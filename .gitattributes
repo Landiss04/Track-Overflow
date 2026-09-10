@@ -1,0 +1,24 @@
+* text=auto eol=lf
+
+# Explicitly mark common binary formats so they are never touched,
+# even if git's text-vs-binary auto-detection guesses wrong.
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.zip binary
+*.7z binary
+*.gz binary
+*.tar binary
+*.exe binary
+*.dll binary
+*.gan binary
