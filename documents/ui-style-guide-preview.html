@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECE1140 Train Management System — UI Style Guide Options</title>
+<style>
+/* ============================================================
+   DARK THEME — "Control Room Dark" (DEFAULT / NORMATIVE)
+   Dark slate, high contrast, cyan accent, true-red danger.
+   Built for a dimly lit dispatch room and long monitoring.
+   ============================================================ */
+[data-theme="dark"] {
+  --font-ui: "Inter", "Segoe UI", "Roboto", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
+
+  --bg-app:        #0F1419;
+  --bg-surface:    #161C24;
+  --bg-raised:     #1E2630;
+  --bg-sunken:     #0A0E12;
+  --border:        #2C3742;
+  --border-strong: #3E4B59;
+
+  --text-primary:   #E6EDF3;
+  --text-secondary: #9FB0C0;
+  --text-muted:     #6B7E90;
+  --text-inverse:   #0F1419;
+
+  --accent:         #38BDF8;
+  --accent-hover:   #7DD3FC;
+  --accent-active:  #0EA5E9;
+  --accent-subtle:  #12303F;
+  --on-accent:      #041018;
+
+  --success: #2ECC71;
+  --warning: #FBBF24;
+  --danger:  #EF4444;
+  --info:    #818CF8;
+
+  --success-hover: #46D983;
+  --danger-hover:  #F75C5C;
+  --danger-active: #D93A3A;
+
+  --success-bg: #0E2A1A;
+  --warning-bg: #322505;
+  --danger-bg:  #2E0F11;
+  --info-bg:    #1B1D3A;
+
+  --focus-ring: #FBBF24;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.5);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.55);
+}
+
+/* ============================================================
+   LIGHT THEME — "Daylight Ops" (OPTIONAL / STRETCH)
+   Light neutral, single blue accent. Maximum legibility in a
+   bright lab, prints cleanly for demos and documentation.
+   ============================================================ */
+[data-theme="light"] {
+  --font-ui: "Inter", "Segoe UI", "Roboto", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
+
+  --bg-app:        #F4F6F8;
+  --bg-surface:    #FFFFFF;
+  --bg-raised:     #FFFFFF;
+  --bg-sunken:     #E8ECF0;
+  --border:        #D5DCE3;
+  --border-strong: #A9B6C2;
+
+  --text-primary:   #16202A;
+  --text-secondary: #4B5C6B;
+  --text-muted:     #7A8794;
+  --text-inverse:   #FFFFFF;
+
+  --accent:         #1D6FD0;
+  --accent-hover:   #1A5FB4;
+  --accent-active:  #164E96;
+  --accent-subtle:  #E4EFFB;
+  --on-accent:      #FFFFFF;
+
+  --success: #15803D;
+  --warning: #B45309;
+  --danger:  #C0272D;
+  --info:    #4338CA;
+
+  --success-hover: #126832;
+  --danger-hover:  #A81F25;
+  --danger-active: #8C1A1F;
+
+  --success-bg: #E6F4EA;
+  --warning-bg: #FDF2E0;
+  --danger-bg:  #FBE8E9;
+  --info-bg:    #EAE8FB;
+
+  --focus-ring: #1D6FD0;
+  --shadow-1: 0 1px 2px rgba(22,32,42,.08);
+  --shadow-2: 0 4px 14px rgba(22,32,42,.12);
+}
+
+/* ============================================================
+   SHARED TOKENS — identical in both themes
+   ============================================================ */
+:root {
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+
+  --radius-sm: 3px; --radius-md: 6px; --radius-lg: 10px; --radius-pill: 999px;
+
+  --text-xs: 12px; --text-sm: 13px; --text-base: 15px;
+  --text-lg: 18px; --text-xl: 22px; --text-2xl: 28px; --text-3xl: 36px;
+
+  --control-h-sm: 28px; --control-h-md: 36px; --control-h-lg: 44px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  transition: background .2s, color .2s;
+}
+
+.page { max-width: 1180px; margin: 0 auto; padding: var(--space-6) var(--space-5) var(--space-7); }
+
+/* ---------- Theme switcher bar ---------- */
+.switcher {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-3) var(--space-5);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+}
+.switcher strong { font-size: var(--text-sm); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.switcher button {
+  font: inherit; font-size: var(--text-sm); font-weight: 600;
+  height: var(--control-h-md); padding: 0 var(--space-4);
+  border-radius: var(--radius-pill); cursor: pointer;
+  background: transparent; color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+}
+.switcher button[aria-pressed="true"] {
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+}
+
+/* ---------- Layout helpers ---------- */
+h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -.02em; margin: var(--space-6) 0 var(--space-2); }
+h2 {
+  font-size: var(--text-xl); font-weight: 650; margin: var(--space-7) 0 var(--space-3);
+  padding-bottom: var(--space-2); border-bottom: 1px solid var(--border);
+}
+h3 { font-size: var(--text-lg); font-weight: 600; margin: var(--space-5) 0 var(--space-2); }
+p  { color: var(--text-secondary); max-width: 78ch; }
+code, .mono { font-family: var(--font-mono); font-size: .92em; }
+
+.panel {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--space-5);
+  box-shadow: var(--shadow-1); margin-bottom: var(--space-4);
+}
+.row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.grid { display: grid; gap: var(--space-3); }
+.grid-3 { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 600; }
+
+/* ---------- Color swatches ---------- */
+.swatch { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.swatch .chip { height: 62px; }
+.swatch .meta { padding: var(--space-2) var(--space-3); background: var(--bg-raised); }
+.swatch .name { font-size: var(--text-sm); font-weight: 600; }
+.swatch .hex { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  font-family: var(--font-ui); font-weight: 600; line-height: 1;
+  height: var(--control-h-md); padding: 0 var(--space-4); font-size: var(--text-base);
+  border-radius: var(--radius-md); border: 1px solid transparent;
+  cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+}
+.btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.btn-sm { height: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--text-sm); }
+.btn-lg { height: var(--control-h-lg); padding: 0 var(--space-5); font-size: var(--text-lg); }
+
+.btn-primary   { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover  { background: var(--accent-hover); }
+.btn-primary:active { background: var(--accent-active); }
+
+.btn-secondary { background: var(--bg-raised); color: var(--text-primary); border-color: var(--border-strong); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--bg-raised); color: var(--text-primary); }
+
+.btn-danger  { background: var(--danger); color: var(--text-inverse); }
+.btn-danger:hover  { background: var(--danger-hover); }
+.btn-danger:active { background: var(--danger-active); }
+
+.btn-success { background: var(--success); color: var(--text-inverse); }
+.btn-success:hover { background: var(--success-hover); }
+
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---------- Form controls ---------- */
+.field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 190px; }
+.input, .select {
+  font: inherit; height: var(--control-h-md); padding: 0 var(--space-3);
+  background: var(--bg-sunken); color: var(--text-primary);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+}
+.input:focus, .select:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--accent); }
+
+/* ---------- Status / badges ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 3px var(--space-3); border-radius: var(--radius-pill); border: 1px solid currentColor;
+}
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.badge-ok    { color: var(--success); background: var(--success-bg); }
+.badge-warn  { color: var(--warning); background: var(--warning-bg); }
+.badge-fault { color: var(--danger);  background: var(--danger-bg); }
+.badge-info  { color: var(--info);    background: var(--info-bg); }
+.badge-idle  { color: var(--text-muted); background: var(--bg-raised); }
+
+/* ---------- Telemetry readout ---------- */
+.readout {
+  background: var(--bg-sunken); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); min-width: 150px;
+}
+.readout .rv { font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 600; letter-spacing: -.01em; }
+.readout .ru { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); margin-left: 4px; }
+
+/* ---------- Table ---------- */
+table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+th {
+  text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-muted); padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-strong); font-weight: 700;
+}
+td { padding: var(--space-3); border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--bg-raised); }
+td.num { font-family: var(--font-mono); text-align: right; }
+
+/* ---------- Track block legend ---------- */
+.block {
+  height: 34px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 700;
+  border-radius: var(--radius-sm); color: var(--text-inverse);
+}
+.blk-free  { background: var(--bg-raised); color: var(--text-secondary); border: 1px solid var(--border-strong); }
+.blk-occ   { background: var(--info); }
+.blk-close { background: var(--warning); }
+.blk-fail  { background: var(--danger); }
+.blk-maint { background: var(--text-muted); }
+
+/* ---------- Type scale demo ---------- */
+.type-row { display: flex; align-items: baseline; gap: var(--space-4); padding: var(--space-2) 0; border-bottom: 1px dashed var(--border); }
+.type-row .spec { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); min-width: 190px; }
+
+.note {
+  border-left: 3px solid var(--accent); background: var(--accent-subtle);
+  padding: var(--space-3) var(--space-4); border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-size: var(--text-sm); color: var(--text-secondary);
+}
+</style>
+</head>
+
+<body data-theme="dark">
+
+<div class="switcher">
+  <strong>Theme</strong>
+  <button type="button" data-set="dark" aria-pressed="true">Dark — default</button>
+  <button type="button" data-set="light" aria-pressed="false">Light — optional</button>
+</div>
+
+<div class="page">
+
+  <h1>UI Style Guide — Live Preview</h1>
+  <p>ECE1140 Train Management System. <strong>Control Room Dark</strong> is the normative theme;
+     <strong>Daylight Ops</strong> is an optional light mode for a future theme switch.
+     Only fonts and colors change between the two — layout, spacing, sizing, and component
+     structure are identical. The normative token tables live in
+     <code>documents/UI_Style_Guide.md</code>.</p>
+
+  <!-- ================= TYPOGRAPHY ================= -->
+  <h2>1. Typography</h2>
+  <div class="panel">
+    <div class="type-row"><span class="spec">Display / 36px / 700</span><span style="font-size:var(--text-3xl);font-weight:700;">CTC Dispatch</span></div>
+    <div class="type-row"><span class="spec">H1 / 28px / 650</span><span style="font-size:var(--text-2xl);font-weight:650;">Track Model — Green Line</span></div>
+    <div class="type-row"><span class="spec">H2 / 22px / 650</span><span style="font-size:var(--text-xl);font-weight:650;">Train Controller</span></div>
+    <div class="type-row"><span class="spec">H3 / 18px / 600</span><span style="font-size:var(--text-lg);font-weight:600;">Failure Injection</span></div>
+    <div class="type-row"><span class="spec">Body / 15px / 400</span><span>Authority is the maximum distance a train may travel before stopping.</span></div>
+    <div class="type-row"><span class="spec">Small / 13px / 400</span><span style="font-size:var(--text-sm);">Secondary detail and helper text.</span></div>
+    <div class="type-row"><span class="spec">Label / 12px / 600 caps</span><span class="label">Commanded Speed</span></div>
+    <div class="type-row"><span class="spec">Mono / telemetry</span><span class="mono" style="font-size:var(--text-lg);">TRN-014  19.4 m/s  BLK-K63</span></div>
+    <p style="margin-top:var(--space-4)">
+      <strong>Rule:</strong> all numeric telemetry, block IDs, train IDs, and timestamps use the monospace face
+      so digits align in tables and don't jitter as values update.
+    </p>
+  </div>
+
+  <!-- ================= COLOR ================= -->
+  <h2>2. Color palette</h2>
+
+  <h3>2.1 Surfaces &amp; text (non-interactive)</h3>
+  <div class="grid grid-3">
+    <div class="swatch"><div class="chip" style="background:var(--bg-app)"></div><div class="meta"><div class="name">App background</div><div class="hex">--bg-app</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--bg-surface)"></div><div class="meta"><div class="name">Surface / panel</div><div class="hex">--bg-surface</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--bg-raised)"></div><div class="meta"><div class="name">Raised / hover</div><div class="hex">--bg-raised</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--bg-sunken)"></div><div class="meta"><div class="name">Sunken / input</div><div class="hex">--bg-sunken</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--border)"></div><div class="meta"><div class="name">Border</div><div class="hex">--border</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--text-primary)"></div><div class="meta"><div class="name">Text primary</div><div class="hex">--text-primary</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--text-secondary)"></div><div class="meta"><div class="name">Text secondary</div><div class="hex">--text-secondary</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--text-muted)"></div><div class="meta"><div class="name">Text muted</div><div class="hex">--text-muted</div></div></div>
+  </div>
+
+  <h3>2.2 Accent &amp; semantic</h3>
+  <div class="grid grid-3">
+    <div class="swatch"><div class="chip" style="background:var(--accent)"></div><div class="meta"><div class="name">Accent (primary action)</div><div class="hex">--accent</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--success)"></div><div class="meta"><div class="name">Success / normal</div><div class="hex">--success</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--warning)"></div><div class="meta"><div class="name">Warning / caution</div><div class="hex">--warning</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--danger)"></div><div class="meta"><div class="name">Danger / fault</div><div class="hex">--danger</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--info)"></div><div class="meta"><div class="name">Info / occupied</div><div class="hex">--info</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--focus-ring)"></div><div class="meta"><div class="name">Focus ring</div><div class="hex">--focus-ring</div></div></div>
+  </div>
+
+  <div class="note" style="margin-top:var(--space-4)">
+    Semantic colors are <strong>never</strong> the only signal. Every colored state also carries a text label,
+    icon, or pattern so the UI stays readable for red/green color-blind users and on a projector.
+  </div>
+
+  <!-- ================= BUTTONS ================= -->
+  <h2>3. Buttons</h2>
+  <div class="panel">
+    <div class="label" style="margin-bottom:var(--space-2)">Variants — 36 px default height</div>
+    <div class="row">
+      <button class="btn btn-primary">Dispatch Train</button>
+      <button class="btn btn-secondary">Edit Schedule</button>
+      <button class="btn btn-ghost">Cancel</button>
+      <button class="btn btn-danger">Emergency Brake</button>
+      <button class="btn btn-success">Clear Fault</button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+    </div>
+
+    <div class="label" style="margin:var(--space-5) 0 var(--space-2)">Sizes</div>
+    <div class="row">
+      <button class="btn btn-primary btn-sm">Small — 28 px</button>
+      <button class="btn btn-primary">Medium — 36 px</button>
+      <button class="btn btn-primary btn-lg">Large — 44 px</button>
+    </div>
+
+    <div class="label" style="margin:var(--space-5) 0 var(--space-2)">Safety-critical control</div>
+    <div class="row">
+      <button class="btn btn-danger btn-lg" style="min-width:230px;letter-spacing:.05em">EMERGENCY BRAKE</button>
+      <span style="font-size:var(--text-sm);color:var(--text-muted)">
+        Min 44 px tall, min 200 px wide, physically separated from routine controls, requires confirmation.
+      </span>
+    </div>
+  </div>
+
+  <!-- ================= FORMS ================= -->
+  <h2>4. Inputs &amp; controls</h2>
+  <div class="panel">
+    <div class="row" style="align-items:flex-end">
+      <div class="field">
+        <label class="label" for="f1">Train ID</label>
+        <input class="input" id="f1" value="TRN-014">
+      </div>
+      <div class="field">
+        <label class="label" for="f2">Destination block</label>
+        <select class="select" id="f2"><option>BLK-K63</option><option>BLK-J58</option></select>
+      </div>
+      <div class="field">
+        <label class="label" for="f3">Suggested speed (m/s)</label>
+        <input class="input" id="f3" value="19.4">
+      </div>
+      <button class="btn btn-primary">Send</button>
+    </div>
+  </div>
+
+  <!-- ================= STATUS ================= -->
+  <h2>5. Status indicators</h2>
+  <div class="panel">
+    <div class="row">
+      <span class="badge badge-ok"><span class="dot"></span>Operational</span>
+      <span class="badge badge-warn"><span class="dot"></span>Speed Restricted</span>
+      <span class="badge badge-fault"><span class="dot"></span>Broken Rail</span>
+      <span class="badge badge-info"><span class="dot"></span>Occupied</span>
+      <span class="badge badge-idle"><span class="dot"></span>Offline</span>
+    </div>
+
+    <div class="label" style="margin:var(--space-5) 0 var(--space-2)">Track block occupancy legend</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
+      <div class="block blk-free">FREE</div>
+      <div class="block blk-occ">OCCUPIED</div>
+      <div class="block blk-close">CLOSED</div>
+      <div class="block blk-fail">FAILURE</div>
+      <div class="block blk-maint">MAINT</div>
+    </div>
+  </div>
+
+  <!-- ================= TELEMETRY ================= -->
+  <h2>6. Telemetry readouts</h2>
+  <div class="panel">
+    <div class="row">
+      <div class="readout"><div class="label">Actual speed</div><span class="rv">19.4</span><span class="ru">m/s</span></div>
+      <div class="readout"><div class="label">Commanded speed</div><span class="rv">21.0</span><span class="ru">m/s</span></div>
+      <div class="readout"><div class="label">Authority</div><span class="rv">K63</span></div>
+      <div class="readout"><div class="label">Power</div><span class="rv">118.2</span><span class="ru">kW</span></div>
+      <div class="readout"><div class="label">Passengers</div><span class="rv">74</span></div>
+      <div class="readout"><div class="label">Cabin temp</div><span class="rv">21.5</span><span class="ru">C</span></div>
+    </div>
+    <p style="font-size:var(--text-sm);margin-bottom:0">
+      Units follow <code>Project_Information/Units.md</code> and are always shown next to the value,
+      in muted text at a smaller size than the number itself.
+    </p>
+  </div>
+
+  <!-- ================= TABLE ================= -->
+  <h2>7. Data table</h2>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <table>
+      <thead>
+        <tr><th>Train</th><th>Line</th><th>Block</th><th style="text-align:right">Speed</th><th style="text-align:right">Authority</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">TRN-011</td><td>Green</td><td class="mono">BLK-A12</td><td class="num">14.2 m/s</td><td class="num">A19</td><td><span class="badge badge-ok"><span class="dot"></span>On Time</span></td></tr>
+        <tr><td class="mono">TRN-014</td><td>Green</td><td class="mono">BLK-K63</td><td class="num">19.4 m/s</td><td class="num">K71</td><td><span class="badge badge-warn"><span class="dot"></span>Delayed</span></td></tr>
+        <tr><td class="mono">TRN-022</td><td>Red</td><td class="mono">BLK-C07</td><td class="num">0.0 m/s</td><td class="num">C07</td><td><span class="badge badge-fault"><span class="dot"></span>E-Brake</span></td></tr>
+        <tr><td class="mono">TRN-030</td><td>Red</td><td class="mono">—</td><td class="num">—</td><td class="num">—</td><td><span class="badge badge-idle"><span class="dot"></span>Yard</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= SPACING ================= -->
+  <h2>8. Spacing, radius &amp; elevation (shared)</h2>
+  <div class="grid grid-2">
+    <div class="panel">
+      <h3 style="margin-top:0">4 px spacing scale</h3>
+      <div class="grid" style="gap:var(--space-2)">
+        <div class="row"><span class="spec mono" style="min-width:130px">--space-1 · 4px</span><div style="height:14px;width:4px;background:var(--accent)"></div></div>
+        <div class="row"><span class="spec mono" style="min-width:130px">--space-2 · 8px</span><div style="height:14px;width:8px;background:var(--accent)"></div></div>
+        <div class="row"><span class="spec mono" style="min-width:130px">--space-3 · 12px</span><div style="height:14px;width:12px;background:var(--accent)"></div></div>
+        <div class="row"><span class="spec mono" style="min-width:130px">--space-4 · 16px</span><div style="height:14px;width:16px;background:var(--accent)"></div></div>
+        <div class="row"><span class="spec mono" style="min-width:130px">--space-5 · 24px</span><div style="height:14px;width:24px;background:var(--accent)"></div></div>
+        <div class="row"><span class="spec mono" style="min-width:130px">--space-6 · 32px</span><div style="height:14px;width:32px;background:var(--accent)"></div></div>
+        <div class="row"><span class="spec mono" style="min-width:130px">--space-7 · 48px</span><div style="height:14px;width:48px;background:var(--accent)"></div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3 style="margin-top:0">Corner radius &amp; elevation</h3>
+      <div class="row">
+        <div style="width:80px;height:56px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-sm);display:grid;place-items:center;font-size:var(--text-xs)">3 px</div>
+        <div style="width:80px;height:56px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);display:grid;place-items:center;font-size:var(--text-xs)">6 px</div>
+        <div style="width:80px;height:56px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-lg);display:grid;place-items:center;font-size:var(--text-xs)">10 px</div>
+      </div>
+      <div class="row" style="margin-top:var(--space-4)">
+        <div style="width:120px;height:56px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-1);display:grid;place-items:center;font-size:var(--text-xs)">shadow-1</div>
+        <div style="width:120px;height:56px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-2);display:grid;place-items:center;font-size:var(--text-xs)">shadow-2 (modal)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODULE HEADER SAMPLE ================= -->
+  <h2>9. Sample module window</h2>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-3) var(--space-5);background:var(--bg-raised);border-bottom:1px solid var(--border)">
+      <div>
+        <div class="label">Module</div>
+        <div style="font-size:var(--text-lg);font-weight:650">Train Controller — TRN-014</div>
+      </div>
+      <div class="row">
+        <span class="badge badge-ok"><span class="dot"></span>Automatic</span>
+        <span class="mono" style="font-size:var(--text-sm);color:var(--text-muted)">14:32:07</span>
+      </div>
+    </div>
+    <div style="padding:var(--space-5)">
+      <div class="row" style="margin-bottom:var(--space-4)">
+        <div class="readout"><div class="label">Setpoint</div><span class="rv">21.0</span><span class="ru">m/s</span></div>
+        <div class="readout"><div class="label">Actual</div><span class="rv">19.4</span><span class="ru">m/s</span></div>
+        <div class="readout"><div class="label">Power</div><span class="rv">118.2</span><span class="ru">kW</span></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-secondary">Manual Mode</button>
+        <button class="btn btn-secondary">Open Doors</button>
+        <button class="btn btn-secondary">Cabin Lights</button>
+        <button class="btn btn-danger">Service Brake</button>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:var(--space-6);font-size:var(--text-sm);color:var(--text-muted)">
+    Preview file — not shipped with the application. Token values here must stay in sync with
+    <code>documents/UI_Style_Guide.md</code>.
+  </p>
+</div>
+
+<script>
+  document.querySelectorAll('.switcher button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.body.dataset.theme = b.dataset.set;
+      document.querySelectorAll('.switcher button').forEach(function (o) {
+        o.setAttribute('aria-pressed', String(o === b));
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>
