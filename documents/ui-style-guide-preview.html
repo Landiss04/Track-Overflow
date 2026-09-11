@@ -6,7 +6,7 @@
 <title>ECE1140 Train Management System — UI Style Guide Options</title>
 <style>
 /* ============================================================
-   DARK THEME — "Control Room Dark" (DEFAULT / NORMATIVE)
+   DARK THEME — "Control Room Dark" (OPTIONAL / STRETCH)
    Dark slate, high contrast, cyan accent, true-red danger.
    Built for a dimly lit dispatch room and long monitoring.
    ============================================================ */
@@ -53,7 +53,7 @@
 }
 
 /* ============================================================
-   LIGHT THEME — "Daylight Ops" (OPTIONAL / STRETCH)
+   LIGHT THEME — "Daylight Ops" (DEFAULT / NORMATIVE)
    Light neutral, single blue accent. Maximum legibility in a
    bright lab, prints cleanly for demos and documentation.
    ============================================================ */
@@ -66,11 +66,11 @@
   --bg-raised:     #FFFFFF;
   --bg-sunken:     #E8ECF0;
   --border:        #D5DCE3;
-  --border-strong: #A9B6C2;
+  --border-strong: #8795A3;
 
   --text-primary:   #16202A;
   --text-secondary: #4B5C6B;
-  --text-muted:     #7A8794;
+  --text-muted:     #5F6B79;
   --text-inverse:   #FFFFFF;
 
   --accent:         #1D6FD0;
@@ -88,7 +88,7 @@
   --danger-hover:  #A81F25;
   --danger-active: #8C1A1F;
 
-  --success-bg: #E6F4EA;
+  --success-bg: #EDF7F0;
   --warning-bg: #FDF2E0;
   --danger-bg:  #FBE8E9;
   --info-bg:    #EAE8FB;
@@ -272,20 +272,20 @@ td.num { font-family: var(--font-mono); text-align: right; }
 </style>
 </head>
 
-<body data-theme="dark">
+<body data-theme="light">
 
 <div class="switcher">
   <strong>Theme</strong>
-  <button type="button" data-set="dark" aria-pressed="true">Dark — default</button>
-  <button type="button" data-set="light" aria-pressed="false">Light — optional</button>
+  <button type="button" data-set="light" aria-pressed="true">Light — default</button>
+  <button type="button" data-set="dark" aria-pressed="false">Dark — optional</button>
 </div>
 
 <div class="page">
 
   <h1>UI Style Guide — Live Preview</h1>
-  <p>ECE1140 Train Management System. <strong>Control Room Dark</strong> is the normative theme;
-     <strong>Daylight Ops</strong> is an optional light mode for a future theme switch.
-     Only fonts and colors change between the two — layout, spacing, sizing, and component
+  <p>ECE1140 Train Management System. <strong>Daylight Ops</strong> is the normative theme;
+     <strong>Control Room Dark</strong> is an optional dark mode for a future theme switch.
+     Only colors change between the two — fonts, layout, spacing, sizing, and component
      structure are identical. The normative token tables live in
      <code>documents/UI_Style_Guide.md</code>.</p>
 

@@ -2,7 +2,7 @@
 
 ## For ECE1140 Train Management System
 
-Version 1.1
+Version 1.2
 Prepared by Team 3
 University of Pittsburgh
 2026-09-11
@@ -13,7 +13,7 @@ University of Pittsburgh
 * [1. Purpose and Scope](#1-purpose-and-scope)
 * [2. Design Principles](#2-design-principles)
 * [3. Typography](#3-typography)
-* [4. Color — Dark Theme (Normative)](#4-color--dark-theme-normative)
+* [4. Color — Light Theme (Normative)](#4-color--light-theme-normative)
   * [4.1 Surfaces and Borders](#41-surfaces-and-borders)
   * [4.2 Text](#42-text)
   * [4.3 Accent](#43-accent)
@@ -31,18 +31,19 @@ University of Pittsburgh
 * [7. Safety-Critical Controls](#7-safety-critical-controls)
 * [8. Accessibility Rules](#8-accessibility-rules)
 * [9. Implementation Notes](#9-implementation-notes)
-* [10. Optional Light Theme (Not Committed)](#10-optional-light-theme-not-committed)
-  * [10.1 Light Token Overrides](#101-light-token-overrides)
+* [10. Optional Dark Theme (Not Committed)](#10-optional-dark-theme-not-committed)
+  * [10.1 Dark Token Overrides](#101-dark-token-overrides)
   * [10.2 Theme Switch Requirements](#102-theme-switch-requirements)
 * [11. Live Preview](#11-live-preview)
 <!-- TOC -->
 
 ## Revision History
 
-| Name   | Date       | Reason For Changes                                            | Version |
-|--------|------------|---------------------------------------------------------------|---------|
-| Team 3 | 2026-09-11 | Initial style guide; dark theme locked as default             | 1.0     |
+| Name   | Date       | Reason For Changes                                              | Version |
+|--------|------------|-----------------------------------------------------------------|---------|
+| Team 3 | 2026-09-11 | Initial style guide; dark theme locked as default               | 1.0     |
 | Team 3 | 2026-09-11 | UI face changed to Helvetica/Arial; weight scale cut to 400/700 | 1.1     |
+| Team 3 | 2026-09-11 | Light theme promoted to default; dark theme moved to optional   | 1.2     |
 
 ---
 
@@ -56,7 +57,7 @@ All modules **shall** use the tokens in Sections 3 through 6. Module authors **s
 introduce ad-hoc colors, font sizes, or spacing values. If a required token is missing, it is
 added here first, then used.
 
-**Control Room Dark** is the committed default theme. Section 10 documents an optional light
+**Daylight Ops** (light) is the committed default theme. Section 10 documents an optional dark
 theme; it is a stretch goal and is not required for any sprint deliverable.
 
 ## 2. Design Principles
@@ -108,81 +109,89 @@ Consolas on Windows. No font is bundled with the application.
 - Field labels **shall** use the Label token in uppercase.
 - Never use font size alone to convey state; pair with color and text.
 
-## 4. Color — Dark Theme (Normative)
+## 4. Color — Light Theme (Normative)
 
 ### 4.1 Surfaces and Borders
 
 | Token | Hex | Use |
 |-------|-----|-----|
-| `--bg-app` | `#0F1419` | Window / desktop background |
-| `--bg-surface` | `#161C24` | Panels, cards, module chrome |
-| `--bg-raised` | `#1E2630` | Hover rows, headers, secondary buttons |
-| `--bg-sunken` | `#0A0E12` | Input fields, readout wells |
-| `--border` | `#2C3742` | Default 1 px separators |
-| `--border-strong` | `#3E4B59` | Input outlines, table header rule |
+| `--bg-app` | `#F4F6F8` | Window / desktop background |
+| `--bg-surface` | `#FFFFFF` | Panels, cards, module chrome |
+| `--bg-raised` | `#FFFFFF` | Hover rows, headers, secondary buttons |
+| `--bg-sunken` | `#E8ECF0` | Input fields, readout wells |
+| `--border` | `#D5DCE3` | Default 1 px separators |
+| `--border-strong` | `#8795A3` | Input outlines, table header rule |
+
+`--bg-raised` intentionally equals `--bg-surface` in this theme; there is no headroom above
+white, so separation is carried by `--border` and `--shadow-1` instead of by a lighter fill.
 
 ### 4.2 Text
 
 | Token | Hex | Use |
 |-------|-----|-----|
-| `--text-primary` | `#E6EDF3` | Body copy, headings, values |
-| `--text-secondary` | `#9FB0C0` | Supporting text, descriptions |
-| `--text-muted` | `#6B7E90` | Labels, units, disabled text |
-| `--text-inverse` | `#0F1419` | Text on `--danger` / `--success` fills |
+| `--text-primary` | `#16202A` | Body copy, headings, values |
+| `--text-secondary` | `#4B5C6B` | Supporting text, descriptions |
+| `--text-muted` | `#5F6B79` | Labels, units, disabled text |
+| `--text-inverse` | `#FFFFFF` | Text on `--danger` / `--success` fills |
 
 ### 4.3 Accent
 
 | Token | Hex | Use |
 |-------|-----|-----|
-| `--accent` | `#38BDF8` | Primary button fill, active tab, selection |
-| `--accent-hover` | `#7DD3FC` | Primary button hover |
-| `--accent-active` | `#0EA5E9` | Primary button pressed |
-| `--accent-subtle` | `#12303F` | Callout background, selected row tint |
-| `--on-accent` | `#041018` | Text/icons on an accent fill |
+| `--accent` | `#1D6FD0` | Primary button fill, active tab, selection |
+| `--accent-hover` | `#1A5FB4` | Primary button hover |
+| `--accent-active` | `#164E96` | Primary button pressed |
+| `--accent-subtle` | `#E4EFFB` | Callout background, selected row tint |
+| `--on-accent` | `#FFFFFF` | Text/icons on an accent fill |
 
 ### 4.4 Semantic Colors
 
 | Token | Hex | Meaning |
 |-------|-----|---------|
-| `--success` | `#2ECC71` | Normal operation, on time, fault cleared |
-| `--success-hover` | `#46D983` | Success button hover |
-| `--success-bg` | `#0E2A1A` | Success badge / banner background |
-| `--warning` | `#FBBF24` | Caution, speed restriction, block closed, delayed |
-| `--warning-bg` | `#322505` | Warning badge / banner background |
-| `--danger` | `#EF4444` | Fault, broken rail, emergency brake, hard stop |
-| `--danger-hover` | `#F75C5C` | Danger button hover |
-| `--danger-active` | `#D93A3A` | Danger button pressed |
-| `--danger-bg` | `#2E0F11` | Danger badge / banner background |
-| `--info` | `#818CF8` | Block occupied, informational state |
-| `--info-bg` | `#1B1D3A` | Info badge / banner background |
-| `--focus-ring` | `#FBBF24` | Keyboard focus outline (2 px, 2 px offset) |
+| `--success` | `#15803D` | Normal operation, on time, fault cleared |
+| `--success-hover` | `#126832` | Success button hover |
+| `--success-bg` | `#EDF7F0` | Success badge / banner background |
+| `--warning` | `#B45309` | Caution, speed restriction, block closed, delayed |
+| `--warning-bg` | `#FDF2E0` | Warning badge / banner background |
+| `--danger` | `#C0272D` | Fault, broken rail, emergency brake, hard stop |
+| `--danger-hover` | `#A81F25` | Danger button hover |
+| `--danger-active` | `#8C1A1F` | Danger button pressed |
+| `--danger-bg` | `#FBE8E9` | Danger badge / banner background |
+| `--info` | `#4338CA` | Block occupied, informational state |
+| `--info-bg` | `#EAE8FB` | Info badge / banner background |
+| `--focus-ring` | `#1D6FD0` | Keyboard focus outline (2 px, 2 px offset) |
 
-`--danger` is a true red rather than a muted salmon so that fault and emergency states read
-unambiguously as danger at a glance and from across the room. `--success` is a saturated green
-so that "normal" and "fault" are separated by hue, not just by brightness.
+On a light background the semantic colors are deep and saturated rather than bright.
+`--danger` is a true signal red dark enough to carry against white, and `--success` is a deep
+green, so that "normal" and "fault" are separated by hue, not just by brightness.
 
 ### 4.5 Contrast Verification
 
-Measured against `--bg-app` (`#0F1419`) unless noted. WCAG 2.1 AA requires 4.5:1 for normal text
-and 3:1 for large text and UI boundaries.
+Measured against `--bg-surface` (`#FFFFFF`) unless noted. WCAG 2.1 AA requires 4.5:1 for normal
+text and 3:1 for large text and UI boundaries.
 
 | Foreground | Background | Ratio | Result |
 |------------|-----------|-------|--------|
-| `--text-primary` | `--bg-app` | 15.9:1 | Pass AAA |
-| `--text-secondary` | `--bg-app` | 8.5:1 | Pass AAA |
-| `--text-muted` | `--bg-app` | 4.5:1 | Pass AA |
-| `--accent` | `--bg-app` | 8.8:1 | Pass AAA |
-| `--success` | `--bg-app` | 8.9:1 | Pass AAA |
-| `--warning` | `--bg-app` | 11.3:1 | Pass AAA |
-| `--danger` | `--bg-app` | 5.0:1 | Pass AA |
-| `--info` | `--bg-app` | 6.3:1 | Pass AA |
-| `--on-accent` | `--accent` | 9.0:1 | Pass AAA |
-| `--text-inverse` | `--danger` | 5.0:1 | Pass AA |
-| `--text-inverse` | `--success` | 8.9:1 | Pass AAA |
-| `--danger` | `--danger-bg` | 4.7:1 | Pass AA |
+| `--text-primary` | `--bg-surface` | 16.5:1 | Pass AAA |
+| `--text-secondary` | `--bg-surface` | 6.9:1 | Pass AAA |
+| `--text-muted` | `--bg-surface` | 5.4:1 | Pass AA |
+| `--text-muted` | `--bg-sunken` | 4.6:1 | Pass AA |
+| `--accent` | `--bg-surface` | 5.0:1 | Pass AA |
+| `--success` | `--bg-surface` | 5.0:1 | Pass AA |
+| `--warning` | `--bg-surface` | 5.0:1 | Pass AA |
+| `--danger` | `--bg-surface` | 5.9:1 | Pass AA |
+| `--info` | `--bg-surface` | 8.0:1 | Pass AAA |
+| `--on-accent` | `--accent` | 5.0:1 | Pass AA |
+| `--text-inverse` | `--danger` | 5.9:1 | Pass AA |
+| `--text-inverse` | `--success` | 5.0:1 | Pass AA |
+| `--danger` | `--danger-bg` | 5.0:1 | Pass AA |
+| `--success` | `--success-bg` | 4.6:1 | Pass AA |
+| `--warning` | `--warning-bg` | 4.5:1 | Pass AA |
+| `--border-strong` | `--bg-surface` | 3.1:1 | Pass AA (non-text) |
 
-Buttons filled with `--danger` or `--success` use dark text (`--text-inverse`), not white.
-White on `--danger` measures 3.8:1 and fails AA for normal text.
+Buttons filled with `--danger` or `--success` use **white** text (`--text-inverse`) in this
+theme, because the semantic colors are dark enough to support it. This inverts in the dark
+theme — see Section 10.
 
 ## 5. Spacing, Radius, and Elevation
 
@@ -207,8 +216,8 @@ Spacing uses a 4 px base scale. These values are shared by both themes.
 
 | Token | Value | Use |
 |-------|-------|-----|
-| `--shadow-1` | `0 1px 2px rgba(0,0,0,.5)` | Resting panels, sticky headers |
-| `--shadow-2` | `0 4px 12px rgba(0,0,0,.55)` | Dialogs, popovers, menus |
+| `--shadow-1` | `0 1px 2px rgba(22,32,42,.08)` | Resting panels, sticky headers |
+| `--shadow-2` | `0 4px 14px rgba(22,32,42,.12)` | Dialogs, popovers, menus |
 
 Control heights: `--control-h-sm` 28 px, `--control-h-md` 36 px (default),
 `--control-h-lg` 44 px.
@@ -292,6 +301,10 @@ on filled states. Adjacent blocks are separated by at least 2 px.
 - Numeric and ID columns are mono; numeric columns are right-aligned.
 - Empty values render as an em dash (`—`), never a blank cell or `None`.
 
+Because `--bg-raised` equals `--bg-surface` in the light theme, row hover **shall** additionally
+apply a 1 px `--border-strong` outline or an `--accent-subtle` tint so the hovered row stays
+distinguishable.
+
 ### 6.7 Module Window Header
 
 Every module window carries a header bar on `--bg-raised` with a bottom `--border` containing:
@@ -316,8 +329,9 @@ an automatic safety function.
 
 - All text meets WCAG 2.1 AA contrast (see Section 4.5).
 - Color is never the sole carrier of meaning — pair with label, icon, or fill pattern.
-- The palette is checked against deuteranopia and protanopia: success and danger differ in
-  lightness (8.9:1 vs 5.0:1 against the app background) as well as hue.
+- The palette is checked against deuteranopia and protanopia: success and danger sit in
+  distinct hue families and at similar weight against white (5.0:1 and 5.9:1), so neither
+  state can be mistaken for the other on hue loss alone — the required text label carries it.
 - All interactive controls are keyboard reachable in a logical tab order with a visible
   `--focus-ring`.
 - Minimum interactive target is 28 px by 28 px; default is 36 px.
@@ -330,64 +344,72 @@ an automatic safety function.
 - If PyQt is used, tokens are injected into a single application-wide QSS stylesheet built from
   those constants, so a theme change is a one-line swap of the token dictionary.
 - Every token in Sections 4 and 10 uses the same key name, which is what makes the optional
-  light theme a drop-in replacement.
+  dark theme a drop-in replacement.
 - The preview file in Section 11 is the visual source of truth for review; any token change
   **shall** be applied to both this document and the preview in the same commit.
 
-## 10. Optional Light Theme (Not Committed)
+## 10. Optional Dark Theme (Not Committed)
 
-This section is **informative**. A light theme and a dark/light switch are a stretch goal. No
+This section is **informative**. A dark theme and a light/dark switch are a stretch goal. No
 sprint deliverable depends on it. It is specified here so that, if implemented, it requires no
 design work — only a token swap.
 
 Typography, spacing, radius, control heights, and all component rules in Sections 3, 5, 6, 7,
 and 8 are unchanged. Only the color tokens below differ.
 
-### 10.1 Light Token Overrides
+### 10.1 Dark Token Overrides
 
-| Token | Dark (normative) | Light (optional) |
-|-------|------------------|------------------|
-| `--bg-app` | `#0F1419` | `#F4F6F8` |
-| `--bg-surface` | `#161C24` | `#FFFFFF` |
-| `--bg-raised` | `#1E2630` | `#FFFFFF` |
-| `--bg-sunken` | `#0A0E12` | `#E8ECF0` |
-| `--border` | `#2C3742` | `#D5DCE3` |
-| `--border-strong` | `#3E4B59` | `#A9B6C2` |
-| `--text-primary` | `#E6EDF3` | `#16202A` |
-| `--text-secondary` | `#9FB0C0` | `#4B5C6B` |
-| `--text-muted` | `#6B7E90` | `#7A8794` |
-| `--text-inverse` | `#0F1419` | `#FFFFFF` |
-| `--accent` | `#38BDF8` | `#1D6FD0` |
-| `--accent-hover` | `#7DD3FC` | `#1A5FB4` |
-| `--accent-active` | `#0EA5E9` | `#164E96` |
-| `--accent-subtle` | `#12303F` | `#E4EFFB` |
-| `--on-accent` | `#041018` | `#FFFFFF` |
-| `--success` | `#2ECC71` | `#15803D` |
-| `--success-hover` | `#46D983` | `#126832` |
-| `--success-bg` | `#0E2A1A` | `#E6F4EA` |
-| `--warning` | `#FBBF24` | `#B45309` |
-| `--warning-bg` | `#322505` | `#FDF2E0` |
-| `--danger` | `#EF4444` | `#C0272D` |
-| `--danger-hover` | `#F75C5C` | `#A81F25` |
-| `--danger-active` | `#D93A3A` | `#8C1A1F` |
-| `--danger-bg` | `#2E0F11` | `#FBE8E9` |
-| `--info` | `#818CF8` | `#4338CA` |
-| `--info-bg` | `#1B1D3A` | `#EAE8FB` |
-| `--focus-ring` | `#FBBF24` | `#1D6FD0` |
-| `--shadow-1` | `0 1px 2px rgba(0,0,0,.5)` | `0 1px 2px rgba(22,32,42,.08)` |
-| `--shadow-2` | `0 4px 12px rgba(0,0,0,.55)` | `0 4px 14px rgba(22,32,42,.12)` |
+| Token | Light (normative) | Dark (optional) |
+|-------|-------------------|-----------------|
+| `--bg-app` | `#F4F6F8` | `#0F1419` |
+| `--bg-surface` | `#FFFFFF` | `#161C24` |
+| `--bg-raised` | `#FFFFFF` | `#1E2630` |
+| `--bg-sunken` | `#E8ECF0` | `#0A0E12` |
+| `--border` | `#D5DCE3` | `#2C3742` |
+| `--border-strong` | `#8795A3` | `#3E4B59` |
+| `--text-primary` | `#16202A` | `#E6EDF3` |
+| `--text-secondary` | `#4B5C6B` | `#9FB0C0` |
+| `--text-muted` | `#5F6B79` | `#6B7E90` |
+| `--text-inverse` | `#FFFFFF` | `#0F1419` |
+| `--accent` | `#1D6FD0` | `#38BDF8` |
+| `--accent-hover` | `#1A5FB4` | `#7DD3FC` |
+| `--accent-active` | `#164E96` | `#0EA5E9` |
+| `--accent-subtle` | `#E4EFFB` | `#12303F` |
+| `--on-accent` | `#FFFFFF` | `#041018` |
+| `--success` | `#15803D` | `#2ECC71` |
+| `--success-hover` | `#126832` | `#46D983` |
+| `--success-bg` | `#EDF7F0` | `#0E2A1A` |
+| `--warning` | `#B45309` | `#FBBF24` |
+| `--warning-bg` | `#FDF2E0` | `#322505` |
+| `--danger` | `#C0272D` | `#EF4444` |
+| `--danger-hover` | `#A81F25` | `#F75C5C` |
+| `--danger-active` | `#8C1A1F` | `#D93A3A` |
+| `--danger-bg` | `#FBE8E9` | `#2E0F11` |
+| `--info` | `#4338CA` | `#818CF8` |
+| `--info-bg` | `#EAE8FB` | `#1B1D3A` |
+| `--focus-ring` | `#1D6FD0` | `#FBBF24` |
+| `--shadow-1` | `0 1px 2px rgba(22,32,42,.08)` | `0 1px 2px rgba(0,0,0,.5)` |
+| `--shadow-2` | `0 4px 14px rgba(22,32,42,.12)` | `0 4px 12px rgba(0,0,0,.55)` |
 
-Light-theme contrast, measured against `--bg-surface` (`#FFFFFF`):
+Dark-theme contrast, measured against `--bg-app` (`#0F1419`):
 
 | Foreground | Ratio | Result |
 |------------|-------|--------|
-| `--text-primary` | 16.5:1 | Pass AAA |
-| `--accent` | 5.0:1 | Pass AA |
-| `--danger` | 5.9:1 | Pass AA |
-| `--success` | 5.0:1 | Pass AA |
+| `--text-primary` | 15.9:1 | Pass AAA |
+| `--text-secondary` | 8.5:1 | Pass AAA |
+| `--text-muted` | 4.5:1 | Pass AA |
+| `--accent` | 8.8:1 | Pass AAA |
+| `--success` | 8.9:1 | Pass AAA |
+| `--warning` | 11.3:1 | Pass AAA |
+| `--danger` | 5.0:1 | Pass AA |
+| `--info` | 6.3:1 | Pass AA |
 
-Note the inversion of `--text-inverse`: in the light theme, filled danger and success buttons
-use **white** text, because the semantic colors are dark enough to support it.
+Two behavioral differences apply if this theme is implemented:
+
+1. **`--text-inverse` inverts.** Filled danger and success buttons use **dark** text in the dark
+   theme, because white on `#EF4444` measures 3.8:1 and fails AA for normal text.
+2. **`--bg-raised` separates from `--bg-surface`.** The extra row-hover rule in Section 6.6 is
+   unnecessary in the dark theme, since `--bg-raised` is already a visibly distinct fill.
 
 ### 10.2 Theme Switch Requirements
 
@@ -396,7 +418,7 @@ If the switch is implemented:
 1. The control lives in the application menu or settings panel, not in individual modules.
 2. The selection persists across restarts.
 3. Switching applies to every open module window without requiring a restart.
-4. Dark is the default on first run.
+4. Light is the default on first run.
 5. No screenshot, printed figure, or demo artifact is theme-dependent for its meaning.
 
 ## 11. Live Preview
@@ -407,5 +429,5 @@ module window — is at:
 
 `documents/ui-style-guide-preview.html`
 
-Open it in a browser and use the switcher in the top bar to compare Dark (default) against
-Light (optional).
+Open it in a browser and use the switcher in the top bar to compare Light (default) against
+Dark (optional).
