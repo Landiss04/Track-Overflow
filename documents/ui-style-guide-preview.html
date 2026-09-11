@@ -11,8 +11,9 @@
    Built for a dimly lit dispatch room and long monitoring.
    ============================================================ */
 [data-theme="dark"] {
-  --font-ui: "Inter", "Segoe UI", "Roboto", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
+  /* Helvetica is absent on Windows; Arial is its metric-compatible substitute. */
+  --font-ui: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+  --font-mono: "Monaco", "Menlo", "Consolas", "Andale Mono", monospace;
 
   --bg-app:        #0F1419;
   --bg-surface:    #161C24;
@@ -57,8 +58,8 @@
    bright lab, prints cleanly for demos and documentation.
    ============================================================ */
 [data-theme="light"] {
-  --font-ui: "Inter", "Segoe UI", "Roboto", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
+  --font-ui: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+  --font-mono: "Monaco", "Menlo", "Consolas", "Andale Mono", monospace;
 
   --bg-app:        #F4F6F8;
   --bg-surface:    #FFFFFF;
@@ -137,7 +138,7 @@ body {
 }
 .switcher strong { font-size: var(--text-sm); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
 .switcher button {
-  font: inherit; font-size: var(--text-sm); font-weight: 600;
+  font: inherit; font-size: var(--text-sm); font-weight: 700;
   height: var(--control-h-md); padding: 0 var(--space-4);
   border-radius: var(--radius-pill); cursor: pointer;
   background: transparent; color: var(--text-secondary);
@@ -150,10 +151,10 @@ body {
 /* ---------- Layout helpers ---------- */
 h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -.02em; margin: var(--space-6) 0 var(--space-2); }
 h2 {
-  font-size: var(--text-xl); font-weight: 650; margin: var(--space-7) 0 var(--space-3);
+  font-size: var(--text-xl); font-weight: 700; margin: var(--space-7) 0 var(--space-3);
   padding-bottom: var(--space-2); border-bottom: 1px solid var(--border);
 }
-h3 { font-size: var(--text-lg); font-weight: 600; margin: var(--space-5) 0 var(--space-2); }
+h3 { font-size: var(--text-lg); font-weight: 700; margin: var(--space-5) 0 var(--space-2); }
 p  { color: var(--text-secondary); max-width: 78ch; }
 code, .mono { font-family: var(--font-mono); font-size: .92em; }
 
@@ -166,19 +167,19 @@ code, .mono { font-family: var(--font-mono); font-size: .92em; }
 .grid { display: grid; gap: var(--space-3); }
 .grid-3 { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 600; }
+.label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 700; }
 
 /* ---------- Color swatches ---------- */
 .swatch { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
 .swatch .chip { height: 62px; }
 .swatch .meta { padding: var(--space-2) var(--space-3); background: var(--bg-raised); }
-.swatch .name { font-size: var(--text-sm); font-weight: 600; }
+.swatch .name { font-size: var(--text-sm); font-weight: 700; }
 .swatch .hex { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
 
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  font-family: var(--font-ui); font-weight: 600; line-height: 1;
+  font-family: var(--font-ui); font-weight: 700; line-height: 1;
   height: var(--control-h-md); padding: 0 var(--space-4); font-size: var(--text-base);
   border-radius: var(--radius-md); border: 1px solid transparent;
   cursor: pointer; transition: background .12s, border-color .12s, color .12s;
@@ -233,7 +234,7 @@ code, .mono { font-family: var(--font-mono); font-size: .92em; }
   background: var(--bg-sunken); border: 1px solid var(--border);
   border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); min-width: 150px;
 }
-.readout .rv { font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 600; letter-spacing: -.01em; }
+.readout .rv { font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 700; letter-spacing: -.01em; }
 .readout .ru { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); margin-left: 4px; }
 
 /* ---------- Table ---------- */
@@ -292,12 +293,12 @@ td.num { font-family: var(--font-mono); text-align: right; }
   <h2>1. Typography</h2>
   <div class="panel">
     <div class="type-row"><span class="spec">Display / 36px / 700</span><span style="font-size:var(--text-3xl);font-weight:700;">CTC Dispatch</span></div>
-    <div class="type-row"><span class="spec">H1 / 28px / 650</span><span style="font-size:var(--text-2xl);font-weight:650;">Track Model — Green Line</span></div>
-    <div class="type-row"><span class="spec">H2 / 22px / 650</span><span style="font-size:var(--text-xl);font-weight:650;">Train Controller</span></div>
-    <div class="type-row"><span class="spec">H3 / 18px / 600</span><span style="font-size:var(--text-lg);font-weight:600;">Failure Injection</span></div>
+    <div class="type-row"><span class="spec">H1 / 28px / 700</span><span style="font-size:var(--text-2xl);font-weight:700;">Track Model — Green Line</span></div>
+    <div class="type-row"><span class="spec">H2 / 22px / 700</span><span style="font-size:var(--text-xl);font-weight:700;">Train Controller</span></div>
+    <div class="type-row"><span class="spec">H3 / 18px / 700</span><span style="font-size:var(--text-lg);font-weight:700;">Failure Injection</span></div>
     <div class="type-row"><span class="spec">Body / 15px / 400</span><span>Authority is the maximum distance a train may travel before stopping.</span></div>
     <div class="type-row"><span class="spec">Small / 13px / 400</span><span style="font-size:var(--text-sm);">Secondary detail and helper text.</span></div>
-    <div class="type-row"><span class="spec">Label / 12px / 600 caps</span><span class="label">Commanded Speed</span></div>
+    <div class="type-row"><span class="spec">Label / 12px / 700 caps</span><span class="label">Commanded Speed</span></div>
     <div class="type-row"><span class="spec">Mono / telemetry</span><span class="mono" style="font-size:var(--text-lg);">TRN-014  19.4 m/s  BLK-K63</span></div>
     <p style="margin-top:var(--space-4)">
       <strong>Rule:</strong> all numeric telemetry, block IDs, train IDs, and timestamps use the monospace face
@@ -473,7 +474,7 @@ td.num { font-family: var(--font-mono); text-align: right; }
     <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-3) var(--space-5);background:var(--bg-raised);border-bottom:1px solid var(--border)">
       <div>
         <div class="label">Module</div>
-        <div style="font-size:var(--text-lg);font-weight:650">Train Controller — TRN-014</div>
+        <div style="font-size:var(--text-lg);font-weight:700">Train Controller — TRN-014</div>
       </div>
       <div class="row">
         <span class="badge badge-ok"><span class="dot"></span>Automatic</span>

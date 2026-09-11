@@ -2,7 +2,7 @@
 
 ## For ECE1140 Train Management System
 
-Version 1.0
+Version 1.1
 Prepared by Team 3
 University of Pittsburgh
 2026-09-11
@@ -39,9 +39,10 @@ University of Pittsburgh
 
 ## Revision History
 
-| Name   | Date       | Reason For Changes                                 | Version |
-|--------|------------|----------------------------------------------------|---------|
-| Team 3 | 2026-09-11 | Initial style guide; dark theme locked as default  | 1.0     |
+| Name   | Date       | Reason For Changes                                            | Version |
+|--------|------------|---------------------------------------------------------------|---------|
+| Team 3 | 2026-09-11 | Initial style guide; dark theme locked as default             | 1.0     |
+| Team 3 | 2026-09-11 | UI face changed to Helvetica/Arial; weight scale cut to 400/700 | 1.1     |
 
 ---
 
@@ -74,22 +75,35 @@ theme; it is a stretch goal and is not required for any sprint deliverable.
 
 | Role | Family | Fallback stack |
 |------|--------|----------------|
-| UI   | Inter  | `"Inter", "Segoe UI", "Roboto", system-ui, sans-serif` |
-| Mono | JetBrains Mono | `"JetBrains Mono", "Cascadia Mono", "Consolas", monospace` |
+| UI   | Helvetica | `"Helvetica Neue", "Helvetica", "Arial", sans-serif` |
+| Mono | Monaco | `"Monaco", "Menlo", "Consolas", "Andale Mono", monospace` |
+
+Helvetica does not ship with Windows. On the lab machines and any standard Windows PC, the UI
+face resolves to **Arial**, which is metric-compatible with Helvetica — line breaks and layout
+are identical, letterforms differ slightly. On macOS it resolves to Helvetica Neue. This is
+intentional and requires no font bundling or licensing.
+
+The mono stack is chosen to sit well beside a neo-grotesque UI face: Monaco/Menlo on macOS,
+Consolas on Windows. No font is bundled with the application.
 
 | Token | Size | Weight | Line height | Use |
 |-------|------|--------|-------------|-----|
 | Display | 36 px | 700 | 1.15 | Application title, splash |
-| H1 | 28 px | 650 | 1.2 | Module window title |
-| H2 | 22 px | 650 | 1.25 | Section heading within a module |
-| H3 | 18 px | 600 | 1.3 | Sub-section, panel title |
+| H1 | 28 px | 700 | 1.2 | Module window title |
+| H2 | 22 px | 700 | 1.25 | Section heading within a module |
+| H3 | 18 px | 700 | 1.3 | Sub-section, panel title |
 | Body | 15 px | 400 | 1.55 | Default text |
 | Small | 13 px | 400 | 1.5 | Helper and secondary detail |
-| Label | 12 px | 600 | 1.4 | Field labels, uppercase, letter-spacing `0.07em` |
-| Mono | inherits | 400–600 | 1.4 | Telemetry values, IDs, timestamps |
+| Label | 12 px | 700 | 1.4 | Field labels, uppercase, letter-spacing `0.07em` |
+| Mono | inherits | 400 or 700 | 1.4 | Telemetry values, IDs, timestamps |
 
 **Rules**
 
+- Only two weights exist: **400 (Regular)** and **700 (Bold)**. Helvetica and Arial ship no
+  intermediate weights, so any request for 500/600/650 is synthesized by the renderer and
+  produces inconsistent results across platforms. Do not specify them.
+- Size and weight carry the hierarchy. Where 700 is not enough separation, use size or
+  `--text-muted`, not a fake semibold.
 - Train IDs, block IDs, timestamps, and all numeric telemetry **shall** render in the mono face.
 - Field labels **shall** use the Label token in uppercase.
 - Never use font size alone to convey state; pair with color and text.
@@ -219,7 +233,7 @@ Control heights: `--control-h-sm` 28 px, `--control-h-md` 36 px (default),
 
 **Rules**
 
-- Border radius `--radius-md`; font weight 600; label in sentence case except emergency controls.
+- Border radius `--radius-md`; font weight 700; label in sentence case except emergency controls.
 - Hover, active, and disabled states are mandatory. Disabled = 40–45 % opacity, no pointer.
 - Focus: 2 px `--focus-ring` outline with 2 px offset. Never remove the focus indicator.
 - At most one Primary button is visible in a panel at a time.
@@ -265,7 +279,7 @@ on filled states. Adjacent blocks are separated by at least 2 px.
 
 - Container: `--bg-sunken`, 1 px `--border`, `--radius-md`, padding `--space-3 --space-4`.
 - Label above in Label token, `--text-muted`.
-- Value in mono, 28 px, weight 600, `--text-primary`.
+- Value in mono, 28 px, weight 700, `--text-primary`.
 - Unit immediately after the value, mono, 13 px, `--text-muted`.
 - Units **shall** match `Project_Information/Units.md` exactly (`m/s`, `m`, `s`, `kW`, `C`, ...).
 - Values update in place; the container does not resize as digits change.
