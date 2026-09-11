@@ -1,0 +1,166 @@
+{
+  "line": "Blue",
+  "blocks": [
+    {
+      "block_number": 1,
+      "section": "A",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0
+    },
+    {
+      "block_number": 2,
+      "section": "A",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0
+    },
+    {
+      "block_number": 3,
+      "section": "A",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "railway_crossing": true
+      }
+    },
+    {
+      "block_number": 4,
+      "section": "A",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0
+    },
+    {
+      "block_number": 5,
+      "section": "A",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "switch": "5 to 6"
+      }
+    },
+    {
+      "block_number": 6,
+      "section": "B",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "switch": "5 to 6",
+        "beacon": true
+      }
+    },
+    {
+      "block_number": 7,
+      "section": "B",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0
+    },
+    {
+      "block_number": 8,
+      "section": "B",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0
+    },
+    {
+      "block_number": 9,
+      "section": "B",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "transponder": true
+      }
+    },
+    {
+      "block_number": 10,
+      "section": "B",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "station": "B"
+      }
+    },
+    {
+      "block_number": 11,
+      "section": "C",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "switch": "5 to 11",
+        "beacon": true
+      }
+    },
+    {
+      "block_number": 12,
+      "section": "C",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0
+    },
+    {
+      "block_number": 13,
+      "section": "C",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0
+    },
+    {
+      "block_number": 14,
+      "section": "C",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "transponder": true
+      }
+    },
+    {
+      "block_number": 15,
+      "section": "C",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 50,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0,
+      "infrastructure": {
+        "station": "C"
+      }
+    }
+  ]
+}
