@@ -1,23 +1,16 @@
-# Trains
+# Trains by Kevin, Harry, Landis, Deni, Ivan, Braden
+
+CTC
 
 
+Track Controller
 
 
+Train Controller
 
 
-
-Kevin change
-# Harry Edit
+Track Modal
 
 
+Train Modal
 
-
-# This is my edit -Landis
-
-# Deni edit :3
-
-# first of many terrible tings
-# Ivan Edit
-
-
-Braden checked in
