@@ -39,3 +39,9 @@
 Special notes
 
 ___
+
+### Action Items Spawned
+
+| Item | Person(s) | Deadline |
+| --- | --- | --- |
+| ___ | ___ | ___ |
