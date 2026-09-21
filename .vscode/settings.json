@@ -12,5 +12,23 @@
         }
     ],
 
-    "editor.tabSize": 4
+    "editor.tabSize": 4,
+
+    // Markdown PDF: use the already-installed Chrome rather than letting the
+    // extension download and auto-update its own managed Chromium.
+    "markdown-pdf.executablePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "markdown-pdf.chromium.autoDownload": false,
+    "markdown-pdf.type": ["pdf"],
+    "markdown-pdf.outputDirectory": "pdf",
+    "markdown-pdf.outputDirectoryRelativePathFile": true,
+    "markdown-pdf.format": "Letter",
+    "markdown-pdf.margin.top": "2cm",
+    "markdown-pdf.margin.bottom": "2cm",
+    "markdown-pdf.margin.left": "2cm",
+    "markdown-pdf.margin.right": "2cm",
+    "markdown-pdf.displayHeaderFooter": true,
+    "markdown-pdf.headerTemplate": "<div style=\"font-size: 9px; margin-left: 2cm;\"><span class='title'></span></div><div style=\"font-size: 9px; margin-left: auto; margin-right: 2cm;\">%%ISO-DATE%%</div>",
+    "markdown-pdf.footerTemplate": "<div style=\"font-size: 9px; margin: 0 auto;\"><span class='pageNumber'></span> / <span class='totalPages'></span></div>",
+    "markdown-pdf.highlightStyle": "github.css",
+    "markdown-pdf.sanitize": "gfm"
 }
