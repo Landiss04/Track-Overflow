@@ -40,27 +40,28 @@ University of Pittsburgh
 
 ## 1. Introduction
 
-This SRS defines the software requirements for the ECE1140 Train Management System, a simulated rail network developed as a term-long group project. It covers functional behavior, quality attributes, and verification criteria for the system.
+This SRS defines the software requirements for the ECE1140 Train Management System, a simulated rail network developed for the North Shore Extension project contract by PAAC. It covers functional behavior, quality attributes, and verification criteria for the system.
 
 ### 1.1 Document Purpose
 
-This document defines what the ECE1140 Train Management System must do. It is intended for the development team, QA, and the course instructor, and serves as the baseline for design, testing, and grading throughout the project lifecycle.
+This document defines what the ECE1140 Train Management System must do. It is intended for the development team and the customer, the Port Authority of Allegheny County, and serves as the baseline for design and testing throughout the project lifecycle.
 
 ### 1.2 Product Scope
 
-The ECE1140 Train Management System is a Python-based application that provides a train management service with a graphical user interface. It allows operators to dispatch and monitor trains on a simulated rail network.
+The ECE1140 Train Management System is a Python-based application that provides a train management service with a graphical user interface. It allows operators to dispatch, monitor, and manage trains on a simulated rail network.
 
 ### 1.3 Definitions, Acronyms, and Abbreviations
 
-| Term      | Definition                                                                 |
-|-----------|----------------------------------------------------------------------------|
-| API       | Application Programming Interface                                          |
-| Authority | The maximum distance a train is permitted to travel before stopping        |
-| Block     | A discrete section of track that can be occupied by at most one train      |
-| CTC       | Centralized Traffic Control — the operator dispatching interface           |
-| SRS       | Software Requirements Specification                                        |
-| UI        | User Interface                                                             |
-| UML       | Unified Modeling Language                                                  |
+| Term | Definition |
+| --- | --- |
+| API       | Application Programming Interface |
+| Authority | The maximum distance a train is permitted to travel before stopping |
+| Block     | A discrete section of track that can be occupied by at most one train |
+| CTC       | Centralized Traffic Control — the operator dispatching interface |
+| SRS       | Software Requirements Specification |
+| UI        | User Interface |
+| UML       | Unified Modeling Language |
+| PAAC      | Port Authority of Allegheny County |
 
 ### 1.4 References
 
@@ -93,7 +94,7 @@ The system provides a train management service through a graphical UI, including
 ### 2.3 Product Constraints
 
 - The system shall be implemented in Python 3.10 or later
-- The system shall run on any standard modern PC (e.g., 8 GB RAM, 2 GHz CPU)
+- The system shall run on a standard, modern Windows 11 PC
 
 ### 2.4 User Characteristics
 
@@ -124,19 +125,36 @@ The system provides a train management service through a graphical UI, including
 
 ---
 
+# This section is under heavy reworks. Each section has a new atomic "shall"/"should"/"may" statements as well the original template wording for reference
+# Reqs are named but the numbers are left out in case of additions/removals during editing. AI can easily perform the numbering for us
+
 ## 3. Requirements
 
 ### 3.1 External Interfaces
 
 #### 3.1.1 User Interfaces
 
+REQ-INTF-X: The system shall provice a GUI for each defined submodule
+
 The system shall provide a graphical UI for operators to dispatch and monitor trains, for drivers to view train status and control their train in manual mode, and for maintenance engineers to inject and clear simulated failures.
 
 #### 3.1.2 Hardware Interfaces
 
+REQ-INTF-X: The system shall have a separate hardware variation for the Wayside Controller submodule
+
+REQ-INTF-X: The system shall have a separate hardware variation for the Train Controller submodule
+
+REQ-INTF-X: The system shall take inputs from the user via a standard mouse, keyboard, and monitor setup
+
 The system requires no physical hardware beyond a standard keyboard, mouse, and monitor. All train and track behavior is simulated in software.
 
 #### 3.1.3 Software Interfaces
+
+REQ-INTF-X: The system shall load track layout data from JSON files at startup. 
+
+REQ-INTF-X: All submodules shall share a single simulation clock
+
+<!-- RT and FF should be in functional I think -->
 
 The system shall load track layout data from the course-provided CSV files at startup. All internal components shall share a single simulation clock supporting real-time and fast-forward operation.
 
