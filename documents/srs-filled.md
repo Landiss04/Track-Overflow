@@ -109,7 +109,7 @@ The system provides a train management service through a graphical UI, including
 
 | # | Assumption / Dependency | Impact if False |
 |---|------------------------|-----------------|
-| A1 | Course-provided track layout CSV files are correct and complete | Track simulation would require rework |
+| A1 | Course-provided track layout JSON files are correct and complete | Track simulation would require rework |
 | A2 | Lab machines have Python 3.10+ available | Additional setup time required |
 | A3 | Module interface contracts are agreed by end of Sprint 1 | Late-stage integration failures |
 | A4 | Sprint end dates do not change after Week 2 | Requirement phasing may need revision |
@@ -125,105 +125,145 @@ The system provides a train management service through a graphical UI, including
 
 ---
 
-# This section is under heavy reworks. Each section has a new atomic "shall"/"should"/"may" statements as well the original template wording for reference
-# Reqs are named but the numbers are left out in case of additions/removals during editing. AI can easily perform the numbering for us
-
 ## 3. Requirements
+
+Each requirement has a unique, stable identifier (`REQ-<AREA>-<NUM>`) used for traceability to Section 4 and to test cases. Numbers are never reused if a requirement is removed.
 
 ### 3.1 External Interfaces
 
 #### 3.1.1 User Interfaces
 
-REQ-INTF-X: The system shall provice a GUI for each defined submodule
+REQ-INTF-001: The system shall provide a graphical user interface (GUI) for each defined submodule.
 
-The system shall provide a graphical UI for operators to dispatch and monitor trains, for drivers to view train status and control their train in manual mode, and for maintenance engineers to inject and clear simulated failures.
+REQ-INTF-002: The system shall provide a GUI for CTC operators to dispatch and monitor trains.
+
+REQ-INTF-003: The system shall provide a GUI for train drivers to view train status and control their train in manual mode.
+
+REQ-INTF-004: The system shall provide a GUI for maintenance engineers to inject and clear simulated failures.
 
 #### 3.1.2 Hardware Interfaces
 
-REQ-INTF-X: The system shall have a separate hardware variation for the Wayside Controller submodule
+REQ-INTF-005: The system shall provide a separate hardware variation for the Wayside Controller submodule.
 
-REQ-INTF-X: The system shall have a separate hardware variation for the Train Controller submodule
+REQ-INTF-006: The system shall provide a separate hardware variation for the Train Controller submodule.
 
-REQ-INTF-X: The system shall take inputs from the user via a standard mouse, keyboard, and monitor setup
+REQ-INTF-007: The system shall accept user input via a standard mouse, keyboard, and monitor.
 
-The system requires no physical hardware beyond a standard keyboard, mouse, and monitor. All train and track behavior is simulated in software.
+REQ-INTF-008: The system shall require no physical hardware beyond the standard mouse, keyboard, and monitor, with all train and track behavior simulated in software.
 
 #### 3.1.3 Software Interfaces
 
-REQ-INTF-X: The system shall load track layout data from JSON files at startup. 
+REQ-INTF-009: The system shall load track layout data from JSON files at startup.
 
-REQ-INTF-X: All submodules shall share a single simulation clock
-
-<!-- RT and FF should be in functional I think -->
-
-The system shall load track layout data from the course-provided CSV files at startup. All internal components shall share a single simulation clock supporting real-time and fast-forward operation.
+REQ-INTF-010: All submodules shall share a single simulation clock.
 
 ### 3.2 Functional
 
-The system shall provide the following capabilities:
+REQ-FUNC-001: The system shall allow operators to dispatch trains manually.
 
-- **Train Dispatching:** Operators can dispatch trains manually or from a pre-loaded schedule.
-- **Live Monitoring:** The UI displays the current state of all trains, track blocks, switches, and signals.
-- **Safe Separation:** The system tracks block occupancy and limits each train's movement to prevent collisions.
-- **Speed and Switch Control:** The system commands train speeds within block limits and positions switches according to each train's route.
-- **Emergency Braking:** The system brings a train to a stop when its authority is exhausted, a failure is detected, or the driver requests it.
-- **Train Physics:** The system simulates train velocity and position based on power, braking, and track grade.
-- **Station Operations:** The system manages door open/close cycles and passenger counts at each station stop.
-- **Failure Handling:** The system detects injected failures and responds safely without requiring a full restart.
+REQ-FUNC-002: The system shall allow operators to dispatch trains from a pre-loaded schedule.
+
+REQ-FUNC-003: The system shall display the current state of all trains, track blocks, switches, and signals in the UI.
+
+REQ-FUNC-004: The system shall track block occupancy for every block.
+
+REQ-FUNC-005: The system shall limit each train's movement to prevent collisions based on block occupancy.
+
+REQ-FUNC-006: The system shall command each train's speed within the speed limit of its current block.
+
+REQ-FUNC-007: The system shall position each switch according to the route of the train approaching it.
+
+REQ-FUNC-008: The system shall bring a train to a stop when its authority is exhausted.
+
+REQ-FUNC-009: The system shall bring a train to a stop when a failure is detected.
+
+REQ-FUNC-010: The system shall bring a train to a stop when the driver requests emergency braking.
+
+REQ-FUNC-011: The system shall simulate each train's velocity and position based on power, braking, and track grade.
+
+REQ-FUNC-012: The system shall manage door open/close cycles at each station stop.
+
+REQ-FUNC-013: The system shall manage passenger counts at each station stop.
+
+REQ-FUNC-014: The system shall detect injected failures.
+
+REQ-FUNC-015: The system shall respond to detected failures safely without requiring a full restart.
+
+REQ-FUNC-016: The system shall support running the simulation in real-time speed.
+
+REQ-FUNC-017: The system shall support running the simulation in fast-forward speed.
 
 ### 3.3 Quality of Service
 
 #### 3.3.1 Performance
 
-The system shall run smoothly in real-time and support fast-forward simulation without loss of correctness.
+REQ-NFR-001: The system shall run smoothly in real-time mode.
+
+REQ-NFR-002: The system shall maintain simulation correctness while running in fast-forward mode.
 
 #### 3.3.2 Security
 
-The system shall validate all user inputs and reject invalid entries without altering simulation state.
+REQ-NFR-003: The system shall validate all user inputs.
+
+REQ-NFR-004: The system shall reject invalid user input entries without altering simulation state.
 
 #### 3.3.3 Reliability
 
-The system shall operate without crashes or unhandled errors during normal simulation runs.
+REQ-NFR-005: The system shall operate without crashes during normal simulation runs.
+
+REQ-NFR-006: The system shall operate without unhandled errors during normal simulation runs.
 
 #### 3.3.4 Availability
 
-The system shall start up and be ready for use within a reasonable time after launch.
+REQ-NFR-007: The system shall start up and be ready for use within a reasonable time after launch.
 
 #### 3.3.5 Observability
 
-The system shall produce a log of significant simulation events for debugging and review.
+REQ-NFR-008: The system shall produce a log of significant simulation events for debugging and review.
 
 ### 3.4 Compliance
 
-- The team shall produce UML class diagrams, sequence diagrams, and a use case diagram as required by the course rubric.
-- All source code and documentation shall be maintained in the course Git repository with commits linked to issue tracker tickets.
-- Each team member shall contribute code commits in every sprint.
+REQ-COMP-001: The team shall produce UML class diagrams as required by the course rubric.
+
+REQ-COMP-002: The team shall produce UML sequence diagrams as required by the course rubric.
+
+REQ-COMP-003: The team shall produce a UML use case diagram as required by the course rubric.
+
+REQ-COMP-004: All source code and documentation shall be maintained in the course Git repository.
+
+REQ-COMP-005: All commits shall be linked to issue tracker tickets.
+
+REQ-COMP-006: Each team member shall contribute code commits in every sprint.
 
 ### 3.5 Design and Implementation
 
 #### 3.5.1 Installation
 
-The system shall be launchable with `python main.py` after running `pip install -r requirements.txt` with no additional configuration.
+REQ-DSN-001: The system shall be launchable with `python main.py` after running `pip install -r requirements.txt` with no additional configuration.
+
+<!-- TODO: rewrite REQ-DSN-001 to require a standalone Windows 11 executable instead of a `python main.py` launch; source-install path is no longer the delivery target -->
 
 #### 3.5.2 Build and Delivery
 
-The repository shall include a `requirements.txt` with pinned package versions so the system installs and runs consistently on any compatible machine.
+REQ-DSN-002: The repository shall include a `requirements.txt` with pinned package versions so the system installs and runs consistently on any compatible machine.
+
+<!-- TODO: revisit REQ-DSN-002 once packaged as an executable — pinned requirements.txt may no longer be the delivery artifact; may need a build/packaging step (e.g. PyInstaller) instead -->
 
 #### 3.5.3 Distribution
 
-The system shall run on a single machine with no external services or network connections required.
+REQ-DSN-003: The system shall run on a single machine with no external services or network connections required.
 
 #### 3.5.4 Maintainability
 
-Software modules shall interact through defined interfaces rather than accessing each other's internal state directly.
+REQ-DSN-004: Software modules shall interact through defined interfaces rather than accessing each other's internal state directly.
 
 #### 3.5.5 Reusability
 
-Common utilities such as the simulation clock and event logger shall be implemented as standalone modules usable by any part of the system.
+REQ-DSN-005: Common utilities such as the simulation clock and event logger shall be implemented as standalone modules usable by any part of the system.
 
 #### 3.5.6 Portability
 
-The system shall use platform-neutral file path handling so it runs correctly regardless of the developer's operating system.
+REQ-DSN-006: The system shall use platform-neutral file path handling so it runs correctly regardless of the developer's operating system.
 
 #### 3.5.7 Cost
 
@@ -241,11 +281,11 @@ No financial cost targets apply. All required tools (Python, Git, IDE) are free.
 
 #### 3.5.9 Proof of Concept
 
-A Sprint 1 POC shall demonstrate a simulated train moving between track blocks under authority control with a basic dispatch UI, validating the core data flow before full implementation begins.
+REQ-DSN-007: A Sprint 1 POC shall demonstrate a simulated train moving between track blocks under authority control with a basic dispatch UI, validating the core data flow before full implementation begins.
 
 #### 3.5.10 Change Management
 
-Requirements changes after Sprint 1 require full team agreement and are recorded in the Revision History table.
+REQ-DSN-008: Requirement changes after Sprint 1 shall require full team agreement and shall be recorded in the Revision History table.
 
 ### 3.6 AI/ML
 
@@ -272,7 +312,7 @@ Not applicable. All logic is deterministic and rule-based. No machine learning i
 
 ### Appendix A — Track Layout File Format
 
-Track layout files are CSV files provided by the course instructor. Columns include: Block Number, Block Length (m), Grade (%), Speed Limit (km/h), Infrastructure type, Station Name, and Door Side.
+Track layout files are JSON files provided by the course instructor (see `TrackModel/`). Each file lists a line name and an array of blocks; each block includes a block number, section letter, length (m), grade (%), speed limit (km/h), elevation and cumulative elevation (m), and an optional `infrastructure` object describing features such as stations, switches, railway crossings, beacons, and transponders.
 
 ### Appendix B — Safe Braking Distance Formula
 
@@ -280,4 +320,4 @@ Track layout files are CSV files provided by the course instructor. Columns incl
 d = v² / (2 × a)
 ```
 
-Where _d_ is stopping distance (m), _v_ is current speed (m/s), and _a_ is deceleration (m/s²). Used to verify emergency braking behavior in REQ-FUNC-007.
+Where _d_ is stopping distance (m), _v_ is current speed (m/s), and _a_ is deceleration (m/s²). 
