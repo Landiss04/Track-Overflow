@@ -127,21 +127,42 @@ The system provides a train management service through a graphical UI, including
 
 ## 3. Requirements
 
-Each requirement has a unique, stable identifier (`REQ-<AREA>-<NUM>`) used for traceability to Section 4 and to test cases. Numbers are never reused if a requirement is removed.
+Each requirement has a unique, stable identifier (`REQ-<AREA>-<NUM>`, with sub-points numbered `REQ-<AREA>-<NUM>.<SUB>`) used for traceability to Section 4 and to test cases. Numbers are never reused if a requirement is removed.
 
 ### 3.1 External Interfaces
 
 #### 3.1.1 User Interfaces
 
-REQ-INTF-001: The system shall provide a graphical user interface (GUI) for each defined submodule.
+<!-- screens/controls between the system and its human users (operators, drivers, engineers) -->
 
-REQ-INTF-002: The system shall provide a GUI for CTC operators to dispatch and monitor trains.
+REQ-INTF-001: The system shall provide a graphical user interface (GUI) for each defined submodule, including:
 
-REQ-INTF-003: The system shall provide a GUI for train drivers to view train status and control their train in manual mode.
+- REQ-INTF-001.1: The system shall provide a GUI for the CTC Office submodule.
+- REQ-INTF-001.2: The system shall provide a GUI for the Track Model submodule.
+- REQ-INTF-001.3: The system shall provide a GUI for the Train Model submodule.
+- REQ-INTF-001.4: The system shall provide a GUI for the Track Controller (Hardware) submodule.
+- REQ-INTF-001.5: The system shall provide a GUI for the Track Controller (Software) submodule.
+- REQ-INTF-001.6: The system shall provide a GUI for the Train Controller (Hardware) submodule.
+- REQ-INTF-001.7: The system shall provide a GUI for the Train Controller (Software) submodule.
 
-REQ-INTF-004: The system shall provide a GUI for maintenance engineers to inject and clear simulated failures.
+<!-- satisfies rubric 9.0: each sub-system has a User Interface -->
+
+REQ-INTF-016: The system shall provide a live system map view for the CTC dispatcher, including:
+
+- REQ-INTF-016.1: The system shall display the state of all track blocks on the CTC map view.
+- REQ-INTF-016.2: The system shall display the state of all trains on the CTC map view.
+- REQ-INTF-016.3: The system shall display the state of all switches on the CTC map view.
+- REQ-INTF-016.4: The system shall display the state of all signals on the CTC map view.
+
+REQ-INTF-017: All submodule GUIs shall conform to the UI Style Guide (`documents/UI_Style_Guide.md`).
+
+REQ-INTF-018: The system shall present invalid-input error messages using a consistent format across all submodule GUIs.
+
+REQ-INTF-019: All submodule GUIs shall follow a consistent screen-layout convention for navigation, status, and action controls.
 
 #### 3.1.2 Hardware Interfaces
+
+<!-- characteristics of each interface between the software and physical hardware components -->
 
 REQ-INTF-005: The system shall provide a separate hardware variation for the Wayside Controller submodule.
 
@@ -149,49 +170,256 @@ REQ-INTF-006: The system shall provide a separate hardware variation for the Tra
 
 REQ-INTF-007: The system shall accept user input via a standard mouse, keyboard, and monitor.
 
-REQ-INTF-008: The system shall require no physical hardware beyond the standard mouse, keyboard, and monitor, with all train and track behavior simulated in software.
+REQ-INTF-020: The Hardware and Software variations of the Track Controller shall expose equivalent external interfaces.
+
+REQ-INTF-021: The Hardware and Software variations of the Train Controller shall expose equivalent external interfaces.
+
+<!-- TODO: ties to the "diverse implementation" requirement in requirements-matrix.md §4.3 — confirm how much interface equivalence is required if the two variations are built independently -->
+
+REQ-INTF-022: The system's GUIs shall be usable on a minimum display resolution.
+
+<!-- TODO: minimum resolution not yet decided by the team; low priority unless graded -->
 
 #### 3.1.3 Software Interfaces
+
+<!-- dependencies on other named/versioned software the system runs under or exchanges data with -->
 
 REQ-INTF-009: The system shall load track layout data from JSON files at startup.
 
 REQ-INTF-010: All submodules shall share a single simulation clock.
 
+REQ-INTF-023: The system's GUIs shall be implemented using a single, named GUI framework/library.
+
+<!-- TODO: framework not yet chosen — name and version it here once selected (e.g., Tkinter, PyQt, etc.) per IEEE 830's named/versioned software interface guidance -->
+
+REQ-INTF-024: The event log produced by REQ-NFR-008 shall be written in a defined, named format.
+
+<!-- TODO: log format not yet decided (e.g., plain text, CSV, JSON) -->
+
+REQ-INTF-025: The system shall define whether any state persists between simulation runs beyond the startup track layout load (REQ-INTF-009).
+
+<!-- TODO: open question — is everything in-memory for the session, or is anything saved/restored between runs? -->
+
+#### 3.1.4 Communications Interfaces
+
+<!-- data channels and message flows between submodules, including their vital/non-vital designation -->
+
+REQ-INTF-011: The system shall implement the track circuit as the communications channel carrying speed and authority data from the Track Controller to the Train Controller.
+
+REQ-INTF-012: The system shall implement a communications channel carrying occupancy and train-presence data between the Track Model and the Track Controller.
+
+REQ-INTF-013: The system shall implement a communications channel carrying speed and authority data from the CTC Office to the Track Controller.
+
+REQ-INTF-014: The system shall implement a communications channel carrying occupancy data from the Track Controller to the CTC Office.
+
+REQ-INTF-015: Each communications channel shall be designated as vital or non-vital.
+
+<!-- TODO: Track Controller and Train Controller are required to have a vital architecture, but office<->wayside<->train comms are non-vital per the US-style convention (see requirements-matrix.md §4.1) — decide how vital decisions stay safe over an inherently non-vital channel (checksums, staleness timeouts, fail-to-restrictive defaults) -->
+
 ### 3.2 Functional
 
-REQ-FUNC-001: The system shall allow operators to dispatch trains manually.
+#### 3.2.1 Simulation
 
-REQ-FUNC-002: The system shall allow operators to dispatch trains from a pre-loaded schedule.
-
-REQ-FUNC-003: The system shall display the current state of all trains, track blocks, switches, and signals in the UI.
-
-REQ-FUNC-004: The system shall track block occupancy for every block.
-
-REQ-FUNC-005: The system shall limit each train's movement to prevent collisions based on block occupancy.
-
-REQ-FUNC-006: The system shall command each train's speed within the speed limit of its current block.
-
-REQ-FUNC-007: The system shall position each switch according to the route of the train approaching it.
-
-REQ-FUNC-008: The system shall bring a train to a stop when its authority is exhausted.
-
-REQ-FUNC-009: The system shall bring a train to a stop when a failure is detected.
-
-REQ-FUNC-010: The system shall bring a train to a stop when the driver requests emergency braking.
-
-REQ-FUNC-011: The system shall simulate each train's velocity and position based on power, braking, and track grade.
-
-REQ-FUNC-012: The system shall manage door open/close cycles at each station stop.
-
-REQ-FUNC-013: The system shall manage passenger counts at each station stop.
-
-REQ-FUNC-014: The system shall detect injected failures.
-
-REQ-FUNC-015: The system shall respond to detected failures safely without requiring a full restart.
+<!-- TODO (open issue, not fixing yet): numbering here starts at 016 instead of 001 and isn't sequential across the document — a full renumbering pass is planned later -->
 
 REQ-FUNC-016: The system shall support running the simulation in real-time speed.
 
 REQ-FUNC-017: The system shall support running the simulation in fast-forward speed.
+
+REQ-FUNC-018: The system shall allow the simulation to be paused.
+
+#### 3.2.2 CTC Office
+
+REQ-FUNC-019: The system shall allow the CTC dispatcher to dispatch a train, including:
+
+- REQ-FUNC-019.1: The system shall allow the CTC dispatcher to enter a destination station for the train being dispatched.
+- REQ-FUNC-019.2: The system shall allow the CTC dispatcher to enter an arrival time for the train being dispatched.
+
+REQ-FUNC-020: The system shall determine and send safety-limited speed and authority values to the track controller, including:
+
+- REQ-FUNC-020.1: The system shall determine and send a speed limit to the track controller within safety limits.
+- REQ-FUNC-020.2: The system shall determine and send an authority to the track controller within safety limits.
+
+REQ-FUNC-073: The system shall provide a manual dispatch mode for the CTC dispatcher.
+
+REQ-FUNC-074: The system shall provide an automatic dispatch mode for the CTC dispatcher.
+
+REQ-FUNC-021: The system shall allow the CTC dispatcher to switch between manual dispatch mode (REQ-FUNC-073) and automatic dispatch mode (REQ-FUNC-074).
+
+REQ-FUNC-022: While in manual dispatch mode, the CTC dispatcher shall be able to manually dispatch a train to a block.
+
+REQ-FUNC-025: While in automatic dispatch mode, the system shall support loading and running a train schedule.
+
+REQ-FUNC-023: The system shall allow the CTC dispatcher to close a block for maintenance.
+
+REQ-FUNC-026: While in maintenance mode, the CTC dispatcher shall be able to manually set switch positions and send them to the track controller.
+
+REQ-FUNC-024: The system shall allow the CTC dispatcher to monitor train occupancy.
+
+REQ-FUNC-027: The system shall display throughput metrics to the CTC dispatcher, derived from ticket sales data reported by the Track Model (REQ-FUNC-030).
+
+#### 3.2.3 Track Model
+
+REQ-FUNC-028: The system shall load a track model at startup.
+
+REQ-FUNC-029: The system shall display each track segment's properties to the user, including:
+
+- REQ-FUNC-029.1: The system shall display each track segment's grade.
+- REQ-FUNC-029.2: The system shall display each track segment's elevation.
+- REQ-FUNC-029.3: The system shall display each track segment's length.
+- REQ-FUNC-029.4: The system shall display each track segment's speed limit.
+- REQ-FUNC-029.5: The system shall display each track segment's direction of travel.
+- REQ-FUNC-029.6: The system shall display each track segment's railway crossings.
+- REQ-FUNC-029.7: The system shall display each track segment's track heaters.
+- REQ-FUNC-029.8: The system shall display each track segment's beacons.
+
+REQ-FUNC-030: The system shall track ticket sales representing passengers waiting at each station.
+
+- REQ-FUNC-030.1: The system shall send ticket sales data to the CTC office.
+
+REQ-FUNC-031: The system shall show passenger movement at each train stop, including:
+
+- REQ-FUNC-031.1: The system shall show the number of passengers boarding each train.
+- REQ-FUNC-031.2: The system shall show the number of passengers disembarking each train.
+
+<!-- overlaps with REQ-FUNC-051 (Train Model passenger count) — confirm scope split or consolidate -->
+
+REQ-FUNC-032: The system shall show train occupancy on the track model display.
+
+REQ-FUNC-033: The system shall exchange track circuit signals, including:
+
+- REQ-FUNC-033.1: The system shall send track circuit signals.
+- REQ-FUNC-033.2: The system shall receive track circuit signals.
+
+REQ-FUNC-034: The system shall allow the environmental temperature to be set.
+
+REQ-FUNC-035: The system shall simulate track heaters affecting the track environment.
+
+REQ-FUNC-036: The system shall display switch and light state, including:
+
+- REQ-FUNC-036.1: The system shall display switch positions.
+- REQ-FUNC-036.2: The system shall display light states.
+
+REQ-FUNC-037: The system shall simulate track failure modes, including:
+
+- REQ-FUNC-037.1: The system shall simulate a broken rail failure mode.
+- REQ-FUNC-037.2: The system shall simulate a track circuit failure mode.
+- REQ-FUNC-037.3: The system shall simulate a power failure mode.
+
+<!-- overlaps with REQ-FUNC-059 (Train Model failure modes); detection of these failures is assigned to REQ-FUNC-072 (Track Controller) -->
+
+#### 3.2.4 Train Controller
+
+REQ-FUNC-038: The system shall regulate train speed at the velocity setpoint received from the CTC and the train driver.
+
+<!-- flagged for team review: clarify how the CTC-issued setpoint and the driver-issued setpoint are reconciled when both are present -->
+
+REQ-FUNC-039: The system shall allow the internal train temperature setpoint to be set.
+
+REQ-FUNC-040: The system shall allow the driver to activate the emergency brake.
+
+REQ-FUNC-041: The system shall allow the driver to activate the service brake.
+
+REQ-FUNC-042: The system shall allow the engineer to set the Kp and Ki control gains.
+
+REQ-FUNC-043: The system shall allow the driver to increase and decrease train speed.
+
+REQ-FUNC-044: The system shall use the speed and authority received from the track circuit.
+
+<!-- flagged for team review: clarify relationship to REQ-FUNC-038 — is this the same setpoint source, or a separate signal? -->
+
+REQ-FUNC-045: The system shall turn train lights on and off.
+
+REQ-FUNC-046: The system shall open and close train doors.
+
+REQ-FUNC-047: The system shall announce stations.
+
+REQ-FUNC-075: The system shall stop the train correctly at each station.
+
+REQ-FUNC-048: The Train Controller shall have a safety-critical architecture, including:
+
+- REQ-FUNC-048.1: The system shall bring a train to a stop when its authority is exhausted.
+- REQ-FUNC-048.2: The system shall bring a train to a stop when a failure is detected.
+
+REQ-FUNC-071: The Train Controller shall detect failure conditions reported by the Train Model, including:
+
+- REQ-FUNC-071.1: The system shall detect a train engine failure.
+- REQ-FUNC-071.2: The system shall detect a signal pickup failure.
+- REQ-FUNC-071.3: The system shall detect a brake failure.
+
+#### 3.2.5 Train Model
+
+REQ-FUNC-049: Given a power command, the system shall calculate train motion using Newton's laws correctly.
+
+REQ-FUNC-050: The system shall display train properties to the user, including:
+
+- REQ-FUNC-050.1: The system shall display train length.
+- REQ-FUNC-050.2: The system shall display train height.
+- REQ-FUNC-050.3: The system shall display train width.
+- REQ-FUNC-050.4: The system shall display train mass.
+- REQ-FUNC-050.5: The system shall display train acceleration.
+- REQ-FUNC-050.6: The system shall display train velocity.
+
+REQ-FUNC-051: The system shall display crew and passenger count for each train, including:
+
+- REQ-FUNC-051.1: The system shall display crew count for each train.
+- REQ-FUNC-051.2: The system shall display passenger count for each train.
+
+REQ-FUNC-052: The system shall receive a track circuit signal containing suggested speed and authority.
+
+REQ-FUNC-053: The Train Model shall track the internal train temperature as commanded by the Train Controller (REQ-FUNC-039).
+
+REQ-FUNC-054: The Train Model shall track the on/off state of train lights as commanded by the Train Controller (REQ-FUNC-045).
+
+REQ-FUNC-055: The Train Model shall track the open/closed state of train doors as commanded by the Train Controller (REQ-FUNC-046).
+
+REQ-FUNC-056: The system shall receive beacon inputs.
+
+REQ-FUNC-057: The system shall allow a passenger to activate the emergency brake.
+
+REQ-FUNC-059: The system shall simulate train failure modes, including:
+
+- REQ-FUNC-059.1: The system shall simulate a train engine failure.
+- REQ-FUNC-059.2: The system shall simulate a signal pickup failure.
+- REQ-FUNC-059.3: The system shall simulate a brake failure.
+
+<!-- overlaps with REQ-FUNC-037 (Track Model failure modes); detection of these failures is assigned to REQ-FUNC-071 (Train Controller) -->
+
+#### 3.2.6 Track Controller (Wayside)
+
+REQ-FUNC-060: The wayside track controller shall receive suggested speed and authority from the CTC.
+
+<!-- overlaps with REQ-FUNC-020 (CTC speed/authority send) — verify distinct pipeline stage or consolidate -->
+
+REQ-FUNC-067: The wayside track controller shall load a PLC file.
+
+REQ-FUNC-066: The wayside track controller's PLC language shall be based only on Boolean variables.
+
+REQ-FUNC-061: The wayside track controller shall automatically move switches based on PLC program execution.
+
+REQ-FUNC-062: The wayside track controller shall automatically set traffic light color based on PLC program execution.
+
+REQ-FUNC-063: The wayside track controller shall receive train presence from the track model.
+
+REQ-FUNC-064: The wayside track controller shall send track occupancy to the CTC.
+
+REQ-FUNC-065: The wayside track controller shall activate railway crossing lights and gates.
+
+REQ-FUNC-068: The wayside track controller shall know when the system is in maintenance mode.
+
+REQ-FUNC-069: The Track Controller shall have a safety-critical architecture, including:
+
+- REQ-FUNC-069.1: The system shall limit each train's movement to prevent collisions based on block occupancy.
+
+REQ-FUNC-072: The wayside track controller shall detect failure conditions reported by the Track Model, including:
+
+- REQ-FUNC-072.1: The system shall detect a broken rail failure.
+- REQ-FUNC-072.2: The system shall detect a track circuit failure.
+- REQ-FUNC-072.3: The system shall detect a power failure.
+
+#### 3.2.7 Moving Block Overlay
+
+Not implemented - out of scope per the customer's requirements.
 
 ### 3.3 Quality of Service
 
@@ -235,6 +463,16 @@ REQ-COMP-005: All commits shall be linked to issue tracker tickets.
 
 REQ-COMP-006: Each team member shall contribute code commits in every sprint.
 
+REQ-COMP-007: The team shall submit a written reflection describing what the team learned from the course.
+
+REQ-COMP-008: The team shall report estimated versus actual hours to complete the project, by team member and in total.
+
+REQ-COMP-009: The team shall report the bug count per week for the last four weeks of development.
+
+REQ-COMP-010: The team shall document the biggest lesson learned by the team.
+
+REQ-COMP-011: The team shall document what the team would do differently if repeating the project.
+
 ### 3.5 Design and Implementation
 
 #### 3.5.1 Installation
@@ -267,7 +505,9 @@ REQ-DSN-006: The system shall use platform-neutral file path handling so it runs
 
 #### 3.5.7 Cost
 
-No financial cost targets apply. All required tools (Python, Git, IDE) are free.
+REQ-DSN-009: The team shall produce a cost analysis for the project.
+
+<!-- TODO: this previously said "no financial cost targets apply" — rubric now grades a Cost Analysis deliverable worth 15 pts; confirm what it should cover (labor hours x rate, tooling, hardware, etc.) -->
 
 #### 3.5.8 Deadline
 
