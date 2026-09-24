@@ -1,0 +1,66 @@
+/* Print styles for Markdown PDF exports of the SRS. */
+
+.cover {
+    break-after: page;
+    page-break-after: always;
+    text-align: center;
+    padding-top: 6cm;
+}
+
+.cover h1,
+.cover h2 {
+    border-bottom: none;
+    margin: 0 0 0.4cm 0;
+}
+
+.cover h1 {
+    font-size: 28pt;
+    font-weight: 600;
+}
+
+.cover h2 {
+    font-size: 16pt;
+    font-weight: 400;
+    color: #444;
+}
+
+.cover p {
+    font-size: 12pt;
+    line-height: 1.8;
+    margin-top: 3cm;
+}
+
+/* Keep tables and their rows from being split across pages. */
+table {
+    break-inside: auto;
+    width: 100%;
+}
+
+tr,
+td,
+th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+/* Repeat table headers when a long table does span pages. */
+thead {
+    display: table-header-group;
+}
+
+/* Never strand a heading at the bottom of a page. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    break-after: avoid;
+    page-break-after: avoid;
+}
+
+pre,
+blockquote {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}

@@ -1,10 +1,14 @@
+<div class="cover">
+
 # Software Requirements Specification
 ## For ECE1140 Train Management System
 
-Version 1.0  
-Prepared by Team 3  
-University of Pittsburgh  
-2026-08-28
+Version 1.0
+Prepared by Team 3
+University of Pittsburgh
+2026-09-24
+
+</div>
 
 ## Table of Contents
 <!-- TOC -->
@@ -17,8 +21,8 @@ University of Pittsburgh
 * [2. Product Overview](#2-product-overview)
     * [2.1 Product Perspective](#21-product-perspective)
     * [2.2 Product Functions](#22-product-functions)
-    * [2.3 Product Constraints](#23-product-constraints)
-    * [2.4 User Characteristics](#24-user-characteristics)
+    * [2.3 User Characteristics](#23-user-characteristics)
+    * [2.4 Product Constraints](#24-product-constraints)
     * [2.5 Assumptions and Dependencies](#25-assumptions-and-dependencies)
     * [2.6 Apportioning of Requirements](#26-apportioning-of-requirements)
 * [3. Requirements](#3-requirements)
@@ -36,7 +40,11 @@ University of Pittsburgh
 
 | Name   | Date       | Reason For Changes     | Version |
 |--------|------------|------------------------|---------|
-| Team 3 | 2026-08-28 | Initial document draft | 1.0     |
+| Team 3 | 2026-08-28 | Initial document draft | 0.1     |
+| Braden | 2026-09-21 | Restructured requirements into numbered atomic statements | 0.2 |
+| Braden | 2026-09-22 | added Communications Interfaces; resolved milestone schedule (3 Work Packages + 3 Iterations) | 0.3 |
+| Braden | 2026-09-23 | rebuilt Section 4 as a full requirement-to-verification traceability table | 0.4 |
+
 
 ## 1. Introduction
 
@@ -44,7 +52,7 @@ This SRS defines the software requirements for the ECE1140 Train Management Syst
 
 ### 1.1 Document Purpose
 
-This document defines what the ECE1140 Train Management System must do. It is intended for the development team and the customer, the Port Authority of Allegheny County, and serves as the baseline for design and testing throughout the project lifecycle.
+This document defines what the ECE1140 Train Management System must do. It is intended for the development team and the customer, the Port Authority of Allegheny County, and serves as the baseline for design and testing throughout the project lifecycle. The document follows the IEEE Standard 830-1998.
 
 ### 1.2 Product Scope
 
@@ -57,18 +65,21 @@ The ECE1140 Train Management System is a Python-based application that provides 
 | API       | Application Programming Interface |
 | Authority | The maximum distance a train is permitted to travel before stopping |
 | Block     | A discrete section of track that can be occupied by at most one train |
-| CTC       | Centralized Traffic Control — the operator dispatching interface |
+| CTC       | Centralized Traffic Control - the operator dispatching interface |
 | SRS       | Software Requirements Specification |
 | UI        | User Interface |
 | UML       | Unified Modeling Language |
 | PAAC      | Port Authority of Allegheny County |
+| PLC       | Programmable Logic Controller — the Boolean-variable program that drives the Track Controller |
 
 ### 1.4 References
 
 | # | Title | Author | Date | Type |
 |---|-------|--------|------|------|
-| 1 | ECE1140 Course Project Description | University of Pittsburgh | 2026-08 | Normative |
+| 1 | Project Description and Requirements | PAAC | 2026-08 | Normative |
 | 2 | IEEE Std 830-1998: Recommended Practice for SRS | IEEE | 1998 | Informative |
+| 3 | UI Style Guide | Team 3 | 2026 | Normative |
+| 4 | Module Requirements Matrix | Team 3 | 2026 | Informative |
 
 ### 1.5 Document Overview
 
@@ -91,19 +102,22 @@ The system provides a train management service through a graphical UI, including
 - Enforcing safe train separation and speed limits
 - Simulating train motion, station stops, and failure conditions
 
-### 2.3 Product Constraints
-
-- The system shall be implemented in Python 3.10 or later
-- The system shall run on a standard, modern Windows 11 PC
-
-### 2.4 User Characteristics
+### 2.3 User Characteristics
 
 | User Class | Description | Expertise |
 |------------|-------------|-----------|
-| CTC Operator | Dispatches trains and monitors the network | No programming knowledge required |
-| Train Driver | Controls a single train in manual mode | Basic operational training |
-| Maintenance Engineer | Injects failures for testing | Technical; understands system internals |
-| Course Instructor | Evaluates the system against the grading rubric | Full technical expertise |
+| CTC Dispatcher | Dispatches trains and monitors the network | Moderate technological expertise |
+| Train Driver | Controls a single train in manual mode | Minimal technological expertise; basic operational training |
+| Programmer | Uploads a Boolean PLC program to control the Track Controller module | Superb technological understanding; must write Boolean PLC program |
+| Murphy | Injects failures for testing | Perfect technical understanding. Master at breaking things. |
+| Passenger | Rides the trains | Zero technical knowledge is expected | 
+| Track Builder | Builds the track | Mechanical expertise |
+| Port Authority of Allegheny County | The Customer - evaluates the system according the specification they laid out | N/A |
+
+### 2.4 Product Constraints
+
+- The system shall be implemented in Python 3.10 or later
+- The system shall run on a standard, modern Windows 11 PC
 
 ### 2.5 Assumptions and Dependencies
 
@@ -111,23 +125,33 @@ The system provides a train management service through a graphical UI, including
 |---|------------------------|-----------------|
 | A1 | Course-provided track layout JSON files are correct and complete | Track simulation would require rework |
 | A2 | Lab machines have Python 3.10+ available | Additional setup time required |
-| A3 | Module interface contracts are agreed by end of Sprint 1 | Late-stage integration failures |
-| A4 | Sprint end dates do not change after Week 2 | Requirement phasing may need revision |
+| A3 | Module interface contracts are agreed by end of WP1 | Late-stage integration failures |
+| A4 | PyQt is installable via pip on all lab machines | GUI framework would need to be swapped or vendored |
 
 ### 2.6 Apportioning of Requirements
 
-| Functional Area | Sprint 1 | Sprint 2 | Sprint 3 | Sprint 4 |
-|----------------|----------|----------|----------|----------|
-| Dispatching & Scheduling | Basic UI shell | Schedule entry | Auto-dispatch | Full dispatch |
-| Safety & Control | Interface contracts | Authority logic | Switch/signal control | Full safety demo |
-| Train & Track Simulation | Layout file loading | Physics/occupancy | Failure injection | Complete simulation |
-| Station Operations | — | Door logic | Passenger counts | Full station behavior |
+<!-- proposed mapping of functional areas onto the 6 course milestones — this is my interpretation, not stated directly by the rubric; please confirm -->
+
+| Functional Area | Iteration 1 (UX) | WP1 | Iteration 2 | WP2 | Iteration 3 | WP3 (Final) |
+| -- | -- | -- | -- | -- | -- | -- |
+| Dispatching & Scheduling | — | Basic UI shell | Schedule entry | Auto-dispatch | Full dispatch | Finalized for delivery |
+| Safety & Control | — | Interface contracts | Authority logic | Switch/signal control | Full safety demo | Finalized for delivery |
+| Train & Track Simulation | — | Layout file loading | Physics/occupancy | Failure injection | Complete simulation | Finalized for delivery |
+| Station Operations | — | — | Door logic | Passenger counts | Full station behavior | Finalized for delivery |
 
 ---
 
 ## 3. Requirements
 
 Each requirement has a unique, stable identifier (`REQ-<AREA>-<NUM>`, with sub-points numbered `REQ-<AREA>-<NUM>.<SUB>`) used for traceability to Section 4 and to test cases. Numbers are never reused if a requirement is removed.
+
+| Area Code | Section | Covers |
+|-----------|---------|--------|
+| `INTF` | 3.1 External Interfaces | User, hardware, software, and communications interfaces |
+| `FUNC` | 3.2 Functional | Functional capabilities of the system |
+| `NFR`  | 3.3 Quality of Service | Non-functional / quality-of-service requirements |
+| `COMP` | 3.4 Compliance | Course and process compliance requirements |
+| `DSN`  | 3.5 Design and Implementation | Design and implementation constraints |
 
 ### 3.1 External Interfaces
 
@@ -164,7 +188,7 @@ REQ-INTF-019: All submodule GUIs shall follow a consistent screen-layout convent
 
 <!-- characteristics of each interface between the software and physical hardware components -->
 
-REQ-INTF-005: The system shall provide a separate hardware variation for the Wayside Controller submodule.
+REQ-INTF-005: The system shall provide a separate hardware variation for the Track Controller submodule.
 
 REQ-INTF-006: The system shall provide a separate hardware variation for the Train Controller submodule.
 
@@ -188,9 +212,9 @@ REQ-INTF-009: The system shall load track layout data from JSON files at startup
 
 REQ-INTF-010: All submodules shall share a single simulation clock.
 
-REQ-INTF-023: The system's GUIs shall be implemented using a single, named GUI framework/library.
+REQ-INTF-023: The system's GUIs shall be implemented using PyQt as the GUI framework/library.
 
-<!-- TODO: framework not yet chosen — name and version it here once selected (e.g., Tkinter, PyQt, etc.) per IEEE 830's named/versioned software interface guidance -->
+<!-- TODO: pin the exact PyQt package/version (e.g., PyQt5 vs PyQt6) once chosen, and add it to requirements.txt -->
 
 REQ-INTF-024: The event log produced by REQ-NFR-008 shall be written in a defined, named format.
 
@@ -224,7 +248,7 @@ REQ-INTF-015: Each communications channel shall be designated as vital or non-vi
 
 REQ-FUNC-016: The system shall support running the simulation in real-time speed.
 
-REQ-FUNC-017: The system shall support running the simulation in fast-forward speed.
+REQ-FUNC-017: The system shall support running the simulation in at least 10x wall clock speed.
 
 REQ-FUNC-018: The system shall allow the simulation to be paused.
 
@@ -310,7 +334,9 @@ REQ-FUNC-037: The system shall simulate track failure modes, including:
 
 #### 3.2.4 Train Controller
 
-REQ-FUNC-038: The system shall regulate train speed at the velocity setpoint received from the CTC and the train driver.
+REQ-FUNC-038: The system shall, in manual mode, regulate train speed at the velocity setpoint received from the train driver.
+
+REQ-FUNC-039: The system shall, in automatic mode, regulate the train speed at the velocity setpoint received from the track controller.
 
 <!-- flagged for team review: clarify how the CTC-issued setpoint and the driver-issued setpoint are reconciled when both are present -->
 
@@ -461,7 +487,7 @@ REQ-COMP-004: All source code and documentation shall be maintained in the cours
 
 REQ-COMP-005: All commits shall be linked to issue tracker tickets.
 
-REQ-COMP-006: Each team member shall contribute code commits in every sprint.
+REQ-COMP-006: Each team member shall contribute code commits at every milestone.
 
 REQ-COMP-007: The team shall submit a written reflection describing what the team learned from the course.
 
@@ -477,15 +503,11 @@ REQ-COMP-011: The team shall document what the team would do differently if repe
 
 #### 3.5.1 Installation
 
-REQ-DSN-001: The system shall be launchable with `python main.py` after running `pip install -r requirements.txt` with no additional configuration.
-
-<!-- TODO: rewrite REQ-DSN-001 to require a standalone Windows 11 executable instead of a `python main.py` launch; source-install path is no longer the delivery target -->
+REQ-DSN-001: The system shall be launchable as a standalone executable binary.
 
 #### 3.5.2 Build and Delivery
 
-REQ-DSN-002: The repository shall include a `requirements.txt` with pinned package versions so the system installs and runs consistently on any compatible machine.
-
-<!-- TODO: revisit REQ-DSN-002 once packaged as an executable — pinned requirements.txt may no longer be the delivery artifact; may need a build/packaging step (e.g. PyInstaller) instead -->
+REQ-DSN-002: The repository shall be pre-compiled into an executable binary prior to being delivered to the customer.
 
 #### 3.5.3 Distribution
 
@@ -505,27 +527,26 @@ REQ-DSN-006: The system shall use platform-neutral file path handling so it runs
 
 #### 3.5.7 Cost
 
-REQ-DSN-009: The team shall produce a cost analysis for the project.
-
-<!-- TODO: this previously said "no financial cost targets apply" — rubric now grades a Cost Analysis deliverable worth 15 pts; confirm what it should cover (labor hours x rate, tooling, hardware, etc.) -->
+REQ-DSN-009: The team shall produce a cost analysis for the project according to the requirements laid out by the customer in future discussions.
 
 #### 3.5.8 Deadline
 
 | Milestone | Date | Deliverables |
 |-----------|------|--------------|
-| Sprint 1 | 2026-09-25 | Module interfaces, track loader, dispatch UI shell, POC demo |
-| Sprint 2 | 2026-10-16 | Train dynamics, occupancy, authority, basic scheduling |
-| Sprint 3 | 2026-11-06 | Full safety logic, switch/signal control, failure injection |
-| Final Demo | 2026-11-20 | Complete integrated system; public presentation |
-| Documentation | 2026-11-25 | UML, SRS, and test reports submitted |
+| Iteration 1 — UX Design | 2026-09-17 | Personas, workflow/information architecture, key inputs & outputs, module UI test |
+| WP1 | 2026-09-24 | SRS, project schedule, coding standards, defect tracking policy, personas; system architecture, UX architecture, UI design, risk assessment |
+| Iteration 2 — Sub-System Presentations | 2026-10-08 | Sub-system UI, key subsystem inputs/outputs working, separate test UI |
+| WP2 | 2026-10-22 | Scrum boards, user stories, architecture & design, test plan |
+| Iteration 3 — System Presentations | 2026-11-12 | Systemwide integration: dispatch a train from yard to station, sub-systems communicating |
+| WP3 / Iteration 4 — Final Demo | 2026-12-10 | Complete system: code base, installation manual, test plan results, bug reports, work schedule, demo video |
 
 #### 3.5.9 Proof of Concept
 
-REQ-DSN-007: A Sprint 1 POC shall demonstrate a simulated train moving between track blocks under authority control with a basic dispatch UI, validating the core data flow before full implementation begins.
+REQ-DSN-007: A WP1 POC shall demonstrate a simulated train moving between track blocks under authority control with a basic dispatch UI, validating the core data flow before full implementation begins.
 
 #### 3.5.10 Change Management
 
-REQ-DSN-008: Requirement changes after Sprint 1 shall require full team agreement and shall be recorded in the Revision History table.
+REQ-DSN-008: Requirement changes after WP1 shall require full team agreement and shall be recorded in the Revision History table.
 
 ### 3.6 AI/ML
 
@@ -535,16 +556,142 @@ Not applicable. All logic is deterministic and rule-based. No machine learning i
 
 ## 4. Verification
 
-| Area | Verification Method |
-|------|---------------------|
-| User interfaces (map, dispatch form, driver display, failure UI) | Demonstration |
-| Functional behavior (dispatch, scheduling, occupancy, authority, speed, switching, braking, physics, doors, failures) | Test + Demonstration |
-| Performance and reliability | Test |
-| Input validation | Test |
-| Event logging | Inspection |
-| UML documentation, version control, team contributions | Inspection |
-| Installation and single-machine deployment | Demonstration |
-| Module independence and shared utilities | Inspection |
+<!-- verified at the parent-requirement level; sub-points (e.g. 001.1-001.7) are verified together with their parent unless noted otherwise -->
+<!-- methods follow IEEE 830's four categories: Inspection, Analysis, Demonstration, Test -->
+
+### 4.1 External Interfaces
+
+| ID | Requirement | Verification Method |
+|----|-------------|----------------------|
+| REQ-INTF-001 | GUI per submodule (7 sub-points) | Demonstration |
+| REQ-INTF-005 | Track Controller hardware variation | Inspection |
+| REQ-INTF-006 | Train Controller hardware variation | Inspection |
+| REQ-INTF-007 | Mouse/keyboard/monitor input | Demonstration |
+| REQ-INTF-009 | Load track layout from JSON at startup | Test |
+| REQ-INTF-010 | Shared simulation clock | Test |
+| REQ-INTF-011 | Track circuit channel (Track Ctrl -> Train Ctrl) | Test + Demonstration |
+| REQ-INTF-012 | Track Model <-> Track Controller occupancy/presence channel | Test + Demonstration |
+| REQ-INTF-013 | CTC -> Track Controller speed/authority channel | Test + Demonstration |
+| REQ-INTF-014 | Track Controller -> CTC occupancy channel | Test + Demonstration |
+| REQ-INTF-015 | Vital/non-vital channel designation | Inspection |
+| REQ-INTF-016 | CTC live system map view (4 sub-points) | Demonstration |
+| REQ-INTF-017 | UI Style Guide conformance | Inspection |
+| REQ-INTF-018 | Consistent error message format | Demonstration |
+| REQ-INTF-019 | Consistent screen-layout convention | Inspection |
+| REQ-INTF-020 | Track Controller HW/SW interface equivalence | Inspection |
+| REQ-INTF-021 | Train Controller HW/SW interface equivalence | Inspection |
+| REQ-INTF-022 | Minimum display resolution | Demonstration |
+| REQ-INTF-023 | PyQt as GUI framework | Inspection |
+| REQ-INTF-024 | Event log format | Inspection |
+| REQ-INTF-025 | State persistence between runs | Test |
+
+### 4.2 Functional
+
+| ID | Requirement | Verification Method |
+|----|-------------|----------------------|
+| REQ-FUNC-016 | Real-time speed | Test + Demonstration |
+| REQ-FUNC-017 | >=10x fast-forward speed | Test + Demonstration |
+| REQ-FUNC-018 | Pause simulation | Demonstration |
+| REQ-FUNC-019 | Dispatch a train w/ destination + arrival time (2 sub-points) | Test + Demonstration |
+| REQ-FUNC-020 | Determine/send safety-limited speed + authority (2 sub-points) | Test |
+| REQ-FUNC-073 | Manual dispatch mode exists | Demonstration |
+| REQ-FUNC-074 | Automatic dispatch mode exists | Demonstration |
+| REQ-FUNC-021 | Switch manual/automatic mode | Demonstration |
+| REQ-FUNC-022 | Manual dispatch to a block | Test + Demonstration |
+| REQ-FUNC-025 | Load and run a train schedule | Test + Demonstration |
+| REQ-FUNC-023 | Close a block for maintenance | Demonstration |
+| REQ-FUNC-026 | Manual switch set in maintenance mode | Demonstration |
+| REQ-FUNC-024 | Monitor train occupancy | Demonstration |
+| REQ-FUNC-027 | Throughput metrics from ticket sales | Test + Demonstration |
+| REQ-FUNC-028 | Load track model at startup | Test |
+| REQ-FUNC-029 | Display track segment properties (8 sub-points) | Demonstration |
+| REQ-FUNC-030 | Track ticket sales (1 sub-point) | Test |
+| REQ-FUNC-031 | Passenger boarding/disembarking (2 sub-points) | Test + Demonstration |
+| REQ-FUNC-032 | Track occupancy display | Demonstration |
+| REQ-FUNC-033 | Send/receive track circuit signals (2 sub-points) | Test |
+| REQ-FUNC-034 | Set environmental temperature | Demonstration |
+| REQ-FUNC-035 | Track heaters affect environment | Test |
+| REQ-FUNC-036 | Switch/light state display (2 sub-points) | Demonstration |
+| REQ-FUNC-037 | Track failure modes (3 sub-points) | Test + Demonstration |
+| REQ-FUNC-038 | Regulate speed at CTC/driver setpoint | Test |
+| REQ-FUNC-039 | Internal temperature setpoint | Demonstration |
+| REQ-FUNC-040 | Driver emergency brake | Test + Demonstration |
+| REQ-FUNC-041 | Driver service brake | Test + Demonstration |
+| REQ-FUNC-042 | Set Kp/Ki control gains | Test |
+| REQ-FUNC-043 | Driver increase/decrease speed | Demonstration |
+| REQ-FUNC-044 | Use speed/authority from track circuit | Test |
+| REQ-FUNC-045 | Train lights on/off | Demonstration |
+| REQ-FUNC-046 | Train doors open/close | Demonstration |
+| REQ-FUNC-047 | Announce stations | Demonstration |
+| REQ-FUNC-075 | Stop correctly at each station | Test + Demonstration |
+| REQ-FUNC-048 | Safety-critical architecture (2 sub-points) | Test + Demonstration |
+| REQ-FUNC-071 | Detect Train Model failures (3 sub-points) | Test |
+| REQ-FUNC-049 | Newton's-laws motion calculation | Test |
+| REQ-FUNC-050 | Display train properties (6 sub-points) | Demonstration |
+| REQ-FUNC-051 | Display crew/passenger count (2 sub-points) | Demonstration |
+| REQ-FUNC-052 | Receive track circuit signal | Test |
+| REQ-FUNC-053 | Track internal temperature as commanded | Test |
+| REQ-FUNC-054 | Track light state as commanded | Test + Demonstration |
+| REQ-FUNC-055 | Track door state as commanded | Test + Demonstration |
+| REQ-FUNC-056 | Receive beacon inputs | Test |
+| REQ-FUNC-057 | Passenger emergency brake | Test + Demonstration |
+| REQ-FUNC-059 | Train failure modes (3 sub-points) | Test + Demonstration |
+| REQ-FUNC-060 | Receive speed/authority from CTC | Test |
+| REQ-FUNC-067 | Load PLC file | Test |
+| REQ-FUNC-066 | Boolean-only PLC language | Inspection |
+| REQ-FUNC-061 | Auto switch movement via PLC | Test + Demonstration |
+| REQ-FUNC-062 | Auto traffic light via PLC | Test + Demonstration |
+| REQ-FUNC-063 | Receive train presence from Track Model | Test |
+| REQ-FUNC-064 | Send occupancy to CTC | Test |
+| REQ-FUNC-065 | Railway crossing lights/gates | Test + Demonstration |
+| REQ-FUNC-068 | Know when in maintenance mode | Demonstration |
+| REQ-FUNC-069 | Safety-critical architecture (1 sub-point) | Test + Demonstration |
+| REQ-FUNC-072 | Detect Track Model failures (3 sub-points) | Test |
+
+*Moving Block Overlay (3.2.7): not implemented, no verification applicable.*
+
+### 4.3 Quality of Service
+
+| ID | Requirement | Verification Method |
+|----|-------------|----------------------|
+| REQ-NFR-001 | Smooth real-time operation | Test |
+| REQ-NFR-002 | Correctness in fast-forward | Test |
+| REQ-NFR-003 | Validate user inputs | Test |
+| REQ-NFR-004 | Reject invalid input w/o state change | Test |
+| REQ-NFR-005 | No crashes | Test |
+| REQ-NFR-006 | No unhandled errors | Test |
+| REQ-NFR-007 | Startup within a reasonable time | Test |
+| REQ-NFR-008 | Event log of significant events | Inspection |
+
+### 4.4 Compliance
+
+| ID | Requirement | Verification Method |
+|----|-------------|----------------------|
+| REQ-COMP-001 | UML class diagrams | Inspection |
+| REQ-COMP-002 | UML sequence diagrams | Inspection |
+| REQ-COMP-003 | UML use case diagram | Inspection |
+| REQ-COMP-004 | Source/docs in course Git repo | Inspection |
+| REQ-COMP-005 | Commits linked to issue tickets | Inspection |
+| REQ-COMP-006 | Commits at every milestone | Inspection |
+| REQ-COMP-007 | Written course reflection | Inspection |
+| REQ-COMP-008 | Estimated vs. actual hours | Inspection |
+| REQ-COMP-009 | Weekly bug count | Inspection |
+| REQ-COMP-010 | Biggest lesson learned | Inspection |
+| REQ-COMP-011 | What the team would do differently | Inspection |
+
+### 4.5 Design and Implementation
+
+| ID | Requirement | Verification Method |
+|----|-------------|----------------------|
+| REQ-DSN-001 | Launch via `python main.py` / `pip install` | Demonstration |
+| REQ-DSN-002 | Pinned `requirements.txt` | Inspection |
+| REQ-DSN-003 | Single machine, no network | Demonstration |
+| REQ-DSN-004 | Modules interact via defined interfaces | Inspection |
+| REQ-DSN-005 | Shared clock/logger as standalone modules | Inspection |
+| REQ-DSN-006 | Platform-neutral file paths | Inspection |
+| REQ-DSN-009 | Cost analysis produced | Inspection |
+| REQ-DSN-007 | WP1 POC demo | Demonstration |
+| REQ-DSN-008 | Change management process followed | Inspection |
 
 ---
 
