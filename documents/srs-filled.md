@@ -44,6 +44,7 @@ University of Pittsburgh
 | Braden | 2026-09-21 | Restructured requirements into numbered atomic statements | 0.2 |
 | Braden | 2026-09-22 | added Communications Interfaces; resolved milestone schedule (3 Work Packages + 3 Iterations) | 0.3 |
 | Braden | 2026-09-23 | rebuilt Section 4 as a full requirement-to-verification traceability table | 0.4 |
+| Team   | 2026-09-24 | Applying specificity to some requirements that previously had none. Added UI and UX to definitions table | 0.5 |
 
 
 ## 1. Introduction
@@ -71,6 +72,8 @@ The ECE1140 Train Management System is a Python-based application that provides 
 | UML       | Unified Modeling Language |
 | PAAC      | Port Authority of Allegheny County |
 | PLC       | Programmable Logic Controller — the Boolean-variable program that drives the Track Controller |
+| UX/UI     | User Experience | 
+| UI        | User Interface |
 
 ### 1.4 References
 
@@ -198,11 +201,7 @@ REQ-INTF-020: The Hardware and Software variations of the Track Controller shall
 
 REQ-INTF-021: The Hardware and Software variations of the Train Controller shall expose equivalent external interfaces.
 
-<!-- TODO: ties to the "diverse implementation" requirement in requirements-matrix.md §4.3 — confirm how much interface equivalence is required if the two variations are built independently -->
-
-REQ-INTF-022: The system's GUIs shall be usable on a minimum display resolution.
-
-<!-- TODO: minimum resolution not yet decided by the team; low priority unless graded -->
+REQ-INTF-022: The system's GUIs shall be usable on a minimum display resolution of 720x450
 
 #### 3.1.3 Software Interfaces
 
@@ -212,17 +211,11 @@ REQ-INTF-009: The system shall load track layout data from JSON files at startup
 
 REQ-INTF-010: All submodules shall share a single simulation clock.
 
-REQ-INTF-023: The system's GUIs shall be implemented using PyQt as the GUI framework/library.
+REQ-INTF-023: The system's GUIs shall be implemented using PySide6 as the GUI framework/library.
 
-<!-- TODO: pin the exact PyQt package/version (e.g., PyQt5 vs PyQt6) once chosen, and add it to requirements.txt -->
+REQ-INTF-024: The event log produced by REQ-NFR-008 shall be written in CSV format.
 
-REQ-INTF-024: The event log produced by REQ-NFR-008 shall be written in a defined, named format.
-
-<!-- TODO: log format not yet decided (e.g., plain text, CSV, JSON) -->
-
-REQ-INTF-025: The system shall define whether any state persists between simulation runs beyond the startup track layout load (REQ-INTF-009).
-
-<!-- TODO: open question — is everything in-memory for the session, or is anything saved/restored between runs? -->
+REQ-INTF-025: The system may persist information between runtimes outside of the provided track layout details outlined in REQ-INTF-009.
 
 #### 3.1.4 Communications Interfaces
 
@@ -236,9 +229,7 @@ REQ-INTF-013: The system shall implement a communications channel carrying speed
 
 REQ-INTF-014: The system shall implement a communications channel carrying occupancy data from the Track Controller to the CTC Office.
 
-REQ-INTF-015: Each communications channel shall be designated as vital or non-vital.
-
-<!-- TODO: Track Controller and Train Controller are required to have a vital architecture, but office<->wayside<->train comms are non-vital per the US-style convention (see requirements-matrix.md §4.1) — decide how vital decisions stay safe over an inherently non-vital channel (checksums, staleness timeouts, fail-to-restrictive defaults) -->
+REQ-INTF-015: Each communications channel shall be considered non-vital
 
 ### 3.2 Functional
 
@@ -451,7 +442,9 @@ Not implemented - out of scope per the customer's requirements.
 
 #### 3.3.1 Performance
 
-REQ-NFR-001: The system shall run smoothly in real-time mode.
+REQ-NFR-001: The system shall run smoothly in real-time mode, that is:
+- REQ-NFR-001.1: The simulation shall advance in 1ms increments, or "ticks"
+- REQ-NFR-001.2: The simulation shall allow no more than 10 dropped ticks per second of simulation time
 
 REQ-NFR-002: The system shall maintain simulation correctness while running in fast-forward mode.
 
@@ -469,7 +462,7 @@ REQ-NFR-006: The system shall operate without unhandled errors during normal sim
 
 #### 3.3.4 Availability
 
-REQ-NFR-007: The system shall start up and be ready for use within a reasonable time after launch.
+REQ-NFR-007: The system shall start up and be ready for use within 20s of launch.
 
 #### 3.3.5 Observability
 
@@ -485,7 +478,7 @@ REQ-COMP-003: The team shall produce a UML use case diagram as required by the c
 
 REQ-COMP-004: All source code and documentation shall be maintained in the course Git repository.
 
-REQ-COMP-005: All commits shall be linked to issue tracker tickets.
+REQ-COMP-005: All commits shall be linked to issue tracker tickets in Jira issue tracking.
 
 REQ-COMP-006: Each team member shall contribute code commits at every milestone.
 
