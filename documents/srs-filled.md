@@ -3,7 +3,7 @@
 # Software Requirements Specification
 ## For ECE1140 Train Management System
 
-Version 0.6<br>
+Version 1.0<br>
 Prepared by Team 3<br>
 University of Pittsburgh<br>
 2026-09-24
@@ -46,6 +46,7 @@ University of Pittsburgh<br>
 | Braden | 2026-09-23 | rebuilt Section 4 as a full requirement-to-verification traceability table | 0.4 |
 | Team   | 2026-09-24 | Applying specificity to some requirements that previously had none. Added UI and UX to definitions table. Changed GUI framework from PyQt to PySide | 0.5 |
 | Braden | 2026-09-24 | Renumbered all INTF, FUNC, and DSN requirements to be sequential starting at 001, matching physical document order; updated all cross-references and Section 4 tables accordingly | 0.6 |
+| Team   | 2026-09-24 | Document version 1.0 approved | 1.0 |
 
 
 ## 1. Introduction
