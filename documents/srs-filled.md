@@ -14,7 +14,9 @@ University of Pittsburgh
 <!-- TOC -->
 * [1. Introduction](#1-introduction)
     * [1.1 Document Purpose](#11-document-purpose)
-    * [1.2 Product Scope](#12-product-scope)
+    * [1.2 Product Scope](#12-product-scope)REQ-NFR-001: The system shall run smoothly in real-time mode, that is:
+- REQ-NFR-001.1: The simulation shall advance in 1ms increments, or "ticks"
+- REQ-NFR-001.2: The simulation shall allow no more than 4 dropped ticks per second of simulation time
     * [1.3 Definitions, Acronyms, and Abbreviations](#13-definitions-acronyms-and-abbreviations)
     * [1.4 References](#14-references)
     * [1.5 Document Overview](#15-document-overview)
