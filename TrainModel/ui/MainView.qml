@@ -28,15 +28,6 @@ ScrollView {
             Layout.rightMargin: 0
             spacing: theme.space_5
 
-            Callout {
-                Layout.fillWidth: true
-                heading: qsTr("Automatic \u2014 track controller in command")
-                body: qsTr("Commanded speed and authority arrive from the "
-                    + "track controller. Lights, doors and the service brake "
-                    + "are commanded by the train controller and are shown "
-                    + "here as state only.")
-            }
-
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Speed & authority")
