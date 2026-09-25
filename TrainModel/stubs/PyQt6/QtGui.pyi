@@ -1,0 +1,6 @@
+class QFontDatabase:
+    @staticmethod
+    def families() -> list[str]: ...
+
+class QFont:
+    def __init__(self, family: str = ..., *, pointSize: int = ...) -> None: ...
