@@ -42,12 +42,13 @@ Rectangle {
                 Text {
                     id: segmentLabel
                     anchors.centerIn: parent
-                    text: modelData.toUpperCase()
+                    // Toggle segments are buttons, so they follow the
+                    // sentence-case button rule rather than the Label token.
+                    text: modelData
                     color: parent.selected ? theme.on_accent : theme.text_secondary
                     font.family: theme.ui_family
-                    font.pixelSize: theme.size_label
+                    font.pixelSize: theme.size_small
                     font.weight: theme.weight_bold
-                    font.letterSpacing: theme.label_letter_spacing
                 }
 
                 MouseArea {

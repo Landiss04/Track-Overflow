@@ -12,6 +12,9 @@ Rectangle {
     property string line: ""
     property string clock: ""
     property bool faulted: false
+    property var navigationEntries: []
+    property int currentNavigationIndex: -1
+    signal navigationActivated(int index)
 
     implicitHeight: theme.control_h_lg + 2 * theme.space_3
     color: theme.bg_raised
@@ -49,6 +52,47 @@ Rectangle {
             label: "E-brake"
             variant: "fault"
             visible: root.faulted
+        }
+
+        RowLayout {
+            Layout.alignment: Qt.AlignVCenter
+            spacing: theme.space_1
+            visible: root.navigationEntries.length > 0
+
+            Repeater {
+                model: root.navigationEntries
+
+                delegate: Rectangle {
+                    required property int index
+                    required property string modelData
+
+                    readonly property bool selected: index === root.currentNavigationIndex
+
+                    implicitWidth: navigationLabel.implicitWidth + 2 * theme.space_3
+                    implicitHeight: theme.control_h_md
+                    radius: theme.radius_md
+                    color: selected ? theme.accent_subtle : "transparent"
+                    border.width: selected ? 1 : 0
+                    border.color: theme.accent
+
+                    Text {
+                        id: navigationLabel
+                        anchors.centerIn: parent
+                        text: modelData
+                        color: parent.selected ? theme.accent : theme.text_secondary
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
+                        font.weight: parent.selected
+                            ? theme.weight_bold : theme.weight_regular
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.navigationActivated(index)
+                    }
+                }
+            }
         }
 
         Item { Layout.fillWidth: true }

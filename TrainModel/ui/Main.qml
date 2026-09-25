@@ -29,19 +29,18 @@ ApplicationWindow {
             line: window.snapshot.line
             clock: window.snapshot.clock
             faulted: window.snapshot.emergency_brake
+            navigationEntries: [qsTr("Overview"), qsTr("Test harness")]
+            currentNavigationIndex: views.currentIndex
+            onNavigationActivated: function (index) { views.currentIndex = index; }
         }
 
+        // Keep the content stack inside a row layout. This constrains the
+        // ScrollViews to the window width now that the navigation rail has
+        // moved into the module header.
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
-
-            NavRail {
-                Layout.fillHeight: true
-                entries: [qsTr("Overview"), qsTr("Test harness")]
-                currentIndex: views.currentIndex
-                onActivated: function (index) { views.currentIndex = index; }
-            }
 
             StackLayout {
                 id: views

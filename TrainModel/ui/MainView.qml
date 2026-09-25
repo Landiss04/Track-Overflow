@@ -26,16 +26,41 @@ ScrollView {
 
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.preferredWidth: 1
             Layout.alignment: Qt.AlignTop
             Layout.margins: theme.space_5
             Layout.rightMargin: 0
             spacing: theme.space_5
 
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: theme.space_3
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Lights")
+                    color: theme.text_primary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_h3
+                    font.weight: theme.weight_bold
+                }
+
+                StatusBadge {
+                    label: root.s.cabin_light
+                        ? qsTr("Cabin on") : qsTr("Cabin off")
+                    variant: root.s.cabin_light ? "ok" : "idle"
+                }
+
+                StatusBadge {
+                    label: root.s.headlight
+                        ? qsTr("Headlight on") : qsTr("Headlight off")
+                    variant: root.s.headlight ? "ok" : "idle"
+                }
+            }
+
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Speed & Authority")
-                badgeLabel: root.s.current_block
-                badgeVariant: "info"
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -90,10 +115,13 @@ ScrollView {
             }
 
             Card {
+                id: cabinAndLoadCard
                 Layout.fillWidth: true
+                // The two columns share a top origin, so this keeps the
+                // lower cards on one baseline as either card changes height.
+                Layout.preferredHeight: failureModesCard.y
+                    + failureModesCard.height - cabinAndLoadCard.y
                 title: qsTr("Cabin & Load")
-                badgeLabel: root.s.cars + qsTr(" cars")
-                badgeVariant: "idle"
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -154,34 +182,13 @@ ScrollView {
                     ceiling: root.s.power_limit
                 }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: theme.space_2
-                    spacing: theme.space_3
-
-                    FieldLabel {
-                        Layout.fillWidth: true
-                        text: qsTr("LIGHTS")
-                    }
-
-                    StatusBadge {
-                        label: root.s.cabin_light
-                            ? qsTr("Cabin on") : qsTr("Cabin off")
-                        variant: root.s.cabin_light ? "ok" : "idle"
-                    }
-
-                    StatusBadge {
-                        label: root.s.headlight
-                            ? qsTr("Headlight on") : qsTr("Headlight off")
-                        variant: root.s.headlight ? "ok" : "idle"
-                    }
-                }
             }
 
         }
 
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.preferredWidth: 1
             Layout.alignment: Qt.AlignTop
             Layout.margins: theme.space_5
             Layout.leftMargin: 0
@@ -190,9 +197,10 @@ ScrollView {
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Brakes & Doors")
-                badgeLabel: root.s.emergency_brake
-                    ? qsTr("E-brake applied") : qsTr("E-brake released")
-                badgeVariant: root.s.emergency_brake ? "fault" : "ok"
+                statusLabel: root.s.emergency_brake
+                    ? qsTr("Emergency brake applied")
+                    : qsTr("Emergency brake released")
+                statusVariant: root.s.emergency_brake ? "fault" : "ok"
 
                 SafetyButton {
                     Layout.fillWidth: true
@@ -213,12 +221,16 @@ ScrollView {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: theme.space_4
+                    Layout.topMargin: theme.space_3
                     spacing: theme.space_3
 
-                    FieldLabel {
+                    Text {
                         Layout.fillWidth: true
-                        text: qsTr("LEFT DOORS")
+                        text: qsTr("Left doors")
+                        color: theme.text_secondary
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
+                        font.weight: theme.weight_regular
                     }
 
                     StatusBadge {
@@ -229,9 +241,13 @@ ScrollView {
 
                     Item { Layout.fillWidth: true }
 
-                    FieldLabel {
+                    Text {
                         Layout.fillWidth: true
-                        text: qsTr("RIGHT DOORS")
+                        text: qsTr("Right doors")
+                        color: theme.text_secondary
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
+                        font.weight: theme.weight_regular
                     }
 
                     StatusBadge {
@@ -246,8 +262,6 @@ ScrollView {
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Position")
-                badgeLabel: root.s.line
-                badgeVariant: "idle"
 
                 KeyValueRow {
                     Layout.fillWidth: true
@@ -278,11 +292,13 @@ ScrollView {
             }
 
             Card {
+                id: failureModesCard
                 Layout.fillWidth: true
                 title: qsTr("Failure Modes")
-                badgeLabel: trainModel.activeFailureCount + qsTr(" failed")
-                badgeVariant: trainModel.activeFailureCount > 0
-                    ? "fault" : "ok"
+                statusLabel: trainModel.activeFailureCount > 0
+                    ? trainModel.activeFailureCount + qsTr(" active")
+                    : qsTr("Clear")
+                statusVariant: trainModel.activeFailureCount > 0 ? "fault" : "ok"
 
                 Repeater {
                     model: trainModel.failures
@@ -291,7 +307,9 @@ ScrollView {
                         required property var modelData
 
                         Layout.fillWidth: true
-                        variant: modelData.active ? "danger" : "success"
+                        // Setting a simulated failure is a test action, not a
+                        // success state. Clearing an active fault is success.
+                        variant: modelData.active ? "success" : "secondary"
                         text: (modelData.active ? qsTr("Clear ") : qsTr("Induce "))
                             + modelData.label + qsTr(" failure")
                         tooltip: qsTr("A failure stays set until it is cleared here. "

@@ -1,4 +1,5 @@
-// Label and value pair, style guide 6.6. Values are mono and right-aligned.
+// Data-list row, style guide 6.6. Field-label styling is only for labels
+// above inputs; list labels remain readable sentence case.
 import QtQuick
 import QtQuick.Layouts
 
@@ -15,9 +16,13 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        FieldLabel {
+        Text {
             Layout.fillWidth: true
-            text: root.label.toUpperCase()
+            text: root.label
+            color: theme.text_secondary
+            font.family: theme.ui_family
+            font.pixelSize: theme.size_small
+            font.weight: theme.weight_regular
             elide: Text.ElideRight
         }
 

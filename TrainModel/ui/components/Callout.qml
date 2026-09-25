@@ -20,10 +20,13 @@ Rectangle {
         anchors.margins: theme.space_4
         spacing: theme.space_2
 
-        FieldLabel {
+        Text {
             Layout.fillWidth: true
-            text: root.heading.toUpperCase()
+            text: root.heading
             color: theme.accent
+            font.family: theme.ui_family
+            font.pixelSize: theme.size_small
+            font.weight: theme.weight_bold
         }
 
         HelperText {

@@ -34,8 +34,6 @@ ScrollView {
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Inputs")
-                badgeLabel: harness.inputs.length + qsTr(" signals")
-                badgeVariant: "info"
 
                 TableHeader { Layout.fillWidth: true }
 
@@ -69,8 +67,6 @@ ScrollView {
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Outputs")
-                badgeLabel: harness.outputs.length + qsTr(" signals")
-                badgeVariant: "idle"
 
                 TableHeader { Layout.fillWidth: true }
 
@@ -98,9 +94,13 @@ ScrollView {
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Failure modes")
-                badgeLabel: trainModel.activeFailureCount + qsTr(" set")
-                badgeVariant: trainModel.activeFailureCount > 0
-                    ? "fault" : "ok"
+
+                StatusBadge {
+                    label: trainModel.activeFailureCount > 0
+                        ? trainModel.activeFailureCount + qsTr(" active")
+                        : qsTr("Clear")
+                    variant: trainModel.activeFailureCount > 0 ? "fault" : "ok"
+                }
 
                 Repeater {
                     model: trainModel.failures
@@ -137,12 +137,13 @@ ScrollView {
             Card {
                 Layout.fillWidth: true
                 title: qsTr("Run control")
-                badgeLabel: harness.running ? qsTr("Running") : qsTr("Held")
-                badgeVariant: harness.running ? "ok" : "idle"
-
-                FieldLabel {
+                Text {
                     Layout.fillWidth: true
-                    text: qsTr("CLOCK")
+                    text: qsTr("Clock")
+                    color: theme.text_secondary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_small
+                    font.weight: theme.weight_regular
                 }
 
                 SegmentedToggle {

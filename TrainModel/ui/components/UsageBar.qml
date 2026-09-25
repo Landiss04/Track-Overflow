@@ -23,6 +23,8 @@ Rectangle {
         anchors.margins: 1
         width: Math.max(0, (parent.width - 2) * root.fraction)
         radius: theme.radius_sm
-        color: theme.accent
+        // Accent identifies a primary action or selection, not a generic
+        // measurement. The numeric readout above supplies the value.
+        color: theme.border_strong
     }
 }
