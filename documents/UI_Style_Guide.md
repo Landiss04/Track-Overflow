@@ -2,7 +2,7 @@
 
 ## For ECE1140 Train Management System
 
-Version 1.2
+Version 1.3
 Prepared by Team 3
 University of Pittsburgh
 2026-09-11
@@ -44,6 +44,7 @@ University of Pittsburgh
 | Team 3 | 2026-09-11 | Initial style guide; dark theme locked as default               | 1.0     |
 | Team 3 | 2026-09-11 | UI face changed to Helvetica/Arial; weight scale cut to 400/700 | 1.1     |
 | Team 3 | 2026-09-11 | Light theme promoted to default; dark theme moved to optional   | 1.2     |
+| Team 3 | 2026-09-25 | Telemetry units repointed to `truth/conventions.md`; display units corrected to imperial | 1.3     |
 
 ---
 
@@ -290,7 +291,10 @@ on filled states. Adjacent blocks are separated by at least 2 px.
 - Label above in Label token, `--text-muted`.
 - Value in mono, 28 px, weight 700, `--text-primary`.
 - Unit immediately after the value, mono, 13 px, `--text-muted`.
-- Units **shall** match `Project_Information/Units.md` exactly (`m/s`, `m`, `s`, `kW`, `C`, ...).
+- Units **shall** match the UI display units table in `truth/conventions.md` exactly
+  (`mph`, `ft`, `s`, `kW`, `F`, ...). That table is imperial, with power in kilowatts as
+  the one exception; the metric values behind it are converted at the display layer and
+  never rendered.
 - Values update in place; the container does not resize as digits change.
 
 ### 6.6 Data Tables

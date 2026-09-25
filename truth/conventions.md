@@ -2,7 +2,90 @@
 
 ## Naming
 
-*Unpopulated.*
+**Status:** current
+**Owner:** Kevin
+**Provenance:** `documents/Coding Standards (Group).docx` §1; `documents/PYTHON_STYLE_GUIDE.md` §5, §8; `documents/requirements-matrix.md` §1–2 (module names)
+**Aliases:** naming conventions, style guide naming, PEP 8 naming
+**Last updated:** 2026-09-25
+
+The baseline is PEP 8. `Coding Standards (Group).docx` is the graded group standard
+and wins where it is specific. `PYTHON_STYLE_GUIDE.md` extends PEP 8 for this
+codebase and wins over bare PEP 8 where the two differ. Where all three are silent,
+PEP 8 applies.
+
+### Module names
+
+The system has five modules. These spellings are canonical in prose, UI headers, and
+documentation.
+
+| Module | Aliases |
+|--------|---------|
+| CTC Office | CTC |
+| Track Controller | Wayside Controller |
+| Train Controller | none |
+| Track Model | none |
+| Train Model | none |
+
+Track Controller and Train Controller each exist as a software and a hardware
+instance; the instance is named alongside the module, not as a separate module.
+
+The Moving Block Overlay (MBO Controller, MBO Scheduler) is out of scope and is not a
+module of this system.
+
+### Python names
+
+| Element | Convention | Example |
+|---|---|---|
+| Module / package | lowercase, short; underscores only where they help | `track_layout.py`, `signals/` |
+| Class | CapWords, no underscores | `TrainController`, `TrackBlock` |
+| Acronym in a class name | all letters capitalized | `CTCOffice`, `HTTPServerError` |
+| Exception | CapWords + `Error` suffix | `InvalidBlockError` |
+| Function / method | lowercase_with_underscores | `set_speed_limit()` |
+| Instance attribute | lowercase_with_underscores | `current_speed` |
+| Non-public attribute / method | one leading underscore | `_authority`, `_check_switch()` |
+| Name-mangled attribute | two leading underscores, only to avoid a subclass clash | `__speed` |
+| Local / global variable | lowercase_with_underscores | `block_number` |
+| Constant | UPPER_CASE_WITH_UNDERSCORES, module level, after imports | `MAX_SPEED_MPS` |
+| Enum class / members | CapWords class, UPPER_CASE members | `SignalAspect.STOP` |
+| Type variable | CapWords, short; `_co` / `_contra` for variance | `T`, `RollingStockT` |
+| First arg | `self` on instance methods, `cls` on class methods | `def stop(self):` |
+
+Rules that apply on top of the table:
+
+- Identifiers are ASCII, English words.
+- Never `l`, `O`, or `I` as a single-character name. Use `L` if you want `l`.
+- A name that clashes with a keyword takes a single trailing underscore: `class_`,
+  `from_`. Never a misspelling.
+- Method names start with a verb: `set_speed_limit`, `calculate_braking_distance`,
+  `is_block_occupied`.
+- A quantity with units carries the unit in the name: `speed_mph`, `distance_m`,
+  `mass_kg`, `grade_percent`. A bare `speed` or `distance` is not acceptable where
+  the unit is not obvious. See `## Units` for which unit belongs on which side of the
+  display boundary.
+- No magic numbers. A literal with meaning becomes a named constant.
+- Short names (`i`, `x`, `dt`, `v0`) are for loop counters and short-lived locals
+  inside a single function. Public APIs are descriptive.
+- Properties are named like the attribute they represent — `speed`, never
+  `get_speed`. The backing attribute takes a leading underscore: `_speed`.
+- Prefer plain public attributes over getter/setter pairs. Convert to `@property`
+  later if validation is needed; the caller-facing name does not change.
+- `mixedCase` appears in new code only to match an external library's callback names.
+- Do not invent `__dunder__` names.
+
+### Docstrings and comments
+
+- Docstrings on every public module, class, function, and method. Triple double
+  quotes. Non-public helpers take a short comment after the `def` line instead.
+- One-line docstring: imperative phrase ending in a period — "Return the speed limit
+  for a block.", not "Returns ...". Closing `"""` on the same line.
+- Multi-line docstring: one-line summary, blank line, detail. Closing `"""` on its
+  own line.
+- Args / Returns / Raises use **Google style** project-wide.
+- Comments are complete sentences in English, capitalized, and explain *why*, not
+  *what*. A comment that contradicts the code is worse than no comment.
+- Block comments are indented to the code they describe; `#` then one space; `#`
+  alone separates paragraphs.
+- Inline comments are used sparingly, at least two spaces after the statement.
 
 ## Units
 
@@ -91,10 +174,173 @@ Supporting factors, for reference when a value arrives in a non-canonical unit:
 | kg           | lb    | × 2.204623   |
 | m            | mi    | × 0.000621371|
 
+### Conflict
+
+Owner: Kevin.
+
+**Gradient — degrees vs. percent. Open.**
+
+| This entry | Other value | Other provenance |
+|-----------|-------------|------------------|
+| degrees | percent | `srs-filled.md` Appendix A (layout CSV column "Grade (%)") |
+
+Degrees and percent are not the same quantity, so no conversion factor between them
+is recorded here until the resolution says which one the backend stores.
+
+**Track layout file format — unresolved.**
+
+`srs-filled.md` §3.1.3 and Appendix A specify CSV, loaded at startup, with the
+columns named under `## File and path conventions`. The layout files actually in the
+repository are JSON. One of the two is out of date. This blocks the gradient conflict
+above, since the file format determines whether "Grade (%)" is a column name that
+still exists.
+
+### Resolved
+
+**Speed — m/s.** `srs-filled.md` Appendix A names the layout CSV column "Speed Limit
+(km/h)". That is an input-format difference only: the loader converts on read and
+nothing downstream sees km/h. The backend unit for speed is m/s, as recorded above.
+
+The style documents are not a source of unit conflicts. `MAX_SPEED_KMH`,
+`speed_kmh`, and `grade_percent` in `Coding Standards (Group).docx` and
+`PYTHON_STYLE_GUIDE.md` illustrate the naming format — that a unit belongs in the
+name — and do not assert which unit a quantity carries.
+
 ## Identifiers
 
-*Unpopulated.*
+**Status:** current
+**Owner:** Kevin
+**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `documents/UI_Style_Guide.md` §3, §6.7
+**Aliases:** IDs, ID formats, key formats
+**Last updated:** 2026-09-25
+
+### ID values
+
+- **All IDs are strings**, never integers, even when they look numeric. This applies
+  to train IDs, block IDs, and station codes. The rule exists to make arithmetic on
+  an identifier a type error rather than a silent bug.
+- Track layout files carry a Block Number column. The value is read as a string.
+- **Authority** is a block ID — the destination block up to which a train may travel
+  — not a distance, in the interface dictionary sense. Where a requirement phrases
+  authority as "the maximum distance a train is permitted to travel before
+  stopping", that is the SRS glossary usage; the transported value is the block ID.
+  See `## Units`.
+- Every ID, train ID, block ID, and timestamp **shall** render in the mono face in
+  any UI.
+
+### Requirement IDs
+
+`REQ-<AREA>-<NNN>` — uppercase area, three-digit zero-padded number. Example:
+`REQ-FUNC-007`.
+
+### Exception identifiers
+
+- Every custom exception derives from `Exception`, never `BaseException`.
+- Each module defines one base exception so callers can catch the whole project's
+  errors in one clause — e.g. `TrainControllerError`, with `InvalidBlockError`
+  deriving from it.
+- The hierarchy is designed around what the catching code needs to know: "what went
+  wrong", not "a problem occurred".
+- Re-raising uses explicit chaining: `raise NewError("...") from original_error`.
+
+### Design token identifiers
+
+UI design tokens use the `--kebab-case` names in `documents/UI_Style_Guide.md`
+Sections 4, 5, and 10. The key names are identical between the light and dark
+palettes, which is what makes the optional dark theme a drop-in token swap. A token
+that does not exist is added to the style guide first, then used.
+
+### Pending
+
+The only train ID format appearing in a normative document is `TRN-014`, as an
+example in `UI_Style_Guide.md` §6.7 (`Train Controller — TRN-014`). It is an
+illustration, not a stated format. Block and station ID formats are not stated
+anywhere. Owner: Kevin — decide and record, or record that IDs are opaque strings
+with no enforced shape.
 
 ## File and path conventions
 
-*Unpopulated.*
+**Status:** current
+**Owner:** Kevin
+**Provenance:** `documents/srs-filled.md` §2.3, §3.1.3, §3.5.1–3.5.6; `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `documents/UI_Style_Guide.md` §9, §11; `.gitattributes`
+**Aliases:** file layout, paths, repo layout, project structure
+**Last updated:** 2026-09-25
+
+### Paths
+
+- Path handling is platform-neutral. The system runs on any developer's operating
+  system and on Windows 11 lab machines; no OS-specific separators or absolute paths
+  appear in source.
+- Resources are opened with `with`, never left to the garbage collector — layout
+  files, save-state files, and connections alike.
+
+### File names
+
+- Source files are short and all-lowercase. Underscores only where they improve
+  readability: `track_layout.py`, `rolling_stock.py`.
+- Track layout data is loaded from the course-provided CSV files at startup. Columns:
+  Block Number, Block Length (m), Grade (%), Speed Limit (km/h), Infrastructure type,
+  Station Name, Door Side.
+
+### Entry point and dependencies
+
+- The system launches with `python main.py` after `pip install -r requirements.txt`,
+  with no additional configuration.
+- `requirements.txt` pins package versions so the install is reproducible.
+- Python 3.10 or later.
+- The whole system is submittable as one runnable executable; each subsystem is also
+  independently installable.
+- No external services or network connections are required at runtime.
+
+### Module boundaries
+
+- Modules interact through defined interfaces, never by reaching into another
+  module's internal state.
+- Shared utilities — the simulation clock and the event logger — are standalone
+  modules usable by any part of the system.
+- All components share a single simulation clock supporting real-time and
+  fast-forward operation.
+
+### UI token files
+
+- Design tokens are defined once, in a single module (for example `ui/theme.py`), as
+  named constants imported by every view. **No literal hex value appears in widget
+  code.**
+- Under PyQt, tokens are injected into one application-wide QSS stylesheet built from
+  those constants, so a theme change is a one-line swap of the token dictionary.
+- `documents/ui-style-guide-preview.html` is the visual source of truth for review.
+  A token change **shall** land in both `UI_Style_Guide.md` and the preview in the
+  same commit.
+
+### Layout inside a file
+
+- Order: module docstring, then module-level dunders (`__all__`, `__version__`), then
+  imports, then constants, then functions and classes. `from __future__` imports
+  precede the dunders.
+- Imports: one per line, three groups separated by a blank line — standard library,
+  third-party, local. Absolute imports preferred over deep relative ones; relative
+  imports only within a tightly-coupled subpackage. No wildcard imports.
+- 4 spaces per indent level, never tabs.
+- 79 characters max for code, 72 for docstrings and comments. Extending code lines to
+  99 requires team agreement and has not been agreed; docstrings and comments stay at
+  72 regardless.
+- Wrapping happens inside brackets, not with backslashes. Closing bracket on its own
+  line, aligned with the start of the statement (PEP 8 "Option B"), everywhere.
+- Break *before* a binary operator in new code.
+- Two blank lines around top-level classes and functions; one between methods.
+- Quote style is consistent within a module; docstrings always `"""`.
+
+### Repository
+
+- `.gitattributes` normalizes text files to LF (`* text=auto eol=lf`). Binary
+  formats — `.docx`, `.xlsx`, `.pdf`, `.gan`, images, archives, executables — are
+  marked `binary` explicitly so git's auto-detection cannot corrupt them.
+- Source and documentation live in the course Git repository, with commits linked to
+  issue tracker tickets. Each team member commits in every sprint.
+
+### Linting
+
+`flake8 --max-line-length=79` for layout, indentation, whitespace, and unused
+variables; `pylint` for naming and missing docstrings; `pep8-naming` as a flake8
+plugin. If `black` is used, it must be configured `line-length = 79` — its default
+of 88 conflicts with the standard above.

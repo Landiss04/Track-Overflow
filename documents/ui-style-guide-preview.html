@@ -299,7 +299,7 @@ td.num { font-family: var(--font-mono); text-align: right; }
     <div class="type-row"><span class="spec">Body / 15px / 400</span><span>Authority is the maximum distance a train may travel before stopping.</span></div>
     <div class="type-row"><span class="spec">Small / 13px / 400</span><span style="font-size:var(--text-sm);">Secondary detail and helper text.</span></div>
     <div class="type-row"><span class="spec">Label / 12px / 700 caps</span><span class="label">Commanded Speed</span></div>
-    <div class="type-row"><span class="spec">Mono / telemetry</span><span class="mono" style="font-size:var(--text-lg);">TRN-014  19.4 m/s  BLK-K63</span></div>
+    <div class="type-row"><span class="spec">Mono / telemetry</span><span class="mono" style="font-size:var(--text-lg);">TRN-014  43.4 mph  BLK-K63</span></div>
     <p style="margin-top:var(--space-4)">
       <strong>Rule:</strong> all numeric telemetry, block IDs, train IDs, and timestamps use the monospace face
       so digits align in tables and don't jitter as values update.
@@ -378,8 +378,8 @@ td.num { font-family: var(--font-mono); text-align: right; }
         <select class="select" id="f2"><option>BLK-K63</option><option>BLK-J58</option></select>
       </div>
       <div class="field">
-        <label class="label" for="f3">Suggested speed (m/s)</label>
-        <input class="input" id="f3" value="19.4">
+        <label class="label" for="f3">Suggested speed (mph)</label>
+        <input class="input" id="f3" value="43.4">
       </div>
       <button class="btn btn-primary">Send</button>
     </div>
@@ -410,16 +410,16 @@ td.num { font-family: var(--font-mono); text-align: right; }
   <h2>6. Telemetry readouts</h2>
   <div class="panel">
     <div class="row">
-      <div class="readout"><div class="label">Actual speed</div><span class="rv">19.4</span><span class="ru">m/s</span></div>
-      <div class="readout"><div class="label">Commanded speed</div><span class="rv">21.0</span><span class="ru">m/s</span></div>
+      <div class="readout"><div class="label">Actual speed</div><span class="rv">43.4</span><span class="ru">mph</span></div>
+      <div class="readout"><div class="label">Commanded speed</div><span class="rv">47.0</span><span class="ru">mph</span></div>
       <div class="readout"><div class="label">Authority</div><span class="rv">K63</span></div>
       <div class="readout"><div class="label">Power</div><span class="rv">118.2</span><span class="ru">kW</span></div>
       <div class="readout"><div class="label">Passengers</div><span class="rv">74</span></div>
-      <div class="readout"><div class="label">Cabin temp</div><span class="rv">21.5</span><span class="ru">C</span></div>
+      <div class="readout"><div class="label">Cabin temp</div><span class="rv">70.7</span><span class="ru">F</span></div>
     </div>
     <p style="font-size:var(--text-sm);margin-bottom:0">
-      Units follow <code>Project_Information/Units.md</code> and are always shown next to the value,
-      in muted text at a smaller size than the number itself.
+      Units follow <code>truth/conventions.md</code> (see the UI display units table) and are
+      always shown next to the value, in muted text at a smaller size than the number itself.
     </p>
   </div>
 
@@ -431,9 +431,9 @@ td.num { font-family: var(--font-mono); text-align: right; }
         <tr><th>Train</th><th>Line</th><th>Block</th><th style="text-align:right">Speed</th><th style="text-align:right">Authority</th><th>Status</th></tr>
       </thead>
       <tbody>
-        <tr><td class="mono">TRN-011</td><td>Green</td><td class="mono">BLK-A12</td><td class="num">14.2 m/s</td><td class="num">A19</td><td><span class="badge badge-ok"><span class="dot"></span>On Time</span></td></tr>
-        <tr><td class="mono">TRN-014</td><td>Green</td><td class="mono">BLK-K63</td><td class="num">19.4 m/s</td><td class="num">K71</td><td><span class="badge badge-warn"><span class="dot"></span>Delayed</span></td></tr>
-        <tr><td class="mono">TRN-022</td><td>Red</td><td class="mono">BLK-C07</td><td class="num">0.0 m/s</td><td class="num">C07</td><td><span class="badge badge-fault"><span class="dot"></span>E-Brake</span></td></tr>
+        <tr><td class="mono">TRN-011</td><td>Green</td><td class="mono">BLK-A12</td><td class="num">31.8 mph</td><td class="num">A19</td><td><span class="badge badge-ok"><span class="dot"></span>On Time</span></td></tr>
+        <tr><td class="mono">TRN-014</td><td>Green</td><td class="mono">BLK-K63</td><td class="num">43.4 mph</td><td class="num">K71</td><td><span class="badge badge-warn"><span class="dot"></span>Delayed</span></td></tr>
+        <tr><td class="mono">TRN-022</td><td>Red</td><td class="mono">BLK-C07</td><td class="num">0.0 mph</td><td class="num">C07</td><td><span class="badge badge-fault"><span class="dot"></span>E-Brake</span></td></tr>
         <tr><td class="mono">TRN-030</td><td>Red</td><td class="mono">—</td><td class="num">—</td><td class="num">—</td><td><span class="badge badge-idle"><span class="dot"></span>Yard</span></td></tr>
       </tbody>
     </table>
@@ -483,8 +483,8 @@ td.num { font-family: var(--font-mono); text-align: right; }
     </div>
     <div style="padding:var(--space-5)">
       <div class="row" style="margin-bottom:var(--space-4)">
-        <div class="readout"><div class="label">Setpoint</div><span class="rv">21.0</span><span class="ru">m/s</span></div>
-        <div class="readout"><div class="label">Actual</div><span class="rv">19.4</span><span class="ru">m/s</span></div>
+        <div class="readout"><div class="label">Setpoint</div><span class="rv">47.0</span><span class="ru">mph</span></div>
+        <div class="readout"><div class="label">Actual</div><span class="rv">43.4</span><span class="ru">mph</span></div>
         <div class="readout"><div class="label">Power</div><span class="rv">118.2</span><span class="ru">kW</span></div>
       </div>
       <div class="row">
