@@ -233,26 +233,15 @@ ScrollView {
                     ? qsTr("E-brake applied") : qsTr("E-brake released")
                 badgeVariant: root.s.emergency_brake ? "fault" : "ok"
 
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: qsTr("Passenger emergency brake")
-                    value: root.s.emergency_brake
-                        ? qsTr("Applied") : qsTr("Released")
-                }
-
                 SafetyButton {
                     Layout.fillWidth: true
                     Layout.topMargin: theme.space_5
                     Layout.bottomMargin: theme.space_2
                     label: qsTr("Apply emergency brake")
-                    onConfirmed: trainModel.applyEmergencyBrake()
-                }
-
-                HelperText {
-                    Layout.fillWidth: true
-                    text: qsTr("Stops the train at the full braking rate and "
+                    tooltip: qsTr("Stops the train at the full braking rate and "
                         + "reports the stop to the track controller and the "
                         + "CTC. Confirmation is required.")
+                    onConfirmed: trainModel.applyEmergencyBrake()
                 }
 
                 AppButton {
@@ -282,12 +271,6 @@ ScrollView {
                     }
                 }
 
-                HelperText {
-                    Layout.fillWidth: true
-                    text: qsTr("Door commands come from the train controller. "
-                        + "Doors unlock at 0 m/s with the service brake "
-                        + "applied.")
-                }
             }
 
             Card {
@@ -306,10 +289,7 @@ ScrollView {
                         Layout.fillWidth: true
                         spacing: theme.space_3
 
-                        FieldLabel {
-                            Layout.fillWidth: true
-                            text: modelData.label.toUpperCase()
-                        }
+                        Item { Layout.fillWidth: true }   // right-align the controls
 
                         StatusBadge {
                             label: modelData.active
@@ -322,17 +302,13 @@ ScrollView {
                             size: "small"
                             text: modelData.active
                                 ? qsTr("Clear") : qsTr("Induce")
+                            tooltip: qsTr("A failure stays set until it is cleared here. "
+                                + "With signal pickup failed, no new commanded speed "
+                                + "or authority reaches this train.")
                             onClicked: trainModel.setFailure(
                                 modelData.name, !modelData.active)
                         }
                     }
-                }
-
-                HelperText {
-                    Layout.fillWidth: true
-                    text: qsTr("A failure stays set until it is cleared here. "
-                        + "With signal pickup failed, no new commanded speed "
-                        + "or authority reaches this train.")
                 }
             }
         }

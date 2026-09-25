@@ -11,6 +11,7 @@ Item {
     property string label: ""
     property string confirmLabel: "Confirm"
     property string cancelLabel: "Cancel"
+    property string tooltip: ""          // optional hover text (native ToolTip)
     signal confirmed()
 
     property bool armed: false
@@ -24,6 +25,7 @@ Item {
         variant: "danger"
         size: "large"
         text: root.label.toUpperCase()
+        tooltip: root.tooltip
         font.letterSpacing: theme.safety_letter_spacing
         onClicked: root.armed = true
     }

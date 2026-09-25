@@ -10,6 +10,7 @@ Button {
     property string variant: "secondary"
     // small | medium | large
     property string size: "medium"
+    property string tooltip: ""          // optional hover text (native ToolTip)
 
     readonly property int hPadding: size === "small" ? theme.space_3
         : size === "large" ? theme.space_5 : theme.space_4
@@ -72,5 +73,14 @@ Button {
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
+    }
+
+    // Tooltip rides the button's own hover state, so it never blocks clicks.
+    onHoveredChanged: {
+        if (control.tooltip === "") return
+        if (control.hovered)
+            ToolTip.show(control.tooltip, 0, 0, control)
+        else
+            ToolTip.hide()
     }
 }
