@@ -91,7 +91,7 @@ Rules that apply on top of the table:
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** asserted by Kevin 2026-09-25; quantity list migrated from `common/Units.md`
+**Provenance:** asserted by Kevin 2026-09-25; quantity list migrated from `common/Units.md`; cross-checked against `common/interfaces.py` unit suffixes and `documents/srs-filled.md`
 **Aliases:** units, unit conventions, measurement units
 **Last updated:** 2026-09-25
 
@@ -118,7 +118,7 @@ Canonical units for state, computation, and all cross-module signals.
 | Gradient        | degrees         | deg    | Positive = uphill in direction of travel           |
 | Elevation       | meters          | m      | Above datum                                        |
 | Temperature     | Fahrenheit      | F      | Ambient and cabin temperature. Exception to metric |
-| Authority       | block ID        | string | Destination block up to which the train may travel |
+| Authority       | meters          | m      | Distance the train may travel. **See Conflict**    |
 | Acceleration    | meters/second²  | m/s^2  |                                                    |
 | Force           | Newtons         | N      |                                                    |
 | Mass            | kilograms       | kg     |                                                    |
@@ -138,7 +138,7 @@ What every UI renders. Converted from the backend unit at the display layer.
 | Gradient        | degrees         | deg    | No imperial equivalent; unchanged                    |
 | Elevation       | feet            | ft     |                                                      |
 | Temperature     | Fahrenheit      | F      | Already Fahrenheit in the backend; no conversion     |
-| Authority       | block ID        | string | Not a measurement; unchanged                         |
+| Authority       | feet            | ft     | Distance. **See Conflict**                           |
 | Acceleration    | feet/second²    | ft/s^2 |                                                      |
 | Force           | pound-force     | lbf    |                                                      |
 | Mass            | short tons      | ton    |                                                      |
@@ -155,6 +155,7 @@ Backend → UI. Multiply by the factor unless the formula column says otherwise.
 | Distance     | m     | ft     | × 3.280840                |
 | Elevation    | m     | ft     | × 3.280840                |
 | Acceleration | m/s^2 | ft/s^2 | × 3.280840                |
+| Authority    | m     | ft     | × 3.280840                |
 | Force        | N     | lbf    | × 0.2248089               |
 | Mass         | kg    | ton    | × 0.001102311             |
 | Power        | W     | kW     | × 0.001                   |
@@ -178,14 +179,31 @@ Supporting factors, for reference when a value arrives in a non-canonical unit:
 
 Owner: Kevin.
 
+**Authority — distance vs. block ID. Open.**
+
+| Value | Provenance |
+|-------|-----------|
+| meters (distance) | `srs-filled.md` §1.3 glossary ("the maximum distance a train is permitted to travel before stopping"); `requirements-matrix.md` §2 ("Authority (distance) from Wayside Controller"); `common/interfaces.py` — `TrackSignal.authority_m`, `set_commanded_signal`, `receive_suggestion`, `get_commanded_signal` all carry `authority_m: float` |
+| block ID (string) | `common/Units.md` as migrated into this entry — "Destination block up to which the train may travel" |
+
+The backend and UI tables above carry meters, because that is what three sources
+including the agreed interface contract transport. The block-ID reading is recorded
+here rather than discarded: it is the only source that said so, and it may reflect a
+superseded design rather than an error. These are not the same kind of value — one is
+a measurement that converts to feet for display, the other is an identifier that does
+not convert at all — so this must be resolved, not left ambiguous.
+
 **Gradient — degrees vs. percent. Open.**
 
-| This entry | Other value | Other provenance |
-|-----------|-------------|------------------|
-| degrees | percent | `srs-filled.md` Appendix A (layout CSV column "Grade (%)") |
+| Value | Provenance |
+|-------|-----------|
+| degrees | `common/Units.md` as migrated into this entry; `common/interfaces.py` — `BlockState.grade_deg` |
+| percent | `srs-filled.md` Appendix A (layout CSV column "Grade (%)") |
 
 Degrees and percent are not the same quantity, so no conversion factor between them
-is recorded here until the resolution says which one the backend stores.
+is recorded here until the resolution says which one the backend stores. The agreed
+interface contract carries `grade_deg`, which favors degrees; the percent claim is
+confined to the layout file format, which is itself unresolved below.
 
 **Track layout file format — unresolved.**
 
@@ -220,11 +238,10 @@ name — and do not assert which unit a quantity carries.
   to train IDs, block IDs, and station codes. The rule exists to make arithmetic on
   an identifier a type error rather than a silent bug.
 - Track layout files carry a Block Number column. The value is read as a string.
-- **Authority** is a block ID — the destination block up to which a train may travel
-  — not a distance, in the interface dictionary sense. Where a requirement phrases
-  authority as "the maximum distance a train is permitted to travel before
-  stopping", that is the SRS glossary usage; the transported value is the block ID.
-  See `## Units`.
+- **Authority is a distance, not an ID.** `common/interfaces.py` transports it as
+  `authority_m: float` on every interface that carries it, and the SRS glossary
+  defines it as a distance. One source calls it a destination block ID; that reading
+  is recorded as an open conflict under `## Units` and is not settled here.
 - Every ID, train ID, block ID, and timestamp **shall** render in the mono face in
   any UI.
 
