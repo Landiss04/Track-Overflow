@@ -195,21 +195,17 @@ ScrollView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: theme.safety_emphasis_height
                     Layout.topMargin: theme.space_5
-                    Layout.bottomMargin: theme.space_2
                     label: qsTr("Apply emergency brake")
+                    applied: root.s.emergency_brake
                     tooltip: qsTr("Stops the train at the full braking rate and "
                         + "reports the stop to the track controller and the "
                         + "CTC. Confirmation is required.")
-                    onConfirmed: trainModel.applyEmergencyBrake()
-                }
-
-                AppButton {
-                    Layout.topMargin: theme.space_2
-                    variant: "secondary"
-                    size: "small"
-                    text: qsTr("Release brake")
-                    enabled: root.s.emergency_brake
-                    onClicked: trainModel.releaseEmergencyBrake()
+                    onConfirmed: {
+                        if (root.s.emergency_brake)
+                            trainModel.releaseEmergencyBrake()
+                        else
+                            trainModel.applyEmergencyBrake()
+                    }
                 }
 
                 FieldLabel {

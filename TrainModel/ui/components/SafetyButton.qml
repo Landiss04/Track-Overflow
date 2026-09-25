@@ -9,6 +9,9 @@ Item {
     id: root
 
     property string label: ""
+    property string releaseLabel: "Release emergency brake"
+    property bool applied: false         // engaged state: shows the darker
+                                         // release control instead of apply
     property string confirmLabel: "Confirm"
     property string cancelLabel: "Cancel"
     property string tooltip: ""          // optional hover text (native ToolTip)
@@ -23,8 +26,9 @@ Item {
         anchors.fill: parent
         visible: !root.armed
         variant: "danger"
+        active: root.applied
         size: "large"
-        text: root.label.toUpperCase()
+        text: (root.applied ? root.releaseLabel : root.label).toUpperCase()
         tooltip: root.tooltip
         font.letterSpacing: theme.safety_letter_spacing
         onClicked: root.armed = true

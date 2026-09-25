@@ -11,6 +11,8 @@ Button {
     // small | medium | large
     property string size: "medium"
     property string tooltip: ""          // optional hover text (native ToolTip)
+    property bool active: false          // danger only: resting fill is the
+                                         // pressed shade, to read as engaged
 
     readonly property int hPadding: size === "small" ? theme.space_3
         : size === "large" ? theme.space_5 : theme.space_4
@@ -20,11 +22,11 @@ Button {
         || variant === "success"
 
     readonly property color restFill: variant === "primary" ? theme.accent
-        : variant === "danger" ? theme.danger
+        : variant === "danger" ? (active ? theme.danger_active : theme.danger)
         : variant === "success" ? theme.success
         : variant === "ghost" ? "transparent" : theme.bg_raised
     readonly property color hoverFill: variant === "primary" ? theme.accent_hover
-        : variant === "danger" ? theme.danger_hover
+        : variant === "danger" ? (active ? theme.danger : theme.danger_hover)
         : variant === "success" ? theme.success_hover
         : variant === "ghost" ? theme.accent_subtle : theme.accent_subtle
     readonly property color pressFill: variant === "primary" ? theme.accent_active
