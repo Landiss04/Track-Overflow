@@ -30,7 +30,7 @@ ScrollView {
 
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Speed & authority")
+                title: qsTr("Speed & Authority")
                 badgeLabel: root.s.current_block
                 badgeVariant: "info"
 
@@ -88,7 +88,7 @@ ScrollView {
 
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Cabin & load")
+                title: qsTr("Cabin & Load")
                 badgeLabel: root.s.cars + qsTr(" cars")
                 badgeVariant: "idle"
 
@@ -175,39 +175,6 @@ ScrollView {
                 }
             }
 
-            Card {
-                Layout.fillWidth: true
-                title: qsTr("Position")
-                badgeLabel: root.s.line
-                badgeVariant: "idle"
-
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: qsTr("Direction of travel")
-                    value: root.s.direction + " \u00B7 " + root.s.previous_block
-                        + " \u2192 " + root.s.current_block
-                }
-
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: qsTr("Current block")
-                    value: root.s.current_block
-                }
-
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: qsTr("Offset into block")
-                    value: root.fixed(root.s.position_offset, 1) + " m"
-                }
-
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: qsTr("Next station \u00B7 arrival")
-                    value: root.s.next_station + " ("
-                        + root.s.platform_side + ") \u00B7 " + root.s.arrival
-                    rule: false
-                }
-            }
         }
 
         ColumnLayout {
@@ -219,7 +186,7 @@ ScrollView {
 
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Brakes & doors")
+                title: qsTr("Brakes & Doors")
                 badgeLabel: root.s.emergency_brake
                     ? qsTr("E-brake applied") : qsTr("E-brake released")
                 badgeVariant: root.s.emergency_brake ? "fault" : "ok"
@@ -267,7 +234,41 @@ ScrollView {
 
             Card {
                 Layout.fillWidth: true
-                title: qsTr("Failure modes")
+                title: qsTr("Position")
+                badgeLabel: root.s.line
+                badgeVariant: "idle"
+
+                KeyValueRow {
+                    Layout.fillWidth: true
+                    label: qsTr("Direction of travel")
+                    value: root.s.direction + " · " + root.s.previous_block
+                        + " → " + root.s.current_block
+                }
+
+                KeyValueRow {
+                    Layout.fillWidth: true
+                    label: qsTr("Current block")
+                    value: root.s.current_block
+                }
+
+                KeyValueRow {
+                    Layout.fillWidth: true
+                    label: qsTr("Offset into block")
+                    value: root.fixed(root.s.position_offset, 1) + " m"
+                }
+
+                KeyValueRow {
+                    Layout.fillWidth: true
+                    label: qsTr("Next station · arrival")
+                    value: root.s.next_station + " ("
+                        + root.s.platform_side + ") · " + root.s.arrival
+                    rule: false
+                }
+            }
+
+            Card {
+                Layout.fillWidth: true
+                title: qsTr("Failure Modes")
                 badgeLabel: trainModel.activeFailureCount + qsTr(" failed")
                 badgeVariant: trainModel.activeFailureCount > 0
                     ? "fault" : "ok"
