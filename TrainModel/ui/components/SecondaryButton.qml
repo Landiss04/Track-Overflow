@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 // Secondary button (Style Guide §6.1): raised fill, primary text, 1 px
 // strong border, radius-md, mandatory states. `subLabel` renders the tall
@@ -11,6 +12,7 @@ Item {
     property string text: ""
     property string subLabel: ""
     property bool enabled_: true         // underscored: `enabled` is reserved by Item
+    property string tooltip: ""          // optional hover tooltip (native ToolTip)
 
     signal clicked
 
@@ -79,5 +81,20 @@ Item {
         onClicked: root.clicked()
         Keys.onReturnPressed: root.clicked()
         Keys.onEnterPressed: root.clicked()
+        onEntered: if (root.tooltip.length > 0) ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onPositionChanged: if (root.tooltip.length > 0) ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onExited: ToolTip.hide()
+    }
+
+    // Hover-only area that is live exactly when the button above is disabled,
+    // so the tooltip still appears on inert controls (disabled MouseAreas are
+    // skipped by hit testing).
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        enabled: !root.enabled_ && root.tooltip.length > 0
+        onEntered: ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onPositionChanged: ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onExited: ToolTip.hide()
     }
 }

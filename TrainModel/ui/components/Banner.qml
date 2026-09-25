@@ -1,13 +1,14 @@
 import QtQuick
+import QtQuick.Controls
 
 // Mode / context banner: sunken surface strip (mockup's neutral grey,
-// resolved to --bg-sunken + --border) with a bold heading and a helper
-// sentence beneath.
+// resolved to --bg-sunken + --border) with a bold heading. Explanatory
+// copy goes in `tooltip` and appears on hover instead of as a second line.
 Item {
     id: root
 
     property string heading: ""
-    property string helper: ""
+    property string tooltip: ""
 
     implicitWidth: 0
     implicitHeight: col.implicitHeight + 2 * theme.space_3
@@ -37,15 +38,14 @@ Item {
             font.weight: Font.Bold
             color: theme.text_primary
         }
+    }
 
-        Text {
-            width: parent.width
-            visible: root.helper.length > 0
-            text: root.helper
-            wrapMode: Text.WordWrap
-            font.family: theme.ui_family
-            font.pixelSize: theme.font_small
-            color: theme.text_secondary
-        }
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        enabled: root.tooltip.length > 0
+        onEntered: ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onPositionChanged: ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onExited: ToolTip.hide()
     }
 }

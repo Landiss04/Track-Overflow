@@ -34,7 +34,7 @@ ColumnLayout {
             Banner {
                 Layout.fillWidth: true
                 heading: "TEST HARNESS — MODULE DRIVEN FROM THIS PAGE"
-                helper: "Every input below is supplied by this page instead " +
+                tooltip: "Every input below is supplied by this page instead " +
                         "of by the track model and train controller, so the " +
                         "train model can be run and graded on its own."
             }
@@ -154,6 +154,8 @@ ColumnLayout {
                 title: "OUTPUTS · READ FROM MODULE"
                 badgeText: "11"
                 badgeVariant: "idle"
+                tooltip: "Values refresh on every tick. Distance travelled " +
+                        "is per tick, not cumulative."
 
                 TableHeader {
                     Layout.fillWidth: true
@@ -208,11 +210,6 @@ ColumnLayout {
                     }
                 }
 
-                HelperText {
-                    Layout.fillWidth: true
-                    text: "Values refresh on every tick. Distance travelled " +
-                          "is per tick, not cumulative."
-                }
             }
 
             Card {
@@ -220,6 +217,8 @@ ColumnLayout {
                 title: "FAILURE MODES · SET HERE"
                 badgeText: "3"
                 badgeVariant: "idle"
+                tooltip: "Set here because these are module state, not " +
+                        "inputs from another module."
 
                 TableHeader {
                     Layout.fillWidth: true
@@ -281,11 +280,6 @@ ColumnLayout {
                     }
                 }
 
-                HelperText {
-                    Layout.fillWidth: true
-                    text: "Set here because these are module state, not " +
-                          "inputs from another module."
-                }
             }
 
             Card {

@@ -32,7 +32,7 @@ ColumnLayout {
             Banner {
                 Layout.fillWidth: true
                 heading: trainModel.mode_label
-                helper: "Speed and authority come from the track controller; " +
+                tooltip: "Speed and authority come from the track controller; " +
                         "the manual throttle is locked out and the doors will " +
                         "not release above 0 MPH."
             }
@@ -227,25 +227,18 @@ ColumnLayout {
                     Layout.fillWidth: true
                     label: "Brakes"
                 }
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    lastRow: true
-                    label: "Passenger emergency brake"
-                    value: trainModel.passenger_ebrake_state
-                }
 
                 // Split ownership: the e-brake is a Train Model control and
                 // stays interactive (Style Guide §7 safety-critical size).
+                // The verb states the live state — no separate status row.
                 PrimaryButton {
                     Layout.fillWidth: true
                     large: true
-                    text: "APPLY EMERGENCY BRAKE"
+                    text: trainModel.passenger_ebrake_state === "APPLIED"
+                          ? "RELEASE EMERGENCY BRAKE" : "APPLY EMERGENCY BRAKE"
+                    tooltip: "Stops the train at full braking rate and reports " +
+                            "the stop to the track controller and the CTC."
                     onClicked: trainModel.apply_emergency_brake()
-                }
-                HelperText {
-                    Layout.fillWidth: true
-                    text: "Stops the train at full braking rate and reports " +
-                          "the stop to the track controller and the CTC."
                 }
 
                 // Divider (Figma "HorizontalBorder").
@@ -293,26 +286,26 @@ ColumnLayout {
                         Layout.fillWidth: true
                         enabled_: false
                         text: "OPEN LEFT DOORS"
+                        tooltip: "Doors unlock at 0 MPH with the service brake applied."
                     }
                     SecondaryButton {
                         Layout.fillWidth: true
                         enabled_: false
                         text: "CLOSE LEFT DOORS"
+                        tooltip: "Doors unlock at 0 MPH with the service brake applied."
                     }
                     SecondaryButton {
                         Layout.fillWidth: true
                         enabled_: false
                         text: "OPEN RIGHT DOORS"
+                        tooltip: "Doors unlock at 0 MPH with the service brake applied."
                     }
                     SecondaryButton {
                         Layout.fillWidth: true
                         enabled_: false
                         text: "CLOSE RIGHT DOORS"
+                        tooltip: "Doors unlock at 0 MPH with the service brake applied."
                     }
-                }
-                HelperText {
-                    Layout.fillWidth: true
-                    text: "Doors unlock at 0 MPH with the service brake applied."
                 }
             }
 
@@ -322,30 +315,34 @@ ColumnLayout {
                 badgeText: trainModel.failure_badge
                 badgeVariant: "fault"
 
+                // The verb states the live state (INDUCE when normal, CLEAR
+                // when failed) — no separate status line on the button.
                 SecondaryButton {
                     Layout.fillWidth: true
-                    text: "INDUCE ENGINE FAILURE"
-                    subLabel: trainModel.engine_failure_state
+                    text: trainModel.engine_failure_state.indexOf("FAILED") >= 0
+                          ? "CLEAR ENGINE FAILURE" : "INDUCE ENGINE FAILURE"
+                    tooltip: "A failure stays set until it is cleared here. With " +
+                            "signal pickup failed, no new commanded speed or " +
+                            "authority reaches this train."
                     onClicked: trainModel.toggle_engine_failure()
                 }
                 SecondaryButton {
                     Layout.fillWidth: true
-                    text: "INDUCE BRAKE FAILURE"
-                    subLabel: trainModel.brake_failure_state
+                    text: trainModel.brake_failure_state.indexOf("FAILED") >= 0
+                          ? "CLEAR BRAKE FAILURE" : "INDUCE BRAKE FAILURE"
+                    tooltip: "A failure stays set until it is cleared here. With " +
+                            "signal pickup failed, no new commanded speed or " +
+                            "authority reaches this train."
                     onClicked: trainModel.toggle_brake_failure()
                 }
                 SecondaryButton {
                     Layout.fillWidth: true
-                    text: "CLEAR SIGNAL PICKUP FAILURE"
-                    subLabel: trainModel.signal_pickup_state
+                    text: trainModel.signal_pickup_state.indexOf("FAILED") >= 0
+                          ? "CLEAR SIGNAL PICKUP FAILURE" : "INDUCE SIGNAL PICKUP FAILURE"
+                    tooltip: "A failure stays set until it is cleared here. With " +
+                            "signal pickup failed, no new commanded speed or " +
+                            "authority reaches this train."
                     onClicked: trainModel.toggle_signal_pickup()
-                }
-
-                HelperText {
-                    Layout.fillWidth: true
-                    text: "A failure stays set until it is cleared here. With " +
-                          "signal pickup failed, no new commanded speed or " +
-                          "authority reaches this train."
                 }
             }
         }

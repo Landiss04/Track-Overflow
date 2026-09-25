@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 // Panel (Style Guide §4.1/§5): white surface, 1 px border, --radius-lg,
 // resting shadow approximated as a soft offset rectangle (--shadow-1 is a
@@ -12,6 +13,7 @@ Item {
     property string title: ""
     property alias badgeText: headerBadge.text
     property string badgeVariant: "idle"
+    property string tooltip: ""          // optional, shown when hovering the header
     default property alias body: bodyColumn.data
 
     implicitHeight: content.implicitHeight
@@ -71,6 +73,15 @@ Item {
                 anchors.rightMargin: theme.space_4
                 anchors.verticalCenter: parent.verticalCenter
                 variant: root.badgeVariant
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                enabled: root.tooltip.length > 0
+                onEntered: ToolTip.show(root.tooltip, mouseX, mouseY, root)
+                onPositionChanged: ToolTip.show(root.tooltip, mouseX, mouseY, root)
+                onExited: ToolTip.hide()
             }
         }
 

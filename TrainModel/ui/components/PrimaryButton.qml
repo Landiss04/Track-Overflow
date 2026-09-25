@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 // Filled action button (Style Guide §6.1). `variant` picks the fill family:
 // "primary" (accent) or "danger" (emergency brake, per §7 safety-critical
@@ -12,6 +13,7 @@ Item {
     property string variant: "primary"   // primary | danger
     property bool large: false
     property bool enabled_: true         // underscored: `enabled` is reserved by Item
+    property string tooltip: ""          // optional hover tooltip (native ToolTip)
 
     signal clicked
 
@@ -69,5 +71,8 @@ Item {
         onClicked: root.clicked()
         Keys.onReturnPressed: root.clicked()
         Keys.onEnterPressed: root.clicked()
+        onEntered: if (root.tooltip.length > 0) ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onPositionChanged: if (root.tooltip.length > 0) ToolTip.show(root.tooltip, mouseX, mouseY, root)
+        onExited: ToolTip.hide()
     }
 }
