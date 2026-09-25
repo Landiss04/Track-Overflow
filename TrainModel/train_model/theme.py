@@ -110,6 +110,8 @@ SHADOW_2_ALPHA = 0.12
 # Safety-critical control minimums (7).
 SAFETY_MIN_HEIGHT = CONTROL_H_LG
 SAFETY_MIN_WIDTH = 200
+# Promoted emergency-brake control, taller than the section-7 minimum.
+SAFETY_EMPHASIS_HEIGHT = 64
 
 
 def resolve_family(candidates: list[str]) -> str:
@@ -191,4 +193,5 @@ def build_theme() -> dict[str, Any]:
         "shadow_2_alpha": SHADOW_2_ALPHA,
         "safety_min_height": SAFETY_MIN_HEIGHT,
         "safety_min_width": SAFETY_MIN_WIDTH,
+        "safety_emphasis_height": SAFETY_EMPHASIS_HEIGHT,
     }

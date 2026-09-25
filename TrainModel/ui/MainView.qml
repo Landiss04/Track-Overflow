@@ -235,6 +235,7 @@ ScrollView {
 
                 SafetyButton {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: theme.safety_emphasis_height
                     Layout.topMargin: theme.space_5
                     Layout.bottomMargin: theme.space_2
                     label: qsTr("Apply emergency brake")
@@ -283,31 +284,18 @@ ScrollView {
                 Repeater {
                     model: trainModel.failures
 
-                    delegate: RowLayout {
+                    delegate: AppButton {
                         required property var modelData
 
                         Layout.fillWidth: true
-                        spacing: theme.space_3
-
-                        Item { Layout.fillWidth: true }   // right-align the controls
-
-                        StatusBadge {
-                            label: modelData.active
-                                ? qsTr("Failed") : qsTr("Normal")
-                            variant: modelData.active ? "fault" : "ok"
-                        }
-
-                        AppButton {
-                            variant: modelData.active ? "success" : "secondary"
-                            size: "small"
-                            text: modelData.active
-                                ? qsTr("Clear") : qsTr("Induce")
-                            tooltip: qsTr("A failure stays set until it is cleared here. "
-                                + "With signal pickup failed, no new commanded speed "
-                                + "or authority reaches this train.")
-                            onClicked: trainModel.setFailure(
-                                modelData.name, !modelData.active)
-                        }
+                        variant: modelData.active ? "danger" : "success"
+                        text: (modelData.active ? qsTr("Clear ") : qsTr("Induce "))
+                            + modelData.label + qsTr(" failure")
+                        tooltip: qsTr("A failure stays set until it is cleared here. "
+                            + "With signal pickup failed, no new commanded speed "
+                            + "or authority reaches this train.")
+                        onClicked: trainModel.setFailure(
+                            modelData.name, !modelData.active)
                     }
                 }
             }
