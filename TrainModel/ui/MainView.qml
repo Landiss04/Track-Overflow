@@ -208,21 +208,33 @@ ScrollView {
                     }
                 }
 
-                FieldLabel {
+                RowLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: theme.space_4
-                    text: qsTr("DOORS")
-                }
+                    spacing: theme.space_3
 
-                Repeater {
-                    model: trainModel.doors
-
-                    delegate: KeyValueRow {
-                        required property var modelData
-
+                    FieldLabel {
                         Layout.fillWidth: true
-                        label: modelData.side
-                        value: modelData.open ? qsTr("Open") : qsTr("Closed")
+                        text: qsTr("LEFT")
+                    }
+
+                    StatusBadge {
+                        label: root.s.left_door
+                            ? qsTr("Open") : qsTr("Closed")
+                        variant: root.s.left_door ? "ok" : "idle"
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    FieldLabel {
+                        Layout.fillWidth: true
+                        text: qsTr("RIGHT")
+                    }
+
+                    StatusBadge {
+                        label: root.s.right_door
+                            ? qsTr("Open") : qsTr("Closed")
+                        variant: root.s.right_door ? "ok" : "idle"
                     }
                 }
 
