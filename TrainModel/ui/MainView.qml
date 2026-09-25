@@ -215,7 +215,7 @@ ScrollView {
 
                     FieldLabel {
                         Layout.fillWidth: true
-                        text: qsTr("LEFT")
+                        text: qsTr("LEFT DOORS")
                     }
 
                     StatusBadge {
@@ -228,7 +228,7 @@ ScrollView {
 
                     FieldLabel {
                         Layout.fillWidth: true
-                        text: qsTr("RIGHT")
+                        text: qsTr("RIGHT DOORS")
                     }
 
                     StatusBadge {
