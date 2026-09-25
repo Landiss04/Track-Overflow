@@ -14,6 +14,9 @@ ScrollView {
         return Number(value).toFixed(digits);
     }
 
+    function mph(val) { return Number(val) * 2.23694; }
+    function ft(val)  { return Number(val) * 3.28084; }
+
     clip: true
     contentWidth: availableWidth
 
@@ -41,22 +44,22 @@ ScrollView {
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Actual speed")
-                        value: root.fixed(root.s.actual_speed, 1)
-                        unit: "m/s"
+                        value: root.fixed(root.mph(root.s.actual_speed), 1)
+                        unit: "mph"
                     }
 
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Commanded")
-                        value: root.fixed(root.s.commanded_speed, 1)
-                        unit: "m/s"
+                        value: root.fixed(root.mph(root.s.commanded_speed), 1)
+                        unit: "mph"
                     }
 
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Speed limit")
-                        value: root.fixed(root.s.speed_limit, 1)
-                        unit: "m/s"
+                        value: root.fixed(root.mph(root.s.speed_limit), 1)
+                        unit: "mph"
                     }
                 }
 
@@ -69,13 +72,13 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Distance to end of authority")
-                    value: root.fixed(root.s.authority_distance, 1) + " m"
+                    value: root.fixed(root.ft(root.s.authority_distance), 1) + " ft"
                 }
 
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Acceleration")
-                    value: root.fixed(root.s.acceleration, 2) + " m/s\u00B2"
+                    value: root.fixed(root.ft(root.s.acceleration), 2) + " ft/s\u00B2"
                 }
 
                 KeyValueRow {
@@ -126,9 +129,9 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Train size (l | w | h)")
-                    value: root.fixed(root.s.length, 2) + " | "
-                        + root.fixed(root.s.width, 2) + " | "
-                        + root.fixed(root.s.height, 2) + " m"
+                    value: root.fixed(root.ft(root.s.length), 1) + " | "
+                        + root.fixed(root.ft(root.s.width), 1) + " | "
+                        + root.fixed(root.ft(root.s.height), 1) + " ft"
                 }
 
                 KeyValueRow {
@@ -262,7 +265,7 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Offset into block")
-                    value: root.fixed(root.s.position_offset, 1) + " m"
+                    value: root.fixed(root.ft(root.s.position_offset), 1) + " ft"
                 }
 
                 KeyValueRow {
