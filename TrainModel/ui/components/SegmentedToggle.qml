@@ -1,87 +1,62 @@
+// Toggle group, style guide 5 (--radius-pill) and 6.1. The selected segment
+// carries the accent fill; the label is always present.
 import QtQuick
+import QtQuick.Layouts
 
-// Two-segment toggle group (Style Guide §5: toggle groups use radius-pill).
-// `options` is a two-item array; `selected` is the active option string.
-// Only the selected segment is accented — the text label always states the
-// state, per the "color is never the only signal" rule (§2).
-Item {
+Rectangle {
     id: root
 
-    property var options: ["TRUE", "FALSE"]
-    property string selected: ""
-    property bool enabled_: true      // underscored: `enabled` is reserved by Item
+    property var options: []
+    property int currentIndex: 0
+    signal activated(int index)
 
-    signal changed(string option)
+    implicitHeight: theme.control_h_md
+    implicitWidth: row.implicitWidth + 2 * theme.space_1
+    radius: theme.radius_pill
+    color: theme.bg_sunken
+    border.color: theme.border_strong
+    border.width: 1
+    opacity: enabled ? 1.0 : 0.42
 
-    implicitWidth: theme.toggle_group_width
-    implicitHeight: theme.control_h_sm
-
-    Rectangle {
+    RowLayout {
+        id: row
         anchors.fill: parent
-        color: theme.bg_raised
-        border.width: 1
-        border.color: theme.border_strong
-        radius: theme.radius_pill
-        opacity: root.enabled_ ? 1.0 : theme.disabled_opacity
-    }
-
-    Row {
-        anchors.fill: parent
-        anchors.leftMargin: 1
-        anchors.rightMargin: 1
+        anchors.margins: theme.space_1
         spacing: 0
 
         Repeater {
             model: root.options
-            delegate: Item {
-                width: parent.width / 2
-                height: parent.height - 2
-                y: 1
 
-                Rectangle {
-                    anchors.fill: parent
-                    visible: modelData === root.selected
-                    color: theme.accent
-                    radius: theme.radius_pill
-                }
+            delegate: Rectangle {
+                required property int index
+                required property string modelData
+
+                readonly property bool selected: index === root.currentIndex
+
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumWidth: segmentLabel.implicitWidth + 2 * theme.space_4
+                radius: theme.radius_pill
+                color: selected ? theme.accent : "transparent"
 
                 Text {
+                    id: segmentLabel
                     anchors.centerIn: parent
-                    text: modelData
+                    text: modelData.toUpperCase()
+                    color: parent.selected ? theme.on_accent : theme.text_secondary
                     font.family: theme.ui_family
-                    font.pixelSize: theme.font_small
-                    font.weight: Font.Bold
-                    color: modelData === root.selected
-                           ? theme.on_accent : theme.text_secondary
-                }
-
-                // Focus ring (2 px, 2 px offset), keyboard focus only.
-                Rectangle {
-                    visible: segPress.activeFocus
-                    anchors.fill: parent
-                    anchors.margins: -theme.focus_ring_offset
-                    color: "transparent"
-                    border.width: theme.focus_ring_width
-                    border.color: theme.focus_ring
-                    radius: theme.radius_pill
+                    font.pixelSize: theme.size_label
+                    font.weight: theme.weight_bold
+                    font.letterSpacing: theme.label_letter_spacing
                 }
 
                 MouseArea {
-                    id: segPress
                     anchors.fill: parent
-                    enabled: root.enabled_
+                    enabled: root.enabled
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (modelData !== root.selected)
-                            root.changed(modelData)
-                    }
-                    Keys.onReturnPressed: {
-                        if (modelData !== root.selected)
-                            root.changed(modelData)
-                    }
+                    onClicked: root.activated(index)
                 }
             }
         }
     }
-
 }

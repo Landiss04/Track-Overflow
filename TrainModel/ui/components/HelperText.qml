@@ -1,9 +1,12 @@
+// Small token, style guide 3. Helper and secondary detail.
 import QtQuick
 
-// Helper / secondary detail in the Small token (Style Guide §3).
 Text {
-    font.family: theme.ui_family
-    font.pixelSize: theme.font_small
     color: theme.text_secondary
+    font.family: theme.ui_family
+    font.pixelSize: theme.size_small
+    font.weight: theme.weight_regular
     wrapMode: Text.WordWrap
+    text: ""
+    textFormat: Text.PlainText
 }

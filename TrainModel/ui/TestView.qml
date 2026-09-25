@@ -1,350 +1,204 @@
+// Test harness page. Every input the Train Model would receive from the
+// Track Model or the Train Controller is supplied here instead, so the
+// module can be run and graded on its own.
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import "."
-import "./components"
+import "components"
 
-// Page 3b — Test UI: the standalone harness. Inputs are edited here and
-// routed through harness.set_input(); outputs, failure modes, and run
-// control bind to harness state. Copy is verbatim from the mockup.
-ColumnLayout {
+ScrollView {
     id: root
 
-    TopBar {
-        Layout.fillWidth: true
-        hamburger: true
-        title: "TRAIN MODEL"
-        subtitle: "Page 3b · Test UI"
-        trainSelector: trainModel.train_selector
-        clock: trainModel.clock
-    }
+    clip: true
+    contentWidth: availableWidth
 
     RowLayout {
-        Layout.fillWidth: true
-        Layout.fillHeight: true
-        Layout.leftMargin: theme.space_3
-        Layout.rightMargin: theme.space_3
-        spacing: theme.space_3
+        width: root.availableWidth
+        spacing: theme.space_5
 
-        // ---- Left column: inputs --------------------------------------
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: theme.space_4
+            Layout.alignment: Qt.AlignTop
+            Layout.margins: theme.space_5
+            Layout.rightMargin: 0
+            spacing: theme.space_5
 
-            Banner {
+            Callout {
                 Layout.fillWidth: true
-                heading: "TEST HARNESS — MODULE DRIVEN FROM THIS PAGE"
-                helper: "Every input below is supplied by this page instead " +
-                        "of by the track model and train controller, so the " +
-                        "train model can be run and graded on its own."
+                heading: qsTr("Test harness \u2014 module driven from this page")
+                body: qsTr("Sending the inputs writes the declared "
+                    + "pass-through signals into the module. The remaining "
+                    + "outputs wait on the simulation.")
             }
 
             Card {
                 Layout.fillWidth: true
-                title: "INPUTS · SET HERE"
-                badgeText: "15"
-                badgeVariant: "idle"
+                title: qsTr("Inputs")
+                badgeLabel: harness.inputs.length + qsTr(" signals")
+                badgeVariant: "info"
 
-                TableHeader {
-                    Layout.fillWidth: true
-                    columns: ["Signal", "Type", "Value"]
-                    fractions: [0.4, 0.2, 0.4]
-                }
+                TableHeader { Layout.fillWidth: true }
 
                 Repeater {
-                    model: harness.input_descriptors
+                    model: harness.inputs
 
-                    delegate: Item {
+                    delegate: SignalRow {
+                        required property var modelData
+
                         Layout.fillWidth: true
-                        implicitHeight: theme.input_row_height
-
-                        readonly property string name: modelData.name
-                        readonly property string type: modelData.type
-                        readonly property string unit: modelData.unit
-
-                        // Signal name — mono, IDs and names in the mono face.
-                        Text {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: name
-                            elide: Text.ElideRight
-                            font.family: theme.mono_family
-                            font.pixelSize: theme.font_small
-                            color: theme.text_primary
-                        }
-
-                        // Type column.
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: (0.4 * parent.width) + theme.space_3
-                            text: type
-                            font.family: theme.mono_family
-                            font.pixelSize: theme.font_small
-                            color: theme.text_muted
-                        }
-
-                        // Value control — bools toggle, numbers validate,
-                        // strings take the wide field (Style Guide §6.2).
-                        SegmentedToggle {
-                            visible: type === "bool"
-                            x: (0.6 * parent.width)
-                            anchors.verticalCenter: parent.verticalCenter
-                            selected: harness[name] ? "TRUE" : "FALSE"
-                            onChanged: function(option) {
-                                harness.set_input(name, option === "TRUE")
-                            }
-                        }
-
-                        RowLayout {
-                            visible: type !== "bool"
-                            x: (0.6 * parent.width)
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: theme.space_2
-
-                            NumericField {
-                                visible: type === "float" || type === "int"
-                                Layout.preferredWidth: theme.field_narrow_width
-                                allowDecimals: type === "float"
-                                sourceText: harness.input_text(name)
-                                onCommit: function(value) {
-                                    harness.set_input(name, value)
-                                }
-                            }
-
-                            TextField {
-                                visible: type === "string"
-                                Layout.preferredWidth: theme.field_wide_width
-                                sourceText: harness[name]
-                                onCommit: function(value) {
-                                    harness.set_input(name, value)
-                                }
-                            }
-
-                            Text {
-                                visible: unit.length > 0
-                                text: unit
-                                font.family: theme.mono_family
-                                font.pixelSize: theme.font_small
-                                color: theme.text_muted
-                            }
-                        }
-
-                        // Bottom rule (Style Guide §6.6).
-                        Rectangle {
-                            visible: index < harness.input_descriptors.length - 1
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 1
-                            color: theme.border
+                        name: modelData.name
+                        kind: modelData.kind
+                        value: modelData.value
+                        unit: modelData.unit
+                        editable: true
+                        onEdited: function (newValue) {
+                            harness.setInput(modelData.name, newValue);
                         }
                     }
                 }
             }
         }
 
-        // ---- Right column: outputs, failures, run control -------------
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: theme.space_4
+            Layout.alignment: Qt.AlignTop
+            Layout.margins: theme.space_5
+            Layout.leftMargin: 0
+            spacing: theme.space_5
 
             Card {
                 Layout.fillWidth: true
-                title: "OUTPUTS · READ FROM MODULE"
-                badgeText: "11"
+                title: qsTr("Outputs")
+                badgeLabel: harness.outputs.length + qsTr(" signals")
                 badgeVariant: "idle"
 
-                TableHeader {
-                    Layout.fillWidth: true
-                    columns: ["Signal", "Type", "Value"]
-                    fractions: [0.4, 0.2, 0.4]
-                }
+                TableHeader { Layout.fillWidth: true }
 
                 Repeater {
                     model: harness.outputs
 
-                    delegate: Item {
+                    delegate: SignalRow {
+                        required property var modelData
+
                         Layout.fillWidth: true
-                        implicitHeight: theme.table_row_height
-
-                        Text {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.signal
-                            elide: Text.ElideRight
-                            font.family: theme.mono_family
-                            font.pixelSize: theme.font_small
-                            color: theme.text_primary
-                        }
-
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: (0.4 * parent.width) + theme.space_3
-                            text: modelData.type
-                            font.family: theme.mono_family
-                            font.pixelSize: theme.font_small
-                            color: theme.text_muted
-                        }
-
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: (0.6 * parent.width)
-                            text: modelData.value
-                            elide: Text.ElideRight
-                            font.family: theme.mono_family
-                            font.pixelSize: theme.font_small
-                            color: theme.text_primary
-                        }
-
-                        Rectangle {
-                            visible: index < harness.outputs.length - 1
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 1
-                            color: theme.border
-                        }
+                        name: modelData.name
+                        kind: modelData.kind
+                        value: modelData.value
+                        unit: modelData.unit
                     }
                 }
 
                 HelperText {
                     Layout.fillWidth: true
-                    text: "Values refresh on every tick. Distance travelled " +
-                          "is per tick, not cumulative."
+                    text: qsTr("Read back from the module. Values refresh "
+                        + "whenever the module state changes.")
                 }
             }
 
             Card {
                 Layout.fillWidth: true
-                title: "FAILURE MODES · SET HERE"
-                badgeText: "3"
-                badgeVariant: "idle"
-
-                TableHeader {
-                    Layout.fillWidth: true
-                    columns: ["Internal state", "Type", "Value"]
-                    fractions: [0.4, 0.2, 0.4]
-                }
+                title: qsTr("Failure modes")
+                badgeLabel: trainModel.activeFailureCount + qsTr(" set")
+                badgeVariant: trainModel.activeFailureCount > 0
+                    ? "fault" : "ok"
 
                 Repeater {
-                    model: [
-                        {name: "engine_failure"},
-                        {name: "brake_failure"},
-                        {name: "signal_pickup_failure"}
-                    ]
+                    model: trainModel.failures
 
-                    delegate: Item {
+                    delegate: RowLayout {
+                        required property var modelData
+
                         Layout.fillWidth: true
-                        implicitHeight: theme.input_row_height
+                        spacing: theme.space_3
 
-                        readonly property string name: modelData.name
-
-                        Text {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: name
-                            elide: Text.ElideRight
-                            font.family: theme.mono_family
-                            font.pixelSize: theme.font_small
-                            color: theme.text_primary
+                        MonoText {
+                            Layout.fillWidth: true
+                            text: modelData.name
                         }
 
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: (0.4 * parent.width) + theme.space_3
-                            text: "bool"
-                            font.family: theme.mono_family
-                            font.pixelSize: theme.font_small
-                            color: theme.text_muted
-                        }
-
-                        // Failure modes are module state, not inputs — set
-                        // the property directly rather than via set_input.
                         SegmentedToggle {
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: (0.6 * parent.width)
-                            selected: harness[name] ? "TRUE" : "FALSE"
-                            onChanged: function(option) {
-                                harness[name] = (option === "TRUE")
+                            options: [qsTr("True"), qsTr("False")]
+                            currentIndex: modelData.active ? 0 : 1
+                            onActivated: function (index) {
+                                trainModel.setFailure(
+                                    modelData.name, index === 0);
                             }
-                        }
-
-                        Rectangle {
-                            visible: index < 2
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 1
-                            color: theme.border
                         }
                     }
                 }
 
                 HelperText {
                     Layout.fillWidth: true
-                    text: "Set here because these are module state, not " +
-                          "inputs from another module."
+                    text: qsTr("Set here because these are module state, not "
+                        + "inputs from another module.")
                 }
             }
 
             Card {
                 Layout.fillWidth: true
-                title: "RUN CONTROL"
-                badgeText: harness.run_state
-                badgeVariant: "idle"
+                title: qsTr("Run control")
+                badgeLabel: harness.running ? qsTr("Running") : qsTr("Held")
+                badgeVariant: harness.running ? "ok" : "idle"
 
-                SectionLabel {
+                FieldLabel {
                     Layout.fillWidth: true
-                    label: "Clock"
+                    text: qsTr("CLOCK")
                 }
 
                 SegmentedToggle {
                     Layout.fillWidth: true
-                    options: ["RUN", "HOLD"]
-                    selected: harness.run_state
-                    onChanged: function(option) {
-                        harness.set_run_state(option)
+                    options: [qsTr("Run"), qsTr("Hold")]
+                    currentIndex: harness.running ? 0 : 1
+                    onActivated: function (index) {
+                        harness.setRunning(index === 0);
                     }
                 }
 
-                PrimaryButton {
+                AppButton {
                     Layout.fillWidth: true
-                    text: "SEND INPUTS TO TRAIN MODEL"
-                    onClicked: harness.send_inputs()
+                    Layout.topMargin: theme.space_2
+                    variant: "primary"
+                    text: qsTr("Send inputs to train model")
+                    onClicked: harness.sendInputs()
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: theme.space_3
 
-                    SecondaryButton {
+                    AppButton {
                         Layout.fillWidth: true
-                        text: "ADVANCE ONE TICK"
-                        onClicked: harness.advance_tick()
+                        variant: "secondary"
+                        text: qsTr("Advance one tick")
+                        onClicked: harness.advanceTick()
                     }
-                    SecondaryButton {
+
+                    AppButton {
                         Layout.fillWidth: true
-                        text: "RESET MODULE"
-                        onClicked: harness.reset_module()
+                        variant: "secondary"
+                        text: qsTr("Reset module")
+                        onClicked: harness.resetModule()
                     }
                 }
 
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Tick"
-                    value: String(harness.tick).replace(/(\d)(?=(\d{3})+$)/g, "$1 ")
+                    Layout.topMargin: theme.space_2
+                    label: qsTr("Tick")
+                    value: String(harness.tick)
                 }
+
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "dt"
-                    value: harness.dt
+                    label: qsTr("dt")
+                    value: Number(harness.dt).toFixed(3) + " s"
                 }
+
                 KeyValueRow {
                     Layout.fillWidth: true
-                    lastRow: true
-                    label: "Elapsed"
+                    label: qsTr("Elapsed")
                     value: harness.elapsed
+                    rule: false
                 }
             }
         }

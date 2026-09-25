@@ -1,351 +1,338 @@
+// Overview page. Everything here is read-only except the passenger emergency
+// brake and the failure injectors, which the Train Model owns.
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import "."
-import "./components"
+import "components"
 
-// Page 3a — Main page: the operational Train Model view. Two equal-weight
-// columns; every displayed value binds to trainModel state, every visual
-// property resolves through the theme tokens.
-ColumnLayout {
+ScrollView {
     id: root
 
-    TopBar {
-        Layout.fillWidth: true
-        title: "Train Model"
-        trainSelector: trainModel.train_selector
-        clock: trainModel.clock
+    readonly property var s: trainModel.snapshot
+
+    function fixed(value, digits) {
+        return Number(value).toFixed(digits);
     }
 
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.fillHeight: true
-        Layout.leftMargin: theme.space_3
-        Layout.rightMargin: theme.space_3
-        spacing: theme.space_3
+    clip: true
+    contentWidth: availableWidth
 
-        // ---- Left column: what the train is doing ---------------------
+    RowLayout {
+        width: root.availableWidth
+        spacing: theme.space_5
+
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: theme.space_4
+            Layout.alignment: Qt.AlignTop
+            Layout.margins: theme.space_5
+            Layout.rightMargin: 0
+            spacing: theme.space_5
 
-            Banner {
+            Callout {
                 Layout.fillWidth: true
-                heading: trainModel.mode_label
-                helper: "Speed and authority come from the track controller; " +
-                        "the manual throttle is locked out and the doors will " +
-                        "not release above 0 MPH."
+                heading: qsTr("Automatic \u2014 track controller in command")
+                body: qsTr("Commanded speed and authority arrive from the "
+                    + "track controller. Lights, doors and the service brake "
+                    + "are commanded by the train controller and are shown "
+                    + "here as state only.")
             }
 
             Card {
                 Layout.fillWidth: true
-                title: "SPEED & AUTHORITY"
-                badgeText: trainModel.speed_auth_badge
-                badgeVariant: "ok"
+                title: qsTr("Speed & authority")
+                badgeLabel: root.s.current_block
+                badgeVariant: "info"
 
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: theme.space_3
 
-                    MetricTile {
+                    TelemetryReadout {
                         Layout.fillWidth: true
-                        label: "ACTUAL SPEED"
-                        value: trainModel.actual_speed
-                        unit: "MPH"
+                        label: qsTr("Actual speed")
+                        value: root.fixed(root.s.actual_speed, 1)
+                        unit: "m/s"
                     }
-                    MetricTile {
+
+                    TelemetryReadout {
                         Layout.fillWidth: true
-                        label: "COMMANDED"
-                        value: trainModel.commanded_display
-                        unit: "MPH"
+                        label: qsTr("Commanded")
+                        value: root.fixed(root.s.commanded_speed, 1)
+                        unit: "m/s"
                     }
-                    MetricTile {
+
+                    TelemetryReadout {
                         Layout.fillWidth: true
-                        label: "SPEED LIMIT"
-                        value: trainModel.speed_limit
-                        unit: "MPH"
+                        label: qsTr("Speed limit")
+                        value: root.fixed(root.s.speed_limit, 1)
+                        unit: "m/s"
                     }
                 }
 
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Authority"
-                    value: trainModel.authority
+                    label: qsTr("Authority")
+                    value: root.s.authority_block
                 }
+
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Distance to end of authority"
-                    value: trainModel.distance_to_eoa
+                    label: qsTr("Distance to end of authority")
+                    value: root.fixed(root.s.authority_distance, 1) + " m"
                 }
+
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Acceleration"
-                    value: trainModel.acceleration
+                    label: qsTr("Acceleration")
+                    value: root.fixed(root.s.acceleration, 2) + " m/s\u00B2"
                 }
+
                 KeyValueRow {
                     Layout.fillWidth: true
-                    lastRow: true
-                    label: "Grade"
-                    value: trainModel.grade
+                    label: qsTr("Grade")
+                    value: root.fixed(root.s.grade, 1) + " deg"
+                    rule: false
                 }
             }
 
             Card {
                 Layout.fillWidth: true
-                title: "CABIN & LOAD"
-                badgeText: trainModel.cabin_badge
+                title: qsTr("Cabin & load")
+                badgeLabel: root.s.cars + qsTr(" cars")
                 badgeVariant: "idle"
 
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: theme.space_3
 
-                    MetricTile {
+                    TelemetryReadout {
                         Layout.fillWidth: true
-                        label: "PASSENGERS"
-                        value: trainModel.passengers
+                        label: qsTr("Passengers")
+                        value: root.s.passengers + " / " + root.s.capacity
                     }
-                    MetricTile {
+
+                    TelemetryReadout {
                         Layout.fillWidth: true
-                        label: "LOADED MASS"
-                        value: trainModel.loaded_mass
-                        unit: "T"
+                        label: qsTr("Loaded mass")
+                        value: root.fixed(root.s.loaded_mass, 1)
+                        unit: "t"
                     }
-                    MetricTile {
+
+                    TelemetryReadout {
                         Layout.fillWidth: true
-                        label: "CABIN TEMP"
-                        value: trainModel.cabin_temp
-                        unit: "°F"
+                        label: qsTr("Cabin temp")
+                        value: String(root.s.cabin_temp)
+                        unit: "F"
                     }
+                }
+
+                KeyValueRow {
+                    Layout.fillWidth: true
+                    label: qsTr("Crew")
+                    value: String(root.s.crew)
                 }
 
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Crew"
-                    value: trainModel.crew
-                }
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: "Cars"
-                    value: trainModel.cars
-                }
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: "Train size (L|W|H)"
-                    value: trainModel.train_size
-                }
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: "Empty mass"
-                    value: trainModel.empty_mass
+                    label: qsTr("Train size (l | w | h)")
+                    value: root.fixed(root.s.length, 2) + " | "
+                        + root.fixed(root.s.width, 2) + " | "
+                        + root.fixed(root.s.height, 2) + " m"
                 }
 
-                // Power consumption row + progress bar (~78 % fill).
-                ColumnLayout {
+                KeyValueRow {
                     Layout.fillWidth: true
-                    spacing: theme.space_2
+                    label: qsTr("Empty mass")
+                    value: root.fixed(root.s.empty_mass, 1) + " t"
+                }
 
-                    KeyValueRow {
+                KeyValueRow {
+                    Layout.fillWidth: true
+                    label: qsTr("Power consumption")
+                    value: root.fixed(root.s.power_consumption, 0) + " / "
+                        + root.fixed(root.s.power_limit, 0) + " kW"
+                    rule: false
+                }
+
+                UsageBar {
+                    Layout.fillWidth: true
+                    value: root.s.power_consumption
+                    ceiling: root.s.power_limit
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: theme.space_2
+                    spacing: theme.space_3
+
+                    FieldLabel {
                         Layout.fillWidth: true
-                        lastRow: true
-                        label: "Power consumption"
-                        value: trainModel.power_consumption
+                        text: qsTr("LIGHTS")
                     }
-                    ProgressBar {
-                        Layout.fillWidth: true
-                        fraction: trainModel.power_fill
+
+                    StatusBadge {
+                        label: root.s.cabin_light
+                            ? qsTr("Cabin on") : qsTr("Cabin off")
+                        variant: root.s.cabin_light ? "ok" : "idle"
                     }
-                }
 
-                SectionLabel {
-                    Layout.fillWidth: true
-                    label: "Lights"
-                }
-
-                // Lights are controller-driven; the model displays state
-                // only — read-only rows, no toggle, no click target.
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: "Interior"
-                    value: trainModel.interior_light_state
-                }
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    lastRow: true
-                    label: "Exterior"
-                    value: trainModel.exterior_light_state
+                    StatusBadge {
+                        label: root.s.headlight
+                            ? qsTr("Headlight on") : qsTr("Headlight off")
+                        variant: root.s.headlight ? "ok" : "idle"
+                    }
                 }
             }
 
             Card {
                 Layout.fillWidth: true
-                title: "POSITION"
-                badgeText: trainModel.position_badge
-                badgeVariant: "info"
+                title: qsTr("Position")
+                badgeLabel: root.s.line
+                badgeVariant: "idle"
 
-                SectionLabel {
+                KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Direction of travel"
-                }
-                ReadOnlyField {
-                    Layout.fillWidth: true
-                    value: trainModel.direction_of_travel
+                    label: qsTr("Direction of travel")
+                    value: root.s.direction + " \u00B7 " + root.s.previous_block
+                        + " \u2192 " + root.s.current_block
                 }
 
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Current block"
-                    value: trainModel.current_block
+                    label: qsTr("Current block")
+                    value: root.s.current_block
                 }
+
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: "Distance into block"
-                    value: trainModel.distance_into_block
+                    label: qsTr("Offset into block")
+                    value: root.fixed(root.s.position_offset, 1) + " m"
                 }
+
                 KeyValueRow {
                     Layout.fillWidth: true
-                    lastRow: true
-                    label: "Next station · arrival"
-                    value: trainModel.next_station
+                    label: qsTr("Next station \u00B7 arrival")
+                    value: root.s.next_station + " ("
+                        + root.s.platform_side + ") \u00B7 " + root.s.arrival
+                    rule: false
                 }
             }
         }
 
-        // ---- Right column: brakes, doors, failure modes ---------------
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: theme.space_4
+            Layout.alignment: Qt.AlignTop
+            Layout.margins: theme.space_5
+            Layout.leftMargin: 0
+            spacing: theme.space_5
 
             Card {
                 Layout.fillWidth: true
-                title: "BRAKES & DOORS"
-                badgeText: trainModel.brakes_badge
-                badgeVariant: "ok"
+                title: qsTr("Brakes & doors")
+                badgeLabel: root.s.emergency_brake
+                    ? qsTr("E-brake applied") : qsTr("E-brake released")
+                badgeVariant: root.s.emergency_brake ? "fault" : "ok"
 
-                SectionLabel {
-                    Layout.fillWidth: true
-                    label: "Brakes"
-                }
                 KeyValueRow {
                     Layout.fillWidth: true
-                    lastRow: true
-                    label: "Passenger emergency brake"
-                    value: trainModel.passenger_ebrake_state
+                    label: qsTr("Passenger emergency brake")
+                    value: root.s.emergency_brake
+                        ? qsTr("Applied") : qsTr("Released")
                 }
 
-                // Split ownership: the e-brake is a Train Model control and
-                // stays interactive (Style Guide §7 safety-critical size).
-                PrimaryButton {
+                SafetyButton {
                     Layout.fillWidth: true
-                    large: true
-                    text: "APPLY EMERGENCY BRAKE"
-                    onClicked: trainModel.apply_emergency_brake()
+                    Layout.topMargin: theme.space_5
+                    Layout.bottomMargin: theme.space_2
+                    label: qsTr("Apply emergency brake")
+                    onConfirmed: trainModel.applyEmergencyBrake()
                 }
+
                 HelperText {
                     Layout.fillWidth: true
-                    text: "Stops the train at full braking rate and reports " +
-                          "the stop to the track controller and the CTC."
+                    text: qsTr("Stops the train at the full braking rate and "
+                        + "reports the stop to the track controller and the "
+                        + "CTC. Confirmation is required.")
                 }
 
-                // Divider (Figma "HorizontalBorder").
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: theme.border
+                AppButton {
+                    Layout.topMargin: theme.space_2
+                    variant: "secondary"
+                    size: "small"
+                    text: qsTr("Release brake")
+                    enabled: root.s.emergency_brake
+                    onClicked: trainModel.releaseEmergencyBrake()
                 }
 
-                SectionLabel {
+                FieldLabel {
                     Layout.fillWidth: true
-                    label: "Doors"
-                }
-                TableHeader {
-                    Layout.fillWidth: true
-                    columns: ["Car", "Side", "State"]
-                    fractions: [0.4, 0.3, 0.3]
+                    Layout.topMargin: theme.space_4
+                    text: qsTr("DOORS")
                 }
 
                 Repeater {
-                    model: trainModel.door_states
-                    delegate: TableRow {
+                    model: trainModel.doors
+
+                    delegate: KeyValueRow {
+                        required property var modelData
+
                         Layout.fillWidth: true
-                        cells: [modelData.car, modelData.side, modelData.state]
-                        fractions: [0.4, 0.3, 0.3]
-                        monoColumns: [true, false, false]
-                        lastRow: index === trainModel.door_states.length - 1
+                        label: modelData.side
+                        value: modelData.open ? qsTr("Open") : qsTr("Closed")
                     }
                 }
 
-                // Manual door control — rendered disabled per the mockup
-                // (see README "Design discrepancies", item 11).
-                // Sub-label disabled with its buttons (Style Guide §6.1
-                // disabled state: 40–45 % opacity, no pointer).
-                SectionLabel {
-                    Layout.fillWidth: true
-                    label: "Manual door control"
-                    opacity: theme.disabled_opacity
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.space_3
-
-                    SecondaryButton {
-                        Layout.fillWidth: true
-                        enabled_: false
-                        text: "OPEN LEFT DOORS"
-                    }
-                    SecondaryButton {
-                        Layout.fillWidth: true
-                        enabled_: false
-                        text: "CLOSE LEFT DOORS"
-                    }
-                    SecondaryButton {
-                        Layout.fillWidth: true
-                        enabled_: false
-                        text: "OPEN RIGHT DOORS"
-                    }
-                    SecondaryButton {
-                        Layout.fillWidth: true
-                        enabled_: false
-                        text: "CLOSE RIGHT DOORS"
-                    }
-                }
                 HelperText {
                     Layout.fillWidth: true
-                    text: "Doors unlock at 0 MPH with the service brake applied."
+                    text: qsTr("Door commands come from the train controller. "
+                        + "Doors unlock at 0 m/s with the service brake "
+                        + "applied.")
                 }
             }
 
             Card {
                 Layout.fillWidth: true
-                title: "FAILURE MODES"
-                badgeText: trainModel.failure_badge
-                badgeVariant: "fault"
+                title: qsTr("Failure modes")
+                badgeLabel: trainModel.activeFailureCount + qsTr(" failed")
+                badgeVariant: trainModel.activeFailureCount > 0
+                    ? "fault" : "ok"
 
-                SecondaryButton {
-                    Layout.fillWidth: true
-                    text: "INDUCE ENGINE FAILURE"
-                    subLabel: trainModel.engine_failure_state
-                    onClicked: trainModel.toggle_engine_failure()
-                }
-                SecondaryButton {
-                    Layout.fillWidth: true
-                    text: "INDUCE BRAKE FAILURE"
-                    subLabel: trainModel.brake_failure_state
-                    onClicked: trainModel.toggle_brake_failure()
-                }
-                SecondaryButton {
-                    Layout.fillWidth: true
-                    text: "CLEAR SIGNAL PICKUP FAILURE"
-                    subLabel: trainModel.signal_pickup_state
-                    onClicked: trainModel.toggle_signal_pickup()
+                Repeater {
+                    model: trainModel.failures
+
+                    delegate: RowLayout {
+                        required property var modelData
+
+                        Layout.fillWidth: true
+                        spacing: theme.space_3
+
+                        FieldLabel {
+                            Layout.fillWidth: true
+                            text: modelData.label.toUpperCase()
+                        }
+
+                        StatusBadge {
+                            label: modelData.active
+                                ? qsTr("Failed") : qsTr("Normal")
+                            variant: modelData.active ? "fault" : "ok"
+                        }
+
+                        AppButton {
+                            variant: modelData.active ? "success" : "secondary"
+                            size: "small"
+                            text: modelData.active
+                                ? qsTr("Clear") : qsTr("Induce")
+                            onClicked: trainModel.setFailure(
+                                modelData.name, !modelData.active)
+                        }
+                    }
                 }
 
                 HelperText {
                     Layout.fillWidth: true
-                    text: "A failure stays set until it is cleared here. With " +
-                          "signal pickup failed, no new commanded speed or " +
-                          "authority reaches this train."
+                    text: qsTr("A failure stays set until it is cleared here. "
+                        + "With signal pickup failed, no new commanded speed "
+                        + "or authority reaches this train.")
                 }
             }
         }

@@ -1,153 +1,194 @@
-"""Design tokens for the Train Model UI.
+"""Design tokens for the ECE1140 UI Style Guide, light theme.
 
-Every colour, font, spacing, radius, and element dimension used by the QML
-views resolves through this module. No literal visual value may appear in a
-view; this is the single source of truth (UI Style Guide §9).
+Single source of truth for colour, typography, spacing, radius and control
+sizing, per style guide section 9. No literal token value appears anywhere
+else in the module: QML reads these through the ``theme`` context property.
 
-Colour, type, spacing, radius, and component tokens come from
-``documents/UI_Style_Guide.md`` (light theme, normative). Element dimensions
-the style guide does not cover — top-bar height, nav-rail width, card header
-strip, metric tile, table row, field, and toggle-group sizes — come from the
-Figma CSS exports in ``refrence-docs/``.
+Token names match the style guide so the optional dark theme of section 10
+is a drop-in replacement.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from PyQt6.QtGui import QFontDatabase
+from PySide6.QtGui import QFontDatabase
+
+# Surfaces and borders (style guide 4.1).
+BG_APP = "#F4F6F8"
+BG_SURFACE = "#FFFFFF"
+BG_RAISED = "#FFFFFF"
+BG_SUNKEN = "#E8ECF0"
+BORDER = "#D5DCE3"
+BORDER_STRONG = "#8795A3"
+
+# Text (4.2).
+TEXT_PRIMARY = "#16202A"
+TEXT_SECONDARY = "#4B5C6B"
+TEXT_MUTED = "#5F6B79"
+TEXT_INVERSE = "#FFFFFF"
+
+# Accent (4.3).
+ACCENT = "#1D6FD0"
+ACCENT_HOVER = "#1A5FB4"
+ACCENT_ACTIVE = "#164E96"
+ACCENT_SUBTLE = "#E4EFFB"
+ON_ACCENT = "#FFFFFF"
+
+# Semantic (4.4).
+SUCCESS = "#15803D"
+SUCCESS_HOVER = "#126832"
+SUCCESS_BG = "#EDF7F0"
+WARNING = "#B45309"
+WARNING_BG = "#FDF2E0"
+DANGER = "#C0272D"
+DANGER_HOVER = "#A81F25"
+DANGER_ACTIVE = "#8C1A1F"
+DANGER_BG = "#FBE8E9"
+INFO = "#4338CA"
+INFO_BG = "#EAE8FB"
+FOCUS_RING = "#1D6FD0"
+
+# Typography (3). Helvetica and Monaco are not bundled; the fallback stacks
+# resolve to Arial and Consolas on Windows and to Helvetica Neue and Menlo
+# on macOS.
+UI_FAMILIES = [
+    "Helvetica Neue",
+    "Helvetica",
+    "Arial",
+    "Nimbus Sans",
+    "DejaVu Sans",
+]
+MONO_FAMILIES = [
+    "Monaco",
+    "Menlo",
+    "Consolas",
+    "Andale Mono",
+    "DejaVu Sans Mono",
+]
+
+SIZE_DISPLAY = 36
+SIZE_H1 = 28
+SIZE_H2 = 22
+SIZE_H3 = 18
+SIZE_BODY = 15
+SIZE_SMALL = 13
+SIZE_LABEL = 12
+SIZE_TELEMETRY = 28
+
+WEIGHT_REGULAR = 400
+WEIGHT_BOLD = 700
+
+# Letter spacing is specified in em; QML expects pixels.
+LABEL_LETTER_SPACING = round(SIZE_LABEL * 0.07, 2)
+SAFETY_LETTER_SPACING = round(SIZE_BODY * 0.05, 2)
+
+# Spacing, radius, elevation (5).
+SPACE_1 = 4
+SPACE_2 = 8
+SPACE_3 = 12
+SPACE_4 = 16
+SPACE_5 = 24
+SPACE_6 = 32
+SPACE_7 = 48
+
+RADIUS_SM = 3
+RADIUS_MD = 6
+RADIUS_LG = 10
+RADIUS_PILL = 999
+
+CONTROL_H_SM = 28
+CONTROL_H_MD = 36
+CONTROL_H_LG = 44
+
+# Shadow-1 and shadow-2 are expressed as an offset, a blur-substitute
+# spread and an alpha, because QML has no CSS box-shadow.
+SHADOW_1_COLOR = "#14161C"
+SHADOW_1_ALPHA = 0.08
+SHADOW_2_ALPHA = 0.12
+
+# Safety-critical control minimums (7).
+SAFETY_MIN_HEIGHT = CONTROL_H_LG
+SAFETY_MIN_WIDTH = 200
 
 
-def _resolve_family(stack: list[str]) -> str:
-    """Return the first font family in *stack* present on this system.
+def resolve_family(candidates: list[str]) -> str:
+    """Return the first installed family from a fallback stack.
 
-    Falls back to the last entry so the stack always yields a name.
+    QML's ``font.family`` takes a single name, so the stacks in style guide
+    section 3 are resolved once at startup against what the machine actually
+    has. Requires a QGuiApplication to exist.
     """
     available = set(QFontDatabase.families())
-    for family in stack:
-        if family in available:
-            return family
-    return stack[-1]
+    for name in candidates:
+        if name in available:
+            return name
+    return candidates[-1]
 
 
 def build_theme() -> dict[str, Any]:
-    """Return the full token dictionary for the committed light theme."""
-    ui_stack = ["Helvetica Neue", "Helvetica", "Arial"]
-    mono_stack = [
-        "Monaco",
-        "Menlo",
-        "Consolas",
-        "Andale Mono",
-        "DejaVu Sans Mono",
-        "Liberation Mono",
-    ]
-
-    tokens: dict[str, Any] = {
-        # -- Typography -------------------------------------------------
-        "ui_family": _resolve_family(ui_stack),
-        "mono_family": _resolve_family(mono_stack),
-        "weight_regular": 400,
-        "weight_bold": 700,
-        "font_display": 36,
-        "font_h1": 28,
-        "font_h2": 22,
-        "font_h3": 18,
-        "font_body": 15,
-        "font_small": 13,
-        "font_label": 12,
-        # Label tracking is an em factor (Style Guide §3); views multiply by
-        # the pixel size so the value stays a token, not a literal.
-        "label_tracking_em": 0.07,
-        "value_size": 28,  # telemetry readout value (§6.5)
-        "unit_size": 13,  # unit suffix after a readout value (§6.5)
-
-        # -- Surfaces and borders (§4.1) -------------------------------
-        "bg_app": "#F4F6F8",
-        "bg_surface": "#FFFFFF",
-        "bg_raised": "#FFFFFF",
-        "bg_sunken": "#E8ECF0",
-        "border": "#D5DCE3",
-        "border_strong": "#8795A3",
-
-        # -- Text (§4.2) ------------------------------------------------
-        "text_primary": "#16202A",
-        "text_secondary": "#4B5C6B",
-        "text_muted": "#5F6B79",
-        "text_inverse": "#FFFFFF",
-
-        # -- Accent (§4.3) ---------------------------------------------
-        "accent": "#1D6FD0",
-        "accent_hover": "#1A5FB4",
-        "accent_active": "#164E96",
-        "accent_subtle": "#E4EFFB",
-        "on_accent": "#FFFFFF",
-
-        # -- Semantic (§4.4) -------------------------------------------
-        "success": "#15803D",
-        "success_hover": "#126832",
-        "success_bg": "#EDF7F0",
-        "warning": "#B45309",
-        "warning_bg": "#FDF2E0",
-        "danger": "#C0272D",
-        "danger_hover": "#A81F25",
-        "danger_active": "#8C1A1F",
-        "danger_bg": "#FBE8E9",
-        "info": "#4338CA",
-        "info_bg": "#EAE8FB",
-        "focus_ring": "#1D6FD0",
-
-        # -- Spacing, radius, elevation (§5) ----------------------------
-        "space_1": 4,
-        "space_2": 8,
-        "space_3": 12,
-        "space_4": 16,
-        "space_5": 24,
-        "space_6": 32,
-        "space_7": 48,
-        "radius_sm": 3,
-        "radius_md": 6,
-        "radius_lg": 10,
-        "radius_pill": 999,
-        "shadow_1": "0 1px 2px rgba(22,32,42,.08)",
-        "shadow_2": "0 4px 14px rgba(22,32,42,.12)",
-
-        # -- Control heights (§5) ---------------------------------------
-        "control_h_sm": 28,
-        "control_h_md": 36,
-        "control_h_lg": 44,
-
-        # -- Focus (§4.4 / §6.1) ----------------------------------------
-        "focus_ring_width": 2,
-        "focus_ring_offset": 2,
-
-        # -- Status badges (§6.3) ---------------------------------------
-        "badge_dot_size": 7,
-        "badge_text_size": 12,
-
-        # -- Element dimensions (Figma exports, not in the style guide) --
-        "top_bar_height": 56,
-        "nav_rail_width": 56,
-        "nav_item_height": 44,
-        "card_header_height": 30,
-        "metric_tile_height": 60,
-        "table_row_height": 24,
-        "input_row_height": 34,
-        "field_height": 28,
-        "field_narrow_width": 96,
-        "field_wide_width": 170,
-        "toggle_group_width": 108,
-        "progress_bar_height": 12,
-        "icon_size": 18,
-        "stroke_width": 2,
-        "sublabeled_button_height": 60,
-        "selector_chip_height": 30,
-
-        # -- State styling (§6.1: disabled = 40–45% opacity) ------------
-        "disabled_opacity": 0.45,
-
-        # -- Canvas (design width 1440 held as the window minimum) ------
-        "design_width": 1440,
-        "design_height": 900,
+    """Return the token table consumed by QML as the ``theme`` property."""
+    return {
+        "bg_app": BG_APP,
+        "bg_surface": BG_SURFACE,
+        "bg_raised": BG_RAISED,
+        "bg_sunken": BG_SUNKEN,
+        "border": BORDER,
+        "border_strong": BORDER_STRONG,
+        "text_primary": TEXT_PRIMARY,
+        "text_secondary": TEXT_SECONDARY,
+        "text_muted": TEXT_MUTED,
+        "text_inverse": TEXT_INVERSE,
+        "accent": ACCENT,
+        "accent_hover": ACCENT_HOVER,
+        "accent_active": ACCENT_ACTIVE,
+        "accent_subtle": ACCENT_SUBTLE,
+        "on_accent": ON_ACCENT,
+        "success": SUCCESS,
+        "success_hover": SUCCESS_HOVER,
+        "success_bg": SUCCESS_BG,
+        "warning": WARNING,
+        "warning_bg": WARNING_BG,
+        "danger": DANGER,
+        "danger_hover": DANGER_HOVER,
+        "danger_active": DANGER_ACTIVE,
+        "danger_bg": DANGER_BG,
+        "info": INFO,
+        "info_bg": INFO_BG,
+        "focus_ring": FOCUS_RING,
+        "ui_families": UI_FAMILIES,
+        "mono_families": MONO_FAMILIES,
+        "ui_family": resolve_family(UI_FAMILIES),
+        "mono_family": resolve_family(MONO_FAMILIES),
+        "size_display": SIZE_DISPLAY,
+        "size_h1": SIZE_H1,
+        "size_h2": SIZE_H2,
+        "size_h3": SIZE_H3,
+        "size_body": SIZE_BODY,
+        "size_small": SIZE_SMALL,
+        "size_label": SIZE_LABEL,
+        "size_telemetry": SIZE_TELEMETRY,
+        "weight_regular": WEIGHT_REGULAR,
+        "weight_bold": WEIGHT_BOLD,
+        "label_letter_spacing": LABEL_LETTER_SPACING,
+        "safety_letter_spacing": SAFETY_LETTER_SPACING,
+        "space_1": SPACE_1,
+        "space_2": SPACE_2,
+        "space_3": SPACE_3,
+        "space_4": SPACE_4,
+        "space_5": SPACE_5,
+        "space_6": SPACE_6,
+        "space_7": SPACE_7,
+        "radius_sm": RADIUS_SM,
+        "radius_md": RADIUS_MD,
+        "radius_lg": RADIUS_LG,
+        "radius_pill": RADIUS_PILL,
+        "control_h_sm": CONTROL_H_SM,
+        "control_h_md": CONTROL_H_MD,
+        "control_h_lg": CONTROL_H_LG,
+        "shadow_1_color": SHADOW_1_COLOR,
+        "shadow_1_alpha": SHADOW_1_ALPHA,
+        "shadow_2_alpha": SHADOW_2_ALPHA,
+        "safety_min_height": SAFETY_MIN_HEIGHT,
+        "safety_min_width": SAFETY_MIN_WIDTH,
     }
-
-    return tokens

@@ -1,55 +1,56 @@
+// Train Model application window.
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import "./components"
+import "components"
 
-// Application shell: window chrome, the collapsed nav rail (page 3b), and
-// a view loader that swaps between page 3a (MainView) and page 3b
-// (TestView). The design width (1440) is held as the minimum; extra
-// window width is shared by the two columns of each view.
-Window {
-    id: app
+ApplicationWindow {
+    id: window
 
-    title: "Train Model"
+    readonly property var snapshot: trainModel.snapshot
+
     visible: true
-    width: theme.design_width
-    height: theme.design_height
-    minimumWidth: theme.design_width
-    minimumHeight: theme.design_height
+    width: 1440
+    height: 900
+    minimumWidth: 1120
+    minimumHeight: 720
+    title: qsTr("Train Model")
     color: theme.bg_app
 
-    // Rail item 5 is the Test UI per the mockup; item 4 is the Main page.
-    readonly property int mainIndex: 3
-    readonly property int testIndex: 4
-
-    property int activeView: app.testIndex
-
-    RowLayout {
+    ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        NavRail {
-            Layout.preferredWidth: theme.nav_rail_width
-            Layout.fillHeight: true
-            activeIndex: app.activeView
-            onActivated: function(index) {
-                if (index === app.mainIndex || index === app.testIndex)
-                    app.activeView = index
-            }
+        ModuleHeader {
+            Layout.fillWidth: true
+            moduleName: qsTr("Train Model")
+            instance: window.snapshot.train_id
+            mode: window.snapshot.mode
+            line: window.snapshot.line
+            clock: window.snapshot.clock
+            faulted: window.snapshot.emergency_brake
         }
 
-        Item {
-            id: viewHost
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            spacing: 0
 
-            MainView {
-                anchors.fill: parent
-                visible: app.activeView === app.mainIndex
+            NavRail {
+                Layout.fillHeight: true
+                entries: [qsTr("Overview"), qsTr("Test harness")]
+                currentIndex: views.currentIndex
+                onActivated: function (index) { views.currentIndex = index; }
             }
 
-            TestView {
-                anchors.fill: parent
-                visible: app.activeView === app.testIndex
+            StackLayout {
+                id: views
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentIndex: 0
+
+                MainView {}
+                TestView {}
             }
         }
     }

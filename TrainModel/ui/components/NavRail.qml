@@ -1,92 +1,68 @@
+// View switcher. Entries carry text labels: style guide 2 and 8 require that
+// colour or an icon is never the only signal, and every interactive target is
+// at least 28 px.
 import QtQuick
+import QtQuick.Layouts
 
-// Collapsed navigation rail (Figma export): 44 px items with 18 px stub
-// glyphs drawn as stroked outlines — the mockup's placeholders are
-// rectangles with per-item border insets, reproduced here from
-// refrence-docs/TestUIwireframe.css. The active item gets a sunken tint
-// and a darker stroke; both states keep their text-free glyph per the
-// "color is never the only signal" rule (the rail is a stub — labels are
-// not part of the design).
-Item {
+Rectangle {
     id: root
 
-    property int activeIndex: 4   // item 5, per the mockup
-
+    property var entries: []
+    property int currentIndex: 0
     signal activated(int index)
 
-    // Per-glyph top/bottom inset as a fraction of the glyph box; left and
-    // right stay at the default inset. Values are the Figma border insets.
-    readonly property var glyphInsets: [
-        [0.2778, 0.2778],
-        [0.1667, 0.1667],
-        [0.1667, 0.1667],
-        [0.2222, 0.2222],
-        [0.1667, 0.1667],
-        [0.1667, 0.2222],
-        [0.1667, 0.1667],
-        [0.2222, 0.2222]
-    ]
-    readonly property real defaultInset: 0.1667
+    implicitWidth: 196
+    color: theme.bg_raised
 
     Rectangle {
-        anchors.fill: parent
-        color: theme.bg_raised
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        implicitWidth: 1
+        color: theme.border
     }
 
-    Column {
+    ColumnLayout {
         anchors.fill: parent
+        anchors.margins: theme.space_3
+        spacing: theme.space_1
 
         Repeater {
-            model: root.glyphInsets.length
+            model: root.entries
 
-        delegate: Item {
-            width: parent.width
-            height: theme.nav_item_height
+            delegate: Rectangle {
+                required property int index
+                required property string modelData
 
-            readonly property bool active: index === root.activeIndex
+                readonly property bool selected: index === root.currentIndex
 
-            // Active-item tint (mockup #EFEFEF → --bg-sunken).
-            Rectangle {
-                anchors.fill: parent
-                visible: active
-                color: theme.bg_sunken
-            }
+                Layout.fillWidth: true
+                implicitHeight: theme.control_h_md
+                radius: theme.radius_md
+                color: selected ? theme.accent_subtle : "transparent"
+                border.width: selected ? 1 : 0
+                border.color: theme.accent
 
-            Canvas {
-                anchors.centerIn: parent
-                width: theme.icon_size
-                height: theme.icon_size
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    var insets = root.glyphInsets[index]
-                    var x = width * root.defaultInset
-                    var y = width * insets[0]
-                    var w = width - 2 * x
-                    var h = width - width * (insets[0] + insets[1])
-                    ctx.strokeStyle = active ? theme.text_primary
-                                             : theme.text_muted
-                    ctx.lineWidth = theme.stroke_width
-                    ctx.strokeRect(x, y, w, h)
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: theme.space_3
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData
+                    color: parent.selected ? theme.accent : theme.text_secondary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_small
+                    font.weight: parent.selected
+                        ? theme.weight_bold : theme.weight_regular
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.activated(index)
                 }
             }
-
-            // 1 px vertical rule between items (Figma "VerticalBorder").
-            Rectangle {
-                visible: index > 0
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                height: 1
-                color: theme.border
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.activated(index)
-            }
         }
-        }
+
+        Item { Layout.fillHeight: true }
     }
 }
