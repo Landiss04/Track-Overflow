@@ -210,10 +210,12 @@ class TestHarnessState(QObject):
     @Slot()
     def sendInputs(self) -> None:
         """Push the declared pass-through inputs into the module."""
+        updates: dict[str, Any] = {}
         for row in self._inputs:
             field = _PASS_THROUGH.get(row["name"])
             if field is not None:
-                self._model.update(field, row["value"])
+                updates[field] = row["value"]
+        self._model.update_many(updates)
 
     @Slot(bool)
     def setRunning(self, running: bool) -> None:

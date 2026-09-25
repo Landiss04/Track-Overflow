@@ -11,7 +11,7 @@ dictionary (v0.2). Deviations from the wireframes are recorded in
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
@@ -148,6 +148,16 @@ class TrainModelState(QObject):
         if key not in self._snapshot:
             raise KeyError(f"unknown snapshot field: {key}")
         self._set(key, value)
+
+    def update_many(self, updates: Mapping[str, Any]) -> None:
+        """Apply a snapshot batch and notify QML once when it changes."""
+        unknown_keys = updates.keys() - self._snapshot.keys()
+        if unknown_keys:
+            raise KeyError(f"unknown snapshot fields: {sorted(unknown_keys)}")
+        if all(self._snapshot[key] == value for key, value in updates.items()):
+            return
+        self._snapshot.update(updates)
+        self.snapshotChanged.emit()
 
     def _set(self, key: str, value: Any) -> None:
         if self._snapshot.get(key) == value:
