@@ -1,9 +1,13 @@
 # train-controller
 
+*This shard is shared by all variants of this module. It is the definition they
+conform to.*
+
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
 **Aliases:** SW Train Controller, HW Train Controller, onboard controller
+**Variants:** `truth/modules/train-controller/train-controller-sw.md`, `truth/modules/train-controller/train-controller-hw.md`
 **Last updated:** 2026-09-25
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
@@ -16,31 +20,61 @@
 > (`AGENTS.md`, Entry rules). This shard has no provenance by design, until someone
 > populates it.
 
-## Module
+## Purpose
 
 **Train Controller** — vital onboard controller governing a single train.
 
 🔴 **VITAL** — explicitly stated. Exists as a software and a hardware instance.
 
-## To be populated
+To be populated:
 
-- Owner — who on the team owns this module. Required before this shard is truth.
+- Whether the diversity requirement stated for the Track Controller also applies
+  here — both carry the same vital bar, the deck states it only for the other.
+
+## Protocol methods
+
+*Unpopulated.*
+
+## Owns
+
+To be populated:
+
+- Configuration it owns at design time, and which other module may read it.
+- Station announcements, door sequencing, and light scheduling.
+
+## Consumes
+
+To be populated:
+
 - Interface contract — the signals it consumes and produces, as entries under
   `truth/signals/`, which is still empty.
-- Configuration it owns at design time, and which other module may read it.
-- Failure modes it simulates or must detect, and the fault-injection contract.
-- Module-specific units, beyond the project-wide tables in `../conventions.md`.
+
+## Enforced parameters
+
+To be populated:
+
+- Module-specific units, beyond the project-wide tables in `../../conventions.md`.
 - Control-law tuning constants `Kp`, `Ki`, `T`, `Pmax`. The deck requires they be
   chosen so the system is stable but supplies **no default values**. Nothing is
   recorded anywhere; the team must derive and verify them.
 - How `T` is derived under 10x fast-forward rather than assumed from wall clock.
-- Whether the diversity requirement stated for the Track Controller also applies
-  here — both carry the same vital bar, the deck states it only for the other.
-- Station announcements, door sequencing, and light scheduling.
+
+## Failure modes
+
+To be populated:
+
+- Failure modes it simulates or must detect, and the fault-injection contract.
+
+## Does not own
+
+*Unpopulated.*
+
+## To be populated
+
+- Owner — who on the team owns this module. Required before this shard is truth.
 
 ## Sources not yet read into truth
 
-- `common/interfaces.py` — `ISwTrainController`.
 - `documents/requirements-matrix.md` §1 — `Kp`, `Ki`, `T`, `Pmax` with no defaults.
 - `documents/requirements-matrix.md` §4.1 — unresolved: vital logic on a non-vital
   communication channel.

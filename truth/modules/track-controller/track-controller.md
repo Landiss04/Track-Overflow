@@ -1,9 +1,13 @@
 # track-controller
 
+*This shard is shared by all variants of this module. It is the definition they
+conform to.*
+
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
 **Aliases:** Wayside Controller, SW Track Controller, HW Track Controller, PLC
+**Variants:** `truth/modules/track-controller/track-controller-sw.md`, `truth/modules/track-controller/track-controller-hw.md`
 **Last updated:** 2026-09-25
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
@@ -16,30 +20,61 @@
 > (`AGENTS.md`, Entry rules). This shard has no provenance by design, until someone
 > populates it.
 
-## Module
+## Purpose
 
 **Track Controller** — vital wayside controller governing a section of track.
 
 🔴 **VITAL** — explicitly stated. Exists as a software and a hardware instance.
 
+To be populated:
+
+- What "diverse implementation" concretely means here, and whether a voting or
+  arbitration layer is in scope — unresolved, see sources.
+
+## Protocol methods
+
+*Unpopulated.*
+
+## Owns
+
+To be populated:
+
+- Configuration it owns at design time, and which other module may read it.
+- Crossing gate and light control.
+
+## Consumes
+
+To be populated:
+
+- Interface contract — the signals it consumes and produces, as entries under
+  `truth/signals/`, which is still empty.
+
+## Enforced parameters
+
+To be populated:
+
+- Module-specific units, beyond the project-wide tables in `../../conventions.md`.
+- PLC scan timing, and how it behaves under 10x fast-forward.
+
+## Failure modes
+
+To be populated:
+
+- Failure modes it simulates or must detect, and the fault-injection contract.
+
+## Does not own
+
+To be populated:
+
+- The boundary against the Track Model: which module interprets a track-circuit
+  signal and which only generates it.
+
 ## To be populated
 
 - Owner — who on the team owns this module. Required before this shard is truth.
-- Interface contract — the signals it consumes and produces, as entries under
-  `truth/signals/`, which is still empty.
-- Configuration it owns at design time, and which other module may read it.
-- Failure modes it simulates or must detect, and the fault-injection contract.
-- Module-specific units, beyond the project-wide tables in `../conventions.md`.
-- What "diverse implementation" concretely means here, and whether a voting or
-  arbitration layer is in scope — unresolved, see sources.
-- The boundary against the Track Model: which module interprets a track-circuit
-  signal and which only generates it.
-- PLC scan timing, and how it behaves under 10x fast-forward.
-- Crossing gate and light control.
 
 ## Sources not yet read into truth
 
-- `common/interfaces.py` — `ISwTrackController`.
 - `documents/requirements-matrix.md` §1, §2 — the user-written PLC program is required
   to be specifiable separately from the controller's own implementation.
 - `documents/requirements-matrix.md` §4.1 — unresolved: a vital controller acting on

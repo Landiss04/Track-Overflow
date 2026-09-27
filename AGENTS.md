@@ -97,6 +97,30 @@ Every entry declares its known alternate names so that two branches naming the s
 thing differently can be caught. If you are about to create an entry, check the
 existing keys and aliases in that shard first.
 
+### Modules with multiple implementations
+
+A module with variants gets **one contract shard plus one shard per variant**, all in
+a directory named for the module: `modules/<module>/<module>.md` for the contract and
+`modules/<module>/<module>-<variant>.md` for each variant. The contract shard is the
+definition every variant conforms to; each variant shard holds only what is true of
+that implementation alone. Use `_templates/module-contract.md` and
+`_templates/module-variant.md`.
+
+A module with a single implementation stays a flat `modules/<module>.md`. Do not
+create a directory for it until a second implementation exists.
+
+The contract shard has a **single named owner**. Variant authors do not edit it
+directly — they propose changes through `_inbox/`, and a pull request touching a
+contract shard requires **both variant authors as reviewers**.
+
+`signals/` entries name the **module** as producer, never a specific variant. A
+signal that only one variant produces is a contract violation, not a signal
+attribute.
+
+How the active variant is selected is a `decisions/` entry, not a module fact.
+Neither the contract shard nor a variant shard records which implementation is in
+use.
+
 ## Layout
 
 ```
@@ -104,6 +128,7 @@ truth/
   INDEX.md              always read
   conventions.md        naming, units, ID formats
   modules/<module>.md   one owned shard per module
+  modules/<module>/     a module with variants: contract shard plus one per variant
   signals/<signal>.md   one file per signal
   arbitration/<rule>.md one file per precedence rule
   decisions/<id>.md     one file per decision
