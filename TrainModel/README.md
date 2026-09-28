@@ -23,7 +23,7 @@ properties (`theme`, `trainModel`, `harness`).
 
 ```bash
 cd TrainModel
-source .venv/bin/activate        # PyQt6 6.11 + mypy; see "Setup" if missing
+source .venv/bin/activate        # PySide6 6.11 + mypy; see "Setup" if missing
 python main.py
 ```
 
@@ -40,8 +40,7 @@ cd TrainModel
 .venv/bin/python -m mypy main.py train_model/        # → no issues found in 5 source files
 ```
 
-`stubs/PyQt6/*.pyi` supply the `pyqtProperty`/`pyqtSignal` signatures PyQt6's
-bundled stubs omit; `mypy.ini` points `mypy_path` at them.
+PySide6 ships its own type stubs, so no local stubs are needed.
 
 ## Layout
 
@@ -53,17 +52,18 @@ train_model/harness.py  TestHarnessState — page 3b inputs/outputs/run control
 ui/Main.qml             window shell, nav rail, 3a/3b view switcher
 ui/MainView.qml         page 3a
 ui/TestView.qml         page 3b
-ui/components/*.qml     Badge, Card, Banner, MetricTile, TableRow/Header,
-                        buttons, toggles, fields, NavRail, TopBar, …
-stubs/PyQt6/*.pyi       local mypy stubs for the property/signal API
 ```
+
+Reusable QML components are not in this folder. They live in the shared
+root-level [`ui/`](../ui/README.md) library and are imported from each view
+with `import "../../ui"`.
 
 ## Setup (if `.venv` is missing)
 
 ```bash
 cd TrainModel
 python3 -m venv .venv
-.venv/bin/pip install "PyQt6==6.11.*" "mypy==2.3.*"
+.venv/bin/pip install "PySide6==6.11.*" "mypy==2.3.*"
 ```
 
 ## Design discrepancies
