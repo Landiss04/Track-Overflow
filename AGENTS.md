@@ -1,63 +1,103 @@
 # Source of Truth
 
-`truth/` is the authoritative record for this repo. It holds normative facts only:
-interfaces, signal definitions, arbitration and precedence rules, naming and unit
+The `truth` branch is the authoritative record for this repo. It holds normative facts
+only: interfaces, signal definitions, arbitration and precedence rules, naming and unit
 conventions, and decisions. It does not hold status — what is stubbed, what is
 implemented, defect counts, coverage. Status is read from the repo itself and must
-never be written into `truth/`.
+never be written into the truth store.
 
-Agents read `truth/`. Agents never edit `truth/` directly. Proposed changes go to
-`truth/_inbox/<branch>/` and are applied only after the user approves them.
+Agents read facts from the `truth` branch and write proposals to `truth/_inbox/` on
+their feature branch. Promotion of a proposal onto the `truth` branch is human-only.
+
+## Reading facts
+
+- Facts live only on the `truth` branch. Never assume a local copy exists. Nothing
+  under `truth/` in the working tree is a fact.
+- Fetch once per session: `git fetch origin truth`
+- Enumerate entries: `git ls-tree -r --name-only origin/truth -- truth/`
+- Search content: `git grep <pattern> origin/truth -- truth/`
+- Read one entry: `git show origin/truth:truth/<path>`
+- Read `truth/INDEX.md` first, via `git show`. Read individual shards on demand. Never
+  read the whole store.
+- Bulk reads may be written to a scratch directory outside the repo, e.g.
+  `/tmp/truth-<session>/`. Scratch copies are valid for the current session only,
+  require a fresh `git fetch` at session start, and are never reused across sessions.
+  Never write truth content anywhere inside the repo.
 
 ## At session start
 
-1. Read `truth/INDEX.md`. Always. It lists every shard with a one-line description
-   and a last-changed date.
-2. Read only the shards relevant to the work at hand. Do not read the whole store.
-3. Check whether the store is behind main:
-
-   ```
-   git fetch origin main && git log --oneline HEAD..origin/main -- truth/
-   ```
-
-   If the output is non-empty, tell the user the truth store is behind main and name
-   the changed files before relying on them.
+1. `git fetch origin truth`.
+2. Read `truth/INDEX.md` with `git show origin/truth:truth/INDEX.md`. Always. It lists
+   every shard with a one-line description and a last-changed date.
+3. Read only the shards relevant to the work at hand. Do not read the whole store.
 4. *Placeholder — environment drift check. Verify the local toolchain matches the
    versions recorded in `truth/conventions.md`. Unpopulated; no action required yet.*
-5. Check `truth/_inbox/<current-branch>/`. If it is non-empty, these are undrained
-   proposals from a previous session. Present them to the user for review before
-   starting new work.
+5. Check `truth/_inbox/<current-branch>/`. If it is non-empty, these are proposals from
+   a previous session awaiting promotion. Present them to the user before starting new
+   work.
 
-## During the session
+## Writing proposals
 
-When you learn a normative fact that is absent from `truth/`, contradicts it, or
-supersedes it, write a fragment immediately. Do not wait for the end of the session.
+When you learn a normative fact that is absent from the `truth` branch, contradicts it,
+or supersedes it, write a proposal immediately. Do not wait for the end of the session.
 
-- Path: `truth/_inbox/<branch>/<YYYYMMDD-HHMM>-<slug>.md`
-- One fragment per proposal. One new file each time. Never edit an existing fragment
+- Write to `truth/_inbox/<branch>/<YYYYMMDD-HHMM>-<slug>.md` on the current feature
+  branch.
+- `<branch>` is the feature branch name from `git rev-parse --abbrev-ref HEAD`, run at
+  the repo root. It is never `truth`.
+- `truth/_inbox/` does not exist on the `truth` branch. Never attempt to write a
+  proposal there.
+- Commit and push the proposal in the same session that produced it. Never leave a
+  proposal uncommitted, or in an unpushed commit.
+- One proposal per file. One new file each time. Never edit an existing proposal
   except when the user asks for a modification.
-- A fragment is the **full proposed entry**, in final form, ready to be copied to its
+- A proposal is the **full proposed entry**, in final form, ready to be copied to its
   canonical path. Not a diff, not a description of an edit.
-- Every fragment states its target canonical path and its provenance.
+- Every proposal states its target canonical path and its provenance.
 
 Do not infer facts from code and record them as normative. Code is evidence of what
 is, not of what was decided. A normative fact comes from a decision, a document, a PR
 discussion, or a direct statement by the user.
 
-## At session end
+## Promotion — human only
 
-Walk `truth/_inbox/<branch>/` and present each fragment to the user with a summary of
-what it asserts, what it changes, and where it came from. For each one the user
-approves, denies, or modifies:
+- Agents never promote proposals, never open a PR against `truth`, and never push to
+  `truth` or any `truth-inbox/*` branch.
+- If a proposal is ready to promote, say so and stop. Do not act on it.
 
-- **Approve** — apply the fragment to its canonical path, then delete the fragment.
-- **Deny** — delete the fragment.
-- **Modify** — rewrite the fragment as instructed, then apply and delete it.
+## Git invariants
 
-After draining, the branch's `truth/` is correct and the inbox is empty. The pull
-request is the second gate; the user's in-session approval is the first.
+These are invariants, not a list of banned commands. Any command not listed below is
+to be evaluated against the invariant, not assumed permitted.
 
-Do not drain silently and do not apply a fragment the user has not seen.
+1. **The primary worktree's checked-out branch never changes.** Violated by
+   `git checkout <branch>`, `git switch <branch>`, `git checkout -b`, `git switch -c`,
+   `git checkout <commit>`, and any `git worktree` operation against the primary path.
+2. **Truth content is never written to disk inside the repo.** Violated by
+   `git checkout origin/truth -- <path>` and `git restore --source=origin/truth <path>`
+   — both look like reads and in fact materialise and stage content. Also violated by
+   redirecting `git show` output to a file inside the repo. Never check out, merge, or
+   rebase `truth` into a code branch, and never run
+   `git merge --allow-unrelated-histories` against it.
+3. **Uncommitted work is never discarded.** Violated by `git reset --hard`,
+   `git clean -fd`, `git stash` (which reaches invariant 1 by making the tree look
+   clean), and `git checkout -- <path>` against a file with uncommitted changes.
+
+`git worktree add` is forbidden to agents entirely, including `--detach`. It is a
+promotion-time mechanism and belongs to the human runbook.
+
+These invariants apply to all agents in all clones, not only the developer's primary
+working clone.
+
+On confusion, stop and report. If you find yourself on an unexpected branch, or the
+tree is not in the state you expected, report it and stop. Do not correct it.
+
+## Deletion rule
+
+- Only a human deletes inbox files, as part of promotion.
+- Deletion is scoped to `truth/_inbox/**/*.md`.
+- `truth/_inbox/.gitkeep` and `truth/README.md` are never deleted or modified. They are
+  the scaffold that inherits into new branches.
 
 ## Entry rules
 
@@ -123,6 +163,8 @@ use.
 
 ## Layout
 
+On the `truth` branch:
+
 ```
 truth/
   INDEX.md              always read
@@ -133,13 +175,18 @@ truth/
   signals/<signal>.md   one file per signal
   arbitration/<rule>.md one file per precedence rule
   decisions/<id>.md     one file per decision
+```
+
+On the development branch and every feature branch:
+
+```
+truth/
+  README.md             scaffold; never modified
+  _inbox/.gitkeep       scaffold; never modified
   _inbox/<branch>/      agent write zone
-  _generated/           renderer output, not committed
 ```
 
 `modules/` shards are single-owner and low-contention; tables inside them are fine.
 `signals/`, `arbitration/`, and `decisions/` are directory-as-table: one file per
 entry, so that unrelated additions merge cleanly and a real disagreement over the
 same fact surfaces as a conflict in one file.
-
-Never write to `truth/_generated/`. It is produced by the renderer.

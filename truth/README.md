@@ -1,13 +1,16 @@
 # truth/
 
-This directory is the source-of-truth store for this repo: normative facts, not status. It does not track what is stubbed, what is implemented, defect counts, or coverage.
+Normative facts live on the `truth` branch. They are not present in this directory.
 
-Agents propose changes via `_inbox/` and never edit canonical files directly. The user approves proposals before they are applied.
+```
+git fetch origin truth
+git ls-tree -r --name-only origin/truth -- truth/
+git grep <pattern> origin/truth -- truth/
+git show origin/truth:truth/<path>
+```
 
-See the Source of Truth section of [`AGENTS.md`](../AGENTS.md) for the full rules.
+This directory is write-only. It is used for proposals, in `_inbox/<branch>/`.
 
-`ui/style-guide.md` records visual tokens and component rules; its adjacent
-HTML file is the authored review preview, not generated output. Executable
-shared QML components live in the root-level [`ui/`](../ui/README.md)
-folder alongside `truth/`. Module views, backend wiring, and verification
-remain in `TrainModel/`.
+Promotion of a proposal onto the `truth` branch is human-only.
+
+See the Source of Truth section of [`AGENTS.md`](../AGENTS.md).
