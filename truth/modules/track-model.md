@@ -4,7 +4,7 @@
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
 **Aliases:** Track Modal (misspelling in README)
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-28
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -30,8 +30,8 @@ Not vital: a physical simulation, not a controller.
 - Configuration it owns at design time, and which other module may read it.
 - Failure modes it simulates or must detect, and the fault-injection contract.
 - Module-specific units, beyond the project-wide tables in `../conventions.md`.
-- Track layout ingestion. **The file format is unresolved** — the SRS specifies CSV,
-  the repository holds JSON. See `../conventions.md` `## Units` Conflict.
+- Track layout ingestion. The file format is JSON — see `../conventions.md`
+  `## Units` Resolved.
 - Configurable block size, and the track layout input method.
 - Whether this module owns the canonical layout store — see sources.
 - Railway crossings, stations, power limitations, track heater.
@@ -46,7 +46,7 @@ Not vital: a physical simulation, not a controller.
   ownership shared with the Track Controller.
 - `documents/requirements-matrix.md` §4.6 — unresolved: this module and the CTC Office
   both claim to own the track-layout database.
-- `documents/srs-filled.md` Appendix A — the CSV column list, including the
-  "Grade (%)" column that conflicts with `grade_deg`.
+- `documents/srs-filled.md` Appendix A — the JSON block fields, including "grade (%)",
+  which conflicts with `grade_deg`.
 - `TrackModel/blue_line.json`, `red_line.json`, `green_line.json` — layout data in the
-  repo, in a format the SRS does not describe.
+  repo.

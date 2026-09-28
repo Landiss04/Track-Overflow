@@ -4,7 +4,7 @@
 **Owner:** Kevin
 **Provenance:** asserted by Kevin 2026-09-25
 **Aliases:** unit split, metric backend imperial UI, display units decision
-**Last updated:** 2026-09-27
+**Last updated:** 2026-09-28
 
 ## Context
 
@@ -41,11 +41,21 @@ lookup surface; this file records why the split exists.
   `TrainModel/ui/MainView.qml`, with state left metric.
 - Where a layout file supplies a non-canonical unit, the loader converts on read.
   Nothing downstream sees the file's unit.
-- Three unit questions remain open and are recorded as conflicts in
-  `conventions.md` `## Units`: authority as a distance vs. a block ID, gradient in
-  degrees vs. percent, and the track layout file format that the gradient question
-  depends on.
+- Open unit questions are recorded as conflicts in `conventions.md` `## Units`:
+  authority as a distance vs. a block ID, gradient in degrees vs. percent, backend
+  temperature, and four UI display units (see `## Conflict` below). The track layout
+  file format is resolved as JSON.
 - Documents that named units independently have been repointed at
   `conventions.md` rather than restating it — `truth/ui/style-guide.md` §6.5 and
   `truth/ui/ui-style-guide-preview.html`. Any future document needing units cites
   that entry; it does not copy the tables.
+
+## Conflict
+
+Owner: Kevin.
+
+Both exceptions in this decision are contested by `common/Units.md` on development
+(`35e6c77`, brabosil3, 2026-09-26), written the day after this decision: it stores
+temperature in Celsius and displays power in horsepower. It also differs on mass,
+acceleration, and force display units. Each value and its provenance is in
+`conventions.md` `## Units` `### Conflict`.

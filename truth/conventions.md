@@ -91,9 +91,9 @@ Rules that apply on top of the table:
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** asserted by Kevin 2026-09-25; quantity list migrated from `common/Units.md`; cross-checked against `common/interfaces.py` unit suffixes and `documents/srs-filled.md`
+**Provenance:** asserted by Kevin 2026-09-25; quantity list migrated from `common/Units.md` as it stood before `35e6c77`; cross-checked against `common/interfaces.py` unit suffixes and `documents/srs-filled.md`
 **Aliases:** units, unit conventions, measurement units
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-28
 
 Two unit systems exist and they are not interchangeable. Everything that is stored,
 computed, or passed across a module boundary is metric SI, with temperature as the
@@ -184,38 +184,55 @@ Owner: Kevin.
 | Value | Provenance |
 |-------|-----------|
 | meters (distance) | `srs-filled.md` §1.3 glossary ("the maximum distance a train is permitted to travel before stopping"); `requirements-matrix.md` §2 ("Authority (distance) from Wayside Controller"); `common/interfaces.py` — `TrackSignal.authority_m`, `set_commanded_signal`, `receive_suggestion`, `get_commanded_signal` all carry `authority_m: float` |
-| block ID (string) | `common/Units.md` as migrated into this entry — "Destination block up to which the train may travel" |
+| block ID (string) | `common/Units.md` as migrated into this entry — "Destination block up to which the train may travel"; `common/Units.md` on development (`35e6c77`, brabosil3, 2026-09-26) — block ID in backend and UI, 1:1 |
 
 The backend and UI tables above carry meters, because that is what three sources
 including the agreed interface contract transport. The block-ID reading is recorded
-here rather than discarded: it is the only source that said so, and it may reflect a
-superseded design rather than an error. These are not the same kind of value — one is
-a measurement that converts to feet for display, the other is an identifier that does
-not convert at all — so this must be resolved, not left ambiguous.
+here rather than discarded: two versions of `common/Units.md` assert it, the later one
+dated after this entry was written, so it is not simply a superseded design. These are
+not the same kind of value — one is a measurement that converts to feet for display,
+the other is an identifier that does not convert at all — so this must be resolved,
+not left ambiguous.
 
 **Gradient — degrees vs. percent. Open.**
 
 | Value | Provenance |
 |-------|-----------|
 | degrees | `common/Units.md` as migrated into this entry; `common/interfaces.py` — `BlockState.grade_deg` |
-| percent | `srs-filled.md` Appendix A (layout CSV column "Grade (%)") |
+| percent | `srs-filled.md` Appendix A (layout file field "grade (%)"); `grade_percent` in `TrackModel/*.json`; `common/Units.md` on development (`35e6c77`, brabosil3, 2026-09-26) — % in backend and UI, 1:1 |
 
 Degrees and percent are not the same quantity, so no conversion factor between them
 is recorded here until the resolution says which one the backend stores. The agreed
-interface contract carries `grade_deg`, which favors degrees; the percent claim is
-confined to the layout file format, which is itself unresolved below.
+interface contract carries `grade_deg`, which favors degrees; the layout files and the
+later units table both carry percent.
 
-**Track layout file format — unresolved.**
+**Temperature (backend) — Fahrenheit vs. Celsius. Open.**
 
-`srs-filled.md` §3.1.3 and Appendix A specify CSV, loaded at startup, with the
-columns named under `## File and path conventions`. The layout files actually in the
-repository are JSON. One of the two is out of date. This blocks the gradient conflict
-above, since the file format determines whether "Grade (%)" is a column name that
-still exists.
+| Value | Provenance |
+|-------|-----------|
+| Fahrenheit | D002 (asserted by Kevin 2026-09-25) — the single exception to metric |
+| Celsius | `common/Units.md` on development (`35e6c77`, brabosil3, 2026-09-26) — °C backend, °F display, °F = °C × 9/5 + 32 |
+
+**UI display units — four quantities. Open.**
+
+| Quantity | This entry and D002 | `common/Units.md` on development (`35e6c77`, brabosil3, 2026-09-26) |
+|----------|---------------------|-----|
+| Power | kW — "never horsepower" (D002 exception) | hp, × 0.00134102 |
+| Mass | short tons, × 0.001102311 | lb, × 2.20462 |
+| Acceleration | ft/s², × 3.280840 | mph/s, × 2.23694 |
+| Force | lbf, × 0.2248089 | not shown in the UI |
+
+The tables above carry this entry's values until the conflicts are resolved. The
+later table was written the day after D002, on `main`, and has not been reconciled
+with it.
 
 ### Resolved
 
-**Speed — m/s.** `srs-filled.md` Appendix A names the layout CSV column "Speed Limit
+**Track layout file format — JSON.** `srs-filled.md` §3.1.3 REQ-INTF-012 and
+Appendix A on development (`c058082`) specify JSON files loaded at startup, matching
+the layout files in `TrackModel/`.
+
+**Speed — m/s.** `srs-filled.md` Appendix A gives the layout file field "speed limit
 (km/h)". That is an input-format difference only: the loader converts on read and
 nothing downstream sees km/h. The backend unit for speed is m/s, as recorded above.
 
@@ -279,9 +296,9 @@ with no enforced shape.
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/srs-filled.md` §2.3, §3.1.3, §3.5.1–3.5.6; `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `truth/ui/style-guide.md` §9, §11; `.gitattributes`
+**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3, §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `truth/ui/style-guide.md` §9, §11; `.gitattributes`
 **Aliases:** file layout, paths, repo layout, project structure
-**Last updated:** 2026-09-27
+**Last updated:** 2026-09-28
 
 ### Paths
 
@@ -295,9 +312,10 @@ with no enforced shape.
 
 - Source files are short and all-lowercase. Underscores only where they improve
   readability: `track_layout.py`, `rolling_stock.py`.
-- Track layout data is loaded from the course-provided CSV files at startup. Columns:
-  Block Number, Block Length (m), Grade (%), Speed Limit (km/h), Infrastructure type,
-  Station Name, Door Side.
+- Track layout data is loaded from the course-provided JSON files at startup. Each
+  file lists a line name and an array of blocks; each block carries block number,
+  section letter, length (m), grade (%), speed limit (km/h), elevation and cumulative
+  elevation (m), and an optional `infrastructure` object.
 
 ### Entry point and dependencies
 
@@ -361,3 +379,22 @@ with no enforced shape.
 variables; `pylint` for naming and missing docstrings; `pep8-naming` as a flake8
 plugin. If `black` is used, it must be configured `line-length = 79` — its default
 of 88 conflicts with the standard above.
+
+### Supersedes
+
+- Track layout files: previously CSV with a named column list, from `srs-filled.md`
+  Appendix A before v1.0; the SRS now specifies JSON.
+
+### Conflict
+
+Owner: Kevin.
+
+**Entry point — `python main.py` vs. prebuilt executable. Open.**
+
+| Value | Provenance |
+|-------|-----------|
+| `python main.py` after `pip install -r requirements.txt`; pinned `requirements.txt` | `srs-filled.md` §3.5.1–3.5.2 before v1.0 (`b14ae73`), as recorded under `### Entry point and dependencies` |
+| launched as a standalone executable binary, pre-compiled before delivery | `srs-filled.md` §3.5.1 REQ-DSN-001, §3.5.2 REQ-DSN-002 on development (`c058082`) |
+
+The first two bullets under `### Entry point and dependencies` stand until this is
+resolved. A development launch path and a delivered binary may both be intended.

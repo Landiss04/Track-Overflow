@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Team 3
-**Provenance:** `documents/requirements-matrix.md` scope note (source: `Project_Information/Final Project vF.pdf`, 81-slide course deck)
+**Provenance:** `documents/requirements-matrix.md` scope note (source: `documents/Project_Information/Final Project vF.pdf`, 81-slide course deck)
 **Aliases:** drop MBO, MBO out of scope, moving block overlay
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-28
 
 ## Context
 

@@ -4,7 +4,7 @@
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
 **Aliases:** Train Modal (misspelling in README)
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-28
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -44,5 +44,5 @@ Not vital: a physical simulation, not a controller.
 - `documents/requirements-matrix.md` §4.5 — unresolved: fault-injection contract with
   the Train Controller.
 - `documents/srs-filled.md` Appendix B — safe braking distance formula.
-- `Project_Information/Blackpool_Flexity2.pdf`,
-  `Project_Information/Track Layout & Vehicle Data vF5.xlsx` — vehicle data, unread.
+- `documents/Project_Information/Blackpool_Flexity2.pdf`,
+  `documents/Project_Information/Track Layout & Vehicle Data vF5.xlsx` — vehicle data, unread.

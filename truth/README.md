@@ -1,16 +1,17 @@
 # truth/
 
-Normative facts live on the `truth` branch. They are not present in this directory.
+The source-of-truth store. It lives on the `truth` branch and holds normative facts
+only — interfaces, signals, arbitration rules, conventions, decisions — never status.
+Start at [`INDEX.md`](INDEX.md).
+
+Agents read it without checking it out:
 
 ```
 git fetch origin truth
-git ls-tree -r --name-only origin/truth -- truth/
-git grep <pattern> origin/truth -- truth/
-git show origin/truth:truth/<path>
+git show origin/truth:truth/INDEX.md
 ```
 
-This directory is write-only. It is used for proposals, in `_inbox/<branch>/`.
+Agents never write here. Proposals go to `truth/_inbox/<branch>/` on feature branches
+cut from development. Promotion onto this branch is human-only.
 
-Promotion of a proposal onto the `truth` branch is human-only.
-
-See the Source of Truth section of [`AGENTS.md`](../AGENTS.md).
+Full rules: [`AGENTS.md`](../AGENTS.md).
