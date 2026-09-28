@@ -4,11 +4,12 @@ This file is read at the start of every agent session. Shards are read on demand
 
 | Shard | Path | Description | Last changed |
 | --- | --- | --- | --- |
-| Conventions | `truth/conventions.md` | Naming, units, identifiers, and file/path conventions | 2026-09-25 |
-| Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — **all are placeholders, none assert facts** | 2026-09-25 |
+| UI | [style-guide.md](ui/style-guide.md) | Visual tokens, component and accessibility rules; [HTML review preview](ui/ui-style-guide-preview.html) | 2026-09-27 |
+| Conventions | `truth/conventions.md` | Naming, units, identifiers, and file/path conventions | 2026-09-27 |
+| Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — **all are placeholders, none assert facts** | 2026-09-27 |
 | Signals | `truth/signals/` | One file per signal | — empty |
 | Arbitration | `truth/arbitration/` | One file per precedence rule | — empty |
-| Decisions | `truth/decisions/` | One file per decision | 2026-09-25 |
+| Decisions | `truth/decisions/` | One file per decision | 2026-09-27 |
 
 ## Decisions on record
 

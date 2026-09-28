@@ -1,103 +1,76 @@
-# Train Model UI (stub)
+# Train Model UI
 
-PyQt6 + QML front-end for the ECE1140 Train Model, covering **page 3a** (main
-operational view) and **page 3b** (test harness). This is a *stub*: it renders
-both pages exactly as the mockup shows them and wires every value to bindable
-Python state, but there is no simulation behind it — values are seeded to the
-mockup and the interactive controls only flip that stub state.
+PySide6 + QML preview for the operational view and test harness. Python owns
+observable state; QML owns presentation. The physics backend is not implemented.
+The harness updates preview pass-through values and emits a complete input
+payload for a backend receiver.
 
-QML owns all visuals; Python owns state. The two talk through QML context
-properties (`theme`, `trainModel`, `harness`).
-
-## Design sources
-
-- **Tokens** — every color, font size, spacing, radius, and control dimension
-  comes from `documents/UI_Style_Guide.md` (light theme), exposed as a single
-  `theme` object built by `train_model/theme.py`. No QML file hard-codes a
-  color or a token-sized dimension.
-- **Dimensions & copy** — element sizes and the on-screen text are taken from
-  the Figma CSS exports in `refrence-docs/` (`UIwireframe.css` = main page,
-  `TestUIwireframe.css` = test UI).
-
-## Run
-
-```bash
-cd TrainModel
-source .venv/bin/activate        # PyQt6 6.11 + mypy; see "Setup" if missing
-python main.py
-```
-
-Offscreen smoke test (no display needed):
-
-```bash
-QT_QPA_PLATFORM=offscreen timeout 8 python main.py   # clean = no output
-```
-
-## Type-check
-
-```bash
-cd TrainModel
-.venv/bin/python -m mypy main.py train_model/        # → no issues found in 5 source files
-```
-
-`stubs/PyQt6/*.pyi` supply the `pyqtProperty`/`pyqtSignal` signatures PyQt6's
-bundled stubs omit; `mypy.ini` points `mypy_path` at them.
-
-## Layout
-
-```
-main.py                 entry point: builds theme, state objects, loads QML
-train_model/theme.py    build_theme() → the design-token dict (80 tokens)
-train_model/state.py    TrainModelState — page 3a bindable values + slots
-train_model/harness.py  TestHarnessState — page 3b inputs/outputs/run control
-ui/Main.qml             window shell, nav rail, 3a/3b view switcher
-ui/MainView.qml         page 3a
-ui/TestView.qml         page 3b
-ui/components/*.qml     Badge, Card, Banner, MetricTile, TableRow/Header,
-                        buttons, toggles, fields, NavRail, TopBar, …
-stubs/PyQt6/*.pyi       local mypy stubs for the property/signal API
-```
-
-## Setup (if `.venv` is missing)
+## Run and verify
 
 ```bash
 cd TrainModel
 python3 -m venv .venv
-.venv/bin/pip install "PyQt6==6.11.*" "mypy==2.3.*"
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python main.py
+QT_QPA_PLATFORM=offscreen .venv/bin/python tests/test_ui_components.py
 ```
 
-## Design discrepancies
+The checks exercise keyboard activation, disabled controls, typed input and
+invalid input, selection values, safety confirmation, complete Python input
+submission, and loading/rendering both application views.
 
-Where the implementation and/or the mockup are internally inconsistent, the
-code follows the mockup as drawn and the gap is flagged here (and at the
-relevant call site). Numbered so in-code references resolve:
+## Design and source
 
-1. **Static stub** — no physics or controller; every value is a fixed seed
-   matching the mockup. Only the tick counter and the interactive toggles
-   change state.
-2. **Nav-rail glyphs are placeholders** — the Figma export shows stub
-   rectangles with per-item border insets, not real icons; reproduced as stroked
-   outlines with no labels.
-3. **Hamburger is a visual stub** — emits `menuClicked`, but the mockup defines
-   no menu, so nothing opens.
-4. **Card shadow is approximated** — `--shadow-1`'s blur is rendered as a 1 px
-   offset dark rectangle; QML has no cheap true drop-shadow here.
-5. **Banner surface** — the mockup's neutral grey maps to the `--bg-sunken`
-   token rather than a dedicated grey.
-6. **Toggles & secondary buttons are non-functional stubs** where the mockup
-   implies live behavior; they only mutate the stub state.
-7. **"SEND INPUTS TO TRAIN MODEL" is a no-op boundary** — there is no module
-   under test to receive them yet.
-8. **Output values embed units inline** (`32.4 MPH`) rather than a separate
-   unit column, as drawn in the mockup.
-9. **Failure-mode rows flip between two hardcoded labels** (normal/failed) and
-   drive no downstream behavior.
-10. **Signal pickup is seeded FAILED** on page 3a to match the "1 FAILED"
-    badge; engine and brake are seeded NORMAL.
-11. **Manual door control is rendered disabled** — the model displays door
-    state but does not command it, so OPEN/CLOSE LEFT/RIGHT are inert (see
-    `ui/MainView.qml`).
-12. **Car count is inconsistent between panels** — Cabin & Load shows "3 CARS"
-    / cars = 3, but the door-state table lists four cars (T-114-A…D).
-13. **INPUTS badge reads "15" but the input table has 16 rows** — the badge
-    count is kept as drawn in the mockup (see `train_model/harness.py`).
+- [UI style guide](../truth/ui/style-guide.md) and
+  [HTML review preview](../truth/ui/ui-style-guide-preview.html).
+- [Units and naming](../truth/conventions.md).
+- `refrence-docs/` holds the original Figma CSS wireframes.
+- Components and theme were reconciled with `development` at
+  `c0580825e7b9f72f289cecdc1618b6136557d44b` without importing its unrelated
+  window-sizing changes. The newer D002 display-unit decision is retained.
+
+## Component wiring
+
+Import `ui/components` from QML and expose `build_theme()` as the `theme`
+context property. Connect action signals to a host QML handler or a Python
+slot. Components do not depend on a particular backend class.
+
+| Component | Host-facing action / data |
+| --- | --- |
+| `AppButton` | Native `clicked()`; primary, secondary, ghost, danger, success |
+| `ValueField` | `label`, `kind`, `text`; `committed(value)` sends a number for int/float, a string otherwise; invalid numbers never commit |
+| `SelectField` | `model`, `textRole`, `valueRole`, `currentIndex`; `committed(value)` sends the selected model value |
+| `SegmentedToggle`, `NavRail` | `activated(index)`; bind `currentIndex` to host state |
+| `ModuleHeader` | `navigationActivated(index)`; bind navigation index, mode, clock and fault state |
+| `SafetyButton` | `confirmed()` after confirmation; bind `applied` to acknowledged state; `confirmationRequired: false` is reserved for the Train Controller emergency brake |
+| `SignalRow` | `edited(value)` forwards typed edits; bind `value` to host state |
+| `DataTable` | `columns` (`key`, `label`, optional `numeric`, `mono`, `width`) and `rows`; `rowActivated(index, row)`; bind `currentIndex` to host state |
+| `TrackBlock` | Read-only `blockId` and `occupancy` (`free`, `occupied`, `closed`, `failure`, `maintenance`) |
+| `StatusBadge`, `TelemetryReadout`, `UsageBar` | Read-only presentation properties |
+| `Card`, `Callout`, `FieldLabel`, `HelperText`, `KeyValueRow`, `MonoText`, `TableHeader` | Layout and text components |
+
+For example, connect `harness.inputsSubmitted` to a backend slot accepting a
+`QVariantMap`. `sendInputs()` emits a snapshot containing **all** input rows,
+including fields with no preview pass-through. The existing field names are
+harness keys, not a newly defined cross-module contract. The backend adapter
+must honor the agreed interfaces and canonical units.
+
+```python
+harness.inputsSubmitted.connect(backend.receive_inputs)
+```
+
+Selection and toggle signals request a change; the host updates the bound
+state. Programmatic state updates do not emit user commands. Input validators
+use the C locale (decimal point) and preserve string IDs such as `"001"`.
+Give each `ValueField` and `SelectField` a visible `label`. Space `TrackBlock`
+instances by at least 2 px. Put `DataTable` in a scrolling container as needed.
+
+## Current limits
+
+- Seeded model values and run counters are preview behavior, not simulation.
+- The harness still exposes backend units; the display conversion required by
+  D002 is not yet applied consistently to that page.
+- The optional dark theme is documented and previewed in HTML, not enabled
+  in the QML application.
+- The table uses a Repeater for small operator tables; use Qt TableView if
+  large datasets require virtualization.

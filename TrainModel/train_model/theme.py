@@ -1,11 +1,12 @@
 """Design tokens for the ECE1140 UI Style Guide, light theme.
 
-Single source of truth for colour, typography, spacing, radius and control
-sizing, per style guide section 9. No literal token value appears anywhere
-else in the module: QML reads these through the ``theme`` context property.
+Single source of truth for colour, typography, spacing, radius and
+control sizing, per style guide section 9. No literal token value
+appears anywhere else in the module: QML reads these through the
+``theme`` context property.
 
-Token names match the style guide so the optional dark theme of section 10
-is a drop-in replacement.
+Token names match the style guide so the optional dark theme of section
+10 is a drop-in replacement.
 """
 
 from __future__ import annotations
@@ -49,9 +50,9 @@ INFO = "#4338CA"
 INFO_BG = "#EAE8FB"
 FOCUS_RING = "#1D6FD0"
 
-# Typography (3). Helvetica and Monaco are not bundled; the fallback stacks
-# resolve to Arial and Consolas on Windows and to Helvetica Neue and Menlo
-# on macOS.
+# Typography (3). Helvetica and Monaco are not bundled; the fallback
+# stacks resolve to Arial and Consolas on Windows and to Helvetica Neue
+# and Menlo on macOS.
 UI_FAMILIES = [
     "Helvetica Neue",
     "Helvetica",
@@ -117,9 +118,9 @@ SAFETY_EMPHASIS_HEIGHT = 64
 def resolve_family(candidates: list[str]) -> str:
     """Return the first installed family from a fallback stack.
 
-    QML's ``font.family`` takes a single name, so the stacks in style guide
-    section 3 are resolved once at startup against what the machine actually
-    has. Requires a QGuiApplication to exist.
+    QML's ``font.family`` takes a single name, so the stacks in style
+    guide section 3 are resolved once at startup against what the
+    machine actually has. Requires a QGuiApplication to exist.
     """
     available = set(QFontDatabase.families())
     for name in candidates:
@@ -129,7 +130,7 @@ def resolve_family(candidates: list[str]) -> str:
 
 
 def build_theme() -> dict[str, Any]:
-    """Return the token table consumed by QML as the ``theme`` property."""
+    """Return the token table QML reads as the ``theme`` property."""
     return {
         "bg_app": BG_APP,
         "bg_surface": BG_SURFACE,

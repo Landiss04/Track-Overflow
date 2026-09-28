@@ -27,36 +27,17 @@ Rectangle {
         Repeater {
             model: root.options
 
-            delegate: Rectangle {
+            delegate: AppButton {
                 required property int index
                 required property string modelData
-
                 readonly property bool selected: index === root.currentIndex
-
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumWidth: segmentLabel.implicitWidth + 2 * theme.space_4
-                radius: theme.radius_pill
-                color: selected ? theme.accent : "transparent"
-
-                Text {
-                    id: segmentLabel
-                    anchors.centerIn: parent
-                    // Toggle segments are buttons, so they follow the
-                    // sentence-case button rule rather than the Label token.
-                    text: modelData
-                    color: parent.selected ? theme.on_accent : theme.text_secondary
-                    font.family: theme.ui_family
-                    font.pixelSize: theme.size_small
-                    font.weight: theme.weight_bold
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: root.enabled
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.activated(index)
-                }
+                size: "small"
+                implicitHeight: theme.control_h_sm
+                text: modelData
+                variant: selected ? "primary" : "ghost"
+                Accessible.name: modelData
+                onClicked: root.activated(index)
             }
         }
     }

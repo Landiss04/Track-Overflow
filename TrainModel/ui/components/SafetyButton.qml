@@ -15,9 +15,14 @@ Item {
     property string confirmLabel: "Confirm"
     property string cancelLabel: "Cancel"
     property string tooltip: ""          // optional hover text (native ToolTip)
+    // Set false only for the Train Controller emergency brake (guide 7).
+    property bool confirmationRequired: true
     signal confirmed()
 
     property bool armed: false
+    onAppliedChanged: armed = false
+    onEnabledChanged: if (!enabled) armed = false
+    onVisibleChanged: if (!visible) armed = false
 
     implicitHeight: theme.safety_min_height
     implicitWidth: Math.max(theme.safety_min_width, row.implicitWidth)
@@ -31,7 +36,14 @@ Item {
         text: (root.applied ? root.releaseLabel : root.label).toUpperCase()
         tooltip: root.tooltip
         font.letterSpacing: theme.safety_letter_spacing
-        onClicked: root.armed = true
+        onClicked: {
+            if (root.confirmationRequired) {
+                root.armed = true;
+                confirmButton.forceActiveFocus();
+            } else {
+                root.confirmed();
+            }
+        }
     }
 
     RowLayout {
@@ -41,6 +53,7 @@ Item {
         spacing: theme.space_3
 
         AppButton {
+            id: confirmButton
             Layout.fillWidth: true
             Layout.fillHeight: true
             variant: "danger"

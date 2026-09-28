@@ -1,8 +1,14 @@
-# UI Style Guide
+**Status:** current
+**Owner:** Kevin
+**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on truth-setup; relocation asserted by Kevin 2026-09-27
+**Aliases:** UI Style Guide, UI_Style_Guide.md, Daylight Ops, ui-style-guide-preview.html
+**Last updated:** 2026-09-27
+
+## UI style guide
 
 ## For ECE1140 Train Management System
 
-Version 1.3
+Version 1.4
 Prepared by Team 3
 University of Pittsburgh
 2026-09-11
@@ -36,17 +42,6 @@ University of Pittsburgh
   * [10.2 Theme Switch Requirements](#102-theme-switch-requirements)
 * [11. Live Preview](#11-live-preview)
 <!-- TOC -->
-
-## Revision History
-
-| Name   | Date       | Reason For Changes                                              | Version |
-|--------|------------|-----------------------------------------------------------------|---------|
-| Team 3 | 2026-09-11 | Initial style guide; dark theme locked as default               | 1.0     |
-| Team 3 | 2026-09-11 | UI face changed to Helvetica/Arial; weight scale cut to 400/700 | 1.1     |
-| Team 3 | 2026-09-11 | Light theme promoted to default; dark theme moved to optional   | 1.2     |
-| Team 3 | 2026-09-25 | Telemetry units repointed to `truth/conventions.md`; display units corrected to imperial | 1.3     |
-
----
 
 ## 1. Purpose and Scope
 
@@ -291,7 +286,7 @@ on filled states. Adjacent blocks are separated by at least 2 px.
 - Label above in Label token, `--text-muted`.
 - Value in mono, 28 px, weight 700, `--text-primary`.
 - Unit immediately after the value, mono, 13 px, `--text-muted`.
-- Units **shall** match the UI display units table in `truth/conventions.md` exactly
+- Units **shall** match the UI display units table in [conventions](../conventions.md#units) exactly
   (`mph`, `ft`, `s`, `kW`, `F`, ...). That table is imperial, with power in kilowatts as
   the one exception; the metric values behind it are converted at the display layer and
   never rendered.
@@ -431,7 +426,22 @@ An interactive rendering of both themes — typography scale, full palette, ever
 and size, inputs, badges, block legend, telemetry readouts, table, spacing scale, and a sample
 module window — is at:
 
-`documents/ui-style-guide-preview.html`
+[ui-style-guide-preview.html](ui-style-guide-preview.html)
 
 Open it in a browser and use the switcher in the top bar to compare Light (default) against
 Dark (optional).
+
+## Supersedes
+
+- `documents/UI_Style_Guide.md` v1.3 and its preview move here at Kevin's
+  request; visual rules and D002's display-unit decision are retained.
+- The v1.2 development guide's metric UI examples are superseded by D002;
+  see [conventions](../conventions.md#units) for unresolved source conflicts.
+
+## Conflict
+
+The inherited preview labels authority with block IDs, while D002 and the
+conventions table prescribe distance in feet. The underlying sources and
+both values remain recorded in [conventions](../conventions.md#conflict).
+**Resolution owner:** Kevin. These preview examples do not resolve the
+open authority conflict.

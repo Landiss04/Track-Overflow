@@ -228,9 +228,9 @@ name — and do not assert which unit a quantity carries.
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `documents/UI_Style_Guide.md` §3, §6.7
+**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `truth/ui/style-guide.md` §3, §6.7
 **Aliases:** IDs, ID formats, key formats
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-27
 
 ### ID values
 
@@ -262,7 +262,7 @@ name — and do not assert which unit a quantity carries.
 
 ### Design token identifiers
 
-UI design tokens use the `--kebab-case` names in `documents/UI_Style_Guide.md`
+UI design tokens use the `--kebab-case` names in `truth/ui/style-guide.md`
 Sections 4, 5, and 10. The key names are identical between the light and dark
 palettes, which is what makes the optional dark theme a drop-in token swap. A token
 that does not exist is added to the style guide first, then used.
@@ -270,7 +270,7 @@ that does not exist is added to the style guide first, then used.
 ### Pending
 
 The only train ID format appearing in a normative document is `TRN-014`, as an
-example in `UI_Style_Guide.md` §6.7 (`Train Controller — TRN-014`). It is an
+example in `truth/ui/style-guide.md` §6.7 (`Train Controller — TRN-014`). It is an
 illustration, not a stated format. Block and station ID formats are not stated
 anywhere. Owner: Kevin — decide and record, or record that IDs are opaque strings
 with no enforced shape.
@@ -279,9 +279,9 @@ with no enforced shape.
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/srs-filled.md` §2.3, §3.1.3, §3.5.1–3.5.6; `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `documents/UI_Style_Guide.md` §9, §11; `.gitattributes`
+**Provenance:** `documents/srs-filled.md` §2.3, §3.1.3, §3.5.1–3.5.6; `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `truth/ui/style-guide.md` §9, §11; `.gitattributes`
 **Aliases:** file layout, paths, repo layout, project structure
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-27
 
 ### Paths
 
@@ -325,8 +325,8 @@ with no enforced shape.
   code.**
 - Under PyQt, tokens are injected into one application-wide QSS stylesheet built from
   those constants, so a theme change is a one-line swap of the token dictionary.
-- `documents/ui-style-guide-preview.html` is the visual source of truth for review.
-  A token change **shall** land in both `UI_Style_Guide.md` and the preview in the
+- `truth/ui/ui-style-guide-preview.html` is the visual source of truth for review.
+  A token change **shall** land in both `truth/ui/style-guide.md` and the preview in the
   same commit.
 
 ### Layout inside a file

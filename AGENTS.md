@@ -127,6 +127,7 @@ use.
 truth/
   INDEX.md              always read
   conventions.md        naming, units, ID formats
+  ui/                   visual rules and authored HTML review preview
   modules/<module>.md   one owned shard per module
   modules/<module>/     a module with variants: contract shard plus one per variant
   signals/<signal>.md   one file per signal

@@ -5,3 +5,7 @@ This directory is the source-of-truth store for this repo: normative facts, not 
 Agents propose changes via `_inbox/` and never edit canonical files directly. The user approves proposals before they are applied.
 
 See the Source of Truth section of [`AGENTS.md`](../AGENTS.md) for the full rules.
+
+`ui/style-guide.md` records visual tokens and component rules; its adjacent
+HTML file is the authored review preview, not generated output. Executable
+QML, backend wiring notes, and verification belong in `TrainModel/`.

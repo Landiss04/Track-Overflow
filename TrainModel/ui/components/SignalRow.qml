@@ -46,6 +46,9 @@ RowLayout {
             anchors.verticalCenter: parent.verticalCenter
             visible: !root.editable
             text: root.displayValue
+            width: parent.width
+            horizontalAlignment: root.kind === "int" || root.kind === "float"
+                ? Text.AlignRight : Text.AlignLeft
         }
 
         Loader {
@@ -79,8 +82,10 @@ RowLayout {
         id: textEditor
 
         ValueField {
+            label: root.name
             kind: root.kind
-            text: root.displayValue
+            text: root.value === undefined || root.value === null
+                ? "" : String(root.value)
             onCommitted: function (newValue) { root.edited(newValue); }
         }
     }

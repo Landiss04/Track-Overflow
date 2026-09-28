@@ -34,10 +34,16 @@ Rectangle {
         spacing: theme.space_4
 
         Text {
-            text: root.instance === ""
-                ? root.moduleName : root.moduleName + " \u2014 " + root.instance
+            text: root.moduleName
             color: theme.text_primary
             font.family: theme.ui_family
+            font.pixelSize: theme.size_h3
+            font.weight: theme.weight_bold
+        }
+
+        MonoText {
+            text: root.instance
+            visible: root.instance !== ""
             font.pixelSize: theme.size_h3
             font.weight: theme.weight_bold
         }
@@ -62,35 +68,23 @@ Rectangle {
             Repeater {
                 model: root.navigationEntries
 
-                delegate: Rectangle {
+                delegate: AppButton {
                     required property int index
                     required property string modelData
-
                     readonly property bool selected: index === root.currentNavigationIndex
-
-                    implicitWidth: navigationLabel.implicitWidth + 2 * theme.space_3
+                    size: "small"
                     implicitHeight: theme.control_h_md
-                    radius: theme.radius_md
-                    color: selected ? theme.accent_subtle : "transparent"
-                    border.width: selected ? 1 : 0
-                    border.color: theme.accent
-
-                    Text {
-                        id: navigationLabel
-                        anchors.centerIn: parent
-                        text: modelData
-                        color: parent.selected ? theme.accent : theme.text_secondary
-                        font.family: theme.ui_family
-                        font.pixelSize: theme.size_small
-                        font.weight: parent.selected
-                            ? theme.weight_bold : theme.weight_regular
+                    text: modelData
+                    variant: "ghost"
+                    background: Rectangle {
+                        radius: theme.radius_md
+                        color: parent.selected || parent.hovered
+                            ? theme.accent_subtle : "transparent"
+                        border.width: parent.visualFocus ? 2 : parent.selected ? 1 : 0
+                        border.color: parent.visualFocus ? theme.focus_ring : theme.accent
                     }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.navigationActivated(index)
-                    }
+                    Accessible.name: modelData
+                    onClicked: root.navigationActivated(index)
                 }
             }
         }

@@ -4,7 +4,7 @@
 **Owner:** Kevin
 **Provenance:** asserted by Kevin 2026-09-25
 **Aliases:** unit split, metric backend imperial UI, display units decision
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-27
 
 ## Context
 
@@ -46,6 +46,6 @@ lookup surface; this file records why the split exists.
   degrees vs. percent, and the track layout file format that the gradient question
   depends on.
 - Documents that named units independently have been repointed at
-  `conventions.md` rather than restating it — `documents/UI_Style_Guide.md` §6.5 and
-  `documents/ui-style-guide-preview.html`. Any future document needing units cites
+  `conventions.md` rather than restating it — `truth/ui/style-guide.md` §6.5 and
+  `truth/ui/ui-style-guide-preview.html`. Any future document needing units cites
   that entry; it does not copy the tables.

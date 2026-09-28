@@ -8,7 +8,7 @@ conform to.*
 **Provenance:** none — this shard asserts no facts yet
 **Aliases:** SW Train Controller, HW Train Controller, onboard controller
 **Variants:** `truth/modules/train-controller/train-controller-sw.md`, `truth/modules/train-controller/train-controller-hw.md`
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-27
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -82,5 +82,5 @@ To be populated:
   fast-forward.
 - `documents/requirements-matrix.md` §5 — names the tuning constants as needing team
   sign-off before implementation.
-- `documents/UI_Style_Guide.md` §7 — this module's emergency brake is the only
+- `truth/ui/style-guide.md` §7 — this module's emergency brake is the only
   unconfirmed destructive control in the system.

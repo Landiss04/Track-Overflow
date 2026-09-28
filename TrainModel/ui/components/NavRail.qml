@@ -30,36 +30,17 @@ Rectangle {
         Repeater {
             model: root.entries
 
-            delegate: Rectangle {
+            delegate: AppButton {
                 required property int index
                 required property string modelData
-
                 readonly property bool selected: index === root.currentIndex
-
                 Layout.fillWidth: true
+                size: "small"
                 implicitHeight: theme.control_h_md
-                radius: theme.radius_md
-                color: selected ? theme.accent_subtle : "transparent"
-                border.width: selected ? 1 : 0
-                border.color: theme.accent
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: theme.space_3
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: modelData
-                    color: parent.selected ? theme.accent : theme.text_secondary
-                    font.family: theme.ui_family
-                    font.pixelSize: theme.size_small
-                    font.weight: parent.selected
-                        ? theme.weight_bold : theme.weight_regular
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.activated(index)
-                }
+                text: modelData
+                variant: selected ? "primary" : "ghost"
+                Accessible.name: modelData
+                onClicked: root.activated(index)
             }
         }
 

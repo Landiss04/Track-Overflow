@@ -126,6 +126,7 @@ class TestHarnessState(QObject):
     """Editable inputs, read-only outputs and run control for page 3b."""
 
     inputsChanged = Signal()
+    inputsSubmitted = Signal("QVariantMap")
     outputsChanged = Signal()
     runControlChanged = Signal()
 
@@ -209,7 +210,10 @@ class TestHarnessState(QObject):
 
     @Slot()
     def sendInputs(self) -> None:
-        """Push the declared pass-through inputs into the module."""
+        """Emit all typed inputs, then update the preview pass-throughs."""
+        self.inputsSubmitted.emit({
+            row["name"]: row["value"] for row in self._inputs
+        })
         updates: dict[str, Any] = {}
         for row in self._inputs:
             field = _PASS_THROUGH.get(row["name"])
