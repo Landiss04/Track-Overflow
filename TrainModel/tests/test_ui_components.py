@@ -22,6 +22,7 @@ from train_model.state import TrainModelState
 from train_model.theme import build_theme
 
 UI = Path(__file__).resolve().parents[1] / "ui"
+COMPONENTS = Path(__file__).resolve().parents[2] / "ui"
 APP = QGuiApplication.instance() or QGuiApplication([])
 
 
@@ -65,7 +66,7 @@ class ComponentsTest(unittest.TestCase):
         """Instantiate a component relative to the real component library."""
         component = QQmlComponent(self.engine)
         component.setData(
-            ('import QtQuick\nimport "components"\n'
+            ('import QtQuick\nimport "../../ui"\n'
              + name + ' { width: 700; ' + properties + ' }').encode(),
             QUrl.fromLocalFile(str(UI / "test.qml")),
         )
@@ -245,7 +246,7 @@ class ComponentsTest(unittest.TestCase):
 
     def test_every_component_loads(self):
         """Compile and instantiate every library file, including readouts."""
-        for path in sorted((UI / "components").glob("*.qml")):
+        for path in sorted(COMPONENTS.glob("*.qml")):
             item = self.make(path.stem)
             item.setVisible(False)
 

@@ -31,23 +31,16 @@ submission, and loading/rendering both application views.
 
 ## Component wiring
 
-Import `ui/components` from QML and expose `build_theme()` as the `theme`
-context property. Connect action signals to a host QML handler or a Python
-slot. Components do not depend on a particular backend class.
+All reusable QML components live in the root-level [`ui/`](../ui/README.md)
+folder, alongside `truth/`. From a view in `TrainModel/ui/`, use:
 
-| Component | Host-facing action / data |
-| --- | --- |
-| `AppButton` | Native `clicked()`; primary, secondary, ghost, danger, success |
-| `ValueField` | `label`, `kind`, `text`; `committed(value)` sends a number for int/float, a string otherwise; invalid numbers never commit |
-| `SelectField` | `model`, `textRole`, `valueRole`, `currentIndex`; `committed(value)` sends the selected model value |
-| `SegmentedToggle`, `NavRail` | `activated(index)`; bind `currentIndex` to host state |
-| `ModuleHeader` | `navigationActivated(index)`; bind navigation index, mode, clock and fault state |
-| `SafetyButton` | `confirmed()` after confirmation; bind `applied` to acknowledged state; `confirmationRequired: false` is reserved for the Train Controller emergency brake |
-| `SignalRow` | `edited(value)` forwards typed edits; bind `value` to host state |
-| `DataTable` | `columns` (`key`, `label`, optional `numeric`, `mono`, `width`) and `rows`; `rowActivated(index, row)`; bind `currentIndex` to host state |
-| `TrackBlock` | Read-only `blockId` and `occupancy` (`free`, `occupied`, `closed`, `failure`, `maintenance`) |
-| `StatusBadge`, `TelemetryReadout`, `UsageBar` | Read-only presentation properties |
-| `Card`, `Callout`, `FieldLabel`, `HelperText`, `KeyValueRow`, `MonoText`, `TableHeader` | Layout and text components |
+```qml
+import "../../ui"
+```
+
+See the [shared component catalog and import helper](../ui/README.md) for
+all components and their signals. The module's three views remain here in
+`TrainModel/ui/`.
 
 For example, connect `harness.inputsSubmitted` to a backend slot accepting a
 `QVariantMap`. `sendInputs()` emits a snapshot containing **all** input rows,

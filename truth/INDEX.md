@@ -4,7 +4,7 @@ This file is read at the start of every agent session. Shards are read on demand
 
 | Shard | Path | Description | Last changed |
 | --- | --- | --- | --- |
-| UI | [style-guide.md](ui/style-guide.md) | Visual tokens, component and accessibility rules; [HTML review preview](ui/ui-style-guide-preview.html) | 2026-09-27 |
+| UI design | [style-guide.md](ui/style-guide.md) | Visual tokens, component and accessibility rules; [HTML review preview](ui/ui-style-guide-preview.html); [shared QML catalog](../ui/README.md) | 2026-09-28 |
 | Conventions | `truth/conventions.md` | Naming, units, identifiers, and file/path conventions | 2026-09-27 |
 | Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — **all are placeholders, none assert facts** | 2026-09-27 |
 | Signals | `truth/signals/` | One file per signal | — empty |

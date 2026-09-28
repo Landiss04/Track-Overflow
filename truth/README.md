@@ -8,4 +8,6 @@ See the Source of Truth section of [`AGENTS.md`](../AGENTS.md) for the full rule
 
 `ui/style-guide.md` records visual tokens and component rules; its adjacent
 HTML file is the authored review preview, not generated output. Executable
-QML, backend wiring notes, and verification belong in `TrainModel/`.
+shared QML components live in the root-level [`ui/`](../ui/README.md)
+folder alongside `truth/`. Module views, backend wiring, and verification
+remain in `TrainModel/`.
