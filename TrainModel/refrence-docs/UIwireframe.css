@@ -1,0 +1,3046 @@
+/* Background+Border */
+
+box-sizing: border-box;
+
+width: 1440px;
+height: 900px;
+
+background: #F4F4F4;
+border: 1px solid #B9B9B9;
+
+/* Inside auto layout */
+flex: none;
+order: 0;
+flex-grow: 0;
+
+
+/* TOP BAR (copy from page-template.html) */
+
+position: absolute;
+height: 56px;
+left: 1px;
+right: 1px;
+top: 1px;
+
+background: #E8E8E8;
+
+
+/* Train Model */
+
+position: absolute;
+width: 187px;
+height: 56px;
+left: 20px;
+top: calc(50% - 56px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 23px;
+display: flex;
+align-items: center;
+letter-spacing: 0.84px;
+
+color: #2E2E2E;
+
+
+
+/* Options - Train */
+
+box-sizing: border-box;
+
+position: absolute;
+width: 172px;
+height: 30px;
+left: 1136.39px;
+top: calc(50% - 30px/2 - 0.5px);
+
+background: #FBFBFB;
+border: 1px solid #A8A8A8;
+
+
+/* T-114 · GREEN LINE */
+
+position: absolute;
+width: 129.91px;
+height: 15px;
+left: 15px;
+top: calc(50% - 15px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 12px;
+line-height: 12px;
+/* or 100% */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* 19:00:05 */
+
+position: absolute;
+width: 105.97px;
+height: 29px;
+left: 1320.39px;
+top: calc(50% - 29px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 600;
+font-size: 22px;
+line-height: 29px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #2E2E2E;
+
+
+
+/* CONTENT - LAYOUT B */
+
+position: absolute;
+height: 844px;
+left: 7px;
+right: 7px;
+top: 44px;
+
+
+
+/* COLUMN 1 - what the train is doing */
+
+position: absolute;
+height: 820px;
+left: 12px;
+right: 697px;
+top: 12px;
+
+
+
+/* Paragraph+Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 53px;
+left: 0px;
+right: 0px;
+top: 0px;
+
+background: #E4E4E4;
+border: 1px solid #B9B9B9;
+
+
+/* Automatic — track controller in command */
+
+position: absolute;
+height: 14px;
+left: 11px;
+right: 370.49px;
+top: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* Speed and authority come from the track controller; the manual throttle is locked out and the doors will not release above 0 MPH. */
+
+position: absolute;
+height: 13px;
+left: 11px;
+right: 83.19px;
+top: 29px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #8A8A8A;
+
+
+
+/* Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 218px;
+left: 0px;
+right: 0px;
+top: 65px;
+
+background: #FFFFFF;
+border: 1px solid #C2C2C2;
+
+
+/* Paragraph+Background+HorizontalBorder */
+
+position: absolute;
+height: 30px;
+left: 1px;
+right: 1px;
+top: 1px;
+
+background: #F0F0F0;
+
+
+/* Speed & Authority */
+
+position: absolute;
+width: 125.08px;
+height: 14px;
+left: 10px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* GREEN I · 14:12 */
+
+position: absolute;
+width: 99.35px;
+height: 14px;
+left: 562px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Paragraph+Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 60px;
+left: 11px;
+right: 451.67px;
+top: 41px;
+
+background: #FAFAFA;
+border: 1px solid #DCDCDC;
+
+
+/* Actual speed */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 126.24px;
+top: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 32 MPH */
+
+position: absolute;
+height: 23px;
+left: 11px;
+right: 134.12px;
+top: 26px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 23px;
+display: flex;
+align-items: center;
+
+color: #2E2E2E;
+
+
+
+/* Paragraph+Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 60px;
+left: 231.33px;
+right: 231.34px;
+top: 41px;
+
+background: #FAFAFA;
+border: 1px solid #DCDCDC;
+
+
+/* Commanded */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 134.9px;
+top: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 35 MPH */
+
+position: absolute;
+height: 23px;
+left: 11px;
+right: 134.12px;
+top: 26px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 23px;
+display: flex;
+align-items: center;
+
+color: #2E2E2E;
+
+
+
+/* Paragraph+Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 60px;
+left: 451.66px;
+right: 11.01px;
+top: 41px;
+
+background: #FAFAFA;
+border: 1px solid #DCDCDC;
+
+
+/* Speed limit */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 135.6px;
+top: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 40 MPH */
+
+position: absolute;
+height: 23px;
+left: 11px;
+right: 134.12px;
+top: 26px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 23px;
+display: flex;
+align-items: center;
+
+color: #2E2E2E;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 111px;
+
+
+
+/* Authority */
+
+position: absolute;
+width: 60.77px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* → GREEN M */
+
+position: absolute;
+width: 70.51px;
+height: 17px;
+left: 580.8px;
+top: calc(50% - 17px/2 - 2px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 135px;
+
+
+
+/* Distance to end of authority */
+
+position: absolute;
+width: 173.39px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 1,340 FT */
+
+position: absolute;
+width: 62.8px;
+height: 17px;
+left: 588.59px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 159px;
+
+
+
+/* Acceleration */
+
+position: absolute;
+width: 78.71px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* +0.4 FT/S² */
+
+position: absolute;
+width: 78.34px;
+height: 17px;
+left: 572.98px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Grade */
+
+position: absolute;
+height: 13px;
+left: 11px;
+right: 626.38px;
+top: 188.5px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* +1.2 % */
+
+position: absolute;
+height: 17px;
+left: 615.19px;
+right: 10.66px;
+top: 186.5px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 0px;
+right: 0px;
+top: 295px;
+bottom: 191px;
+
+background: #FFFFFF;
+border: 1px solid #C2C2C2;
+
+
+/* Paragraph+Background+HorizontalBorder */
+
+position: absolute;
+height: 30px;
+left: 1px;
+right: 1px;
+top: 1px;
+
+background: #F0F0F0;
+
+
+/* Cabin & Load */
+
+position: absolute;
+width: 86.02px;
+height: 14px;
+left: 10px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* 5 CARS */
+
+position: absolute;
+width: 39.93px;
+height: 14px;
+left: 621.39px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Paragraph+Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 11px;
+right: 481px;
+top: 41px;
+bottom: 233px;
+
+background: #FAFAFA;
+border: 1px solid #DCDCDC;
+
+
+/* Passengers */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 134.3px;
+top: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 84 / 148 */
+
+position: absolute;
+height: 23px;
+left: 11px;
+right: 112.26px;
+top: 26px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 23px;
+display: flex;
+align-items: center;
+
+color: #2E2E2E;
+
+
+
+/* Paragraph+Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 246px;
+right: 246px;
+top: 41px;
+bottom: 233px;
+
+background: #FAFAFA;
+border: 1px solid #DCDCDC;
+
+
+/* Loaded mass */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 129.64px;
+top: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 56.7 T */
+
+position: absolute;
+height: 23px;
+left: 11px;
+right: 133.79px;
+top: 26px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 23px;
+display: flex;
+align-items: center;
+
+color: #2E2E2E;
+
+
+
+/* Paragraph+Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 481px;
+right: 11px;
+top: 41px;
+bottom: 233px;
+
+background: #FAFAFA;
+border: 1px solid #DCDCDC;
+
+
+/* Cabin temp */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 137.13px;
+top: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 68 °F */
+
+position: absolute;
+height: 23px;
+left: 11px;
+right: 144.63px;
+top: 26px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 600;
+font-size: 18px;
+line-height: 23px;
+display: flex;
+align-items: center;
+
+color: #2E2E2E;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 111px;
+
+
+
+/* Crew */
+
+position: absolute;
+width: 30.13px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 2 */
+
+position: absolute;
+width: 8.18px;
+height: 17px;
+left: 643.19px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 143px;
+
+
+
+/* Cars */
+
+position: absolute;
+width: 27.59px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 5 */
+
+position: absolute;
+width: 8.18px;
+height: 17px;
+left: 643.19px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 175px;
+
+
+
+/* Train Size (l|w|H) */
+
+position: absolute;
+width: 108px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 105.64 FT | 8.69 FT | 11.22 FT */
+
+position: absolute;
+width: 243px;
+height: 17px;
+left: 408px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 207px;
+
+
+
+/* Empty mass */
+
+position: absolute;
+width: 66.43px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 40.9 T */
+
+position: absolute;
+width: 47.15px;
+height: 17px;
+left: 604.19px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Lights */
+
+position: absolute;
+height: 14px;
+left: 11px;
+right: 662px;
+top: 289.5px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* Lights controls */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 304px;
+
+background: #FFFFFF;
+border: 1px solid #A8A8A8;
+
+
+/* Interior lights */
+
+box-sizing: border-box;
+
+position: absolute;
+width: 346px;
+height: 22px;
+left: 1px;
+top: 1px;
+
+background: #FFFFFF;
+border: 1px solid #A8A8A8;
+
+
+/* Interior on */
+
+box-sizing: border-box;
+
+position: absolute;
+width: 38.06px;
+height: 20px;
+left: 225px;
+top: 1px;
+
+background: #EFEFEF;
+border-right: 1px solid #A8A8A8;
+
+
+/* On */
+
+position: absolute;
+width: 17.36px;
+height: 14px;
+left: 10px;
+top: calc(50% - 14px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* Off */
+
+position: absolute;
+width: 22.41px;
+height: 14px;
+left: 273px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #6A6A6A;
+
+
+
+/* Exterior lights */
+
+box-sizing: border-box;
+
+position: absolute;
+width: 346px;
+height: 22px;
+left: 348px;
+top: 1px;
+
+background: #FFFFFF;
+border: 1px solid #A8A8A8;
+
+
+/* Exterior on */
+
+box-sizing: border-box;
+
+position: absolute;
+width: 38.06px;
+height: 20px;
+left: 225px;
+top: 1px;
+
+background: #EFEFEF;
+border-right: 1px solid #A8A8A8;
+
+
+/* On */
+
+position: absolute;
+width: 17.36px;
+height: 14px;
+left: 10px;
+top: calc(50% - 14px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* Off */
+
+position: absolute;
+width: 22.41px;
+height: 14px;
+left: 273px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #6A6A6A;
+
+
+
+/* Interior */
+
+position: absolute;
+width: 160px;
+height: 22px;
+left: 12px;
+top: 1px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Exterior */
+
+position: absolute;
+width: 160px;
+height: 22px;
+left: 359px;
+top: 1px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Power consumption */
+
+position: absolute;
+height: 26px;
+left: 11px;
+right: 544px;
+top: 239px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 350 kW / 480 kW */
+
+position: absolute;
+height: 17px;
+left: 557px;
+right: 14.23px;
+top: 252px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 12px;
+left: 12px;
+right: 10px;
+top: 274.5px;
+
+background: #FAFAFA;
+border: 1px solid #DCDCDC;
+
+
+/* Background */
+
+position: absolute;
+left: 0.15%;
+right: 22.09%;
+top: 1px;
+bottom: 1px;
+
+background: #9A9A9A;
+
+
+/* Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 179px;
+left: 0px;
+right: 0px;
+top: 641px;
+
+background: #FFFFFF;
+border: 1px solid #C2C2C2;
+
+
+/* Paragraph+Background+HorizontalBorder */
+
+position: absolute;
+height: 30px;
+left: 1px;
+right: 1px;
+top: 1px;
+
+background: #F0F0F0;
+
+
+/* Position */
+
+position: absolute;
+width: 60.32px;
+height: 14px;
+left: 10px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* GREEN LINE */
+
+position: absolute;
+width: 66.3px;
+height: 14px;
+left: 595px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Direction of travel */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 549.68px;
+top: 41px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 30px;
+left: 11px;
+right: 11px;
+top: 56px;
+
+background: #FBFBFB;
+border: 1px solid #A8A8A8;
+
+
+/* FORWARD · GREEN H → GREEN I */
+
+position: absolute;
+width: 210.97px;
+height: 17px;
+left: 11px;
+top: calc(50% - 17px/2 - 1.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 96px;
+
+
+
+/* Current block */
+
+position: absolute;
+width: 85.78px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* GREEN I */
+
+position: absolute;
+width: 54.98px;
+height: 17px;
+left: 596.39px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+HorizontalBorder */
+
+position: absolute;
+height: 24px;
+left: 11px;
+right: 11px;
+top: 120px;
+
+
+
+/* Distance into block */
+
+position: absolute;
+width: 118.02px;
+height: 13px;
+left: 0px;
+top: calc(50% - 13px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* 620 FT */
+
+position: absolute;
+width: 47.15px;
+height: 17px;
+left: 604.19px;
+top: calc(50% - 17px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Next station · arrival */
+
+position: absolute;
+height: 13px;
+left: 11px;
+right: 532.68px;
+top: 149.5px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* [STATION] 14:19 */
+
+position: absolute;
+height: 17px;
+left: 544.98px;
+right: 10.62px;
+top: 147.5px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* COLUMN 2 — what the driver acts on */
+
+position: absolute;
+height: 820px;
+left: 697px;
+right: 12px;
+top: 12px;
+
+
+
+/* Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 490px;
+left: 0px;
+right: 0px;
+top: 0px;
+
+background: #FFFFFF;
+border: 1px solid #C2C2C2;
+
+
+/* Paragraph+Background+HorizontalBorder */
+
+position: absolute;
+height: 30px;
+left: 1px;
+right: 1px;
+top: 1px;
+
+background: #F0F0F0;
+
+
+/* Brakes & Doors */
+
+position: absolute;
+width: 105.75px;
+height: 14px;
+left: 10px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* E-BRAKE RELEASED · DOORS CLOSED */
+
+position: absolute;
+width: 204.97px;
+height: 14px;
+left: 456.39px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Brakes */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 622.68px;
+top: 41px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Passenger emergency brake */
+
+position: absolute;
+height: 13px;
+left: 11px;
+right: 496.79px;
+top: 67.5px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* RELEASED */
+
+position: absolute;
+height: 17px;
+left: 599.59px;
+right: 10.61px;
+top: 65.5px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 13px;
+line-height: 17px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 60px;
+left: 11px;
+right: 11px;
+top: 96px;
+
+background: #4A4A4A;
+border: 1px solid #4A4A4A;
+
+
+/* Apply emergency brake */
+
+position: absolute;
+width: 196.33px;
+height: 18px;
+left: calc(50% - 196.33px/2 + 0.17px);
+top: calc(50% - 18px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 14px;
+line-height: 18px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.84px;
+text-transform: uppercase;
+
+color: #FFFFFF;
+
+
+
+/* Stops the train at full braking rate and reports the stop to the track controller and the CTC. */
+
+position: absolute;
+height: 13px;
+left: 11px;
+right: 260.05px;
+top: 166px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #8A8A8A;
+
+
+
+/* Horizontal Divider */
+
+position: absolute;
+height: 1px;
+left: 11px;
+right: 11px;
+top: 189px;
+
+background: #D8D8D8;
+
+
+/* Doors */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 627.42px;
+top: 200px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Paragraph+Border */
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 221px;
+
+
+
+/* Car */
+
+position: absolute;
+height: 13px;
+left: 13px;
+right: 616.85px;
+top: 4.5px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Side */
+
+position: absolute;
+width: 25.1px;
+height: 13px;
+left: 489px;
+top: 4.5px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* State */
+
+position: absolute;
+width: 31.45px;
+height: 13px;
+left: 563px;
+top: 4.5px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+letter-spacing: 0.6px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Paragraph+Border */
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 243px;
+
+
+
+/* T-114-A */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.46px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Left */
+
+position: absolute;
+width: 19.19px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+Border */
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 265px;
+
+
+
+/* T-114-A */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.46px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Right */
+
+position: absolute;
+width: 26.07px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+Border */
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 287px;
+
+
+
+/* T-114-B */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.46px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Left */
+
+position: absolute;
+width: 19.19px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+Border */
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 309px;
+
+
+
+/* T-114-B */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.46px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Right */
+
+position: absolute;
+width: 26.07px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+Border */
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 331px;
+
+
+
+/* T-114-C */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.46px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Left */
+
+position: absolute;
+width: 19.19px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+VerticalBorder */
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 353px;
+
+
+
+/* T-114-C */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.46px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Right */
+
+position: absolute;
+width: 26.07px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 375px;
+
+
+
+/* T-114-D */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.5px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Left */
+
+position: absolute;
+width: 19.19px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Paragraph+VerticalBorder */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 22px;
+left: 11px;
+right: 11px;
+top: 397px;
+
+
+
+/* T-114-D */
+
+position: absolute;
+height: 14px;
+left: 13px;
+right: 591.5px;
+top: 4px;
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Right */
+
+position: absolute;
+width: 26.07px;
+height: 14px;
+left: 489px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Closed */
+
+position: absolute;
+width: 34.07px;
+height: 14px;
+left: 563px;
+top: 4px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+
+color: #3A3A3A;
+
+
+
+/* Manual door control */
+
+position: absolute;
+height: 11px;
+left: 11px;
+right: 540.09px;
+top: 425px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+opacity: 0.38;
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 28px;
+left: 11px;
+right: 532.25px;
+top: 438px;
+
+background: #EDEDED;
+opacity: 0.38;
+border: 1px solid #A8A8A8;
+
+
+/* Open left doors */
+
+position: absolute;
+width: 104.86px;
+height: 14px;
+left: calc(50% - 104.86px/2 + 0.69px);
+top: calc(50% - 14px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #3A3A3A;
+
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 28px;
+left: 184.75px;
+right: 358.5px;
+top: 438px;
+
+background: #EDEDED;
+opacity: 0.38;
+border: 1px solid #A8A8A8;
+
+
+/* Close left doors */
+
+position: absolute;
+width: 109.48px;
+height: 14px;
+left: calc(50% - 109.48px/2 + 0.67px);
+top: calc(50% - 14px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #3A3A3A;
+
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 28px;
+left: 358.5px;
+right: 184.75px;
+top: 438px;
+
+background: #EDEDED;
+opacity: 0.38;
+border: 1px solid #A8A8A8;
+
+
+/* Open right doors */
+
+position: absolute;
+width: 114.32px;
+height: 14px;
+left: calc(50% - 114.32px/2 + 0.69px);
+top: calc(50% - 14px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #3A3A3A;
+
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+height: 28px;
+left: 532.25px;
+right: 11px;
+top: 438px;
+
+background: #EDEDED;
+opacity: 0.38;
+border: 1px solid #A8A8A8;
+
+
+/* Close right doors */
+
+position: absolute;
+width: 118.94px;
+height: 14px;
+left: calc(50% - 118.94px/2 + 0.69px);
+top: calc(50% - 14px/2);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.66px;
+text-transform: uppercase;
+
+color: #3A3A3A;
+
+
+
+/* Doors unlock at 0 MPH with the service brake applied. */
+
+position: absolute;
+height: 13px;
+left: 11px;
+right: 420.23px;
+top: 472px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #8A8A8A;
+
+
+
+/* Background+Border */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 0px;
+right: 0px;
+top: 502px;
+bottom: 0px;
+
+background: #FFFFFF;
+border: 1px solid #C2C2C2;
+
+
+/* Paragraph+Background+HorizontalBorder */
+
+position: absolute;
+height: 30px;
+left: 1px;
+right: 1px;
+top: 1px;
+
+background: #F0F0F0;
+
+
+/* Failure Modes */
+
+position: absolute;
+width: 96.55px;
+height: 14px;
+left: 10px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #2E2E2E;
+
+
+
+/* 1 FAILED */
+
+position: absolute;
+width: 53.17px;
+height: 14px;
+left: 608.19px;
+top: calc(50% - 14px/2 - 0.5px);
+
+font-family: 'IBM Plex Mono';
+font-style: normal;
+font-weight: 400;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 11px;
+right: 11px;
+top: 41px;
+bottom: 202.67px;
+
+background: #EDEDED;
+border: 1px solid #A8A8A8;
+
+
+/* Induce engine failure */
+
+position: absolute;
+width: 186.65px;
+height: 18px;
+left: calc(50% - 186.65px/2 + 0.17px);
+top: calc(50% - 18px/2 - 9.01px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 14px;
+line-height: 18px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.84px;
+text-transform: uppercase;
+
+color: #3A3A3A;
+
+
+
+/* Engine · normal */
+
+position: absolute;
+width: 90.18px;
+height: 11px;
+left: calc(50% - 90.18px/2 + 0.17px);
+top: calc(50% - 11px/2 + 10.49px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 11px;
+right: 11px;
+top: 125.33px;
+bottom: 118.33px;
+
+background: #EDEDED;
+border: 1px solid #A8A8A8;
+
+
+/* Induce brake failure */
+
+position: absolute;
+width: 178.86px;
+height: 18px;
+left: calc(50% - 178.86px/2 + 0.16px);
+top: calc(50% - 18px/2 - 9px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 14px;
+line-height: 18px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.84px;
+text-transform: uppercase;
+
+color: #3A3A3A;
+
+
+
+/* Brake · normal */
+
+position: absolute;
+width: 84.56px;
+height: 11px;
+left: calc(50% - 84.56px/2 + 0.16px);
+top: calc(50% - 11px/2 + 10.5px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* Button */
+
+box-sizing: border-box;
+
+position: absolute;
+left: 11px;
+right: 11px;
+top: 209.67px;
+bottom: 34px;
+
+background: #EDEDED;
+border: 1px solid #A8A8A8;
+
+
+/* Clear signal pickup failure */
+
+position: absolute;
+width: 236.13px;
+height: 18px;
+left: calc(50% - 236.13px/2 + 0.2px);
+top: calc(50% - 18px/2 - 9.01px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 14px;
+line-height: 18px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.84px;
+text-transform: uppercase;
+
+color: #3A3A3A;
+
+
+
+/* Signal pickup · failed 14:07 */
+
+position: absolute;
+width: 154.62px;
+height: 11px;
+left: calc(50% - 154.62px/2 + 0.15px);
+top: calc(50% - 11px/2 + 10.49px);
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 9px;
+line-height: 12px;
+display: flex;
+align-items: center;
+text-align: center;
+letter-spacing: 0.9px;
+text-transform: uppercase;
+
+color: #7C7C7C;
+
+
+
+/* A failure stays set until it is cleared here. With signal pickup failed, no new commanded speed or authority reaches this train. */
+
+position: absolute;
+left: 11px;
+right: 106.41px;
+top: 294px;
+bottom: 11px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 400;
+font-size: 10px;
+line-height: 13px;
+/* identical to box height */
+display: flex;
+align-items: center;
+
+color: #8A8A8A;
+
+
+
+/* l */
+
+position: absolute;
+width: 6px;
+height: 14px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #000000;
+
+
+
+/* l */
+
+position: absolute;
+width: 6px;
+height: 14px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #000000;
+
+
+
+/* l */
+
+position: absolute;
+width: 6px;
+height: 14px;
+
+font-family: 'IBM Plex Sans';
+font-style: normal;
+font-weight: 600;
+font-size: 11px;
+line-height: 14px;
+display: flex;
+align-items: center;
+letter-spacing: 0.88px;
+text-transform: uppercase;
+
+color: #000000;
+
+
