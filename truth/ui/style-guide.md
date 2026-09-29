@@ -1,6 +1,6 @@
 **Status:** current
 **Owner:** Kevin
-**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on truth-setup; relocation asserted by Kevin 2026-09-27; PySide6 with QML asserted by Kevin 2026-09-29
+**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on truth-setup; relocation asserted by Kevin 2026-09-27; PySide6 per `documents/srs-filled.md` §3.1.3 REQ-INTF-014 (development, `c058082`); QML asserted by Kevin 2026-09-29
 **Aliases:** UI Style Guide, UI_Style_Guide.md, Daylight Ops, ui-style-guide-preview.html
 **Last updated:** 2026-09-29
 

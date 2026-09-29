@@ -296,7 +296,7 @@ with no enforced shape.
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3, §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `truth/ui/style-guide.md` §9, §11; `.gitattributes`; PySide6 with QML asserted by Kevin 2026-09-29
+**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3 (REQ-INTF-012, REQ-INTF-014), §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `truth/ui/style-guide.md` §9, §11; `.gitattributes`; QML asserted by Kevin 2026-09-29
 **Aliases:** file layout, paths, repo layout, project structure
 **Last updated:** 2026-09-29
 
@@ -403,7 +403,7 @@ resolved. A development launch path and a delivered binary may both be intended.
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** asserted by Kevin 2026-09-29; Python floor also in `documents/srs-filled.md` §3.5 as previously recorded under `## File and path conventions`
+**Provenance:** `documents/srs-filled.md` §2.4 (Python 3.10 or later) and §3.1.3 REQ-INTF-014 (PySide6 is the GUI framework), development `c058082`; PySide6 and PyInstaller versions asserted by Kevin 2026-09-29
 **Aliases:** dev environment, environment, toolchain versions, minimum versions
 **Last updated:** 2026-09-29
 
