@@ -1,8 +1,8 @@
 **Status:** current
 **Owner:** Kevin
-**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on truth-setup; relocation asserted by Kevin 2026-09-27
+**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on truth-setup; relocation asserted by Kevin 2026-09-27; PySide6 with QML asserted by Kevin 2026-09-29
 **Aliases:** UI Style Guide, UI_Style_Guide.md, Daylight Ops, ui-style-guide-preview.html
-**Last updated:** 2026-09-27
+**Last updated:** 2026-09-29
 
 ## UI style guide
 
@@ -339,9 +339,9 @@ an automatic safety function.
 ## 9. Implementation Notes
 
 - Tokens are defined once in a single module (for example `ui/theme.py`) as named constants and
-  imported by every view. No literal hex values appear in widget code.
-- If PyQt is used, tokens are injected into a single application-wide QSS stylesheet built from
-  those constants, so a theme change is a one-line swap of the token dictionary.
+  imported by every view. No literal hex values appear in QML or view code.
+- The UI is PySide6 with QML. QML reads every token from that one module, exposed to
+  QML, so a theme change is a one-line swap of the token dictionary. QSS is not used.
 - Every token in Sections 4 and 10 uses the same key name, which is what makes the optional
   dark theme a drop-in replacement.
 - The preview file in Section 11 is the visual source of truth for review; any token change

@@ -296,9 +296,9 @@ with no enforced shape.
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3, §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `truth/ui/style-guide.md` §9, §11; `.gitattributes`
+**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3, §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `truth/ui/style-guide.md` §9, §11; `.gitattributes`; PySide6 with QML asserted by Kevin 2026-09-29
 **Aliases:** file layout, paths, repo layout, project structure
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 
 ### Paths
 
@@ -322,7 +322,7 @@ with no enforced shape.
 - The system launches with `python main.py` after `pip install -r requirements.txt`,
   with no additional configuration.
 - `requirements.txt` pins package versions so the install is reproducible.
-- Python and PySide6 minimum versions are under `## Toolchain`.
+- Python, PySide6, and PyInstaller minimum versions are under `## Toolchain`.
 - The whole system is submittable as one runnable executable; each subsystem is also
   independently installable.
 - No external services or network connections are required at runtime.
@@ -339,10 +339,10 @@ with no enforced shape.
 ### UI token files
 
 - Design tokens are defined once, in a single module (for example `ui/theme.py`), as
-  named constants imported by every view. **No literal hex value appears in widget
+  named constants imported by every view. **No literal hex value appears in QML or view
   code.**
-- Under PyQt, tokens are injected into one application-wide QSS stylesheet built from
-  those constants, so a theme change is a one-line swap of the token dictionary.
+- The UI is PySide6 with QML. QML reads every token from that one module, exposed to
+  QML, so a theme change is a one-line swap of the token dictionary. QSS is not used.
 - `truth/ui/ui-style-guide-preview.html` is the visual source of truth for review.
   A token change **shall** land in both `truth/ui/style-guide.md` and the preview in the
   same commit.
@@ -414,6 +414,7 @@ environment drift check verifies exactly these and nothing else.
 |---------|---------|--------------------------------------------------|
 | Python  | 3.10    | `python --version` ≥ 3.10                        |
 | PySide6 | 6.11    | `python -c "import PySide6; print(PySide6.__version__)"` ≥ 6.11 |
+| PyInstaller | 6.22.2 | `pyinstaller --version` ≥ 6.22.2               |
 
-Both bounds are inclusive. Versions compare numerically per component: 3.9 is
+All bounds are inclusive. Versions compare numerically per component: 3.9 is
 below 3.10.
