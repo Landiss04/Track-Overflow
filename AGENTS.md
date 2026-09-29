@@ -33,7 +33,8 @@ their feature branch. Promotion of a proposal onto the `truth` branch is human-o
 4. Environment drift check. Verify the local toolchain meets the minimum versions in
    `truth/conventions/toolchain.md` (read via `git show`). If it does not, report the
    mismatch to the user before starting work.
-5. Check `truth/_inbox/<current-branch>/`. If it is non-empty, these are proposals from
+5. System check. Report the date, time, machine name, and operating system name.
+6. Check `truth/_inbox/<current-branch>/`. If it is non-empty, these are proposals from
    a previous session awaiting promotion. Present them to the user before starting new
    work.
 
