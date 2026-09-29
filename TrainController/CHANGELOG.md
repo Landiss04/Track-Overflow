@@ -8,6 +8,9 @@ entry names the commits that make it up, so the history can be traced in
 
 Author: Jonathan Tsang · Branch: `Track-Ctrl-SW`
 
+Commits: `3050c73` wireframe · `d52e2d0` state, units and tests ·
+`c7d84b6` QML UI, README and changelog
+
 ### Added
 
 - **HTML wireframe** (`wireframe/page4_train_controller.html`): a
