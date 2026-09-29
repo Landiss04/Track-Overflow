@@ -31,8 +31,8 @@ their feature branch. Promotion of a proposal onto the `truth` branch is human-o
    every shard with a one-line description and a last-changed date.
 3. Read only the shards relevant to the work at hand. Do not read the whole store.
 4. Environment drift check. Verify the local toolchain meets the minimum versions in
-   `## Toolchain` of `truth/conventions.md` (read via `git show`). If it does not,
-   report the mismatch to the user before starting work.
+   `truth/conventions/toolchain.md` (read via `git show`). If it does not, report the
+   mismatch to the user before starting work.
 5. Check `truth/_inbox/<current-branch>/`. If it is non-empty, these are proposals from
    a previous session awaiting promotion. Present them to the user before starting new
    work.
@@ -167,10 +167,14 @@ use.
 On the `truth` branch:
 
 ```
+AGENTS.md               these rules; identical on development
 truth/
+  README.md             what this branch holds; start at INDEX.md
   INDEX.md              always read
-  conventions.md        naming, units, ID formats
-  ui/                   visual rules and authored HTML review preview
+  _templates/           entry.md, decision.md, module-contract.md,
+                        module-variant.md, and fragment.md (proposal wrapper)
+  conventions/<key>.md  naming, units, identifiers, files-and-paths, toolchain
+  ui/style-guide.md     UI style guide: visual tokens and component rules
   modules/<module>.md   one owned shard per module
   modules/<module>/     a module with variants: contract shard plus one per variant
   signals/<signal>.md   one file per signal
@@ -178,9 +182,11 @@ truth/
   decisions/<id>.md     one file per decision
 ```
 
-On the development branch and every feature branch:
+On `development` (the default branch; `main` is release-only, see
+`decisions/D003-branch-model.md`) and every feature branch cut from it:
 
 ```
+AGENTS.md               these rules; identical on truth
 truth/
   README.md             scaffold; never modified
   _inbox/.gitkeep       scaffold; never modified
@@ -188,6 +194,6 @@ truth/
 ```
 
 `modules/` shards are single-owner and low-contention; tables inside them are fine.
-`signals/`, `arbitration/`, and `decisions/` are directory-as-table: one file per
-entry, so that unrelated additions merge cleanly and a real disagreement over the
+`conventions/`, `signals/`, `arbitration/`, and `decisions/` are directory-as-table: one
+file per entry, so that unrelated additions merge cleanly and a real disagreement over the
 same fact surfaces as a conflict in one file.
