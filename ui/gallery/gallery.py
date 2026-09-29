@@ -22,8 +22,8 @@ _HERE = Path(__file__).resolve().parent
 _REPO = _HERE.parents[1]
 _GALLERY_QML = _HERE / "Gallery.qml"
 
-# The theme tokens live with the Train Model; see ui/README.md.
-sys.path.insert(0, str(_REPO / "TrainModel"))
+# The theme tokens live in ui/theme.py; see ui/README.md.
+sys.path.insert(0, str(_REPO))
 
 # Offscreen rendering has no font directory. That notice is platform
 # noise, not a UI fault.
@@ -65,7 +65,7 @@ from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
 import PySide6.QtQuick  # noqa: E402,F401  Enables the QQuickWindow downcast.
 from PySide6.QtTest import QTest  # noqa: E402
 
-from train_model.theme import build_theme  # noqa: E402
+from ui.theme import build_theme  # noqa: E402
 
 
 class WarningLog(QObject):

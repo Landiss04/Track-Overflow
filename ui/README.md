@@ -35,12 +35,12 @@ needed for these relative imports.
 ## Theme setup
 
 The host must expose a `theme` context property before loading its QML.
-The existing token provider is `TrainModel/train_model/theme.py`; the Train
-Model entry point already configures it. From Python with the repository root
-on its import path, after creating a `QGuiApplication`:
+The token provider is [`theme.py`](theme.py), in this folder; the Train Model
+entry point already configures it. From Python with the repository root on its
+import path, after creating a `QGuiApplication`:
 
 ```python
-from TrainModel.train_model.theme import build_theme
+from ui.theme import build_theme
 
 engine.rootContext().setContextProperty("theme", build_theme())
 ```
@@ -69,7 +69,6 @@ property bindings, not command handlers.
 ## Guides
 
 - [UI style guide](https://github.com/Landiss04/Track-Overflow/blob/truth/truth/ui/style-guide.md)
-  and its [HTML preview](https://github.com/Landiss04/Track-Overflow/blob/truth/truth/ui/ui-style-guide-preview.html),
   on the `truth` branch
 - [Train Model integration and setup](../TrainModel/README.md)
 
