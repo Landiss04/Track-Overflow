@@ -322,7 +322,7 @@ with no enforced shape.
 - The system launches with `python main.py` after `pip install -r requirements.txt`,
   with no additional configuration.
 - `requirements.txt` pins package versions so the install is reproducible.
-- Python 3.10 or later.
+- Python and PySide6 minimum versions are under `## Toolchain`.
 - The whole system is submittable as one runnable executable; each subsystem is also
   independently installable.
 - No external services or network connections are required at runtime.
@@ -398,3 +398,22 @@ Owner: Kevin.
 
 The first two bullets under `### Entry point and dependencies` stand until this is
 resolved. A development launch path and a delivered binary may both be intended.
+
+## Toolchain
+
+**Status:** current
+**Owner:** Kevin
+**Provenance:** asserted by Kevin 2026-09-29; Python floor also in `documents/srs-filled.md` §3.5 as previously recorded under `## File and path conventions`
+**Aliases:** dev environment, environment, toolchain versions, minimum versions
+**Last updated:** 2026-09-29
+
+Minimum versions every development and lab machine must have. The session-start
+environment drift check verifies exactly these and nothing else.
+
+| Tool    | Minimum | Check                                            |
+|---------|---------|--------------------------------------------------|
+| Python  | 3.10    | `python --version` ≥ 3.10                        |
+| PySide6 | 6.11    | `python -c "import PySide6; print(PySide6.__version__)"` ≥ 6.11 |
+
+Both bounds are inclusive. Versions compare numerically per component: 3.9 is
+below 3.10.
