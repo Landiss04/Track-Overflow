@@ -12,7 +12,11 @@ from PySide6.QtQml import QQmlApplicationEngine
 from train_model.aspect_lock import install_aspect_lock
 from train_model.harness import TestHarnessState
 from train_model.state import TrainModelState
-from train_model.theme import build_theme
+
+# The design tokens are shared by every module's UI, so they live in the
+# repository-level ui/ folder next to the shared QML components.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ui.theme import build_theme  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
 

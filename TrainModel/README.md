@@ -13,7 +13,8 @@ properties (`theme`, `trainModel`, `harness`).
 
 - **Tokens** — every color, font size, spacing, radius, and control dimension
   comes from `documents/UI_Style_Guide.md` (light theme), exposed as a single
-  `theme` object built by `train_model/theme.py`. No QML file hard-codes a
+  `theme` object built by the shared [`ui/theme.py`](../ui/theme.py) at the
+  repository root. No QML file hard-codes a
   color or a token-sized dimension.
 - **Dimensions & copy** — element sizes and the on-screen text are taken from
   the Figma CSS exports in `refrence-docs/` (`UIwireframe.css` = main page,
@@ -46,7 +47,6 @@ PySide6 ships its own type stubs, so no local stubs are needed.
 
 ```
 main.py                 entry point: builds theme, state objects, loads QML
-train_model/theme.py    build_theme() → the design-token dict (80 tokens)
 train_model/state.py    TrainModelState — page 3a bindable values + slots
 train_model/harness.py  TestHarnessState — page 3b inputs/outputs/run control
 ui/Main.qml             window shell, nav rail, 3a/3b view switcher
