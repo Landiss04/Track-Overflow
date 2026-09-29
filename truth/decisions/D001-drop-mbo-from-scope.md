@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Team 3
-**Provenance:** `documents/requirements-matrix.md` scope note (source: `documents/Project_Information/Final Project vF.pdf`, 81-slide course deck)
+**Provenance:** `documents/requirements-matrix.md` scope note (source: `documents/Project_Information/Final Project vF.pdf`, 81-slide course deck); removal of the MBO interface residue asserted by Kevin 2026-09-29
 **Aliases:** drop MBO, MBO out of scope, moving block overlay
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 
 ## Context
 
@@ -18,7 +18,7 @@ bypassing fixed-block authority for trains it covers.
 Both MBO components are **out of scope** for this implementation. Neither the MBO
 Controller nor the MBO Scheduler will be built. The MBO is not a module of this
 system and does not appear in the canonical module list in
-[`../conventions.md`](../conventions.md) `## Naming`.
+[`../conventions/naming.md`](../conventions/naming.md).
 
 ## Consequences
 
@@ -29,7 +29,6 @@ system and does not appear in the canonical module list in
   table of contents links to a "Scope gaps created by dropping MBO" section, but that
   section was never written — §4 is "Points of Tension / Conflicts" instead. **The
   transferred requirements have not been enumerated anywhere.** Owner: Team 3.
-- `common/interfaces.py` still declares `IMboOverlay`, and its module docstring still
-  diagrams the MBO Overlay supplying Safe Authority to the CTC Office. The interface
-  contract has not caught up with this decision. Deciding whether to delete
-  `IMboOverlay` or keep it as a documented no-op is open.
+- The MBO residue in `common/interfaces.py` is deleted, not kept as a documented
+  no-op: `IMboOverlay`, `ICtcOffice.receive_mbo_authority`, and the MBO Overlay lines
+  of the module docstring (Kevin 2026-09-29).

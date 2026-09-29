@@ -6,9 +6,9 @@ relevant signal entry, not here.*
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
-**Aliases:** none
+**Aliases:** HW Train Controller
 **Contract:** `truth/modules/train-controller/train-controller.md`
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-29
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >

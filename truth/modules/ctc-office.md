@@ -3,8 +3,8 @@
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
-**Aliases:** CTC, CTC Office, dispatcher
-**Last updated:** 2026-09-25
+**Aliases:** CTC
+**Last updated:** 2026-09-29
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -29,7 +29,7 @@ Not stated vital, but it issues the authority that vital controllers rely on.
   `truth/signals/`, which is still empty.
 - Configuration it owns at design time, and which other module may read it.
 - Failure modes it simulates or must detect, and the fault-injection contract.
-- Module-specific units, beyond the project-wide tables in `../conventions.md`.
+- Module-specific units, beyond the project-wide tables in `../conventions/units.md`.
 - Territory / section assignment per dispatcher.
 - Throughput metrics: what is measured and how.
 - Whether it owns or only reads the track layout store — see arbitration §4.6 below.

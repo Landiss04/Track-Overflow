@@ -1,17 +1,12 @@
+# style-guide
+
 **Status:** current
 **Owner:** Kevin
-**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on truth-setup; relocation asserted by Kevin 2026-09-27; PySide6 per `documents/srs-filled.md` §3.1.3 REQ-INTF-014 (development, `c058082`); QML asserted by Kevin 2026-09-29
-**Aliases:** UI Style Guide, UI_Style_Guide.md, Daylight Ops, ui-style-guide-preview.html
+**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on `truth` (`e315da5`; the branch was formerly named truth-setup); relocation asserted by Kevin 2026-09-27; PySide6 per `documents/srs-filled.md` §3.1.3 REQ-INTF-014 (development, `c058082`); QML asserted by Kevin 2026-09-29; QML-specific values and the Idle badge background follow `UI-icon-standardization` (`3dc7a4d`) at Kevin's direction 2026-09-29; dark theme and preview removal and the Train Controller service-brake exemption asserted by Kevin 2026-09-29
+**Aliases:** UI Style Guide, UI_Style_Guide.md
 **Last updated:** 2026-09-29
 
-## UI style guide
-
-## For ECE1140 Train Management System
-
-Version 1.4
-Prepared by Team 3
-University of Pittsburgh
-2026-09-11
+UI style guide for the ECE1140 Train Management System (University of Pittsburgh).
 
 ## Table of Contents
 
@@ -19,7 +14,7 @@ University of Pittsburgh
 * [1. Purpose and Scope](#1-purpose-and-scope)
 * [2. Design Principles](#2-design-principles)
 * [3. Typography](#3-typography)
-* [4. Color — Light Theme (Normative)](#4-color--light-theme-normative)
+* [4. Color](#4-color)
   * [4.1 Surfaces and Borders](#41-surfaces-and-borders)
   * [4.2 Text](#42-text)
   * [4.3 Accent](#43-accent)
@@ -37,10 +32,6 @@ University of Pittsburgh
 * [7. Safety-Critical Controls](#7-safety-critical-controls)
 * [8. Accessibility Rules](#8-accessibility-rules)
 * [9. Implementation Notes](#9-implementation-notes)
-* [10. Optional Dark Theme (Not Committed)](#10-optional-dark-theme-not-committed)
-  * [10.1 Dark Token Overrides](#101-dark-token-overrides)
-  * [10.2 Theme Switch Requirements](#102-theme-switch-requirements)
-* [11. Live Preview](#11-live-preview)
 <!-- TOC -->
 
 ## 1. Purpose and Scope
@@ -53,8 +44,7 @@ All modules **shall** use the tokens in Sections 3 through 6. Module authors **s
 introduce ad-hoc colors, font sizes, or spacing values. If a required token is missing, it is
 added here first, then used.
 
-**Daylight Ops** (light) is the committed default theme. Section 10 documents an optional dark
-theme; it is a stretch goal and is not required for any sprint deliverable.
+**Daylight Ops** (light) is the only theme. There is no dark theme.
 
 ## 2. Design Principles
 
@@ -64,48 +54,56 @@ theme; it is a stretch goal and is not required for any sprint deliverable.
 3. **Numbers do not jitter.** All telemetry uses a monospace face so digits stay column-aligned
    as values update at simulation tick rate.
 4. **Destructive actions are hard to hit by accident.** Emergency and brake controls are
-   oversized, isolated, and confirmed.
+   oversized, isolated, and confirmed, except the Train Controller brakes, which act
+   immediately (Section 7).
 5. **One accent color.** The accent identifies the primary action in a view. If everything is
    accented, nothing is.
 
 ## 3. Typography
 
-| Role | Family | Fallback stack |
-|------|--------|----------------|
-| UI   | Helvetica | `"Helvetica Neue", "Helvetica", "Arial", sans-serif` |
-| Mono | Monaco | `"Monaco", "Menlo", "Consolas", "Andale Mono", monospace` |
+| Token | Role | Family | Fallback order |
+|-------|------|--------|----------------|
+| `--ui-family` | UI | Helvetica | Helvetica Neue, Helvetica, Arial, Nimbus Sans, DejaVu Sans |
+| `--mono-family` | Mono | Monaco | Monaco, Menlo, Consolas, Andale Mono, DejaVu Sans Mono |
+
+QML's `font.family` takes a single name, so each list is resolved once at startup to the
+first family installed on the machine. If none is installed, the last one is used.
 
 Helvetica does not ship with Windows. On the lab machines and any standard Windows PC, the UI
 face resolves to **Arial**, which is metric-compatible with Helvetica — line breaks and layout
-are identical, letterforms differ slightly. On macOS it resolves to Helvetica Neue. This is
-intentional and requires no font bundling or licensing.
+are identical, letterforms differ slightly. On macOS it resolves to Helvetica Neue, and on Linux
+to Nimbus Sans or DejaVu Sans. This is intentional and requires no font bundling or licensing.
 
-The mono stack is chosen to sit well beside a neo-grotesque UI face: Monaco/Menlo on macOS,
-Consolas on Windows. No font is bundled with the application.
+The mono list is chosen to sit well beside a neo-grotesque UI face: Monaco/Menlo on macOS,
+Consolas on Windows, DejaVu Sans Mono on Linux. No font is bundled with the application.
 
-| Token | Size | Weight | Line height | Use |
-|-------|------|--------|-------------|-----|
-| Display | 36 px | 700 | 1.15 | Application title, splash |
-| H1 | 28 px | 700 | 1.2 | Module window title |
-| H2 | 22 px | 700 | 1.25 | Section heading within a module |
-| H3 | 18 px | 700 | 1.3 | Sub-section, panel title |
-| Body | 15 px | 400 | 1.55 | Default text |
-| Small | 13 px | 400 | 1.5 | Helper and secondary detail |
-| Label | 12 px | 700 | 1.4 | Field labels, uppercase, letter-spacing `0.07em` |
-| Mono | inherits | 400 or 700 | 1.4 | Telemetry values, IDs, timestamps |
+| Role | Size token | Size | Weight | Line height | Use |
+|------|------------|------|--------|-------------|-----|
+| Display | `--size-display` | 36 px | 700 | 1.15 | Application title, splash |
+| H1 | `--size-h1` | 28 px | 700 | 1.2 | Module window title |
+| H2 | `--size-h2` | 22 px | 700 | 1.25 | Section heading within a module |
+| H3 | `--size-h3` | 18 px | 700 | 1.3 | Sub-section, panel title |
+| Body | `--size-body` | 15 px | 400 | 1.55 | Default text |
+| Small | `--size-small` | 13 px | 400 | 1.5 | Helper and secondary detail |
+| Label | `--size-label` | 12 px | 700 | 1.4 | Field labels, uppercase, letter-spacing `--label-letter-spacing` (0.84 px) |
+| Telemetry | `--size-telemetry` | 28 px | 700 | 1.4 | Telemetry readout values (Section 6.5) |
+| Mono | inherits | inherits | 400 or 700 | 1.4 | Telemetry values, IDs, timestamps |
 
 **Rules**
 
-- Only two weights exist: **400 (Regular)** and **700 (Bold)**. Helvetica and Arial ship no
-  intermediate weights, so any request for 500/600/650 is synthesized by the renderer and
-  produces inconsistent results across platforms. Do not specify them.
+- Only two weights exist: **400 (Regular, `--weight-regular`)** and **700 (Bold,
+  `--weight-bold`)**. Helvetica and Arial ship no intermediate weights, so any request for
+  500/600/650 is synthesized by the renderer and produces inconsistent results across
+  platforms. Do not specify them.
 - Size and weight carry the hierarchy. Where 700 is not enough separation, use size or
   `--text-muted`, not a fake semibold.
-- Train IDs, block IDs, timestamps, and all numeric telemetry **shall** render in the mono face.
+- Every ID (train, block, station), every timestamp, and all numeric telemetry **shall**
+  render in the mono face.
 - Field labels **shall** use the Label token in uppercase.
+- Letter-spacing is given in pixels, because QML's `font.letterSpacing` is in pixels.
 - Never use font size alone to convey state; pair with color and text.
 
-## 4. Color — Light Theme (Normative)
+## 4. Color
 
 ### 4.1 Surfaces and Borders
 
@@ -118,8 +116,8 @@ Consolas on Windows. No font is bundled with the application.
 | `--border` | `#D5DCE3` | Default 1 px separators |
 | `--border-strong` | `#8795A3` | Input outlines, table header rule |
 
-`--bg-raised` intentionally equals `--bg-surface` in this theme; there is no headroom above
-white, so separation is carried by `--border` and `--shadow-1` instead of by a lighter fill.
+`--bg-raised` intentionally equals `--bg-surface`; there is no headroom above white, so
+separation is carried by `--border` instead of by a lighter fill.
 
 ### 4.2 Text
 
@@ -185,13 +183,12 @@ text and 3:1 for large text and UI boundaries.
 | `--warning` | `--warning-bg` | 4.5:1 | Pass AA |
 | `--border-strong` | `--bg-surface` | 3.1:1 | Pass AA (non-text) |
 
-Buttons filled with `--danger` or `--success` use **white** text (`--text-inverse`) in this
-theme, because the semantic colors are dark enough to support it. This inverts in the dark
-theme — see Section 10.
+Buttons filled with `--danger` or `--success` use **white** text (`--text-inverse`), because
+the semantic colors are dark enough to support it.
 
 ## 5. Spacing, Radius, and Elevation
 
-Spacing uses a 4 px base scale. These values are shared by both themes.
+Spacing uses a 4 px base scale.
 
 | Token | Value | Typical use |
 |-------|-------|-------------|
@@ -210,10 +207,12 @@ Spacing uses a 4 px base scale. These values are shared by both themes.
 | `--radius-lg` | 10 px | Panels, cards, dialogs |
 | `--radius-pill` | 999 px | Status badges, toggle groups |
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `--shadow-1` | `0 1px 2px rgba(22,32,42,.08)` | Resting panels, sticky headers |
-| `--shadow-2` | `0 4px 14px rgba(22,32,42,.12)` | Dialogs, popovers, menus |
+QML has no CSS box-shadow, so elevation is carried by borders:
+
+| Surface | Border |
+|---------|--------|
+| Resting panels, cards, sticky headers | 1 px `--border` |
+| Dialogs, popovers, menus | 1 px `--border-strong` |
 
 Control heights: `--control-h-sm` 28 px, `--control-h-md` 36 px (default),
 `--control-h-lg` 44 px.
@@ -265,6 +264,8 @@ the matching `-bg` token.
 | Info | `--info` | Occupied, En Route |
 | Idle | `--text-muted` | Offline, Yard, Unassigned |
 
+Idle has no `-bg` token of its own, so its background is `--bg-sunken`.
+
 The text label is required. A bare colored dot is not an acceptable status indicator.
 
 ### 6.4 Track Block Occupancy
@@ -284,9 +285,9 @@ on filled states. Adjacent blocks are separated by at least 2 px.
 
 - Container: `--bg-sunken`, 1 px `--border`, `--radius-md`, padding `--space-3 --space-4`.
 - Label above in Label token, `--text-muted`.
-- Value in mono, 28 px, weight 700, `--text-primary`.
+- Value in mono, `--size-telemetry` (28 px), weight 700, `--text-primary`.
 - Unit immediately after the value, mono, 13 px, `--text-muted`.
-- Units **shall** match the UI display units table in [conventions](../conventions.md#units) exactly
+- Units **shall** match the UI display units table in [conventions/units.md](../conventions/units.md) exactly
   (`mph`, `ft`, `s`, `kW`, `F`, ...). That table is imperial, with power in kilowatts as
   the one exception; the metric values behind it are converted at the display layer and
   never rendered.
@@ -300,7 +301,7 @@ on filled states. Adjacent blocks are separated by at least 2 px.
 - Numeric and ID columns are mono; numeric columns are right-aligned.
 - Empty values render as an em dash (`—`), never a blank cell or `None`.
 
-Because `--bg-raised` equals `--bg-surface` in the light theme, row hover **shall** additionally
+Because `--bg-raised` equals `--bg-surface`, row hover **shall** additionally
 apply a 1 px `--border-strong` outline or an `--accent-subtle` tint so the hovered row stays
 distinguishable.
 
@@ -318,10 +319,11 @@ Applies to Emergency Brake, Service Brake, Force Close Block, and any command th
 an automatic safety function.
 
 - Minimum size 44 px tall by 200 px wide (`--control-h-lg`).
-- Fill `--danger`, label uppercase with `0.05em` letter-spacing.
+- Fill `--danger`, label uppercase with `--safety-letter-spacing` (0.75 px).
 - Separated from routine controls by at least `--space-5`, and never adjacent to a Primary button.
-- Require an explicit confirmation step, except the Train Controller emergency brake, which is
-  immediate by design and is the only unconfirmed destructive control in the system.
+- Require an explicit confirmation step, except the Train Controller emergency brake and
+  service brake, which are immediate by design and are the only unconfirmed destructive
+  controls in the system.
 - Active emergency state is mirrored by a persistent Fault badge in the module header.
 
 ## 8. Accessibility Rules
@@ -338,110 +340,43 @@ an automatic safety function.
 
 ## 9. Implementation Notes
 
-- Tokens are defined once in a single module (for example `ui/theme.py`) as named constants and
-  imported by every view. No literal hex values appear in QML or view code.
-- The UI is PySide6 with QML. QML reads every token from that one module, exposed to
-  QML, so a theme change is a one-line swap of the token dictionary. QSS is not used.
-- Every token in Sections 4 and 10 uses the same key name, which is what makes the optional
-  dark theme a drop-in replacement.
-- The preview file in Section 11 is the visual source of truth for review; any token change
-  **shall** be applied to both this document and the preview in the same commit.
-
-## 10. Optional Dark Theme (Not Committed)
-
-This section is **informative**. A dark theme and a light/dark switch are a stretch goal. No
-sprint deliverable depends on it. It is specified here so that, if implemented, it requires no
-design work — only a token swap.
-
-Typography, spacing, radius, control heights, and all component rules in Sections 3, 5, 6, 7,
-and 8 are unchanged. Only the color tokens below differ.
-
-### 10.1 Dark Token Overrides
-
-| Token | Light (normative) | Dark (optional) |
-|-------|-------------------|-----------------|
-| `--bg-app` | `#F4F6F8` | `#0F1419` |
-| `--bg-surface` | `#FFFFFF` | `#161C24` |
-| `--bg-raised` | `#FFFFFF` | `#1E2630` |
-| `--bg-sunken` | `#E8ECF0` | `#0A0E12` |
-| `--border` | `#D5DCE3` | `#2C3742` |
-| `--border-strong` | `#8795A3` | `#3E4B59` |
-| `--text-primary` | `#16202A` | `#E6EDF3` |
-| `--text-secondary` | `#4B5C6B` | `#9FB0C0` |
-| `--text-muted` | `#5F6B79` | `#6B7E90` |
-| `--text-inverse` | `#FFFFFF` | `#0F1419` |
-| `--accent` | `#1D6FD0` | `#38BDF8` |
-| `--accent-hover` | `#1A5FB4` | `#7DD3FC` |
-| `--accent-active` | `#164E96` | `#0EA5E9` |
-| `--accent-subtle` | `#E4EFFB` | `#12303F` |
-| `--on-accent` | `#FFFFFF` | `#041018` |
-| `--success` | `#15803D` | `#2ECC71` |
-| `--success-hover` | `#126832` | `#46D983` |
-| `--success-bg` | `#EDF7F0` | `#0E2A1A` |
-| `--warning` | `#B45309` | `#FBBF24` |
-| `--warning-bg` | `#FDF2E0` | `#322505` |
-| `--danger` | `#C0272D` | `#EF4444` |
-| `--danger-hover` | `#A81F25` | `#F75C5C` |
-| `--danger-active` | `#8C1A1F` | `#D93A3A` |
-| `--danger-bg` | `#FBE8E9` | `#2E0F11` |
-| `--info` | `#4338CA` | `#818CF8` |
-| `--info-bg` | `#EAE8FB` | `#1B1D3A` |
-| `--focus-ring` | `#1D6FD0` | `#FBBF24` |
-| `--shadow-1` | `0 1px 2px rgba(22,32,42,.08)` | `0 1px 2px rgba(0,0,0,.5)` |
-| `--shadow-2` | `0 4px 14px rgba(22,32,42,.12)` | `0 4px 12px rgba(0,0,0,.55)` |
-
-Dark-theme contrast, measured against `--bg-app` (`#0F1419`):
-
-| Foreground | Ratio | Result |
-|------------|-------|--------|
-| `--text-primary` | 15.9:1 | Pass AAA |
-| `--text-secondary` | 8.5:1 | Pass AAA |
-| `--text-muted` | 4.5:1 | Pass AA |
-| `--accent` | 8.8:1 | Pass AAA |
-| `--success` | 8.9:1 | Pass AAA |
-| `--warning` | 11.3:1 | Pass AAA |
-| `--danger` | 5.0:1 | Pass AA |
-| `--info` | 6.3:1 | Pass AA |
-
-Two behavioral differences apply if this theme is implemented:
-
-1. **`--text-inverse` inverts.** Filled danger and success buttons use **dark** text in the dark
-   theme, because white on `#EF4444` measures 3.8:1 and fails AA for normal text.
-2. **`--bg-raised` separates from `--bg-surface`.** The extra row-hover rule in Section 6.6 is
-   unnecessary in the dark theme, since `--bg-raised` is already a visibly distinct fill.
-
-### 10.2 Theme Switch Requirements
-
-If the switch is implemented:
-
-1. The control lives in the application menu or settings panel, not in individual modules.
-2. The selection persists across restarts.
-3. Switching applies to every open module window without requiring a restart.
-4. Light is the default on first run.
-5. No screenshot, printed figure, or demo artifact is theme-dependent for its meaning.
-
-## 11. Live Preview
-
-An interactive rendering of both themes — typography scale, full palette, every button variant
-and size, inputs, badges, block legend, telemetry readouts, table, spacing scale, and a sample
-module window — is at:
-
-[ui-style-guide-preview.html](ui-style-guide-preview.html)
-
-Open it in a browser and use the switcher in the top bar to compare Light (default) against
-Dark (optional).
+- Tokens are defined once, in a single Python module (for example `ui/theme.py`), as named
+  constants. No literal hex values appear in QML or view code.
+- The UI is PySide6 with QML. The host exposes the tokens to QML as a `theme` context
+  property before loading any QML, and every view reads its values from `theme`. QSS is
+  not used.
 
 ## Supersedes
 
 - `documents/UI_Style_Guide.md` v1.3 and its preview move here at Kevin's
   request; visual rules and D002's display-unit decision are retained.
 - The v1.2 development guide's metric UI examples are superseded by D002;
-  see [conventions](../conventions.md#units) for unresolved source conflicts.
+  see [conventions/units.md](../conventions/units.md) for unresolved source conflicts.
+- The optional dark theme (Section 10) is removed because dark mode will not be used, and the
+  HTML review preview (Section 11) is removed at Kevin's request (2026-09-29).
+- CSS-only values are replaced for QML: fallback stacks resolve at startup, letter-spacing is
+  in pixels, and `--shadow-1` / `--shadow-2` give way to borders, following
+  `UI-icon-standardization` (`3dc7a4d`).
+- The Train Controller service brake no longer requires confirmation (Kevin 2026-09-29).
 
 ## Conflict
 
-The inherited preview labels authority with block IDs, while D002 and the
-conventions table prescribe distance in feet. The underlying sources and
-both values remain recorded in [conventions](../conventions.md#conflict).
-**Resolution owner:** Kevin. These preview examples do not resolve the
-open authority conflict.
+**Resolution owner:** Kevin.
+
+**Module window title — H1 vs. H3. Open.**
+
+| Value | Provenance |
+|-------|------------|
+| H1, 28 px | Section 3 typography table: H1 is the "Module window title" |
+| H3, 18 px | Section 6.7: module name and instance "at H3 weight"; `ui/ModuleHeader.qml` on `UI-icon-standardization` (`3dc7a4d`) renders the name at H3 |
+
+**Mode badge in every module header. Open.**
+
+| Value | Provenance |
+|-------|------------|
+| Every module window header carries an Automatic / Manual mode badge | Section 6.7 |
+| Automatic / Manual modes exist only for CTC dispatch and for train speed regulation; no requirement gives the Track Model or Train Model a mode | `documents/srs-filled.md` REQ-FUNC-006–008 (CTC dispatch), REQ-FUNC-025–026 (train speed regulation), development `c058082` |
+
+The SRS also has a maintenance mode (REQ-FUNC-012, REQ-FUNC-057), which Section 6.7 does not
+mention. The badge's color is not specified; `ui/ModuleHeader.qml` renders it as an Info
+badge and hides it when a module has no mode.

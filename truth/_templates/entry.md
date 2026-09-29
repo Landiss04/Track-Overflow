@@ -20,5 +20,6 @@
 
 ## Conflict
 
-<omit unless a conflict exists. If it does: each value, provenance of each, and
+<omit unless a conflict exists. If it does: each value and the provenance of each>
+
 **Resolution owner:** <name>

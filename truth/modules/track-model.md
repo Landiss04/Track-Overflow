@@ -3,8 +3,8 @@
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
-**Aliases:** Track Modal (misspelling in README)
-**Last updated:** 2026-09-28
+**Aliases:** none
+**Last updated:** 2026-09-29
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -29,9 +29,9 @@ Not vital: a physical simulation, not a controller.
   `truth/signals/`, which is still empty.
 - Configuration it owns at design time, and which other module may read it.
 - Failure modes it simulates or must detect, and the fault-injection contract.
-- Module-specific units, beyond the project-wide tables in `../conventions.md`.
-- Track layout ingestion. The file format is JSON — see `../conventions.md`
-  `## Units` Resolved.
+- Module-specific units, beyond the project-wide tables in `../conventions/units.md`.
+- Track layout ingestion. The file format is JSON — see `../conventions/units.md`
+  `## Resolved`.
 - Configurable block size, and the track layout input method.
 - Whether this module owns the canonical layout store — see sources.
 - Railway crossings, stations, power limitations, track heater.

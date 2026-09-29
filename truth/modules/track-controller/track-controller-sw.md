@@ -6,9 +6,9 @@ relevant signal entry, not here.*
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
-**Aliases:** none
+**Aliases:** SW Track Controller
 **Contract:** `truth/modules/track-controller/track-controller.md`
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-29
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >

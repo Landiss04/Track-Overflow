@@ -3,8 +3,8 @@
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
-**Aliases:** Train Modal (misspelling in README)
-**Last updated:** 2026-09-28
+**Aliases:** none
+**Last updated:** 2026-09-29
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -29,11 +29,11 @@ Not vital: a physical simulation, not a controller.
   `truth/signals/`, which is still empty.
 - Configuration it owns at design time, and which other module may read it.
 - Failure modes it simulates or must detect, and the fault-injection contract.
-- Module-specific units, beyond the project-wide tables in `../conventions.md`.
+- Module-specific units, beyond the project-wide tables in `../conventions/units.md`.
 - Physical dimensions, mass, crew count, passenger capacity, car count for a single
   or multi-car consist, and acceleration / velocity limit parameters.
 - Terrain-aware Newtonian point-mass dynamics, and the grade input it depends on —
-  degrees vs. percent is unresolved, see `../conventions.md` `## Units` Conflict.
+  degrees vs. percent is unresolved, see `../conventions/units.md` `## Conflict`.
 - Tunnel light controller.
 - Failure modes it simulates: engine failure, signal pickup failure, brake failure.
 

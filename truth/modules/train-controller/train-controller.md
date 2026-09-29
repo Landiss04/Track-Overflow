@@ -6,9 +6,9 @@ conform to.*
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
-**Aliases:** SW Train Controller, HW Train Controller, onboard controller
+**Aliases:** none
 **Variants:** `truth/modules/train-controller/train-controller-sw.md`, `truth/modules/train-controller/train-controller-hw.md`
-**Last updated:** 2026-09-27
+**Last updated:** 2026-09-29
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -53,7 +53,7 @@ To be populated:
 
 To be populated:
 
-- Module-specific units, beyond the project-wide tables in `../../conventions.md`.
+- Module-specific units, beyond the project-wide tables in `../../conventions/units.md`.
 - Control-law tuning constants `Kp`, `Ki`, `T`, `Pmax`. The deck requires they be
   chosen so the system is stable but supplies **no default values**. Nothing is
   recorded anywhere; the team must derive and verify them.
@@ -82,5 +82,5 @@ To be populated:
   fast-forward.
 - `documents/requirements-matrix.md` §5 — names the tuning constants as needing team
   sign-off before implementation.
-- `truth/ui/style-guide.md` §7 — this module's emergency brake is the only
-  unconfirmed destructive control in the system.
+- `truth/ui/style-guide.md` §7 — this module's emergency brake and service brake are
+  the only unconfirmed destructive controls in the system.

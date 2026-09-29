@@ -6,9 +6,9 @@ conform to.*
 **Status:** placeholder
 **Owner:** unassigned
 **Provenance:** none — this shard asserts no facts yet
-**Aliases:** Wayside Controller, SW Track Controller, HW Track Controller, PLC
+**Aliases:** Wayside Controller
 **Variants:** `truth/modules/track-controller/track-controller-sw.md`, `truth/modules/track-controller/track-controller-hw.md`
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-29
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
@@ -53,7 +53,7 @@ To be populated:
 
 To be populated:
 
-- Module-specific units, beyond the project-wide tables in `../../conventions.md`.
+- Module-specific units, beyond the project-wide tables in `../../conventions/units.md`.
 - PLC scan timing, and how it behaves under 10x fast-forward.
 
 ## Failure modes
