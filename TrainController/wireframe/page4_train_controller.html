@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Train Controller Cab</title>
+<!--
+  Page 4 — Train Controller cab interface, driver T-214, Green Line.
+  Grayscale wireframe, 1440 x 900. Self-contained (embedded CSS, no JS,
+  no external assets) for import to Figma via html.to.design.
+
+  Frame 1: driver cab. CONTROL GAINS is intentionally absent; Kp/Ki
+  tuning moved to the Engineer-only pop-up in Frame 2.
+-->
+<style>
+  :root {
+    --ink: #1f1f1f;
+    --ink-2: #3a3a3a;
+    --muted: #707070;
+    --faint: #a8a8a8;
+    --line: #b9b9b9;
+    --line-strong: #8a8a8a;
+    --fill-app: #efefef;
+    --fill-panel: #ffffff;
+    --fill-head: #f2f2f2;
+    --fill-btn: #ececec;
+    --fill-dark: #4a4a4a;
+    --fill-current: #585858;
+    --ui: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: Monaco, Menlo, Consolas, "Andale Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #d9d9d9;
+    font-family: var(--ui);
+    color: var(--ink);
+    padding: 24px;
+  }
+  .frame-caption {
+    font: 700 12px/1 var(--ui);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  .frame {
+    width: 1440px;
+    height: 900px;
+    background: var(--fill-app);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 48px;
+  }
+  .label {
+    font: 400 10px/1 var(--ui);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .mono { font-family: var(--mono); }
+
+  /* Header ------------------------------------------------------- */
+  .header {
+    height: 56px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: 0 12px 0 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--fill-head);
+  }
+  .brand { padding-right: 12px; border-right: 1px solid var(--line); }
+  .brand h1 { font: 700 14px/1.2 var(--ui); letter-spacing: .08em; }
+  .brand .label { margin-top: 3px; font-size: 9.5px; }
+  .train-pick { display: flex; align-items: center; gap: 8px; margin-left: 12px; }
+  .select {
+    width: 156px; height: 30px;
+    border: 1px solid var(--line-strong);
+    background: var(--fill-panel);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px;
+    font: 400 13px/1 var(--mono);
+  }
+  .select::after { content: "\2304"; font: 700 12px/1 var(--ui); margin-top: -6px; }
+  .spacer { flex: 1; }
+  .seg-group { display: flex; align-items: center; gap: 9px; margin-left: 12px; }
+  .seg { display: flex; border: 1px solid var(--line-strong); height: 30px; }
+  .seg span {
+    width: 117px;
+    display: flex; align-items: center; justify-content: center;
+    font: 400 10.5px/1 var(--ui); letter-spacing: .1em;
+    background: var(--fill-panel);
+  }
+  .seg span + span { border-left: 1px solid var(--line-strong); }
+  .seg span.on { font-weight: 700; background: var(--fill-btn); box-shadow: inset 0 -2px 0 var(--ink-2); }
+  .clock {
+    margin-left: 12px; padding-left: 12px;
+    border-left: 1px solid var(--line);
+    font: 700 22px/1 var(--mono);
+  }
+
+  /* Body --------------------------------------------------------- */
+  .body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 558px 415px 415px;
+    gap: 13px;
+    padding: 13px;
+  }
+  .col { display: flex; flex-direction: column; gap: 13px; min-height: 0; }
+  .panel {
+    background: var(--fill-panel);
+    border: 1px solid var(--line);
+    display: flex; flex-direction: column;
+  }
+  .panel-head {
+    height: 30px; flex: none;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px;
+    background: var(--fill-head);
+    border-bottom: 1px solid var(--line);
+    font: 700 10.5px/1 var(--ui); letter-spacing: .1em;
+  }
+  .panel-head .right { font: 400 13px/1 var(--mono); letter-spacing: .06em; }
+  .panel-head .right.small { font: 400 10.5px/1 var(--ui); letter-spacing: .08em; color: var(--ink-2); }
+  .panel-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .btn {
+    border: 1.5px solid var(--line-strong);
+    background: var(--fill-btn);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font: 700 14px/1 var(--ui); letter-spacing: .1em;
+    text-align: center;
+  }
+  .btn.thin { font-weight: 400; font-size: 11.5px; height: 35px; border-width: 1px; }
+  .btn .sub { font: 400 8.5px/1 var(--ui); letter-spacing: .1em; margin-top: 8px; }
+  .btn.disabled { background: #f7f7f7; border-color: #d4d4d4; color: var(--faint); }
+
+  /* Left column: speed and track ahead --------------------------- */
+  .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+  .readout {
+    height: 75px;
+    border: 1px solid var(--line);
+    background: #f8f8f8;
+    padding: 12px 10px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .readout .value { font: 700 18px/1 var(--mono); }
+  .aspects { display: grid; grid-template-columns: 127px 127px 131px 127px; gap: 8px; margin-top: 2px; }
+  .aspect {
+    height: 63px;
+    border: 1px solid var(--line-strong);
+    background: var(--fill-head);
+    display: flex; align-items: center; justify-content: center;
+    font: 700 12px/1 var(--ui); letter-spacing: .1em; color: var(--ink-2);
+  }
+  .aspect.on { background: var(--fill-dark); color: #fff; border: 2px solid var(--ink); }
+  .track-caption { margin: 12px 0 8px 20px; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; color: var(--muted); }
+  .track { position: relative; padding-left: 60px; display: flex; flex-direction: column; gap: 8px; }
+  .arrow {
+    position: absolute; left: 29px; top: 140px; bottom: 14px; width: 16px;
+  }
+  .arrow::before {
+    content: ""; position: absolute; left: 7px; top: 2px; bottom: 0;
+    border-left: 1.5px solid var(--ink-2);
+  }
+  .arrow::after {
+    content: ""; position: absolute; left: 2px; top: 1px;
+    width: 9px; height: 9px;
+    border-left: 1.5px solid var(--ink-2); border-top: 1.5px solid var(--ink-2);
+    transform: rotate(45deg);
+  }
+  .arrow .train { position: absolute; left: 0; bottom: 0; width: 15px; height: 33px; background: var(--fill-dark); }
+  .block-row { display: flex; align-items: center; gap: 16px; }
+  .block {
+    width: 360px; height: 86px;
+    border: 1px solid var(--line-strong);
+    background: var(--fill-panel);
+    padding: 0 16px;
+    display: flex; flex-direction: column; justify-content: center; gap: 12px;
+  }
+  .block .name { font: 400 15px/1 var(--ui); letter-spacing: .02em; }
+  .block .note { font: 400 11.5px/1 var(--ui); letter-spacing: .03em; color: var(--muted); }
+  .block.closed { border: 1px dashed var(--line); }
+  .block.stop { border-top: 3px solid var(--ink); }
+  .block.current { background: var(--fill-current); border-color: var(--fill-current); color: #fff; }
+  .block.current .note { color: #fff; }
+  .block-dist { font: 400 13px/1 var(--ui); color: var(--muted); letter-spacing: .02em; }
+
+  /* Middle column ------------------------------------------------ */
+  .banner {
+    height: 47px;
+    border: 1px solid var(--line-strong);
+    background: #e4e4e4;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 13px;
+  }
+  .banner b { font: 700 10.5px/1 var(--ui); letter-spacing: .14em; }
+  .banner span { font: 400 9.5px/1 var(--ui); color: var(--muted); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .field .box {
+    height: 37px; border: 1px solid var(--line-strong);
+    background: #fbfbfb;
+    display: flex; align-items: center; padding: 0 10px;
+    font: 400 13px/1 var(--mono); letter-spacing: .04em;
+  }
+  .big { height: 87px; font-size: 14.5px; }
+  .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--line-strong); height: 68px; }
+  .toggle span {
+    display: flex; align-items: center; justify-content: center;
+    font: 400 16px/1 var(--ui); letter-spacing: .1em; color: var(--ink-2);
+    background: #fafafa;
+  }
+  .toggle span + span { border-left: 1px solid var(--line-strong); }
+  .toggle span.on { font-weight: 700; color: var(--ink); background: var(--fill-btn); box-shadow: inset 0 -3px 0 var(--ink-2); }
+  .ebrake {
+    height: 152px;
+    background: var(--fill-dark); border: 2px solid var(--ink);
+    color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  }
+  .ebrake b { font: 700 21px/1 var(--ui); letter-spacing: .12em; }
+  .ebrake span { font: 400 9.5px/1 var(--ui); letter-spacing: .12em; }
+  .doors { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; height: 135px; }
+
+  /* Right column ------------------------------------------------- */
+  .kv {
+    display: flex; justify-content: space-between; align-items: center;
+    height: 29px;
+    border-bottom: 1px solid #e3e3e3;
+  }
+  .kv:last-of-type { border-bottom: 0; }
+  .kv .v { font: 400 13px/1 var(--mono); }
+  .temp { display: grid; grid-template-columns: 107px 1fr 107px; gap: 8px; height: 72px; }
+  .temp .set {
+    border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font: 700 23px/1 var(--mono); background: #fbfbfb;
+  }
+  .onoff-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .onoff { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line-strong); height: 77px; }
+  .onoff span {
+    display: flex; align-items: center; justify-content: center;
+    font: 400 16px/1 var(--ui); letter-spacing: .1em; color: var(--muted); background: #fafafa;
+  }
+  .onoff span + span { border-left: 1px solid var(--line-strong); }
+  .onoff span.on { color: var(--ink); font-weight: 700; background: var(--fill-btn); box-shadow: inset 0 -3px 0 var(--ink-2); }
+  .grow { flex: 1; }
+  .col.share > .panel { flex: 1; }
+  .col.share .panel-body { flex: 1; justify-content: space-evenly; }
+
+  /* Frame 2: engineer pop-up ------------------------------------- */
+  .frame.popup-frame {
+    background: rgba(40, 40, 40, .45);
+    align-items: center; justify-content: center;
+  }
+  .dialog {
+    width: 520px;
+    background: var(--fill-panel);
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .2);
+  }
+  .dialog .panel-body { padding: 16px; gap: 12px; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line-strong); height: 36px; }
+  .steps span { display: flex; align-items: center; justify-content: center; font: 400 12px/1 var(--mono); color: var(--muted); }
+  .steps span + span { border-left: 1px solid var(--line-strong); }
+  .steps span.on { color: var(--ink); font-weight: 700; background: var(--fill-btn); box-shadow: inset 0 -2px 0 var(--ink-2); }
+  .gain-head { display: flex; justify-content: space-between; }
+  .stepper { display: grid; grid-template-columns: 52px 1fr 52px; gap: 8px; height: 50px; }
+  .stepper .btn { font-weight: 400; font-size: 18px; }
+  .stepper .val {
+    border: 1px solid var(--line-strong); background: #fbfbfb;
+    display: flex; align-items: center; justify-content: center;
+    font: 400 18px/1 var(--mono);
+  }
+  .dialog-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 4px; }
+  .dialog-actions .btn { height: 44px; font-size: 12.5px; }
+  .dialog-actions .primary { background: var(--fill-dark); color: #fff; border-color: var(--ink); }
+</style>
+</head>
+<body>
+
+<p class="frame-caption">Page 4 — Train Controller · Driver cab</p>
+<div class="frame" id="cab">
+
+  <header class="header">
+    <div class="brand">
+      <h1>TRAIN CONTROLLER</h1>
+      <p class="label">GREEN LINE · BLOCK GREEN I</p>
+    </div>
+    <div class="train-pick">
+      <span class="label">TRAIN</span>
+      <div class="select">T-214</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg-group">
+      <span class="label">USER</span>
+      <div class="seg"><span class="on">DRIVER</span><span>ENGINEER</span></div>
+    </div>
+    <div class="seg-group">
+      <span class="label">MODE</span>
+      <div class="seg"><span>AUTOMATIC</span><span class="on">MANUAL</span></div>
+    </div>
+    <div class="clock">21:26:35</div>
+  </header>
+
+  <main class="body">
+
+    <!-- Left: speed and track ahead -->
+    <section class="col">
+      <div class="panel grow">
+        <div class="panel-head">
+          <span>SPEED AND TRACK AHEAD</span>
+          <span class="right">GREEN I · 10,032 FT AUTHORITY</span>
+        </div>
+        <div class="panel-body">
+          <div class="readouts">
+            <div class="readout"><span class="label">CURRENT SPEED</span><span class="value">32 MPH</span></div>
+            <div class="readout"><span class="label">SPEED LIMIT</span><span class="value">45 MPH</span></div>
+            <div class="readout"><span class="label">TO STOP POINT</span><span class="value">10,032 FT</span></div>
+          </div>
+          <p class="label" style="margin-top:6px">SIGNAL AHEAD · ENTERING GREEN J</p>
+          <div class="aspects">
+            <div class="aspect">RED</div>
+            <div class="aspect">YELLOW</div>
+            <div class="aspect on">GREEN</div>
+            <div class="aspect">SUPER GREEN</div>
+          </div>
+          <p class="track-caption">TRACK AHEAD — YOUR TRAIN AT THE BOTTOM</p>
+          <div class="track">
+            <div class="arrow"><div class="train"></div></div>
+            <div class="block-row">
+              <div class="block closed"><span class="name">GREEN N</span><span class="note">CLOSED</span></div>
+            </div>
+            <div class="block-row">
+              <div class="block stop"><span class="name">GREEN M</span><span class="note">STOP IN THIS BLOCK</span></div>
+              <span class="block-dist">10,032 FT</span>
+            </div>
+            <div class="block-row">
+              <div class="block"><span class="name">GREEN L</span><span class="note">[STATION]</span></div>
+              <span class="block-dist">4,224 FT</span>
+            </div>
+            <div class="block-row">
+              <div class="block"><span class="name">GREEN K</span><span class="note">CLEAR</span></div>
+              <span class="block-dist">2,640 FT</span>
+            </div>
+            <div class="block-row">
+              <div class="block"><span class="name">GREEN J</span><span class="note">CLEAR</span></div>
+              <span class="block-dist">1,320 FT</span>
+            </div>
+            <div class="block-row">
+              <div class="block current"><span class="name">GREEN I</span><span class="note">T-214 IS HERE</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Middle: speed, brakes, doors -->
+    <section class="col">
+      <div class="banner"><b>MANUAL</b><span>CTC speed control is off.</span></div>
+
+      <div class="panel">
+        <div class="panel-head"><span>SPEED</span></div>
+        <div class="panel-body">
+          <div class="pair">
+            <div class="field"><span class="label">TARGET SPEED</span><div class="box">35 MPH</div></div>
+            <div class="field"><span class="label">SET BY</span><div class="box">DRIVER</div></div>
+          </div>
+          <div class="pair">
+            <div class="btn big">SLOWER</div>
+            <div class="btn big">FASTER</div>
+          </div>
+          <div class="btn thin">USE CTC TARGET · 35 MPH</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span>BRAKES</span></div>
+        <div class="panel-body">
+          <span class="label">SERVICE BRAKE</span>
+          <div class="toggle"><span class="on">OFF</span><span>ON</span></div>
+          <div class="ebrake">
+            <b>EMERGENCY BRAKE</b>
+            <span>FULL STOP · THE OFFICE MUST RELEASE IT</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel grow">
+        <div class="panel-head"><span>DOORS</span><span class="right small">SHUT</span></div>
+        <div class="panel-body">
+          <div class="doors">
+            <div class="btn">OPEN LEFT<span class="sub">PLATFORM SIDE</span></div>
+            <div class="btn disabled">OPEN RIGHT<span class="sub">NO PLATFORM</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: next station, cabin temperature, lights -->
+    <section class="col share">
+      <div class="panel">
+        <div class="panel-head"><span>NEXT STATION</span></div>
+        <div class="panel-body">
+          <div>
+            <div class="kv"><span class="label">STATION</span><span class="v">[STATION]</span></div>
+            <div class="kv"><span class="label">ARRIVES</span><span class="v">08:47</span></div>
+            <div class="kv"><span class="label">DISTANCE</span><span class="v">4,224 FT</span></div>
+            <div class="kv"><span class="label">DOORS OPEN</span><span class="v">LEFT</span></div>
+          </div>
+          <div class="btn thin" style="height:38px;font-size:12.5px">ANNOUNCE AGAIN</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span>CABIN TEMPERATURE</span></div>
+        <div class="panel-body">
+          <span class="label">TARGET</span>
+          <div class="temp">
+            <div class="btn">COOLER</div>
+            <div class="set">68 °F</div>
+            <div class="btn">WARMER</div>
+          </div>
+          <div class="kv" style="margin-top:14px;border:0">
+            <span class="label">IN THE CABIN NOW</span><span class="v">71 °F</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span>LIGHTS</span></div>
+        <div class="panel-body">
+          <div class="onoff-pair">
+            <div class="field"><span class="label">CABIN</span>
+              <div class="onoff"><span>OFF</span><span class="on">ON</span></div></div>
+            <div class="field"><span class="label">HEADLIGHTS</span>
+              <div class="onoff"><span>OFF</span><span class="on">ON</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<p class="frame-caption">Page 4c — Engineer gains pop-up (opens when USER = Engineer)</p>
+<div class="frame popup-frame" id="engineer-gains">
+  <div class="dialog">
+    <div class="panel-head">
+      <span>ENGINEER · CONTROL GAINS</span>
+      <span class="right small">T-214</span>
+    </div>
+    <div class="panel-body">
+      <span class="label">STEP SIZE</span>
+      <div class="steps">
+        <span class="on">0.001</span><span>0.010</span><span>0.100</span><span>1.000</span>
+      </div>
+
+      <div class="gain-head"><span class="label">KP</span><span class="label">IN USE <span class="mono">12.400</span></span></div>
+      <div class="stepper">
+        <div class="btn">&minus;</div>
+        <div class="val">12.400</div>
+        <div class="btn">+</div>
+      </div>
+
+      <div class="gain-head"><span class="label">KI</span><span class="label">IN USE <span class="mono">0.850</span></span></div>
+      <div class="stepper">
+        <div class="btn">&minus;</div>
+        <div class="val">0.850</div>
+        <div class="btn">+</div>
+      </div>
+
+      <div class="dialog-actions">
+        <div class="btn">CLOSE</div>
+        <div class="btn primary">APPLY GAINS</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
