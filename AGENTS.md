@@ -30,8 +30,9 @@ their feature branch. Promotion of a proposal onto the `truth` branch is human-o
 2. Read `truth/INDEX.md` with `git show origin/truth:truth/INDEX.md`. Always. It lists
    every shard with a one-line description and a last-changed date.
 3. Read only the shards relevant to the work at hand. Do not read the whole store.
-4. *Placeholder — environment drift check. Verify the local toolchain matches the
-   versions recorded in `truth/conventions.md`. Unpopulated; no action required yet.*
+4. Environment drift check. Verify the local toolchain meets the minimum versions in
+   `## Toolchain` of `truth/conventions.md` (read via `git show`). If it does not,
+   report the mismatch to the user before starting work.
 5. Check `truth/_inbox/<current-branch>/`. If it is non-empty, these are proposals from
    a previous session awaiting promotion. Present them to the user before starting new
    work.
