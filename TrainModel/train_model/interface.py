@@ -110,8 +110,8 @@ class ControllerCommands:
     service_brake: bool
     # Controller path only; a passenger pull is internal.
     emergency_brake: bool
-    cabin_lights: bool
-    headlights: bool
+    interior_lights: bool
+    exterior_lights: bool
     door_left_open: bool
     door_right_open: bool
     temp_setpoint_f: float          # units open
@@ -167,11 +167,13 @@ class ControllerOutputs:
     """To the Train Controller."""
 
     actual_speed_mps: float
+    # Brake State, bool[2]: emergency then service.
     emergency_brake_active: bool    # controller or passenger
+    service_brake_active: bool
     door_left_open: bool
     door_right_open: bool
-    cabin_lights_on: bool
-    headlights_on: bool
+    interior_lights_on: bool
+    exterior_lights_on: bool
     cabin_temp_f: float
     # Passed through; zeros or stale under pickup failure, open.
     commanded_speed_mps: float

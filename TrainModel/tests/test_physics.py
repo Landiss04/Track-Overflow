@@ -41,8 +41,8 @@ def make_inputs(
             power_cmd_w=power_w,
             service_brake=service,
             emergency_brake=emergency,
-            cabin_lights=False,
-            headlights=False,
+            interior_lights=False,
+            exterior_lights=False,
             door_left_open=door_left,
             door_right_open=False,
             temp_setpoint_f=70.0,
@@ -263,6 +263,43 @@ def test_passenger_bounds_and_capacity() -> None:
     # Twenty uniform draws from a full train are all zero only by a
     # vanishingly unlikely seed; the reported capacity must move.
     assert disembarked
+
+
+def test_brake_and_light_state_reported() -> None:
+    """Check Brake State and Light State reflect each command."""
+    model = TrainModel(TrainConfig())
+    for service, emergency in [(False, False), (True, False),
+                               (False, True), (True, True)]:
+        out = model.step(DT_S, make_inputs(
+            service=service, emergency=emergency)).controller
+        assert out.service_brake_active is service
+        assert out.emergency_brake_active is emergency
+
+    base = make_inputs()
+    for interior, exterior in [(True, False), (False, True)]:
+        ctl = base.controller
+        inputs = TrainModelInputs(
+            controller=ControllerCommands(
+                power_cmd_w=ctl.power_cmd_w,
+                service_brake=ctl.service_brake,
+                emergency_brake=ctl.emergency_brake,
+                interior_lights=interior,
+                exterior_lights=exterior,
+                door_left_open=ctl.door_left_open,
+                door_right_open=ctl.door_right_open,
+                temp_setpoint_f=ctl.temp_setpoint_f,
+                announcement=ctl.announcement,
+            ),
+            track=base.track,
+        )
+        out = model.step(DT_S, inputs).controller
+        assert out.interior_lights_on is interior
+        assert out.exterior_lights_on is exterior
+
+    model.pull_passenger_emergency_brake()
+    out = model.step(DT_S, make_inputs()).controller
+    assert out.emergency_brake_active is True
+    assert out.service_brake_active is False
 
 
 def script_input(tick: int) -> TrainModelInputs:

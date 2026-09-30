@@ -279,6 +279,7 @@ class TrainModel:
         # Assemble outputs from state; before any step, no inputs exist.
         failures = self._failures
         ebrake = self._passenger_ebrake_pulled
+        service = False
         commanded_speed_mps = 0.0
         authority_block_id: str | None = None
         speed_limit_mps = 0.0
@@ -289,9 +290,10 @@ class TrainModel:
             cmd = inputs.controller
             track = inputs.track
             ebrake = ebrake or cmd.emergency_brake
+            service = cmd.service_brake
             block_id = track.track_info.block_id
             speed_limit_mps = track.track_info.speed_limit_mps
-            lights = (cmd.cabin_lights, cmd.headlights)
+            lights = (cmd.interior_lights, cmd.exterior_lights)
             # OPEN(5.7): pass through this tick's beacon; None otherwise.
             beacon = track.beacon
             # OPEN(5.3): under signal pickup failure, commanded speed
@@ -304,10 +306,11 @@ class TrainModel:
             controller=ControllerOutputs(
                 actual_speed_mps=self._velocity_mps,
                 emergency_brake_active=ebrake,
+                service_brake_active=service,
                 door_left_open=self._door_left_open,
                 door_right_open=self._door_right_open,
-                cabin_lights_on=lights[0],
-                headlights_on=lights[1],
+                interior_lights_on=lights[0],
+                exterior_lights_on=lights[1],
                 cabin_temp_f=_c_to_f(self._cabin_temp_c),
                 commanded_speed_mps=commanded_speed_mps,
                 authority_block_id=authority_block_id,

@@ -24,9 +24,9 @@ def test_stub_returns_safe_values() -> None:
     assert ctl.speed_limit_mps == 0.0
     assert ctl.authority_block_id is None
     assert ctl.beacon is None
-    assert not any((ctl.emergency_brake_active, ctl.door_left_open,
-                    ctl.door_right_open, ctl.cabin_lights_on,
-                    ctl.headlights_on))
+    assert not any((ctl.emergency_brake_active, ctl.service_brake_active,
+                    ctl.door_left_open, ctl.door_right_open,
+                    ctl.interior_lights_on, ctl.exterior_lights_on))
     assert ctl.failures == FailureState()
     assert trk.block_id == "B7"
     assert trk.offset_m == 0.0
