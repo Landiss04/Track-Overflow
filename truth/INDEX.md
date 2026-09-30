@@ -5,15 +5,15 @@ This file is read at the start of every agent session. Shards are read on demand
 | Shard | Path | Description | Last changed |
 | --- | --- | --- | --- |
 | UI design | [style-guide.md](ui/style-guide.md) | Visual tokens, component and accessibility rules | 2026-09-29 |
-| Conventions: naming | [naming.md](conventions/naming.md) | Module names and aliases, Python naming, docstrings | 2026-09-29 |
-| Conventions: units | [units.md](conventions/units.md) | Backend and display units, conversion factors | 2026-09-29 |
-| Conventions: identifiers | [identifiers.md](conventions/identifiers.md) | ID values, requirement IDs, exceptions, design token names | 2026-09-29 |
+| Conventions: naming | [naming.md](conventions/naming.md) | Module names and aliases, Python naming, docstrings | 2026-09-30 |
+| Conventions: units | [units.md](conventions/units.md) | Backend and display units, conversion factors | 2026-09-30 |
+| Conventions: identifiers | [identifiers.md](conventions/identifiers.md) | ID values, requirement IDs, exceptions, design token names | 2026-09-30 |
 | Conventions: files and paths | [files-and-paths.md](conventions/files-and-paths.md) | Paths, file names, delivery, module boundaries, layout, repository, linting | 2026-09-29 |
 | Conventions: toolchain | [toolchain.md](conventions/toolchain.md) | Minimum tool versions checked at session start | 2026-09-29 |
-| Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — **all are placeholders, none assert facts** | 2026-09-29 |
+| Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — **all are placeholders, none assert facts** | 2026-09-30 |
 | Signals | `truth/signals/` | One file per signal | — empty |
 | Arbitration | `truth/arbitration/` | One file per precedence rule | — empty |
-| Decisions | `truth/decisions/` | One file per decision | 2026-09-29 |
+| Decisions | `truth/decisions/` | One file per decision | 2026-09-30 |
 
 ## Decisions on record
 

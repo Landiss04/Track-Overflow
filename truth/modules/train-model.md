@@ -33,7 +33,7 @@ Not vital: a physical simulation, not a controller.
 - Physical dimensions, mass, crew count, passenger capacity, car count for a single
   or multi-car consist, and acceleration / velocity limit parameters.
 - Terrain-aware Newtonian point-mass dynamics, and the grade input it depends on —
-  degrees vs. percent is unresolved, see `../conventions/units.md` `## Conflict`.
+  degrees, per `../conventions/units.md`.
 - Tunnel light controller.
 - Failure modes it simulates: engine failure, signal pickup failure, brake failure.
 

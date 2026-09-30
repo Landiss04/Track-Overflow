@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/Coding Standards (Group).docx` §1; `documents/PYTHON_STYLE_GUIDE.md` §5, §8; `documents/requirements-matrix.md` §1–2 (module names)
+**Provenance:** `documents/Coding Standards (Group).docx` §1; `documents/PYTHON_STYLE_GUIDE.md` §5, §8; `documents/requirements-matrix.md` §1–2 (module names); unit-suffix examples asserted by Kevin 2026-09-30
 **Aliases:** naming conventions, style guide naming, PEP 8 naming
-**Last updated:** 2026-09-29
+**Last updated:** 2026-09-30
 
 The baseline is PEP 8. `Coding Standards (Group).docx` is the graded group standard
 and wins where it is specific. `PYTHON_STYLE_GUIDE.md` extends PEP 8 for this
@@ -56,10 +56,11 @@ Rules that apply on top of the table:
   `from_`. Never a misspelling.
 - Method names start with a verb: `set_speed_limit`, `calculate_braking_distance`,
   `is_block_occupied`.
-- A quantity with units carries the unit in the name: `speed_mph`, `distance_m`,
-  `mass_kg`, `grade_percent`. A bare `speed` or `distance` is not acceptable where
-  the unit is not obvious. See [units.md](units.md) for which unit belongs on which side of the
-  display boundary.
+- A quantity with units carries the unit in the name, and the unit is the one for the
+  side of the display boundary the value is on. Backend: `speed_mps`, `distance_m`,
+  `mass_kg`, `grade_deg`. Display layer: `speed_mph`. A bare `speed` or `distance` is
+  not acceptable where the unit is not obvious. See [units.md](units.md) for which unit
+  belongs on which side.
 - No magic numbers. A literal with meaning becomes a named constant.
 - Short names (`i`, `x`, `dt`, `v0`) are for loop counters and short-lived locals
   inside a single function. Public APIs are descriptive.
@@ -85,16 +86,8 @@ Rules that apply on top of the table:
   alone separates paragraphs.
 - Inline comments are used sparingly, at least two spaces after the statement.
 
-## Conflict
+## Supersedes
 
-Owner: Kevin.
-
-**Unit-suffix examples vs. backend units. Open.**
-
-| Value | Provenance |
-|-------|------------|
-| `speed_mph` and `grade_percent` are the examples of a unit-suffixed name | This entry, `## Python names` |
-| The backend stores speed in m/s and gradient in degrees; D002's example is `speed_mps` | [units.md](units.md) backend table; D002 |
-
-The examples name a display unit (`mph`) and the percent side of the open gradient
-conflict in [units.md](units.md).
+- Unit-suffix examples: previously `speed_mph`, `distance_m`, `mass_kg`, `grade_percent`,
+  which mixed display, backend and layout-file units; now split by side of the display
+  boundary (Kevin 2026-09-30).

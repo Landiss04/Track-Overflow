@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `truth/ui/style-guide.md` §3, §6.7
+**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `truth/ui/style-guide.md` §3, §6.7; authority as a block ID and the design token mapping asserted by Kevin 2026-09-30
 **Aliases:** IDs, ID formats, key formats
-**Last updated:** 2026-09-29
+**Last updated:** 2026-09-30
 
 ## ID values
 
@@ -12,10 +12,9 @@
   to train IDs, block IDs, and station codes. The rule exists to make arithmetic on
   an identifier a type error rather than a silent bug.
 - Track layout files carry a Block Number column. The value is read as a string.
-- **Authority is a distance, not an ID.** `common/interfaces.py` transports it as
-  `authority_m: float` on every interface that carries it, and the SRS glossary
-  defines it as a distance. One source calls it a destination block ID; that reading
-  is recorded as an open conflict in [units.md](units.md) and is not settled here.
+- **Authority is a block ID.** It names the destination block up to which the train may
+  travel, so it is a string like every other block ID and is never converted for
+  display. See [units.md](units.md) `## Resolved`.
 - How IDs and timestamps render in a UI is set by `truth/ui/style-guide.md` §3.
 
 ## Requirement IDs
@@ -36,9 +35,19 @@
 ## Design token identifiers
 
 UI design tokens use the `--kebab-case` names in `truth/ui/style-guide.md`
-Sections 3, 4, and 5. A token that does not exist is added to the style guide first,
-then used. How these names are spelled in Python and QML is an open conflict — see
-`## Conflict` below.
+Sections 3, 4, and 5. That spelling is canonical. A token that does not exist is added
+to the style guide first, then used.
+
+The other spellings are derived mechanically: drop the leading `--`, replace each `-`
+with `_`, then
+
+| Context | Rule | Example |
+|---------|------|---------|
+| Style guide (canonical) | `--kebab-case` | `--bg-app` |
+| Python | UPPER_SNAKE_CASE constant, per [naming.md](naming.md) | `BG_APP` |
+| QML | `theme.` + lower_snake_case | `theme.bg_app` |
+
+No token takes a spelling that does not follow from its canonical name.
 
 ## Pending
 
@@ -48,17 +57,7 @@ illustration, not a stated format. Block and station ID formats are not stated
 anywhere. Owner: Kevin — decide and record, or record that IDs are opaque strings
 with no enforced shape.
 
-## Conflict
+## Supersedes
 
-Owner: Kevin.
-
-**Design token names — three spellings, no mapping rule. Open.**
-
-| Spelling | Used in | Provenance |
-|----------|---------|------------|
-| `--bg-app` | Style guide token tables | `truth/ui/style-guide.md` §4–5; `## Design token identifiers` above |
-| `BG_APP` | Python token module | [naming.md](naming.md) constants rule; `TrainModel/train_model/theme.py` on `UI-icon-standardization` (`3dc7a4d`) |
-| `theme.bg_app` | QML | `build_theme()` in the same `theme.py`, read through the `theme` context property |
-
-`--bg-app` is not a valid Python or QML identifier, so every token already has at least
-two spellings, and no rule states how they map.
+- Authority: previously a distance transported as `authority_m: float`; now a block ID
+  (Kevin 2026-09-30).

@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** asserted by Kevin 2026-09-25
+**Provenance:** asserted by Kevin 2026-09-25; temperature exception removed by Kevin 2026-09-30
 **Aliases:** unit split, metric backend imperial UI, display units decision
-**Last updated:** 2026-09-29
+**Last updated:** 2026-09-30
 
 ## Context
 
@@ -17,10 +17,10 @@ an independent judgment call.
 
 ## Decision
 
-Two unit systems, split at the display layer, each with exactly one exception.
+Two unit systems, split at the display layer. The backend has no exception; the UI has one.
 
 - **Backend is metric SI.** Everything stored, computed, or passed across a module
-  boundary is metric. **Exception: temperature is Fahrenheit**, backend included.
+  boundary is metric, temperature included (Celsius).
 - **UI is imperial.** Everything a user sees is imperial. **Exception: power is
   displayed in kilowatts**, never horsepower.
 - **Conversion happens at the display layer only.** State, signals, and interface
@@ -41,20 +41,16 @@ lookup surface; this file records why the split exists.
   `TrainModel/ui/MainView.qml`, with state left metric.
 - Where a layout file supplies a non-canonical unit, the loader converts on read.
   Nothing downstream sees the file's unit.
-- Open unit questions are recorded as conflicts in `conventions/units.md`:
-  authority as a distance vs. a block ID, gradient in degrees vs. percent, backend
-  temperature, and four UI display units (see `## Conflict` below). The track layout
-  file format is resolved as JSON.
+- Temperature is converted like every other quantity: °C in the backend, °F in the UI.
+- The unit questions once open against this decision — authority, gradient, backend
+  temperature, and four UI display units — are resolved in `conventions/units.md`
+  `## Resolved`. The track layout file format is resolved as JSON.
 - Documents that named units independently have been repointed at
   `conventions/units.md` rather than restating it — `truth/ui/style-guide.md` §6.5. Any future
   document needing units cites that entry; it does not copy the tables.
 
-## Conflict
+## Supersedes
 
-Owner: Kevin.
-
-Both exceptions in this decision are contested by `common/Units.md` on development
-(`35e6c77`, brabosil3, 2026-09-26), written the day after this decision: it stores
-temperature in Celsius and displays power in horsepower. It also differs on mass,
-acceleration, and force display units. Each value and its provenance is in
-`conventions/units.md` `## Conflict`.
+- Backend exception: previously temperature was Fahrenheit, backend included; now the
+  backend is Celsius with no exception (Kevin 2026-09-30, adopting `common/Units.md` on
+  development, `35e6c77`).

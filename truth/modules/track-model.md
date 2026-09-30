@@ -47,6 +47,6 @@ Not vital: a physical simulation, not a controller.
 - `documents/requirements-matrix.md` §4.6 — unresolved: this module and the CTC Office
   both claim to own the track-layout database.
 - `documents/srs-filled.md` Appendix A — the JSON block fields, including "grade (%)",
-  which conflicts with `grade_deg`.
+  which the loader converts to degrees on read (`../conventions/units.md`).
 - `TrackModel/blue_line.json`, `red_line.json`, `green_line.json` — layout data in the
   repo.
