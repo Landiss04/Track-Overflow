@@ -2,7 +2,6 @@
 // dashed border, so the frame uses a solid --border-strong rule.
 import QtQuick
 import QtQuick.Layouts
-import "../../../../ui"
 
 Rectangle {
     id: root

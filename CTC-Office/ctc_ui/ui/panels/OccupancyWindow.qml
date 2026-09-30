@@ -3,7 +3,6 @@
 // would escape the canvas scale transform.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Rectangle {

@@ -2,7 +2,6 @@
 // Label-token label above it; placeholder text is not a label.
 import QtQuick
 import QtQuick.Layouts
-import "../../../../ui"
 
 ColumnLayout {
     id: root

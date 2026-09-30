@@ -2,7 +2,6 @@
 // geometry still needs configuring, so no track information is drawn.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Panel {

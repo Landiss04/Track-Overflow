@@ -71,12 +71,21 @@ Do not copy shared components into this module; change them in `ui/`.
 
 | Component | Why it is CTC-only |
 | --- | --- |
-| `Panel` | Header-bar panel with a trailing slot; shared `Card` has a different layout |
-| `ModeCallout` | Info and warning variants with a side bar; shared `Callout` is info-only |
+| `ModeCallout` | Info and warning variants with a side bar; shared `Callout` is info-only, and matching it would restyle other modules |
 | `CtcHeader` | Window buttons, mode toggle and clock; shared `ModuleHeader` has navigation tabs instead |
-| `EmptyState` | Framed empty-state message |
-| `FormField` | Label above a non-field control such as a `SegmentedToggle` |
-| `LabeledDivider` | Rule with a centred caption |
+
+#### Moved to the shared library
+
+These started here and were promoted to `ui/` on 2026-09-30 so other
+modules can use them. They are catalogued in the shared
+[`ui/README.md`](../../ui/README.md) and shown in `ui/gallery/`.
+
+| Component | Was | Now |
+| --- | --- | --- |
+| `Panel` | `ctc_ui/ui/components/Panel.qml` | `ui/Panel.qml` |
+| `EmptyState` | `ctc_ui/ui/components/EmptyState.qml` | `ui/EmptyState.qml` |
+| `FormField` | `ctc_ui/ui/components/FormField.qml` | `ui/FormField.qml` |
+| `LabeledDivider` | `ctc_ui/ui/components/LabeledDivider.qml` | `ui/LabeledDivider.qml` |
 
 ## Checks
 
@@ -103,3 +112,8 @@ the context-property pattern shared with the Train Model UI.
 5. **No placeholders on text fields.** The shared `ValueField` does not
    expose `placeholderText` or `inputMask`, so the search hint and the
    `HH:MM` arrival-time mask were dropped when migrating to it.
+6. **Window sizing is shared.** `ui/Main.qml` is a `ScaledWindow` and
+   `__main__.py` installs `ui.aspect_lock.install_window_scaling`. The CTC
+   used to correct the window size from a QML timer after each resize,
+   which fought the window manager and snapped the window back to its large
+   size; that code is gone. See `documents/SCALING_GUIDE.md`.

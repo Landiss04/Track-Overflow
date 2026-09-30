@@ -2,7 +2,6 @@
 // placeholder, and an optional per-line breakdown.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Panel {

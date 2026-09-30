@@ -1,7 +1,6 @@
 // Blocks currently closed or restricted.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Panel {

@@ -2,7 +2,6 @@
 // CTC computes the suggested speed and authority sent to the wayside.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Panel {

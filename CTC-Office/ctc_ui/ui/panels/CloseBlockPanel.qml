@@ -3,7 +3,6 @@
 // separated from the routine selectors by at least --space-5.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Panel {

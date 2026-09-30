@@ -1,7 +1,6 @@
 // Automatic dispatch: schedule file and upcoming departures.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Panel {

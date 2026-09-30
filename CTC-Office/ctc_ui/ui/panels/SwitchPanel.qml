@@ -1,7 +1,6 @@
 // Set a switch position and send it to the track controller.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Panel {

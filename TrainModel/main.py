@@ -9,13 +9,13 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QFont, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from train_model.aspect_lock import install_aspect_lock
 from train_model.harness import TestHarnessState
 from train_model.state import TrainModelState
 
 # The design tokens are shared by every module's UI, so they live in the
 # repository-level ui/ folder next to the shared QML components.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
@@ -53,11 +53,7 @@ def main() -> int:
         return 1
 
     window = engine.rootObjects()[0]
-    ratio = (
-        window.property("referenceWidth"),
-        window.property("referenceHeight"),
-    )
-    aspect_lock = install_aspect_lock(window, ratio)  # noqa: F841  keep alive
+    aspect_lock = install_window_scaling(window)  # noqa: F841  keep alive
 
     exit_code = app.exec()
     # Tear down QML before the context objects it binds to, so bindings

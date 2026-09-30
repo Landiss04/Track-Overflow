@@ -723,6 +723,69 @@ ApplicationWindow {
                                 HelperText { text: "No border, H2 title, no rule." }
                             }
                         }
+
+                        Card {
+                            Layout.fillWidth: true
+                            title: "Panel · EmptyState · FormField · LabeledDivider"
+
+                            Panel {
+                                Layout.fillWidth: true
+                                title: "Panel with header items"
+                                headerItems: [
+                                    StatusBadge { label: "Running"; variant: "ok" },
+                                    AppButton {
+                                        variant: "ghost"
+                                        size: "small"
+                                        text: "Clear"
+                                        onClicked: gallery.log("Panel header button clicked")
+                                    }
+                                ]
+                                HelperText {
+                                    Layout.fillWidth: true
+                                    text: "Body slot. Children land in the body column."
+                                }
+                            }
+
+                            Panel {
+                                Layout.fillWidth: true
+                                title: "Panel with a very long title that should elide before it reaches the header items"
+                                headerItems: [StatusBadge { label: "Idle" }]
+                                HelperText { text: "Long title elides." }
+                            }
+
+                            Panel {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 200
+                                title: "Panel with EmptyState"
+                                Item {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    EmptyState {
+                                        anchors.centerIn: parent
+                                        heading: "Nothing to show"
+                                        body: "EmptyState shrinks to fit a narrow parent."
+                                    }
+                                }
+                            }
+
+                            FormField {
+                                Layout.fillWidth: true
+                                label: "FormField around a toggle"
+                                SegmentedToggle {
+                                    options: ["Normal", "Reverse"]
+                                    currentIndex: -1
+                                    onActivated: function (index) {
+                                        currentIndex = index;
+                                        gallery.log("FormField toggle -> " + index);
+                                    }
+                                }
+                            }
+
+                            LabeledDivider {
+                                Layout.fillWidth: true
+                                text: "or labeled divider"
+                            }
+                        }
                     }
                 }
             }
