@@ -56,6 +56,8 @@ or supersedes it, write a proposal immediately. Do not wait for the end of the s
 - A proposal is the **full proposed entry**, in final form, ready to be copied to its
   canonical path. Not a diff, not a description of an edit.
 - Every proposal states its target canonical path and its provenance.
+- When `truth/_inbox/<branch>/` holds five proposals, present them to the user for
+  review before continuing work. This does not replace the session-start check.
 
 Do not infer facts from code and record them as normative. Code is evidence of what
 is, not of what was decided. A normative fact comes from a decision, a document, a PR
