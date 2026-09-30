@@ -31,9 +31,26 @@ MPS_TO_MPH = 2.23694
 M_TO_FT = 3.28084
 ANNOUNCE_LOCKOUT_MS = 5000
 
+# --- plant model (toy, replaced by the Train Model) ---
+MAX_ACCEL = 1.6         # m/s^2 at full power
+DRAG_BASE = 0.30        # m/s^2 rolling resistance
+DRAG_SPEED = 0.004      # m/s^2 per m/s, stands in for aero drag
+SERVICE_DECEL = 1.2     # m/s^2
+EBRAKE_DECEL = 2.7      # m/s^2
+SERVICE_BAND = 0.15     # m/s over target before the service brake helps
+
+# ---------------------------------------------------------------- DEMO ONLY
+# Cycles the signal aspect so every state of the Next Signal panel can be seen
+# without the Wayside Controller connected. NOT real functionality.
+# To remove: set DEMO_CYCLE_SIGNALS = False, or delete this constant, the
+# _demo_cycle_signal method and the timer that starts it in Console.__init__.
+DEMO_CYCLE_SIGNALS = True
+DEMO_SIGNAL_PERIOD_MS = 3000
+# -------------------------------------------------------------- END DEMO
+
 ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
-ASPECT_TOKEN = {"RED": "danger", "YELLOW": "warning",
-                "GREEN": "success", "SUPER GREEN": "success"}
+ASPECT_TOKEN = {"RED": "signal-red", "YELLOW": "signal-yellow",
+                "GREEN": "signal-green", "SUPER GREEN": "signal-super"}
 ASPECT_TEXT = {
     "RED": "Stop here.",
     "YELLOW": "Slow down. Be ready to stop.",
@@ -88,7 +105,7 @@ class State:
     commanded_mps: float = 24.6
     target_mps: float = 21.5
     speed_limit_mps: float = 31.3
-    authority_m: float = 10000
+    authority_m: float = 20000
     accel_mps2: float = 0.0
 
     power_w: float = 0.0
@@ -112,8 +129,8 @@ class State:
     authority_block: str = "GREEN J"
     current_block: str = "GREEN I"
 
-    kp: float = 1200.0
-    ki: float = 40.0
+    kp: float = 30000.0     # W per m/s of error
+    ki: float = 6000.0      # W per (m/s x s) of accumulated error
 
     @property
     def actual_mph(self): return self.actual_mps * MPS_TO_MPH
@@ -153,7 +170,7 @@ class ControllerCore:
             power, self.integral = 0.0, self.integral - error * self.dt
 
         s.power_w = power
-        s.service_brake = (error < -0.5) or s.service_request
+        s.service_brake = (error < -SERVICE_BAND) or s.service_request
 
         self.enforce_safety()
 
@@ -199,15 +216,26 @@ class ControllerCore:
             s.target_mps = max(0.0, min(mph, s.limit_mph)) / MPS_TO_MPH
 
     def _plant(self) -> None:
-        """Toy physics until the Train Model is wired in."""
+        """Toy physics until the Train Model is wired in.
+
+        Rolling and aerodynamic drag matter here: without them a coasting train
+        holds its speed forever, so it can never shed the last mph below the
+        point where the controller stops commanding power.
+        """
         s = self.state
-        a = (s.power_w / MAX_POWER_W) * 1.2
+        v = s.actual_mps
+        drag = (DRAG_BASE + DRAG_SPEED * v) if v > 0 else 0.0
+        a = (s.power_w / MAX_POWER_W) * MAX_ACCEL - drag
         if s.emergency_brake:
-            a = -2.7
+            a = -EBRAKE_DECEL
         elif s.service_brake:
-            a = -1.2
-        s.accel_mps2 = a if (s.actual_mps > 0 or a > 0) else 0.0
-        s.actual_mps = max(0.0, s.actual_mps + a * self.dt)
+            a = -SERVICE_DECEL
+        if v <= 0.0 and a < 0.0:
+            a = 0.0
+        s.accel_mps2 = a
+        s.actual_mps = max(0.0, v + a * self.dt)
+        if s.actual_mps < 0.12 and s.target_mps < 0.12:
+            s.actual_mps = 0.0          # settle cleanly at a stand
         s.authority_m = max(0.0, s.authority_m - s.actual_mps * self.dt)
         drift = s.target_temp_f - s.cabin_temp_f
         s.cabin_temp_f += max(-0.02, min(0.02, drift * 0.01))
@@ -232,21 +260,23 @@ def vbox(parent=None, spacing=T.SPACE_3, margins=(0, 0, 0, 0)):
 class Readout(QFrame):
     """§6.5 telemetry readout."""
 
-    def __init__(self, label: str, unit: str, hero: bool = True):
+    def __init__(self, label: str, unit: str, hero: bool = True, size: str = None):
         super().__init__()
         self.setObjectName("readout")
         lay = vbox(self, T.SPACE_2, (T.SPACE_3,) * 4)
         lay.setAlignment(Qt.AlignCenter)
         cap = QLabel(label.upper(), objectName="roLabel", alignment=Qt.AlignCenter)
         cap.setFont(T.font("label"))
-        self.val = QLabel("—", objectName="roValue" if hero else "roValueSm",
+        size = size or ("hero" if hero else "h1")
+        self.val = QLabel("—", objectName={"hero": "roValue", "mid": "roValueMd",
+                                           "h1": "roValueSm"}[size],
                           alignment=Qt.AlignCenter)
-        self.val.setMinimumHeight(T.TYPE["hero" if hero else "h1"][0] + 6)
+        self.val.setMinimumHeight(T.TYPE[size][0] + 6)
         self.unit = QLabel(unit, objectName="roUnit", alignment=Qt.AlignCenter)
         for w in (cap, self.val, self.unit):
             lay.addWidget(w)
         self._hero = hero
-        self.setMinimumHeight(150 if hero else 96)
+        self.setMinimumHeight({"hero": 150, "mid": 120, "h1": 96}[size])
 
     def set(self, v):
         self.val.setText(str(v))
@@ -621,8 +651,8 @@ class GainsDialog(QDialog):
         self.in_kp = QLineEdit(f"{core.state.kp:.0f}")
         self.in_ki = QLineEdit(f"{core.state.ki:.0f}")
         self._steps = []
-        for text, field, step in (("Kp — proportional gain", self.in_kp, 50.0),
-                                  ("Ki — integral gain", self.in_ki, 5.0)):
+        for text, field, step in (("Kp — proportional gain", self.in_kp, 2500.0),
+                                  ("Ki — integral gain", self.in_ki, 500.0)):
             cap = QLabel(text.upper(), objectName="label")
             cap.setFont(T.font("label"))
             lay.addWidget(cap)
@@ -729,6 +759,13 @@ class Console(QWidget):
         self._build()
         self.gains_dialog = GainsDialog(self.core, self)
         self.gains_dialog.on_locked = self._retire_engineer
+
+        # ---------------- DEMO ONLY: delete this block to remove ----------
+        if DEMO_CYCLE_SIGNALS:
+            self.t_demo = QTimer(self)
+            self.t_demo.timeout.connect(self._demo_cycle_signal)
+            self.t_demo.start(DEMO_SIGNAL_PERIOD_MS)
+        # -------------------------------------------------- END DEMO ------
         self._apply_gating()
         self._update_train_dot()
         self.setFocus()          # no control starts focused, so none looks chosen
@@ -818,7 +855,7 @@ class Console(QWidget):
         self.btn_numbers.toggled.connect(self._toggle_numbers)
 
         self.kv_motion = KVPanel("Motion", [
-            "Current speed", "Target speed", "Commanded speed · CTC",
+            "Current speed", "Target speed", "Commanded speed",
             "Speed limit · GREEN I", "Acceleration"])
         self.kv_engine = KVPanel("Engine & brakes", [
             "Power command", "Max engine power", "Service brake",
@@ -868,7 +905,7 @@ class Console(QWidget):
     def _speed_panel(self):
         """Commanded speed reads above; the dial sets the target below."""
         panel = Panel("Speed", "FROM CTC", fill=True)
-        self.ro_cmd = Readout("Commanded speed · CTC", "MPH", hero=False)
+        self.ro_cmd = Readout("Commanded speed", "MPH", hero=False, size="mid")
         panel.body.addWidget(self.ro_cmd)
 
         self.dial = SpeedDial(on_set=self.core.set_target_mph)
@@ -1037,6 +1074,15 @@ class Console(QWidget):
         else:
             self.gains_dialog.hide()
 
+    # ---------------- DEMO ONLY: delete this method to remove -------------
+    def _demo_cycle_signal(self):
+        """Steps the aspect RED -> YELLOW -> GREEN -> SUPER GREEN on a timer so
+        the panel can be demonstrated. Replaced by the real aspect from the
+        Wayside Controller."""
+        i = ASPECTS.index(self.core.state.next_signal)
+        self.core.state.next_signal = ASPECTS[(i + 1) % len(ASPECTS)]
+    # -------------------------------------------------- END DEMO ----------
+
     def _retire_engineer(self):
         """Once the gains are committed: close the panel, disable the ENGINEER
         role for the rest of the run and hand the console to the driver. The
@@ -1156,7 +1202,7 @@ class Console(QWidget):
         if self.numbers.isVisible():
             self.kv_motion.set("Current speed", f"{round(s.actual_mph)} MPH")
             self.kv_motion.set("Target speed", f"{round(s.target_mph)} MPH")
-            self.kv_motion.set("Commanded speed · CTC", f"{round(s.commanded_mph)} MPH")
+            self.kv_motion.set("Commanded speed", f"{round(s.commanded_mph)} MPH")
             self.kv_motion.set("Speed limit · GREEN I", f"{round(s.limit_mph)} MPH")
             self.kv_motion.set("Acceleration", f"{s.accel_mps2:.1f} M/S²")
             self.kv_engine.set("Power command", f"{s.power_w:,.0f} W")

@@ -35,6 +35,11 @@ LIGHT = {
     "brake-service": "#F2C037", "brake-service-active": "#D9A520",
     # line identity, matching the CTC track view
     "green-line": "#2F7D4F", "red-line": "#B03A3A",
+    # signal aspects: read like a real signal head, so they are deliberately
+    # brighter than the semantic --danger / --warning / --success above.
+    # Super green is a lighter green than green so the two never look alike.
+    "signal-red": "#D62828", "signal-yellow": "#F2B90C",
+    "signal-green": "#1E8E3E", "signal-super": "#4ADE80",
 }
 
 # §10.1 — informative, not committed. Kept here so the switch is a token swap.
@@ -54,6 +59,8 @@ DARK = {
     "brake-emergency": "#EF4444", "brake-emergency-active": "#D93A3A",
     "brake-service": "#FBBF24", "brake-service-active": "#E0A818",
     "green-line": "#3FA76A", "red-line": "#E06666",
+    "signal-red": "#EF4444", "signal-yellow": "#FBBF24",
+    "signal-green": "#22C55E", "signal-super": "#86EFAC",
 }
 
 ACTIVE = LIGHT
@@ -101,6 +108,7 @@ TYPE = {
     # a much larger figure for the four primary readouts. Per §1 this must be
     # added to the guide before it ships. Everything else obeys §6.5 exactly.
     "hero": (72, W_BOLD),
+    "mid": (44, W_BOLD),          # secondary readouts, e.g. commanded speed
 }
 
 
@@ -157,6 +165,8 @@ QFrame#readout {{
 QLabel#roLabel {{ color: {c('text-muted')}; font-size: 12px; font-weight: 700; background: transparent; }}
 QLabel#roValue {{ color: {c('text-primary')}; font-family: {FONT_MONO};
                    font-size: {TYPE['hero'][0]}px; font-weight: 700; background: transparent; }}
+QLabel#roValueMd {{ color: {c('text-primary')}; font-family: {FONT_MONO};
+                   font-size: {TYPE['mid'][0]}px; font-weight: 700; background: transparent; }}
 QLabel#roValueSm {{ color: {c('text-primary')}; font-family: {FONT_MONO};
                    font-size: {TYPE['h1'][0]}px; font-weight: 700; background: transparent; }}
 QLabel#roUnit  {{ color: {c('text-muted')}; font-family: {FONT_MONO}; font-size: 13px; background: transparent; }}
