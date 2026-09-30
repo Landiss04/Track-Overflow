@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../components"
+import "../../../../ui"
 
 Panel {
     id: root
@@ -13,11 +14,18 @@ Panel {
     DataTable {
         Layout.fillWidth: true
         columns: [
-            { title: qsTr("Block"), key: "block", width: 110, mono: true },
-            { title: qsTr("State"), key: "state" }
+            { label: qsTr("Block"), key: "block", width: 110, mono: true },
+            { label: qsTr("State"), key: "state" }
         ]
         rows: root.closures
-        emptyText: qsTr("No active closures")
+    }
+
+    HelperText {
+        Layout.fillWidth: true
+        Layout.topMargin: theme.space_2
+        visible: root.closures.length === 0
+        horizontalAlignment: Text.AlignHCenter
+        text: qsTr("No active closures")
     }
 
     Item { Layout.fillHeight: true }

@@ -1,7 +1,7 @@
 // Minimized Train Occupancy window, docked over the track view.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
+import "../../../../ui"
 
 Rectangle {
     id: root

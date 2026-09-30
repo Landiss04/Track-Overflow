@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../components"
+import "../../../../ui"
 
 Panel {
     id: root
@@ -77,12 +78,19 @@ Panel {
     DataTable {
         Layout.fillWidth: true
         columns: [
-            { title: qsTr("Time"), key: "time", width: 64, mono: true },
-            { title: qsTr("Train"), key: "train", width: 72, mono: true },
-            { title: qsTr("Status"), key: "status" }
+            { label: qsTr("Time"), key: "time", width: 64, mono: true },
+            { label: qsTr("Train"), key: "train", width: 72, mono: true },
+            { label: qsTr("Status"), key: "status" }
         ]
         rows: root.departures
-        emptyText: qsTr("No departures scheduled")
+    }
+
+    HelperText {
+        Layout.fillWidth: true
+        Layout.topMargin: theme.space_2
+        visible: root.departures.length === 0
+        horizontalAlignment: Text.AlignHCenter
+        text: qsTr("No departures scheduled")
     }
 
     Item { Layout.fillHeight: true }

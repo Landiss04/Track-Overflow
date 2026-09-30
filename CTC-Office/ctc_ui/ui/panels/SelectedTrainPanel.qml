@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../components"
+import "../../../../ui"
 
 Panel {
     id: root

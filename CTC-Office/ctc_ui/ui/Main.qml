@@ -29,6 +29,11 @@ ApplicationWindow {
     property string occupancyState: "closed"
     property string selectedTrainId: ""
     property bool testHarnessOpen: false
+    // Modal scrim: --text-primary at 40 % alpha. The shared theme has no
+    // scrim token, so it is derived here rather than hard-coded.
+    readonly property color scrimBase: theme.text_primary
+    readonly property color scrimColor: Qt.rgba(
+        scrimBase.r, scrimBase.g, scrimBase.b, 0.4)
     readonly property bool modalOpen: occupancyState === "open"
         || testHarnessOpen
 
@@ -105,7 +110,7 @@ ApplicationWindow {
             anchors.fill: parent
             spacing: 0
 
-            ModuleHeader {
+            CtcHeader {
                 Layout.fillWidth: true
                 moduleName: qsTr("CTC Office — Dispatcher Console")
                 modes: [qsTr("Automatic"), qsTr("Manual"),
@@ -173,7 +178,7 @@ ApplicationWindow {
         // The header sits under it, so only one modal can open at a time.
         Rectangle {
             anchors.fill: parent
-            color: theme.scrim
+            color: window.scrimColor
             visible: window.modalOpen
 
             MouseArea {

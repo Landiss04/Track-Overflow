@@ -1,6 +1,7 @@
 // Horizontal rule with a centred Label-token caption.
 import QtQuick
 import QtQuick.Layouts
+import "../../../../ui"
 
 RowLayout {
     id: root

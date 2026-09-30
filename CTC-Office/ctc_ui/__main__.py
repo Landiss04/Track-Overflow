@@ -12,7 +12,10 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QFont, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from ctc_ui.theme import build_theme
+# The design tokens are shared by every module's UI, so they live in the
+# repository-level ui/ folder next to the shared QML components.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from ui.theme import build_theme  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
 

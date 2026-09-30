@@ -3,6 +3,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../components"
+import "../../../../ui"
 
 Panel {
     id: root
@@ -29,41 +30,26 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        FormField {
+        SelectField {
+            id: trainSelect
             Layout.preferredWidth: 160
             label: qsTr("Train")
-
-            SelectField {
-                id: trainSelect
-                Layout.fillWidth: true
-                mono: true
-                model: root.trainOptions
-                currentIndex: -1
-            }
+            model: root.trainOptions
+            currentIndex: -1
         }
 
-        FormField {
+        SelectField {
+            id: destinationSelect
             Layout.fillWidth: true
             label: qsTr("Destination station")
-
-            SelectField {
-                id: destinationSelect
-                Layout.fillWidth: true
-                model: root.destinationOptions
-                currentIndex: -1
-            }
+            model: root.destinationOptions
+            currentIndex: -1
         }
 
-        FormField {
+        ValueField {
+            id: arrivalField
             Layout.preferredWidth: 120
             label: qsTr("Arrival time")
-
-            ValueField {
-                id: arrivalField
-                Layout.fillWidth: true
-                placeholderText: "HH:MM"
-                inputMask: "99:99;_"
-            }
         }
     }
 
@@ -101,29 +87,20 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        FormField {
+        SelectField {
+            id: lineSelect
             Layout.preferredWidth: 160
             label: qsTr("Line")
-
-            SelectField {
-                id: lineSelect
-                Layout.fillWidth: true
-                model: root.lineOptions
-                currentIndex: -1
-            }
+            model: root.lineOptions
+            currentIndex: -1
         }
 
-        FormField {
+        SelectField {
+            id: blockSelect
             Layout.fillWidth: true
             label: qsTr("Block")
-
-            SelectField {
-                id: blockSelect
-                Layout.fillWidth: true
-                mono: true
-                model: root.blockOptions
-                currentIndex: -1
-            }
+            model: root.blockOptions
+            currentIndex: -1
         }
 
         AppButton {
@@ -133,7 +110,7 @@ Panel {
             enabled: lineSelect.currentIndex >= 0
                 && blockSelect.currentIndex >= 0
             onClicked: root.setAuthorityRequested(
-                lineSelect.currentText, blockSelect.currentText)
+                lineSelect.currentValue, blockSelect.currentValue)
         }
     }
 
@@ -144,7 +121,7 @@ Panel {
         text: qsTr("Dispatch train")
         enabled: trainSelect.currentIndex >= 0
             && destinationSelect.currentIndex >= 0
-        onClicked: root.dispatchRequested(trainSelect.currentText,
-            destinationSelect.currentText, arrivalField.text)
+        onClicked: root.dispatchRequested(trainSelect.currentValue,
+            destinationSelect.currentValue, arrivalField.text)
     }
 }

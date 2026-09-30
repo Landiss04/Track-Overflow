@@ -3,6 +3,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../components"
+import "../../../../ui"
 
 Panel {
     id: root
@@ -56,16 +57,23 @@ Panel {
         Layout.fillWidth: true
         visible: root.showLineTable
         columns: [
-            { title: qsTr("Line"), key: "line" },
-            { title: qsTr("Tickets/hr"), key: "tickets", width: 88,
+            { label: qsTr("Line"), key: "line" },
+            { label: qsTr("Tickets/hr"), key: "tickets", width: 88,
               numeric: true },
-            { title: qsTr("Trains/hr"), key: "trains", width: 80,
+            { label: qsTr("Trains/hr"), key: "trains", width: 80,
               numeric: true },
-            { title: qsTr("Dwell (s)"), key: "dwell", width: 80,
+            { label: qsTr("Dwell (s)"), key: "dwell", width: 80,
               numeric: true }
         ]
         rows: root.lineRows
-        emptyText: qsTr("No line data")
+    }
+
+    HelperText {
+        Layout.fillWidth: true
+        Layout.topMargin: theme.space_2
+        visible: root.showLineTable && root.lineRows.length === 0
+        horizontalAlignment: Text.AlignHCenter
+        text: qsTr("No line data")
     }
 
     Item { Layout.fillHeight: true }

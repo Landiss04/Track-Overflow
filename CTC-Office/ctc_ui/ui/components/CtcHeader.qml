@@ -3,6 +3,7 @@
 // toggle, and the simulation clock in mono at 13 px muted.
 import QtQuick
 import QtQuick.Layouts
+import "../../../../ui"
 
 Rectangle {
     id: root

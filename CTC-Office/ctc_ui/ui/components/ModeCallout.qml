@@ -3,6 +3,7 @@
 // colour is never the only signal.
 import QtQuick
 import QtQuick.Layouts
+import "../../../../ui"
 
 Rectangle {
     id: root

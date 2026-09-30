@@ -1,9 +1,8 @@
 # CTC Office UI (skeleton)
 
-PySide6 + QML front-end for the CTC Office dispatcher console, converted
-from the HTML mockups in `../CTC-pages/`. This is a **blank UI with no
-backend**: every panel shows its empty state, and actions emit QML signals
-that nothing handles yet.
+PySide6 + QML front-end for the CTC Office dispatcher console. This is a
+**blank UI with no backend**: every panel shows its empty state, and
+actions emit QML signals that nothing handles yet.
 
 QML owns all visuals; Python owns startup and the design tokens. The
 structure follows the Train Model UI on the `Train-Model-UI-experimental`
@@ -23,9 +22,9 @@ python -m ctc_ui
 With no backend, only window-level UI state works:
 
 - The **Operating mode** toggle switches the right-hand column between the
-  Automatic, Manual, and Maintenance views (mockup pages 1, 2, and 5).
-- **Train occupancy** opens the occupancy window (page 3). "Keep open at
-  bottom" or the minimize button docks it over the track view (page 4).
+  Automatic, Manual, and Maintenance views.
+- **Train occupancy** opens the occupancy window. "Keep open at
+  bottom" or the minimize button docks it over the track view.
   Escape, the close button, or clicking the scrim closes it.
 - **Test harness** (header) opens a popup for forcing inputs and reading
   outputs, modeled on the Train Model test harness. No IO is declared yet,
@@ -41,34 +40,43 @@ With no backend, only window-level UI state works:
 | Area | Hook |
 | --- | --- |
 | Track map | `panels/TrackViewPanel.qml` → `mapCanvas`. Set `mapAvailable` to enable zoom and fit. The legend goes below the canvas. |
-| Selected train | `SelectedTrainPanel.trainId`. A non-empty ID shows the detail layout (page 4). |
+| Selected train | `SelectedTrainPanel.trainId`. A non-empty ID shows the detail layout. |
 | Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |
 | Selects | `model` on each `SelectField`, via the panel's `*Options` properties. |
 | Test harness | `TestHarnessWindow.inputs` / `.outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once a backend is attached. |
-| Header | `ModuleHeader.clock`, `.speedLabel` (e.g. `10× speed`, page 6), `.operatorName`. |
+| Header | `CtcHeader.clock`, `.speedLabel` (e.g. `10× speed`), `.operatorName`. |
 
 ## Layout
 
 ```
 __main__.py             entry point: builds theme, loads QML
-theme.py                build_theme(): style guide tokens (light theme)
 ui/Main.qml             window, fixed 1440×900 canvas, mode + window state
 ui/views/*.qml          Automatic / Manual / Maintenance right-hand columns
 ui/panels/*.qml         track view, dispatch, schedule, throughput,
                         closures, switch, close block, occupancy window/dock,
                         test harness
-ui/components/*.qml     buttons, badges, fields, readouts, tables, …
+ui/components/*.qml     CTC-only building blocks (see below)
 ```
 
-`AppButton`, `FieldLabel`, `HelperText`, `MonoText`, `StatusBadge`,
-`SegmentedToggle`, `SignalRow`, `TableHeader`, `TelemetryReadout` and
-`ValueField` come from the Train Model branch. Changes made here:
+### Shared components
 
-- `StatusBadge`: the dot size is now a token (`badge_dot`).
-- `ValueField`: the placeholder uses `text_muted`.
-- `SignalRow`: added `pragma ComponentBehavior: Bound` for qmllint.
-- `SegmentedToggle`: added keyboard focus, activation, and a focus ring
-  (style guide 8), plus `currentIndex: -1` for "nothing selected".
+Buttons, fields, badges, readouts, tables and the theme tokens come from
+the repository-level [`ui/`](../../ui/README.md) folder shared by every
+module. `__main__.py` puts the repository root on `sys.path` to import
+`ui.theme`. QML files import the folder relatively: `import
+"../../../../ui"` from `ui/panels/`, `ui/views/` and `ui/components/`.
+Do not copy shared components into this module; change them in `ui/`.
+
+`ui/components/` holds only what the shared library does not provide:
+
+| Component | Why it is CTC-only |
+| --- | --- |
+| `Panel` | Header-bar panel with a trailing slot; shared `Card` has a different layout |
+| `ModeCallout` | Info and warning variants with a side bar; shared `Callout` is info-only |
+| `CtcHeader` | Window buttons, mode toggle and clock; shared `ModuleHeader` has navigation tabs instead |
+| `EmptyState` | Framed empty-state message |
+| `FormField` | Label above a non-field control such as a `SegmentedToggle` |
+| `LabeledDivider` | Rule with a centred caption |
 
 ## Checks
 
@@ -76,7 +84,7 @@ ui/components/*.qml     buttons, badges, fields, readouts, tables, …
 python -m flake8 --max-line-length=79 --max-doc-length=72 ctc_ui
 python -m mypy --disallow-untyped-defs ctc_ui
 pyside6-qmllint -I ctc_ui/ui -I ctc_ui/ui/components -I ctc_ui/ui/panels \
-    $(find ctc_ui/ui -name '*.qml')
+    -I ../ui $(find ctc_ui/ui -name '*.qml')
 ```
 
 flake8 and mypy are clean. qmllint's only remaining warnings are
@@ -88,7 +96,10 @@ the context-property pattern shared with the Train Model UI.
 1. **No shadows.** QML has no cheap box-shadow, so `--shadow-1` is carried
    by `--border`, as in the Train Model UI.
 2. **No dashed borders.** Empty states use a solid `--border-strong` frame.
-3. **Scrim colour.** The style guide has no scrim token; `theme.SCRIM` is
-   `--text-primary` at 40 % alpha.
+3. **Scrim colour.** The style guide has no scrim token, so `Main.qml`
+   derives it from `theme.text_primary` at 40 % alpha.
 4. **The occupancy window is not a `Popup`.** A Popup reparents to the
    window overlay and would escape the canvas scale transform.
+5. **No placeholders on text fields.** The shared `ValueField` does not
+   expose `placeholderText` or `inputMask`, so the search hint and the
+   `HH:MM` arrival-time mask were dropped when migrating to it.

@@ -9,7 +9,7 @@ ColumnLayout {
 
     spacing: theme.space_3
 
-    Callout {
+    ModeCallout {
         Layout.fillWidth: true
         variant: "warning"
         heading: qsTr("Maintenance mode")

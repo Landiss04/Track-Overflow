@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../components"
+import "../../../../ui"
 
 Panel {
     id: root
@@ -21,29 +22,20 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        FormField {
+        SelectField {
+            id: lineSelect
             Layout.preferredWidth: 120
             label: qsTr("Line")
-
-            SelectField {
-                id: lineSelect
-                Layout.fillWidth: true
-                model: root.lineOptions
-                currentIndex: -1
-            }
+            model: root.lineOptions
+            currentIndex: -1
         }
 
-        FormField {
+        SelectField {
+            id: switchSelect
             Layout.fillWidth: true
             label: qsTr("Switch")
-
-            SelectField {
-                id: switchSelect
-                Layout.fillWidth: true
-                mono: true
-                model: root.switchOptions
-                currentIndex: -1
-            }
+            model: root.switchOptions
+            currentIndex: -1
         }
     }
 
@@ -66,8 +58,8 @@ Panel {
         text: qsTr("Send to track controller")
         enabled: switchSelect.currentIndex >= 0
             && positionToggle.currentIndex >= 0
-        onClicked: root.sendRequested(lineSelect.currentText,
-            switchSelect.currentText, positionToggle.currentIndex)
+        onClicked: root.sendRequested(lineSelect.currentValue,
+            switchSelect.currentValue, positionToggle.currentIndex)
     }
 
     HelperText {

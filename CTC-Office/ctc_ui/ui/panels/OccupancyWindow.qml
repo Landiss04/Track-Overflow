@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../components"
+import "../../../../ui"
 
 Rectangle {
     id: root
@@ -82,14 +83,9 @@ Rectangle {
             Layout.margins: theme.space_4
             spacing: theme.space_3
 
-            FormField {
+            ValueField {
                 Layout.preferredWidth: 240
                 label: qsTr("Search")
-
-                ValueField {
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("Train or block ID")
-                }
             }
 
             FormField {
@@ -129,21 +125,28 @@ Rectangle {
             Layout.fillWidth: true
             Layout.margins: theme.space_4
             columns: [
-                { title: qsTr("Train"), key: "train", width: 72,
+                { label: qsTr("Train"), key: "train", width: 72,
                   mono: true },
-                { title: qsTr("Line"), key: "line", width: 72 },
-                { title: qsTr("Block"), key: "block", width: 64,
+                { label: qsTr("Line"), key: "line", width: 72 },
+                { label: qsTr("Block"), key: "block", width: 64,
                   mono: true },
-                { title: qsTr("Speed (m/s)"), key: "speed", width: 96,
+                { label: qsTr("Speed (m/s)"), key: "speed", width: 96,
                   numeric: true },
-                { title: qsTr("Authority"), key: "authority", width: 88,
+                { label: qsTr("Authority"), key: "authority", width: 88,
                   mono: true },
-                { title: qsTr("Destination"), key: "destination" },
-                { title: qsTr("ETA"), key: "eta", width: 64, mono: true },
-                { title: qsTr("Status"), key: "status", width: 110 }
+                { label: qsTr("Destination"), key: "destination" },
+                { label: qsTr("ETA"), key: "eta", width: 64, mono: true },
+                { label: qsTr("Status"), key: "status", width: 110 }
             ]
             rows: root.trains
-            emptyText: qsTr("No trains on the network")
+        }
+
+        HelperText {
+            Layout.fillWidth: true
+            Layout.topMargin: theme.space_2
+            visible: root.trains.length === 0
+            horizontalAlignment: Text.AlignHCenter
+            text: qsTr("No trains on the network")
         }
 
         Item { Layout.fillHeight: true }
