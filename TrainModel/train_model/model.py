@@ -67,6 +67,36 @@ def _sign(value: float) -> float:
     return (value > 0.0) - (value < 0.0)
 
 
+def _brakes_engaged(
+    service_cmd: bool,
+    emergency_cmd: bool,
+    passenger_pulled: bool,
+    brake_failed: bool,
+) -> tuple[bool, bool]:
+    """Return which brakes are engaged, as Brake State orders them.
+
+    Brake State reports the brakes' actual state, not the commands. The
+    braking force and the reported state both come from this function.
+
+    Args:
+        service_cmd: The Train Controller's service brake command.
+        emergency_cmd: The Train Controller's emergency brake command.
+        passenger_pulled: Whether the passenger emergency brake is pulled.
+        brake_failed: Whether Murphy has injected a brake failure.
+
+    Returns:
+        ``(emergency, service)``: whether each brake is engaged.
+    """
+    # OPEN(5.95): brake failure disables service and emergency.
+    if brake_failed:
+        return False, False
+    emergency = emergency_cmd or passenger_pulled
+    # OPEN(5.8): the emergency brake supersedes the service brake, so
+    # the service brake is not engaged while the emergency brake is.
+    service = service_cmd and not emergency
+    return emergency, service
+
+
 class TrainModel:
     """Train Model. Constructed as ``TrainModel(config)``."""
 
@@ -181,12 +211,13 @@ class TrainModel:
         # OPEN(1): brake forces come from m_ref, so the deceleration they
         # produce scales with operating mass; no cap.
         cfg = self.config
-        # OPEN(5.95): brake failure disables service and emergency.
-        if self._failures.brake:
-            return 0.0
-        if emergency or self._passenger_ebrake_pulled:
+        emergency_on, service_on = _brakes_engaged(
+            service, emergency,
+            self._passenger_ebrake_pulled, self._failures.brake,
+        )
+        if emergency_on:
             return cfg.f_emergency_n
-        if service:
+        if service_on:
             return cfg.f_service_n
         return 0.0
 
@@ -278,22 +309,24 @@ class TrainModel:
     ) -> TrainModelOutputs:
         # Assemble outputs from state; before any step, no inputs exist.
         failures = self._failures
-        ebrake = self._passenger_ebrake_pulled
-        service = False
+        service_cmd = False
+        emergency_cmd = False
         commanded_speed_mps = 0.0
         authority_block_id: str | None = None
         speed_limit_mps = 0.0
         block_id = _NO_BLOCK_ID
-        lights = (False, False)
+        interior = False
+        exterior = False
         beacon = None
         if inputs is not None:
             cmd = inputs.controller
             track = inputs.track
-            ebrake = ebrake or cmd.emergency_brake
-            service = cmd.service_brake
+            service_cmd = cmd.service_brake
+            emergency_cmd = cmd.emergency_brake
             block_id = track.track_info.block_id
             speed_limit_mps = track.track_info.speed_limit_mps
-            lights = (cmd.interior_lights, cmd.exterior_lights)
+            interior = cmd.interior_lights
+            exterior = cmd.exterior_lights
             # OPEN(5.7): pass through this tick's beacon; None otherwise.
             beacon = track.beacon
             # OPEN(5.3): under signal pickup failure, commanded speed
@@ -301,6 +334,10 @@ class TrainModel:
             if not failures.signal_pickup:
                 commanded_speed_mps = track.track_signal.commanded_speed_mps
                 authority_block_id = track.track_signal.authority_block_id
+        ebrake, service = _brakes_engaged(
+            service_cmd, emergency_cmd,
+            self._passenger_ebrake_pulled, failures.brake,
+        )
 
         return TrainModelOutputs(
             controller=ControllerOutputs(
@@ -309,8 +346,8 @@ class TrainModel:
                 service_brake_active=service,
                 door_left_open=self._door_left_open,
                 door_right_open=self._door_right_open,
-                interior_lights_on=lights[0],
-                exterior_lights_on=lights[1],
+                interior_lights_on=interior,
+                exterior_lights_on=exterior,
                 cabin_temp_f=_c_to_f(self._cabin_temp_c),
                 commanded_speed_mps=commanded_speed_mps,
                 authority_block_id=authority_block_id,

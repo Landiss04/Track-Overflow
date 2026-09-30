@@ -34,6 +34,8 @@ def make_inputs(
     boarded: int = 0,
     door_left: bool = False,
     polarity: bool = True,
+    interior: bool = False,
+    exterior: bool = False,
 ) -> TrainModelInputs:
     """Return the standard input set with the named overrides applied."""
     return TrainModelInputs(
@@ -41,8 +43,8 @@ def make_inputs(
             power_cmd_w=power_w,
             service_brake=service,
             emergency_brake=emergency,
-            interior_lights=False,
-            exterior_lights=False,
+            interior_lights=interior,
+            exterior_lights=exterior,
             door_left_open=door_left,
             door_right_open=False,
             temp_setpoint_f=70.0,
@@ -265,41 +267,74 @@ def test_passenger_bounds_and_capacity() -> None:
     assert disembarked
 
 
-def test_brake_and_light_state_reported() -> None:
-    """Check Brake State and Light State reflect each command."""
+@pytest.mark.parametrize(
+    ("service", "emergency", "pulled", "failed", "expected"),
+    [
+        # expected is Brake State: (emergency, service) engaged.
+        (False, False, False, False, (False, False)),
+        (True, False, False, False, (False, True)),
+        (False, True, False, False, (True, False)),
+        # The emergency brake supersedes the service brake.
+        (True, True, False, False, (True, False)),
+        (False, False, True, False, (True, False)),
+        (True, False, True, False, (True, False)),
+        # Failed brakes are not engaged, whatever is commanded.
+        (True, False, False, True, (False, False)),
+        (False, True, False, True, (False, False)),
+        (True, True, True, True, (False, False)),
+    ],
+)
+def test_brake_state_reports_engaged_brakes(
+    service: bool,
+    emergency: bool,
+    pulled: bool,
+    failed: bool,
+    expected: tuple[bool, bool],
+) -> None:
+    """Check Brake State reports the engaged brakes, not the commands."""
     model = TrainModel(TrainConfig())
-    for service, emergency in [(False, False), (True, False),
-                               (False, True), (True, True)]:
-        out = model.step(DT_S, make_inputs(
-            service=service, emergency=emergency)).controller
-        assert out.service_brake_active is service
-        assert out.emergency_brake_active is emergency
+    model.set_failures(FailureState(brake=failed))
+    if pulled:
+        model.pull_passenger_emergency_brake()
+    out = model.step(DT_S, make_inputs(
+        service=service, emergency=emergency)).controller
+    assert (out.emergency_brake_active, out.service_brake_active) == expected
 
-    base = make_inputs()
+
+def test_brake_state_matches_applied_force() -> None:
+    """Check a reported brake is the one decelerating a moving train."""
+    cfg = TrainConfig()
+    for service, emergency, failed in [(True, False, False),
+                                       (False, True, False),
+                                       (True, True, True)]:
+        model = TrainModel(cfg)
+        while model.snapshot().velocity_mps < 10.0:
+            model.step(DT_S, make_inputs(power_w=cfg.p_max_w))
+        model.set_failures(FailureState(brake=failed))
+        for _ in range(3):
+            outputs = model.step(DT_S, make_inputs(
+                service=service, emergency=emergency))
+        decel = -model.snapshot().acceleration_mps2
+        mass = model.snapshot().mass_kg
+        ctl = outputs.controller
+        if ctl.emergency_brake_active:
+            f_expected = cfg.f_emergency_n
+        elif ctl.service_brake_active:
+            f_expected = cfg.f_service_n
+        else:
+            f_expected = 0.0
+        f_roll = cfg.c_rr * mass * cfg.g_mps2
+        assert decel * mass == pytest.approx(f_expected + f_roll)
+
+
+def test_light_state_reported() -> None:
+    """Check each Light State element follows its own command."""
+    model = TrainModel(TrainConfig())
     for interior, exterior in [(True, False), (False, True)]:
-        ctl = base.controller
-        inputs = TrainModelInputs(
-            controller=ControllerCommands(
-                power_cmd_w=ctl.power_cmd_w,
-                service_brake=ctl.service_brake,
-                emergency_brake=ctl.emergency_brake,
-                interior_lights=interior,
-                exterior_lights=exterior,
-                door_left_open=ctl.door_left_open,
-                door_right_open=ctl.door_right_open,
-                temp_setpoint_f=ctl.temp_setpoint_f,
-                announcement=ctl.announcement,
-            ),
-            track=base.track,
-        )
-        out = model.step(DT_S, inputs).controller
+        out = model.step(DT_S, make_inputs(
+            interior=interior, exterior=exterior)).controller
         assert out.interior_lights_on is interior
         assert out.exterior_lights_on is exterior
-
-    model.pull_passenger_emergency_brake()
-    out = model.step(DT_S, make_inputs()).controller
-    assert out.emergency_brake_active is True
-    assert out.service_brake_active is False
 
 
 def script_input(tick: int) -> TrainModelInputs:
