@@ -1,4 +1,8 @@
-"""Hold the Train Model window at 16:10 while the user drags a border.
+"""Hold a module window at 16:10 while the user drags a border.
+
+Shared by every module, so all windows resize the same way. Pair it
+with ``ui/ScaledWindow.qml`` and call :func:`install_window_scaling`
+once the QML has loaded.
 
 Windows sends ``WM_SIZING`` for every mouse move of an interactive
 resize, with a pointer to the rectangle it is about to apply. Rewriting
@@ -186,3 +190,18 @@ def install_aspect_lock(
         height = round(width * ratio_h / ratio_w)
     window.resize(width, height)
     return WindowsAspectLock(window, ratio)
+
+
+def install_window_scaling(window: QWindow) -> object | None:
+    """Install the aspect lock on a ``ScaledWindow`` loaded from QML.
+
+    Reads the ratio from the window's ``referenceWidth`` and
+    ``referenceHeight`` properties, so the lock and the QML canvas can
+    never disagree. Returns the lock, which the caller must keep alive
+    for the lifetime of the window, or ``None`` off Windows.
+    """
+    ratio = (
+        int(window.property("referenceWidth")),
+        int(window.property("referenceHeight")),
+    )
+    return install_aspect_lock(window, ratio)

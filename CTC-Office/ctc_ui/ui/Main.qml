@@ -1,0 +1,140 @@
+// CTC Office application window. UI only: there is no backend yet, so
+// every panel shows its empty state and actions emit signals nobody
+// handles. Window-level UI state (mode, occupancy window) lives here.
+//
+// Sizing and scaling come from the shared ui/ScaledWindow.qml; __main__.py
+// installs the matching aspect lock. Do not resize the window from here.
+import QtQuick
+import QtQuick.Layouts
+import "components"
+import "panels"
+import "views"
+import "../../../ui"
+
+ScaledWindow {
+    id: window
+
+    // 0 = Automatic, 1 = Manual, 2 = Maintenance.
+    property int modeIndex: 0
+    // closed | open | docked
+    property string occupancyState: "closed"
+    property string selectedTrainId: ""
+    property bool testHarnessOpen: false
+    // Modal scrim: --text-primary at 40 % alpha. The shared theme has no
+    // scrim token, so it is derived here rather than hard-coded.
+    readonly property color scrimBase: theme.text_primary
+    readonly property color scrimColor: Qt.rgba(
+        scrimBase.r, scrimBase.g, scrimBase.b, 0.4)
+    readonly property bool modalOpen: occupancyState === "open"
+        || testHarnessOpen
+
+    title: qsTr("CTC Office")
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        CtcHeader {
+            Layout.fillWidth: true
+            moduleName: qsTr("CTC Office — Dispatcher Console")
+            modes: [qsTr("Automatic"), qsTr("Manual"),
+                qsTr("Maintenance")]
+            modeIndex: window.modeIndex
+            occupancyOpen: window.occupancyState !== "closed"
+            onModeActivated: function (index) {
+                window.modeIndex = index;
+            }
+            onOccupancyClicked: window.occupancyState = "open"
+            onTestHarnessClicked: window.testHarnessOpen = true
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.margins: theme.space_3
+            spacing: theme.space_3
+
+            TrackViewPanel {
+                id: trackView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                onLineFilterActivated: function (index) {
+                    lineFilterIndex = index;
+                }
+            }
+
+            StackLayout {
+                // Pinned: wrapped text reports its unwrapped width as
+                // implicit width and would otherwise crowd out the
+                // track view.
+                Layout.preferredWidth: 760
+                Layout.minimumWidth: 760
+                Layout.maximumWidth: 760
+                Layout.fillHeight: true
+                currentIndex: window.modeIndex
+
+                AutomaticView {
+                    selectedTrainId: window.selectedTrainId
+                    onClearSelectionRequested: window.selectedTrainId = ""
+                }
+
+                ManualView {
+                    selectedTrainId: window.selectedTrainId
+                    onClearSelectionRequested: window.selectedTrainId = ""
+                }
+
+                MaintenanceView {}
+            }
+        }
+    }
+
+    OccupancyDock {
+        x: trackView.x + theme.space_7
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: theme.space_7
+        width: 360
+        visible: window.occupancyState === "docked"
+        onExpandRequested: window.occupancyState = "open"
+        onCloseRequested: window.occupancyState = "closed"
+    }
+
+    // Modal scrim: swallows clicks behind whichever modal is open.
+    // The header sits under it, so only one modal can open at a time.
+    Rectangle {
+        anchors.fill: parent
+        color: window.scrimColor
+        visible: window.modalOpen
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onClicked: {
+                window.testHarnessOpen = false;
+                if (window.occupancyState === "open")
+                    window.occupancyState = "closed";
+            }
+            onWheel: function (wheel) { wheel.accepted = true; }
+        }
+    }
+
+    OccupancyWindow {
+        width: 912
+        height: 516
+        anchors.centerIn: parent
+        visible: window.occupancyState === "open"
+        onMinimizeRequested: window.occupancyState = "docked"
+        onCloseRequested: window.occupancyState = "closed"
+        onTrainSelected: function (trainId) {
+            window.selectedTrainId = trainId;
+            window.occupancyState = "docked";
+        }
+    }
+
+    TestHarnessWindow {
+        width: 1040
+        height: 640
+        anchors.centerIn: parent
+        visible: window.testHarnessOpen
+        onCloseRequested: window.testHarnessOpen = false
+    }
+}
