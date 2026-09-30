@@ -8,6 +8,8 @@ literals in test 1 and test 3 are the datasheet design values themselves.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from train_model.interface import (
@@ -26,11 +28,16 @@ from train_model.model import TrainModel
 DT_S = 0.1
 
 
+def pct_to_deg(grade_percent: float) -> float:
+    """Return the angle in degrees of a grade given in percent."""
+    return math.degrees(math.atan(grade_percent / 100.0))
+
+
 def make_inputs(
     power_w: float = 0.0,
     service: bool = False,
     emergency: bool = False,
-    grade_percent: float = 0.0,
+    grade_deg: float = 0.0,
     boarded: int = 0,
     door_left: bool = False,
     polarity: bool = True,
@@ -47,13 +54,13 @@ def make_inputs(
             exterior_lights=exterior,
             door_left_open=door_left,
             door_right_open=False,
-            temp_setpoint_f=70.0,
+            temp_setpoint_c=21.0,
             announcement="",
         ),
         track=TrackInputs(
             track_info=TrackInfo(
                 block_id="A1",
-                grade_percent=grade_percent,
+                grade_deg=grade_deg,
                 elevation_m=0.0,
                 speed_limit_mps=19.0,
                 polarity=polarity,
@@ -74,14 +81,14 @@ def board(model: TrainModel, n: int) -> None:
 
 
 def run_until_speed(
-    model: TrainModel, target_mps: float, grade_percent: float = 0.0
+    model: TrainModel, target_mps: float, grade_deg: float = 0.0
 ) -> None:
     """Step at full power until the velocity reaches ``target_mps``."""
     for _ in range(5000):
         if model.snapshot().velocity_mps >= target_mps:
             return
         model.step(DT_S, make_inputs(
-            power_w=model.config.p_max_w, grade_percent=grade_percent))
+            power_w=model.config.p_max_w, grade_deg=grade_deg))
     pytest.fail(f"never reached {target_mps} m/s within 5000 ticks")
 
 
@@ -145,14 +152,14 @@ def test_full_train_grade_threshold() -> None:
     board(model, config.capacity)
     for _ in range(200):
         model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, grade_percent=4.3))
+            power_w=config.p_max_w, grade_deg=pct_to_deg(4.3)))
     assert model.snapshot().velocity_mps > 0.0
 
     model = TrainModel(config)
     board(model, config.capacity)
     for _ in range(1000):
         model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, grade_percent=4.5))
+            power_w=config.p_max_w, grade_deg=pct_to_deg(4.5)))
         assert model.snapshot().velocity_mps == 0.0
 
 
@@ -162,7 +169,7 @@ def test_service_brake_holds_full_train_on_6_percent() -> None:
     model = TrainModel(config)
     board(model, config.capacity)
     for _ in range(1000):
-        model.step(DT_S, make_inputs(service=True, grade_percent=6.0))
+        model.step(DT_S, make_inputs(service=True, grade_deg=pct_to_deg(6.0)))
         assert model.snapshot().velocity_mps == 0.0
 
 
@@ -175,7 +182,7 @@ def test_brake_failure_rolls_back_on_6_percent() -> None:
     # The spec does not fix the horizon; 500 ticks is long enough for any
     # rolling resistance to be overwhelmed by the grade.
     for _ in range(500):
-        model.step(DT_S, make_inputs(service=True, grade_percent=6.0))
+        model.step(DT_S, make_inputs(service=True, grade_deg=pct_to_deg(6.0)))
     assert model.snapshot().velocity_mps < 0.0
 
 
@@ -340,7 +347,7 @@ def test_light_state_reported() -> None:
 def script_input(tick: int) -> TrainModelInputs:
     """Return the scripted input for one position in a 500-tick run."""
     power_w = 0.0
-    grade_percent = 0.0
+    grade_deg = 0.0
     door_left = False
     boarded = 0
     emergency = False
@@ -352,15 +359,15 @@ def script_input(tick: int) -> TrainModelInputs:
         power_w = TrainConfig().p_max_w
     elif tick < 400:
         # Braking to rest on a grade.
-        grade_percent = 6.0
+        grade_deg = pct_to_deg(6.0)
         emergency = True
     else:
         # Relaunch against the grade.
         power_w = TrainConfig().p_max_w
-        grade_percent = 6.0
+        grade_deg = pct_to_deg(6.0)
     return make_inputs(
         power_w=power_w, service=False, emergency=emergency,
-        grade_percent=grade_percent, boarded=boarded, door_left=door_left)
+        grade_deg=grade_deg, boarded=boarded, door_left=door_left)
 
 
 def run_scripted(model: TrainModel) -> tuple[list[TrainModelOutputs],

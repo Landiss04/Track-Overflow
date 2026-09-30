@@ -2,8 +2,9 @@
 
 Point-mass longitudinal dynamics for one fixed consist, per the Train
 Model backend design, section 1 and sections 5.1 to 5.95. State is SI
-internally. Temperature crosses the boundary in degrees Fahrenheit and
-grade in percent; each is converted in exactly one function below.
+internally. Temperature crosses the boundary in degrees Celsius and grade
+in degrees, the backend units; grade becomes radians where the physics
+uses it.
 
 Sites that take a default for an item the design leaves open are
 marked ``OPEN(<section>)``.
@@ -31,10 +32,6 @@ CABIN_TEMP_RATE_PER_S = 1.0 / 300.0
 # OPEN(5.4): the design gives no initial cabin temperature.
 INITIAL_CABIN_TEMP_C = 20.0
 
-_PERCENT = 100.0
-_F_PER_C = 9.0 / 5.0
-_F_OFFSET = 32.0
-
 # No Track Info has been received before the first step.
 _NO_BLOCK_ID = ""
 
@@ -45,21 +42,6 @@ class TrainModelError(Exception):
 
 class InvalidTimeStepError(TrainModelError):
     """Raised when ``step`` is given a time step that is not positive."""
-
-
-def _f_to_c(temp_f: float) -> float:
-    # The one inbound temperature conversion.
-    return (temp_f - _F_OFFSET) / _F_PER_C
-
-
-def _c_to_f(temp_c: float) -> float:
-    # The one outbound temperature conversion.
-    return temp_c * _F_PER_C + _F_OFFSET
-
-
-def _grade_angle_rad(grade_percent: float) -> float:
-    # The one grade conversion: rise over run in percent to an angle.
-    return math.atan(grade_percent / _PERCENT)
 
 
 def _sign(value: float) -> float:
@@ -155,9 +137,9 @@ class TrainModel:
         if block_changed:
             self._offset_m = 0.0
 
-        grade_rad = _grade_angle_rad(track.track_info.grade_percent)
+        grade_rad = math.radians(track.track_info.grade_deg)
         self._integrate(dt, inputs, grade_rad)
-        self._update_cabin_temp(dt, _f_to_c(cmd.temp_setpoint_f))
+        self._update_cabin_temp(dt, cmd.temp_setpoint_c)
 
         self._outputs = self._build_outputs(inputs, block_changed)
         return self._outputs
@@ -348,7 +330,7 @@ class TrainModel:
                 door_right_open=self._door_right_open,
                 interior_lights_on=interior,
                 exterior_lights_on=exterior,
-                cabin_temp_f=_c_to_f(self._cabin_temp_c),
+                cabin_temp_c=self._cabin_temp_c,
                 commanded_speed_mps=commanded_speed_mps,
                 authority_block_id=authority_block_id,
                 speed_limit_mps=speed_limit_mps,

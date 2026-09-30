@@ -19,7 +19,6 @@ a boarding count on one tick only.
 
 from __future__ import annotations
 
-import math
 from dataclasses import replace
 from typing import Any
 
@@ -74,12 +73,6 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
         "value": "GREEN M",
     },
     {
-        "name": "authority_distance",
-        "kind": "float",
-        "unit": "m",
-        "value": 410.0,
-    },
-    {
         "name": "beacon_station",
         "kind": "string",
         "unit": "",
@@ -104,7 +97,7 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     # Track circuit polarity; flipping it is a block change.
     {"name": "polarity", "kind": "bool", "unit": "", "value": False},
     {"name": "passengers_boarded", "kind": "int", "unit": "", "value": 12},
-    {"name": "temperature_setpoint", "kind": "int", "unit": "F", "value": 68},
+    {"name": "temperature_setpoint", "kind": "int", "unit": "C", "value": 20},
     {
         "name": "announcement",
         "kind": "string",
@@ -113,11 +106,9 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Harness inputs the Train Model does not take, shown on the overview
-#: as sent: ``authority_distance`` (the authority units are open) and
-#: the ``grade`` and ``elevation`` readouts.
+#: Harness inputs the Train Model does not report back, shown on the
+#: overview as sent: the ``grade`` and ``elevation`` readouts.
 _DISPLAY_ONLY: dict[str, str] = {
-    "authority_distance": "authority_distance",
     "grade": "grade",
     "elevation": "elevation",
 }
@@ -130,9 +121,9 @@ _OUTPUT_SPEC: tuple[tuple[str, str, str, str], ...] = (
     ("right_door_state", "bool", "", "right_door"),
     ("interior_light_state", "bool", "", "interior_light"),
     ("exterior_light_state", "bool", "", "exterior_light"),
-    ("cabin_temp", "int", "F", "cabin_temp"),
+    ("cabin_temp", "int", "C", "cabin_temp"),
     ("commanded_speed", "float", "m/s", "commanded_speed"),
-    ("authority", "float", "m", "authority_distance"),
+    ("authority", "string", "", "authority_block"),
     ("beacon_station", "string", "", "next_station"),
     ("beacon_platform_side", "string", "", "platform_side"),
     ("position_block", "string", "", "current_block"),
@@ -307,8 +298,6 @@ class TestHarnessState(QObject):
                 platform_side="L" if side == "L" else "R",
                 underground=values["beacon_underground"],
             )
-        # The harness row is in degrees; the model takes percent.
-        grade_percent = math.tan(math.radians(values["grade"])) * 100.0
         return TrainModelInputs(
             controller=ControllerCommands(
                 power_cmd_w=values["power_command"],
@@ -318,13 +307,13 @@ class TestHarnessState(QObject):
                 exterior_lights=values["exterior_light_command"],
                 door_left_open=values["left_door_command"],
                 door_right_open=values["right_door_command"],
-                temp_setpoint_f=float(values["temperature_setpoint"]),
+                temp_setpoint_c=float(values["temperature_setpoint"]),
                 announcement=values["announcement"],
             ),
             track=TrackInputs(
                 track_info=TrackInfo(
                     block_id=values["block"],
-                    grade_percent=grade_percent,
+                    grade_deg=values["grade"],
                     elevation_m=values["elevation"],
                     speed_limit_mps=values["speed_limit"],
                     polarity=values["polarity"],

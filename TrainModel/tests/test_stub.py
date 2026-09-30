@@ -19,7 +19,7 @@ def test_stub_returns_safe_values() -> None:
     out = model.step(DT_S, make_inputs(block_id="B7"))
     ctl, trk = out.controller, out.track
     assert ctl.actual_speed_mps == 0.0
-    assert ctl.cabin_temp_f == 0.0
+    assert ctl.cabin_temp_c == 0.0
     assert ctl.commanded_speed_mps == 0.0
     assert ctl.speed_limit_mps == 0.0
     assert ctl.authority_block_id is None

@@ -36,13 +36,13 @@ def make_inputs(block_id: str = "A1") -> TrainModelInputs:
             exterior_lights=True,
             door_left_open=False,
             door_right_open=False,
-            temp_setpoint_f=70.0,
+            temp_setpoint_c=21.0,
             announcement="",
         ),
         track=TrackInputs(
             track_info=TrackInfo(
                 block_id=block_id,
-                grade_percent=1.0,
+                grade_deg=0.5,
                 elevation_m=0.0,
                 speed_limit_mps=15.0,
                 polarity=True,

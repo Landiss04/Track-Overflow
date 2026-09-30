@@ -91,8 +91,8 @@ relevant call site). Numbered so in-code references resolve:
    applied until **Reset module**.
 7. **"SEND INPUTS TO TRAIN MODEL" also advances one tick**, so the outputs
    respond at once. Later ticks reuse the last sent inputs, except that
-   `passengers_boarded` applies once per send. The harness `grade` row is in
-   degrees and is converted to the percent the model takes.
+   `passengers_boarded` applies once per send. Harness rows are in backend
+   units, as the interface carries them: grade in degrees, temperature in °C.
 8. **Output values embed units inline** (`32.4 MPH`) rather than a separate
    unit column, as drawn in the mockup.
 9. **Failure modes apply from the next tick**, as the model's
@@ -105,5 +105,5 @@ relevant call site). Numbered so in-code references resolve:
     `ui/MainView.qml`).
 12. **Car count is inconsistent between panels** — Cabin & Load shows "3 CARS"
     / cars = 3, but the door-state table lists four cars (T-114-A…D).
-13. **INPUTS badge reads "15" but the input table has 21 rows** — the badge
+13. **INPUTS badge reads "15" but the input table has 20 rows** — the badge
     count is kept as drawn in the mockup (see `train_model/harness.py`).

@@ -6,7 +6,7 @@
 | Speed limit | mph | m/s | mph = m/s x 2.23694 | |
 | Distance | ft | m | ft = m x 3.28084 | |
 | Time | s | s | 1:1 | |
-| Gradient | % | % | 1:1 | Matches `grade_percent` in TrackModel/*.json; positive = uphill in direction of travel |
+| Gradient | deg | deg | 1:1 | Positive = uphill in direction of travel. `grade_percent` in TrackModel/*.json is converted on read: deg = atan(% ÷ 100) × 180 ÷ π |
 | Elevation | ft | m | ft = m x 3.28084 | Above datum |
 | Temperature | °F | °C | °F = °C x 9/5 + 32 | Ambient and cabin temperature |
 | Authority | block ID | block ID | 1:1 | Destination block up to which the train may travel; not a physical unit |

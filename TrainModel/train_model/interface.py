@@ -5,9 +5,8 @@ pure mapping function per producer-to-consumer edge, translating other
 modules' types into these and back. Other modules' struct layouts do not
 appear here.
 
-Field names carry their units. Where the interface dictionary is still open on
-units (temperature, grade, authority), the suffix marks the current
-assumption so a later change is a mechanical rename.
+Field names carry their backend units, per ``truth/conventions/units.md``:
+temperature in degrees Celsius, grade in degrees, and authority as a block ID.
 """
 
 from dataclasses import dataclass
@@ -114,7 +113,7 @@ class ControllerCommands:
     exterior_lights: bool
     door_left_open: bool
     door_right_open: bool
-    temp_setpoint_f: float          # units open
+    temp_setpoint_c: float
     announcement: str
 
 
@@ -126,7 +125,7 @@ class TrackInfo:
     """
 
     block_id: str
-    grade_percent: float            # positive uphill; units open
+    grade_deg: float                # positive uphill
     elevation_m: float
     speed_limit_mps: float
     polarity: bool
@@ -137,7 +136,7 @@ class TrackSignal:
     """Track circuit data. Ignored while signal pickup has failed."""
 
     commanded_speed_mps: float
-    # Block the train may travel up to; units open.
+    # Block the train may travel up to.
     authority_block_id: str
 
 
@@ -175,7 +174,7 @@ class ControllerOutputs:
     door_right_open: bool
     interior_lights_on: bool
     exterior_lights_on: bool
-    cabin_temp_f: float
+    cabin_temp_c: float
     # Passed through; zeros or stale under pickup failure, open.
     commanded_speed_mps: float
     authority_block_id: str | None  # passed through; None = no authority

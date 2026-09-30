@@ -18,6 +18,7 @@ ScrollView {
     function ft(val)  { return Number(val) * 3.28084; }
     function tons(val) { return Number(val) * 0.001102311; }
     function kw(val)  { return Number(val) * 0.001; }
+    function degF(val) { return Number(val) * 9 / 5 + 32; }
 
     clip: true
     contentWidth: availableWidth
@@ -98,12 +99,6 @@ ScrollView {
 
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: qsTr("Distance to end of authority")
-                    value: root.fixed(root.ft(root.s.authority_distance), 1) + " ft"
-                }
-
-                KeyValueRow {
-                    Layout.fillWidth: true
                     label: qsTr("Acceleration")
                     value: root.fixed(root.ft(root.s.acceleration), 2) + " ft/s\u00B2"
                 }
@@ -145,7 +140,7 @@ ScrollView {
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Cabin temp")
-                        value: root.fixed(root.s.cabin_temp, 0)
+                        value: root.fixed(root.degF(root.s.cabin_temp), 0)
                         unit: "F"
                     }
                 }
