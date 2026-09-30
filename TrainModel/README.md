@@ -1,10 +1,11 @@
-# Train Model UI (stub)
+# Train Model UI
 
 PySide6 + QML front-end for the ECE1140 Train Model, covering **page 3a** (main
-operational view) and **page 3b** (test harness). This is a *stub*: it renders
-both pages exactly as the mockup shows them and wires every value to bindable
-Python state, but there is no simulation behind it — values are seeded to the
-mockup and the interactive controls only flip that stub state.
+operational view) and **page 3b** (test harness). `TrainModelState` wraps the
+real `TrainModel` in `train_model/model.py`: the test harness sends it inputs
+and drives the clock, and the views show the model's state. A few header
+fields that the model does not produce (train ID, line, mode, clock, arrival)
+remain seeded to the mockup.
 
 QML owns all visuals; Python owns state. The two talk through QML context
 properties (`theme`, `trainModel`, `harness`).
@@ -72,9 +73,10 @@ Where the implementation and/or the mockup are internally inconsistent, the
 code follows the mockup as drawn and the gap is flagged here (and at the
 relevant call site). Numbered so in-code references resolve:
 
-1. **Static stub** — no physics or controller; every value is a fixed seed
-   matching the mockup. Only the tick counter and the interactive toggles
-   change state.
+1. **Header fields are seeded** — train ID, line, mode, clock and arrival are
+   fixed values from the mockup; the model does not produce them. Power
+   consumption shows the commanded power capped at P_max, because the model
+   does not report power.
 2. **Nav-rail glyphs are placeholders** — the Figma export shows stub
    rectangles with per-item border insets, not real icons; reproduced as stroked
    outlines with no labels.
@@ -84,20 +86,24 @@ relevant call site). Numbered so in-code references resolve:
    offset dark rectangle; QML has no cheap true drop-shadow here.
 5. **Banner surface** — the mockup's neutral grey maps to the `--bg-sunken`
    token rather than a dedicated grey.
-6. **Toggles & secondary buttons are non-functional stubs** where the mockup
-   implies live behavior; they only mutate the stub state.
-7. **"SEND INPUTS TO TRAIN MODEL" is a no-op boundary** — there is no module
-   under test to receive them yet.
+6. **Releasing the passenger emergency brake does nothing** — the model
+   latches the pull (design §5.8 leaves release open), so the brake stays
+   applied until **Reset module**.
+7. **"SEND INPUTS TO TRAIN MODEL" also advances one tick**, so the outputs
+   respond at once. Later ticks reuse the last sent inputs, except that
+   `passengers_boarded` applies once per send. The harness `grade` row is in
+   degrees and is converted to the percent the model takes.
 8. **Output values embed units inline** (`32.4 MPH`) rather than a separate
    unit column, as drawn in the mockup.
-9. **Failure-mode rows flip between two hardcoded labels** (normal/failed) and
-   drive no downstream behavior.
-10. **Signal pickup is seeded FAILED** on page 3a to match the "1 FAILED"
-    badge; engine and brake are seeded NORMAL.
+9. **Failure modes apply from the next tick**, as the model's
+   `set_failures` defines.
+10. **All failure modes start cleared**, not with signal pickup failed as the
+    mockup's "1 FAILED" badge shows, so the harness's commanded speed and
+    authority reach the model from the first tick.
 11. **Manual door control is rendered disabled** — the model displays door
     state but does not command it, so OPEN/CLOSE LEFT/RIGHT are inert (see
     `ui/MainView.qml`).
 12. **Car count is inconsistent between panels** — Cabin & Load shows "3 CARS"
     / cars = 3, but the door-state table lists four cars (T-114-A…D).
-13. **INPUTS badge reads "15" but the input table has 16 rows** — the badge
+13. **INPUTS badge reads "15" but the input table has 21 rows** — the badge
     count is kept as drawn in the mockup (see `train_model/harness.py`).

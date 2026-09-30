@@ -1,8 +1,12 @@
 """Observable state for the Train Model module.
 
-Values are placeholders. No physics is implemented: the class exists so
-the views bind to a single source of truth and so the simulation can be
-dropped in behind these properties without touching QML.
+Wraps one ``TrainModel`` and republishes its state as a flat snapshot the
+views bind to. The test harness supplies the inputs and drives the clock;
+this class steps the model and refreshes the snapshot after each tick.
+
+Every value in the snapshot is in its backend unit, per D002; the views
+convert for display. A few fields are display-only placeholders that the
+Train Model does not produce (train ID, line, mode, clock, arrival).
 
 Signal names, units and directions follow the Train Model interface
 dictionary (v0.2). Deviations from the wireframes are recorded in
@@ -14,6 +18,14 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
+
+from train_model.interface import (
+    FailureState,
+    TrainConfig,
+    TrainModelInputs,
+    TrainModelOutputs,
+)
+from train_model.model import TrainModel
 
 #: The three failure modes injected by Murphy, in interface-dictionary
 #: order (``Failure Status`` is ``bool[3]``).
@@ -29,6 +41,9 @@ _FAILURE_LABELS: dict[str, str] = {
     "signal_pickup_failure": "Signal pickup",
 }
 
+# Shown where the model has not reported a block or an authority yet.
+_NONE_SHOWN = "—"
+
 
 class TrainModelState(QObject):
     """Holds everything the Train Model views display."""
@@ -36,56 +51,75 @@ class TrainModelState(QObject):
     snapshotChanged = Signal()
     failuresChanged = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        config: TrainConfig | None = None,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._snapshot: dict[str, Any] = {
+        self._config = config if config is not None else TrainConfig()
+        self._model = TrainModel(self._config)
+        self._failures: dict[str, bool] = dict.fromkeys(FAILURE_MODES, False)
+        self._snapshot: dict[str, Any] = self._initial_snapshot()
+        self._refresh(inputs=None)
+
+    def _initial_snapshot(self) -> dict[str, Any]:
+        # Display-only fields, and the harness pass-throughs the model
+        # does not use. Everything else is filled in by _refresh.
+        cfg = self._config
+        return {
             "train_id": "T-114",
             "line": "Green Line",
             "mode": "Automatic",
             "clock": "19:00:05",
-            # Speed and authority. Track Signal comes from Track Model.
-            "actual_speed": 14.5,
-            "commanded_speed": 16.0,
-            "speed_limit": 18.0,
-            "authority_block": "GREEN M",
-            "authority_distance": 410.0,
-            "acceleration": 0.12,
-            "grade": 0.7,
-            "elevation": 0.0,
-            # Cabin and load.
-            "passengers": 84,
-            "capacity": 148,
-            "loaded_mass": 51.4,
-            "empty_mass": 37.1,
-            "cabin_temp": 68,
-            "crew": 2,
-            "cars": 3,
-            "length": 32.2,
-            "width": 2.65,
-            "height": 3.42,
-            "power_consumption": 350.0,
-            "power_limit": 480.0,
-            # Light State is bool[2]: cabin and headlight. Commanded by
-            # the Train Controller, displayed read-only here.
-            "cabin_light": True,
-            "headlight": True,
-            # Position.
-            "direction": "Forward",
-            "previous_block": "GREEN H",
-            "current_block": "GREEN I",
-            "position_offset": 189.0,
-            "next_station": "Dormont",
-            "platform_side": "L",
-            "left_door": False,
-            "right_door": False,
             "arrival": "14:19",
-            "emergency_brake": False,
+            "authority_distance": 0.0,
+            "grade": 0.0,
+            "elevation": 0.0,
+            "next_station": _NONE_SHOWN,
+            "platform_side": _NONE_SHOWN,
+            "previous_block": _NONE_SHOWN,
+            "current_block": _NONE_SHOWN,
+            "capacity": cfg.capacity,
+            "empty_mass": cfg.m_empty_kg,
+            "crew": cfg.n_crew,
+            "length": cfg.length_m,
+            "width": cfg.width_m,
+            "height": cfg.height_m,
+            "power_limit": cfg.p_max_w,
+            "power_consumption": 0.0,
         }
-        self._failures: dict[str, bool] = {
-            "engine_failure": False,
-            "brake_failure": False,
-            "signal_pickup_failure": True,
-        }
+
+    # ------------------------------------------------------------------ #
+    # Driven by the test harness
+    # ------------------------------------------------------------------ #
+
+    def step(self, dt: float, inputs: TrainModelInputs) -> None:
+        """Advance the model one tick and refresh the snapshot."""
+        self._model.step(dt, inputs)
+        self._refresh(inputs)
+
+    def reset(self) -> None:
+        """Replace the model with a fresh one and clear every failure."""
+        self._model = TrainModel(self._config)
+        self._failures = dict.fromkeys(FAILURE_MODES, False)
+        self._snapshot = self._initial_snapshot()
+        self._refresh(inputs=None)
+        self.failuresChanged.emit()
+
+    def update_many(self, updates: Mapping[str, Any]) -> None:
+        """Apply a snapshot batch; notify QML once if it changed."""
+        unknown_keys = updates.keys() - self._snapshot.keys()
+        if unknown_keys:
+            raise KeyError(f"unknown snapshot fields: {sorted(unknown_keys)}")
+        if all(self._snapshot[key] == value for key, value in updates.items()):
+            return
+        self._snapshot.update(updates)
+        self.snapshotChanged.emit()
+
+    # ------------------------------------------------------------------ #
+    # Read by the views
+    # ------------------------------------------------------------------ #
 
     @Property("QVariantMap", notify=snapshotChanged)
     def snapshot(self) -> dict[str, Any]:
@@ -117,14 +151,25 @@ class TrainModelState(QObject):
         """How many failure modes are currently set."""
         return sum(1 for active in self._failures.values() if active)
 
+    # ------------------------------------------------------------------ #
+    # Train Model UI actions
+    # ------------------------------------------------------------------ #
+
     @Slot(str, bool)
     def setFailure(self, name: str, active: bool) -> None:
-        """Set or clear one failure mode."""
+        """Set or clear one failure mode; it applies from the next tick."""
         if name not in self._failures:
             raise KeyError(f"unknown failure mode: {name}")
         if self._failures[name] == active:
             return
         self._failures[name] = active
+        self._model.set_failures(
+            FailureState(
+                engine=self._failures["engine_failure"],
+                signal_pickup=self._failures["signal_pickup_failure"],
+                brake=self._failures["brake_failure"],
+            )
+        )
         self.failuresChanged.emit()
 
     @Slot(str, result=bool)
@@ -134,33 +179,66 @@ class TrainModelState(QObject):
 
     @Slot()
     def applyEmergencyBrake(self) -> None:
-        """Latch the passenger emergency brake."""
-        self._set("emergency_brake", True)
+        """Pull the passenger emergency brake; it applies next tick."""
+        self._model.pull_passenger_emergency_brake()
+        self.update_many({"passenger_ebrake_pulled": True})
 
     @Slot()
     def releaseEmergencyBrake(self) -> None:
-        """Release the passenger emergency brake."""
-        self._set("emergency_brake", False)
+        """Do nothing: the model latches the pull until Reset module."""
+        # OPEN(5.8): the design does not say who releases the brake.
 
-    @Slot(str, "QVariant")
-    def update(self, key: str, value: Any) -> None:
-        """Write one snapshot field. Used by the test harness."""
-        if key not in self._snapshot:
-            raise KeyError(f"unknown snapshot field: {key}")
-        self._set(key, value)
+    # ------------------------------------------------------------------ #
+    # Snapshot
+    # ------------------------------------------------------------------ #
 
-    def update_many(self, updates: Mapping[str, Any]) -> None:
-        """Apply a snapshot batch; notify QML once if it changed."""
-        unknown_keys = updates.keys() - self._snapshot.keys()
-        if unknown_keys:
-            raise KeyError(f"unknown snapshot fields: {sorted(unknown_keys)}")
-        if all(self._snapshot[key] == value for key, value in updates.items()):
-            return
-        self._snapshot.update(updates)
-        self.snapshotChanged.emit()
+    def _refresh(self, inputs: TrainModelInputs | None) -> None:
+        # Republish the model's state. Before the first tick there are
+        # no inputs, so only the model's own state is shown.
+        snap = self._model.snapshot()
+        outputs: TrainModelOutputs = snap.outputs
+        ctl = outputs.controller
+        trk = outputs.track
 
-    def _set(self, key: str, value: Any) -> None:
-        if self._snapshot.get(key) == value:
-            return
-        self._snapshot[key] = value
-        self.snapshotChanged.emit()
+        block = trk.block_id or _NONE_SHOWN
+        updates: dict[str, Any] = {
+            "actual_speed": ctl.actual_speed_mps,
+            "commanded_speed": ctl.commanded_speed_mps,
+            "speed_limit": ctl.speed_limit_mps,
+            "authority_block": ctl.authority_block_id or _NONE_SHOWN,
+            "acceleration": snap.acceleration_mps2,
+            "passengers": snap.n_passengers,
+            "loaded_mass": snap.mass_kg,
+            "cabin_temp": ctl.cabin_temp_f,
+            "interior_light": ctl.interior_lights_on,
+            "exterior_light": ctl.exterior_lights_on,
+            "left_door": ctl.door_left_open,
+            "right_door": ctl.door_right_open,
+            "emergency_brake": ctl.emergency_brake_active,
+            "service_brake": ctl.service_brake_active,
+            "passenger_ebrake_pulled": snap.passenger_ebrake_pulled,
+            "direction": (
+                "Reverse" if ctl.actual_speed_mps < 0.0 else "Forward"
+            ),
+            "current_block": block,
+            "position_offset": trk.offset_m,
+        }
+        if block != self._snapshot["current_block"]:
+            updates["previous_block"] = self._snapshot["current_block"]
+        # A beacon is only received near a station; keep the last one.
+        if ctl.beacon is not None:
+            updates["next_station"] = ctl.beacon.station_name
+            updates["platform_side"] = ctl.beacon.platform_side
+        if inputs is not None:
+            # The model does not report power; show the command, capped
+            # at P_max, and nothing while the engine has failed.
+            power_w = min(max(inputs.controller.power_cmd_w, 0.0),
+                          self._config.p_max_w)
+            if self._failures["engine_failure"]:
+                power_w = 0.0
+            updates["power_consumption"] = power_w
+
+        if any(self._snapshot.get(key) != value
+               for key, value in updates.items()):
+            self._snapshot.update(updates)
+            self.snapshotChanged.emit()

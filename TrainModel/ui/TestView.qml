@@ -26,9 +26,9 @@ ScrollView {
             Callout {
                 Layout.fillWidth: true
                 heading: qsTr("Test harness \u2014 module driven from this page")
-                body: qsTr("Sending the inputs writes the declared "
-                    + "pass-through signals into the module. The remaining "
-                    + "outputs wait on the simulation.")
+                body: qsTr("Sending the inputs hands them to the Train Model "
+                    + "and advances one tick. Each later tick reuses the last "
+                    + "sent inputs; passengers board once per send.")
             }
 
             Card {

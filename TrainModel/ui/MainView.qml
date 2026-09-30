@@ -16,6 +16,8 @@ ScrollView {
 
     function mph(val) { return Number(val) * 2.23694; }
     function ft(val)  { return Number(val) * 3.28084; }
+    function tons(val) { return Number(val) * 0.001102311; }
+    function kw(val)  { return Number(val) * 0.001; }
 
     clip: true
     contentWidth: availableWidth
@@ -46,15 +48,15 @@ ScrollView {
                 }
 
                 StatusBadge {
-                    label: root.s.cabin_light
-                        ? qsTr("Cabin on") : qsTr("Cabin off")
-                    variant: root.s.cabin_light ? "ok" : "idle"
+                    label: root.s.interior_light
+                        ? qsTr("Interior on") : qsTr("Interior off")
+                    variant: root.s.interior_light ? "ok" : "idle"
                 }
 
                 StatusBadge {
-                    label: root.s.headlight
-                        ? qsTr("Headlight on") : qsTr("Headlight off")
-                    variant: root.s.headlight ? "ok" : "idle"
+                    label: root.s.exterior_light
+                        ? qsTr("Exterior on") : qsTr("Exterior off")
+                    variant: root.s.exterior_light ? "ok" : "idle"
                 }
             }
 
@@ -136,14 +138,14 @@ ScrollView {
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Loaded mass")
-                        value: root.fixed(root.s.loaded_mass, 1)
-                        unit: "t"
+                        value: root.fixed(root.tons(root.s.loaded_mass), 1)
+                        unit: "ton"
                     }
 
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Cabin temp")
-                        value: String(root.s.cabin_temp)
+                        value: root.fixed(root.s.cabin_temp, 0)
                         unit: "F"
                     }
                 }
@@ -165,14 +167,14 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Empty mass")
-                    value: root.fixed(root.s.empty_mass, 1) + " t"
+                    value: root.fixed(root.tons(root.s.empty_mass), 1) + " ton"
                 }
 
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Power consumption")
-                    value: root.fixed(root.s.power_consumption, 0) + " / "
-                        + root.fixed(root.s.power_limit, 0) + " kW"
+                    value: root.fixed(root.kw(root.s.power_consumption), 0) + " / "
+                        + root.fixed(root.kw(root.s.power_limit), 0) + " kW"
                     rule: false
                 }
 
@@ -207,12 +209,12 @@ ScrollView {
                     Layout.preferredHeight: theme.safety_emphasis_height
                     Layout.topMargin: theme.space_5
                     label: qsTr("Apply emergency brake")
-                    applied: root.s.emergency_brake
+                    applied: root.s.passenger_ebrake_pulled
                     tooltip: qsTr("Stops the train at the full braking rate and "
                         + "reports the stop to the track controller and the "
                         + "CTC. Confirmation is required.")
                     onConfirmed: {
-                        if (root.s.emergency_brake)
+                        if (root.s.passenger_ebrake_pulled)
                             trainModel.releaseEmergencyBrake()
                         else
                             trainModel.applyEmergencyBrake()
