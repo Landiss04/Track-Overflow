@@ -108,7 +108,8 @@ class ControllerCommands:
 
     power_cmd_w: float
     service_brake: bool
-    emergency_brake: bool           # controller path only; passenger pull is internal
+    # Controller path only; a passenger pull is internal.
+    emergency_brake: bool
     cabin_lights: bool
     headlights: bool
     door_left_open: bool
@@ -119,7 +120,10 @@ class ControllerCommands:
 
 @dataclass(frozen=True, slots=True)
 class TrackInfo:
-    """From the Track Model, every tick. Terrain; unaffected by signal pickup failure."""
+    """From the Track Model, every tick.
+
+    Terrain; unaffected by signal pickup failure.
+    """
 
     block_id: str
     grade_percent: float            # positive uphill; units open
@@ -133,7 +137,8 @@ class TrackSignal:
     """Track circuit data. Ignored while signal pickup has failed."""
 
     commanded_speed_mps: float
-    authority_block_id: str         # block the train may travel up to; units open
+    # Block the train may travel up to; units open.
+    authority_block_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,7 +148,8 @@ class TrackInputs:
     track_info: TrackInfo
     track_signal: TrackSignal
     beacon: Beacon | None           # None when not over a beacon
-    passengers_boarded: int         # 0 except when boarding; never exceeds last reported capacity
+    # 0 except when boarding; never exceeds last reported capacity.
+    passengers_boarded: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,9 +173,11 @@ class ControllerOutputs:
     cabin_lights_on: bool
     headlights_on: bool
     cabin_temp_f: float
-    commanded_speed_mps: float      # passed through; zeros or stale under pickup failure, open
+    # Passed through; zeros or stale under pickup failure, open.
+    commanded_speed_mps: float
     authority_block_id: str | None  # passed through; None = no authority
-    speed_limit_mps: float          # passed through from TrackInfo, provisional
+    # Passed through from TrackInfo, provisional.
+    speed_limit_mps: float
     beacon: Beacon | None           # between-beacon behaviour open
     failures: FailureState
 
@@ -181,8 +189,10 @@ class TrackOutputs:
     block_id: str
     offset_m: float                # reference point on the 32.2 m train open
     actual_speed_mps: float         # negative during rollback
-    block_changed: bool             # true on the tick polarity reverses; table says int
-    passenger_capacity: int         # remaining, computed after the disembark draw
+    # True on the tick polarity reverses; table says int.
+    block_changed: bool
+    # Remaining, computed after the disembark draw.
+    passenger_capacity: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,7 +224,10 @@ class TrainModel(Protocol):
     config: TrainConfig
 
     def step(self, dt: float, inputs: TrainModelInputs) -> TrainModelOutputs:
-        """Advance one tick. dt is fixed by the harness and must be positive."""
+        """Advance one tick.
+
+        dt is fixed by the harness and must be positive.
+        """
         ...
 
     def snapshot(self) -> TrainModelSnapshot:
