@@ -9,6 +9,15 @@ ColumnLayout {
     property string label: ""
     property string kind: "string" // int | float | string
     property alias text: editor.text
+    property var modelValue: undefined
+    property bool preserveActiveEdit: false
+    function refreshModelText() {
+        if (modelValue === undefined) return;
+        if (preserveActiveEdit && editor.activeFocus) return;
+        editor.text = modelValue === null ? "" : String(modelValue);
+    }
+    onModelValueChanged: refreshModelText()
+    Component.onCompleted: refreshModelText()
     readonly property bool valid: kind === "string" || editor.acceptableInput
     property string errorMessage: kind === "int"
         ? qsTr("Enter a whole number.") : qsTr("Enter a number.")
@@ -64,9 +73,18 @@ ColumnLayout {
         // editingFinished fires on Return and again on focus loss; only
         // commit text that has not already been committed.
         property var lastCommittedText: undefined
+        property bool userEdited: false
+        onTextEdited: userEdited = true
+        onActiveFocusChanged: {
+            if (!activeFocus && !userEdited) root.refreshModelText();
+        }
         onTextChanged: if (text !== lastCommittedText) lastCommittedText = undefined
 
         onEditingFinished: {
+            if (root.preserveActiveEdit && !userEdited) {
+                root.refreshModelText();
+                return;
+            }
             if (!root.valid || text === lastCommittedText) return;
             if (root.kind === "string") {
                 lastCommittedText = text;
@@ -78,6 +96,8 @@ ColumnLayout {
                     root.committed(value);
                 }
             }
+            userEdited = false;
+            root.refreshModelText();
         }
     }
 

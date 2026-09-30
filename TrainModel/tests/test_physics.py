@@ -9,6 +9,7 @@ literals in test 1 and test 3 are the datasheet design values themselves.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -217,7 +218,10 @@ def test_engine_failure_power_has_no_effect() -> None:
         model_off.step(DT_S, make_inputs(power_w=0.0))
         model_on.step(DT_S, make_inputs(
             power_w=model_on.config.p_max_w))
-        assert model_off.snapshot() == model_on.snapshot()
+        # Producer commands differ; the entire physical state must agree.
+        assert replace(model_off.snapshot(), inputs=None) == replace(
+            model_on.snapshot(), inputs=None
+        )
         assert model_off.snapshot().velocity_mps == 0.0
 
 

@@ -3,12 +3,25 @@
 PySide6 + QML front-end for the ECE1140 Train Model, covering **page 3a** (main
 operational view) and **page 3b** (test harness). `TrainModelState` wraps the
 real `TrainModel` in `train_model/model.py`: the test harness sends it inputs
-and drives the clock, and the views show the model's state. A few header
-fields that the model does not produce (train ID, line, mode, clock, arrival)
-remain seeded to the mockup.
+and drives the clock, and the views show the model's state. Header metadata that the model does not produce (train ID, line, arrival)
+shows a dash. The clock shows elapsed model time, and the mode follows the
+harness run/pause state.
 
 QML owns all visuals; Python owns state. The two talk through QML context
 properties (`theme`, `trainModel`, `harness`).
+
+See [open issues](docs/open-issues.md) for speed-control ownership,
+vehicle calibration, and the displayed power-consumption limitation.
+
+## Physics stepping
+
+Commands are held for the complete tick. Traction is evaluated at the
+midpoint velocity so its mechanical work cannot exceed the available
+commanded energy. Internal substeps resolve the low-speed `P/v` transition;
+they do not change the harness clock. Stops are integrated only up to zero
+velocity, then static holding or rollback is evaluated for the remaining
+time. Reported acceleration uses the current forces at the final velocity.
+Nonfinite numeric inputs and negative power are rejected before state changes.
 
 ## Design sources
 
@@ -39,7 +52,7 @@ QT_QPA_PLATFORM=offscreen timeout 8 python main.py   # clean = no output
 
 ```bash
 cd TrainModel
-.venv/bin/python -m mypy main.py train_model/        # → no issues found in 5 source files
+.venv/bin/python -m mypy main.py train_model/
 ```
 
 PySide6 ships its own type stubs, so no local stubs are needed.
@@ -67,43 +80,33 @@ python3 -m venv .venv
 .venv/bin/pip install "PySide6==6.11.*" "mypy==2.3.*"
 ```
 
-## Design discrepancies
+## UI state and editing
 
-Where the implementation and/or the mockup are internally inconsistent, the
-code follows the mockup as drawn and the gap is flagged here (and at the
-relevant call site). Numbered so in-code references resolve:
+Both pages read the same model snapshot. Passenger-brake and failure changes
+refresh the controls and discrete outputs immediately, including while paused;
+the next tick integrates their physical effect. Terrain, beacons, lights,
+doors, temperature, passenger counts, and the clock refresh from that snapshot.
 
-1. **Header fields are seeded** — train ID, line, mode, clock and arrival are
-   fixed values from the mockup; the model does not produce them. Power
-   consumption shows the commanded power capped at P_max, because the model
-   does not report power.
-2. **Nav-rail glyphs are placeholders** — the Figma export shows stub
-   rectangles with per-item border insets, not real icons; reproduced as stroked
-   outlines with no labels.
-3. **Hamburger is a visual stub** — emits `menuClicked`, but the mockup defines
-   no menu, so nothing opens.
-4. **Card shadow is approximated** — `--shadow-1`'s blur is rendered as a 1 px
-   offset dark rectangle; QML has no cheap true drop-shadow here.
-5. **Banner surface** — the mockup's neutral grey maps to the `--bg-sunken`
-   token rather than a dedicated grey.
-6. **Releasing the passenger emergency brake does nothing** — the model
-   latches the pull (design §5.8 leaves release open), so the brake stays
-   applied until **Reset module**.
-7. **"SEND INPUTS TO TRAIN MODEL" also advances one tick**, so the outputs
-   respond at once. Later ticks reuse the last sent inputs, except that
-   `passengers_boarded` applies once per send. Harness rows are in backend
-   units, as the interface carries them: grade in degrees, temperature in °C.
-8. **Output values embed units inline** (`32.4 MPH`) rather than a separate
-   unit column, as drawn in the mockup.
-9. **Failure modes apply from the next tick**, as the model's
-   `set_failures` defines.
-10. **All failure modes start cleared**, not with signal pickup failed as the
-    mockup's "1 FAILED" badge shows, so the harness's commanded speed and
-    authority reach the model from the first tick.
-11. **Manual door control is rendered disabled** — the model displays door
-    state but does not command it, so OPEN/CLOSE LEFT/RIGHT are inert (see
-    `ui/MainView.qml`).
-12. **Car count is inconsistent between panels** — Cabin & Load shows "3 CARS"
-    / cars = 3, but the door-state table lists four cars (T-114-A…D).
-13. **INPUTS badge reads "15" but the input table has 20 rows** — the badge
-    count is kept as drawn in the mockup (see `train_model/harness.py`).
+Test input rows show live values until edited. Explicit edits are marked
+**pending** and remain staged until **Send inputs**, which also advances one
+tick. Starting or advancing a fresh simulation also sends its initial edits.
+Live updates preserve the focused editor and its unfinished text.
+Later ticks reuse accepted producer commands, so a suppressed readout during
+a failure does not overwrite the underlying command. `passengers_boarded`
+is a one-time event: sending consumes the count and returns its row to zero;
+enter another count for another boarding event. Reset clears the model,
+failures, pending edits, and elapsed time.
+
+The test harness emergency-brake input can explicitly override the passenger
+latch. An injected brake failure still prevents braking. The overview's
+passenger-brake release action remains inert pending a decision on normal
+operation; this test override does not define that policy.
+
+## Remaining display limitations
+
+- Train ID, line, and arrival time have no model source and display a dash.
+- Manual door buttons remain disabled: the model displays controller commands.
+- Power consumption displays capped commanded power, suppressed on engine
+  failure; see [open issues](docs/open-issues.md) for the measurement limitation.
+- Harness values use backend units (including degrees for grade and Celsius
+  for temperature); the overview converts its readouts to display units.

@@ -41,7 +41,11 @@ class TrainModelError(Exception):
 
 
 class InvalidTimeStepError(TrainModelError):
-    """Raised when ``step`` is given a time step that is not positive."""
+    """Raised for a nonfinite or nonpositive time step."""
+
+
+class InvalidInputError(TrainModelError, ValueError):
+    """Raised for invalid numeric inputs, before state is changed."""
 
 
 def _sign(value: float) -> float:
@@ -97,6 +101,8 @@ class TrainModel:
         self._last_polarity: bool | None = None
         self._door_left_open = False
         self._door_right_open = False
+        self._last_inputs: TrainModelInputs | None = None
+        self._elapsed_s = 0.0
 
         self._outputs = self._build_outputs(
             inputs=None, block_changed=False
@@ -110,20 +116,39 @@ class TrainModel:
         """Advance one tick of length ``dt`` seconds.
 
         Args:
-            dt: Fixed sample period in seconds. Must be positive.
+            dt: Fixed sample period in seconds. Must be finite and positive.
             inputs: This tick's controller commands and track inputs.
 
         Returns:
             The outputs for this tick.
 
         Raises:
-            InvalidTimeStepError: If ``dt`` is not positive.
+            InvalidTimeStepError: If ``dt`` is nonfinite or not positive.
+            InvalidInputError: If numeric inputs are invalid.
         """
-        if dt <= 0.0:
-            raise InvalidTimeStepError(f"dt must be positive, got {dt}")
+        if not math.isfinite(dt) or dt <= 0.0:
+            raise InvalidTimeStepError(
+                f"dt must be finite and positive, got {dt}"
+            )
 
         cmd = inputs.controller
         track = inputs.track
+        numeric = {
+            "power_cmd_w": cmd.power_cmd_w,
+            "temp_setpoint_c": cmd.temp_setpoint_c,
+            "grade_deg": track.track_info.grade_deg,
+            "elevation_m": track.track_info.elevation_m,
+            "speed_limit_mps": track.track_info.speed_limit_mps,
+            "commanded_speed_mps": track.track_signal.commanded_speed_mps,
+            "passengers_boarded": track.passengers_boarded,
+        }
+        for name, value in numeric.items():
+            if not math.isfinite(value):
+                raise InvalidInputError(f"{name} must be finite, got {value}")
+        if cmd.power_cmd_w < 0.0:
+            raise InvalidInputError("power_cmd_w must be nonnegative")
+        if not isinstance(track.passengers_boarded, int):
+            raise InvalidInputError("passengers_boarded must be an integer")
 
         self._update_passengers(
             cmd.door_left_open, cmd.door_right_open,
@@ -141,6 +166,8 @@ class TrainModel:
         self._integrate(dt, inputs, grade_rad)
         self._update_cabin_temp(dt, cmd.temp_setpoint_c)
 
+        self._last_inputs = inputs
+        self._elapsed_s += dt
         self._outputs = self._build_outputs(inputs, block_changed)
         return self._outputs
 
@@ -154,16 +181,31 @@ class TrainModel:
             n_passengers=self._n_passengers,
             passenger_ebrake_pulled=self._passenger_ebrake_pulled,
             outputs=self._outputs,
+            inputs=self._last_inputs,
+            elapsed_s=self._elapsed_s,
         )
 
     def set_failures(self, failures: FailureState) -> None:
-        """Apply Murphy's fault injection from the next tick on."""
+        """Report a fault now; the next step integrates its physical effect."""
         self._failures = failures
+        self._refresh_discrete_outputs()
 
     def pull_passenger_emergency_brake(self) -> None:
         """Pull the passenger emergency brake."""
-        # OPEN(5.8): the pull latches; release is not implemented.
         self._passenger_ebrake_pulled = True
+        self._refresh_discrete_outputs()
+
+    def clear_passenger_brake_for_test(self) -> None:
+        """Clear the latch for testing, without defining normal UI release."""
+        self._passenger_ebrake_pulled = False
+        self._refresh_discrete_outputs()
+
+    def _refresh_discrete_outputs(self) -> None:
+        # Report actions immediately, including while paused. Motion is
+        # still integrated only by step(); do not advance time here.
+        self._outputs = self._build_outputs(
+            self._last_inputs, self._outputs.track.block_changed
+        )
 
     # ------------------------------------------------------------------ #
     # Physics
@@ -206,44 +248,79 @@ class TrainModel:
     def _integrate(
         self, dt: float, inputs: TrainModelInputs, grade_rad: float
     ) -> None:
-        # Section 1: forces, then trapezoidal a -> v and v -> x.
+        # Commands are held throughout this tick. Solve traction at the
+        # midpoint velocity: F * dx <= P * h, even on launch. Previous
+        # ticks' accelerations never enter this tick's force balance.
         cfg = self.config
         cmd = inputs.controller
         m = self._mass_kg()
-        v_prev = self._velocity_mps
-        a_prev = self._accel_mps2
-
-        f_trac = self._traction_n(cmd.power_cmd_w, v_prev)
         f_brake = self._brake_n(cmd.service_brake, cmd.emergency_brake)
         f_grade = m * cfg.g_mps2 * math.sin(grade_rad)
         f_roll = cfg.c_rr * m * cfg.g_mps2 * math.cos(grade_rad)
+        hold = f_brake + f_roll
+        power = 0.0 if self._failures.engine else min(
+            cmd.power_cmd_w, cfg.p_max_w
+        )
+        remaining = dt
+        v = self._velocity_mps
+        while remaining > 0.0:
+            direction = _sign(v)
+            if direction == 0.0:
+                drive = self._traction_n(power, 0.0) - f_grade
+                if abs(drive) <= hold:
+                    break
+                direction = _sign(drive)
 
-        if v_prev != 0.0:
-            a_n = (
-                f_trac - f_grade - _sign(v_prev) * (f_brake + f_roll)
-            ) / m
-            v_n = v_prev + (dt / 2.0) * (a_n + a_prev)
-            dx = (dt / 2.0) * (v_n + v_prev)
-            if _sign(v_n) != _sign(v_prev):
-                # Brakes and rolling resistance stop the train, never
-                # reverse it; the next tick takes the at-rest case.
-                v_n = 0.0
-                a_n = 0.0
-        else:
-            f_drive = f_trac - f_grade
-            f_hold = f_brake + f_roll
-            if abs(f_drive) <= f_hold:
-                a_n = 0.0
+            resistance = f_grade + direction * hold
+            h = remaining
+            if direction > 0.0 and power > 0.0:
+                # Resolve the P/v transition and its relaxation time.
+                # This bounds midpoint steps without a speed governor.
+                scale = max(v, power / cfg.f_max_n, math.ulp(0.0))
+                h = min(h, m * scale * (scale / power))
+                if 0.0 < resistance < cfg.f_max_n:
+                    equilibrium = power / resistance
+                    if math.isclose(v, equilibrium, rel_tol=1e-12,
+                                    abs_tol=math.ulp(equilibrium)):
+                        # At floating-point equilibrium, skip vanishing
+                        # substeps rather than accumulating roundoff.
+                        v = equilibrium
+                        self._offset_m += v * remaining
+                        break
+                v_next = v + h * (cfg.f_max_n - resistance) / m
+                if (v + v_next) / 2.0 > power / cfg.f_max_n:
+                    # Scale the midpoint quadratic by speed to avoid
+                    # squaring tiny velocities at very small powers.
+                    b = v / scale - (h / scale) * resistance / (2.0 * m)
+                    c = (h / scale) * (power / scale) / (2.0 * m)
+                    root = math.hypot(b, 2.0 * math.sqrt(c))
+                    u = ((b + root) / 2.0 if b >= 0.0
+                         else 2.0 * c / (root - b))
+                    v_next = 2.0 * scale * u - v
             else:
-                a_n = (f_drive - _sign(f_drive) * f_hold) / m
-            v_n = v_prev + (dt / 2.0) * (a_n + a_prev)
-            dx = (dt / 2.0) * (v_n + v_prev)
+                # No traction during rollback; all forces are constant.
+                v_next = v - h * resistance / m
 
-        self._accel_mps2 = a_n
-        self._velocity_mps = v_n
-        # OPEN(5.3): offset is distance since the last block change,
-        # for the front of the train; it goes negative in rollback.
-        self._offset_m += dx
+            if (v > 0.0 and v_next <= 0.0) or (v < 0.0 and v_next >= 0.0):
+                # Integrate to the stop, then evaluate static holding or
+                # gravity-driven reversal for the remainder of the tick.
+                traction = self._traction_n(power, v / 2.0)
+                a_stop = (traction - resistance) / m
+                h = min(h, -v / a_stop)
+                v_next = 0.0
+            self._offset_m += h * (v + v_next) / 2.0
+            remaining -= h
+            v = v_next
+
+        self._velocity_mps = v
+        drive = self._traction_n(power, v) - f_grade
+        if v == 0.0:
+            self._accel_mps2 = (
+                0.0 if abs(drive) <= hold
+                else (drive - _sign(drive) * hold) / m
+            )
+        else:
+            self._accel_mps2 = (drive - _sign(v) * hold) / m
 
     # ------------------------------------------------------------------ #
     # Blocks, passengers, cabin

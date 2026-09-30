@@ -10,17 +10,15 @@ signals are presented as one row per element: ``Light Command``
 (``bool[2]``) becomes left and right, and the ``Track Signal`` struct is
 flattened into its fields.
 
-Sending the inputs hands them to the Train Model and advances one tick.
-The model then keeps receiving the last sent inputs on every tick,
-whether advanced by hand or by the running clock, except that
-``passengers_boarded`` is applied once per send: the Track Model reports
-a boarding count on one tick only.
+Controls read live model state, with explicitly staged edits marked pending.
+Sending applies those edits and advances one tick. Later ticks reuse the
+model's accepted producer inputs. A boarding count is consumed once and
+must be entered again for a later boarding event.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
@@ -38,80 +36,64 @@ from train_model.state import FAILURE_MODES, TrainModelState
 #: the view renders; ``unit`` is empty where the signal is
 #: dimensionless.
 INPUT_SPEC: tuple[dict[str, Any], ...] = (
-    {"name": "power_command", "kind": "float", "unit": "W", "value": 118000.0},
+    {"name": "power_command", "kind": "float", "unit": "W"},
     {
         "name": "service_brake_command",
         "kind": "bool",
         "unit": "",
-        "value": False,
     },
     {
         "name": "emergency_brake_command",
         "kind": "bool",
         "unit": "",
-        "value": False,
     },
     {
         "name": "interior_light_command",
         "kind": "bool",
         "unit": "",
-        "value": True,
     },
     {
         "name": "exterior_light_command",
         "kind": "bool",
         "unit": "",
-        "value": True,
     },
-    {"name": "left_door_command", "kind": "bool", "unit": "", "value": False},
-    {"name": "right_door_command", "kind": "bool", "unit": "", "value": False},
-    {"name": "commanded_speed", "kind": "float", "unit": "m/s", "value": 16.0},
+    {"name": "left_door_command", "kind": "bool", "unit": ""},
+    {"name": "right_door_command", "kind": "bool", "unit": ""},
+    {"name": "commanded_speed", "kind": "float", "unit": "m/s"},
     {
         "name": "authority_block",
         "kind": "string",
         "unit": "",
-        "value": "GREEN M",
     },
     {
         "name": "beacon_station",
         "kind": "string",
         "unit": "",
-        "value": "Dormont",
     },
     {
         "name": "beacon_platform_side",
         "kind": "string",
         "unit": "",
-        "value": "L",
     },
     {
         "name": "beacon_underground",
         "kind": "bool",
         "unit": "",
-        "value": False,
     },
-    {"name": "block", "kind": "string", "unit": "", "value": "GREEN I"},
-    {"name": "grade", "kind": "float", "unit": "deg", "value": 0.7},
-    {"name": "elevation", "kind": "float", "unit": "m", "value": 0.0},
-    {"name": "speed_limit", "kind": "float", "unit": "m/s", "value": 18.0},
+    {"name": "block", "kind": "string", "unit": ""},
+    {"name": "grade", "kind": "float", "unit": "deg"},
+    {"name": "elevation", "kind": "float", "unit": "m"},
+    {"name": "speed_limit", "kind": "float", "unit": "m/s"},
     # Track circuit polarity; flipping it is a block change.
-    {"name": "polarity", "kind": "bool", "unit": "", "value": False},
-    {"name": "passengers_boarded", "kind": "int", "unit": "", "value": 12},
-    {"name": "temperature_setpoint", "kind": "int", "unit": "C", "value": 20},
+    {"name": "polarity", "kind": "bool", "unit": ""},
+    {"name": "passengers_boarded", "kind": "int", "unit": ""},
+    {"name": "temperature_setpoint", "kind": "float", "unit": "C"},
     {
         "name": "announcement",
         "kind": "string",
         "unit": "",
-        "value": "Next stop Dormont",
     },
 )
-
-#: Harness inputs the Train Model does not report back, shown on the
-#: overview as sent: the ``grade`` and ``elevation`` readouts.
-_DISPLAY_ONLY: dict[str, str] = {
-    "grade": "grade",
-    "elevation": "elevation",
-}
 
 #: Outputs read back from the module, in interface-dictionary order.
 _OUTPUT_SPEC: tuple[tuple[str, str, str, str], ...] = (
@@ -121,15 +103,19 @@ _OUTPUT_SPEC: tuple[tuple[str, str, str, str], ...] = (
     ("right_door_state", "bool", "", "right_door"),
     ("interior_light_state", "bool", "", "interior_light"),
     ("exterior_light_state", "bool", "", "exterior_light"),
-    ("cabin_temp", "int", "C", "cabin_temp"),
+    ("cabin_temp", "float", "C", "cabin_temp"),
     ("commanded_speed", "float", "m/s", "commanded_speed"),
     ("authority", "string", "", "authority_block"),
-    ("beacon_station", "string", "", "next_station"),
-    ("beacon_platform_side", "string", "", "platform_side"),
+    ("beacon_station", "string", "", "beacon_station"),
+    ("beacon_platform_side", "string", "", "beacon_platform_side"),
+    ("beacon_underground", "bool", "", "beacon_underground"),
     ("position_block", "string", "", "current_block"),
     ("position_offset", "float", "m", "position_offset"),
     ("actual_speed", "float", "m/s", "actual_speed"),
     ("passengers", "int", "", "passengers"),
+    ("passenger_capacity", "int", "", "passenger_capacity"),
+    ("block_changed", "bool", "", "block_changed"),
+    ("speed_limit", "float", "m/s", "speed_limit"),
 )
 
 # Float outputs are shown to this many decimal places.
@@ -150,9 +136,9 @@ class TestHarnessState(QObject):
     ) -> None:
         super().__init__(parent)
         self._model = model
-        self._inputs: list[dict[str, Any]] = [dict(row) for row in INPUT_SPEC]
-        # The inputs the model receives each tick; None until a send.
-        self._sent: TrainModelInputs | None = None
+        self._pending_inputs: dict[str, Any] = {}
+        self._live_inputs = model.live_input_values()
+        self._emergency_override_pending = False
         self._running = False
         self._tick = 0
         self._dt = _DEFAULT_DT
@@ -161,16 +147,42 @@ class TestHarnessState(QObject):
         self._timer.timeout.connect(self._step)
         self._model.snapshotChanged.connect(self.outputsChanged)
         self._model.failuresChanged.connect(self.outputsChanged)
+        self._model.snapshotChanged.connect(self._sync_inputs)
 
-    @Property("QVariantList", notify=inputsChanged)
+    def _sync_inputs(self) -> None:
+        live = self._model.live_input_values()
+        if live != self._live_inputs:
+            self._live_inputs = live
+            self.inputsChanged.emit()
+
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    def inputDefinitions(self) -> list[dict[str, Any]]:
+        """Stable row identities: ticks must not recreate focused editors."""
+        return [
+            {key: row[key] for key in ("name", "kind", "unit")}
+            for row in INPUT_SPEC
+        ]
+
+    @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
+    def inputValues(self) -> dict[str, Any]:
+        """Live values overlaid only with explicitly staged edits."""
+        return self._live_inputs | self._pending_inputs
+
+    @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
+    def pendingInputs(self) -> dict[str, Any]:
+        """Which displayed values have not yet been sent."""
+        return {name: True for name in self._pending_inputs}
+
+    @Property("QVariantList", notify=inputsChanged)  # type: ignore[arg-type]
     def inputs(self) -> list[dict[str, Any]]:
         """Editable input rows."""
-        return [dict(row) for row in self._inputs]
+        values = self._live_inputs | self._pending_inputs
+        return [dict(row, value=values[row["name"]]) for row in INPUT_SPEC]
 
-    @Property("QVariantList", notify=outputsChanged)
+    @Property("QVariantList", notify=outputsChanged)  # type: ignore[arg-type]
     def outputs(self) -> list[dict[str, Any]]:
         """Read-only output rows resolved from the module snapshot."""
-        snapshot = self._model.snapshot
+        snapshot = cast(dict[str, Any], self._model.snapshot)
         rows: list[dict[str, Any]] = [
             {
                 "name": name,
@@ -206,24 +218,27 @@ class TestHarnessState(QObject):
         """Seconds per tick."""
         return self._dt
 
-    @Property(str, notify=runControlChanged)
+    @Property(str, notify=outputsChanged)
     def elapsed(self) -> str:
         """Elapsed simulated time as ``hh:mm:ss``."""
-        total = int(self._tick * self._dt)
-        hours, remainder = divmod(total, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        snapshot = cast(dict[str, Any], self._model.snapshot)
+        return str(snapshot["clock"])
 
     @Slot(str, "QVariant")
     def setInput(self, name: str, value: Any) -> None:
         """Write one input row, coercing to the declared type."""
-        for row in self._inputs:
+        for row in INPUT_SPEC:
             if row["name"] != name:
                 continue
             coerced = self._coerce(row["kind"], value)
-            if row["value"] == coerced:
+            if name == "emergency_brake_command":
+                # Clicking False must work even if the input is already
+                # False but the separate passenger latch is active.
+                self._emergency_override_pending = True
+            if (name in self._pending_inputs
+                    and self._pending_inputs[name] == coerced):
                 return
-            row["value"] = coerced
+            self._pending_inputs[name] = coerced
             self.inputsChanged.emit()
             return
         raise KeyError(f"unknown input: {name}")
@@ -231,12 +246,17 @@ class TestHarnessState(QObject):
     @Slot()
     def sendInputs(self) -> None:
         """Hand the inputs to the Train Model and advance one tick."""
-        values = {row["name"]: row["value"] for row in self._inputs}
-        self._sent = self._build_inputs(values)
-        self._model.update_many(
-            {field: values[name] for name, field in _DISPLAY_ONLY.items()}
-        )
-        self._step()
+        values = self._model.command_values() | self._pending_inputs
+        inputs = self._build_inputs(values)
+        if self._emergency_override_pending:
+            self._model.clear_passenger_brake_for_test()
+            self._emergency_override_pending = False
+        self._model.step(self._dt, inputs)
+        self._pending_inputs.clear()
+        self._tick += 1
+        self._sync_inputs()
+        self.inputsChanged.emit()
+        self.runControlChanged.emit()
 
     @Slot(bool)
     def setRunning(self, running: bool) -> None:
@@ -257,10 +277,10 @@ class TestHarnessState(QObject):
 
     @Slot()
     def resetModule(self) -> None:
-        """Restore the seeded inputs, a fresh model and zero counters."""
+        """Restore a fresh model, live inputs and zero counters."""
         self._timer.stop()
-        self._inputs = [dict(row) for row in INPUT_SPEC]
-        self._sent = None
+        self._pending_inputs.clear()
+        self._emergency_override_pending = False
         self._tick = 0
         self._running = False
         self._model.reset()
@@ -268,16 +288,13 @@ class TestHarnessState(QObject):
         self.runControlChanged.emit()
 
     def _step(self) -> None:
-        # One tick. Before the first send, nothing has been sent, so
-        # the inputs as they stand are sent first.
-        if self._sent is None:
+        # The first tick may submit pending edits. Later ticks use only
+        # accepted model inputs; they never overwrite or submit drafts.
+        if self._tick == 0 and self._pending_inputs:
             self.sendInputs()
             return
-        self._model.step(self._dt, self._sent)
-        # Boarding is reported on one tick only.
-        self._sent = replace(
-            self._sent,
-            track=replace(self._sent.track, passengers_boarded=0),
+        self._model.step(
+            self._dt, self._build_inputs(self._model.command_values())
         )
         self._tick += 1
         self.runControlChanged.emit()

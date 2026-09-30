@@ -67,7 +67,8 @@ def test_protocol_members_match_signatures() -> None:
     """Check that every protocol method exists with the same parameters."""
     impl = TrainModel(TrainConfig())
     for name in ("step", "snapshot", "set_failures",
-                 "pull_passenger_emergency_brake"):
+                 "pull_passenger_emergency_brake",
+                 "clear_passenger_brake_for_test"):
         expected = inspect.signature(getattr(interface.TrainModel, name))
         actual = inspect.signature(getattr(TrainModel, name))
         assert list(actual.parameters) == list(expected.parameters), name

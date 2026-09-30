@@ -28,7 +28,11 @@ ScrollView {
                 heading: qsTr("Test harness \u2014 module driven from this page")
                 body: qsTr("Sending the inputs hands them to the Train Model "
                     + "and advances one tick. Each later tick reuses the last "
-                    + "sent inputs; passengers board once per send.")
+                    + "sent inputs; passengers board once per send. "
+                    + "Select emergency_brake_command and send to override "
+                    + "a passenger brake latch. Brake failure still applies. "
+                    + "Controls show live model state; pending edits are "
+                    + "marked until sent. Boarding counts are consumed once.")
             }
 
             Card {
@@ -38,17 +42,20 @@ ScrollView {
                 TableHeader { Layout.fillWidth: true }
 
                 Repeater {
-                    model: harness.inputs
+                    model: harness.inputDefinitions
 
                     delegate: SignalRow {
                         required property var modelData
 
                         Layout.fillWidth: true
-                        name: modelData.name
+                        objectName: "input-" + modelData.name
                         kind: modelData.kind
-                        value: modelData.value
+                        value: harness.inputValues[modelData.name]
                         unit: modelData.unit
                         editable: true
+                        preserveActiveEdit: true
+                        property bool pending: !!harness.pendingInputs[modelData.name]
+                        name: modelData.name + (pending ? " (pending)" : "")
                         onEdited: function (newValue) {
                             harness.setInput(modelData.name, newValue);
                         }

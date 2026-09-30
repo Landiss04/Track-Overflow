@@ -41,8 +41,9 @@ def snap(state: TrainModelState) -> dict[str, Any]:
 
 
 def test_every_input_row_is_mapped() -> None:
-    """Check that sending the seeded rows builds valid model inputs."""
+    """Check that sending edited rows builds valid model inputs."""
     state, harness = make_harness()
+    harness.setInput("block", "GREEN I")
     harness.sendInputs()
     assert harness.property("tick") == 1
     assert snap(state)["current_block"] == "GREEN I"
@@ -57,6 +58,9 @@ def test_send_boards_passengers_once() -> None:
     harness.advanceTick()
     harness.advanceTick()
     assert snap(state)["passengers"] == 30
+    harness.sendInputs()
+    assert snap(state)["passengers"] == 30
+    harness.setInput("passengers_boarded", 30)
     harness.sendInputs()
     assert snap(state)["passengers"] == 60
     outputs = {row["name"]: row["value"] for row in harness.property("outputs")}
@@ -106,6 +110,72 @@ def test_passenger_pull_reported_next_tick() -> None:
     assert snap(state)["emergency_brake"] is True
     state.releaseEmergencyBrake()
     assert snap(state)["passenger_ebrake_pulled"] is True
+    harness.advanceTick()
+    assert snap(state)["emergency_brake"] is True
+
+
+def test_test_input_overrides_passenger_latch_both_ways() -> None:
+    """Test commands clear the latch without resetting other train state."""
+    state, harness = make_harness()
+    harness.sendInputs()
+    harness.setInput("passengers_boarded", 0)
+    state.applyEmergencyBrake()
+    harness.advanceTick()
+    passengers = snap(state)["passengers"]
+    # False was already displayed; clicking it must still clear the latch.
+    harness.setInput("emergency_brake_command", False)
+    assert snap(state)["passenger_ebrake_pulled"] is True
+    harness.sendInputs()
+    assert snap(state)["passenger_ebrake_pulled"] is False
+    assert snap(state)["emergency_brake"] is False
+    assert snap(state)["passengers"] == passengers
+    harness.setInput("emergency_brake_command", True)
+    harness.sendInputs()
+    assert snap(state)["emergency_brake"] is True
+    harness.setInput("emergency_brake_command", False)
+    harness.sendInputs()
+    assert snap(state)["emergency_brake"] is False
+
+
+def test_test_override_restores_service_brake() -> None:
+    """A service request becomes effective after the test override."""
+    state, harness = make_harness()
+    harness.setInput("service_brake_command", True)
+    harness.sendInputs()
+    state.applyEmergencyBrake()
+    harness.advanceTick()
+    assert snap(state)["service_brake"] is False
+    harness.setInput("emergency_brake_command", False)
+    harness.sendInputs()
+    assert snap(state)["emergency_brake"] is False
+    assert snap(state)["service_brake"] is True
+
+
+def test_test_override_preserves_brake_failure() -> None:
+    """Testing overrides the passenger request, never injected faults."""
+    state, harness = make_harness()
+    harness.sendInputs()
+    state.setFailure("brake_failure", True)
+    state.applyEmergencyBrake()
+    for command in [False, True, False]:
+        harness.setInput("emergency_brake_command", command)
+        harness.sendInputs()
+        assert state.isFailed("brake_failure")
+        assert not snap(state)["passenger_ebrake_pulled"]
+        assert not snap(state)["emergency_brake"]
+
+
+def test_unrelated_sends_do_not_clear_passenger_latch() -> None:
+    """The override is explicit and applies once per test selection."""
+    state, harness = make_harness()
+    harness.setInput("emergency_brake_command", False)
+    harness.sendInputs()
+    state.applyEmergencyBrake()
+    harness.advanceTick()
+    harness.setInput("power_command", 0)
+    harness.sendInputs()
+    assert snap(state)["passenger_ebrake_pulled"] is True
+    assert snap(state)["emergency_brake"] is True
 
 
 def test_reset_restores_a_fresh_model() -> None:
@@ -122,6 +192,7 @@ def test_reset_restores_a_fresh_model() -> None:
 def test_invalid_platform_side_is_rejected() -> None:
     """Check a beacon platform side other than L or R raises."""
     _, harness = make_harness()
+    harness.setInput("beacon_station", "Station")
     harness.setInput("beacon_platform_side", "X")
     with pytest.raises(ValueError, match="platform_side"):
         harness.sendInputs()

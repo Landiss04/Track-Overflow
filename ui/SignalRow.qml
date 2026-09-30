@@ -11,6 +11,7 @@ RowLayout {
     property var value: undefined
     property string unit: ""
     property bool editable: false
+    property bool preserveActiveEdit: false
     property int kindWidth: 64
     property int valueWidth: 180
     property int unitWidth: 52
@@ -84,8 +85,8 @@ RowLayout {
         ValueField {
             label: root.name
             kind: root.kind
-            text: root.value === undefined || root.value === null
-                ? "" : String(root.value)
+            modelValue: root.value
+            preserveActiveEdit: root.preserveActiveEdit
             onCommitted: function (newValue) { root.edited(newValue); }
         }
     }

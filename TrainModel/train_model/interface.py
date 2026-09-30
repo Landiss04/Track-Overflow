@@ -214,6 +214,8 @@ class TrainModelSnapshot:
     n_passengers: int
     passenger_ebrake_pulled: bool
     outputs: TrainModelOutputs
+    inputs: TrainModelInputs | None = None
+    elapsed_s: float = 0.0
 
 
 # --------------------------------------------------------------------------- #
@@ -228,7 +230,9 @@ class TrainModel(Protocol):
     def step(self, dt: float, inputs: TrainModelInputs) -> TrainModelOutputs:
         """Advance one tick.
 
-        dt is fixed by the harness and must be positive.
+        dt is fixed by the harness and must be finite and positive.
+        Numeric inputs must be finite; power must be nonnegative.
+        Invalid inputs are rejected before any state is changed.
         """
         ...
 
@@ -243,4 +247,8 @@ class TrainModel(Protocol):
         ...
 
     def pull_passenger_emergency_brake(self) -> None:
+        ...
+
+    def clear_passenger_brake_for_test(self) -> None:
+        """Test harness override only; normal UI release is undecided."""
         ...

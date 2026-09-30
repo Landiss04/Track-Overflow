@@ -48,7 +48,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 moduleName: qsTr("Train Model")
                 instance: window.snapshot.train_id
-                mode: window.snapshot.mode
+                mode: harness.running ? qsTr("Running") : qsTr("Paused")
                 line: window.snapshot.line
                 clock: window.snapshot.clock
                 faulted: window.snapshot.emergency_brake
