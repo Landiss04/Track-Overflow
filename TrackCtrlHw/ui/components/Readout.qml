@@ -11,42 +11,42 @@ Rectangle {
     property string unit: ""
     property bool compact: false
 
-    readonly property int valueSize: compact ? Theme.sizeBody : Theme.sizeReadout
+    readonly property int valueSize: compact ? theme.size_body : theme.size_telemetry
 
-    implicitWidth: column.implicitWidth + 2 * Theme.space4
-    implicitHeight: column.implicitHeight + 2 * Theme.space3
-    radius: Theme.radiusMd
-    color: Theme.bgSunken
+    implicitWidth: column.implicitWidth + 2 * theme.space_4
+    implicitHeight: column.implicitHeight + 2 * theme.space_3
+    radius: theme.radius_md
+    color: theme.bg_sunken
     border.width: 1
-    border.color: Theme.border
+    border.color: theme.border
     clip: true
 
     Column {
         id: column
         anchors.fill: parent
-        anchors.leftMargin: Theme.space4
-        anchors.rightMargin: Theme.space4
-        anchors.topMargin: Theme.space3
-        anchors.bottomMargin: Theme.space3
-        spacing: Theme.space1
+        anchors.leftMargin: theme.space_4
+        anchors.rightMargin: theme.space_4
+        anchors.topMargin: theme.space_3
+        anchors.bottomMargin: theme.space_3
+        spacing: theme.space_1
 
         Text {
             text: root.label.toUpperCase()
-            color: Theme.textMuted
-            font.family: Theme.uiFamily
-            font.pixelSize: Theme.sizeLabel
+            color: theme.text_muted
+            font.family: theme.ui_family
+            font.pixelSize: theme.size_label
             font.bold: true
-            font.letterSpacing: Theme.sizeLabel * Theme.labelTracking
+            font.letterSpacing: theme.label_letter_spacing
         }
 
         Row {
-            spacing: Theme.space2
+            spacing: theme.space_2
             width: parent.width
 
             Text {
                 text: root.value
-                color: Theme.textPrimary
-                font.family: Theme.monoFamily
+                color: theme.text_primary
+                font.family: theme.mono_family
                 font.pixelSize: root.valueSize
                 font.bold: true
                 width: Math.min(implicitWidth, column.width)
@@ -56,9 +56,9 @@ Rectangle {
             Text {
                 text: root.unit
                 visible: root.unit !== ""
-                color: Theme.textMuted
-                font.family: Theme.monoFamily
-                font.pixelSize: Theme.sizeSmall
+                color: theme.text_muted
+                font.family: theme.mono_family
+                font.pixelSize: theme.size_small
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: root.compact ? 1 : 4
             }

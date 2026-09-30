@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
+import "../../../ui" as Shared
+
 // Style Guide §6.6. Header uses the Label token with a --border-strong rule;
 // rows are 13 px with --space-3 cell padding and a --border bottom rule.
 // Because --bg-raised equals --bg-surface in the light theme, row hover applies
@@ -21,7 +23,7 @@ Item {
 
     signal actionTriggered(int row, int column)
 
-    readonly property int cellPadding: Theme.space3
+    readonly property int cellPadding: theme.space_3
     readonly property int rowHeight: 36
     readonly property int headerHeight: 32
 
@@ -36,7 +38,7 @@ Item {
         }
         if (flex === 0)
             return 0;
-        var gaps = Math.max(0, columns.length - 1) * Theme.space3;
+        var gaps = Math.max(0, columns.length - 1) * theme.space_3;
         var avail = list.width - 2 * cellPadding - gaps - fixed;
         return Math.max(88, avail / flex);
     }
@@ -48,10 +50,10 @@ Item {
 
     function cellInk(cell) {
         if (cell.tone === "muted")
-            return Theme.textMuted;
+            return theme.text_muted;
         if (cell.tone === "secondary")
-            return Theme.textSecondary;
-        return Theme.textPrimary;
+            return theme.text_secondary;
+        return theme.text_primary;
     }
 
     function cellAlignment(index, cell) {
@@ -75,7 +77,7 @@ Item {
                 anchors.fill: parent
                 anchors.leftMargin: root.cellPadding
                 anchors.rightMargin: root.cellPadding
-                spacing: Theme.space3
+                spacing: theme.space_3
 
                 Repeater {
                     model: root.columns.length
@@ -86,11 +88,11 @@ Item {
                         width: root.columnWidth(index)
                         height: root.headerHeight
                         text: root.columns[index].title.toUpperCase()
-                        color: Theme.textMuted
-                        font.family: Theme.uiFamily
-                        font.pixelSize: Theme.sizeLabel
+                        color: theme.text_muted
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_label
                         font.bold: true
-                        font.letterSpacing: Theme.sizeLabel * Theme.labelTracking
+                        font.letterSpacing: theme.label_letter_spacing
                         verticalAlignment: Text.AlignVCenter
                         horizontalAlignment: root.columns[index].align === "right" ? Text.AlignRight : Text.AlignLeft
                         elide: Text.ElideRight
@@ -103,7 +105,7 @@ Item {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 height: 1
-                color: Theme.borderStrong
+                color: theme.border_strong
             }
         }
 
@@ -131,7 +133,7 @@ Item {
 
                 Rectangle {
                     anchors.fill: parent
-                    color: root.selectedRow === rowItem.index ? Theme.accentSubtle : hoverArea.containsMouse ? Theme.accentSubtle : "transparent"
+                    color: root.selectedRow === rowItem.index ? theme.accent_subtle : hoverArea.containsMouse ? theme.accent_subtle : "transparent"
                 }
 
                 MouseArea {
@@ -147,7 +149,7 @@ Item {
                     anchors.fill: parent
                     anchors.leftMargin: root.cellPadding
                     anchors.rightMargin: root.cellPadding
-                    spacing: Theme.space3
+                    spacing: theme.space_3
 
                     Repeater {
                         model: root.columns.length
@@ -167,8 +169,8 @@ Item {
                                 visible: cellItem.cell.badge === undefined && cellItem.cell.button === undefined
                                 text: cellItem.cell.text !== undefined && cellItem.cell.text !== "" ? cellItem.cell.text : "\u2014"
                                 color: root.cellInk(cellItem.cell)
-                                font.family: cellItem.cell.mono === true ? Theme.monoFamily : Theme.uiFamily
-                                font.pixelSize: Theme.sizeSmall
+                                font.family: cellItem.cell.mono === true ? theme.mono_family : theme.ui_family
+                                font.pixelSize: theme.size_small
                                 verticalAlignment: Text.AlignVCenter
                                 horizontalAlignment: root.cellAlignment(index, cellItem.cell)
                                 elide: Text.ElideRight
@@ -177,30 +179,30 @@ Item {
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: cellItem.cell.badge !== undefined
-                                spacing: Theme.space2
+                                spacing: theme.space_2
 
-                                StatusBadge {
-                                    kind: cellItem.cell.badge !== undefined ? cellItem.cell.badge : "idle"
-                                    text: cellItem.cell.badgeText !== undefined ? cellItem.cell.badgeText : ""
+                                Shared.StatusBadge {
+                                    variant: cellItem.cell.badge !== undefined ? cellItem.cell.badge : "idle"
+                                    label: cellItem.cell.badgeText !== undefined ? cellItem.cell.badgeText : ""
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
 
                                 Text {
                                     visible: cellItem.cell.text !== undefined && cellItem.cell.text !== ""
                                     text: cellItem.cell.text !== undefined ? cellItem.cell.text : ""
-                                    color: Theme.textSecondary
-                                    font.family: cellItem.cell.mono === true ? Theme.monoFamily : Theme.uiFamily
-                                    font.pixelSize: Theme.sizeSmall
+                                    color: theme.text_secondary
+                                    font.family: cellItem.cell.mono === true ? theme.mono_family : theme.ui_family
+                                    font.pixelSize: theme.size_small
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
 
-                            AppButton {
+                            Shared.AppButton {
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.right: parent.right
                                 visible: cellItem.cell.button !== undefined
                                 enabled: cellItem.cell.enabled !== false
-                                size: "sm"
+                                size: "small"
                                 text: cellItem.cell.button !== undefined ? cellItem.cell.button : ""
                                 onClicked: root.actionTriggered(rowItem.index, cellItem.index)
                             }
@@ -213,7 +215,7 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 1
-                    color: Theme.border
+                    color: theme.border
                 }
             }
         }

@@ -1,29 +1,13 @@
-# Shared UI kit for the ECE1140 Train Management System.
-# Normative source: documents/UI_Style_Guide.md. Modules import this directory
-# rather than restyling controls locally.
+# Track Controller specific components.
+# Shared, standardized controls and design tokens live in the repository-root
+# `ui/` kit (imported as `Shared`); only components with no equivalent there are
+# defined here. Normative source: documents/UI_Style_Guide.md.
 # No `module` line: a QML module URI must start with an uppercase letter, so
 # this directory is consumed with `import "components"`.
 
-singleton Theme 1.0 Theme.qml
-
-AppButton 1.0 AppButton.qml
 Banner 1.0 Banner.qml
 DataTable 1.0 DataTable.qml
-FieldSelect 1.0 FieldSelect.qml
 IconButton 1.0 IconButton.qml
 ModuleHeader 1.0 ModuleHeader.qml
 Panel 1.0 Panel.qml
 Readout 1.0 Readout.qml
-SegmentedControl 1.0 SegmentedControl.qml
-StatusBadge 1.0 StatusBadge.qml
-
-AppButton 1.0 AppButton.qml
-Banner 1.0 Banner.qml
-DataTable 1.0 DataTable.qml
-FieldSelect 1.0 FieldSelect.qml
-IconButton 1.0 IconButton.qml
-ModuleHeader 1.0 ModuleHeader.qml
-Panel 1.0 Panel.qml
-Readout 1.0 Readout.qml
-SegmentedControl 1.0 SegmentedControl.qml
-StatusBadge 1.0 StatusBadge.qml

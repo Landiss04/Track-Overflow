@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Layouts
 
+import "../../../ui" as Shared
+
 // Style Guide §6.7. Every module window carries module name and instance at H3,
 // the current mode badge, and the simulation clock in mono 13 px --text-muted.
 Rectangle {
@@ -14,32 +16,32 @@ Rectangle {
     property string clock: "--:--:--"
     property alias controls: controlRow.data
 
-    implicitHeight: Theme.controlHMd + 2 * Theme.space4
-    color: Theme.bgRaised
+    implicitHeight: theme.control_h_md + 2 * theme.space_4
+    color: theme.bg_raised
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.space5
-        anchors.rightMargin: Theme.space5
-        spacing: Theme.space4
+        anchors.leftMargin: theme.space_5
+        anchors.rightMargin: theme.space_5
+        spacing: theme.space_4
 
         Text {
             text: root.instance === "" ? root.moduleName : root.moduleName + " \u2014 " + root.instance
-            color: Theme.textPrimary
-            font.family: Theme.uiFamily
-            font.pixelSize: Theme.sizeH3
+            color: theme.text_primary
+            font.family: theme.ui_family
+            font.pixelSize: theme.size_h3
             font.bold: true
         }
 
-        StatusBadge {
-            kind: root.modeKind
-            text: root.mode
+        Shared.StatusBadge {
+            variant: root.modeKind
+            label: root.mode
             visible: root.mode !== ""
         }
 
-        StatusBadge {
-            kind: "fault"
-            text: root.faultText
+        Shared.StatusBadge {
+            variant: "fault"
+            label: root.faultText
             visible: root.faultText !== ""
         }
 
@@ -49,14 +51,14 @@ Rectangle {
 
         RowLayout {
             id: controlRow
-            spacing: Theme.space4
+            spacing: theme.space_4
         }
 
         Text {
             text: root.clock
-            color: Theme.textMuted
-            font.family: Theme.monoFamily
-            font.pixelSize: Theme.sizeSmall
+            color: theme.text_muted
+            font.family: theme.mono_family
+            font.pixelSize: theme.size_small
             font.bold: true
         }
     }
@@ -66,6 +68,6 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: Theme.border
+        color: theme.border
     }
 }

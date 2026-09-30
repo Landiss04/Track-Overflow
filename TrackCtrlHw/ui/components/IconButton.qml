@@ -11,13 +11,13 @@ Button {
     property string size: "md"
     property string tip: ""
 
-    readonly property int controlHeight: size === "sm" ? Theme.controlHSm : Theme.controlHMd
+    readonly property int controlHeight: size === "sm" ? theme.control_h_sm : theme.control_h_md
 
     implicitWidth: controlHeight
     implicitHeight: controlHeight
     padding: 0
     hoverEnabled: true
-    opacity: enabled ? 1.0 : Theme.disabledOpacity
+    opacity: enabled ? 1.0 : 0.42
     Accessible.name: tip
 
     ToolTip.text: tip
@@ -25,10 +25,10 @@ Button {
     ToolTip.delay: 400
 
     background: Rectangle {
-        radius: Theme.radiusMd
-        color: control.hovered ? Theme.accentSubtle : Theme.bgRaised
+        radius: theme.radius_md
+        color: control.hovered ? theme.accent_subtle : theme.bg_raised
         border.width: 1
-        border.color: Theme.borderStrong
+        border.color: theme.border_strong
 
         Rectangle {
             anchors.fill: parent
@@ -37,15 +37,15 @@ Button {
             radius: parent.radius + 3
             color: "transparent"
             border.width: 2
-            border.color: Theme.focusRing
+            border.color: theme.focus_ring
         }
     }
 
     contentItem: Text {
         text: control.glyph
-        color: Theme.textSecondary
-        font.family: Theme.uiFamily
-        font.pixelSize: Theme.sizeBody
+        color: theme.text_secondary
+        font.family: theme.ui_family
+        font.pixelSize: theme.size_body
         font.bold: true
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

@@ -1,12 +1,10 @@
 import QtQuick
 
-import "components"
-
 // Wayside territory schematic, ported from the SVG in
 // TrackCtrlHw/ui/html/track-controller.html. Geometry is kept in the original
 // 678 x 450 coordinate space and scaled to fit, so the drawing stays a direct
-// transcription. Every colour comes from Theme; block state is carried by fill
-// *and* by the printed label, per Style Guide §2 and §8.
+// transcription. Every colour comes from the shared theme; block state is
+// carried by fill *and* by the printed label, per Style Guide §2 and §8.
 Item {
     id: root
 
@@ -36,16 +34,16 @@ Item {
         property real fontScale: 1.0
 
         function uiFont(size) {
-            return "bold " + Math.round(size * fontScale) + "px \"" + Theme.uiFamily + "\"";
+            return "bold " + Math.round(size * fontScale) + "px \"" + theme.ui_family + "\"";
         }
 
         function monoFont(size) {
-            return Math.round(size * fontScale) + "px \"" + Theme.monoFamily + "\"";
+            return Math.round(size * fontScale) + "px \"" + theme.mono_family + "\"";
         }
 
         function thinLine(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
-            ctx.strokeStyle = Theme.borderStrong;
+            ctx.strokeStyle = theme.border_strong;
             ctx.lineWidth = 1;
             ctx.setLineDash([]);
             ctx.moveTo(x1 + 0.5, y1);
@@ -55,7 +53,7 @@ Item {
 
         function dashLine(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
-            ctx.strokeStyle = Theme.borderStrong;
+            ctx.strokeStyle = theme.border_strong;
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 4]);
             ctx.moveTo(x1 + 0.5, y1);
@@ -66,7 +64,7 @@ Item {
 
         function leg(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
-            ctx.strokeStyle = Theme.textSecondary;
+            ctx.strokeStyle = theme.text_secondary;
             ctx.lineWidth = 1.5;
             ctx.setLineDash([]);
             ctx.moveTo(x1, y1);
@@ -75,38 +73,38 @@ Item {
         }
 
         function blockFree(ctx, x, y, w, h) {
-            ctx.fillStyle = Theme.bgRaised;
+            ctx.fillStyle = theme.bg_raised;
             ctx.fillRect(x, y, w, h);
-            ctx.strokeStyle = Theme.borderStrong;
+            ctx.strokeStyle = theme.border_strong;
             ctx.lineWidth = 1;
             ctx.setLineDash([]);
             ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
         }
 
         function blockOccupied(ctx, x, y, w, h) {
-            ctx.fillStyle = Theme.info;
+            ctx.fillStyle = theme.info;
             ctx.fillRect(x, y, w, h);
         }
 
         function blockClosed(ctx, x, y, w, h) {
-            ctx.fillStyle = Theme.warning;
+            ctx.fillStyle = theme.warning;
             ctx.fillRect(x, y, w, h);
         }
 
         function solid(ctx, x, y, w, h) {
-            ctx.fillStyle = Theme.textSecondary;
+            ctx.fillStyle = theme.text_secondary;
             ctx.fillRect(x, y, w, h);
         }
 
         function plate(ctx, x, y, w, h) {
-            ctx.fillStyle = Theme.bgSurface;
+            ctx.fillStyle = theme.bg_surface;
             ctx.fillRect(x, y, w, h);
         }
 
         function signalHead(ctx, cx, cy) {
             ctx.beginPath();
-            ctx.fillStyle = Theme.bgSunken;
-            ctx.strokeStyle = Theme.textMuted;
+            ctx.fillStyle = theme.bg_sunken;
+            ctx.strokeStyle = theme.text_muted;
             ctx.lineWidth = 1;
             ctx.setLineDash([]);
             ctx.arc(cx, cy, 4.5, 0, 2 * Math.PI);
@@ -116,7 +114,7 @@ Item {
 
         function switchMark(ctx, cx, cy) {
             ctx.beginPath();
-            ctx.fillStyle = Theme.textSecondary;
+            ctx.fillStyle = theme.text_secondary;
             ctx.moveTo(cx - 6, cy);
             ctx.lineTo(cx, cy - 6);
             ctx.lineTo(cx + 6, cy);
@@ -126,21 +124,21 @@ Item {
         }
 
         function micro(ctx, text, x, y) {
-            ctx.fillStyle = Theme.textMuted;
+            ctx.fillStyle = theme.text_muted;
             ctx.font = uiFont(root.microSize);
             ctx.textAlign = "left";
             ctx.fillText(text, x, y);
         }
 
         function label(ctx, text, x, y, align) {
-            ctx.fillStyle = Theme.textMuted;
+            ctx.fillStyle = theme.text_muted;
             ctx.font = monoFont(root.labelSize);
             ctx.textAlign = align !== undefined ? align : "left";
             ctx.fillText(text, x, y);
         }
 
         function value(ctx, text, x, y, align) {
-            ctx.fillStyle = Theme.textPrimary;
+            ctx.fillStyle = theme.text_primary;
             ctx.font = monoFont(root.valueSize);
             ctx.textAlign = align !== undefined ? align : "left";
             ctx.fillText(text, x, y);

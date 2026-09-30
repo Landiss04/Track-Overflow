@@ -3,10 +3,11 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
 import "components"
+import "../../ui" as Shared
 
 // Track Controller — page 4. Layout and information architecture are a direct
-// port of TrackCtrlHw/ui/html/track-controller.html; all styling comes from
-// documents/UI_Style_Guide.md via Theme.
+// port of TrackCtrlHw/ui/html/track-controller.html; styling comes from the
+// shared ui/ kit and its theme tokens.
 Item {
     id: page
 
@@ -94,7 +95,7 @@ Item {
     // ---- shell -----------------------------------------------------------
     Rectangle {
         anchors.fill: parent
-        color: Theme.bgApp
+        color: theme.bg_app
     }
 
     ColumnLayout {
@@ -110,17 +111,18 @@ Item {
             clock: page.clockText
 
             controls: [
-                FieldSelect {
+                Shared.SelectField {
                     label: "Wayside"
-                    mono: true
-                    fieldWidth: 96
-                    options: ["1", "2", "3"]
+                    model: ["1", "2", "3"]
+                    // A ColumnLayout fills by default; this field is fixed width.
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: 96
                 },
-                AppButton {
+                Shared.AppButton {
                     text: "Load database"
                     Layout.alignment: Qt.AlignVCenter
                 },
-                SegmentedControl {
+                Shared.SegmentedToggle {
                     options: ["Automatic", "Maintenance"]
                     currentIndex: page.modeIndex
                     Layout.alignment: Qt.AlignVCenter
@@ -132,29 +134,29 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: Theme.space5
-            spacing: Theme.space4
+            Layout.margins: theme.space_5
+            spacing: theme.space_4
 
             // ---- dominant visual + the occupancy it comes from ----------
             ColumnLayout {
                 Layout.preferredWidth: 760
                 Layout.minimumWidth: 700
                 Layout.fillHeight: true
-                spacing: Theme.space4
+                spacing: theme.space_4
 
                 Panel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.minimumHeight: 280
                     title: "Wayside territory"
-                    bodyPadding: Theme.space3
+                    bodyPadding: theme.space_3
 
                     headerContent: [
                         Text {
                             text: "Sections D\u2013F \u00B7 Blocks 11\u201319"
-                            color: Theme.textMuted
-                            font.family: Theme.uiFamily
-                            font.pixelSize: Theme.sizeSmall
+                            color: theme.text_muted
+                            font.family: theme.ui_family
+                            font.pixelSize: theme.size_small
                         },
                         IconButton {
                             size: "sm"
@@ -164,9 +166,9 @@ Item {
                         },
                         Text {
                             text: page.zoomPercent + "%"
-                            color: Theme.textMuted
-                            font.family: Theme.monoFamily
-                            font.pixelSize: Theme.sizeSmall
+                            color: theme.text_muted
+                            font.family: theme.mono_family
+                            font.pixelSize: theme.size_small
                         },
                         IconButton {
                             size: "sm"
@@ -192,9 +194,9 @@ Item {
 
                     headerContent: Text {
                         text: "From track model \u00B7 14:32:05"
-                        color: Theme.textMuted
-                        font.family: Theme.uiFamily
-                        font.pixelSize: Theme.sizeSmall
+                        color: theme.text_muted
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
                     }
 
                     DataTable {
@@ -222,7 +224,7 @@ Item {
                 ColumnLayout {
                     width: sideColumn.availableWidth
                     height: Math.max(implicitHeight, sideColumn.availableHeight)
-                    spacing: Theme.space4
+                    spacing: theme.space_4
 
                     Banner {
                         Layout.fillWidth: true
@@ -239,7 +241,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            spacing: Theme.space3
+                            spacing: theme.space_3
 
                             Readout {
                                 Layout.fillWidth: true
@@ -270,17 +272,17 @@ Item {
                             ColumnLayout {
                                 Layout.alignment: Qt.AlignVCenter
                                 Layout.preferredWidth: 150
-                                spacing: Theme.space2
+                                spacing: theme.space_2
 
-                                AppButton {
+                                Shared.AppButton {
                                     Layout.fillWidth: true
                                     variant: "primary"
                                     text: "Load PLC file"
                                 }
 
-                                AppButton {
+                                Shared.AppButton {
                                     Layout.fillWidth: true
-                                    size: "sm"
+                                    size: "small"
                                     text: "Last report"
                                 }
                             }
@@ -297,9 +299,9 @@ Item {
 
                         headerContent: Text {
                             text: "Received 14:31:58"
-                            color: Theme.textMuted
-                            font.family: Theme.uiFamily
-                            font.pixelSize: Theme.sizeSmall
+                            color: theme.text_muted
+                            font.family: theme.ui_family
+                            font.pixelSize: theme.size_small
                         }
 
                         DataTable {
@@ -318,9 +320,9 @@ Item {
                         title: "Switches"
                         bodyPadding: 0
 
-                        headerContent: StatusBadge {
-                            kind: "ok"
-                            text: "2 of 2 agreeing"
+                        headerContent: Shared.StatusBadge {
+                            variant: "ok"
+                            label: "2 of 2 agreeing"
                         }
 
                         DataTable {
@@ -341,9 +343,9 @@ Item {
 
                         headerContent: Text {
                             text: "Set by PLC \u00B7 14:32:06"
-                            color: Theme.textMuted
-                            font.family: Theme.uiFamily
-                            font.pixelSize: Theme.sizeSmall
+                            color: theme.text_muted
+                            font.family: theme.ui_family
+                            font.pixelSize: theme.size_small
                         }
 
                         DataTable {

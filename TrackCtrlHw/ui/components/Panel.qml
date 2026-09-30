@@ -7,7 +7,7 @@ Item {
     id: root
 
     property string title: ""
-    property int bodyPadding: Theme.space4
+    property int bodyPadding: theme.space_4
     property alias headerContent: headerTools.data
     default property alias content: body.data
 
@@ -15,18 +15,18 @@ Item {
         anchors.fill: surface
         anchors.topMargin: 1
         anchors.bottomMargin: -2
-        radius: Theme.radiusLg
-        color: Theme.shadowInk
-        opacity: Theme.shadow1Opacity
+        radius: theme.radius_lg
+        color: theme.shadow_1_color
+        opacity: theme.shadow_1_alpha
     }
 
     Rectangle {
         id: surface
         anchors.fill: parent
-        radius: Theme.radiusLg
-        color: Theme.bgSurface
+        radius: theme.radius_lg
+        color: theme.bg_surface
         border.width: 1
-        border.color: Theme.border
+        border.color: theme.border
         clip: true
 
         ColumnLayout {
@@ -40,15 +40,15 @@ Item {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Theme.space4
-                    anchors.rightMargin: Theme.space4
-                    spacing: Theme.space3
+                    anchors.leftMargin: theme.space_4
+                    anchors.rightMargin: theme.space_4
+                    spacing: theme.space_3
 
                     Text {
                         text: root.title
-                        color: Theme.textPrimary
-                        font.family: Theme.uiFamily
-                        font.pixelSize: Theme.sizeH3
+                        color: theme.text_primary
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_h3
                         font.bold: true
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -56,7 +56,7 @@ Item {
 
                     RowLayout {
                         id: headerTools
-                        spacing: Theme.space2
+                        spacing: theme.space_2
                     }
                 }
 
@@ -65,7 +65,7 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 1
-                    color: Theme.border
+                    color: theme.border
                 }
             }
 
@@ -74,7 +74,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.margins: root.bodyPadding
-                spacing: Theme.space3
+                spacing: theme.space_3
             }
         }
     }

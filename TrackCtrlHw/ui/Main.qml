@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-import "components"
-
 ApplicationWindow {
     id: window
 
@@ -14,7 +12,7 @@ ApplicationWindow {
     minimumHeight: 760
     visible: true
     title: qsTr("CTC / Train System \u2014 Track Controller")
-    color: Theme.bgApp
+    color: theme.bg_app
 
     TrackController {
         anchors.fill: parent
