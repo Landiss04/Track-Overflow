@@ -27,12 +27,12 @@ from train_model.interface import (
 )
 from train_model.model import TrainModel
 
-#: The three failure modes injected by Murphy, in interface-dictionary
-#: order (``Failure Status`` is ``bool[3]``).
+#: The three failure modes injected by Murphy, in ``Failure Status``
+#: (``bool[3]``) element order: engine, signal pickup, brake.
 FAILURE_MODES: tuple[str, ...] = (
     "engine_failure",
-    "brake_failure",
     "signal_pickup_failure",
+    "brake_failure",
 )
 
 _FAILURE_LABELS: dict[str, str] = {
