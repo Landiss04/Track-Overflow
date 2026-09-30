@@ -76,7 +76,8 @@ Never resize the window from QML or Python after the fact (for example from
 | `DataTable` | `columns` (`key`, `label`, optional `numeric`, `mono`, `width`) and `rows`; `rowActivated(index, row)`; bind `currentIndex` to host state |
 | `TrackBlock` | Read-only `blockId` and `occupancy` (`free`, `occupied`, `closed`, `failure`, `maintenance`) |
 | `StatusBadge`, `TelemetryReadout`, `UsageBar` | Read-only presentation properties |
-| `Card`, `Callout`, `FieldLabel`, `HelperText`, `KeyValueRow`, `MonoText`, `TableHeader` | Layout and text components |
+| `Card`, `FieldLabel`, `HelperText`, `KeyValueRow`, `MonoText`, `TableHeader` | Layout and text components |
+| `Callout` | `heading`, `body`, `variant` (`info` default, or `warning`); a side-bar callout on the matching subtle background. The heading renders uppercase |
 | `Panel` | `title`; `headerItems: [...]` for trailing badges or small buttons; children fill the body. A header-bar panel for full-height workspace regions, where `Card` suits compact, content-sized sections |
 | `EmptyState` | `heading`, `body`; framed placeholder that shrinks to fit a narrow parent. Center it in the region it replaces |
 | `FormField` | `label`; the Label-token heading above a control that has no label of its own, such as a `SegmentedToggle`. `ValueField` and `SelectField` carry their own labels and do not need it |

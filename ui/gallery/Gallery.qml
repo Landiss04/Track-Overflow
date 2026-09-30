@@ -708,6 +708,14 @@ ApplicationWindow {
                                 heading: "Callout with heading only"
                             }
 
+                            Callout {
+                                Layout.fillWidth: true
+                                variant: "warning"
+                                heading: "Warning callout"
+                                body: "variant: \"warning\" uses --warning on --warning-bg, "
+                                    + "for caution states such as a maintenance mode."
+                            }
+
                             Card {
                                 Layout.fillWidth: true
                                 title: "Nested framed card"

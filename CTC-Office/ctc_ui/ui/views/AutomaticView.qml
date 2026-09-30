@@ -1,7 +1,7 @@
 // Automatic mode: trains dispatch themselves from the loaded schedule.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
+import "../../../../ui"
 import "../panels"
 
 ColumnLayout {
@@ -12,7 +12,7 @@ ColumnLayout {
 
     spacing: theme.space_3
 
-    ModeCallout {
+    Callout {
         Layout.fillWidth: true
         variant: "info"
         heading: qsTr("Automatic mode")

@@ -71,7 +71,6 @@ Do not copy shared components into this module; change them in `ui/`.
 
 | Component | Why it is CTC-only |
 | --- | --- |
-| `ModeCallout` | Info and warning variants with a side bar; shared `Callout` is info-only, and matching it would restyle other modules |
 | `CtcHeader` | Window buttons, mode toggle and clock; shared `ModuleHeader` has navigation tabs instead |
 
 #### Moved to the shared library
@@ -86,6 +85,7 @@ modules can use them. They are catalogued in the shared
 | `EmptyState` | `ctc_ui/ui/components/EmptyState.qml` | `ui/EmptyState.qml` |
 | `FormField` | `ctc_ui/ui/components/FormField.qml` | `ui/FormField.qml` |
 | `LabeledDivider` | `ctc_ui/ui/components/LabeledDivider.qml` | `ui/LabeledDivider.qml` |
+| `ModeCallout` | `ctc_ui/ui/components/ModeCallout.qml` | merged into `ui/Callout.qml` (file name kept); use `Callout { variant: "warning" }` |
 
 ## Checks
 

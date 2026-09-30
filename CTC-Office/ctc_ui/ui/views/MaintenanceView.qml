@@ -1,7 +1,7 @@
 // Maintenance mode: block closures and switch positions set by hand.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
+import "../../../../ui"
 import "../panels"
 
 ColumnLayout {
@@ -9,7 +9,7 @@ ColumnLayout {
 
     spacing: theme.space_3
 
-    ModeCallout {
+    Callout {
         Layout.fillWidth: true
         variant: "warning"
         heading: qsTr("Maintenance mode")

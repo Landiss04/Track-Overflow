@@ -13,7 +13,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import "../components"
 import "../../../../ui"
 
 Rectangle {
@@ -136,7 +135,7 @@ Rectangle {
                 width: scroller.availableWidth
                 spacing: theme.space_4
 
-                ModeCallout {
+                Callout {
                     Layout.fillWidth: true
                     Layout.topMargin: theme.space_4
                     Layout.leftMargin: theme.space_4

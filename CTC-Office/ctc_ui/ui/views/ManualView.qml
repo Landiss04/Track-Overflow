@@ -1,7 +1,7 @@
 // Manual mode: the dispatcher issues destination, authority and speed.
 import QtQuick
 import QtQuick.Layouts
-import "../components"
+import "../../../../ui"
 import "../panels"
 
 ColumnLayout {
@@ -12,7 +12,7 @@ ColumnLayout {
 
     spacing: theme.space_3
 
-    ModeCallout {
+    Callout {
         Layout.fillWidth: true
         variant: "info"
         heading: qsTr("Manual mode")
