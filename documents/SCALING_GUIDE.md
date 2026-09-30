@@ -31,7 +31,7 @@ The minimum window size is 720 x 450, which renders the canvas at 0.5x.
 
 ## Aspect-ratio locking
 
-The UI targets Windows 11. There, `train_model/aspect_lock.py` subclasses
+The UI targets Windows 11. There, `ui/aspect_lock.py` subclasses
 the window procedure and rewrites the `WM_SIZING` rectangle Windows proposes
 on every mouse move of an interactive resize. A Qt native event filter cannot
 do this: `WM_SIZING` is sent directly to the window procedure, not posted to
@@ -99,5 +99,5 @@ by `documents/UI_Style_Guide.md`.
 ## Change policy
 
 Keep the reference dimensions and transform in `ui/Main.qml` and the aspect
-lock in `train_model/aspect_lock.py`. Changes to colors, font sizes, radii,
+lock in `ui/aspect_lock.py`. Changes to colors, font sizes, radii,
 or spacing belong in the UI style guide and are outside the scaling mechanism.
