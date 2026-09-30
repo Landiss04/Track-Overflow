@@ -1,12 +1,12 @@
-**Target:** truth/decisions/D007-interfaces-harness-catalog.md
+**Target:** truth/decisions/D008-interfaces-harness-catalog.md
 **Action:** create
 **Proposed by:** Claude (Claude Code) on Train-model-Interface
 **Provenance:** asserted by Kevin Schillinger 2026-09-30 ("keep it", then choosing the harness-side catalog role over a module-imported contract or reference only)
-**Note:** D004–D006 are claimed by open proposals (D004 twice: central-harness on this branch, shared-window-scaling on `CTC_UI_Implementation`). D007 is the next unclaimed ID as of `origin/truth` 7127a96. Reassign at promotion if needed.
+**Note:** D004 is claimed by shared-window-scaling on `CTC_UI_Implementation`, and D005–D007 by proposals on this branch. D008 assumes those are promoted first. Reassign at promotion if needed.
 
 ---
 
-# D007-interfaces-harness-catalog
+# D008-interfaces-harness-catalog
 
 **Status:** current
 **Owner:** Kevin
@@ -17,10 +17,11 @@
 ## Context
 
 `common/interfaces.py` defines one dataclass per cross-module signal and one abstract
-interface per module. No module imports it. The central-harness decision has each module
-define only its own boundary types, with the harness mapping each producer-to-consumer
-edge, so the file cannot be a contract that modules import. The choice was to delete it,
-keep it as reference only, or give it a role the central harness can use.
+interface per module. No module imports it. The central-harness decision (D005) has each
+module define only its own boundary types, with the harness mapping each
+producer-to-consumer edge, so the file cannot be a contract that modules import. The
+choice was to delete it, keep it as reference only, or give it a role the central
+harness can use.
 
 ## Decision
 
@@ -34,8 +35,8 @@ keep it as reference only, or give it a role the central harness can use.
 
 ## Consequences
 
-- Compatible with the central-harness decision: no module's interface contains another
-  module's struct layouts, including the catalog's.
+- Compatible with the central-harness decision (D005): no module's interface contains
+  another module's struct layouts, including the catalog's.
 - The catalog must agree with truth. When a `signals/` entry or a unit convention
   changes, the catalog changes with it.
 - A module's boundary types can still change without touching the catalog. Only that
