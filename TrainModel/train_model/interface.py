@@ -6,8 +6,8 @@ modules' types into these and back. Other modules' struct layouts do not
 appear here.
 
 Field names carry their units. Where the interface dictionary is still open on
-units (temperature, grade), the suffix marks the current assumption so a later
-change is a mechanical rename.
+units (temperature, grade, authority), the suffix marks the current
+assumption so a later change is a mechanical rename.
 """
 
 from dataclasses import dataclass
@@ -121,8 +121,8 @@ class ControllerCommands:
 class TrackInfo:
     """From the Track Model, every tick. Terrain; unaffected by signal pickup failure."""
 
-    block_id: int
-    grade_deg: float                # units open
+    block_id: str
+    grade_percent: float            # positive uphill; units open
     elevation_m: float
     speed_limit_mps: float
     polarity: bool
@@ -133,7 +133,7 @@ class TrackSignal:
     """Track circuit data. Ignored while signal pickup has failed."""
 
     commanded_speed_mps: float
-    authority_m: float              # distance to stop, measured to the front; units open
+    authority_block_id: str         # block the train may travel up to; units open
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,7 +168,7 @@ class ControllerOutputs:
     headlights_on: bool
     cabin_temp_f: float
     commanded_speed_mps: float      # passed through; zeros or stale under pickup failure, open
-    authority_m: float              # passed through; same
+    authority_block_id: str | None  # passed through; None = no authority
     speed_limit_mps: float          # passed through from TrackInfo, provisional
     beacon: Beacon | None           # between-beacon behaviour open
     failures: FailureState
@@ -178,8 +178,8 @@ class ControllerOutputs:
 class TrackOutputs:
     """To the Track Model."""
 
-    block_id: int
-    offset_m: float                 # reference point on the 32.2 m train open
+    block_id: str
+    offset_m: float                # reference point on the 32.2 m train open
     actual_speed_mps: float         # negative during rollback
     block_changed: bool             # true on the tick polarity reverses; table says int
     passenger_capacity: int         # remaining, computed after the disembark draw
