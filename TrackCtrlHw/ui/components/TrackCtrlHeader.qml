@@ -3,8 +3,14 @@ import QtQuick.Layouts
 
 import "../../../ui" as Shared
 
-// Style Guide §6.7. Every module window carries module name and instance at H3,
-// the current mode badge, and the simulation clock in mono 13 px --text-muted.
+// Style Guide §6.7. Module name and instance at H3, the mode badge, and the
+// simulation clock in mono 13 px --text-muted.
+//
+// Module-local rather than the shared ui/ModuleHeader because this header
+// carries module-specific controls (wayside select, Load database, the
+// Automatic/Maintenance toggle), which the shared header has no slot for, and
+// because the mode badge must change semantic colour in Maintenance. Same
+// reason CTC Office keeps CtcHeader. Height matches ui/ModuleHeader exactly.
 Rectangle {
     id: root
 

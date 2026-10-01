@@ -1,6 +1,10 @@
 """Render the Track Controller window to a PNG for visual review.
 
     python TrackCtrlHw/ui/capture.py out.png
+    python TrackCtrlHw/ui/capture.py out.png 720 450
+
+The optional width and height check the scaling guide's size checklist;
+without them the window opens at the 1440 x 900 reference canvas.
 """
 
 import sys
@@ -19,7 +23,8 @@ REPO_ROOT = UI_DIR.parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ui.theme import build_theme  # noqa: E402  (needs REPO_ROOT on sys.path)
+from ui.aspect_lock import install_window_scaling  # noqa: E402
+from ui.theme import build_theme  # noqa: E402
 
 
 def main() -> int:
@@ -38,6 +43,9 @@ def main() -> int:
     if not roots:
         return 1
     window = roots[0]
+    window_scaling = install_window_scaling(window)  # noqa: F841  keep alive
+    if len(sys.argv) > 3:
+        window.resize(int(sys.argv[2]), int(sys.argv[3]))
 
     def grab() -> None:
         window.grabWindow().save(str(out))

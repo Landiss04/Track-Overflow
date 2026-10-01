@@ -65,8 +65,8 @@ Item {
 
     readonly property var switchColumns: [
         { title: "Switch", width: 90 },
-        { title: "Commanded", width: 120 },
-        { title: "Reported", width: 120 },
+        { title: "Commanded", width: 100 },
+        { title: "Reported", width: 100 },
         { title: "Set by", fill: true },
         { title: "", width: 130 }
     ]
@@ -77,11 +77,11 @@ Item {
     ]
 
     readonly property var signalColumns: [
-        { title: "Device", width: 100 },
-        { title: "Location", width: 140 },
+        { title: "Device", width: 90 },
+        { title: "Location", width: 112 },
         { title: "State 1", fill: true },
         { title: "State 2", fill: true },
-        { title: "Set by", width: 56 }
+        { title: "Set by", width: 52 }
     ]
 
     readonly property var signalRows: [
@@ -102,7 +102,7 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        ModuleHeader {
+        TrackCtrlHeader {
             Layout.fillWidth: true
             moduleName: "Track Controller"
             instance: "Green Line \u00B7 Wayside 1"
@@ -139,15 +139,13 @@ Item {
 
             // ---- dominant visual + the occupancy it comes from ----------
             ColumnLayout {
-                Layout.preferredWidth: 760
-                Layout.minimumWidth: 700
+                Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: theme.space_4
 
                 Panel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: 280
                     title: "Wayside territory"
                     bodyPadding: theme.space_3
 
@@ -187,8 +185,8 @@ Item {
 
                 Panel {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 240
-                    Layout.minimumHeight: 184
+                    // Panel header 44 + table header 32 + 4 whole rows.
+                    Layout.preferredHeight: 220
                     title: "Block occupancy"
                     bodyPadding: 0
 
@@ -209,151 +207,141 @@ Item {
             }
 
             // ---- control / readout column -------------------------------
-            // Sized for a 1040 px tall window. On a shorter screen the column
-            // scrolls instead of clipping panels off the bottom.
-            ScrollView {
-                id: sideColumn
-
-                Layout.fillWidth: true
-                Layout.minimumWidth: 560
+            // Heights are fixed to the 1440 x 900 canvas, so nothing here
+            // reacts to the window. A table taller than its panel scrolls
+            // inside the panel rather than the column scrolling as a whole.
+            // Pinned: the banner's wrapped text reports its unwrapped width as
+            // implicit width and would otherwise crowd out the territory view.
+            ColumnLayout {
+                Layout.fillWidth: false
+                Layout.preferredWidth: 616
+                Layout.minimumWidth: 616
+                Layout.maximumWidth: 616
                 Layout.fillHeight: true
-                clip: true
-                contentWidth: availableWidth
-                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                spacing: theme.space_4
 
-                ColumnLayout {
-                    width: sideColumn.availableWidth
-                    height: Math.max(implicitHeight, sideColumn.availableHeight)
-                    spacing: theme.space_4
+                Banner {
+                    Layout.fillWidth: true
+                    kind: page.maintenanceMode ? "warning" : "info"
+                    heading: page.maintenanceMode ? "Maintenance mode" : "Automatic mode"
+                    body: page.maintenanceMode ? "Manual switch commands are unlocked. The PLC program no longer has sole authority over switches, signals and the crossing." : "The loaded PLC program is setting switches, signals and the crossing, so manual switch commands unlock only in Maintenance mode."
+                }
 
-                    Banner {
+                Panel {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 148
+                    title: "Wayside PLC"
+
+                    RowLayout {
                         Layout.fillWidth: true
-                        kind: page.maintenanceMode ? "warning" : "info"
-                        heading: page.maintenanceMode ? "Maintenance mode" : "Automatic mode"
-                        body: page.maintenanceMode ? "Manual switch commands are unlocked. The PLC program no longer has sole authority over switches, signals and the crossing." : "The loaded PLC program is setting switches, signals and the crossing, so manual switch commands unlock only in Maintenance mode."
-                    }
+                        Layout.fillHeight: true
+                        spacing: theme.space_3
 
-                    Panel {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 140
-                        title: "Wayside PLC"
-
-                        RowLayout {
+                        Readout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            spacing: theme.space_3
+                            Layout.minimumWidth: 150
+                            label: "Program running"
+                            value: "wayside-1-v7.plc"
+                            compact: true
+                        }
 
-                            Readout {
+                        Readout {
+                            Layout.fillHeight: true
+                            Layout.minimumWidth: 90
+                            label: "Uploaded"
+                            value: "14:02"
+                            compact: true
+                        }
+
+                        Readout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.minimumWidth: 140
+                            label: "CTC uplink"
+                            value: "sent 14:32:06"
+                            compact: true
+                        }
+
+                        ColumnLayout {
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.preferredWidth: 150
+                            spacing: theme.space_2
+
+                            Shared.AppButton {
                                 Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                Layout.minimumWidth: 150
-                                label: "Program running"
-                                value: "wayside-1-v7.plc"
-                                compact: true
+                                variant: "primary"
+                                text: "Load PLC file"
                             }
 
-                            Readout {
-                                Layout.fillHeight: true
-                                Layout.minimumWidth: 90
-                                label: "Uploaded"
-                                value: "14:02"
-                                compact: true
-                            }
-
-                            Readout {
+                            Shared.AppButton {
                                 Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                Layout.minimumWidth: 140
-                                label: "CTC uplink"
-                                value: "sent 14:32:06"
-                                compact: true
-                            }
-
-                            ColumnLayout {
-                                Layout.alignment: Qt.AlignVCenter
-                                Layout.preferredWidth: 150
-                                spacing: theme.space_2
-
-                                Shared.AppButton {
-                                    Layout.fillWidth: true
-                                    variant: "primary"
-                                    text: "Load PLC file"
-                                }
-
-                                Shared.AppButton {
-                                    Layout.fillWidth: true
-                                    size: "small"
-                                    text: "Last report"
-                                }
+                                size: "small"
+                                text: "Last report"
                             }
                         }
                     }
+                }
 
-                    Panel {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.preferredHeight: 156
-                        Layout.minimumHeight: 156
-                        title: "From the office"
-                        bodyPadding: 0
+                Panel {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 148
+                    title: "From the office"
+                    bodyPadding: 0
 
-                        headerContent: Text {
-                            text: "Received 14:31:58"
-                            color: theme.text_muted
-                            font.family: theme.ui_family
-                            font.pixelSize: theme.size_small
-                        }
-
-                        DataTable {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            columns: page.officeColumns
-                            rows: page.officeRows
-                        }
+                    headerContent: Text {
+                        text: "Received 14:31:58"
+                        color: theme.text_muted
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
                     }
 
-                    Panel {
+                    DataTable {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredHeight: 156
-                        Layout.minimumHeight: 156
-                        title: "Switches"
-                        bodyPadding: 0
+                        columns: page.officeColumns
+                        rows: page.officeRows
+                    }
+                }
 
-                        headerContent: Shared.StatusBadge {
-                            variant: "ok"
-                            label: "2 of 2 agreeing"
-                        }
+                Panel {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 148
+                    title: "Switches"
+                    bodyPadding: 0
 
-                        DataTable {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            columns: page.switchColumns
-                            rows: page.switchRows
-                        }
+                    headerContent: Shared.StatusBadge {
+                        variant: "ok"
+                        label: "2 of 2 agreeing"
                     }
 
-                    Panel {
+                    DataTable {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredHeight: 264
-                        Layout.minimumHeight: 224
-                        title: "Signals & crossings"
-                        bodyPadding: 0
+                        columns: page.switchColumns
+                        rows: page.switchRows
+                    }
+                }
 
-                        headerContent: Text {
-                            text: "Set by PLC \u00B7 14:32:06"
-                            color: theme.text_muted
-                            font.family: theme.ui_family
-                            font.pixelSize: theme.size_small
-                        }
+                Panel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 148
+                    title: "Signals & crossings"
+                    bodyPadding: 0
 
-                        DataTable {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            columns: page.signalColumns
-                            rows: page.signalRows
-                        }
+                    headerContent: Text {
+                        text: "Set by PLC \u00B7 14:32:06"
+                        color: theme.text_muted
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
+                    }
+
+                    DataTable {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        columns: page.signalColumns
+                        rows: page.signalRows
                     }
                 }
             }

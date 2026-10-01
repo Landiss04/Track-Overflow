@@ -21,7 +21,8 @@ REPO_ROOT = UI_DIR.parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ui.theme import build_theme  # noqa: E402  (needs REPO_ROOT on sys.path)
+from ui.aspect_lock import install_window_scaling  # noqa: E402
+from ui.theme import build_theme  # noqa: E402
 
 
 def main() -> int:
@@ -43,6 +44,10 @@ def main() -> int:
     if not engine.rootObjects():
         print(f"Failed to load {ENTRY_QML}", file=sys.stderr)
         return 1
+
+    window_scaling = install_window_scaling(  # noqa: F841  must outlive window
+        engine.rootObjects()[0]
+    )
 
     return app.exec()
 
