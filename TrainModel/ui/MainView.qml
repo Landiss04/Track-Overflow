@@ -203,17 +203,19 @@ ScrollView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: theme.safety_emphasis_height
                     Layout.topMargin: theme.space_5
+                    objectName: "passengerEmergencyBrake"
                     label: qsTr("Apply emergency brake")
-                    applied: root.s.passenger_ebrake_pulled
+                    // Never offers a release: whether passengers may release
+                    // it is undecided. Disabled while the emergency brake is
+                    // engaged from any source (a Train Controller command or
+                    // a pull) and while a pull is latched, which covers a
+                    // pull the failed brakes cannot engage.
+                    enabled: !root.s.emergency_brake
+                        && !root.s.passenger_ebrake_pulled
                     tooltip: qsTr("Stops the train at the full braking rate and "
                         + "reports the stop to the track controller and the "
                         + "CTC. Confirmation is required.")
-                    onConfirmed: {
-                        if (root.s.passenger_ebrake_pulled)
-                            trainModel.releaseEmergencyBrake()
-                        else
-                            trainModel.applyEmergencyBrake()
-                    }
+                    onConfirmed: trainModel.applyEmergencyBrake()
                 }
 
                 RowLayout {

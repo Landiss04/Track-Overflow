@@ -1,12 +1,12 @@
 """Regression coverage for rejected submissions and display-unit boundaries."""
 
-from dataclasses import replace
 import math
 
 import pytest
 from PySide6.QtCore import QCoreApplication
 
 from train_model.harness import TestHarnessState as Harness
+from train_model.link import LocalLink
 from train_model.state import TrainModelState
 from tests.test_physics import make_inputs
 
@@ -15,7 +15,7 @@ from tests.test_physics import make_inputs
 def pair():
     app = QCoreApplication.instance() or QCoreApplication([])
     state = TrainModelState()
-    yield state, Harness(state)
+    yield state, Harness(LocalLink(state))
     assert app is not None
 
 
@@ -146,14 +146,15 @@ def test_display_input_round_trip_keeps_backend_metric(pair, name, display,
     assert harness.displayInputValues[name] == display
 
 
-def test_live_inputs_and_outputs_convert_from_external_model_step(pair):
+def test_live_inputs_and_outputs_convert_after_a_send(pair):
     state, harness = pair
-    inp = make_inputs(power_w=100000)
-    inp = replace(inp, controller=replace(inp.controller, temp_setpoint_c=25),
-                  track=replace(inp.track,
-                                track_info=replace(inp.track.track_info,
-                                                   elevation_m=100)))
-    state.step(.1, inp)
+    for name, value in {
+        "power_command": 100000, "commanded_speed": 10.0,
+        "authority_block": "A9", "block": "A1", "speed_limit": 19.0,
+        "polarity": True, "elevation": 100, "temperature_setpoint": 25,
+    }.items():
+        harness.setInput(name, value)
+    assert harness.sendInputs()
     assert harness.displayInputValues["power_command"] == 100
     assert harness.displayInputValues["commanded_speed"] == 22.36936
     assert harness.displayInputValues["elevation"] == 328.084
@@ -171,11 +172,13 @@ def test_live_inputs_and_outputs_convert_from_external_model_step(pair):
     assert out["actual_speed"]["value"] == round(
         state.snapshot["actual_speed"] * 2.236936, 3
     )
+    # No power output exists, so the control keeps the accepted command
+    # while the engine has failed.
     state.setFailure("engine_failure", True)
-    assert harness.displayInputValues["power_command"] == 0
+    assert harness.displayInputValues["power_command"] == 100
     harness.setDisplayInput("power_command", 99)
     assert harness.sendInputs()
-    assert harness.displayInputValues["power_command"] == 0
+    assert harness.displayInputValues["power_command"] == 99
     state.setFailure("engine_failure", False)
     assert harness.displayInputValues["power_command"] == 99
     assert state.command_values()["power_command"] == 99000

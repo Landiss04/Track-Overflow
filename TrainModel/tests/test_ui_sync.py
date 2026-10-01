@@ -1,6 +1,5 @@
 """Both views observe one model; staged test inputs are explicitly separate."""
 
-from dataclasses import replace
 import os
 from pathlib import Path
 import subprocess
@@ -10,9 +9,8 @@ import pytest
 from PySide6.QtCore import QCoreApplication
 
 from train_model.harness import TestHarnessState as Harness
-from train_model.interface import Beacon
+from train_model.link import LocalLink
 from train_model.state import TrainModelState
-from tests.test_physics import make_inputs
 
 
 @pytest.fixture
@@ -20,7 +18,7 @@ def pair():
     """Keep a Qt application alive for the harness timer."""
     app = QCoreApplication.instance() or QCoreApplication([])
     state = TrainModelState()
-    yield state, Harness(state)
+    yield state, Harness(LocalLink(state))
     assert app is not None
 
 
@@ -58,11 +56,17 @@ LIVE_VALUES = {
 }
 
 
+def send(harness, values):
+    """Stage every value and send them as one tick."""
+    for name, value in values.items():
+        harness.setInput(name, value)
+    assert harness.sendInputs()
+
+
 @pytest.mark.parametrize("name", list(LIVE_VALUES))
-def test_every_input_refreshes_from_external_model_step(pair, name):
+def test_every_input_shows_the_accepted_value_after_a_send(pair, name):
     state, harness = pair
-    command = dict(LIVE_VALUES, passengers_boarded=7)
-    state.step(0.1, Harness._build_inputs(command))
+    send(harness, dict(LIVE_VALUES, passengers_boarded=7))
     assert harness.inputValues[name] == LIVE_VALUES[name]
     assert not harness.pendingInputs
     assert state.snapshot["grade"] == 2.0
@@ -75,13 +79,14 @@ def test_every_input_refreshes_from_external_model_step(pair, name):
 ])
 def test_failure_state_and_affected_values_change_while_paused(pair, failure):
     state, harness = pair
-    state.step(0.1, Harness._build_inputs(LIVE_VALUES))
+    send(harness, LIVE_VALUES)
     state.setFailure(failure, True)
     assert outputs(harness)[failure]
     assert state.activeFailureCount == 1
     assert next(r for r in state.failures if r["name"] == failure)["active"]
+    # There is no power output, so engine failure changes no control.
     fields = {
-        "engine_failure": {"power_command": 0},
+        "engine_failure": {},
         "signal_pickup_failure": {"commanded_speed": 0, "authority_block": ""},
         "brake_failure": {"service_brake_command": False},
     }[failure]
@@ -133,28 +138,40 @@ def test_reset_clears_drafts_faults_beacons_and_terrain(pair):
 
 def test_beacon_disappearance_and_clock_refresh(pair):
     state, harness = pair
-    inp = make_inputs()
-    inp = replace(inp, track=replace(
-        inp.track, beacon=Beacon("Station", "L", True)
-    ))
-    state.step(0.1, inp)
+    send(harness, {
+        "beacon_station": "Station", "beacon_platform_side": "L",
+        "beacon_underground": True,
+    })
     assert outputs(harness)["beacon_station"] == "Station"
-    for _ in range(9):
-        state.step(0.1, make_inputs())
+    send(harness, {"beacon_station": "", "beacon_underground": False})
+    for _ in range(8):
+        harness.advanceTick()
     assert state.snapshot["next_station"] == "—"
     assert outputs(harness)["beacon_station"] == ""
     assert not outputs(harness)["beacon_underground"]
     assert state.snapshot["clock"] == harness.elapsed == "00:00:01"
 
 
-def test_qml_live_bindings_and_edit_focus():
-    """Exercise actual Qt Quick bindings in a separate GUI application."""
-    script = Path(__file__).with_name("qml_sync_check.py")
+def run_gui_check(name, timeout):
+    """Run a GUI check script in its own offscreen application."""
+    script = Path(__file__).with_name(name)
     result = subprocess.run(
         [sys.executable, str(script)], capture_output=True, text=True,
-        timeout=20, env={
+        timeout=timeout, env={
             **os.environ, "QT_QPA_PLATFORM": "offscreen",
             "QT_QUICK_BACKEND": "software", "PYTHONDONTWRITEBYTECODE": "1",
         },
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    # A QML binding error is a failure even when the checks pass.
+    assert ".qml:" not in result.stderr, result.stderr
+
+
+def test_qml_live_bindings_and_edit_focus():
+    """Exercise actual Qt Quick bindings in a separate GUI application."""
+    run_gui_check("qml_sync_check.py", timeout=20)
+
+
+def test_emergency_brake_button_with_the_real_test_ui():
+    """The overview button, driven from the test UI in its own process."""
+    run_gui_check("ebrake_button_check.py", timeout=120)

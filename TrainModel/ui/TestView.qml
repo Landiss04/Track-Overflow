@@ -105,14 +105,14 @@ ScrollView {
                 title: qsTr("Failure modes")
 
                 StatusBadge {
-                    label: trainModel.activeFailureCount > 0
-                        ? trainModel.activeFailureCount + qsTr(" active")
+                    label: harness.activeFailureCount > 0
+                        ? harness.activeFailureCount + qsTr(" active")
                         : qsTr("Clear")
-                    variant: trainModel.activeFailureCount > 0 ? "fault" : "ok"
+                    variant: harness.activeFailureCount > 0 ? "fault" : "ok"
                 }
 
                 Repeater {
-                    model: trainModel.failures
+                    model: harness.failures
 
                     delegate: RowLayout {
                         required property var modelData
@@ -129,7 +129,7 @@ ScrollView {
                             options: [qsTr("True"), qsTr("False")]
                             currentIndex: modelData.active ? 0 : 1
                             onActivated: function (index) {
-                                trainModel.setFailure(
+                                harness.setFailure(
                                     modelData.name, index === 0);
                             }
                         }
@@ -138,8 +138,8 @@ ScrollView {
 
                 HelperText {
                     Layout.fillWidth: true
-                    text: qsTr("Set here because these are module state, not "
-                        + "inputs from another module.")
+                    text: qsTr("Test only: Murphy sets these from the Train "
+                        + "Model window. Shown as the module reports them.")
                 }
             }
 

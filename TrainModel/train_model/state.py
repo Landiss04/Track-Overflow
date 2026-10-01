@@ -1,8 +1,9 @@
 """Observable state for the Train Model module.
 
 Wraps one ``TrainModel`` and republishes its state as a flat snapshot the
-views bind to. The test harness supplies the inputs and drives the clock;
-this class steps the model and refreshes the snapshot after each tick.
+views bind to. Whoever drives the module (the test UI over its link
+today, the central harness once integrated) calls :meth:`step`; this
+class steps the model and refreshes the snapshot after each tick.
 
 Every value in the snapshot is in its backend unit, per D002; the views
 convert for display. Unavailable identity, line and arrival metadata is
@@ -17,7 +18,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import (
+    Property,
+    QCoreApplication,
+    QObject,
+    QTimer,
+    Signal,
+    Slot,
+)
 
 from train_model.interface import (
     FailureState,
@@ -44,12 +52,16 @@ _FAILURE_LABELS: dict[str, str] = {
 # Shown where the model has not reported a block or an authority yet.
 _NONE_SHOWN = "—"
 
+# The window reads "Paused" once no step has arrived for this long.
+_IDLE_MS = 500
+
 
 class TrainModelState(QObject):
     """Holds everything the Train Model views display."""
 
     snapshotChanged = Signal()
     failuresChanged = Signal()
+    runningChanged = Signal()
 
     def __init__(
         self,
@@ -61,6 +73,8 @@ class TrainModelState(QObject):
         self._model = TrainModel(self._config)
         self._failures: dict[str, bool] = dict.fromkeys(FAILURE_MODES, False)
         self._snapshot: dict[str, Any] = self._initial_snapshot()
+        self._running = False
+        self._idle: QTimer | None = None
         self._refresh()
 
     def _initial_snapshot(self) -> dict[str, Any]:
@@ -88,19 +102,47 @@ class TrainModelState(QObject):
         }
 
     # ------------------------------------------------------------------ #
-    # Driven by the test harness
+    # Driven from outside the module
     # ------------------------------------------------------------------ #
 
     def step(
         self, dt: float, inputs: TrainModelInputs, *,
         override_passenger_brake: bool = False,
-    ) -> None:
+    ) -> TrainModelOutputs:
         """Validate before a test override; publish only the accepted step."""
         if override_passenger_brake:
             self._model.validate_inputs(dt, inputs)
             self._model.clear_passenger_brake_for_test()
-        self._model.step(dt, inputs)
+        outputs = self._model.step(dt, inputs)
         self._refresh()
+        self._mark_running()
+        return outputs
+
+    def outputs(self) -> TrainModelOutputs:
+        """The module's current cross-module outputs."""
+        return self._model.snapshot().outputs
+
+    @Property(bool, notify=runningChanged)
+    def running(self) -> bool:
+        """Whether steps are arriving, whoever is sending them."""
+        return self._running
+
+    def _mark_running(self) -> None:
+        # Needs an event loop; without one the flag is never shown.
+        if QCoreApplication.instance() is None:
+            return
+        if self._idle is None:
+            self._idle = QTimer(self)
+            self._idle.setSingleShot(True)
+            self._idle.setInterval(_IDLE_MS)
+            self._idle.timeout.connect(lambda: self._set_running(False))
+        self._idle.start()
+        self._set_running(True)
+
+    def _set_running(self, running: bool) -> None:
+        if running != self._running:
+            self._running = running
+            self.runningChanged.emit()
 
     def command_values(self) -> dict[str, Any]:
         """Current producer inputs; consumed boarding is not replayed."""
@@ -144,27 +186,6 @@ class TrainModelState(QObject):
             "temperature_setpoint": cmd.temp_setpoint_c,
             "announcement": cmd.announcement,
         }
-
-    def live_input_values(self) -> dict[str, Any]:
-        """Live controls reflect actual state, not hidden stored commands."""
-        values = self.command_values()
-        snapshot = self._snapshot
-        for name, field in {
-            "power_command": "power_consumption",
-            "service_brake_command": "service_brake",
-            "emergency_brake_command": "emergency_brake",
-            "interior_light_command": "interior_light",
-            "exterior_light_command": "exterior_light",
-            "left_door_command": "left_door",
-            "right_door_command": "right_door",
-            "commanded_speed": "commanded_speed",
-        }.items():
-            values[name] = snapshot[field]
-        authority = (
-            self._model.snapshot().outputs.controller.authority_block_id
-        )
-        values["authority_block"] = authority or ""
-        return values
 
     def reset(self) -> None:
         """Replace the model with a fresh one and clear every failure."""
@@ -318,10 +339,6 @@ class TrainModelState(QObject):
             if self._failures["engine_failure"]:
                 power_w = 0.0
             updates["power_consumption"] = power_w
-
-        # Command-only fields (e.g. a new setpoint) must also notify the
-        # test UI, even when the resulting physical state is unchanged.
-        updates["input_commands"] = self.command_values()
 
         if any(self._snapshot.get(key) != value
                for key, value in updates.items()):

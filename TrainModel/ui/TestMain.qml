@@ -1,4 +1,6 @@
-// Train Model application window.
+// Train Model test UI window. Runs in its own process (test_ui.py) and
+// stands in for the Track Model, the Train Controller and the clock,
+// driving the Train Model's process through its interface.
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -8,7 +10,6 @@ import "../../ui"
 ApplicationWindow {
     id: window
 
-    readonly property var snapshot: trainModel.snapshot
     readonly property int referenceWidth: 1440
     readonly property int referenceHeight: 900
     readonly property real canvasScale: Math.min(
@@ -19,13 +20,11 @@ ApplicationWindow {
     height: referenceHeight
     minimumWidth: 720
     minimumHeight: 450
-    title: qsTr("Train Model")
+    title: qsTr("Train Model Test UI")
     color: theme.bg_app
 
-    // The design is laid out once at the reference size and scaled as a
-    // whole. On Windows, main.py keeps the window at 16:10 while it is
-    // resized; any other shape (maximized, snapped, fullscreen, Linux) is
-    // letterboxed around the centered canvas.
+    // Laid out once at the reference size and scaled as a whole, the
+    // same way as the Train Model window (Main.qml).
     Item {
         id: designCanvas
 
@@ -46,20 +45,14 @@ ApplicationWindow {
 
             ModuleHeader {
                 Layout.fillWidth: true
-                moduleName: qsTr("Train Model")
-                instance: window.snapshot.train_id
-                // Running while steps arrive, from the test UI or, once
-                // integrated, the central harness.
-                mode: trainModel.running ? qsTr("Running") : qsTr("Paused")
-                line: window.snapshot.line
-                clock: window.snapshot.clock
-                faulted: window.snapshot.emergency_brake
+                moduleName: qsTr("Train Model Test UI")
+                mode: !harness.connected ? qsTr("Not connected")
+                    : harness.running ? qsTr("Running") : qsTr("Paused")
+                clock: harness.elapsed
+                faulted: !harness.connected || harness.emergencyBrakeActive
             }
 
-            // This fills the fixed reference canvas; the canvas transform
-            // scales the complete design uniformly with the window. The
-            // test UI is a separate window in its own process (test_ui.py).
-            MainView {
+            TestView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
             }

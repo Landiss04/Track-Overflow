@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / "TrainModel")]
 
 from train_model.harness import TestHarnessState  # noqa: E402
+from train_model.link import LocalLink  # noqa: E402
 from train_model.state import TrainModelState  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
@@ -26,20 +27,22 @@ def walk(item):
 def main():
     app = QGuiApplication([])
     state = TrainModelState()
-    harness = TestHarnessState(state)
+    harness = TestHarnessState(LocalLink(state))
     engine = QQmlApplicationEngine()
     for name, value in [("theme", build_theme()), ("trainModel", state),
                         ("harness", harness)]:
         engine.rootContext().setContextProperty(name, value)
-    engine.load(QUrl.fromLocalFile(str(ROOT / "TrainModel/ui/Main.qml")))
-    assert engine.rootObjects()
-    window = engine.rootObjects()[0]
+    # Two separate windows, as in the two processes; one engine here.
+    for qml in ("Main.qml", "TestMain.qml"):
+        engine.load(QUrl.fromLocalFile(str(ROOT / "TrainModel/ui" / qml)))
+    assert len(engine.rootObjects()) == 2
+    model_window, test_window = engine.rootObjects()
     QTest.qWait(50)
 
-    def items():
+    def items(window=test_window):
         return list(walk(window.contentItem()))
 
-    def click(text, root=None):
+    def click(text, window=test_window, root=None):
         matches = [x for x in walk(root or window.contentItem())
                    if x.property("text") == text and x.isVisible()
                    and hasattr(x, "clicked")]
@@ -58,10 +61,10 @@ def main():
         editor = next(x for x in walk(row(name))
                       if x.objectName() == "valueEditor")
         editor.forceActiveFocus()
-        QTest.keyClick(window, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClick(test_window, Qt.Key_A, Qt.ControlModifier)
         for char in text:
-            QTest.keyClick(window, Qt.Key(ord(char.upper())))
-        QTest.keyClick(window, Qt.Key_Return)
+            QTest.keyClick(test_window, Qt.Key(ord(char.upper())))
+        QTest.keyClick(test_window, Qt.Key_Return)
 
     def send_from_qml():
         # Run control is below the viewport: exercise its QML click handler.
@@ -71,16 +74,22 @@ def main():
         button.clicked.emit()
         QTest.qWait(10)
 
-    # Overview apply updates the hidden test control immediately, paused.
-    click("APPLY EMERGENCY BRAKE")
-    click("CONFIRM")
+    # No view switcher: each window shows only its own page.
+    assert not [x for x in items(model_window)
+                if x.objectName().startswith("input-")]
+
+    # Overview apply updates the test UI's control immediately, paused.
+    click("APPLY EMERGENCY BRAKE", model_window)
+    click("CONFIRM", model_window)
     assert row("emergency_brake_command").property("value") is True
     assert state.snapshot["emergency_brake"]
-    click("RELEASE EMERGENCY BRAKE")
-    click("CONFIRM")
+    # No release from the overview: the same label, disabled.
+    click("APPLY EMERGENCY BRAKE", model_window)
+    assert not any(x.property("text") in ("CONFIRM",
+                                          "RELEASE EMERGENCY BRAKE")
+                   and x.isVisible() for x in items(model_window))
     assert state.snapshot["emergency_brake"]  # normal release unchanged
-    click("Test harness")
-    click("False", row("emergency_brake_command"))
+    click("False", root=row("emergency_brake_command"))
     assert row("emergency_brake_command").property("pending")
     harness.sendInputs()
     assert row("emergency_brake_command").property("value") is False
@@ -93,9 +102,9 @@ def main():
     editor = next(x for x in walk(power_row)
                   if x.objectName() == "valueEditor")
     editor.forceActiveFocus()
-    QTest.keyClick(window, Qt.Key_A, Qt.ControlModifier)
-    QTest.keyClick(window, Qt.Key_9)
-    QTest.keyClick(window, Qt.Key_9)
+    QTest.keyClick(test_window, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClick(test_window, Qt.Key_9)
+    QTest.keyClick(test_window, Qt.Key_9)
     state.setFailure("engine_failure", True)
     for _ in range(3):
         harness.advanceTick()
@@ -103,12 +112,15 @@ def main():
     assert row("power_command") == power_row
     assert editor.property("activeFocus")
     assert editor.property("text") == "99"
-    QTest.keyClick(window, Qt.Key_Return)
+    QTest.keyClick(test_window, Qt.Key_Return)
     assert harness.inputValues["power_command"] == 99000
     assert power_row.property("pending")
-    click("Overview")  # commit/blur without rebuilding test delegates
+    editor.setProperty("focus", False)  # commit and blur
+    QTest.qWait(10)
+    assert not editor.property("activeFocus")
     harness.sendInputs()
-    assert harness.inputValues["power_command"] == 0  # engine failed
+    # No power output exists: the control keeps the accepted command.
+    assert harness.inputValues["power_command"] == 99000
     state.setFailure("engine_failure", False)
     assert harness.inputValues["power_command"] == 99000
     harness.resetModule()
@@ -116,7 +128,6 @@ def main():
     assert editor.property("text") == "0"
     assert not power_row.property("pending")
     assert state.snapshot["clock"] == harness.elapsed == "00:00:00"
-    click("Test harness")
     for name, unit, value in [
         ("power_command", "kW", 0),
         ("commanded_speed", "mph", 0),
@@ -130,7 +141,7 @@ def main():
     # A failed submission via QML retains the latch, state and drafts.
     state.applyEmergencyBrake()
     before = dict(state.snapshot)
-    click("False", row("emergency_brake_command"))
+    click("False", root=row("emergency_brake_command"))
     edit("power_command", "-1")
     send_from_qml()
     assert state.snapshot == before

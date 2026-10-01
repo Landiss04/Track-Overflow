@@ -2,13 +2,30 @@
 
 PySide6 + QML front-end for the ECE1140 Train Model, covering **page 3a** (main
 operational view) and **page 3b** (test harness). `TrainModelState` wraps the
-real `TrainModel` in `train_model/model.py`: the test harness sends it inputs
-and drives the clock, and the views show the model's state. Header metadata that the model does not produce (train ID, line, arrival)
-shows a dash. The clock shows elapsed model time, and the mode follows the
-harness run/pause state.
+real `TrainModel` in `train_model/model.py`, and the views show the model's
+state. Header metadata that the model does not produce (train ID, line,
+arrival) shows a dash. The clock shows elapsed model time.
+
+The two pages are **independent windows, each its own process**:
+
+- **Train Model** (`main.py`) owns the module. Its header reads *Running* while
+  steps arrive and *Paused* once they stop.
+- **Test UI** (`test_ui.py`) stands in for the Track Model, the Train
+  Controller and the clock. It drives the module only through its interface,
+  `step(dt, TrainModelInputs) -> TrainModelOutputs`, over a local socket
+  (`train_model/link.py`), and reads back only `TrainModelOutputs`. Three
+  test-only commands ride alongside: set a failure, clear the passenger brake
+  latch, and reset.
+
+Once the system is integrated, the central harness calls the same
+`TrainModelState.step` the link calls; the test UI and the link are removed
+with no change to the module. Either window starts on its own; the test UI
+reads *Not connected* until the Train Model is up, and reconnects if it
+restarts.
 
 QML owns all visuals; Python owns state. The two talk through QML context
-properties (`theme`, `trainModel`, `harness`).
+properties: `theme` and `trainModel` in the Train Model window, `theme` and
+`harness` in the test UI.
 
 See [open issues](docs/open-issues.md) for speed-control ownership,
 vehicle calibration, and the displayed power-consumption limitation.
@@ -39,20 +56,31 @@ Nonfinite numeric inputs and negative power are rejected before state changes.
 ```bash
 cd TrainModel
 source .venv/bin/activate        # PySide6 6.11 + mypy; see "Setup" if missing
-python main.py
+python main.py                   # Train Model window
+python test_ui.py                # test UI window, in a second terminal
 ```
 
 Offscreen smoke test (no display needed):
 
 ```bash
-QT_QPA_PLATFORM=offscreen timeout 8 python main.py   # clean = no output
+QT_QPA_PLATFORM=offscreen timeout 8 python main.py      # clean = no output
+QT_QPA_PLATFORM=offscreen timeout 8 python test_ui.py   # clean = no output
 ```
+
+Tests (`pip install pytest` into `.venv` first):
+
+```bash
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
+```
+
+Set `TRAIN_MODEL_LINK` to run a pair on a private link name, for example
+beside a Train Model that is already open.
 
 ## Type-check
 
 ```bash
 cd TrainModel
-.venv/bin/python -m mypy main.py train_model/
+.venv/bin/python -m mypy main.py test_ui.py train_model/
 ```
 
 PySide6 ships its own type stubs, so no local stubs are needed.
@@ -60,10 +88,14 @@ PySide6 ships its own type stubs, so no local stubs are needed.
 ## Layout
 
 ```
-main.py                 entry point: builds theme, state objects, loads QML
+main.py                 Train Model process: state, link server, Main.qml
+test_ui.py              test UI process: link client, harness, TestMain.qml
+train_model/app.py      shared bootstrap: theme, font, QML engine, scaling
+train_model/link.py     test UI link: wire format, server, socket client
 train_model/state.py    TrainModelState — page 3a bindable values + slots
 train_model/harness.py  TestHarnessState — page 3b inputs/outputs/run control
-ui/Main.qml             window shell, nav rail, 3a/3b view switcher
+ui/Main.qml             Train Model window shell around page 3a
+ui/TestMain.qml         test UI window shell around page 3b
 ui/MainView.qml         page 3a
 ui/TestView.qml         page 3b
 ```
@@ -82,12 +114,16 @@ python3 -m venv .venv
 
 ## UI state and editing
 
-Both pages read the same model snapshot. Passenger-brake and failure changes
-refresh the controls and discrete outputs immediately, including while paused;
-the next tick integrates their physical effect. Terrain, beacons, lights,
-doors, temperature, passenger counts, and the clock refresh from that snapshot.
+The Train Model window reads the model snapshot. The test UI reads only the
+module's outputs: the Train Model pushes them after every step and after any
+Train Model UI action, so passenger-brake and failure changes reach the test
+UI's controls and outputs immediately, including while paused; the next tick
+integrates their physical effect. Failures can be set from either window.
 
-Test input rows show live values until edited. Explicit edits are marked
+Test input rows show live values until edited: brakes, lights, doors,
+commanded speed and authority read back from the outputs; the rest show the
+last accepted command. There is no power output, so `power_command` shows the
+accepted command even while the engine has failed. Explicit edits are marked
 **pending** and remain staged until **Send inputs**, which also advances one
 tick. Starting or advancing a fresh simulation also sends its initial edits.
 Live updates preserve the focused editor and its unfinished text. A rejected
@@ -117,17 +153,23 @@ door-open rising edge at rest.
 ## Passenger brake override
 
 The test harness emergency-brake input can explicitly override the passenger
-latch. An injected brake failure still prevents braking. The overview's
-passenger-brake release action remains inert pending a decision on normal
-operation; this test override does not define that policy.
+latch. An injected brake failure still prevents braking. The overview offers
+no release, pending a decision on normal operation; this test override does
+not define that policy. Its button always reads *Apply emergency brake* and is
+disabled while the emergency brake is engaged from any source (a Train
+Controller command from the test UI, or a pull) and while a pull is latched.
 
 ## Remaining display limitations
 
 - Train ID, line, and arrival time have no model source and display a dash.
 - Manual door buttons remain disabled: the model displays the commanded doors
   as the interlock allows them.
-- Power consumption displays capped commanded power, suppressed on engine
-  failure; see [open issues](docs/open-issues.md) for the measurement limitation.
+- Power consumption (Train Model window) displays capped commanded power,
+  suppressed on engine failure; see [open issues](docs/open-issues.md) for the
+  measurement limitation.
+- The test UI shows no onboard passenger count: it is not a cross-module
+  output. The Train Model window shows it; the test UI shows the remaining
+  `passenger_capacity`.
 - Both pages display speed in mph, distance/elevation in feet, temperature
   in Fahrenheit, and power in kW. Grade remains in degrees. Test editors
   convert back to backend units before staging commands; model state remains SI.

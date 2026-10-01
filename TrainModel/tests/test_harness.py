@@ -17,6 +17,7 @@ from PySide6.QtCore import QCoreApplication  # noqa: E402
 
 from train_model import harness as harness_module  # noqa: E402
 from train_model.interface import TrainConfig  # noqa: E402
+from train_model.link import LocalLink  # noqa: E402
 from train_model.state import TrainModelState  # noqa: E402
 
 
@@ -31,7 +32,7 @@ def qt_app() -> Iterator[None]:
 def make_harness() -> tuple[TrainModelState, Any]:
     """Return a fresh model state and a harness driving it."""
     state = TrainModelState()
-    return state, harness_module.TestHarnessState(state)
+    return state, harness_module.TestHarnessState(LocalLink(state))
 
 
 def snap(state: TrainModelState) -> dict[str, Any]:
@@ -66,7 +67,7 @@ def test_send_boards_passengers_once() -> None:
     harness.sendInputs()
     assert snap(state)["passengers"] == 60
     outputs = {row["name"]: row["value"] for row in harness.property("outputs")}
-    assert outputs["passengers"] == 60
+    assert outputs["passenger_capacity"] == snap(state)["capacity"] - 60
 
 
 def test_boarding_raises_mass() -> None:
