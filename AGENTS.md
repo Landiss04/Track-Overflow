@@ -23,6 +23,8 @@ their feature branch. Promotion of a proposal onto the `truth` branch is human-o
   `/tmp/truth-<session>/`. Scratch copies are valid for the current session only,
   require a fresh `git fetch` at session start, and are never reused across sessions.
   Never write truth content anywhere inside the repo.
+- Nothing under `truth/incoming/` is a fact. It is promoted content in transit to its
+  canonical path.
 
 ## At session start
 
@@ -66,8 +68,13 @@ discussion, or a direct statement by the user.
 ## Promotion — human only
 
 - Agents never promote proposals, never open a PR against `truth`, and never push to
-  `truth` or any `truth-inbox/*` branch.
+  `truth` or any `promote-*` branch.
 - If a proposal is ready to promote, say so and stop. Do not act on it.
+- A human promotes by merging approved proposals, wrapper included, into
+  `truth/incoming/` on `truth`. The `truth-incoming` workflow then moves each entry to
+  its `**Target:**` path and deletes the incoming file. That workflow is the only
+  non-human writer to `truth`.
+- The procedure is `RUNBOOK.md` on the `truth` branch. It is for humans only.
 
 ## Git invariants
 
@@ -88,7 +95,7 @@ to be evaluated against the invariant, not assumed permitted.
    clean), and `git checkout -- <path>` against a file with uncommitted changes.
 
 `git worktree add` is forbidden to agents entirely, including `--detach`. It is a
-promotion-time mechanism and belongs to the human runbook.
+promotion-time mechanism and belongs to the human runbook (`RUNBOOK.md` on `truth`).
 
 These invariants apply to all agents in all clones, not only the developer's primary
 working clone.
@@ -102,6 +109,8 @@ tree is not in the state you expected, report it and stop. Do not correct it.
 - Deletion is scoped to `truth/_inbox/**/*.md`.
 - `truth/_inbox/.gitkeep` and `truth/README.md` are never deleted or modified. They are
   the scaffold that inherits into new branches.
+- On `truth`, the `truth-incoming` workflow deletes files under `truth/incoming/` as it
+  moves them to their canonical paths. `truth/incoming/.gitkeep` is never deleted.
 
 ## Entry rules
 
@@ -171,9 +180,13 @@ On the `truth` branch:
 
 ```
 AGENTS.md               these rules; identical on development
+RUNBOOK.md              human promotion procedure; not for agents
+.github/                truth-incoming workflow and its move script
 truth/
   README.md             what this branch holds; start at INDEX.md
   INDEX.md              always read
+  _promotions.md        promotion log: one line per promoted or denied proposal
+  incoming/             promoted proposals in transit; never facts
   _templates/           entry.md, decision.md, module-contract.md,
                         module-variant.md, and fragment.md (proposal wrapper)
   conventions/<key>.md  naming, units, identifiers, files-and-paths, toolchain
