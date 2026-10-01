@@ -1,7 +1,7 @@
 **Target:** truth/decisions/D009-shared-simulation-clock.md
 **Action:** create
 **Proposed by:** Claude on generic-clock-config
-**Provenance:** asserted by Landis 2026-10-01
+**Provenance:** asserted by Landis 2026-10-01; start time 05:00:00 and 24-hour display asserted by Landis 2026-10-01
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Status:** current
 **Owner:** Landis
-**Provenance:** asserted by Landis 2026-10-01
+**Provenance:** asserted by Landis 2026-10-01; start time 05:00:00 and 24-hour display asserted by Landis 2026-10-01
 **Aliases:** system clock, simulation clock, shared clock, sim time, clock speed, 10x
 **Last updated:** 2026-10-01
 
@@ -27,7 +27,9 @@ who controls it.
 - At 1x, one simulated second lasts one real second.
 - The allowed speeds are 1x and 10x. No other speed is accepted.
 - The clock can be paused and resumed.
-- A simulation starts at 08:00:00 simulated time.
+- A simulation starts at 05:00:00 simulated time.
+- Simulated time of day is shown in 24-hour (military) time as zero-padded
+  `HH:MM:SS`, hours 00 to 23: 1:05 PM is `13:05:00`.
 - The default tick length is 0.1 s. It is configurable per clock and does not change
   while the clock runs (D006).
 - The central harness (D005) owns the clock and passes simulation time to every
