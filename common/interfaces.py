@@ -18,9 +18,6 @@ Architecture signal flow (from Final Project vF.pdf, p. 8-9):
       |-- Power Cmd, Brake Cmd, Doors,
       |   Lights, Temp Setpoint -----------> Train Model
       |<- Current Speed, Failures --------- Train Model
-  MBO Overlay
-      |-- Safe Authority ------------------> CTC Office
-      |<- Train Position ------------------- Train Model
 """
 
 from abc import ABC, abstractmethod
@@ -186,7 +183,7 @@ class ITrainModel(ABC):
     Physical train simulator (Newton's-law point-mass model).
 
     Inputs  – commands from SW Train Controller, track signal from Track Model.
-    Outputs – TrainState (speed, position, etc.) to SW Train Controller, MBO,
+    Outputs – TrainState (speed, position, etc.) to SW Train Controller,
               and position to Track Model.
     """
 
@@ -338,7 +335,7 @@ class ICtcOffice(ABC):
     """
     Centralized Traffic Control office.
 
-    Inputs  – block/switch states from SW Track Controller, authority from MBO.
+    Inputs  – block/switch states from SW Track Controller.
     Outputs – suggested speed and authority per block to SW Track Controller.
     """
 
@@ -355,12 +352,6 @@ class ICtcOffice(ABC):
     @abstractmethod
     def receive_switch_states(self, states: list[SwitchState]) -> None:
         """Accept switch positions from the wayside."""
-
-    # -- From MBO --
-
-    @abstractmethod
-    def receive_mbo_authority(self, train_id: str, authority_m: float) -> None:
-        """Accept a safe moving-block authority from the MBO overlay."""
 
     # -- Dispatcher actions --
 
@@ -381,30 +372,3 @@ class ICtcOffice(ABC):
     @abstractmethod
     def get_suggestion(self, block_id: str) -> tuple[float, float]:
         """Return (suggested_speed_mps, authority_m) for a block."""
-
-
-class IMboOverlay(ABC):
-    """
-    Moving Block Overlay — computes safe stopping distance per train.
-
-    Inputs  – real-time position from each Train Model.
-    Outputs – safe authority per train to CTC Office.
-    """
-
-    @abstractmethod
-    def update(self, dt: float) -> None:
-        """Recalculate safe authorities for all tracked trains."""
-
-    # -- From Train Model --
-
-    @abstractmethod
-    def report_train_position(
-        self, train_id: str, position: TrainPosition, speed_mps: float
-    ) -> None:
-        """Receive a vital position/speed report from a train."""
-
-    # -- Outputs to CTC --
-
-    @abstractmethod
-    def get_safe_authority(self, train_id: str) -> float:
-        """Return the safe stopping distance in metres for the given train."""
