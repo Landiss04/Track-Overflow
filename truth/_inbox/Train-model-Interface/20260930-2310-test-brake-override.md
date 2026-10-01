@@ -20,8 +20,3 @@ request is latched. This is a testing override, not a normal control action.
 Keep the regular overview UI unchanged: whether normal users can release
 the passenger emergency brake remains an open question.
 
-## Supersedes
-
-- The proposal `20260930-2300-passenger-brake-release.md` incorrectly assigned
-  release to the overview; Kevin's clarification assigns the override to
-  the test UI and leaves overview release undecided.
