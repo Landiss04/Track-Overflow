@@ -28,7 +28,8 @@ ScrollView {
                 heading: qsTr("Test harness \u2014 module driven from this page")
                 body: qsTr("Sending the inputs hands them to the Train Model "
                     + "and advances one tick. Each later tick reuses the last "
-                    + "sent inputs; passengers board once per send. "
+                    + "sent inputs; passengers board once per send, only at "
+                    + "a station with a door open. Doors open only at 0 mph. "
                     + "Select emergency_brake_command and send to override "
                     + "a passenger brake latch. Brake failure still applies. "
                     + "Controls show live model state; pending edits are "

@@ -116,8 +116,8 @@ class TrainModelState(QObject):
                 "beacon_station": "", "beacon_platform_side": "L",
                 "beacon_underground": False, "block": "", "grade": 0.0,
                 "elevation": 0.0, "speed_limit": 0.0, "polarity": False,
-                "passengers_boarded": 0, "temperature_setpoint": 20.0,
-                "announcement": "",
+                "station": "", "passengers_boarded": 0,
+                "temperature_setpoint": 20.0, "announcement": "",
             }
         cmd, track = inputs.controller, inputs.track
         beacon = track.beacon
@@ -139,6 +139,7 @@ class TrainModelState(QObject):
             "elevation": track.track_info.elevation_m,
             "speed_limit": track.track_info.speed_limit_mps,
             "polarity": track.track_info.polarity,
+            "station": track.track_info.station_name or "",
             "passengers_boarded": 0,
             "temperature_setpoint": cmd.temp_setpoint_c,
             "announcement": cmd.announcement,

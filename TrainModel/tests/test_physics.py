@@ -44,6 +44,7 @@ def make_inputs(
     polarity: bool = True,
     interior: bool = False,
     exterior: bool = False,
+    station: str | None = None,
 ) -> TrainModelInputs:
     """Return the standard input set with the named overrides applied."""
     return TrainModelInputs(
@@ -65,6 +66,7 @@ def make_inputs(
                 elevation_m=0.0,
                 speed_limit_mps=19.0,
                 polarity=polarity,
+                station_name=station,
             ),
             track_signal=TrackSignal(
                 commanded_speed_mps=10.0,
@@ -77,8 +79,9 @@ def make_inputs(
 
 
 def board(model: TrainModel, n: int) -> None:
-    """Board ``n`` passengers in a single unpowered tick."""
-    model.step(DT_S, make_inputs(boarded=n))
+    """Board ``n`` passengers at a station, then close the door."""
+    model.step(DT_S, make_inputs(boarded=n, door_left=True, station="S"))
+    model.step(DT_S, make_inputs())
 
 
 def run_until_speed(
@@ -271,8 +274,10 @@ def test_passenger_bounds_and_capacity() -> None:
         snap = model.snapshot()
         check_bounds(snap)
         disembarked = disembarked or snap.n_passengers < before
-        model.step(DT_S, make_inputs(door_left=False, boarded=50))
+        model.step(DT_S, make_inputs(
+            door_left=True, boarded=50, station="S"))
         check_bounds(model.snapshot())
+        model.step(DT_S, make_inputs(door_left=False))
     # Twenty uniform draws from a full train are all zero only by a
     # vanishingly unlikely seed; the reported capacity must move.
     assert disembarked
@@ -356,9 +361,9 @@ def script_input(tick: int) -> TrainModelInputs:
     boarded = 0
     emergency = False
     if tick < 40:
-        # Door cycles while boarding to capacity.
+        # Door cycles while boarding to capacity at a station.
         door_left = tick % 2 == 0
-        boarded = 56 if not door_left else 0
+        boarded = 56 if door_left else 0
     elif tick < 200:
         power_w = TrainConfig().p_max_w
     elif tick < 400:
@@ -371,7 +376,8 @@ def script_input(tick: int) -> TrainModelInputs:
         grade_deg = pct_to_deg(6.0)
     return make_inputs(
         power_w=power_w, service=False, emergency=emergency,
-        grade_deg=grade_deg, boarded=boarded, door_left=door_left)
+        grade_deg=grade_deg, boarded=boarded, door_left=door_left,
+        station="S" if tick < 40 else None)
 
 
 def run_scripted(model: TrainModel) -> tuple[list[TrainModelOutputs],

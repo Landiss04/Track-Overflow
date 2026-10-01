@@ -52,7 +52,8 @@ LIVE_VALUES = {
     "beacon_station": "Station", "beacon_platform_side": "R",
     "beacon_underground": True, "block": "B2", "grade": 2.0,
     "elevation": 17.0, "speed_limit": 18.0, "polarity": True,
-    "passengers_boarded": 0, "temperature_setpoint": 22.5,
+    "station": "Station", "passengers_boarded": 0,
+    "temperature_setpoint": 22.5,
     "announcement": "Arriving",
 }
 

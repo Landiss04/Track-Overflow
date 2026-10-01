@@ -52,6 +52,8 @@ def test_every_input_row_is_mapped() -> None:
 def test_send_boards_passengers_once() -> None:
     """Check that a sent boarding count updates the passenger count once."""
     state, harness = make_harness()
+    harness.setInput("station", "GLENBURY")
+    harness.setInput("left_door_command", True)
     harness.setInput("passengers_boarded", 30)
     harness.sendInputs()
     assert snap(state)["passengers"] == 30
@@ -71,6 +73,8 @@ def test_boarding_raises_mass() -> None:
     """Check that boarding passengers raises the displayed mass."""
     cfg = TrainConfig()
     state, harness = make_harness()
+    harness.setInput("station", "GLENBURY")
+    harness.setInput("right_door_command", True)
     harness.setInput("passengers_boarded", 10)
     harness.sendInputs()
     expected = cfg.m_empty_kg + (cfg.n_crew + 10) * cfg.passenger_mass_kg

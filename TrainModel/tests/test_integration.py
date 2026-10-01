@@ -22,7 +22,7 @@ def test_launch_matches_constant_force_kinematics(
     """A command applies for the entire tick, including the first one."""
     cfg = TrainConfig()
     model = TrainModel(cfg)
-    model.step(dt, make_inputs(boarded=load))
+    model.step(dt, make_inputs(boarded=load, door_left=True, station="S"))
     model.step(dt, make_inputs(power_w=cfg.p_max_w))
     snap = model.snapshot()
     acceleration = cfg.f_max_n / snap.mass_kg - cfg.c_rr * cfg.g_mps2
@@ -82,7 +82,7 @@ def test_stop_distance_and_position_are_exact(
     """Constant braking ends at v²/(2a), without backward displacement."""
     cfg = TrainConfig()
     model = TrainModel(cfg)
-    model.step(0.1, make_inputs(boarded=load))
+    model.step(0.1, make_inputs(boarded=load, door_left=True, station="S"))
     run_until_speed(model, 5.0)
     start = model.snapshot()
     angle = math.atan(grade / 100)
@@ -134,7 +134,8 @@ def test_bad_timestep_preserves_state(dt: float) -> None:
     model = TrainModel(TrainConfig())
     before = model.snapshot()
     with pytest.raises(InvalidTimeStepError):
-        model.step(dt, make_inputs(boarded=10, door_left=True))
+        model.step(dt, make_inputs(
+            boarded=10, door_left=True, station="S"))
     assert model.snapshot() == before
 
 
@@ -159,7 +160,9 @@ def test_nonfinite_input_is_rejected_atomically(
 ) -> None:
     """Every numeric boundary input is finite before mutation begins."""
     model = TrainModel(TrainConfig())
+    boarding = make_inputs(boarded=20, door_left=True, station="S")
     good = make_inputs(boarded=20)
+    model.step(0.1, boarding)
     model.step(0.1, good)
     before = model.snapshot()
     if field == "temp_setpoint_c":
@@ -187,6 +190,7 @@ def test_nonfinite_input_is_rejected_atomically(
     assert model.snapshot() == before
     model.step(0.1, make_inputs(door_left=True))
     control = TrainModel(TrainConfig())
+    control.step(0.1, boarding)
     control.step(0.1, good)
     control.step(0.1, make_inputs(door_left=True))
     assert model.snapshot() == control.snapshot()
