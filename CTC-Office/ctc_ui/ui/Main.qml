@@ -19,14 +19,12 @@ ScaledWindow {
     // closed | open | docked
     property string occupancyState: "closed"
     property string selectedTrainId: ""
-    property bool testHarnessOpen: false
     // Modal scrim: --text-primary at 40 % alpha. The shared theme has no
     // scrim token, so it is derived here rather than hard-coded.
     readonly property color scrimBase: theme.text_primary
     readonly property color scrimColor: Qt.rgba(
         scrimBase.r, scrimBase.g, scrimBase.b, 0.4)
     readonly property bool modalOpen: occupancyState === "open"
-        || testHarnessOpen
 
     title: qsTr("CTC Office")
 
@@ -45,7 +43,6 @@ ScaledWindow {
                 window.modeIndex = index;
             }
             onOccupancyClicked: window.occupancyState = "open"
-            onTestHarnessClicked: window.testHarnessOpen = true
         }
 
         RowLayout {
@@ -98,8 +95,8 @@ ScaledWindow {
         onCloseRequested: window.occupancyState = "closed"
     }
 
-    // Modal scrim: swallows clicks behind whichever modal is open.
-    // The header sits under it, so only one modal can open at a time.
+    // Modal scrim: swallows clicks behind the open occupancy window.
+    // The header sits under it, so it cannot be reopened while open.
     Rectangle {
         anchors.fill: parent
         color: window.scrimColor
@@ -108,11 +105,7 @@ ScaledWindow {
         MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.AllButtons
-            onClicked: {
-                window.testHarnessOpen = false;
-                if (window.occupancyState === "open")
-                    window.occupancyState = "closed";
-            }
+            onClicked: window.occupancyState = "closed"
             onWheel: function (wheel) { wheel.accepted = true; }
         }
     }
@@ -128,13 +121,5 @@ ScaledWindow {
             window.selectedTrainId = trainId;
             window.occupancyState = "docked";
         }
-    }
-
-    TestHarnessWindow {
-        width: 1040
-        height: 640
-        anchors.centerIn: parent
-        visible: window.testHarnessOpen
-        onCloseRequested: window.testHarnessOpen = false
     }
 }

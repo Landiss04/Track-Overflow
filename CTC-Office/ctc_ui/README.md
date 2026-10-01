@@ -17,6 +17,25 @@ pip install -r ../requirements.txt
 python -m ctc_ui
 ```
 
+### Test UI
+
+The test harness is a separate process with its own window, not part of
+the CTC Office window. Start it from a second terminal, also in
+`CTC-Office`:
+
+```bash
+python ctc_ui/test_ui.py        # or: python -m ctc_ui.test_ui
+```
+
+It forces CTC inputs and reads back outputs so the module can be tested on
+its own, standing in for the modules the CTC talks to. Once the modules
+are integrated, those modules replace it and it is not used.
+
+No IO is declared yet, so both tables are empty and Reset / Send stay
+disabled. **Show preview** fills them with sample rows to check the
+layout. The badge reads "Not connected" because the link to a running
+CTC is not built yet; see [IO link (planned)](#io-link-planned).
+
 ## What is interactive
 
 With no backend, only window-level UI state works:
@@ -26,10 +45,8 @@ With no backend, only window-level UI state works:
 - **Train occupancy** opens the occupancy window. "Keep open at
   bottom" or the minimize button docks it over the track view.
   Escape, the close button, or clicking the scrim closes it.
-- **Test harness** (header) opens a popup for forcing inputs and reading
-  outputs, modeled on the Train Model test harness. No IO is declared yet,
-  so both tables are empty and Reset / Send stay disabled until inputs
-  exist. Escape, the close button, or clicking the scrim closes it.
+- **Load schedule** (Automatic view) opens the system file picker. Picking
+  a file shows its name under "Schedule file"; nothing parses it yet.
 - Dispatch, set authority, send to track controller, and close block
   enable once their selects have a value. The selects are empty, so these
   stay disabled until options are bound. Close block requires a
@@ -41,21 +58,24 @@ With no backend, only window-level UI state works:
 | --- | --- |
 | Track map | `panels/TrackViewPanel.qml` → `mapCanvas`. Set `mapAvailable` to enable zoom and fit. The legend goes below the canvas. |
 | Selected train | `SelectedTrainPanel.trainId`. A non-empty ID shows the detail layout. |
+| Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` fires with the picked file's URL. Read and parse it there; set `scheduleFile`, `departures`, and `running` from the result. |
 | Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |
 | Selects | `model` on each `SelectField`, via the panel's `*Options` properties. |
-| Test harness | `TestHarnessWindow.inputs` / `.outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once a backend is attached. |
+| Test harness | `ui/test/TestHarnessView.qml` in the test UI process. `inputs` / `outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once linked to a running CTC. |
 | Header | `CtcHeader.clock`, `.speedLabel` (e.g. `10× speed`), `.operatorName`. |
 
 ## Layout
 
 ```
-__main__.py             entry point: builds theme, loads QML
+__main__.py             CTC Office entry point: builds theme, loads QML
+test_ui.py              test UI entry point (separate process)
 ui/Main.qml             window, fixed 1440×900 canvas, mode + window state
 ui/views/*.qml          Automatic / Manual / Maintenance right-hand columns
 ui/panels/*.qml         track view, dispatch, schedule, throughput,
-                        closures, switch, close block, occupancy window/dock,
-                        test harness
+                        closures, switch, close block, occupancy window/dock
 ui/components/*.qml     CTC-only building blocks (see below)
+ui/test/TestMain.qml    test UI window
+ui/test/TestHarnessView.qml  inputs / outputs tables and run controls
 ```
 
 ### Shared components
@@ -93,12 +113,24 @@ modules can use them. They are catalogued in the shared
 python -m flake8 --max-line-length=79 --max-doc-length=72 ctc_ui
 python -m mypy --disallow-untyped-defs ctc_ui
 pyside6-qmllint -I ctc_ui/ui -I ctc_ui/ui/components -I ctc_ui/ui/panels \
-    -I ../ui $(find ctc_ui/ui -name '*.qml')
+    -I ctc_ui/ui/test -I ../ui $(find ctc_ui/ui -name '*.qml')
 ```
 
 flake8 and mypy are clean. qmllint's only remaining warnings are
 `[unqualified]` access to the `theme` context property. That is inherent to
 the context-property pattern shared with the Train Model UI.
+
+## IO link (planned)
+
+Not built yet. The test UI will control a running CTC Office's inputs and
+outputs over a Qt local socket: the CTC process listens with a
+`QLocalServer` and the test UI connects with a `QLocalSocket`. That is a
+named pipe on Windows and a Unix socket elsewhere, never a network
+connection. Messages are JSON, one per line, and map onto what
+`TestHarnessView` already exposes: declaring the inputs and outputs,
+editing an input, sending all inputs, resetting them, and reading
+outputs back. The CTC Office runs normally whether or not a test UI is
+connected.
 
 ## Design notes
 

@@ -1,5 +1,6 @@
 // Automatic dispatch: schedule file and upcoming departures.
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../../../../ui"
 
@@ -11,7 +12,8 @@ Panel {
     property var departures: []
     readonly property bool scheduleLoaded: scheduleFile !== ""
 
-    signal loadScheduleRequested()
+    // The backend reads and parses the file; the panel only picks it.
+    signal scheduleFileSelected(url fileUrl)
     signal pauseRequested()
 
     title: qsTr("Auto dispatch")
@@ -38,7 +40,21 @@ Panel {
         AppButton {
             variant: "secondary"
             text: root.scheduleLoaded ? qsTr("Reload") : qsTr("Load schedule")
-            onClicked: root.loadScheduleRequested()
+            onClicked: scheduleDialog.open()
+        }
+    }
+
+    FileDialog {
+        id: scheduleDialog
+
+        title: qsTr("Load schedule")
+        fileMode: FileDialog.OpenFile
+        // No schedule file format is decided yet, so accept any file.
+        nameFilters: [qsTr("All files (*)")]
+        onAccepted: {
+            const path = decodeURIComponent(selectedFile.toString());
+            root.scheduleFile = path.substring(path.lastIndexOf("/") + 1);
+            root.scheduleFileSelected(selectedFile);
         }
     }
 
