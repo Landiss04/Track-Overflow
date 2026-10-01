@@ -59,7 +59,7 @@ class Beacon:
 class TrackSignal:
     """Encoded track-circuit signal the Train Controller reads off the rail."""
     commanded_speed_mps: float
-    authority_m: float
+    authority_block_id: str     # destination block the train may travel up to
     beacon: Optional[Beacon] = None
 
 
@@ -121,7 +121,7 @@ class ITrackModel(ABC):
         self,
         block_id: str,
         speed_mps: float,
-        authority_m: float,
+        authority_block_id: str,
     ) -> None:
         """Store the commanded speed and authority for a specific block."""
 
@@ -174,8 +174,8 @@ class ITrackModel(ABC):
     # -- Environment --
 
     @abstractmethod
-    def set_temperature_f(self, temp_f: float) -> None:
-        """Set ambient temperature (°F) for track-heater logic."""
+    def set_temperature_c(self, temp_c: float) -> None:
+        """Set ambient temperature (°C) for track-heater logic."""
 
 
 class ITrainModel(ABC):
@@ -214,8 +214,8 @@ class ITrainModel(ABC):
         """Control cabin and headlight state."""
 
     @abstractmethod
-    def set_temperature_setpoint_f(self, temp_f: float) -> None:
-        """Set the cabin temperature setpoint in °F."""
+    def set_temperature_setpoint_c(self, temp_c: float) -> None:
+        """Set the cabin temperature setpoint in °C."""
 
     # -- Input from Track Model --
 
@@ -302,7 +302,7 @@ class ISwTrackController(ABC):
         self,
         block_id: str,
         suggested_speed_mps: float,
-        authority_m: float,
+        authority_block_id: str,
     ) -> None:
         """Accept a speed/authority suggestion from the CTC for a block."""
 
@@ -319,8 +319,8 @@ class ISwTrackController(ABC):
     # -- Outputs to Track Model --
 
     @abstractmethod
-    def get_commanded_signal(self, block_id: str) -> tuple[float, float]:
-        """Return (commanded_speed_mps, authority_m) for a block."""
+    def get_commanded_signal(self, block_id: str) -> tuple[float, str]:
+        """Return (commanded_speed_mps, authority_block_id) for a block."""
 
     @abstractmethod
     def get_switch_commands(self) -> list[SwitchState]:
@@ -370,5 +370,5 @@ class ICtcOffice(ABC):
     # -- Outputs to SW Track Controller --
 
     @abstractmethod
-    def get_suggestion(self, block_id: str) -> tuple[float, float]:
-        """Return (suggested_speed_mps, authority_m) for a block."""
+    def get_suggestion(self, block_id: str) -> tuple[float, str]:
+        """Return (suggested_speed_mps, authority_block_id) for a block."""
