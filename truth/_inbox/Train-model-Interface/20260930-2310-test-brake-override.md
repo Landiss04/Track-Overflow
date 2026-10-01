@@ -1,5 +1,5 @@
 **Target:** truth/decisions/passenger-emergency-brake-release.md
-**Action:** replace proposed entry
+**Action:** create
 **Proposed by:** Codex on Train-model-Interface
 **Provenance:** Kevin Schillinger corrected Codex in this chat on 2026-09-30: the test UI must toggle the emergency brake, while the regular UI stays unchanged because release there remains an open question.
 
