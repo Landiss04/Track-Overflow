@@ -1,7 +1,14 @@
 **Target:** truth/ui/component-kit.md
 **Action:** create
 **Proposed by:** GitHub Copilot on feature/TrackCtrl-UI-Implementation
-**Provenance:** `ui/README.md` on `development` (`53586da`)
+**Provenance:** `ui/README.md` and `documents/SCALING_GUIDE.md` on `development` (`84336f9`)
+**Edited:** 2026-10-01 by GitHub Copilot at Braden's request. **This proposal has changed
+since it was first written — re-read it rather than relying on an earlier review.** The
+Definition is unchanged. Changed: the kit now also supplies the module window and the
+aspect lock, so a `## Window and scaling` section was added; the `## Pending` collision
+example was corrected (`ModuleHeader` was renamed `TrackCtrlHeader` and the local `Panel`
+was dropped for the shared one, so `DataTable` is now the only remaining collision), and a
+practised naming convention is now recorded there. Original wording is in git history.
 
 Note for the promoter: this is proposed as a new shard under `truth/ui/` because
 `truth/ui/style-guide.md` governs visual rules and `truth/conventions/files-and-paths.md`
@@ -16,10 +23,10 @@ as a new shard requires a row in `truth/INDEX.md`.
 
 **Status:** current
 **Owner:** unassigned
-**Provenance:** `ui/README.md` on `development` (`53586da`); token provider and `theme`
-context property per `truth/ui/style-guide.md` §9
+**Provenance:** `ui/README.md` and `documents/SCALING_GUIDE.md` on `development`
+(`84336f9`); token provider and `theme` context property per `truth/ui/style-guide.md` §9
 **Aliases:** shared UI kit, shared QML components, ui/ folder, component library
-**Last updated:** 2026-09-29
+**Last updated:** 2026-10-01
 
 ## Definition
 
@@ -55,6 +62,20 @@ relative directory import. A module does not restyle a shared control locally.
 - Host-facing signals request a change; the host updates the bound state. A component
   does not mutate its own bound state in response to user input.
 
+## Window and scaling
+
+The kit also supplies the module window, so every module resizes identically. A module
+does not write its own window sizing.
+
+- `ui/ScaledWindow.qml` is the application window. It owns a fixed 1440 x 900 reference
+  canvas at 16:10, a uniform scale, the letterbox, and the 720 x 450 minimum.
+- `ui/aspect_lock.py` holds the window at 16:10 during an interactive resize on Windows.
+  The host calls `install_window_scaling(window)` after the QML loads and keeps the
+  returned object alive for the life of the window.
+- A module UI is a fixed composition, not a responsive layout: no child may bind its
+  geometry to the live window size, and window geometry is never reassigned after the
+  fact. Full rules in `documents/SCALING_GUIDE.md`.
+
 ## Pending
 
 Owner: unassigned — needs a decision, not an inference.
@@ -63,6 +84,9 @@ A module-local component directory and the shared kit are both plain directory i
 so a module-local component that reuses a shared component's name collides with it and
 must be disambiguated with an aliased import (`import "../../ui" as Shared`). Whether
 module-local names are required to be distinct from shared ones, or whether the aliased
-import is the standard form, is not stated anywhere. Encountered on
-`feature/TrackCtrl-UI-Implementation`, where `TrackCtrlHw/ui/components/` defines
-`DataTable` and `ModuleHeader` alongside the shared kit's own.
+import is the standard form, is not stated anywhere.
+
+Practice so far points at a module prefix: CTC Office keeps `CtcHeader` and the Track
+Controller keeps `TrackCtrlHeader`, both module-local because they carry module-specific
+header controls the shared `ModuleHeader` has no slot for. The one live collision left is
+`DataTable`, defined by both `ui/` and `TrackCtrlHw/ui/components/`.
