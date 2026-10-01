@@ -28,9 +28,3 @@ to the Train Model.
 - The Train Model recomputes its operating mass on every boarding event.
 - This entry does not settle how the Train Model learns that it is at a station.
 - The source is the Train Model design. The Track Model owner has not confirmed it.
-
-## Supersedes
-
-- Boarding conditions: previously unrestricted, so a count was applied whenever it
-  arrived, including while moving with the doors closed. Kevin Schillinger restricted
-  boarding to a station with a door open on 2026-10-01.
