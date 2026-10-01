@@ -143,13 +143,13 @@ Item {
                 Layout.fillHeight: true
                 spacing: theme.space_4
 
-                Panel {
+                Shared.Panel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     title: "Wayside territory"
                     bodyPadding: theme.space_3
 
-                    headerContent: [
+                    headerItems: [
                         Text {
                             text: "Sections D\u2013F \u00B7 Blocks 11\u201319"
                             color: theme.text_muted
@@ -183,14 +183,14 @@ Item {
                     }
                 }
 
-                Panel {
+                Shared.Panel {
                     Layout.fillWidth: true
-                    // Panel header 44 + table header 32 + 4 whole rows.
-                    Layout.preferredHeight: 220
+                    // Panel header 48 + table header 32 + 4 whole rows.
+                    Layout.preferredHeight: 224
                     title: "Block occupancy"
                     bodyPadding: 0
 
-                    headerContent: Text {
+                    headerItems: Text {
                         text: "From track model \u00B7 14:32:05"
                         color: theme.text_muted
                         font.family: theme.ui_family
@@ -227,9 +227,9 @@ Item {
                     body: page.maintenanceMode ? "Manual switch commands are unlocked. The PLC program no longer has sole authority over switches, signals and the crossing." : "The loaded PLC program is setting switches, signals and the crossing, so manual switch commands unlock only in Maintenance mode."
                 }
 
-                Panel {
+                Shared.Panel {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 148
+                    Layout.preferredHeight: 152
                     title: "Wayside PLC"
 
                     RowLayout {
@@ -283,13 +283,13 @@ Item {
                     }
                 }
 
-                Panel {
+                Shared.Panel {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 148
+                    Layout.preferredHeight: 152
                     title: "From the office"
                     bodyPadding: 0
 
-                    headerContent: Text {
+                    headerItems: Text {
                         text: "Received 14:31:58"
                         color: theme.text_muted
                         font.family: theme.ui_family
@@ -304,13 +304,13 @@ Item {
                     }
                 }
 
-                Panel {
+                Shared.Panel {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 148
+                    Layout.preferredHeight: 152
                     title: "Switches"
                     bodyPadding: 0
 
-                    headerContent: Shared.StatusBadge {
+                    headerItems: Shared.StatusBadge {
                         variant: "ok"
                         label: "2 of 2 agreeing"
                     }
@@ -323,14 +323,14 @@ Item {
                     }
                 }
 
-                Panel {
+                Shared.Panel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: 148
+                    Layout.minimumHeight: 152
                     title: "Signals & crossings"
                     bodyPadding: 0
 
-                    headerContent: Text {
+                    headerItems: Text {
                         text: "Set by PLC \u00B7 14:32:06"
                         color: theme.text_muted
                         font.family: theme.ui_family

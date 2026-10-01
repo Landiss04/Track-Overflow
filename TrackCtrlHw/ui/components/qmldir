@@ -8,6 +8,5 @@
 Banner 1.0 Banner.qml
 DataTable 1.0 DataTable.qml
 IconButton 1.0 IconButton.qml
-Panel 1.0 Panel.qml
 Readout 1.0 Readout.qml
 TrackCtrlHeader 1.0 TrackCtrlHeader.qml
