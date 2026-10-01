@@ -1,10 +1,3 @@
-**Target:** truth/signals/brake-state.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.8 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; `bool[2]` shape asserted by Kevin Schillinger 2026-09-30; "report the state, not echo the command" asserted by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30; not in the repository. Replaces the inbox proposal `20260930-2059-brake-state.md`, which did not say what the elements report while the brakes have failed.
-
----
-
 # brake-state
 
 **Status:** current

@@ -1,10 +1,3 @@
-**Target:** truth/signals/block-change-event.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.3 (Locked: polarity-reversal detection) and Interfaces table; type asserted by Kevin Schillinger 2026-09-30
-
----
-
 # block-change-event
 
 **Status:** current

@@ -1,11 +1,3 @@
-**Target:** truth/decisions/D008-interfaces-harness-catalog.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** asserted by Kevin Schillinger 2026-09-30 ("keep it", then choosing the harness-side catalog role over a module-imported contract or reference only)
-**Note:** D004 is claimed by shared-window-scaling on `CTC_UI_Implementation`, and D005–D007 by proposals on this branch. D008 assumes those are promoted first. Reassign at promotion if needed.
-
----
-
 # D008-interfaces-harness-catalog
 
 **Status:** current

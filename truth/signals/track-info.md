@@ -1,10 +1,3 @@
-**Target:** truth/signals/track-info.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §1 and §5.3 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; grade unit per `conventions/units.md` as resolved by Kevin 2026-09-30; not in the repository
-
----
-
 # track-info
 
 **Status:** current

@@ -1,10 +1,3 @@
-**Target:** truth/signals/power-command.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §1 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; not in the repository
-
----
-
 # power-command
 
 **Status:** current

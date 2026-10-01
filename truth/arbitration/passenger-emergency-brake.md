@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/passenger-emergency-brake.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.8 (Locked) and Interfaces table (Emergency Brake State), supplied by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30; not in the repository
-
----
-
 # passenger-emergency-brake
 
 **Status:** current

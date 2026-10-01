@@ -1,10 +1,3 @@
-**Target:** truth/signals/emergency-brake-command.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` Interfaces table; command path vs passenger path asserted by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30
-
----
-
 # emergency-brake-command
 
 **Status:** current

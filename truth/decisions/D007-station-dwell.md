@@ -1,11 +1,3 @@
-**Target:** truth/decisions/D007-station-dwell.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.2 (Locked), supplied by Kevin Schillinger 2026-09-30; not in the repository
-**Note:** D007 assumes D004 (shared window scaling, `CTC_UI_Implementation`), D005 and D006 (this branch) are promoted first. Reassign at promotion if needed.
-
----
-
 # D007-station-dwell
 
 **Status:** current

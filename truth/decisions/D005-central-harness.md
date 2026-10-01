@@ -1,11 +1,3 @@
-**Target:** truth/decisions/D005-central-harness.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** asserted by Kevin Schillinger 2026-09-30 ("central harness is the goal currently"), approving the boundary-contract model in the Train Model `interface.py` module docstring
-**Note:** D004 is claimed by shared-window-scaling on `CTC_UI_Implementation`, which keeps it (Kevin 2026-09-30). D005 assumes it is promoted first. Reassign at promotion if needed.
-
----
-
 # D005-central-harness
 
 **Status:** current
