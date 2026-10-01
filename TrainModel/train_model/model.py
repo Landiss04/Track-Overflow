@@ -126,6 +126,34 @@ class TrainModel:
             InvalidTimeStepError: If ``dt`` is nonfinite or not positive.
             InvalidInputError: If numeric inputs are invalid.
         """
+        self.validate_inputs(dt, inputs)
+        cmd = inputs.controller
+        track = inputs.track
+
+        self._update_passengers(
+            cmd.door_left_open, cmd.door_right_open,
+            track.passengers_boarded,
+        )
+        # OPEN(5.6): no door interlock; the doors obey the commands.
+        self._door_left_open = cmd.door_left_open
+        self._door_right_open = cmd.door_right_open
+
+        block_changed = self._detect_block_change(track.track_info.polarity)
+        if block_changed:
+            self._offset_m = 0.0
+
+        grade_rad = math.radians(track.track_info.grade_deg)
+        self._integrate(dt, inputs, grade_rad)
+        self._update_cabin_temp(dt, cmd.temp_setpoint_c)
+
+        self._last_inputs = inputs
+        self._elapsed_s += dt
+        self._outputs = self._build_outputs(inputs, block_changed)
+        return self._outputs
+
+    @staticmethod
+    def validate_inputs(dt: float, inputs: TrainModelInputs) -> None:
+        """Validate a step without changing state, including test actions."""
         if not math.isfinite(dt) or dt <= 0.0:
             raise InvalidTimeStepError(
                 f"dt must be finite and positive, got {dt}"
@@ -149,27 +177,6 @@ class TrainModel:
             raise InvalidInputError("power_cmd_w must be nonnegative")
         if not isinstance(track.passengers_boarded, int):
             raise InvalidInputError("passengers_boarded must be an integer")
-
-        self._update_passengers(
-            cmd.door_left_open, cmd.door_right_open,
-            track.passengers_boarded,
-        )
-        # OPEN(5.6): no door interlock; the doors obey the commands.
-        self._door_left_open = cmd.door_left_open
-        self._door_right_open = cmd.door_right_open
-
-        block_changed = self._detect_block_change(track.track_info.polarity)
-        if block_changed:
-            self._offset_m = 0.0
-
-        grade_rad = math.radians(track.track_info.grade_deg)
-        self._integrate(dt, inputs, grade_rad)
-        self._update_cabin_temp(dt, cmd.temp_setpoint_c)
-
-        self._last_inputs = inputs
-        self._elapsed_s += dt
-        self._outputs = self._build_outputs(inputs, block_changed)
-        return self._outputs
 
     def snapshot(self) -> TrainModelSnapshot:
         """Return the current state for display. No side effects."""

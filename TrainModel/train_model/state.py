@@ -91,8 +91,14 @@ class TrainModelState(QObject):
     # Driven by the test harness
     # ------------------------------------------------------------------ #
 
-    def step(self, dt: float, inputs: TrainModelInputs) -> None:
-        """Advance the model one tick and refresh the snapshot."""
+    def step(
+        self, dt: float, inputs: TrainModelInputs, *,
+        override_passenger_brake: bool = False,
+    ) -> None:
+        """Validate before a test override; publish only the accepted step."""
+        if override_passenger_brake:
+            self._model.validate_inputs(dt, inputs)
+            self._model.clear_passenger_brake_for_test()
         self._model.step(dt, inputs)
         self._refresh()
 

@@ -31,12 +31,13 @@ from train_model.interface import (
     TrainModelInputs,
 )
 from train_model.state import FAILURE_MODES, TrainModelState
+from train_model.model import InvalidTimeStepError
 
 #: Inputs, in interface-dictionary order. ``kind`` drives which editor
 #: the view renders; ``unit`` is empty where the signal is
-#: dimensionless.
+#: dimensionless. Units are display units; pending and accepted values stay SI.
 INPUT_SPEC: tuple[dict[str, Any], ...] = (
-    {"name": "power_command", "kind": "float", "unit": "W"},
+    {"name": "power_command", "kind": "float", "unit": "kW"},
     {
         "name": "service_brake_command",
         "kind": "bool",
@@ -59,7 +60,7 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     },
     {"name": "left_door_command", "kind": "bool", "unit": ""},
     {"name": "right_door_command", "kind": "bool", "unit": ""},
-    {"name": "commanded_speed", "kind": "float", "unit": "m/s"},
+    {"name": "commanded_speed", "kind": "float", "unit": "mph"},
     {
         "name": "authority_block",
         "kind": "string",
@@ -82,12 +83,12 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     },
     {"name": "block", "kind": "string", "unit": ""},
     {"name": "grade", "kind": "float", "unit": "deg"},
-    {"name": "elevation", "kind": "float", "unit": "m"},
-    {"name": "speed_limit", "kind": "float", "unit": "m/s"},
+    {"name": "elevation", "kind": "float", "unit": "ft"},
+    {"name": "speed_limit", "kind": "float", "unit": "mph"},
     # Track circuit polarity; flipping it is a block change.
     {"name": "polarity", "kind": "bool", "unit": ""},
     {"name": "passengers_boarded", "kind": "int", "unit": ""},
-    {"name": "temperature_setpoint", "kind": "float", "unit": "C"},
+    {"name": "temperature_setpoint", "kind": "float", "unit": "°F"},
     {
         "name": "announcement",
         "kind": "string",
@@ -103,25 +104,26 @@ _OUTPUT_SPEC: tuple[tuple[str, str, str, str], ...] = (
     ("right_door_state", "bool", "", "right_door"),
     ("interior_light_state", "bool", "", "interior_light"),
     ("exterior_light_state", "bool", "", "exterior_light"),
-    ("cabin_temp", "float", "C", "cabin_temp"),
-    ("commanded_speed", "float", "m/s", "commanded_speed"),
+    ("cabin_temp", "float", "°F", "cabin_temp"),
+    ("commanded_speed", "float", "mph", "commanded_speed"),
     ("authority", "string", "", "authority_block"),
     ("beacon_station", "string", "", "beacon_station"),
     ("beacon_platform_side", "string", "", "beacon_platform_side"),
     ("beacon_underground", "bool", "", "beacon_underground"),
     ("position_block", "string", "", "current_block"),
-    ("position_offset", "float", "m", "position_offset"),
-    ("actual_speed", "float", "m/s", "actual_speed"),
+    ("position_offset", "float", "ft", "position_offset"),
+    ("actual_speed", "float", "mph", "actual_speed"),
     ("passengers", "int", "", "passengers"),
     ("passenger_capacity", "int", "", "passenger_capacity"),
     ("block_changed", "bool", "", "block_changed"),
-    ("speed_limit", "float", "m/s", "speed_limit"),
+    ("speed_limit", "float", "mph", "speed_limit"),
 )
 
 # Float outputs are shown to this many decimal places.
 _OUTPUT_DECIMALS = 3
 
 _DEFAULT_DT = 0.100
+_DISPLAY_FACTORS = {"mph": 2.236936, "ft": 3.280840, "kW": 0.001}
 
 
 class TestHarnessState(QObject):
@@ -130,12 +132,14 @@ class TestHarnessState(QObject):
     inputsChanged = Signal()
     outputsChanged = Signal()
     runControlChanged = Signal()
+    inputErrorChanged = Signal()
 
     def __init__(
         self, model: TrainModelState, parent: QObject | None = None
     ) -> None:
         super().__init__(parent)
         self._model = model
+        self._input_error = ""
         self._pending_inputs: dict[str, Any] = {}
         self._live_inputs = model.live_input_values()
         self._emergency_override_pending = False
@@ -165,8 +169,33 @@ class TestHarnessState(QObject):
 
     @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
     def inputValues(self) -> dict[str, Any]:
-        """Live values overlaid only with explicitly staged edits."""
+        """Backend values for Python callers; QML uses displayInputValues."""
         return self._live_inputs | self._pending_inputs
+
+    @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
+    def displayInputValues(self) -> dict[str, Any]:
+        """Convert only at the view boundary; retain SI in pending commands."""
+        return self._display_values()
+
+    def _display_values(self) -> dict[str, Any]:
+        values = self._live_inputs | self._pending_inputs
+        return {
+            row["name"]: self._format(
+                row["kind"], self._to_display(row["unit"], values[row["name"]]),
+                decimals=6,
+            )
+            for row in INPUT_SPEC
+        }
+
+    @Property(str, notify=inputErrorChanged)
+    def inputError(self) -> str:
+        """Visible rejection reason; drafts remain available for correction."""
+        return self._input_error
+
+    def _set_input_error(self, message: str) -> None:
+        if message != self._input_error:
+            self._input_error = message
+            self.inputErrorChanged.emit()
 
     @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
     def pendingInputs(self) -> dict[str, Any]:
@@ -176,7 +205,7 @@ class TestHarnessState(QObject):
     @Property("QVariantList", notify=inputsChanged)  # type: ignore[arg-type]
     def inputs(self) -> list[dict[str, Any]]:
         """Editable input rows."""
-        values = self._live_inputs | self._pending_inputs
+        values = self._display_values()
         return [dict(row, value=values[row["name"]]) for row in INPUT_SPEC]
 
     @Property("QVariantList", notify=outputsChanged)  # type: ignore[arg-type]
@@ -188,7 +217,9 @@ class TestHarnessState(QObject):
                 "name": name,
                 "kind": kind,
                 "unit": unit,
-                "value": self._format(kind, snapshot[field]),
+                "value": self._format(
+                    kind, self._to_display(unit, snapshot[field])
+                ),
             }
             for name, kind, unit, field in _OUTPUT_SPEC
         ]
@@ -225,8 +256,18 @@ class TestHarnessState(QObject):
         return str(snapshot["clock"])
 
     @Slot(str, "QVariant")
+    def setDisplayInput(self, name: str, value: Any) -> None:
+        """Accept editor units and convert to the backend before staging."""
+        for row in INPUT_SPEC:
+            if row["name"] == name:
+                self.setInput(name, self._from_display(
+                    row["unit"], self._coerce(row["kind"], value)
+                ))
+                return
+        raise KeyError(f"unknown input: {name}")
+
     def setInput(self, name: str, value: Any) -> None:
-        """Write one input row, coercing to the declared type."""
+        """Stage a backend-unit value from Python (not a QML entry point)."""
         for row in INPUT_SPEC:
             if row["name"] != name:
                 continue
@@ -243,20 +284,28 @@ class TestHarnessState(QObject):
             return
         raise KeyError(f"unknown input: {name}")
 
-    @Slot()
-    def sendInputs(self) -> None:
-        """Hand the inputs to the Train Model and advance one tick."""
+    @Slot(result=bool)
+    def sendInputs(self) -> bool:
+        """Submit a valid tick, or retain state and drafts with an error."""
         values = self._model.command_values() | self._pending_inputs
-        inputs = self._build_inputs(values)
-        if self._emergency_override_pending:
-            self._model.clear_passenger_brake_for_test()
-            self._emergency_override_pending = False
-        self._model.step(self._dt, inputs)
+        try:
+            inputs = self._build_inputs(values)
+            self._model.step(
+                self._dt, inputs,
+                override_passenger_brake=self._emergency_override_pending,
+            )
+        except (ValueError, InvalidTimeStepError) as exc:
+            self.setRunning(False)
+            self._set_input_error(str(exc))
+            return False
+        self._emergency_override_pending = False
         self._pending_inputs.clear()
         self._tick += 1
         self._sync_inputs()
+        self._set_input_error("")
         self.inputsChanged.emit()
         self.runControlChanged.emit()
+        return True
 
     @Slot(bool)
     def setRunning(self, running: bool) -> None:
@@ -279,6 +328,7 @@ class TestHarnessState(QObject):
     def resetModule(self) -> None:
         """Restore a fresh model, live inputs and zero counters."""
         self._timer.stop()
+        self._set_input_error("")
         self._pending_inputs.clear()
         self._emergency_override_pending = False
         self._tick = 0
@@ -345,12 +395,29 @@ class TestHarnessState(QObject):
         )
 
     @staticmethod
-    def _format(kind: str, value: Any) -> Any:
+    def _to_display(unit: str, value: Any) -> Any:
+        """Canonical display factors from truth/conventions/units.md."""
+        if unit == "°F":
+            return value * 9 / 5 + 32
+        factor = _DISPLAY_FACTORS.get(unit)
+        return value * factor if factor is not None else value
+
+    @staticmethod
+    def _from_display(unit: str, value: Any) -> Any:
+        if unit == "°F":
+            return (value - 32) * 5 / 9
+        factor = _DISPLAY_FACTORS.get(unit)
+        return value / factor if factor is not None else value
+
+    @staticmethod
+    def _format(
+        kind: str, value: Any, decimals: int = _OUTPUT_DECIMALS,
+    ) -> Any:
         """Round a numeric output for display in its declared kind."""
         if kind == "int":
             return round(value)
         if kind == "float":
-            return round(value, _OUTPUT_DECIMALS)
+            return round(value, decimals)
         return value
 
     @staticmethod

@@ -190,9 +190,9 @@ def test_reset_restores_a_fresh_model() -> None:
 
 
 def test_invalid_platform_side_is_rejected() -> None:
-    """Check a beacon platform side other than L or R raises."""
+    """Check an invalid beacon is rejected with a visible error."""
     _, harness = make_harness()
     harness.setInput("beacon_station", "Station")
     harness.setInput("beacon_platform_side", "X")
-    with pytest.raises(ValueError, match="platform_side"):
-        harness.sendInputs()
+    assert not harness.sendInputs()
+    assert "platform_side" in harness.inputError

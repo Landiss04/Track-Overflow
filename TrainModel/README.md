@@ -90,7 +90,10 @@ doors, temperature, passenger counts, and the clock refresh from that snapshot.
 Test input rows show live values until edited. Explicit edits are marked
 **pending** and remain staged until **Send inputs**, which also advances one
 tick. Starting or advancing a fresh simulation also sends its initial edits.
-Live updates preserve the focused editor and its unfinished text.
+Live updates preserve the focused editor and its unfinished text. A rejected
+submission displays an error, pauses running, and retains the model state and
+pending edits for correction. Validation happens before a passenger-brake
+override, so invalid inputs cannot release the brake.
 Later ticks reuse accepted producer commands, so a suppressed readout during
 a failure does not overwrite the underlying command. `passengers_boarded`
 is a one-time event: sending consumes the count and returns its row to zero;
@@ -108,5 +111,6 @@ operation; this test override does not define that policy.
 - Manual door buttons remain disabled: the model displays controller commands.
 - Power consumption displays capped commanded power, suppressed on engine
   failure; see [open issues](docs/open-issues.md) for the measurement limitation.
-- Harness values use backend units (including degrees for grade and Celsius
-  for temperature); the overview converts its readouts to display units.
+- Both pages display speed in mph, distance/elevation in feet, temperature
+  in Fahrenheit, and power in kW. Grade remains in degrees. Test editors
+  convert back to backend units before staging commands; model state remains SI.

@@ -14,7 +14,7 @@ ScrollView {
         return Number(value).toFixed(digits);
     }
 
-    function mph(val) { return Number(val) * 2.23694; }
+    function mph(val) { return Number(val) * 2.236936; }
     function ft(val)  { return Number(val) * 3.28084; }
     function tons(val) { return Number(val) * 0.001102311; }
     function kw(val)  { return Number(val) * 0.001; }

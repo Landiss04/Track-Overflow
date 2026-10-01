@@ -54,6 +54,23 @@ def main():
     def row(name):
         return next(x for x in items() if x.objectName() == "input-" + name)
 
+    def edit(name, text):
+        editor = next(x for x in walk(row(name))
+                      if x.objectName() == "valueEditor")
+        editor.forceActiveFocus()
+        QTest.keyClick(window, Qt.Key_A, Qt.ControlModifier)
+        for char in text:
+            QTest.keyClick(window, Qt.Key(ord(char.upper())))
+        QTest.keyClick(window, Qt.Key_Return)
+
+    def send_from_qml():
+        # Run control is below the viewport: exercise its QML click handler.
+        button = next(x for x in items()
+                      if x.property("text") == "Send inputs to train model"
+                      and hasattr(x, "clicked"))
+        button.clicked.emit()
+        QTest.qWait(10)
+
     # Overview apply updates the hidden test control immediately, paused.
     click("APPLY EMERGENCY BRAKE")
     click("CONFIRM")
@@ -87,18 +104,59 @@ def main():
     assert editor.property("activeFocus")
     assert editor.property("text") == "99"
     QTest.keyClick(window, Qt.Key_Return)
-    assert harness.inputValues["power_command"] == 99
+    assert harness.inputValues["power_command"] == 99000
     assert power_row.property("pending")
     click("Overview")  # commit/blur without rebuilding test delegates
     harness.sendInputs()
     assert harness.inputValues["power_command"] == 0  # engine failed
     state.setFailure("engine_failure", False)
-    assert harness.inputValues["power_command"] == 99
+    assert harness.inputValues["power_command"] == 99000
     harness.resetModule()
     QTest.qWait(10)
     assert editor.property("text") == "0"
     assert not power_row.property("pending")
     assert state.snapshot["clock"] == harness.elapsed == "00:00:00"
+    click("Test harness")
+    for name, unit, value in [
+        ("power_command", "kW", 0),
+        ("commanded_speed", "mph", 0),
+        ("speed_limit", "mph", 0),
+        ("elevation", "ft", 0),
+        ("temperature_setpoint", "°F", 68),
+    ]:
+        assert row(name).property("unit") == unit
+        assert row(name).property("value") == value
+
+    # A failed submission via QML retains the latch, state and drafts.
+    state.applyEmergencyBrake()
+    before = dict(state.snapshot)
+    click("False", row("emergency_brake_command"))
+    edit("power_command", "-1")
+    send_from_qml()
+    assert state.snapshot == before
+    assert harness.tick == 0
+    error = next(x for x in items() if x.objectName() == "inputError")
+    assert error.isVisible()
+    assert "nonnegative" in error.property("text")
+    assert row("emergency_brake_command").property("pending")
+    edit("power_command", "100")
+    edit("temperature_setpoint", "77")
+    edit("commanded_speed", "22.36936")
+    edit("elevation", "328.084")
+    send_from_qml()
+    assert not error.isVisible()
+    assert not state.snapshot["passenger_ebrake_pulled"]
+    assert state.command_values()["power_command"] == 100000
+    assert state.command_values()["temperature_setpoint"] == 25
+    assert abs(state.command_values()["commanded_speed"] - 10) < 1e-12
+    assert abs(state.command_values()["elevation"] - 100) < 1e-12
+    assert row("power_command").property("value") == 100
+    assert row("temperature_setpoint").property("value") == 77
+    assert not row("power_command").property("pending")
+    output = next(x for x in items()
+                  if x.objectName() == "output-commanded_speed")
+    assert output.property("unit") == "mph"
+    assert output.property("value") == 22.369
     del engine
     del app
 

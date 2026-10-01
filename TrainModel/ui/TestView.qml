@@ -50,14 +50,14 @@ ScrollView {
                         Layout.fillWidth: true
                         objectName: "input-" + modelData.name
                         kind: modelData.kind
-                        value: harness.inputValues[modelData.name]
+                        value: harness.displayInputValues[modelData.name]
                         unit: modelData.unit
                         editable: true
                         preserveActiveEdit: true
                         property bool pending: !!harness.pendingInputs[modelData.name]
                         name: modelData.name + (pending ? " (pending)" : "")
                         onEdited: function (newValue) {
-                            harness.setInput(modelData.name, newValue);
+                            harness.setDisplayInput(modelData.name, newValue);
                         }
                     }
                 }
@@ -84,6 +84,7 @@ ScrollView {
                         required property var modelData
 
                         Layout.fillWidth: true
+                        objectName: "output-" + modelData.name
                         name: modelData.name
                         kind: modelData.kind
                         value: modelData.value
@@ -168,6 +169,14 @@ ScrollView {
                     variant: "primary"
                     text: qsTr("Send inputs to train model")
                     onClicked: harness.sendInputs()
+                }
+
+                HelperText {
+                    objectName: "inputError"
+                    Layout.fillWidth: true
+                    visible: harness.inputError !== ""
+                    text: qsTr("Inputs not sent: ") + harness.inputError
+                    color: theme.danger
                 }
 
                 RowLayout {
