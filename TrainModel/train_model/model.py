@@ -130,13 +130,17 @@ class TrainModel:
         cmd = inputs.controller
         track = inputs.track
 
+        # Door interlock: a door can only open at 0 mph. An open command
+        # while moving is refused, and takes effect once the train stops.
+        stopped = self._velocity_mps == 0.0
+        door_left = cmd.door_left_open and stopped
+        door_right = cmd.door_right_open and stopped
         self._update_passengers(
-            cmd.door_left_open, cmd.door_right_open,
-            track.passengers_boarded,
+            door_left, door_right, track.passengers_boarded,
+            at_station=bool(track.track_info.station_name),
         )
-        # OPEN(5.6): no door interlock; the doors obey the commands.
-        self._door_left_open = cmd.door_left_open
-        self._door_right_open = cmd.door_right_open
+        self._door_left_open = door_left
+        self._door_right_open = door_right
 
         block_changed = self._detect_block_change(track.track_info.polarity)
         if block_changed:
@@ -144,6 +148,10 @@ class TrainModel:
 
         grade_rad = math.radians(track.track_info.grade_deg)
         self._integrate(dt, inputs, grade_rad)
+        if self._velocity_mps != 0.0:
+            # The interlock holds: no door stays open once the train moves.
+            self._door_left_open = False
+            self._door_right_open = False
         self._update_cabin_temp(dt, cmd.temp_setpoint_c)
 
         self._last_inputs = inputs
@@ -283,7 +291,8 @@ class TrainModel:
             if direction > 0.0 and power > 0.0:
                 # Resolve the P/v transition and its relaxation time.
                 # This bounds midpoint steps without a speed governor.
-                scale = max(v, power / cfg.f_max_n, math.ulp(0.0))
+                v_base = power / cfg.f_max_n
+                scale = max(v, v_base, math.ulp(0.0))
                 h = min(h, m * scale * (scale / power))
                 if 0.0 < resistance < cfg.f_max_n:
                     equilibrium = power / resistance
@@ -294,16 +303,33 @@ class TrainModel:
                         v = equilibrium
                         self._offset_m += v * remaining
                         break
-                v_next = v + h * (cfg.f_max_n - resistance) / m
-                if (v + v_next) / 2.0 > power / cfg.f_max_n:
-                    # Scale the midpoint quadratic by speed to avoid
-                    # squaring tiny velocities at very small powers.
+                # A substep stays in one traction regime: it ends at the
+                # base speed v_base = P / F_max rather than straddle it.
+                if v < v_base or (
+                        v == v_base and resistance > cfg.f_max_n):
+                    # Force-limited: F_max is constant, so this is exact.
+                    v_next = v + h * (cfg.f_max_n - resistance) / m
+                    if v_next > v_base:
+                        h = min(h, (v_base - v) * m
+                                / (cfg.f_max_n - resistance))
+                        v_next = v_base
+                else:
+                    # Power-limited. Scale the midpoint quadratic by
+                    # speed to avoid squaring tiny velocities at very
+                    # small powers.
                     b = v / scale - (h / scale) * resistance / (2.0 * m)
                     c = (h / scale) * (power / scale) / (2.0 * m)
                     root = math.hypot(b, 2.0 * math.sqrt(c))
                     u = ((b + root) / 2.0 if b >= 0.0
                          else 2.0 * c / (root - b))
                     v_next = 2.0 * scale * u - v
+                    if v_next < v_base < v:
+                        # Slowing into the force limit: end where the
+                        # same midpoint rule reaches v_base.
+                        net = power / ((v + v_base) / 2.0) - resistance
+                        if net < 0.0:
+                            h = min(h, m * (v_base - v) / net)
+                            v_next = v_base
             else:
                 # No traction during rollback; all forces are constant.
                 v_next = v - h * resistance / m
@@ -344,9 +370,12 @@ class TrainModel:
         return changed
 
     def _update_passengers(
-        self, door_left: bool, door_right: bool, boarded: int
+        self, door_left: bool, door_right: bool, boarded: int, *,
+        at_station: bool,
     ) -> None:
         # Section 5.2: disembark first, then board, bounded both ways.
+        # The door arguments are the interlocked door states, so an
+        # opened door already implies the train is stopped.
         cfg = self.config
         opened = (
             (door_left and not self._door_left_open)
@@ -356,6 +385,10 @@ class TrainModel:
         # rising edge (either side) at v = 0.
         if opened and self._velocity_mps == 0.0:
             self._n_passengers -= self._rng.randint(0, self._n_passengers)
+        # Passengers can only board at a station with a door open; a
+        # count received at any other time boards nobody.
+        if not (at_station and (door_left or door_right)):
+            return
         room = cfg.capacity - self._n_passengers
         self._n_passengers += max(0, min(boarded, room))
 

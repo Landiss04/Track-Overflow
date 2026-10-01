@@ -87,6 +87,8 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     {"name": "speed_limit", "kind": "float", "unit": "mph"},
     # Track circuit polarity; flipping it is a block change.
     {"name": "polarity", "kind": "bool", "unit": ""},
+    # Station in the current block; empty where there is none.
+    {"name": "station", "kind": "string", "unit": ""},
     {"name": "passengers_boarded", "kind": "int", "unit": ""},
     {"name": "temperature_setpoint", "kind": "float", "unit": "°F"},
     {
@@ -384,6 +386,7 @@ class TestHarnessState(QObject):
                     elevation_m=values["elevation"],
                     speed_limit_mps=values["speed_limit"],
                     polarity=values["polarity"],
+                    station_name=values["station"] or None,
                 ),
                 track_signal=TrackSignal(
                     commanded_speed_mps=values["commanded_speed"],

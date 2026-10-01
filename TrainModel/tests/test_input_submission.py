@@ -34,7 +34,11 @@ def pair():
 def test_rejected_send_preserves_state_and_can_retry(pair, failure,
                                                      bad_field, bad_value):
     state, harness = pair
+    harness.setInput("station", "Station")
+    harness.setInput("left_door_command", True)
     harness.setInput("passengers_boarded", 40)
+    assert harness.sendInputs()
+    harness.setInput("left_door_command", False)
     assert harness.sendInputs()
     state.applyEmergencyBrake()
     state.setFailure("brake_failure", failure)
@@ -65,8 +69,9 @@ def test_rejected_send_preserves_state_and_can_retry(pair, failure,
     assert state.isFailed("brake_failure") == failure
     # Rejection did not consume the seeded disembark draw or board anyone.
     control = TrainModelState()
-    control.step(.1, make_inputs(boarded=40))
-    control.step(.1, make_inputs(door_left=True, boarded=10))
+    control.step(.1, make_inputs(boarded=40, door_left=True, station="S"))
+    control.step(.1, make_inputs(station="S"))
+    control.step(.1, make_inputs(door_left=True, boarded=10, station="S"))
     assert state.snapshot["passengers"] == control.snapshot["passengers"]
 
 

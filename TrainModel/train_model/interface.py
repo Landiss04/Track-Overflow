@@ -129,6 +129,8 @@ class TrackInfo:
     elevation_m: float
     speed_limit_mps: float
     polarity: bool
+    # Station in this block; None where there is none. Boarding needs one.
+    station_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

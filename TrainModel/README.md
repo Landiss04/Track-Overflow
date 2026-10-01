@@ -100,6 +100,22 @@ is a one-time event: sending consumes the count and returns its row to zero;
 enter another count for another boarding event. Reset clears the model,
 failures, pending edits, and elapsed time.
 
+## Doors and boarding
+
+The doors are interlocked: a door can only open at 0 mph. An open command
+while the train is moving leaves the door closed, and a held command opens it
+on the first tick that starts at rest. An open door closes as soon as the
+train moves. Door state therefore reports the actual doors, which can differ
+from the command.
+
+Passengers board only at a station with a door open. The `station` input row
+names the station in the current block (`TrackInfo.station_name`); leave it
+empty away from a station. A boarding count sent at any other time boards
+nobody and is not kept for later. Disembarking is unchanged: a draw on each
+door-open rising edge at rest.
+
+## Passenger brake override
+
 The test harness emergency-brake input can explicitly override the passenger
 latch. An injected brake failure still prevents braking. The overview's
 passenger-brake release action remains inert pending a decision on normal
@@ -108,7 +124,8 @@ operation; this test override does not define that policy.
 ## Remaining display limitations
 
 - Train ID, line, and arrival time have no model source and display a dash.
-- Manual door buttons remain disabled: the model displays controller commands.
+- Manual door buttons remain disabled: the model displays the commanded doors
+  as the interlock allows them.
 - Power consumption displays capped commanded power, suppressed on engine
   failure; see [open issues](docs/open-issues.md) for the measurement limitation.
 - Both pages display speed in mph, distance/elevation in feet, temperature
