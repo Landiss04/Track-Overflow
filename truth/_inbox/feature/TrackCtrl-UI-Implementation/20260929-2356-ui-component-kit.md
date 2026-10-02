@@ -17,6 +17,13 @@ module imports them. If you would rather fold it into `files-and-paths.md` under
 `## Shared QML component kit` heading, the body below transfers unchanged. Promoting it
 as a new shard requires a row in `truth/INDEX.md`.
 
+Ordering note: `## Window and scaling` cites `decisions/D004-shared-window-scaling.md`,
+which is **not yet on `truth`** — it is still pending as
+`truth/_inbox/CTC_UI_Implementation/20260930-1147-shared-window-scaling.md` (Landis) and
+appears in neither `truth/decisions/` nor `truth/_promotions.md`. This entry deliberately
+cites D004 rather than restating the aspect ratio and minimum size, so promote D004 first
+or the citation dangles.
+
 ---
 
 # component-kit
@@ -64,17 +71,20 @@ relative directory import. A module does not restyle a shared control locally.
 
 ## Window and scaling
 
-The kit also supplies the module window, so every module resizes identically. A module
-does not write its own window sizing.
+The kit also supplies the module window, so every module resizes identically:
 
-- `ui/ScaledWindow.qml` is the application window. It owns a fixed 1440 x 900 reference
-  canvas at 16:10, a uniform scale, the letterbox, and the 720 x 450 minimum.
-- `ui/aspect_lock.py` holds the window at 16:10 during an interactive resize on Windows.
-  The host calls `install_window_scaling(window)` after the QML loads and keeps the
-  returned object alive for the life of the window.
-- A module UI is a fixed composition, not a responsive layout: no child may bind its
-  geometry to the live window size, and window geometry is never reassigned after the
-  fact. Full rules in `documents/SCALING_GUIDE.md`.
+- `ui/ScaledWindow.qml` is the application window. Children declared inside it are placed
+  on its fixed reference canvas.
+- `ui/aspect_lock.py` constrains an interactive resize on Windows. The host calls
+  `install_window_scaling(window)` after the QML loads and keeps the returned object
+  alive for the life of the window; off Windows it returns `None` and the canvas
+  letterboxes.
+
+The resizing behaviour itself is a decision, not a kit fact: see
+`decisions/D004-shared-window-scaling.md` for the aspect ratio, the minimum size and the
+rule that no module implements its own window sizing, and `documents/SCALING_GUIDE.md`
+for the reference-canvas dimensions and the prohibition on binding child geometry to the
+live window size. Neither is restated here.
 
 ## Pending
 
