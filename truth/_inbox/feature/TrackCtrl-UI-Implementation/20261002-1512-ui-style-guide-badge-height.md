@@ -1,42 +1,28 @@
-# WITHDRAWN — DO NOT PROMOTE. SUPERSEDED BY A DECISION.
-
 **Target:** truth/ui/style-guide.md
-**Action:** none — withdrawn (was: replace)
+**Action:** replace
 **Proposed by:** GitHub Copilot on feature/TrackCtrl-UI-Implementation
-**Provenance:** omission observed against Section 6.3; no source asserts a badge height
-**Edited:** 2026-10-02 by GitHub Copilot at Braden's request. Only this wrapper was
-rewritten; the proposed entry below is left exactly as authored, for the record.
+**Provenance:** asserted by Kevin 2026-10-02 — status badge height is 28 px, the
+`--control-h-sm` token, consistent across every module
 
-## Why this is withdrawn
+Note for the promoter: this supersedes
+`20260930-0012-ui-style-guide.md`, which recorded the badge height as an open question.
+Kevin decided it on 2026-10-02, so the question is closed and the `## Pending` section that
+proposal would have added does not appear here. **Promote this one; the earlier proposal is
+withdrawn and must not be promoted** — promoting both would reopen the question.
 
-This proposal existed to record that the status badge height was undecided. **Kevin decided
-it on 2026-10-02: the height is 28 px, the `--control-h-sm` token, consistent across every
-module.** The question is closed, so the `## Pending` section below must not reach `truth`.
-
-Promote `20261002-1512-ui-style-guide-badge-height.md` instead. It targets the same shard
-with the same `replace` action and carries the decision in Section 6.3 and `## Supersedes`,
-with no `## Pending` section. Promoting both would reopen a settled question.
-
-## Action required
-
-**None from a reviewer.** Do not promote. A human deletes this file as part of promotion
-and logs it in `truth/_promotions.md` as:
-
-| Date | Source branch | Proposal | Canonical path | Outcome |
-| --- | --- | --- | --- | --- |
-| 2026-10-02 | feature/TrackCtrl-UI-Implementation | 20260930-0012-ui-style-guide.md | ui/style-guide.md | denied — superseded by 20261002-1512-ui-style-guide-badge-height.md |
+Changes against `origin/truth:truth/ui/style-guide.md`: Section 6.3 now states the height and
+the `--control-h-sm` token; a `## Supersedes` line records the decision; the provenance line
+and the date are updated. Nothing else is edited, and the `## Conflict` section is unchanged.
 
 ---
-
-## Superseded content below — retained only as a record, do not copy
 
 # style-guide
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on `truth` (`e315da5`; the branch was formerly named truth-setup); relocation asserted by Kevin 2026-09-27; PySide6 per `documents/srs-filled.md` §3.1.3 REQ-INTF-014 (development, `c058082`); QML asserted by Kevin 2026-09-29; QML-specific values and the Idle badge background follow `UI-icon-standardization` (`3dc7a4d`) at Kevin's direction 2026-09-29; dark theme and preview removal and the Train Controller service-brake exemption asserted by Kevin 2026-09-29
+**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on `truth` (`e315da5`; the branch was formerly named truth-setup); relocation asserted by Kevin 2026-09-27; PySide6 per `documents/srs-filled.md` §3.1.3 REQ-INTF-014 (development, `c058082`); QML asserted by Kevin 2026-09-29; QML-specific values and the Idle badge background follow `UI-icon-standardization` (`3dc7a4d`) at Kevin's direction 2026-09-29; dark theme and preview removal and the Train Controller service-brake exemption asserted by Kevin 2026-09-29; status badge height asserted by Kevin 2026-10-02
 **Aliases:** UI Style Guide, UI_Style_Guide.md
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-02
 
 UI style guide for the ECE1140 Train Management System (University of Pittsburgh).
 
@@ -285,8 +271,8 @@ Control heights: `--control-h-sm` 28 px, `--control-h-md` 36 px (default),
 
 ### 6.3 Status Badges
 
-Pill shape, 12 px uppercase bold text, 1 px border in the semantic color, 7 px dot, background
-the matching `-bg` token.
+Pill shape, height `--control-h-sm` (28 px), 12 px uppercase bold text, 1 px border in the
+semantic color, 7 px dot, background the matching `-bg` token.
 
 | Badge | Color token | Example labels |
 |-------|-------------|----------------|
@@ -297,6 +283,10 @@ the matching `-bg` token.
 | Idle | `--text-muted` | Offline, Yard, Unassigned |
 
 Idle has no `-bg` token of its own, so its background is `--bg-sunken`.
+
+The height is fixed, not a minimum: every status badge in every module is 28 px tall, so that
+badges sitting in adjacent panels, table rows and headers align. A module **shall not** set its
+own badge height.
 
 The text label is required. A bare colored dot is not an acceptable status indicator.
 
@@ -390,21 +380,8 @@ an automatic safety function.
   in pixels, and `--shadow-1` / `--shadow-2` give way to borders, following
   `UI-icon-standardization` (`3dc7a4d`).
 - The Train Controller service brake no longer requires confirmation (Kevin 2026-09-29).
-
-## Pending
-
-Owner: Kevin.
-
-**Status badge height is not stated.** Section 6.3 fixes the pill shape, the 12 px
-uppercase bold label, the 1 px semantic border, the 7 px dot and the `-bg` fill, but gives
-no height, and Section 5's control-height tokens are not said to apply to a badge. Section
-8's 28 px minimum target governs interactive controls, and a status badge is not one.
-
-Two values are already in circulation, both from code and therefore neither normative: the
-Track Controller's former local badge used 24 px, and the shared kit's `ui/StatusBadge.qml`
-uses `--control-h-sm` (28 px). The Track Controller moved to 28 px on
-`feature/TrackCtrl-UI-Implementation` by adopting the shared component. Decide and record a
-height, or record that Section 5's `--control-h-sm` applies to badges.
+- Status badge height: previously unstated, with 24 px and 28 px both in circulation in code;
+  now fixed at 28 px (`--control-h-sm`) for every module (Kevin 2026-10-02).
 
 ## Conflict
 
