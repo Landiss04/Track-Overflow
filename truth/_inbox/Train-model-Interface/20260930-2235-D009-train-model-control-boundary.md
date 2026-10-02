@@ -1,11 +1,11 @@
-**Target:** truth/decisions/train-model-control-boundary.md
+**Target:** truth/decisions/D009-train-model-control-boundary.md
 **Action:** create
 **Proposed by:** Codex on Train-model-Interface
 **Provenance:** asserted by Kevin Schillinger 2026-09-30 in this chat: "this module is physics only the controls happen in the train controller"
 
 ---
 
-# train-model-control-boundary
+# D009-train-model-control-boundary
 
 **Status:** current
 **Owner:** Kevin Schillinger
