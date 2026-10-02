@@ -170,7 +170,7 @@ class ControllerOutputs:
 
     actual_speed_mps: float
     # Brake State, bool[2]: emergency then service. Engaged, not
-    # commanded: both are false while the brakes have failed.
+    # commanded: a brake failure blocks only the service brake.
     emergency_brake_active: bool    # controller or passenger
     service_brake_active: bool
     door_left_open: bool
