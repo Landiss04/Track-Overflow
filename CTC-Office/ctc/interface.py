@@ -22,7 +22,10 @@ m/s, distances in m. Every ID is a string, and authority is a block ID
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
+
+if TYPE_CHECKING:
+    from ctc.schedule import Schedule
 
 SwitchPosition = Literal["normal", "reverse"]
 CrossingState = Literal["inactive", "active"]
@@ -124,6 +127,17 @@ class CtcOutputs:
 
 
 @dataclass(frozen=True, slots=True)
+class QueuedTrain:
+    """A scheduled run that has not been dispatched yet."""
+
+    line: str
+    train_id: str
+    # Due at its first stop, in seconds after the schedule start.
+    departure_s: int
+    first_block_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class CtcSnapshot:
     """Full observable state for the CTC UIs."""
 
@@ -131,6 +145,8 @@ class CtcSnapshot:
     inputs: CtcInputs | None = None
     elapsed_s: float = 0.0
     tickets_sold_total: int = 0
+    # Runs from the loaded schedule still waiting, by departure time.
+    queued_trains: tuple[QueuedTrain, ...] = ()
 
 
 # ------------------------------------------------------------------ #
@@ -167,4 +183,8 @@ class CtcOffice(Protocol):
         ...
 
     def set_maintenance_mode(self, active: bool) -> None:
+        ...
+
+    def load_schedule(self, schedule: Schedule) -> None:
+        """Replace the schedule; its runs are queued for dispatch."""
         ...

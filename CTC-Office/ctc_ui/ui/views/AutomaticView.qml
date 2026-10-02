@@ -8,7 +8,11 @@ ColumnLayout {
     id: root
 
     property string selectedTrainId: ""
+    property string scheduleFile: ""
+    property string scheduleError: ""
+    property var departures: []
     signal clearSelectionRequested()
+    signal scheduleFileSelected(url fileUrl)
 
     spacing: theme.space_3
 
@@ -38,6 +42,12 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 343
+            scheduleFile: root.scheduleFile
+            scheduleError: root.scheduleError
+            departures: root.departures
+            onScheduleFileSelected: function (fileUrl) {
+                root.scheduleFileSelected(fileUrl);
+            }
         }
 
         ThroughputPanel {

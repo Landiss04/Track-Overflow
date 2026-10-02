@@ -11,14 +11,19 @@ this class behind the same ``CtcOffice`` contract.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from ctc.interface import (
     CtcInputs,
     CtcOutputs,
     CtcSnapshot,
+    QueuedTrain,
     TrainSuggestion,
     TrackControllerOutputs,
 )
+
+if TYPE_CHECKING:
+    from ctc.schedule import Schedule
 
 # Placeholder until the CTC computes speeds. Not a decided value.
 STUB_SUGGESTED_SPEED_MPS = 10.0
@@ -80,6 +85,7 @@ class StubCtcOffice:
         self._inputs: CtcInputs | None = None
         self._elapsed_s = 0.0
         self._tickets_total = 0
+        self._schedule: Schedule | None = None
 
     def step(self, dt: float, inputs: CtcInputs) -> CtcOutputs:
         """Advance one tick; see ``CtcOffice.step``."""
@@ -101,6 +107,7 @@ class StubCtcOffice:
             inputs=self._inputs,
             elapsed_s=self._elapsed_s,
             tickets_sold_total=self._tickets_total,
+            queued_trains=self._queued(),
         )
 
     def dispatch(self, train_id: str, destination_block_id: str) -> None:
@@ -123,6 +130,21 @@ class StubCtcOffice:
 
     def set_maintenance_mode(self, active: bool) -> None:
         self._maintenance = bool(active)
+
+    def load_schedule(self, schedule: Schedule) -> None:
+        """Replace the schedule. With no scheduling algorithm yet, every
+        run stays queued."""
+        self._schedule = schedule
+
+    def _queued(self) -> tuple[QueuedTrain, ...]:
+        if self._schedule is None:
+            return ()
+        runs = sorted(self._schedule.trains,
+                      key=lambda t: (t.departure_s, t.line, t.train_id))
+        return tuple(
+            QueuedTrain(t.line, t.train_id, t.departure_s,
+                        t.stops[0].block_id)
+            for t in runs)
 
     def _outputs(self) -> CtcOutputs:
         suggestions = tuple(

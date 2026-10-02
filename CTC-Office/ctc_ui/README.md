@@ -19,34 +19,45 @@ python -m ctc_ui
 
 ### Test UI
 
-The test harness is a separate process with its own window, not part of
-the CTC Office window. Start it from a second terminal, also in
+The test harness is a separate process with its own window. It stands
+in for the Track Controller and the Track Model (the two modules the CTC
+exchanges data with) and for dispatcher actions the CTC UI does not have
+yet. Start the CTC Office first, then from a second terminal, also in
 `CTC-Office`:
 
 ```bash
 python ctc_ui/test_ui.py        # or: python -m ctc_ui.test_ui
 ```
 
-It forces CTC inputs and reads back outputs so the module can be tested on
-its own, standing in for the modules the CTC talks to. Once the modules
-are integrated, those modules replace it and it is not used.
+It connects to the running CTC Office over a local socket, so both
+windows act on the one live CTC module; the badge reads **Connected**.
+**Send** applies the input rows and dispatcher actions and advances the
+CTC one 0.1 s tick; outputs are read back from the module, in display
+units (mph, ft). Maintenance mode is owned by the CTC window's
+operating mode, so the test UI shows it in Outputs only.
 
-No IO is declared yet, so both tables are empty and Reset / Send stay
-disabled. **Show preview** fills them with sample rows to check the
-layout. The badge reads "Not connected" because the link to a running
-CTC is not built yet; see [IO link (planned)](#io-link-planned).
+To test the CTC module without the window, run the test UI with its own
+in-process module instead:
+
+```bash
+python ctc_ui/test_ui.py --standalone
+```
 
 ## What is interactive
 
-With no backend, only window-level UI state works:
-
 - The **Operating mode** toggle switches the right-hand column between the
-  Automatic, Manual, and Maintenance views.
+  Automatic, Manual, and Maintenance views. Maintenance also sets the
+  CTC's `maintenance_mode` output, which the test UI shows.
 - **Train occupancy** opens the occupancy window. "Keep open at
   bottom" or the minimize button docks it over the track view.
   Escape, the close button, or clicking the scrim closes it.
-- **Load schedule** (Automatic view) opens the system file picker. Picking
-  a file shows its name under "Schedule file"; nothing parses it yet.
+- **Load schedule** (Automatic view) loads a schedule JSON in the
+  `Utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). Its
+  runs appear under **Next departures** as Queued, with due times counted
+  from the schedule start. They stay queued until a scheduling algorithm
+  exists. A malformed file shows an error and keeps the current schedule.
+- **Run / Pause** by the simulation clock toggles a stand-in paused state
+  until the shared simulation clock is merged.
 - Dispatch, set authority, send to track controller, and close block
   enable once their selects have a value. The selects are empty, so these
   stay disabled until options are bound. Close block requires a
@@ -120,17 +131,19 @@ flake8 and mypy are clean. qmllint's only remaining warnings are
 `[unqualified]` access to the `theme` context property. That is inherent to
 the context-property pattern shared with the Train Model UI.
 
-## IO link (planned)
+## CTC module and link
 
-Not built yet. The test UI will control a running CTC Office's inputs and
-outputs over a Qt local socket: the CTC process listens with a
-`QLocalServer` and the test UI connects with a `QLocalSocket`. That is a
-named pipe on Windows and a Unix socket elsewhere, never a network
-connection. Messages are JSON, one per line, and map onto what
-`TestHarnessView` already exposes: declaring the inputs and outputs,
-editing an input, sending all inputs, resetting them, and reading
-outputs back. The CTC Office runs normally whether or not a test UI is
-connected.
+- `ctc/interface.py` is the CTC's boundary (decision D005): inputs from
+  the Track Controller and Track Model, outputs to the Track Controller,
+  and the `CtcOffice` contract (`step(dt, inputs) -> outputs` plus
+  dispatcher actions and `load_schedule`).
+- `ctc/model.py` is a stub implementation with no routing logic yet.
+- The CTC window hosts the module (`ctc_ui/ctc_host.py`) and serves it
+  over `ctc/socket_link.py`: a Qt local socket (a named pipe on Windows,
+  never a network connection) carrying one JSON message per line. The
+  test UI connects with `SocketLink`, or uses `ctc/link.py`'s `LocalLink`
+  with `--standalone`. At integration the central harness calls the
+  module directly and the links are not used.
 
 ## Design notes
 

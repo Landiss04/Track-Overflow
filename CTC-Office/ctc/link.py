@@ -25,6 +25,10 @@ from ctc.model import StubCtcOffice
 class CtcLink(Protocol):
     """What the test UI can do to the CTC Office."""
 
+    #: True when a CTC UI owns some controls (maintenance mode), so the
+    #: test UI must only display them.
+    ctc_ui_attached: bool
+
     @property
     def connected(self) -> bool:
         ...
@@ -54,6 +58,9 @@ class CtcLink(Protocol):
 
 class LocalLink:
     """A ``CtcLink`` to a CTC Office in this process."""
+
+    #: No CTC UI is attached, so the test UI drives every control.
+    ctc_ui_attached = False
 
     def __init__(
         self, factory: Callable[[], CtcOffice] = StubCtcOffice

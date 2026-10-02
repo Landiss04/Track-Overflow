@@ -12,9 +12,10 @@ to, plus the dispatcher actions of the CTC UI. Once the modules are
 integrated, the central harness connects them to the CTC through the
 same boundary (``ctc/interface.py``) and this test UI is not used.
 
-The CTC Office module runs inside this process, reached only through
-``ctc.link.LocalLink``. A socket link to a CTC Office in its own process
-can replace it later without changing the module or this UI.
+It connects to the running CTC Office window over a local socket
+(``ctc.socket_link``), so both windows act on the one live CTC module;
+start the CTC Office first. With ``--standalone`` it instead runs its
+own CTC module in this process (``ctc.link.LocalLink``).
 """
 
 from __future__ import annotations
@@ -38,6 +39,8 @@ from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
+from ctc.link import LocalLink  # noqa: E402
+from ctc.socket_link import SocketLink  # noqa: E402
 from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 
 _TEST_MAIN_QML = (
@@ -65,7 +68,9 @@ def main() -> int:
 
     context.setContextProperty("theme", theme)
     # Keep a Python reference: QML holds only a C++ pointer to it.
-    harness = CtcTestHarness()
+    link = (LocalLink() if "--standalone" in sys.argv[1:]
+            else SocketLink())
+    harness = CtcTestHarness(link)
     context.setContextProperty("harness", harness)
 
     engine.load(QUrl.fromLocalFile(str(_TEST_MAIN_QML)))
@@ -79,7 +84,11 @@ def main() -> int:
     window_scaling = install_window_scaling(  # noqa: F841
         cast(QWindow, engine.rootObjects()[0]))
 
-    return app.exec()
+    exit_code = app.exec()
+    # Tear down QML before the harness it binds to, so bindings never
+    # re-evaluate against a deleted object.
+    del engine
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -217,6 +217,7 @@ class CtcTestHarness(QObject):
     inputsChanged = Signal()
     outputsChanged = Signal()
     statusChanged = Signal()
+    connectedChanged = Signal()
 
     def __init__(self, link: CtcLink | None = None,
                  parent: QObject | None = None) -> None:
@@ -230,8 +231,15 @@ class CtcTestHarness(QObject):
         self._status = ""
         self._status_error = False
         self._outputs = self._read_back()
+        # A socket link reports connection changes and pushes snapshots
+        # when the CTC UI changes the module.
+        for signal, slot in (("connectedChanged", self._on_connected),
+                             ("snapshotChanged", self._on_snapshot)):
+            source = getattr(self._link, signal, None)
+            if source is not None:
+                source.connect(slot)
 
-    # -- Bindable properties -------------------------------------------
+    # -- Bindable properties ------------------------------------------
 
     @Property(list, notify=inputsChanged)
     def inputs(self) -> list[dict[str, Any]]:
@@ -239,13 +247,18 @@ class CtcTestHarness(QObject):
 
     @Property(list, notify=inputsChanged)
     def dispatcherInputs(self) -> list[dict[str, Any]]:  # noqa: N802
-        return _rows(DISPATCHER_DEFAULTS, self._dispatcher)
+        rows = _rows(DISPATCHER_DEFAULTS, self._dispatcher)
+        if self._link.ctc_ui_attached:
+            # The CTC UI's operating mode owns maintenance mode; it
+            # shows in the outputs instead.
+            rows = [r for r in rows if r["name"] != "maintenance_mode"]
+        return rows
 
     @Property(list, notify=outputsChanged)
     def outputs(self) -> list[dict[str, Any]]:
         return self._outputs
 
-    @Property(bool, constant=True)
+    @Property(bool, notify=connectedChanged)
     def connected(self) -> bool:
         return self._link.connected
 
@@ -257,18 +270,26 @@ class CtcTestHarness(QObject):
     def statusIsError(self) -> bool:  # noqa: N802
         return self._status_error
 
-    # -- Edits ---------------------------------------------------------
+    # -- Edits --------------------------------------------------------
 
-    # Edits are stored as drafts without re-publishing the rows, so the
-    # editor being typed in keeps its focus.
+    # Text edits are stored as drafts without re-publishing the rows, so
+    # the editor being typed in keeps its focus. A toggle, though, draws
+    # itself from its row's value, so bool edits re-publish the rows;
+    # clicking a toggle has already committed any text being edited.
 
     @Slot(str, "QVariant")
     def setInput(self, name: str, value: Any) -> None:  # noqa: N802
         """Stage an edit to an input row; applied on Send."""
         if name in self._inputs:
             self._inputs[name] = value
+            kind = INPUT_DEFAULTS[name][0]
         elif name in self._dispatcher:
             self._dispatcher[name] = value
+            kind = DISPATCHER_DEFAULTS[name][0]
+        else:
+            return
+        if kind == "bool":
+            self.inputsChanged.emit()
 
     @Slot()
     def resetInputs(self) -> None:  # noqa: N802
@@ -279,7 +300,7 @@ class CtcTestHarness(QObject):
         self.inputsChanged.emit()
         self._set_status("Inputs reset. Send to apply them.", False)
 
-    # -- Send ----------------------------------------------------------
+    # -- Send ---------------------------------------------------------
 
     @Slot()
     def send(self) -> None:
@@ -297,7 +318,7 @@ class CtcTestHarness(QObject):
         self.outputsChanged.emit()
         self._set_status(f"Sent. Stepped {DT_S:g} s.", False)
 
-    # -- Internals -----------------------------------------------------
+    # -- Internals ----------------------------------------------------
 
     def _parse_orders(self) -> dict[str, str]:
         orders: dict[str, str] = {}
@@ -321,15 +342,32 @@ class CtcTestHarness(QObject):
             self._link.set_block_closed(block_id, False)
         for block_id in closed - self._applied_closed:
             self._link.set_block_closed(block_id, True)
-        self._link.set_maintenance_mode(
-            bool(self._dispatcher["maintenance_mode"]))
+        if not self._link.ctc_ui_attached:
+            self._link.set_maintenance_mode(
+                bool(self._dispatcher["maintenance_mode"]))
         self._applied_orders = orders
         self._applied_closed = closed
 
     def _read_back(self) -> list[dict[str, Any]]:
-        snap = self._link.snapshot()
+        try:
+            snap = self._link.snapshot()
+        except CtcError:
+            return []           # not connected yet
         return output_rows(snap.outputs, snap.tickets_sold_total,
                            snap.elapsed_s)
+
+    def _on_connected(self) -> None:
+        self.connectedChanged.emit()
+        self._on_snapshot()
+        if self._link.connected:
+            self._set_status("Connected to the CTC Office.", False)
+        else:
+            self._set_status("The CTC Office is not running. Start it with "
+                             "python -m ctc_ui from CTC-Office.", True)
+
+    def _on_snapshot(self) -> None:
+        self._outputs = self._read_back()
+        self.outputsChanged.emit()
 
     def _set_status(self, text: str, is_error: bool) -> None:
         self._status = text

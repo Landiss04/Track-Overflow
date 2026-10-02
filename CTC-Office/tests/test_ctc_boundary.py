@@ -165,6 +165,20 @@ class HarnessSendTest(unittest.TestCase):
         self.assertNotIn("authority[T1]", names)
         self.assertIn("authority[T2]", names)
 
+    def test_toggle_edit_republishes_rows(self) -> None:
+        # A toggle draws itself from its row, so a bool edit must
+        # re-publish the rows, keeping earlier text drafts.
+        harness = CtcTestHarness(LocalLink())
+        published: list[bool] = []
+        harness.inputsChanged.connect(lambda: published.append(True))
+        harness.setInput("dispatch_orders", "T1=A9")
+        self.assertEqual(published, [])    # text edits keep focus
+        harness.setInput("maintenance_mode", True)
+        self.assertEqual(published, [True])
+        rows = {r["name"]: r["value"] for r in harness.dispatcherInputs}
+        self.assertIs(rows["maintenance_mode"], True)
+        self.assertEqual(rows["dispatch_orders"], "T1=A9")
+
     def test_parse_error_reports_and_does_not_step(self) -> None:
         harness = CtcTestHarness(LocalLink())
         harness.setInput("switch_states", "SW1=sideways")

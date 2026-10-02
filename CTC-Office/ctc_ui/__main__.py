@@ -23,6 +23,7 @@ from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
+from ctc_ui.ctc_host import CtcHost  # noqa: E402
 from ctc_ui.track_map import TrackMapModel  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
@@ -51,6 +52,11 @@ def main() -> int:
     # a Python reference: QML holds only a C++ pointer to it.
     track_map = TrackMapModel()
     context.setContextProperty("trackMap", track_map)
+    # The window hosts the one live CTC module and serves it to the test
+    # UI. Keep a Python reference for the same reason as above.
+    ctc = CtcHost()
+    ctc.start()
+    context.setContextProperty("ctc", ctc)
 
     engine.load(QUrl.fromLocalFile(str(_MAIN_QML)))
     if not engine.rootObjects():
@@ -62,7 +68,13 @@ def main() -> int:
     window_scaling = install_window_scaling(  # noqa: F841
         engine.rootObjects()[0])
 
-    return app.exec()
+    exit_code = app.exec()
+    # Shut down in dependency order: close the test UI link, then tear
+    # down QML before the context objects it binds to (ctc, trackMap),
+    # so bindings never re-evaluate against deleted objects.
+    ctc.stop()
+    del engine
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -50,6 +50,8 @@ ScaledWindow {
             occupancyOpen: window.occupancyState !== "closed"
             onModeActivated: function (index) {
                 window.modeIndex = index;
+                // Maintenance mode is the CTC's maintenance_mode output.
+                ctc.setMaintenanceMode(index === 2);
             }
             onOccupancyClicked: window.occupancyState = "open"
             paused: window.simulationPaused
@@ -85,7 +87,13 @@ ScaledWindow {
 
                 AutomaticView {
                     selectedTrainId: window.selectedTrainId
+                    scheduleFile: ctc.scheduleFile
+                    scheduleError: ctc.scheduleError
+                    departures: ctc.departures
                     onClearSelectionRequested: window.selectedTrainId = ""
+                    onScheduleFileSelected: function (fileUrl) {
+                        ctc.loadSchedule(fileUrl);
+                    }
                 }
 
                 ManualView {
