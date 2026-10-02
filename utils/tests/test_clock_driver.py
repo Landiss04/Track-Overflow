@@ -28,9 +28,12 @@ _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
 REPORT = os.environ.get("CLOCK_TEST_REPORT") == "1"
 
-# How late a tick may run after it falls due, in real seconds. Covers
-# OS timer resolution and scheduling under load.
-MAX_LATENESS_S = 0.025
+# How late ticks may run after they fall due, in real seconds. Typical
+# lateness is held tight; the single worst tick only has to survive an
+# OS scheduling spike, which on Windows can reach a few tens of ms.
+MAX_MEAN_LATENESS_S = 0.005
+MAX_P95_LATENESS_S = 0.010
+MAX_LATENESS_S = 0.050
 # How early a tick may run: only timestamp noise between Qt's timer and
 # Python's ``perf_counter``.
 MAX_EARLINESS_S = 0.002
@@ -151,14 +154,19 @@ class ClockDriverAccuracyTest(unittest.TestCase):
         ideal_ticks = math.floor(
             self.recorder.ideal_elapsed_s(end_s) / DEFAULT_TICK_S + 1e-9
         )
+        mean_s = sum(lateness) / len(lateness)
+        ordered = sorted(lateness)
+        p95_s = ordered[min(len(ordered) - 1, int(0.95 * len(ordered)))]
         if REPORT:
-            mean_ms = 1000 * sum(lateness) / len(lateness)
             print(
                 f"\n  {label}: {len(lateness)} ticks, lateness "
-                f"mean {mean_ms:.2f} ms, worst {1000 * max(lateness):.2f} ms,"
-                f" earliest {1000 * min(lateness):+.2f} ms; "
+                f"mean {1000 * mean_s:.2f} ms, p95 {1000 * p95_s:.2f} ms, "
+                f"worst {1000 * max(lateness):.2f} ms, "
+                f"earliest {1000 * min(lateness):+.2f} ms; "
                 f"{self.clock.tick_count} of {ideal_ticks} ideal ticks run"
             )
+        self.assertLessEqual(mean_s, MAX_MEAN_LATENESS_S)
+        self.assertLessEqual(p95_s, MAX_P95_LATENESS_S)
         self.assertLessEqual(max(lateness), MAX_LATENESS_S)
         self.assertGreaterEqual(min(lateness), -MAX_EARLINESS_S)
         # The last tick may still be within its lateness window.

@@ -66,11 +66,15 @@ class ClockLinkTest(unittest.TestCase):
         self.assertTrue(self.server.listen(self.name))
         self.client = ClockLinkClient(self.name)
         self.assertTrue(_wait_until(lambda: self.client.connected))
+        # Servers started mid-test, closed in tearDown.
+        self.extra_servers: list[ClockLinkServer] = []
 
     def tearDown(self) -> None:
-        """Close the link."""
-        self.server.close()
-        _spin(20)
+        """Close the link and let Qt finish releasing its sockets."""
+        self.client.close()
+        for server in [self.server, *self.extra_servers]:
+            server.close()
+        _spin(50)
 
     def test_client_receives_state_on_connect(self) -> None:
         """Show the CTC's time, pause state and speed on connecting."""
@@ -89,7 +93,7 @@ class ClockLinkTest(unittest.TestCase):
         self.assertTrue(_wait_until(lambda: self.clock.paused))
 
     def test_ctc_changes_reach_the_client(self) -> None:
-        """Mirror pause, speed and time changes made in the CTC window."""
+        """Mirror pause, speed and time changes made in the CTC."""
         self.clock.setSpeed(10)
         self.clock.resume()
         self.assertTrue(_wait_until(
@@ -113,7 +117,7 @@ class ClockLinkTest(unittest.TestCase):
         )
 
     def test_unsupported_commands_are_ignored(self) -> None:
-        """Ignore garbage, unknown types, and speeds other than 1 or 10."""
+        """Ignore garbage, unknown types, and unsupported speeds."""
         raw = QLocalSocket()
         raw.connectToServer(self.name)
         self.assertTrue(raw.waitForConnected(1000))
@@ -143,11 +147,11 @@ class ClockLinkTest(unittest.TestCase):
         self.assertTrue(_wait_until(lambda: not self.client.connected))
         self.assertEqual(self.client.timeText, NO_TIME_TEXT)
         restarted = ClockLinkServer(self.clock)
+        self.extra_servers.append(restarted)
         self.assertTrue(restarted.listen(self.name))
         self.assertTrue(_wait_until(lambda: self.client.connected))
         self.assertTrue(_wait_until(
             lambda: self.client.timeText != NO_TIME_TEXT))
-        restarted.close()
 
     def test_commands_while_disconnected_are_dropped(self) -> None:
         """Send nothing when no CTC Office is running."""

@@ -31,10 +31,13 @@ It forces CTC inputs and reads back outputs so the module can be tested on
 its own, standing in for the modules the CTC talks to. Once the modules
 are integrated, those modules replace it and it is not used.
 
-No IO is declared yet, so both tables are empty and Reset / Send stay
-disabled. **Show preview** fills them with sample rows to check the
-layout. The badge reads "Not connected" because the link to a running
-CTC is not built yet; see [IO link (planned)](#io-link-planned).
+The CTC Office module it tests runs inside the test UI's own process,
+through `ctc/link.py` (`LocalLink`). The **simulation clock** is the
+exception: it belongs to the running CTC Office window, and the test UI's
+title bar has the same clock controls as the CTC header. Run / Pause and
+1× / 10× in either window control the one clock, and both windows show
+it; see [Clock link](#clock-link). With no CTC Office running, the test UI
+shows `--:--:--`, greys out its clock controls, and keeps retrying.
 
 ## What is interactive
 
@@ -75,6 +78,8 @@ With no backend, only window-level UI state works:
 ```
 __main__.py             CTC Office entry point: builds theme, loads QML
 test_ui.py              test UI entry point (separate process)
+sim_clock.py            SimulationClockBridge: the shared clock for QML
+clock_link.py           clock link between the CTC and the test UI
 ui/Main.qml             window, fixed 1440×900 canvas, mode + window state
 ui/views/*.qml          Automatic / Manual / Maintenance right-hand columns
 ui/panels/*.qml         track view, dispatch, schedule, throughput,
@@ -98,6 +103,7 @@ Do not copy shared components into this module; change them in `ui/`.
 | Component | Why it is CTC-only |
 | --- | --- |
 | `CtcHeader` | Window buttons, mode toggle and clock; shared `ModuleHeader` has navigation tabs instead |
+| `ClockControls` | Simulation clock readout, Run / Pause and 1× / 10×; shared by `CtcHeader` and the test UI |
 
 #### Moved to the shared library
 
@@ -126,17 +132,26 @@ flake8 and mypy are clean. qmllint's only remaining warnings are
 `[unqualified]` access to the `theme` context property. That is inherent to
 the context-property pattern shared with the Train Model UI.
 
-## IO link (planned)
+## Clock link
 
-Not built yet. The test UI will control a running CTC Office's inputs and
-outputs over a Qt local socket: the CTC process listens with a
-`QLocalServer` and the test UI connects with a `QLocalSocket`. That is a
-named pipe on Windows and a Unix socket elsewhere, never a network
-connection. Messages are JSON, one per line, and map onto what
-`TestHarnessView` already exposes: declaring the inputs and outputs,
-editing an input, sending all inputs, resetting them, and reading
-outputs back. The CTC Office runs normally whether or not a test UI is
-connected.
+`clock_link.py` lets the test UI, in its own process, control the CTC
+Office's simulation clock. The CTC process listens with a `QLocalServer`
+(`ClockLinkServer`) and the test UI connects with a `QLocalSocket`
+(`ClockLinkClient`). That is a named pipe on Windows and a Unix socket
+elsewhere, never a network connection. Messages are JSON, one per line:
+
+| Direction | Message |
+| --- | --- |
+| CTC → test UI | `{"type": "clock", "time": "05:00:03", "paused": false, "speed": 1}`, on connect and whenever the shown time, pause state or speed changes |
+| Test UI → CTC | `{"type": "pause"}`, `{"type": "resume"}`, `{"type": "set_speed", "speed": 10}` |
+
+Anything malformed, of an unknown type, or with a speed other than 1 or 10
+is ignored. The CTC Office runs normally whether or not a test UI is
+connected, and if the link cannot start (for example, a second CTC Office
+is already running) it prints a warning and carries on.
+
+The same socket approach can later carry the module's inputs and outputs,
+replacing `LocalLink` without changing the module or the test UI.
 
 ## Design notes
 
