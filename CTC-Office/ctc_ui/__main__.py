@@ -23,6 +23,8 @@ from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
+from ctc_ui.clock_link import ClockLinkServer  # noqa: E402
+from ctc_ui.sim_clock import SimulationClockBridge  # noqa: E402
 from ctc_ui.track_map import TrackMapModel  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
@@ -51,6 +53,14 @@ def main() -> int:
     # a Python reference: QML holds only a C++ pointer to it.
     track_map = TrackMapModel()
     context.setContextProperty("trackMap", track_map)
+    # The one simulation clock, driven in real time. Parented to the app
+    # so it lives as long as the event loop.
+    sim_clock = SimulationClockBridge(parent=app)
+    context.setContextProperty("simClock", sim_clock)
+    # Lets the test UI, in its own process, control the same clock. The
+    # CTC runs normally if the link cannot start.
+    clock_link = ClockLinkServer(sim_clock, parent=app)
+    clock_link.listen()
 
     engine.load(QUrl.fromLocalFile(str(_MAIN_QML)))
     if not engine.rootObjects():

@@ -12,6 +12,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import "../components"
 import "../../../../ui"
 
 Rectangle {
@@ -27,6 +28,11 @@ Rectangle {
     // Result of the last Send or Reset; shown in the footer.
     property string status: ""
     property bool statusIsError: false
+    // The running CTC Office's simulation clock, over the clock link.
+    property bool clockConnected: false
+    property string clockTime: "--:--:--"
+    property bool clockPaused: true
+    property int clockSpeed: 1
 
     // Value column width; wide enough for list-valued text rows.
     readonly property int valueWidth: 300
@@ -34,6 +40,9 @@ Rectangle {
     signal inputEdited(string name, var value)
     signal sendInputsRequested()
     signal resetInputsRequested()
+    signal clockPauseRequested()
+    signal clockResumeRequested()
+    signal clockSpeedRequested(int speed)
 
     color: theme.bg_surface
     clip: true
@@ -93,10 +102,12 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // Title bar.
+        // Title bar, with the CTC Office's simulation clock on the right.
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: theme.control_h_lg + theme.space_2
+            Layout.preferredHeight: Math.max(
+                theme.control_h_lg + theme.space_2,
+                clockControls.implicitHeight + 2 * theme.space_2)
             Layout.leftMargin: theme.space_4
             Layout.rightMargin: theme.space_4
             spacing: theme.space_3
@@ -116,6 +127,27 @@ Rectangle {
             }
 
             Item { Layout.fillWidth: true }
+
+            HelperText {
+                visible: !root.clockConnected
+                text: qsTr("CTC Office not running. Start it with "
+                    + "python -m ctc_ui to control its clock.")
+                color: theme.text_muted
+            }
+
+            ClockControls {
+                id: clockControls
+
+                time: root.clockTime
+                paused: root.clockPaused
+                speed: root.clockSpeed
+                controlsEnabled: root.clockConnected
+                onPauseRequested: root.clockPauseRequested()
+                onResumeRequested: root.clockResumeRequested()
+                onSpeedRequested: function (speed) {
+                    root.clockSpeedRequested(speed);
+                }
+            }
         }
 
         Rectangle {

@@ -15,6 +15,11 @@ same boundary (``ctc/interface.py``) and this test UI is not used.
 The CTC Office module runs inside this process, reached only through
 ``ctc.link.LocalLink``. A socket link to a CTC Office in its own process
 can replace it later without changing the module or this UI.
+
+The simulation clock is the exception: it belongs to the running CTC
+Office (``python -m ctc_ui``), and this UI pauses, resumes, and sets its
+speed over the clock link (``ctc_ui/clock_link.py``). Both windows show
+the same clock.
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
+from ctc_ui.clock_link import ClockLinkClient  # noqa: E402
 from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 
 _TEST_MAIN_QML = (
@@ -67,6 +73,9 @@ def main() -> int:
     # Keep a Python reference: QML holds only a C++ pointer to it.
     harness = CtcTestHarness()
     context.setContextProperty("harness", harness)
+    # Connects to the running CTC Office, retrying until one is up.
+    ctc_clock = ClockLinkClient(parent=app)
+    context.setContextProperty("ctcClock", ctc_clock)
 
     engine.load(QUrl.fromLocalFile(str(_TEST_MAIN_QML)))
     if not engine.rootObjects():

@@ -2,7 +2,7 @@
 
 Reads ``documents/Project_Information/Schedule v4.xlsx`` (one sheet per
 line, one "Train N Arrival Time at Station" column per train) and writes
-``Utils/schedule_v4.json``. Uses only the standard library: an .xlsx is
+``utils/schedule_v4.json``. Uses only the standard library: an .xlsx is
 a zip of XML.
 
 Output, per line and per train, is the ordered list of timed stops::
@@ -35,7 +35,7 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO / "documents" / "Project_Information" / "Schedule v4.xlsx"
-OUTPUT = REPO / "Utils" / "schedule_v4.json"
+OUTPUT = REPO / "utils" / "schedule_v4.json"
 LAYOUT_FILES = {
     "Green": REPO / "TrackModel" / "green_line.json",
     "Red": REPO / "TrackModel" / "red_line.json",

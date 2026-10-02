@@ -40,6 +40,11 @@ CTC is not built yet; see [IO link (planned)](#io-link-planned).
 
 With no backend, only window-level UI state works:
 
+- The **Simulation clock** in the header is live. It starts paused at
+  05:00:00 (24-hour). **Run** / **Pause** start and hold it, and the
+  **1× / 10×** toggle sets its speed: at 1× one simulated second lasts one
+  real second. The CTC owns the one shared clock until the central harness
+  takes it over.
 - The **Operating mode** toggle switches the right-hand column between the
   Automatic, Manual, and Maintenance views.
 - **Train occupancy** opens the occupancy window. "Keep open at
@@ -62,7 +67,8 @@ With no backend, only window-level UI state works:
 | Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |
 | Selects | `model` on each `SelectField`, via the panel's `*Options` properties. |
 | Test harness | `ui/test/TestHarnessView.qml` in the test UI process. `inputs` / `outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once linked to a running CTC. |
-| Header | `CtcHeader.clock`, `.speedLabel` (e.g. `10× speed`), `.operatorName`. |
+| Header | `CtcHeader.clock`, `.paused` and `.speed` are bound to `simClock` (see below); `.operatorName`. |
+| Simulation clock | `simClock` context property, a `SimulationClockBridge` (`sim_clock.py`) that owns the shared `utils.system_clock.SystemClock` and drives it in real time. Read `timeText`, `paused`, `speed`; call `pause()`, `resume()`, `setSpeed(1 or 10)`. Use `simClock.clock` from Python to add tick listeners. |
 
 ## Layout
 
