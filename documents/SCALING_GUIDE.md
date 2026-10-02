@@ -57,6 +57,9 @@ and forth.
 
 ## Common scaling failures
 
+If a Windows machine letterboxes during a drag and the cause is not below,
+run the diagnostic in [SCALING_DIAGNOSTIC.md](SCALING_DIAGNOSTIC.md).
+
 ### Jitter while moving or resizing
 
 **Cause:** Code changes native window dimensions while the window manager is
