@@ -30,3 +30,6 @@ One line per promoted or denied proposal, appended at promotion time. See
 | 2026-10-01 | Train-model-Interface | 20260930-2059-light-state.md | signals/light-state.md | promoted |
 | 2026-10-01 | Train-model-Interface | 20260930-2059-temperature-setpoint.md | signals/temperature-setpoint.md | promoted |
 | 2026-10-01 | Train-model-Interface | 20260930-2108-train-model.md | modules/train-model.md | promoted |
+| 2026-10-02 | feature/TrackCtrl-UI-Implementation | 20261002-1512-ui-style-guide-badge-height.md | ui/style-guide.md | promoted |
+| 2026-10-02 | feature/TrackCtrl-UI-Implementation | 20260930-0012-ui-style-guide.md | ui/style-guide.md | denied — withdrawn; superseded by 20261002-1512-ui-style-guide-badge-height.md |
+| 2026-10-02 | feature/TrackCtrl-UI-Implementation | 20260930-0012-identifiers.md | conventions/identifiers.md | denied — withdrawn; superseded by token-name resolution 7127a96 |
