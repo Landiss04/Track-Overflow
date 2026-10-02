@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CTC / Train System — Page 4 · Track Controller · Test UI</title>
+<!-- Bundled copy of ctc-ui.css so this file opens standalone. The <link>
+     below comes after it, so the real stylesheet wins wherever it is present. -->
+<style>
+/* ==========================================================================
+   ctc-ui.css — CTC / Train System UI kit
+   Derived from CTC-UI-SPEC.md v1.0. Tokens, geometry and type scale are
+   transcribed from the spec; no value here is invented except where noted
+   with ADDED.
+   Never restyle these classes locally. Add to this file instead, and mirror
+   the addition into components.html.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+/* --- tokens --------------------------------------------------------------- */
+:root {
+  --bg-page:#f4f4f4;  --bg-topbar:#e8e8e8;  --bg-nav:#ededed;
+  --bg-panel:#ffffff; --bg-panel-hdr:#f0f0f0; --bg-banner:#e4e4e4;
+  --bg-field:#fbfbfb; --bg-subtle:#fafafa;  --bg-selected:#efefef;
+
+  --line-strong:#b9b9b9; --line-panel:#c2c2c2; --line-hdr:#d4d4d4;
+  --line-section:#d8d8d8; --line-row:#ececec; --line-tile:#dcdcdc;
+  --line-control:#a8a8a8;
+
+  --ink:#2e2e2e; --ink-body:#3a3a3a; --ink-2:#5a5a5a; --ink-3:#6a6a6a;
+  --ink-muted:#7c7c7c; --ink-faint:#8a8a8a; --ink-placeholder:#9a9a9a;
+
+  --action:#4a4a4a; --action-ink:#ffffff; --btn-light:#ededed;
+
+  --green-line:#2f7d4f; --red-line:#b03a3a;
+
+  --bar:#cfcfcf; --bar-mid:#9a9a9a; --bar-peak:#5a5a5a;
+
+  --sans:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin:0; padding:0; background:var(--bg-page); }
+body {
+  font-family:var(--sans); font-size:12px; color:var(--ink-body);
+  -webkit-font-smoothing:antialiased;
+}
+
+/* --- utilities ------------------------------------------------------------ */
+.mono  { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.green { color:var(--green-line); }   /* line identity only */
+.red   { color:var(--red-line); }     /* line identity only */
+.is-disabled { opacity:.38; pointer-events:none; }
+.help  { font:400 10px/14px var(--sans); color:var(--ink-faint); }
+.micro { font:400 9px/12px var(--sans); letter-spacing:.10em;
+         text-transform:uppercase; color:var(--ink-muted); }
+
+/* --- shell --------------------------------------------------------------- */
+.app {
+  position:relative; width:1440px; height:900px; margin:0 auto;
+  background:var(--bg-page); overflow:hidden;
+  display:flex; flex-direction:column;
+}
+.shell { flex:1; min-height:0; display:flex; }
+
+/* top bar — 56px, identical on every page ------------------------------- */
+.topbar {
+  flex:0 0 56px; height:56px; display:flex; align-items:center; gap:12px;
+  padding:0 12px; background:var(--bg-topbar);
+  border-bottom:1px solid var(--line-strong);
+}
+.topbar__ident  { display:flex; flex-direction:column; }
+.topbar__title  { font:600 14px/18px var(--sans); letter-spacing:.06em;
+                  text-transform:uppercase; color:var(--ink); }
+.topbar__sub    { font:400 10px/14px var(--mono); letter-spacing:.06em;
+                  text-transform:uppercase; color:var(--ink-faint); }
+.topbar__spacer { flex:1; }
+/* ADDED — inline picker beside the page title (wayside, territory, etc.) */
+.topbar__pick   { display:flex; align-items:center; gap:8px; }
+.pick__label    { font:500 12px/1 var(--sans); color:var(--ink-2); }
+.topbar__ctl    { display:flex; flex-direction:column; align-items:flex-start; }
+.clock { font:600 22px/26px var(--mono); color:var(--ink);
+         font-variant-numeric:tabular-nums; }
+
+.iconbtn--compact { flex:0 0 28px; width:28px; height:28px; }
+.iconbtn {
+  flex:0 0 30px; width:30px; height:30px; display:grid; place-items:center;
+  background:var(--btn-light); border:1px solid var(--line-control);
+  color:var(--ink-2); cursor:pointer;
+}
+.iconbtn:focus-visible, .btn:focus-visible, .seg__opt:focus-visible,
+.nav__item:focus-visible { outline:2px solid var(--ink); outline-offset:1px; }
+
+/* icons — thin-stroke SVG only, 14/16/18px, stroke-width 2, fill none ---- */
+.icon    { width:16px; height:16px; fill:none; stroke:currentColor;
+           stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.icon--s { width:14px; height:14px; }
+.icon--l { width:18px; height:18px; }
+
+/* nav drawer — 56px collapsed -------------------------------------------- */
+.nav {
+  flex:0 0 56px; width:56px; background:var(--bg-nav);
+  border-right:1px solid var(--line-strong);
+  display:flex; flex-direction:column; padding-top:12px;
+}
+.nav__item {
+  height:44px; display:grid; place-items:center; color:var(--ink-3);
+  border-left:3px solid transparent; text-decoration:none; cursor:pointer;
+}
+.nav__item.is-active {
+  background:var(--bg-selected); border-left-color:var(--ink); color:var(--ink);
+}
+
+/* content area — padding 12, gap 12 -------------------------------------- */
+.main { flex:1; min-width:0; min-height:0; margin-left:12px; padding:12px;
+        display:flex; gap:12px; }
+.main--wide { margin-left:0; }   /* ADDED — pages with no nav drawer */
+.col  { display:flex; flex-direction:column; gap:12px; min-height:0; }
+.col--visual { flex:0 0 632px; width:632px; }   /* Layout A dominant visual */
+.col--visual-wide { flex:0 0 700px; width:700px; }   /* ADDED — same, nav removed */
+.col--side   { flex:1; min-width:0; }
+.row { display:flex; gap:12px; min-height:0; }
+.row--grow { flex:1; min-height:0; }
+
+/* --- panel --------------------------------------------------------------- */
+.panel {
+  background:var(--bg-panel); border:1px solid var(--line-panel);
+  display:flex; flex-direction:column; min-height:0;
+}
+.panel--grow { flex:1; min-height:0; }
+.panel--half { flex:1; min-width:0; }   /* two panels sharing one row */
+.panel__hdr {
+  flex:0 0 30px; height:30px; display:flex; align-items:center;
+  justify-content:space-between; gap:10px; padding:0 10px;
+  background:var(--bg-panel-hdr); border-bottom:1px solid var(--line-hdr);
+}
+.panel__title { font:600 11px/13px var(--sans); letter-spacing:.08em;
+                text-transform:uppercase; color:var(--ink); }
+.panel__meta  { font:400 10px/13px var(--mono); letter-spacing:.06em;
+                text-transform:uppercase; color:var(--ink-muted); }
+/* ADDED — metadata plus controls on the right of a panel header */
+.panel__tools { display:flex; align-items:center; gap:8px; }
+.panel__body  { flex:1; min-height:0; padding:10px;
+                display:flex; flex-direction:column; gap:10px; }
+.panel__body--flush { padding:0; gap:0; }
+
+/* ADDED — always-visible scroll track, so a region reads as scrollable even
+   when its current contents fit. */
+.scroll { overflow-y:scroll; scrollbar-width:thin;
+          scrollbar-color:var(--bar-mid) var(--bg-subtle); }
+.scroll::-webkit-scrollbar { width:10px; }
+.scroll::-webkit-scrollbar-track { background:var(--bg-subtle);
+          border-left:1px solid var(--line-section); }
+.scroll::-webkit-scrollbar-thumb { background:var(--bar-mid); }
+.scroll .tbl__head { position:sticky; top:0; z-index:1; }
+
+/* ADDED — vertical or horizontal share of a flex line. Set --share inline,
+   as with a table's grid-template-columns. */
+.share { flex:var(--share,1) 1 0; min-height:0; min-width:0; }
+
+/* fill a flex-grown box (SVG, canvas, map) */
+.fill { position:relative; flex:1; min-height:0; }
+.fill > svg, .fill > canvas { position:absolute; top:0; right:0; bottom:0; left:0;
+                               width:100%; height:100%; }
+
+/* ADDED — control strip pinned above a flush (table) panel body */
+.panel__strip { flex:0 0 auto; padding:10px; display:flex; align-items:flex-end;
+                gap:8px; border-bottom:1px solid var(--line-section);
+                background:var(--bg-subtle); }
+
+/* ADDED — explanatory line inside a flush (table) panel body */
+.note { padding:10px; font:400 10px/14px var(--sans); color:var(--ink-faint);
+        border-bottom:1px solid var(--line-section); }
+
+/* --- state banner -------------------------------------------------------- */
+.banner { background:var(--bg-banner); border:1px solid var(--line-strong);
+          padding:10px; }
+.banner__name { font:600 11px/15px var(--sans); letter-spacing:.08em;
+                text-transform:uppercase; color:var(--ink); }
+.banner__text { font:400 10px/14px var(--sans); color:var(--ink-faint); }
+/* ADDED — banner carrying a value and its controls on one line */
+.banner--strip { display:flex; align-items:center; justify-content:space-between;
+                 gap:10px; }
+.banner__val   { font:400 13px/16px var(--mono); color:var(--ink);
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.banner__fields{ display:flex; gap:10px; min-width:0; }
+.banner__fields > * + * { padding-left:10px; border-left:1px solid var(--line-strong); }
+
+/* --- empty state --------------------------------------------------------- */
+.empty { flex:1; display:flex; flex-direction:column; justify-content:center;
+         gap:10px; border:1px dashed var(--line-strong); padding:10px; }
+.empty__name { font:400 11px/14px var(--sans); color:var(--ink-2); }
+
+/* --- field / control group ---------------------------------------------- */
+.field { display:flex; flex-direction:column; }
+.field__label { font:400 10px/14px var(--sans); letter-spacing:.06em;
+                text-transform:uppercase; color:var(--ink-muted); }
+.field__ctl {
+  height:30px; background:var(--bg-field); border:1px solid var(--line-control);
+  padding:0 10px; display:flex; align-items:center;
+  font:500 12px/1 var(--sans); color:var(--ink);
+}
+.field__ctl.mono { font:400 13px/1 var(--mono); }
+.field__ctl--compact { height:28px; }
+.field__ctl--select { justify-content:space-between; color:var(--ink); }
+.field__ctl--num    { width:56px; }
+.field__ctl::placeholder { color:var(--ink-placeholder); }
+
+/* ADDED — micro label above a control group (spec type scale, 9/400) */
+.group { display:flex; flex-direction:column; }
+.group__ctls { display:flex; align-items:center; gap:8px; }
+
+/* --- buttons ------------------------------------------------------------- */
+.btn {
+  height:30px; padding:0 10px; display:inline-flex; align-items:center;
+  justify-content:center; gap:8px; background:var(--btn-light);
+  border:1px solid var(--line-control); color:var(--ink);
+  font:400 11px/1 var(--sans); letter-spacing:.06em;
+  text-transform:uppercase; cursor:pointer;
+}
+.btn--compact { height:28px; }
+.btn--primary { height:36px; background:var(--action); border-color:var(--action);
+                color:var(--action-ink); }
+
+/* --- segmented control (2–4 options) ------------------------------------ */
+.seg { display:inline-flex; height:30px; border:1px solid var(--line-control);
+       background:var(--bg-field); }
+.seg--compact { height:28px; }
+.seg__opt {
+  padding:0 10px; display:inline-flex; align-items:center; background:transparent;
+  border:0; border-right:1px solid var(--line-control); color:var(--ink-3);
+  font:400 11px/1 var(--sans); letter-spacing:.06em; text-transform:uppercase;
+  cursor:pointer;
+}
+.seg__opt:last-child { border-right:0; }
+.seg__opt.is-on { background:var(--action); color:var(--action-ink); }
+
+/* --- table (CSS grid, not <table>) -------------------------------------- */
+.tbl { display:flex; flex-direction:column; min-height:0; }
+.tbl__head, .tbl__row { display:grid; align-items:center; gap:10px;
+                        padding:0 10px; }
+.tbl__head {
+  height:22px; background:var(--bg-subtle);
+  border-bottom:1px solid var(--line-section);
+  font:400 9px/12px var(--sans); letter-spacing:.10em;
+  text-transform:uppercase; color:var(--ink-muted);
+}
+.tbl__row { position:relative; height:28px; border-bottom:1px solid var(--line-row);
+            font:400 11px/14px var(--sans); color:var(--ink-body); }
+.tbl__row--action { height:40px; }     /* ADDED — row carrying a 28px button */
+.cell { display:flex; align-items:center; gap:8px; min-width:0; }  /* ADDED — swatch + text in one cell */     /* ADDED — row carrying a 28px button */
+.tbl__row:last-child { border-bottom:0; }
+.tbl__row.is-selected { background:var(--bg-selected); }
+.tbl__row.is-selected::before { content:""; position:absolute; left:0; top:0;
+  bottom:0; width:3px; background:var(--ink); }
+
+/* --- key / value list (one subject) ------------------------------------- */
+.kv { display:flex; flex-direction:column; }
+.kv__row { height:24px; display:flex; align-items:center;
+           justify-content:space-between; gap:10px;
+           border-bottom:1px solid var(--line-row); }
+.kv__row:last-child { border-bottom:0; }
+.kv__k { font:400 10px/13px var(--sans); letter-spacing:.06em;
+         text-transform:uppercase; color:var(--ink-muted); }
+.kv__v { font:500 12px/16px var(--sans); color:var(--ink); }
+.kv__v.mono { font:400 13px/16px var(--mono); }
+
+/* --- metric tiles (3 per row, 6 per page max) --------------------------- */
+.tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.tile  { border:1px solid var(--line-tile); background:var(--bg-subtle);
+         padding:10px; }
+.tile__label { font:400 10px/13px var(--sans); letter-spacing:.06em;
+               text-transform:uppercase; color:var(--ink-muted); }
+.tile__value { font:600 18px/22px var(--mono); color:var(--ink);
+               font-variant-numeric:tabular-nums; }
+
+/* --- charts (grayscale bars, no axes) ----------------------------------- */
+.chart { display:flex; align-items:flex-end; gap:8px; height:64px; }
+.chart__bar { flex:1; background:var(--bar); }
+.chart__bar--mid  { background:var(--bar-mid); }
+.chart__bar--peak { background:var(--bar-peak); }
+
+/* --- state without colour ----------------------------------------------- */
+.swatch { display:inline-block; width:14px; height:14px;
+          border:1px solid var(--line-strong); }
+.swatch--occupied { background:var(--ink-2); border-color:var(--ink-2); }
+.swatch--clear    { background:var(--line-row); }
+.swatch--closed   { background:repeating-linear-gradient(45deg,
+                    var(--line-strong) 0 2px, transparent 2px 5px); }
+
+/* --- modal + dock chip --------------------------------------------------- */
+.modal { position:absolute; top:0; right:0; bottom:0; left:0; z-index:10;
+         background:rgba(46,46,46,.28);
+         display:flex; align-items:center; justify-content:center; }
+.modal__win { background:var(--bg-panel); border:1px solid var(--line-strong);
+              box-shadow:0 12px 32px rgba(0,0,0,.22);
+              display:flex; flex-direction:column; }
+.modal__bar { flex:0 0 40px; height:40px; display:flex; align-items:center;
+              justify-content:space-between; padding:0 10px;
+              border-bottom:1px solid var(--line-hdr);
+              background:var(--bg-panel-hdr); }
+.modal__title { font:600 11px/13px var(--sans); letter-spacing:.08em;
+                text-transform:uppercase; color:var(--ink); }
+.modal__body { padding:10px; display:flex; flex-direction:column; gap:10px; }
+.modal__foot { padding:10px; border-top:1px solid var(--line-section);
+               display:flex; align-items:center; justify-content:space-between;
+               gap:10px; }
+.dock { position:absolute; bottom:12px; left:68px; height:30px; padding:0 10px;
+        display:inline-flex; align-items:center; gap:8px;
+        background:var(--bg-panel); border:1px solid var(--line-strong);
+        box-shadow:0 6px 16px rgba(0,0,0,.18);
+        font:400 11px/1 var(--sans); color:var(--ink); }
+
+/* --- diagram primitives (SVG inside .fill) ------------------------------ */
+/* ADDED — so pages never hard-code a hex inside an <svg>. */
+.d-thin   { fill:none; stroke:var(--line-strong); stroke-width:1; }
+.d-stroke { fill:none; stroke:var(--ink-2); stroke-width:1.5; }
+.d-body   { fill:var(--bg-panel); stroke:var(--ink-2); stroke-width:1.5; }
+.d-fill   { fill:var(--bg-field); stroke:var(--ink-3); stroke-width:1; }
+.d-clear  { fill:var(--line-row); stroke:var(--line-strong); stroke-width:1; }
+.d-solid  { fill:var(--ink-2); }
+.d-plate  { fill:var(--bg-panel); stroke:none; }
+.d-hatch  { fill:url(#hatch); stroke:var(--line-strong); stroke-width:1; }
+.d-dash   { fill:none; stroke:var(--line-strong); stroke-width:1;
+            stroke-dasharray:4 4; }
+.d-micro  { font:400 9px var(--sans); letter-spacing:.10em; fill:var(--ink-muted); }
+.d-lbl    { font:400 10px var(--mono); letter-spacing:.06em; fill:var(--ink-muted); }
+.d-val    { font:400 11px var(--mono); letter-spacing:.06em; fill:var(--ink); }
+.d-line   { fill:var(--green-line); }   /* ADDED — line identity in a diagram */
+</style>
+<link rel="stylesheet" href="ctc-ui.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ TOP BAR (copy verbatim between pages) ============ -->
+  <header class="topbar">
+    <div class="topbar__ident">
+      <div class="topbar__title">Track Controller test UI</div>
+      <div class="topbar__sub"><span class="green">Green Line</span> · iteration 1</div>
+    </div>
+
+    <div class="topbar__pick">
+      <span class="pick__label">Wayside:</span>
+      <div class="field__ctl field__ctl--compact field__ctl--select field__ctl--num mono"
+           role="button" tabindex="0" aria-label="Select wayside">1
+        <svg class="icon icon--s" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+      </div>
+    </div>
+
+    <div class="topbar__spacer"></div>
+
+    <!-- page global control: this page's only one -->
+    <div class="topbar__ctl">
+      <span class="micro">Input source</span>
+      <div class="seg seg--compact" role="group" aria-label="Input source">
+        <button class="seg__opt is-on" type="button">Test UI</button>
+        <button class="seg__opt" type="button">Live modules</button>
+      </div>
+    </div>
+
+    <div class="clock" id="clock">14:32:07</div>
+  </header>
+
+  <div class="shell">
+
+    <!-- ============ CONTENT AREA — Layout B ============ -->
+    <main class="main main--wide">
+
+      <section class="panel share" style="--share:1">
+        <div class="panel__hdr">
+          <span class="panel__title">Inputs</span>
+          <span class="panel__meta">17 test points · driven by this page</span>
+        </div>
+        <div class="panel__body panel__body--flush">
+          <div class="panel__strip">
+            <div class="field share" style="--share:1">
+              <span class="field__label">Apply to block</span>
+              <div class="field__ctl field__ctl--select mono">GREEN E-15 <svg class="icon icon--s" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></div>
+            </div>
+            <div class="field share" style="--share:1">
+              <span class="field__label">Train</span>
+              <div class="field__ctl field__ctl--select mono">T-104 <svg class="icon icon--s" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg></div>
+            </div>
+            <button class="btn" type="button">Send to module</button>
+          </div>
+          <div class="scroll share" style="--share:1">
+            <div class="tbl">
+              <div class="tbl__head" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Input</span><span>Type</span><span>Value</span><span>Units</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Block occupied</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="Block occupied">
+                  <button class="seg__opt is-on" type="button">True</button>
+                  <button class="seg__opt" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Block closed by dispatcher</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="Block closed by dispatcher">
+                  <button class="seg__opt" type="button">True</button>
+                  <button class="seg__opt is-on" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Suggested speed from CTC</span><span class="mono">float</span>
+                <div class="field__ctl field__ctl--compact mono">15.0</div>
+                <span class="mono">MPH</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Authority from CTC</span><span class="mono">int</span>
+                <div class="field__ctl field__ctl--compact mono">1</div>
+                <span class="mono">blocks</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Train ID in block</span><span class="mono">string</span>
+                <div class="field__ctl field__ctl--compact mono">T-104</div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Track circuit failure</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="Track circuit failure">
+                  <button class="seg__opt" type="button">True</button>
+                  <button class="seg__opt is-on" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SW-1 reported position</span><span class="mono">bool</span>
+                <div class="field__ctl field__ctl--compact mono">0</div>
+                <span class="mono">0 normal</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SW-2 reported position</span><span class="mono">bool</span>
+                <div class="field__ctl field__ctl--compact mono">0</div>
+                <span class="mono">0 normal</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SW-1 correspondence failure</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="SW-1 correspondence failure">
+                  <button class="seg__opt" type="button">True</button>
+                  <button class="seg__opt is-on" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Signal lamp failure</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="Signal lamp failure">
+                  <button class="seg__opt" type="button">True</button>
+                  <button class="seg__opt is-on" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Crossing gate failure</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="Crossing gate failure">
+                  <button class="seg__opt" type="button">True</button>
+                  <button class="seg__opt is-on" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Next block occupied, wayside 2</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="Next block occupied, wayside 2">
+                  <button class="seg__opt" type="button">True</button>
+                  <button class="seg__opt is-on" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Maintenance mode</span><span class="mono">bool</span>
+                <div class="seg seg--compact" role="group" aria-label="Maintenance mode">
+                  <button class="seg__opt" type="button">True</button>
+                  <button class="seg__opt is-on" type="button">False</button>
+                </div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Manual command SW-1</span><span class="mono">bool</span>
+                <div class="field__ctl field__ctl--compact mono">0</div>
+                <span class="mono">0 normal</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Manual command SW-2</span><span class="mono">bool</span>
+                <div class="field__ctl field__ctl--compact mono">0</div>
+                <span class="mono">0 normal</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>PLC file name</span><span class="mono">string</span>
+                <div class="field__ctl field__ctl--compact mono">wayside-1-v7.plc</div>
+                <span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row tbl__row--action" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>System clock</span><span class="mono">string</span>
+                <div class="field__ctl field__ctl--compact mono">14:32:07</div>
+                <span class="mono">HH:MM:SS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel share" style="--share:1">
+        <div class="panel__hdr">
+          <span class="panel__title">Outputs</span>
+          <span class="panel__meta">21 test points · read-only</span>
+        </div>
+        <div class="panel__body panel__body--flush">
+          <div class="panel__strip">
+            <div class="field share" style="--share:1">
+              <span class="field__label">Update</span>
+              <div class="seg" role="group" aria-label="Update">
+                <button class="seg__opt is-on" type="button">Live</button>
+                <button class="seg__opt" type="button">Hold</button>
+              </div>
+            </div>
+            <div class="field share" style="--share:1">
+              <span class="field__label">Last update</span>
+              <div class="field__ctl mono">14:32:07</div>
+            </div>
+          </div>
+          <div class="scroll share" style="--share:1">
+            <div class="tbl">
+              <div class="tbl__head" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Output</span><span>Type</span><span>Value</span><span>Units</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SW-1 commanded position</span><span class="mono">bool</span>
+                <span class="mono">0</span><span class="mono">0 normal</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SW-2 commanded position</span><span class="mono">bool</span>
+                <span class="mono">0</span><span class="mono">0 normal</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SIG-11/12 aspect</span><span class="mono">enum</span>
+                <span class="mono">SUPER GREEN</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SIG-12/13 aspect</span><span class="mono">enum</span>
+                <span class="mono">GREEN</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SIG-14/15 aspect</span><span class="mono">enum</span>
+                <span class="mono">RED</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>SIG-15/16 aspect</span><span class="mono">enum</span>
+                <span class="mono">YELLOW</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>XING-15 lights active</span><span class="mono">bool</span>
+                <span class="mono">1</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>XING-15 gates down</span><span class="mono">bool</span>
+                <span class="mono">1</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Commanded speed to Track Model</span><span class="mono">float</span>
+                <span class="mono">15.0</span><span class="mono">MPH</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Authority to Track Model</span><span class="mono">int</span>
+                <span class="mono">1</span><span class="mono">blocks</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Occupancy vector to CTC</span><span class="mono">bool[9]</span>
+                <span class="mono">000010100</span><span class="mono">11&ndash;19</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Occupancy report sent at</span><span class="mono">string</span>
+                <span class="mono">14:32:06</span><span class="mono">HH:MM:SS</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Occupancy received at</span><span class="mono">string</span>
+                <span class="mono">14:32:05</span><span class="mono">HH:MM:SS</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Blocks reported to CTC</span><span class="mono">int</span>
+                <span class="mono">9</span><span class="mono">blocks</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Manual control active</span><span class="mono">bool</span>
+                <span class="mono">0</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Authority into occupied block</span><span class="mono">bool</span>
+                <span class="mono">0</span><span class="mono">never 1</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Route refused by interlocking</span><span class="mono">bool</span>
+                <span class="mono">0</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Channel A / B agree</span><span class="mono">bool</span>
+                <span class="mono">1</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Watchdog margin</span><span class="mono">int</span>
+                <span class="mono">92</span><span class="mono">ms</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>Vital fault asserted</span><span class="mono">bool</span>
+                <span class="mono">0</span><span class="mono">&mdash;</span>
+              </div>
+              <div class="tbl__row" style="grid-template-columns:1fr 56px 152px 84px">
+                <span>PLC scan overrun</span><span class="mono">bool</span>
+                <span class="mono">0</span><span class="mono">&mdash;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+  /* Clock: right-most element of the top bar, always live. Runs on the system
+     clock's simulated time so the static times on the page stay coherent. */
+  (function () {
+    var el = document.getElementById('clock');
+    var t = 14 * 3600 + 32 * 60 + 7;
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function tick() {
+      var h = Math.floor(t / 3600) % 24, m = Math.floor(t / 60) % 60, s = t % 60;
+      el.textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
+      t += 1;
+    }
+    tick();
+    setInterval(tick, 1000);
+  }());
+</script>
+</body>
+</html>

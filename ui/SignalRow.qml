@@ -10,6 +10,8 @@ RowLayout {
     property string kind: "string"
     property var value: undefined
     property string unit: ""
+    // Allowed values when kind is "enum"; ignored for every other kind.
+    property var options: []
     property bool editable: false
     property int kindWidth: 64
     property int valueWidth: 180
@@ -58,7 +60,8 @@ RowLayout {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.editable
             active: root.editable
-            sourceComponent: root.kind === "bool" ? boolEditor : textEditor
+            sourceComponent: root.kind === "bool" ? boolEditor
+                : root.kind === "enum" ? enumEditor : textEditor
         }
     }
 
@@ -79,10 +82,23 @@ RowLayout {
     }
 
     Component {
+        id: enumEditor
+
+        SelectField {
+            label: root.name
+            labelVisible: false
+            model: root.options
+            currentIndex: Math.max(0, root.options.indexOf(root.value))
+            onCommitted: function (newValue) { root.edited(newValue); }
+        }
+    }
+
+    Component {
         id: textEditor
 
         ValueField {
             label: root.name
+            labelVisible: false
             kind: root.kind
             text: root.value === undefined || root.value === null
                 ? "" : String(root.value)
