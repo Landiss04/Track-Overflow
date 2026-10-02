@@ -13,7 +13,8 @@ properties (`theme`, `trainModel`, `harness`).
 
 - **Tokens** — every color, font size, spacing, radius, and control dimension
   comes from `documents/UI_Style_Guide.md` (light theme), exposed as a single
-  `theme` object built by `train_model/theme.py`. No QML file hard-codes a
+  `theme` object built by the shared [`ui/theme.py`](../ui/theme.py) at the
+  repository root. No QML file hard-codes a
   color or a token-sized dimension.
 - **Dimensions & copy** — element sizes and the on-screen text are taken from
   the Figma CSS exports in `refrence-docs/` (`UIwireframe.css` = main page,
@@ -23,7 +24,7 @@ properties (`theme`, `trainModel`, `harness`).
 
 ```bash
 cd TrainModel
-source .venv/bin/activate        # PyQt6 6.11 + mypy; see "Setup" if missing
+source .venv/bin/activate        # PySide6 6.11 + mypy; see "Setup" if missing
 python main.py
 ```
 
@@ -40,30 +41,29 @@ cd TrainModel
 .venv/bin/python -m mypy main.py train_model/        # → no issues found in 5 source files
 ```
 
-`stubs/PyQt6/*.pyi` supply the `pyqtProperty`/`pyqtSignal` signatures PyQt6's
-bundled stubs omit; `mypy.ini` points `mypy_path` at them.
+PySide6 ships its own type stubs, so no local stubs are needed.
 
 ## Layout
 
 ```
 main.py                 entry point: builds theme, state objects, loads QML
-train_model/theme.py    build_theme() → the design-token dict (80 tokens)
 train_model/state.py    TrainModelState — page 3a bindable values + slots
 train_model/harness.py  TestHarnessState — page 3b inputs/outputs/run control
 ui/Main.qml             window shell, nav rail, 3a/3b view switcher
 ui/MainView.qml         page 3a
 ui/TestView.qml         page 3b
-ui/components/*.qml     Badge, Card, Banner, MetricTile, TableRow/Header,
-                        buttons, toggles, fields, NavRail, TopBar, …
-stubs/PyQt6/*.pyi       local mypy stubs for the property/signal API
 ```
+
+Reusable QML components are not in this folder. They live in the shared
+root-level [`ui/`](../ui/README.md) library and are imported from each view
+with `import "../../ui"`.
 
 ## Setup (if `.venv` is missing)
 
 ```bash
 cd TrainModel
 python3 -m venv .venv
-.venv/bin/pip install "PyQt6==6.11.*" "mypy==2.3.*"
+.venv/bin/pip install "PySide6==6.11.*" "mypy==2.3.*"
 ```
 
 ## Design discrepancies
