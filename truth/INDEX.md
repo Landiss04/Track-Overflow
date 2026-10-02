@@ -5,7 +5,7 @@ This file is read at the start of every agent session. Shards are read on demand
 | Shard | Path | Description | Last changed |
 | --- | --- | --- | --- |
 | UI design | [style-guide.md](ui/style-guide.md) | Visual tokens, component and accessibility rules | 2026-09-29 |
-| Conventions: naming | [naming.md](conventions/naming.md) | Module names and aliases, Python naming, docstrings | 2026-09-30 |
+| Conventions: naming | [naming.md](conventions/naming.md) | Module names and aliases, Python naming, docstrings | 2026-10-02 |
 | Conventions: units | [units.md](conventions/units.md) | Backend and display units, conversion factors | 2026-09-30 |
 | Conventions: identifiers | [identifiers.md](conventions/identifiers.md) | ID values, requirement IDs, exceptions, design token names | 2026-09-30 |
 | Conventions: files and paths | [files-and-paths.md](conventions/files-and-paths.md) | Paths, file names, delivery, module boundaries, layout, repository, linting | 2026-09-29 |
