@@ -22,7 +22,8 @@ class TrainConfig:
     """Vehicle constants. Bombardier FLEXITY 2 (Blackpool), 5-module consist.
 
     Primitives only. Everything derived is a property, so the set stays
-    consistent if a primitive changes.
+    consistent if a primitive changes. The brake forces are primitives:
+    the instructor supplied them directly.
     """
 
     # Vehicle (datasheet)
@@ -43,8 +44,11 @@ class TrainConfig:
     # Rated performance, all at 2/3 load (datasheet)
     ref_load_fraction: float = 2.0 / 3.0
     accel_ref_mps2: float = 0.5
-    decel_service_mps2: float = 1.2
-    decel_emergency_mps2: float = 2.73
+
+    # Brake forces (instructor, 2026-10-02): a 51,433 kg load times the
+    # rated 1.2 and 2.73 m/s^2 decelerations, entered as given.
+    f_service_n: float = 61_720.0
+    f_emergency_n: float = 140_413.0
 
     # Environment
     c_rr: float = 0.002                     # rolling resistance, assumed
@@ -62,14 +66,6 @@ class TrainConfig:
     @property
     def f_max_n(self) -> float:
         return self.m_ref_kg * self.accel_ref_mps2
-
-    @property
-    def f_service_n(self) -> float:
-        return self.m_ref_kg * self.decel_service_mps2
-
-    @property
-    def f_emergency_n(self) -> float:
-        return self.m_ref_kg * self.decel_emergency_mps2
 
 
 # --------------------------------------------------------------------------- #

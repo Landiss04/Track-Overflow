@@ -274,16 +274,14 @@ class Recorder:
     TrainConfig(passenger_mass_kg=80.0),
 ], ids=["default", "lighter", "smaller", "heavier-people"])
 def test_derived_forces_follow_primitives(cfg: TrainConfig) -> None:
-    """Check derived values recompute from the primitives."""
+    """Check traction derives from mass; brake forces are given."""
     n_ref = round(cfg.capacity * cfg.ref_load_fraction)
     m_ref = cfg.m_empty_kg + n_ref * cfg.passenger_mass_kg
     assert cfg.m_ref_kg == pytest.approx(m_ref, rel=1e-12)
     assert cfg.f_max_n == pytest.approx(
         m_ref * cfg.accel_ref_mps2, rel=1e-12)
-    assert cfg.f_service_n == pytest.approx(
-        m_ref * cfg.decel_service_mps2, rel=1e-12)
-    assert cfg.f_emergency_n == pytest.approx(
-        m_ref * cfg.decel_emergency_mps2, rel=1e-12)
+    assert cfg.f_service_n == 61_720.0
+    assert cfg.f_emergency_n == 140_413.0
 
 
 def test_passenger_mass_is_170_lb() -> None:
@@ -308,15 +306,18 @@ def test_config_is_immutable() -> None:
         CFG.p_max_w = 1.0  # type: ignore[misc]
 
 
+def test_traction_gives_rated_rate_at_reference_mass() -> None:
+    """Check F_max gives the datasheet 0.5 m/s^2 on the 2/3-load mass."""
+    assert CFG.f_max_n / CFG.m_ref_kg == pytest.approx(0.5, rel=1e-12)
+
+
 @pytest.mark.parametrize(("force", "rate"), [
-    ("f_max_n", "accel_ref_mps2"),
-    ("f_service_n", "decel_service_mps2"),
-    ("f_emergency_n", "decel_emergency_mps2"),
+    ("f_service_n", 1.2),
+    ("f_emergency_n", 2.73),
 ])
-def test_rated_rate_at_reference_mass(force: str, rate: str) -> None:
-    """Check each force gives its datasheet rate on the 2/3-load mass."""
-    assert getattr(CFG, force) / CFG.m_ref_kg == pytest.approx(
-        getattr(CFG, rate), rel=1e-12)
+def test_brake_forces_match_instructor_load(force: str, rate: float) -> None:
+    """Check each brake force is 51,433 kg times its rated rate."""
+    assert getattr(CFG, force) == pytest.approx(51_433 * rate, abs=1.0)
 
 
 def test_base_speed_where_power_limit_takes_over() -> None:
@@ -663,20 +664,35 @@ def test_test_override_releases_passenger_brake() -> None:
     assert vel(model) > 0.0
 
 
-@pytest.mark.parametrize("kind", ["service", "emergency", "passenger"])
-def test_brake_failure_disables_every_brake(kind: str) -> None:
-    """Check a brake failure leaves only rolling resistance."""
+def test_brake_failure_blocks_the_service_brake() -> None:
+    """Check a failed service brake leaves only rolling resistance."""
+    model = fresh()
+    launch(model, 10.0)
+    model.set_failures(FailureState(brake=True))
+    v0 = vel(model)
+    out = model.step(DT_S, brake_inputs("service"))
+    assert acc(model) == pytest.approx(-CFG.c_rr * G, rel=1e-12)
+    assert vel(model) == pytest.approx(v0 - CFG.c_rr * G * DT_S, rel=1e-12)
+    assert out.controller.service_brake_active is False
+
+
+@pytest.mark.parametrize("kind", ["emergency", "passenger"])
+def test_brake_failure_leaves_the_emergency_brake(kind: str) -> None:
+    """Check the emergency brake still brakes fully under brake failure."""
     model = fresh()
     launch(model, 10.0)
     model.set_failures(FailureState(brake=True))
     v0 = vel(model)
     if kind == "passenger":
         model.pull_passenger_emergency_brake()
-        model.step(DT_S, inp(0.0))
+        out = model.step(DT_S, inp(0.0))
     else:
-        model.step(DT_S, brake_inputs(kind))
-    assert acc(model) == pytest.approx(-CFG.c_rr * G, rel=1e-12)
-    assert vel(model) == pytest.approx(v0 - CFG.c_rr * G * DT_S, rel=1e-12)
+        out = model.step(DT_S, brake_inputs(kind))
+    m = mass_of(0)
+    decel = (CFG.f_emergency_n + roll_n(m)) / m
+    assert acc(model) == pytest.approx(-decel, rel=1e-12)
+    assert vel(model) == pytest.approx(v0 - decel * DT_S, rel=1e-12)
+    assert out.controller.emergency_brake_active is True
 
 
 @pytest.mark.parametrize("v0", [5.0, 12.0, CFG.v_max_mps])

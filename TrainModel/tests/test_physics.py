@@ -116,8 +116,9 @@ def test_design_constants() -> None:
     config = TrainConfig()
     assert config.m_ref_kg == pytest.approx(52_312, abs=1.0)
     assert config.f_max_n == pytest.approx(26_156, abs=1.0)
-    assert config.f_service_n == pytest.approx(62_774, abs=1.0)
-    assert config.f_emergency_n == pytest.approx(142_812, abs=1.0)
+    # Brake forces are the instructor's: 51,433 kg x 1.2 and x 2.73.
+    assert config.f_service_n == pytest.approx(61_720, abs=1.0)
+    assert config.f_emergency_n == pytest.approx(140_413, abs=1.0)
 
 
 def test_first_tick_acceleration_two_thirds_load() -> None:
@@ -229,7 +230,7 @@ def test_engine_failure_power_has_no_effect() -> None:
 
 
 def test_all_failures_compose() -> None:
-    """Check all three failures leave only rolling resistance acting."""
+    """Check all failures leave only rolling resistance under service."""
     config = TrainConfig()
     model = TrainModel(config)
     run_until_speed(model, 10.0)
@@ -241,7 +242,7 @@ def test_all_failures_compose() -> None:
     for _ in range(500):
         assert model.snapshot().velocity_mps > 0.0
         outputs = model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, service=True, emergency=True))
+            power_w=config.p_max_w, service=True))
         accel = model.snapshot().acceleration_mps2
         assert accel == pytest.approx(expected_accel, rel=1e-9)
         assert outputs.controller.commanded_speed_mps == 0.0
@@ -294,10 +295,11 @@ def test_passenger_bounds_and_capacity() -> None:
         (True, True, False, False, (True, False)),
         (False, False, True, False, (True, False)),
         (True, False, True, False, (True, False)),
-        # Failed brakes are not engaged, whatever is commanded.
+        # Brake failure blocks the service brake only.
         (True, False, False, True, (False, False)),
-        (False, True, False, True, (False, False)),
-        (True, True, True, True, (False, False)),
+        (False, True, False, True, (True, False)),
+        (False, False, True, True, (True, False)),
+        (True, True, True, True, (True, False)),
     ],
 )
 def test_brake_state_reports_engaged_brakes(
@@ -322,6 +324,7 @@ def test_brake_state_matches_applied_force() -> None:
     cfg = TrainConfig()
     for service, emergency, failed in [(True, False, False),
                                        (False, True, False),
+                                       (True, False, True),
                                        (True, True, True)]:
         model = TrainModel(cfg)
         while model.snapshot().velocity_mps < 10.0:

@@ -11,7 +11,8 @@ to the Train Controller; they do not govern motion in this module.
 Sustained power can therefore accelerate the model beyond the configured
 speed. Speed regulation and enforcement belong to the Train Controller.
 Verify that behavior during controller integration rather than adding a
-velocity clamp to the physics.
+velocity clamp to the physics. The course instructor confirmed on 2026-10-02
+that the Train Model does not enforce the maximum speed.
 
 ## Vehicle calibration
 
@@ -19,7 +20,9 @@ The force and resistance parameters still need calibration against the
 Blackpool FLEXITY 2 datasheet. Its 0.5 m/s² figure is an average acceleration
 from 0 to 70 km/h at two-thirds load; using it to derive a maximum traction
 force does not establish that the simulated acceleration curve matches the
-vehicle. Rolling resistance is assumed, aerodynamic drag is absent, and
+vehicle. The brake forces (61,720 N service, 140,413 N emergency) are the
+instructor's values from a 51,433 kg load; the traction limit is still derived
+from the 52,312 kg reference mass. Rolling resistance is assumed, aerodynamic drag is absent, and
 reference mass excludes crew while operating mass includes crew. Validate
 acceleration, braking and grade performance across loads before treating
 the model as a calibrated representation of the vehicle.

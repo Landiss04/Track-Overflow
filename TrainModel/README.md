@@ -153,7 +153,8 @@ door-open rising edge at rest.
 ## Passenger brake override
 
 The test harness emergency-brake input can explicitly override the passenger
-latch. An injected brake failure still prevents braking. The overview offers
+latch. An injected brake failure blocks the service brake only; the emergency
+brake and a passenger pull still work. The overview offers
 no release, pending a decision on normal operation; this test override does
 not define that policy. Its button always reads *Apply emergency brake* and is
 disabled while the emergency brake is engaged from any source (a Train
