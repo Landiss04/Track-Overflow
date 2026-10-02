@@ -16,10 +16,15 @@ Rectangle {
     // Simulation speed badge text, e.g. "10× speed"; hidden if empty.
     property string speedLabel: ""
     property bool speedElevated: false
+    // Simulation clock state. The shared clock starts paused.
+    property bool paused: true
     property bool occupancyOpen: false
 
     signal modeActivated(int index)
     signal occupancyClicked()
+    // Requests for the shared simulation clock's pause() / resume().
+    signal pauseRequested()
+    signal resumeRequested()
 
     readonly property string modeName: modes.length > modeIndex
         ? modes[modeIndex] : ""
@@ -129,7 +134,47 @@ Rectangle {
                     text: root.clock
                     color: theme.text_muted
                 }
+
+                // Always shown, and both controls are sized to their wider
+                // label, so the header does not shift when toggled.
+                StatusBadge {
+                    Layout.preferredWidth: Math.max(
+                        pausedBadgeSize.implicitWidth,
+                        runningBadgeSize.implicitWidth)
+                    label: root.paused ? qsTr("Paused") : qsTr("Running")
+                    variant: root.paused ? "warning" : "ok"
+                }
+
+                AppButton {
+                    Layout.preferredWidth: Math.max(
+                        runButtonSize.implicitWidth,
+                        pauseButtonSize.implicitWidth)
+                    variant: "secondary"
+                    size: "small"
+                    text: root.paused ? qsTr("Run") : qsTr("Pause")
+                    Accessible.name: root.paused
+                        ? qsTr("Run the simulation")
+                        : qsTr("Pause the simulation")
+                    onClicked: root.paused ? root.resumeRequested()
+                        : root.pauseRequested()
+                }
             }
         }
+    }
+
+    // Unshown copies that measure each label for the fixed widths above.
+    StatusBadge { id: pausedBadgeSize; visible: false; label: qsTr("Paused") }
+    StatusBadge { id: runningBadgeSize; visible: false; label: qsTr("Running") }
+    AppButton {
+        id: runButtonSize
+        visible: false
+        size: "small"
+        text: qsTr("Run")
+    }
+    AppButton {
+        id: pauseButtonSize
+        visible: false
+        size: "small"
+        text: qsTr("Pause")
     }
 }

@@ -16,8 +16,14 @@ from PySide6.QtQml import QQmlApplicationEngine
 # so they live in the repository-level ui/ folder next to the shared QML
 # components.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# CTC-Office/, so the ``ctc`` module package imports however this file
+# is started.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
+
+from ctc_ui.track_map import TrackMapModel  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
 
@@ -26,6 +32,7 @@ def main() -> int:
     """Create the app, load the QML views, and run the event loop."""
     app = QGuiApplication(sys.argv)
     app.setApplicationName("CTC Office")
+    install_app_icon(app)
 
     theme = build_theme()
     font = QFont()
@@ -40,6 +47,10 @@ def main() -> int:
         return 1
 
     context.setContextProperty("theme", theme)
+    # The track map is built once from the layout files at startup. Keep
+    # a Python reference: QML holds only a C++ pointer to it.
+    track_map = TrackMapModel()
+    context.setContextProperty("trackMap", track_map)
 
     engine.load(QUrl.fromLocalFile(str(_MAIN_QML)))
     if not engine.rootObjects():

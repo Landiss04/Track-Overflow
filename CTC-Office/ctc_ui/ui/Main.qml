@@ -19,6 +19,13 @@ ScaledWindow {
     // closed | open | docked
     property string occupancyState: "closed"
     property string selectedTrainId: ""
+    // Stand-in for the shared simulation clock's paused state until the
+    // clock is wired in; like the clock, the window starts paused.
+    property bool simulationPaused: true
+    // The TrackMapModel from __main__.py's `trackMap` context property,
+    // named apart from TrackViewPanel.trackMap so the binding cannot
+    // resolve to the panel's own property.
+    readonly property var trackMapModel: trackMap
     // Modal scrim: --text-primary at 40 % alpha. The shared theme has no
     // scrim token, so it is derived here rather than hard-coded.
     readonly property color scrimBase: theme.text_primary
@@ -35,6 +42,8 @@ ScaledWindow {
         CtcHeader {
             Layout.fillWidth: true
             moduleName: qsTr("CTC Office — Dispatcher Console")
+            // Fixed: the CTC has a single, named operator.
+            operatorName: "Stephen Philips"
             modes: [qsTr("Automatic"), qsTr("Manual"),
                 qsTr("Maintenance")]
             modeIndex: window.modeIndex
@@ -43,6 +52,9 @@ ScaledWindow {
                 window.modeIndex = index;
             }
             onOccupancyClicked: window.occupancyState = "open"
+            paused: window.simulationPaused
+            onPauseRequested: window.simulationPaused = true
+            onResumeRequested: window.simulationPaused = false
         }
 
         RowLayout {
@@ -53,6 +65,7 @@ ScaledWindow {
 
             TrackViewPanel {
                 id: trackView
+                trackMap: window.trackMapModel
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 onLineFilterActivated: function (index) {

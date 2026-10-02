@@ -7,17 +7,14 @@ Start it from the ``CTC-Office`` directory with either::
     python -m ctc_ui.test_ui
 
 It is for testing the CTC Office on its own: it stands in for the
-modules the CTC talks to. Once the modules are integrated, those
-modules replace it and it is not used.
+Track Controller and the Track Model, the two modules the CTC talks
+to, plus the dispatcher actions of the CTC UI. Once the modules are
+integrated, the central harness connects them to the CTC through the
+same boundary (``ctc/interface.py``) and this test UI is not used.
 
-Not yet built: the link that lets this process control a running CTC
-Office's inputs and outputs. It is planned as a Qt local socket
-(``QLocalServer`` in the CTC process, ``QLocalSocket`` here; a named
-pipe on Windows, a Unix socket elsewhere, never a network connection),
-carrying one JSON message per line. ``TestHarnessView.qml`` already
-exposes what the link needs: the ``inputs``, ``outputs``, and
-``connected`` properties, and the ``inputEdited``,
-``sendInputsRequested``, and ``resetInputsRequested`` signals.
+The CTC Office module runs inside this process, reached only through
+``ctc.link.LocalLink``. A socket link to a CTC Office in its own process
+can replace it later without changing the module or this UI.
 """
 
 from __future__ import annotations
@@ -34,8 +31,14 @@ from PySide6.QtQml import QQmlApplicationEngine
 # so they live in the repository-level ui/ folder next to the shared QML
 # components.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# CTC-Office/, so the ``ctc`` module package imports however this file
+# is started.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
+
+from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 
 _TEST_MAIN_QML = (
     Path(__file__).resolve().parent / "ui" / "test" / "TestMain.qml"
@@ -46,6 +49,7 @@ def main() -> int:
     """Create the test UI app, load its window, and run the loop."""
     app = QGuiApplication(sys.argv)
     app.setApplicationName("CTC Office Test Harness")
+    install_app_icon(app)
 
     theme = build_theme()
     font = QFont()
@@ -60,6 +64,9 @@ def main() -> int:
         return 1
 
     context.setContextProperty("theme", theme)
+    # Keep a Python reference: QML holds only a C++ pointer to it.
+    harness = CtcTestHarness()
+    context.setContextProperty("harness", harness)
 
     engine.load(QUrl.fromLocalFile(str(_TEST_MAIN_QML)))
     if not engine.rootObjects():

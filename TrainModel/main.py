@@ -15,6 +15,7 @@ from train_model.state import TrainModelState
 # The design tokens are shared by every module's UI, so they live in the
 # repository-level ui/ folder next to the shared QML components.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
@@ -25,6 +26,7 @@ def main() -> int:
     """Create the app, load the QML views, and run the event loop."""
     app = QGuiApplication(sys.argv)
     app.setApplicationName("Train Model")
+    install_app_icon(app)
 
     theme = build_theme()
     font = QFont()

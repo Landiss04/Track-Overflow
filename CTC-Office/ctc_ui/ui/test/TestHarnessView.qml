@@ -3,12 +3,10 @@
 // test harness template. It fills the separate test UI process's window
 // (test/TestMain.qml); the CTC Office window does not open it.
 //
-// No IO is declared yet, so both tables are empty. Bind `inputs` and
-// `outputs` and set `connected` once the link to a running CTC exists;
-// the edit, send, and reset signals are what that link will act on.
-//
-// Each row is { name, kind, value, unit } where kind is
-// "bool" | "int" | "float" | "string", matching SignalRow.
+// Rows come from ctc_ui/test_harness.py, bound in TestMain.qml. Each row
+// is { name, kind, value, unit, hint } where kind is
+// "bool" | "int" | "float" | "string", matching SignalRow, and hint
+// describes how a text row is written.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -19,34 +17,19 @@ import "../../../../ui"
 Rectangle {
     id: root
 
+    // Rows from the neighboring modules (Track Controller, Track Model).
     property var inputs: []
+    // Rows standing in for the CTC UI's own dispatcher actions.
+    property var dispatcherInputs: []
     property var outputs: []
-    // True once this process is linked to a running CTC Office.
+    // True once this process is linked to a CTC Office.
     property bool connected: false
-    // Dummy preview: swaps in example rows so the populated layout can be
-    // seen before any IO is declared. Remove once real signals exist.
-    property bool previewing: false
+    // Result of the last Send or Reset; shown in the footer.
+    property string status: ""
+    property bool statusIsError: false
 
-    readonly property var shownInputs: previewing ? previewInputs : inputs
-    readonly property var shownOutputs: previewing ? previewOutputs : outputs
-
-    readonly property var previewInputs: [
-        { name: "sample_bool", kind: "bool", value: true,
-          unit: "" },
-        { name: "sample_float", kind: "float", value: 12.5,
-          unit: "m/s" },
-        { name: "sample_int", kind: "int", value: 3, unit: "" },
-        { name: "sample_string", kind: "string", value: "BLOCK A",
-          unit: "" }
-    ]
-    readonly property var previewOutputs: [
-        { name: "sample_float", kind: "float", value: 17.9,
-          unit: "m/s" },
-        { name: "sample_bool", kind: "bool", value: false,
-          unit: "" },
-        { name: "sample_unset", kind: "float", value: "",
-          unit: "m" }
-    ]
+    // Value column width; wide enough for list-valued text rows.
+    readonly property int valueWidth: 300
 
     signal inputEdited(string name, var value)
     signal sendInputsRequested()
@@ -59,6 +42,53 @@ Rectangle {
         return count === 1 ? qsTr("1 signal") : qsTr("%1 signals").arg(count);
     }
 
+    component EditableRows: ColumnLayout {
+        id: rowsRoot
+
+        property var rows: []
+
+        Layout.fillWidth: true
+        spacing: theme.space_2
+
+        TableHeader {
+            Layout.fillWidth: true
+            valueWidth: root.valueWidth
+        }
+
+        Repeater {
+            model: rowsRoot.rows
+
+            delegate: ColumnLayout {
+                id: row
+
+                required property var modelData
+
+                Layout.fillWidth: true
+                spacing: 0
+
+                SignalRow {
+                    Layout.fillWidth: true
+                    name: row.modelData.name
+                    kind: row.modelData.kind
+                    value: row.modelData.value
+                    unit: row.modelData.unit
+                    valueWidth: root.valueWidth
+                    editable: true
+                    onEdited: function (newValue) {
+                        root.inputEdited(row.modelData.name, newValue);
+                    }
+                }
+
+                HelperText {
+                    Layout.fillWidth: true
+                    visible: (row.modelData.hint || "") !== ""
+                    text: row.modelData.hint || ""
+                    color: theme.text_muted
+                }
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -68,7 +98,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: theme.control_h_lg + theme.space_2
             Layout.leftMargin: theme.space_4
-            Layout.rightMargin: theme.space_2
+            Layout.rightMargin: theme.space_4
             spacing: theme.space_3
 
             Text {
@@ -85,21 +115,7 @@ Rectangle {
                 variant: root.connected ? "ok" : "idle"
             }
 
-            StatusBadge {
-                label: qsTr("Preview data")
-                variant: "warning"
-                visible: root.previewing
-            }
-
             Item { Layout.fillWidth: true }
-
-            AppButton {
-                variant: "secondary"
-                size: "small"
-                text: root.previewing ? qsTr("Hide preview")
-                    : qsTr("Show preview")
-                onClicked: root.previewing = !root.previewing
-            }
         }
 
         Rectangle {
@@ -126,10 +142,11 @@ Rectangle {
                     Layout.leftMargin: theme.space_4
                     Layout.rightMargin: theme.space_4
                     heading: qsTr("Force inputs, read outputs")
-                    body: qsTr("Inputs set here replace what the CTC would "
-                        + "receive from the track controllers. Outputs are "
-                        + "read back from the module after the inputs are "
-                        + "sent.")
+                    body: qsTr("Inputs stand in for the Track Controller and "
+                        + "the Track Model; dispatcher actions stand in for "
+                        + "the CTC UI. Send applies them and advances the "
+                        + "CTC one tick. Outputs are read back from the "
+                        + "module.")
                 }
 
                 RowLayout {
@@ -139,47 +156,36 @@ Rectangle {
                     Layout.bottomMargin: theme.space_4
                     spacing: theme.space_4
 
-                    Panel {
+                    ColumnLayout {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         Layout.alignment: Qt.AlignTop
-                        title: qsTr("Inputs")
+                        spacing: theme.space_4
 
-                        headerItems: [
-                            HelperText {
-                                text: root.signalCount(
-                                    root.shownInputs.length)
-                                color: theme.text_muted
-                            }
-                        ]
-
-                        TableHeader { Layout.fillWidth: true }
-
-                        Repeater {
-                            model: root.shownInputs
-
-                            delegate: SignalRow {
-                                required property var modelData
-
-                                Layout.fillWidth: true
-                                name: modelData.name
-                                kind: modelData.kind
-                                value: modelData.value
-                                unit: modelData.unit
-                                editable: true
-                                onEdited: function (newValue) {
-                                    root.inputEdited(modelData.name,
-                                        newValue);
+                        Panel {
+                            Layout.fillWidth: true
+                            title: qsTr("Inputs")
+                            headerItems: [
+                                HelperText {
+                                    text: root.signalCount(root.inputs.length)
+                                    color: theme.text_muted
                                 }
-                            }
+                            ]
+
+                            EditableRows { rows: root.inputs }
                         }
 
-                        HelperText {
+                        Panel {
                             Layout.fillWidth: true
-                            Layout.topMargin: theme.space_2
-                            visible: root.shownInputs.length === 0
-                            horizontalAlignment: Text.AlignHCenter
-                            text: qsTr("No inputs declared yet.")
+                            title: qsTr("Dispatcher actions")
+                            headerItems: [
+                                HelperText {
+                                    text: qsTr("Stand-in for the CTC UI")
+                                    color: theme.text_muted
+                                }
+                            ]
+
+                            EditableRows { rows: root.dispatcherInputs }
                         }
                     }
 
@@ -191,8 +197,7 @@ Rectangle {
 
                         headerItems: [
                             HelperText {
-                                text: root.signalCount(
-                                    root.shownOutputs.length)
+                                text: root.signalCount(root.outputs.length)
                                 color: theme.text_muted
                             }
                         ]
@@ -200,7 +205,7 @@ Rectangle {
                         TableHeader { Layout.fillWidth: true }
 
                         Repeater {
-                            model: root.shownOutputs
+                            model: root.outputs
 
                             delegate: SignalRow {
                                 required property var modelData
@@ -216,9 +221,9 @@ Rectangle {
                         HelperText {
                             Layout.fillWidth: true
                             Layout.topMargin: theme.space_2
-                            visible: root.shownOutputs.length === 0
-                            horizontalAlignment: Text.AlignHCenter
-                            text: qsTr("No outputs declared yet.")
+                            text: qsTr("To the Track Controller, read back "
+                                + "after each Send.")
+                            color: theme.text_muted
                         }
                     }
                 }
@@ -241,23 +246,24 @@ Rectangle {
 
             HelperText {
                 Layout.fillWidth: true
-                text: root.shownInputs.length === 0
-                    ? qsTr("Controls enable once inputs are declared.")
-                    : qsTr("Sending writes every input to the module at "
-                        + "once.")
+                text: root.status !== "" ? root.status
+                    : qsTr("Edit inputs, then Send to apply them and "
+                        + "advance one tick.")
+                color: root.statusIsError ? theme.danger
+                    : theme.text_secondary
             }
 
             AppButton {
                 variant: "secondary"
                 text: qsTr("Reset inputs")
-                enabled: root.shownInputs.length > 0
+                enabled: root.connected
                 onClicked: root.resetInputsRequested()
             }
 
             AppButton {
                 variant: "primary"
                 text: qsTr("Send inputs to CTC")
-                enabled: root.shownInputs.length > 0
+                enabled: root.connected
                 onClicked: root.sendInputsRequested()
             }
         }
