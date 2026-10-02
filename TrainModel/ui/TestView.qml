@@ -78,8 +78,10 @@ ScrollView {
 
                 TableHeader { Layout.fillWidth: true }
 
+                // Stable rows bound to a value map: rebuilding every row on
+                // each tick cannot keep up with 10x.
                 Repeater {
-                    model: harness.outputs
+                    model: harness.outputDefinitions
 
                     delegate: SignalRow {
                         required property var modelData
@@ -88,7 +90,7 @@ ScrollView {
                         objectName: "output-" + modelData.name
                         name: modelData.name
                         kind: modelData.kind
-                        value: modelData.value
+                        value: harness.outputValues[modelData.name]
                         unit: modelData.unit
                     }
                 }

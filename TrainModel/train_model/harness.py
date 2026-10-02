@@ -319,9 +319,28 @@ class TestHarnessState(QObject):
         values = self._display_values()
         return [dict(row, value=values[row["name"]]) for row in INPUT_SPEC]
 
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    def outputDefinitions(self) -> list[dict[str, Any]]:
+        """Stable output rows: a tick updates values, not delegates."""
+        return [
+            {"name": name, "kind": kind, "unit": unit}
+            for name, kind, unit in _OUTPUT_SPEC
+        ] + [
+            {"name": name, "kind": "bool", "unit": ""}
+            for name in _FAILURE_FIELDS
+        ]
+
+    @Property("QVariantMap", notify=outputsChanged)  # type: ignore[arg-type]
+    def outputValues(self) -> dict[str, Any]:
+        """Displayed output values by row name; None while disconnected."""
+        return {row["name"]: row["value"] for row in self._output_rows()}
+
     @Property("QVariantList", notify=outputsChanged)  # type: ignore[arg-type]
     def outputs(self) -> list[dict[str, Any]]:
         """Read-only output rows; empty values while disconnected."""
+        return self._output_rows()
+
+    def _output_rows(self) -> list[dict[str, Any]]:
         outputs = self._link.outputs
         values = _output_values(outputs) if outputs is not None else {}
         rows: list[dict[str, Any]] = [
