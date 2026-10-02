@@ -67,7 +67,7 @@ at ⅔ load, and an empty train accelerates and brakes harder than a full one:
 | Train | Operating mass | Emergency deceleration |
 |---|---|---|
 | Crew only | 41,286 kg | ≈ 3.42 m/s² |
-| ⅔ load | ≈ 51,800 kg | ≈ 2.73 m/s² (datasheet) |
+| At the reference mass | 51,433 kg | 2.73 m/s² from the brake, ≈ 2.75 m/s² with rolling resistance |
 | Full | 58,404 kg | ≈ 2.42 m/s² |
 
 The two masses use different passenger weights by design: the reference mass
