@@ -17,13 +17,21 @@ Controls read back live state from the outputs, with staged edits marked
 pending. Sending applies those edits and advances one tick. Later ticks
 reuse the last accepted inputs. A boarding count is consumed once and
 must be entered again for a later boarding event.
+
+Time comes from the shared simulation clock (``utils/system_clock.py``).
+The module steps once per clock tick, and dt is the clock's fixed tick
+length. ``ClockDriver`` ticks the clock in real time while it runs, at
+1x or 10x; sending and advancing tick it by hand. Speed changes how
+often ticks happen, never dt (D006).
 """
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any, cast
 
-from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from train_model.interface import (
     Beacon,
@@ -36,6 +44,12 @@ from train_model.interface import (
 )
 from train_model.link import LinkError, LocalLink, SocketLink
 from train_model.model import InvalidTimeStepError
+
+# The simulation clock is shared by every module, so it lives in the
+# repository-level utils/ package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils.clock_driver import ClockDriver  # noqa: E402
+from utils.system_clock import ALLOWED_SPEEDS, SystemClock  # noqa: E402
 
 #: Inputs, in interface-dictionary order. ``kind`` drives which editor
 #: the view renders; ``unit`` is empty where the signal is
@@ -154,7 +168,6 @@ _INITIAL_COMMANDS: dict[str, Any] = {
 # Float outputs are shown to this many decimal places.
 _OUTPUT_DECIMALS = 3
 
-_DEFAULT_DT = 0.100
 _DISPLAY_FACTORS = {"mph": 2.236936, "ft": 3.280840, "kW": 0.001}
 
 #: Either link: in this process (tests) or in the Train Model process.
@@ -221,12 +234,19 @@ class TestHarnessState(QObject):
         self._pending_inputs: dict[str, Any] = {}
         self._live_inputs = self._live_input_values()
         self._emergency_override_pending = False
-        self._running = False
+        # Accepted steps since the last reset. A rejected step still
+        # spends its clock tick but is not counted here.
         self._tick = 0
-        self._dt = _DEFAULT_DT
-        self._timer = QTimer(self)
-        self._timer.setInterval(round(self._dt * 1000))
-        self._timer.timeout.connect(self._step)
+        # Set while a send ticks the clock, so that tick carries the
+        # staged edits; the tick reports whether the module took them.
+        self._send_requested = False
+        self._send_accepted = False
+        self._clock = SystemClock()
+        self._clock.add_tick_listener(self._on_clock_tick)
+        self._clock.add_state_listener(self.runControlChanged.emit)
+        # The driver idles while the clock is held.
+        self._driver = ClockDriver(self._clock, parent=self)
+        self._driver.start()
         link.outputsChanged.connect(self.outputsChanged)
         link.outputsChanged.connect(self._sync_inputs)
         link.connectedChanged.connect(self.connectedChanged)
@@ -357,7 +377,17 @@ class TestHarnessState(QObject):
     @Property(bool, notify=runControlChanged)
     def running(self) -> bool:
         """Whether the simulation clock is running rather than held."""
-        return self._running
+        return not self._clock.is_paused
+
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    def speeds(self) -> list[int]:
+        """Speed multipliers the clock accepts, slowest first."""
+        return list(ALLOWED_SPEEDS)
+
+    @Property(int, notify=runControlChanged)
+    def speed(self) -> int:
+        """Clock speed multiplier; 1 is real time."""
+        return self._clock.speed
 
     @Property(int, notify=runControlChanged)
     def tick(self) -> int:
@@ -366,13 +396,13 @@ class TestHarnessState(QObject):
 
     @Property(float, notify=runControlChanged)
     def dt(self) -> float:
-        """Seconds per tick."""
-        return self._dt
+        """Seconds per tick, fixed by the clock at any speed."""
+        return self._clock.tick_s
 
     @Property(str, notify=runControlChanged)
     def elapsed(self) -> str:
         """Elapsed simulated time as ``hh:mm:ss``."""
-        total = int(self._tick * self._dt + 1e-9)
+        total = int(self._tick * self._clock.tick_s + 1e-9)
         return f"{total // 3600:02d}:{total // 60 % 60:02d}:{total % 60:02d}"
 
     @Slot(str, "QVariant")
@@ -415,42 +445,43 @@ class TestHarnessState(QObject):
     @Slot(result=bool)
     def sendInputs(self) -> bool:
         """Submit a valid tick, or retain state and drafts with an error."""
-        values = self._accepted | self._pending_inputs
-        if not self._submit(values, self._emergency_override_pending):
-            return False
-        self._emergency_override_pending = False
-        self._pending_inputs.clear()
-        self._set_input_error("")
-        self.inputsChanged.emit()
-        return True
+        # Tick the clock by hand; that tick carries the staged edits.
+        self._send_requested = True
+        self._send_accepted = False
+        try:
+            self._clock.tick()
+        finally:
+            self._send_requested = False
+        return self._send_accepted
 
     @Slot(bool)
     def setRunning(self, running: bool) -> None:
         """Run or hold the simulation clock."""
-        if self._running == running:
-            return
-        self._running = running
         if running:
-            self._timer.start()
+            self._clock.resume()
         else:
-            self._timer.stop()
-        self.runControlChanged.emit()
+            self._clock.pause()
+
+    @Slot(int)
+    def setSpeed(self, speed: int) -> None:
+        """Set the clock speed multiplier; one of ``speeds``."""
+        self._clock.set_speed(speed)
 
     @Slot()
     def advanceTick(self) -> None:
         """Advance the Train Model one tick on the last sent inputs."""
-        self._step()
+        self._clock.tick()
 
     @Slot()
     def resetModule(self) -> None:
         """Restore a fresh module, the initial commands and zero counters."""
-        self._timer.stop()
+        # Resetting also holds the clock; the speed is kept.
+        self._clock.reset()
         self._set_input_error("")
         self._pending_inputs.clear()
         self._accepted = dict(_INITIAL_COMMANDS)
         self._emergency_override_pending = False
         self._tick = 0
-        self._running = False
         try:
             self._link.reset()
         except LinkError as exc:
@@ -459,24 +490,42 @@ class TestHarnessState(QObject):
         self.inputsChanged.emit()
         self.runControlChanged.emit()
 
-    def _step(self) -> None:
-        # The first tick may submit pending edits. Later ticks use only
-        # accepted inputs; they never overwrite or submit drafts.
-        if self._tick == 0 and self._pending_inputs:
-            self.sendInputs()
-            return
-        if self._submit(self._accepted) and not self._pending_inputs:
+    def _on_clock_tick(self, _sim_time_s: float, tick_s: float) -> None:
+        # Every module step happens on a clock tick. A send, and the
+        # first tick when edits are pending, submit those edits. Later
+        # ticks use only accepted inputs; they never submit drafts.
+        send = self._send_requested or (
+            self._tick == 0 and bool(self._pending_inputs)
+        )
+        # Consume the request first: a rejection holds the clock, and
+        # the driver may run ticks already due before it stops.
+        self._send_requested = False
+        if send:
+            self._send_accepted = self._send(tick_s)
+        elif self._submit(tick_s, self._accepted) and not self._pending_inputs:
             # A pending draft keeps the error that explains why it was
             # not sent; otherwise a good tick clears a stale one.
             self._set_input_error("")
 
+    def _send(self, dt: float) -> bool:
+        # Step on the accepted inputs with the staged edits applied.
+        values = self._accepted | self._pending_inputs
+        if not self._submit(dt, values, self._emergency_override_pending):
+            return False
+        self._emergency_override_pending = False
+        self._pending_inputs.clear()
+        self._set_input_error("")
+        self.inputsChanged.emit()
+        return True
+
     def _submit(
-        self, values: dict[str, Any], clear_passenger_brake: bool = False,
+        self, dt: float, values: dict[str, Any],
+        clear_passenger_brake: bool = False,
     ) -> bool:
         """Step the module once on ``values``; report a rejection."""
         try:
             self._link.step(
-                self._dt, self._build_inputs(values),
+                dt, self._build_inputs(values),
                 clear_passenger_brake=clear_passenger_brake,
             )
         except (ValueError, InvalidTimeStepError, LinkError) as exc:

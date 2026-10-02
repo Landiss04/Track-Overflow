@@ -15,7 +15,10 @@ The two pages are **independent windows, each its own process**:
   `step(dt, TrainModelInputs) -> TrainModelOutputs`, over a local socket
   (`train_model/link.py`), and reads back only `TrainModelOutputs`. Three
   test-only commands ride alongside: set a failure, clear the passenger brake
-  latch, and reset.
+  latch, and reset. Its clock is the shared simulation clock
+  (`utils/system_clock.py`): each step is one clock tick, dt is the clock's
+  fixed tick length, and the **1x / 10x** speed toggle changes only how often
+  ticks happen.
 
 Once the system is integrated, the central harness calls the same
 `TrainModelState.step` the link calls; the test UI and the link are removed

@@ -164,6 +164,30 @@ ScrollView {
                     }
                 }
 
+                Text {
+                    Layout.fillWidth: true
+                    Layout.topMargin: theme.space_2
+                    text: qsTr("Speed")
+                    color: theme.text_secondary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_small
+                    font.weight: theme.weight_regular
+                }
+
+                // One segment per speed the shared clock accepts. Speed
+                // changes how often ticks happen, never dt.
+                SegmentedToggle {
+                    objectName: "speedToggle"
+                    Layout.fillWidth: true
+                    options: harness.speeds.map(function (speed) {
+                        return qsTr("%1x").arg(speed);
+                    })
+                    currentIndex: harness.speeds.indexOf(harness.speed)
+                    onActivated: function (index) {
+                        harness.setSpeed(harness.speeds[index]);
+                    }
+                }
+
                 AppButton {
                     Layout.fillWidth: true
                     Layout.topMargin: theme.space_2
