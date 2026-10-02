@@ -33,3 +33,11 @@ One line per promoted or denied proposal, appended at promotion time. See
 | 2026-10-02 | feature/TrackCtrl-UI-Implementation | 20261002-1512-ui-style-guide-badge-height.md | ui/style-guide.md | promoted |
 | 2026-10-02 | feature/TrackCtrl-UI-Implementation | 20260930-0012-ui-style-guide.md | ui/style-guide.md | denied — withdrawn; superseded by 20261002-1512-ui-style-guide-badge-height.md |
 | 2026-10-02 | feature/TrackCtrl-UI-Implementation | 20260930-0012-identifiers.md | conventions/identifiers.md | denied — withdrawn; superseded by token-name resolution 7127a96 |
+| 2026-10-02 | Train-model-Interface | 20260930-2235-D009-train-model-control-boundary.md | decisions/D009-train-model-control-boundary.md | promoted |
+| 2026-10-02 | Train-model-Interface | 20261001-0145-door-command.md | signals/door-command.md | promoted |
+| 2026-10-02 | Train-model-Interface | 20261001-0145-passengers-boarded.md | signals/passengers-boarded.md | promoted |
+| 2026-10-02 | Train-model-Interface | 20261002-1640-passenger-emergency-brake-release.md | arbitration/passenger-emergency-brake.md | promoted |
+| 2026-10-02 | Train-model-Interface | 20261002-2031-traction-cut-under-braking.md | arbitration/traction-cut-under-braking.md | promoted |
+| 2026-10-02 | Train-model-Interface | 20261001-1922-D010-train-model-test-ui-boundary.md | decisions/D010-train-model-test-ui-boundary.md | promoted |
+| 2026-10-02 | Train-model-Interface | 20261001-1922-train-model-separate-ui-processes.md | modules/train-model.md | promoted |
+| 2026-10-02 | Train-model-Interface | 20261001-1942-D011-passenger-emergency-brake-button.md | decisions/D011-passenger-emergency-brake-button.md | promoted |
