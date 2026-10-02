@@ -20,9 +20,9 @@ The force and resistance parameters still need calibration against the
 Blackpool FLEXITY 2 datasheet. Its 0.5 m/s² figure is an average acceleration
 from 0 to 70 km/h at two-thirds load; using it to derive a maximum traction
 force does not establish that the simulated acceleration curve matches the
-vehicle. The brake forces (61,720 N service, 140,413 N emergency) are the
-instructor's values from a 51,433 kg load; the traction limit is still derived
-from the 52,312 kg reference mass. Rolling resistance is assumed, aerodynamic drag is absent, and
+vehicle. All three forces derive from a 51,433 kg reference mass, 2/3 of the
+datasheet load between 40.9 t empty and 56.7 t loaded: 25,717 N traction,
+61,720 N service and 140,413 N emergency, matching the instructor's values. Rolling resistance is assumed, aerodynamic drag is absent, and
 reference mass excludes crew while operating mass includes crew. Validate
 acceleration, braking and grade performance across loads before treating
 the model as a calibrated representation of the vehicle.

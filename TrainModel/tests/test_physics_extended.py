@@ -270,18 +270,20 @@ class Recorder:
 @pytest.mark.parametrize("cfg", [
     TrainConfig(),
     TrainConfig(m_empty_kg=30_000.0),
-    TrainConfig(capacity=150),
-    TrainConfig(passenger_mass_kg=80.0),
-], ids=["default", "lighter", "smaller", "heavier-people"])
+    TrainConfig(m_loaded_kg=60_000.0),
+    TrainConfig(ref_load_fraction=0.5),
+], ids=["default", "lighter", "heavier-load", "half-load"])
 def test_derived_forces_follow_primitives(cfg: TrainConfig) -> None:
-    """Check traction derives from mass; brake forces are given."""
-    n_ref = round(cfg.capacity * cfg.ref_load_fraction)
-    m_ref = cfg.m_empty_kg + n_ref * cfg.passenger_mass_kg
+    """Check the reference mass and all forces recompute from primitives."""
+    m_ref = cfg.m_empty_kg + cfg.ref_load_fraction * (
+        cfg.m_loaded_kg - cfg.m_empty_kg)
     assert cfg.m_ref_kg == pytest.approx(m_ref, rel=1e-12)
     assert cfg.f_max_n == pytest.approx(
         m_ref * cfg.accel_ref_mps2, rel=1e-12)
-    assert cfg.f_service_n == 61_720.0
-    assert cfg.f_emergency_n == 140_413.0
+    assert cfg.f_service_n == pytest.approx(
+        m_ref * cfg.decel_service_mps2, rel=1e-12)
+    assert cfg.f_emergency_n == pytest.approx(
+        m_ref * cfg.decel_emergency_mps2, rel=1e-12)
 
 
 def test_passenger_mass_is_170_lb() -> None:
@@ -311,13 +313,21 @@ def test_traction_gives_rated_rate_at_reference_mass() -> None:
     assert CFG.f_max_n / CFG.m_ref_kg == pytest.approx(0.5, rel=1e-12)
 
 
-@pytest.mark.parametrize(("force", "rate"), [
-    ("f_service_n", 1.2),
-    ("f_emergency_n", 2.73),
+@pytest.mark.parametrize(("force", "expected_n"), [
+    ("f_max_n", 25_717.0),
+    ("f_service_n", 61_720.0),
+    ("f_emergency_n", 140_413.0),
 ])
-def test_brake_forces_match_instructor_load(force: str, rate: float) -> None:
-    """Check each brake force is 51,433 kg times its rated rate."""
-    assert getattr(CFG, force) == pytest.approx(51_433 * rate, abs=1.0)
+def test_forces_match_instructor_values(
+        force: str, expected_n: float) -> None:
+    """Check each force is the instructor's 51,433 kg figure, to 1 N."""
+    assert getattr(CFG, force) == pytest.approx(expected_n, abs=1.0)
+
+
+def test_reference_mass_is_two_thirds_of_datasheet_load() -> None:
+    """Check m_ref = 40.9 t + 2/3 (56.7 t - 40.9 t) = 51,433 kg."""
+    assert CFG.m_ref_kg == pytest.approx(
+        40_900 + 2 / 3 * (56_700 - 40_900), rel=1e-12)
 
 
 def test_base_speed_where_power_limit_takes_over() -> None:
@@ -356,11 +366,11 @@ def test_negative_boarding_is_ignored() -> None:
 
 
 def test_crew_in_operating_mass_not_in_reference_mass() -> None:
-    """Check crew count toward operating mass but not reference mass."""
-    model = fresh(REF_LOAD)
-    crew_kg = CFG.n_crew * CFG.passenger_mass_kg
-    assert model.snapshot().mass_kg - CFG.m_ref_kg == pytest.approx(
-        crew_kg, rel=1e-9)
+    """Check crew and passenger mass move operating mass, not m_ref."""
+    other = TrainConfig(n_crew=0, passenger_mass_kg=60.0)
+    assert other.m_ref_kg == CFG.m_ref_kg
+    assert fresh(REF_LOAD).snapshot().mass_kg == pytest.approx(
+        CFG.m_empty_kg + (CFG.n_crew + REF_LOAD) * CFG.passenger_mass_kg)
 
 
 # --------------------------------------------------------------------------- #
