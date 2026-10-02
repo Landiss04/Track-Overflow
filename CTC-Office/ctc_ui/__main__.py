@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QFont, QGuiApplication
+from PySide6.QtGui import QFont, QGuiApplication, QWindow
 from PySide6.QtQml import QQmlApplicationEngine
 
 # The design tokens and window scaling are shared by every module's UI,
@@ -23,7 +24,9 @@ from ui.app_icon import install_app_icon  # noqa: E402
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
+from ctc_ui.clock_link import ClockLinkServer  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
+from ctc_ui.sim_clock import SimulationClockBridge  # noqa: E402
 from ctc_ui.track_map import TrackMapModel  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
@@ -57,16 +60,25 @@ def main() -> int:
     ctc = CtcHost()
     ctc.start()
     context.setContextProperty("ctc", ctc)
+    # The one simulation clock, driven in real time. Parented to the app
+    # so it lives as long as the event loop.
+    sim_clock = SimulationClockBridge(parent=app)
+    context.setContextProperty("simClock", sim_clock)
+    # Lets the test UI, in its own process, control the same clock. The
+    # CTC runs normally if the link cannot start.
+    clock_link = ClockLinkServer(sim_clock, parent=app)
+    clock_link.listen()
 
     engine.load(QUrl.fromLocalFile(str(_MAIN_QML)))
     if not engine.rootObjects():
         print("Failed to load QML views.", file=sys.stderr)
         return 1
 
-    # Keep a reference: the lock's window procedure must outlive the
-    # window, or Windows calls into freed memory.
+    # The root of a ScaledWindow is always a window. Keep a reference:
+    # the lock's window procedure must outlive the window, or Windows
+    # calls into freed memory.
     window_scaling = install_window_scaling(  # noqa: F841
-        engine.rootObjects()[0])
+        cast(QWindow, engine.rootObjects()[0]))
 
     exit_code = app.exec()
     # Shut down in dependency order: close the test UI link, then tear

@@ -19,9 +19,6 @@ ScaledWindow {
     // closed | open | docked
     property string occupancyState: "closed"
     property string selectedTrainId: ""
-    // Stand-in for the shared simulation clock's paused state until the
-    // clock is wired in; like the clock, the window starts paused.
-    property bool simulationPaused: true
     // The TrackMapModel from __main__.py's `trackMap` context property,
     // named apart from TrackViewPanel.trackMap so the binding cannot
     // resolve to the panel's own property.
@@ -54,9 +51,13 @@ ScaledWindow {
                 ctc.setMaintenanceMode(index === 2);
             }
             onOccupancyClicked: window.occupancyState = "open"
-            paused: window.simulationPaused
-            onPauseRequested: window.simulationPaused = true
-            onResumeRequested: window.simulationPaused = false
+            // simClock is the shared simulation clock from __main__.py.
+            clock: simClock.timeText
+            paused: simClock.paused
+            speed: simClock.speed
+            onPauseRequested: simClock.pause()
+            onResumeRequested: simClock.resume()
+            onSpeedRequested: function (speed) { simClock.setSpeed(speed); }
         }
 
         RowLayout {

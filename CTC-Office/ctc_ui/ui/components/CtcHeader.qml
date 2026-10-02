@@ -1,6 +1,7 @@
 // Module window header, style guide 6.7. Module name at H3, the current
 // mode badge, the Train Occupancy window launcher, the operating-mode
-// toggle, and the simulation clock in mono at 13 px muted.
+// toggle, and the simulation clock in mono at 13 px muted with its
+// Run / Pause and 1× / 10× speed controls.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -13,18 +14,18 @@ Rectangle {
     property var modes: []
     property int modeIndex: 0
     property string clock: "--:--:--"
-    // Simulation speed badge text, e.g. "10× speed"; hidden if empty.
-    property string speedLabel: ""
-    property bool speedElevated: false
-    // Simulation clock state. The shared clock starts paused.
+    // Simulation clock state. The shared clock starts paused at 1×.
     property bool paused: true
+    property int speed: 1
     property bool occupancyOpen: false
 
     signal modeActivated(int index)
     signal occupancyClicked()
-    // Requests for the shared simulation clock's pause() / resume().
+    // Requests for the shared simulation clock's pause() / resume() /
+    // setSpeed().
     signal pauseRequested()
     signal resumeRequested()
+    signal speedRequested(int speed)
 
     readonly property string modeName: modes.length > modeIndex
         ? modes[modeIndex] : ""
@@ -115,66 +116,13 @@ Rectangle {
             color: theme.border
         }
 
-        ColumnLayout {
-            spacing: theme.space_1
-
-            FieldLabel { text: qsTr("SIMULATION CLOCK") }
-
-            RowLayout {
-                Layout.preferredHeight: theme.control_h_md
-                spacing: theme.space_2
-
-                StatusBadge {
-                    label: root.speedLabel
-                    variant: root.speedElevated ? "warning" : "idle"
-                    visible: root.speedLabel !== ""
-                }
-
-                MonoText {
-                    text: root.clock
-                    color: theme.text_muted
-                }
-
-                // Always shown, and both controls are sized to their wider
-                // label, so the header does not shift when toggled.
-                StatusBadge {
-                    Layout.preferredWidth: Math.max(
-                        pausedBadgeSize.implicitWidth,
-                        runningBadgeSize.implicitWidth)
-                    label: root.paused ? qsTr("Paused") : qsTr("Running")
-                    variant: root.paused ? "warning" : "ok"
-                }
-
-                AppButton {
-                    Layout.preferredWidth: Math.max(
-                        runButtonSize.implicitWidth,
-                        pauseButtonSize.implicitWidth)
-                    variant: "secondary"
-                    size: "small"
-                    text: root.paused ? qsTr("Run") : qsTr("Pause")
-                    Accessible.name: root.paused
-                        ? qsTr("Run the simulation")
-                        : qsTr("Pause the simulation")
-                    onClicked: root.paused ? root.resumeRequested()
-                        : root.pauseRequested()
-                }
-            }
+        ClockControls {
+            time: root.clock
+            paused: root.paused
+            speed: root.speed
+            onPauseRequested: root.pauseRequested()
+            onResumeRequested: root.resumeRequested()
+            onSpeedRequested: function (speed) { root.speedRequested(speed); }
         }
-    }
-
-    // Unshown copies that measure each label for the fixed widths above.
-    StatusBadge { id: pausedBadgeSize; visible: false; label: qsTr("Paused") }
-    StatusBadge { id: runningBadgeSize; visible: false; label: qsTr("Running") }
-    AppButton {
-        id: runButtonSize
-        visible: false
-        size: "small"
-        text: qsTr("Run")
-    }
-    AppButton {
-        id: pauseButtonSize
-        visible: false
-        size: "small"
-        text: qsTr("Pause")
     }
 }

@@ -16,6 +16,11 @@ It connects to the running CTC Office window over a local socket
 (``ctc.socket_link``), so both windows act on the one live CTC module;
 start the CTC Office first. With ``--standalone`` it instead runs its
 own CTC module in this process (``ctc.link.LocalLink``).
+
+The simulation clock is the exception: it belongs to the running CTC
+Office (``python -m ctc_ui``), and this UI pauses, resumes, and sets its
+speed over the clock link (``ctc_ui/clock_link.py``). Both windows show
+the same clock.
 """
 
 from __future__ import annotations
@@ -41,6 +46,7 @@ from ui.theme import build_theme  # noqa: E402
 
 from ctc.link import LocalLink  # noqa: E402
 from ctc.socket_link import SocketLink  # noqa: E402
+from ctc_ui.clock_link import ClockLinkClient  # noqa: E402
 from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 
 _TEST_MAIN_QML = (
@@ -72,6 +78,9 @@ def main() -> int:
             else SocketLink())
     harness = CtcTestHarness(link)
     context.setContextProperty("harness", harness)
+    # Connects to the running CTC Office, retrying until one is up.
+    ctc_clock = ClockLinkClient(parent=app)
+    context.setContextProperty("ctcClock", ctc_clock)
 
     engine.load(QUrl.fromLocalFile(str(_TEST_MAIN_QML)))
     if not engine.rootObjects():

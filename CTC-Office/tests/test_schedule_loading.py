@@ -19,7 +19,7 @@ from ctc.schedule import ScheduleError, load_schedule, parse_schedule  # noqa
 from ctc.wire import snapshot_from_wire, to_wire  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
 
-SCHEDULE = Path(__file__).resolve().parents[2] / "Utils" / "schedule_v4.json"
+SCHEDULE = Path(__file__).resolve().parents[2] / "utils" / "schedule_v4.json"
 
 
 class ScheduleLoadingTest(unittest.TestCase):

@@ -1,7 +1,7 @@
 """Train schedules for the CTC Office, read from JSON.
 
 The format is the one ``tools/schedule_to_json.py`` writes
-(``Utils/schedule_v4.json``): per line, per train, the ordered timed
+(``utils/schedule_v4.json``): per line, per train, the ordered timed
 stops, each with a block ID, an optional station name and an arrival
 time in seconds after the schedule start. IDs are strings.
 """

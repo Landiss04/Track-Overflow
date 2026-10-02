@@ -4,10 +4,10 @@ Shared by every module, so all windows carry the same icon. Call
 :func:`install_app_icon` once, right after creating the
 ``QGuiApplication`` and setting its name, before any window is shown.
 
-The logo is ``Utils/Track_Overlow_Logo.png`` at the repository root.
+The logo is ``utils/Track_Overlow_Logo.png`` at the repository root.
 The packaged binary must bundle it at the same relative path, for
 example with PyInstaller's ``--add-data`` option:
-``"Utils/Track_Overlow_Logo.png:Utils"``.
+``"utils/Track_Overlow_Logo.png:utils"``.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pathlib import Path
 from PySide6.QtGui import QGuiApplication, QIcon
 
 LOGO_PATH = (
-    Path(__file__).resolve().parents[1] / "Utils" / "Track_Overlow_Logo.png"
+    Path(__file__).resolve().parents[1] / "utils" / "Track_Overlow_Logo.png"
 )
 
 # Prefix of the Windows taskbar identity. The application name is

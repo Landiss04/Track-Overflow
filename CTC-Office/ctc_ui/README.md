@@ -43,8 +43,21 @@ in-process module instead:
 python ctc_ui/test_ui.py --standalone
 ```
 
+The **simulation clock** also belongs to the running CTC Office window,
+over its own link, and the test UI's title bar has the same clock
+controls as the CTC header. Run / Pause and 1× / 10× in either window
+control the one clock, and both windows show it; see [Clock link](#clock-link). With no CTC Office running, the test UI
+shows `--:--:--`, greys out its clock controls, and keeps retrying.
+
 ## What is interactive
 
+With no backend, only window-level UI state works:
+
+- The **Simulation clock** in the header is live. It starts paused at
+  05:00:00 (24-hour). **Run** / **Pause** start and hold it, and the
+  **1× / 10×** toggle sets its speed: at 1× one simulated second lasts one
+  real second. The CTC owns the one shared clock until the central harness
+  takes it over.
 - The **Operating mode** toggle switches the right-hand column between the
   Automatic, Manual, and Maintenance views. Maintenance also sets the
   CTC's `maintenance_mode` output, which the test UI shows.
@@ -52,7 +65,7 @@ python ctc_ui/test_ui.py --standalone
   bottom" or the minimize button docks it over the track view.
   Escape, the close button, or clicking the scrim closes it.
 - **Load schedule** (Automatic view) loads a schedule JSON in the
-  `Utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). Its
+  `utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). Its
   runs appear under **Next departures** as Queued, with due times counted
   from the schedule start. They stay queued until a scheduling algorithm
   exists. A malformed file shows an error and keeps the current schedule.
@@ -73,13 +86,16 @@ python ctc_ui/test_ui.py --standalone
 | Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |
 | Selects | `model` on each `SelectField`, via the panel's `*Options` properties. |
 | Test harness | `ui/test/TestHarnessView.qml` in the test UI process. `inputs` / `outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once linked to a running CTC. |
-| Header | `CtcHeader.clock`, `.speedLabel` (e.g. `10× speed`), `.operatorName`. |
+| Header | `CtcHeader.clock`, `.paused` and `.speed` are bound to `simClock` (see below); `.operatorName`. |
+| Simulation clock | `simClock` context property, a `SimulationClockBridge` (`sim_clock.py`) that owns the shared `utils.system_clock.SystemClock` and drives it in real time. Read `timeText`, `paused`, `speed`; call `pause()`, `resume()`, `setSpeed(1 or 10)`. Use `simClock.clock` from Python to add tick listeners. |
 
 ## Layout
 
 ```
 __main__.py             CTC Office entry point: builds theme, loads QML
 test_ui.py              test UI entry point (separate process)
+sim_clock.py            SimulationClockBridge: the shared clock for QML
+clock_link.py           clock link between the CTC and the test UI
 ui/Main.qml             window, fixed 1440×900 canvas, mode + window state
 ui/views/*.qml          Automatic / Manual / Maintenance right-hand columns
 ui/panels/*.qml         track view, dispatch, schedule, throughput,
@@ -103,6 +119,7 @@ Do not copy shared components into this module; change them in `ui/`.
 | Component | Why it is CTC-only |
 | --- | --- |
 | `CtcHeader` | Window buttons, mode toggle and clock; shared `ModuleHeader` has navigation tabs instead |
+| `ClockControls` | Simulation clock readout, Run / Pause and 1× / 10×; shared by `CtcHeader` and the test UI |
 
 #### Moved to the shared library
 
@@ -144,6 +161,27 @@ the context-property pattern shared with the Train Model UI.
   test UI connects with `SocketLink`, or uses `ctc/link.py`'s `LocalLink`
   with `--standalone`. At integration the central harness calls the
   module directly and the links are not used.
+
+## Clock link
+
+`clock_link.py` lets the test UI, in its own process, control the CTC
+Office's simulation clock. The CTC process listens with a `QLocalServer`
+(`ClockLinkServer`) and the test UI connects with a `QLocalSocket`
+(`ClockLinkClient`). That is a named pipe on Windows and a Unix socket
+elsewhere, never a network connection. Messages are JSON, one per line:
+
+| Direction | Message |
+| --- | --- |
+| CTC → test UI | `{"type": "clock", "time": "05:00:03", "paused": false, "speed": 1}`, on connect and whenever the shown time, pause state or speed changes |
+| Test UI → CTC | `{"type": "pause"}`, `{"type": "resume"}`, `{"type": "set_speed", "speed": 10}` |
+
+Anything malformed, of an unknown type, or with a speed other than 1 or 10
+is ignored. The CTC Office runs normally whether or not a test UI is
+connected, and if the link cannot start (for example, a second CTC Office
+is already running) it prints a warning and carries on.
+
+The module's inputs and outputs use the same approach on a separate
+socket; see [CTC module and link](#ctc-module-and-link).
 
 ## Design notes
 
