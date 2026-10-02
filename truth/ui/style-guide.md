@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on `truth` (`e315da5`; the branch was formerly named truth-setup); relocation asserted by Kevin 2026-09-27; PySide6 per `documents/srs-filled.md` §3.1.3 REQ-INTF-014 (development, `c058082`); QML asserted by Kevin 2026-09-29; QML-specific values and the Idle badge background follow `UI-icon-standardization` (`3dc7a4d`) at Kevin's direction 2026-09-29; dark theme and preview removal and the Train Controller service-brake exemption asserted by Kevin 2026-09-29
+**Provenance:** Team 3, `documents/UI_Style_Guide.md` v1.2 on development (`c0580825e7b9f72f289cecdc1618b6136557d44b`); D002 and v1.3 on `truth` (`e315da5`; the branch was formerly named truth-setup); relocation asserted by Kevin 2026-09-27; PySide6 per `documents/srs-filled.md` §3.1.3 REQ-INTF-014 (development, `c058082`); QML asserted by Kevin 2026-09-29; QML-specific values and the Idle badge background follow `UI-icon-standardization` (`3dc7a4d`) at Kevin's direction 2026-09-29; dark theme and preview removal and the Train Controller service-brake exemption asserted by Kevin 2026-09-29; status badge height asserted by Kevin 2026-10-02
 **Aliases:** UI Style Guide, UI_Style_Guide.md
-**Last updated:** 2026-09-29
+**Last updated:** 2026-10-02
 
 UI style guide for the ECE1140 Train Management System (University of Pittsburgh).
 
@@ -253,8 +253,8 @@ Control heights: `--control-h-sm` 28 px, `--control-h-md` 36 px (default),
 
 ### 6.3 Status Badges
 
-Pill shape, 12 px uppercase bold text, 1 px border in the semantic color, 7 px dot, background
-the matching `-bg` token.
+Pill shape, height `--control-h-sm` (28 px), 12 px uppercase bold text, 1 px border in the
+semantic color, 7 px dot, background the matching `-bg` token.
 
 | Badge | Color token | Example labels |
 |-------|-------------|----------------|
@@ -265,6 +265,10 @@ the matching `-bg` token.
 | Idle | `--text-muted` | Offline, Yard, Unassigned |
 
 Idle has no `-bg` token of its own, so its background is `--bg-sunken`.
+
+The height is fixed, not a minimum: every status badge in every module is 28 px tall, so that
+badges sitting in adjacent panels, table rows and headers align. A module **shall not** set its
+own badge height.
 
 The text label is required. A bare colored dot is not an acceptable status indicator.
 
@@ -358,6 +362,8 @@ an automatic safety function.
   in pixels, and `--shadow-1` / `--shadow-2` give way to borders, following
   `UI-icon-standardization` (`3dc7a4d`).
 - The Train Controller service brake no longer requires confirmation (Kevin 2026-09-29).
+- Status badge height: previously unstated, with 24 px and 28 px both in circulation in code;
+  now fixed at 28 px (`--control-h-sm`) for every module (Kevin 2026-10-02).
 
 ## Conflict
 
