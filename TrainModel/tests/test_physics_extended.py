@@ -752,7 +752,7 @@ def test_emergency_brake_stops_full_train_on_downgrade() -> None:
 
 @pytest.mark.parametrize("kind", ["service", "emergency"])
 def test_traction_adds_to_braking_when_both_commanded(kind: str) -> None:
-    """Check, as found, that traction is not cut while braking."""
+    """Check traction is not cut while braking: the controller decides."""
     model = fresh()
     launch(model, 10.0)
     model.step(DT_S, brake_inputs(kind, power_w=CFG.p_max_w))
