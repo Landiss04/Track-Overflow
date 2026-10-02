@@ -20,7 +20,6 @@ Rectangle {
 
     signal modeActivated(int index)
     signal occupancyClicked()
-    signal testHarnessClicked()
 
     readonly property string modeName: modes.length > modeIndex
         ? modes[modeIndex] : ""
@@ -89,12 +88,6 @@ Rectangle {
                     Accessible.description: root.occupancyOpen
                         ? qsTr("Window is open") : qsTr("Window is closed")
                     onClicked: root.occupancyClicked()
-                }
-
-                AppButton {
-                    variant: "secondary"
-                    text: qsTr("Test harness")
-                    onClicked: root.testHarnessClicked()
                 }
             }
         }
