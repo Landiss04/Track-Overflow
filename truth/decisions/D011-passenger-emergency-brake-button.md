@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D011-passenger-emergency-brake-button.md
-**Action:** create
-**Proposed by:** Claude Code on Train-model-Interface-ui-split
-**Provenance:** asserted by Kevin Schillinger 2026-10-01 in a Claude Code session: "when the emergency break is activated the emergency break button should be disabled. and the text should no longer change to release emergency break just keep it as apply emergency break"; and the button must update when the Train Controller commands the emergency brake (from the test UI)
-
----
-
 # D011-passenger-emergency-brake-button
 
 **Status:** current

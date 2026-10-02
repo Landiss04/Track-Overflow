@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Train Model
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.8 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30
+**Provenance:** `Train_Model_Backend_Design.pdf` §5.8 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30; release by the Train Controller asserted by Kevin Schillinger 2026-10-02
 **Aliases:** passenger e-brake, passenger emergency brake pull, emergency brake ownership
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-02
 
 ## Definition
 
@@ -13,8 +13,17 @@ apply the emergency brake force. The Train Model reports Emergency Brake State t
 Train Controller, and that state is active when either the Train Controller's emergency
 brake command or a passenger pull is active, unless the brakes have failed.
 
+The Train Controller releases the emergency brake. The Train Model UI offers no
+release control (D011).
+
 ## Notes
 
 - Brake failure disables the passenger emergency brake along with the others. See
   `signals/failure-status.md`.
-- The source leaves open who releases the brake once it is pulled.
+- This entry does not settle the signal or mechanism by which the Train Controller
+  releases a passenger pull.
+
+## Supersedes
+
+- Release: previously left open by the source; now the Train Controller (Kevin
+  Schillinger 2026-10-02).

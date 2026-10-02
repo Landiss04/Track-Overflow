@@ -1,10 +1,3 @@
-**Target:** truth/signals/door-command.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.6 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; door interlock asserted by Kevin Schillinger 2026-10-01 in this chat ("on the doors add an interlock. the doors can only open at 0 mph"); not in the repository. Replaces the inbox proposal `20260930-2059-door-command.md`, which left the interlock open.
-
----
-
 # door-command
 
 **Status:** current

@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin Schillinger
-**Provenance:** ownership asserted by Kevin Schillinger 2026-09-30; `Train_Model_Backend_Design.pdf` §1, §5.1 to §5.95 (Locked) and Constants table; Train Model `interface.py` boundary contract as amended by Kevin 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30
+**Provenance:** ownership asserted by Kevin Schillinger 2026-09-30; `Train_Model_Backend_Design.pdf` §1, §5.1 to §5.95 (Locked) and Constants table; Train Model `interface.py` boundary contract as amended by Kevin 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30; separate Train Model and test UI processes, and failure injection from the test UI, asserted by Kevin Schillinger 2026-10-01 (D010)
 **Aliases:** Train Model, train model module
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-01
 
 ## Purpose
 
@@ -17,10 +17,17 @@ data into the train's motion and reported state.
 - `step(dt, inputs) -> outputs`: advance one tick. dt is fixed; see D006.
 - `snapshot() -> snapshot`: the full observable state, for the Train Model UI. It has
   no side effects.
-- `set_failures(failures)`: Murphy's fault injection, from the Train Model UI.
+- `set_failures(failures)`: Murphy's fault injection, from the Train Model UI or, as a
+  test-only command, the test UI.
 - `pull_passenger_emergency_brake()`: a passenger pull, from the Train Model UI.
 
 The last two are UI actions, not cross-module inputs.
+
+## User interfaces
+
+- The Train Model UI and the test UI are independent windows, each its own process.
+  The test UI drives the module only through its interface and is removed at
+  integration (D010).
 
 ## Owns
 
@@ -76,8 +83,8 @@ configurable.
 
 ## Failure modes
 
-- Three independent failures, all injected by Murphy from the Train Model UI: engine,
-  signal pickup, and brake. Any combination is valid.
+- Three independent failures, all injected by Murphy from the Train Model UI or the
+  test UI: engine, signal pickup, and brake. Any combination is valid.
 - Engine failure zeroes traction. Signal pickup failure affects the Track Signal only.
   Brake failure disables both the service and the emergency brake, including a
   passenger pull.
@@ -95,6 +102,8 @@ configurable.
 
 ## Supersedes
 
+- UI layout: previously one window with buttons switching between the Train Model
+  and test views; now two independent processes (D010, 2026-10-01).
 - Previously a placeholder that asserted nothing, with owner unassigned. Now populated
   from the backend design with Kevin Schillinger as owner (2026-09-30). The placeholder
   listed a "tunnel light controller" under this module; tunnel lighting belongs to the

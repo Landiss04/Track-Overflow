@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/traction-cut-under-braking.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** asserted by Kevin Schillinger 2026-10-02 in this chat ("the train controller is responsible for this decision"), declining a traction cut in the Train Model; consistent with the inbox proposal `20260930-2235-train-model-control-boundary.md`
-
----
-
 # traction-cut-under-braking
 
 **Status:** current

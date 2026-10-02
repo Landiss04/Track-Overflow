@@ -1,10 +1,3 @@
-**Target:** truth/signals/passengers-boarded.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.2 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; boarding restricted to a station with a door open, asserted by Kevin Schillinger 2026-10-01 in this chat ("passengers can only board at a station w door open"); not in the repository. Replaces the inbox proposal `20260930-2059-passengers-boarded.md`, which did not restrict when boarding can happen.
-
----
-
 # passengers-boarded
 
 **Status:** current

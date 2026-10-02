@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D010-train-model-test-ui-boundary.md
-**Action:** create
-**Proposed by:** Claude Code on Train-model-Interface-ui-split
-**Provenance:** asserted by Kevin Schillinger 2026-10-01 in a Claude Code session: requirement change splitting the Train Model UI and test UI into separate processes, "the harness should follow the interface and be drop in compatible for the inputs from both the track model and the train controller ... once the system is integrated the test ui should be able to be removed and the train model wired into the system without any rework"; test-only commands, outputs-only readback, immediate mirroring of Train Model UI actions and the derived run state chosen by Kevin Schillinger in the same session
-
----
-
 # D010-train-model-test-ui-boundary
 
 **Status:** current
