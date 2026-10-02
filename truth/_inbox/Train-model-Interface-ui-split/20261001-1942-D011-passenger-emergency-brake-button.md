@@ -25,7 +25,4 @@ Controller commanded the emergency brake.
 - The button always reads "Apply emergency brake". It never offers a release.
 - It is disabled while the emergency brake is activated, whatever activated it: a
   passenger pull or the Train Controller's emergency brake command.
-
-## Consequences
-
-- Who releases a passenger pull stays open; this decision does not settle it.
+- The Train Controllere releases the emegency break 
