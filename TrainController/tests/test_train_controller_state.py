@@ -216,6 +216,68 @@ class DoorTests(unittest.TestCase):
         self.assertEqual(self.state.snapshot["current_speed_mph"], 0)
 
 
+class AutomaticStationStopTests(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.state = TrainControllerState()
+        self.state.setMode("Automatic")
+
+    def _run_until_dwell(self) -> int:
+        for second in range(300):
+            self.state.step(1.0)
+            if self.state.is_dwelling:
+                return second
+        self.fail("train never started a station dwell")
+
+    def test_stops_at_station_and_opens_platform_doors(self) -> None:
+        self._run_until_dwell()
+        snap = self.state.snapshot
+        self.assertEqual(snap["current_block"], "65")
+        self.assertEqual(snap["current_speed_mph"], 0)
+        self.assertTrue(snap["right_door"])
+        self.assertFalse(snap["left_door"])
+        self.assertEqual(snap["dwell_left_s"], 45)
+
+    def test_dwell_is_45_s_including_door_close(self) -> None:
+        self._run_until_dwell()
+        _run(self.state, 39)
+        self.assertTrue(self.state.right_door_open)
+        _run(self.state, 2)
+        self.assertFalse(self.state.right_door_open)
+        self.assertEqual(self.state.current_speed_mps, 0)
+        _run(self.state, 4)
+        self.assertFalse(self.state.is_dwelling)
+        _run(self.state, 2)
+        self.assertGreater(self.state.current_speed_mps, 0)
+
+    def test_departs_and_stops_at_next_station(self) -> None:
+        self._run_until_dwell()
+        _run(self.state, 46)
+        self._run_until_dwell()
+        self.assertEqual(self.state.snapshot["current_block"], "73")
+
+    def test_driver_cannot_operate_doors_in_automatic(self) -> None:
+        self._run_until_dwell()
+        self.state.toggleRightDoor()
+        self.assertTrue(self.state.right_door_open)
+        snap = self.state.snapshot
+        self.assertFalse(snap["can_open_left"])
+        self.assertFalse(snap["can_open_right"])
+
+    def test_switching_to_manual_ends_the_dwell(self) -> None:
+        self._run_until_dwell()
+        self.state.setMode("Manual")
+        self.assertFalse(self.state.is_dwelling)
+        self.state.toggleRightDoor()
+        self.assertFalse(self.state.right_door_open)
+
+    def test_manual_mode_does_not_stop_at_stations(self) -> None:
+        manual = TrainControllerState()
+        _run(manual, 60)
+        self.assertFalse(manual.is_dwelling)
+        self.assertGreater(manual.current_speed_mps, 0)
+
+
 class ComfortTests(unittest.TestCase):
 
     def setUp(self) -> None:

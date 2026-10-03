@@ -48,6 +48,13 @@ EASE_ACCEL_MPS2 = 0.5
 CABIN_TEMP_DRIFT_F_PER_S = 0.1
 STANDSTILL_MPS = 0.01
 
+# Station stops in Automatic mode. The dwell is fixed by truth D007 and
+# includes the time to open and close the doors, so the doors close
+# DOOR_CLOSE_LEAD_S before departure. The train stops mid-platform.
+STATION_DWELL_S = 45.0
+DOOR_CLOSE_LEAD_S = 5.0
+STOP_TOLERANCE_M = 0.5
+
 TEMP_SETPOINT_MIN_F = 60
 TEMP_SETPOINT_MAX_F = 80
 ANNOUNCEMENT_DURATION_S = 5.0
@@ -158,6 +165,9 @@ class TrainControllerState(QObject):
         self.announcement = ""
         self._announcement_left_s = 0.0
 
+        self.dwell_left_s = 0.0
+        self._served_stations: set[str] = set()
+
         self.gain_step = GAIN_STEPS[0]
         self.kp_pending = 12.4
         self.ki_pending = 0.85
@@ -185,7 +195,7 @@ class TrainControllerState(QObject):
 
         if self.emergency_brake:
             decel_mps2 = EMERGENCY_DECEL_MPS2
-        elif self.service_brake or self._must_stop_for_authority(dt):
+        elif self.service_brake or self._must_stop(dt):
             decel_mps2 = SERVICE_DECEL_MPS2
         else:
             decel_mps2 = 0.0
@@ -200,13 +210,17 @@ class TrainControllerState(QObject):
                 EASE_ACCEL_MPS2 * dt,
             )
 
-        # Euler position step; the train never passes its authority.
+        # Euler position step; the train never passes its stop point
+        # (the end of authority, or a platform in Automatic mode).
+        stop_point_m = self.stop_point_m
         self.distance_travelled_m = min(
-            self.authority_end_m,
+            stop_point_m,
             self.distance_travelled_m + self.current_speed_mps * dt,
         )
-        if self.authority_left_m <= 0:
+        if stop_point_m - self.distance_travelled_m <= 0:
             self.current_speed_mps = 0.0
+
+        self._update_station_stop(dt)
 
         drift_c = CABIN_TEMP_DRIFT_F_PER_S * dt * 5 / 9
         self.cabin_temp_c = _approach(
@@ -219,12 +233,58 @@ class TrainControllerState(QObject):
 
         self.snapshotChanged.emit()
 
-    def _must_stop_for_authority(self, dt: float) -> bool:
+    def _must_stop(self, dt: float) -> bool:
         # Brake once the service-brake stopping distance, plus one tick
-        # of travel, reaches the end of the authority block.
+        # of travel, reaches the stop point.
         speed_mps = self.current_speed_mps
         braking_distance_m = speed_mps ** 2 / (2 * SERVICE_DECEL_MPS2)
-        return self.authority_left_m <= braking_distance_m + speed_mps * dt
+        distance_left_m = self.stop_point_m - self.distance_travelled_m
+        return distance_left_m <= braking_distance_m + speed_mps * dt
+
+    def _update_station_stop(self, dt: float) -> None:
+        # Automatic mode: on arriving mid-platform, open the platform-side
+        # doors and dwell; close the doors near the end of the dwell.
+        if self.is_dwelling:
+            self.dwell_left_s = max(0.0, self.dwell_left_s - dt)
+            if self.dwell_left_s <= DOOR_CLOSE_LEAD_S:
+                self.left_door_open = False
+                self.right_door_open = False
+            if self.dwell_left_s == 0:
+                self._served_stations.add(self.current_block.block_id)
+            return
+
+        index = self._next_station_stop_index()
+        if (
+            self.mode is DriveMode.AUTOMATIC
+            and index == self.current_block_index
+            and self.is_stopped
+            and not self.emergency_brake
+            and self.stop_point_m - self.distance_travelled_m
+            < STOP_TOLERANCE_M
+        ):
+            self.dwell_left_s = STATION_DWELL_S
+            side = self.route[index].platform_side
+            self.left_door_open = side in ("LEFT", "BOTH")
+            self.right_door_open = side in ("RIGHT", "BOTH")
+            self.announceAgain()
+
+    def _platform_stop_m(self, index: int) -> float:
+        block = self.route[index]
+        return self._block_starts_m[index] + block.length_m / 2
+
+    def _next_station_stop_index(self) -> int | None:
+        # The next station not yet served whose platform stop point is
+        # still ahead of (or at) the train.
+        for index in range(self.current_block_index, len(self.route)):
+            block = self.route[index]
+            if (
+                block.is_station
+                and block.block_id not in self._served_stations
+                and self._platform_stop_m(index)
+                >= self.distance_travelled_m - STOP_TOLERANCE_M
+            ):
+                return index
+        return None
 
     # ------------------------------------------------------------------
     # Derived values
@@ -239,6 +299,25 @@ class TrainControllerState(QObject):
     def any_door_open(self) -> bool:
         """Whether either side's doors are open."""
         return self.left_door_open or self.right_door_open
+
+    @property
+    def is_dwelling(self) -> bool:
+        """Whether the train is in an automatic station dwell."""
+        return self.dwell_left_s > 0
+
+    @property
+    def stop_point_m(self) -> float:
+        """Where the train must next stop along the route.
+
+        The end of the authority block, or in Automatic mode the middle
+        of the next unserved station platform, whichever comes first.
+        """
+        stop_m = self.authority_end_m
+        if self.mode is DriveMode.AUTOMATIC:
+            index = self._next_station_stop_index()
+            if index is not None:
+                stop_m = min(stop_m, self._platform_stop_m(index))
+        return stop_m
 
     @property
     def authority_left_m(self) -> float:
@@ -288,10 +367,15 @@ class TrainControllerState(QObject):
         return self.route[index].platform_side if index is not None else ""
 
     def can_open_door(self, side: str) -> bool:
-        """Whether the driver may open the doors on ``side`` now."""
+        """Whether the driver may open the doors on ``side`` now.
+
+        Only in Manual mode: in Automatic the controller opens the
+        doors itself during the station dwell.
+        """
         block = self.current_block
         return (
-            self.is_stopped
+            self.mode is DriveMode.MANUAL
+            and self.is_stopped
             and block.is_station
             and block.platform_side in (side, "BOTH")
         )
@@ -357,6 +441,8 @@ class TrainControllerState(QObject):
             ),
             "station_arrival": self._arrival_text(station_distance_m),
             "at_station": current_block.is_station,
+            "dwelling": self.is_dwelling,
+            "dwell_left_s": math.ceil(self.dwell_left_s),
             "platform_side": self.platform_side(),
             "left_door": self.left_door_open,
             "right_door": self.right_door_open,
@@ -490,7 +576,12 @@ class TrainControllerState(QObject):
 
     @Slot()
     def toggleLeftDoor(self) -> None:
-        """Open or close the left doors, if allowed."""
+        """Open or close the left doors, if allowed.
+
+        Ignored during an automatic station dwell, which runs the doors.
+        """
+        if self.is_dwelling:
+            return
         if self.left_door_open:
             self.left_door_open = False
         elif self.can_open_door("LEFT"):
@@ -499,7 +590,12 @@ class TrainControllerState(QObject):
 
     @Slot()
     def toggleRightDoor(self) -> None:
-        """Open or close the right doors, if allowed."""
+        """Open or close the right doors, if allowed.
+
+        Ignored during an automatic station dwell, which runs the doors.
+        """
+        if self.is_dwelling:
+            return
         if self.right_door_open:
             self.right_door_open = False
         elif self.can_open_door("RIGHT"):
@@ -555,8 +651,17 @@ class TrainControllerState(QObject):
 
     @Slot(str)
     def setMode(self, mode: str) -> None:
-        """Switch between Manual and Automatic speed control."""
-        self.mode = DriveMode(mode)
+        """Switch between Manual and Automatic speed control.
+
+        Leaving Automatic during a station dwell ends the dwell: the
+        station counts as served and the doors stay as they are, under
+        the driver's control.
+        """
+        new_mode = DriveMode(mode)
+        if new_mode is DriveMode.MANUAL and self.is_dwelling:
+            self._served_stations.add(self.current_block.block_id)
+            self.dwell_left_s = 0.0
+        self.mode = new_mode
         self.snapshotChanged.emit()
 
     @Slot(str)

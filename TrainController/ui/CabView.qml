@@ -24,6 +24,11 @@ RowLayout {
     }
 
     function doorHelp() {
+        if (snapshot.dwelling)
+            return "Station stop: doors close automatically "
+                + "5 s before departure.";
+        if (!manual && !(snapshot.left_door || snapshot.right_door))
+            return "Automatic: doors open by themselves at each station.";
         if (snapshot.left_door || snapshot.right_door)
             return "Doors are open. The train will not move until they close.";
         if (!snapshot.at_station)
@@ -268,7 +273,8 @@ RowLayout {
                     Layout.preferredHeight: 56
                     size: "large"
                     text: root.snapshot.left_door ? "Close left" : "Open left"
-                    enabled: root.snapshot.left_door || root.snapshot.can_open_left
+                    enabled: (root.snapshot.left_door && !root.snapshot.dwelling)
+                        || root.snapshot.can_open_left
                     onClicked: controller.toggleLeftDoor()
                 }
 
@@ -278,7 +284,8 @@ RowLayout {
                     Layout.preferredHeight: 56
                     size: "large"
                     text: root.snapshot.right_door ? "Close right" : "Open right"
-                    enabled: root.snapshot.right_door || root.snapshot.can_open_right
+                    enabled: (root.snapshot.right_door && !root.snapshot.dwelling)
+                        || root.snapshot.can_open_right
                     onClicked: controller.toggleRightDoor()
                 }
             }
@@ -305,6 +312,13 @@ RowLayout {
             Layout.fillWidth: true
             title: "Next station"
             bodyPadding: theme.space_3
+            headerItems: [
+                StatusBadge {
+                    visible: root.snapshot.dwelling
+                    variant: "info"
+                    label: "Dwell " + root.snapshot.dwell_left_s + " s"
+                }
+            ]
 
             KeyValueRow {
                 Layout.fillWidth: true

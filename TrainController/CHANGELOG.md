@@ -5,6 +5,27 @@ entry names the commits that make it up (by hash, or by subject where the
 entry was written before the hash existed), so the history can be traced in
 `git log -- TrainController/`.
 
+## 2026-10-03 — Automatic station stops; full UI click check
+
+Author: Jonathan Tsang · Branch: `Train-Ctrl_SW`
+
+Commits: "Train Controller: automatic station stops with 45 s dwell" ·
+"truth proposal: automatic station stop (D012)"
+
+- **Automatic mode stops at every station**, mid-platform, for the 45 s
+  dwell (truth D007). The platform-side doors open on arrival and close
+  5 s before departure, inside the dwell. The announcement plays on
+  arrival. A "Dwell N s" badge shows on the Next station panel.
+- **Doors by mode:** the driver operates them in Manual only. In Automatic
+  the controller runs them, and switching to Manual mid-dwell ends the
+  dwell.
+- **`tests/ui_click_check.py`:** clicks all 42 controls and checks through
+  the real QML across Manual, Automatic and Engineer modes. 0 QML warnings.
+- **Tests:** 47 unit cases (6 new).
+- **Truth proposal** `truth/_inbox/Train-Ctrl_SW/20261003-0022-automatic-station-stop.md`
+  (D012): Automatic stops at every station, and the 45 s includes door
+  open and close.
+
 ## 2026-10-02 — Shared UI components, block-ID authority, real Green Line
 
 Author: Jonathan Tsang · Branch: `Train-Ctrl_SW`

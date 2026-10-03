@@ -50,6 +50,13 @@ cd TrainController
 .venv/Scripts/python -m unittest discover tests
 ```
 
+UI click check: it clicks every control through the real QML in Manual,
+Automatic and Engineer modes, and fails on any QML warning:
+
+```bash
+.venv/Scripts/python tests/ui_click_check.py
+```
+
 Offscreen smoke test (no display needed). `QT_QPA_FONTDIR` is needed on
 Windows because Qt's offscreen platform ships no fonts:
 
@@ -88,7 +95,7 @@ right-side platforms. The speed limit is that of the occupied block, read from
 | Cooler / Warmer | Setpoint ±1 °F (60–80). The cabin temperature drifts toward it. |
 | Cabin lights / Headlights | Off / On. |
 | User: Engineer | Opens the Kp/Ki pop-up (step or type values, then apply). Close or Esc returns to Driver. |
-| Mode: Automatic / Manual | Automatic hands the target to the CTC. |
+| Mode: Automatic / Manual | Automatic hands the target to the CTC, stops at every station for the 45 s dwell (D007), and opens and closes the platform-side doors within it. Driver door buttons are disabled in Automatic. Switching to Manual mid-dwell ends the dwell. |
 
 The tick runs once per second. The speed eases toward the target at up to
 0.5 m/s², the distances count down, the train moves block by block, and it
@@ -130,3 +137,6 @@ wireframe/                                 reference PNG and HTML wireframe (Fig
    shows `—` when stopped.
 10. **Signal aspect is a placeholder** (GREEN) until the Track Model supplies
     it, and it has no effect on control yet.
+11. **Station stop point** is mid-platform, and the doors close 5 s before
+    the end of the 45 s dwell. Both values are local choices; truth fixes
+    only the 45 s.
