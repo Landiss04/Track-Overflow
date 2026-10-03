@@ -1,7 +1,7 @@
 **Target:** truth/decisions/D010-train-model-test-ui-boundary.md
 **Action:** replace
 **Proposed by:** Claude (Claude Code) on train-model-clock-update
-**Provenance:** validating each step before the shared clock ticks, and a drift check every 30 ticks, decided by Kevin Schillinger 2026-10-03 in this chat, after a rejected step was found to advance the shared clock without the Train Model; the rest of the entry unchanged from truth
+**Provenance:** the test UI taking dt from the shared clock with a 1x / 10x speed toggle, asserted by Kevin Schillinger 2026-10-02 in this chat (moved here from the D012 proposal); validating each step before the shared clock ticks, and a drift check every 30 ticks, decided by Kevin Schillinger 2026-10-03 in this chat, after a rejected step was found to advance the shared clock without the Train Model; the rest of the entry unchanged from truth
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Status:** current
 **Owner:** Kevin Schillinger
-**Provenance:** asserted by Kevin Schillinger 2026-10-01; validating steps before the clock ticks and a drift check every 30 ticks asserted by Kevin Schillinger 2026-10-03
+**Provenance:** asserted by Kevin Schillinger 2026-10-01; dt from the shared clock and a 1x / 10x speed toggle asserted by Kevin Schillinger 2026-10-02; validating steps before the clock ticks and a drift check every 30 ticks asserted by Kevin Schillinger 2026-10-03
 **Aliases:** Train Model test UI, test harness boundary, separate UI processes, drop-in test harness
 **Last updated:** 2026-10-03
 
@@ -37,6 +37,8 @@ be able to drop the test UI at integration.
   the test UI immediately, as outputs, including while the clock is held.
 - The Train Model UI shows Running while steps arrive and Paused when they stop,
   whoever sends them.
+- The test UI takes dt from the shared clock's tick length and offers a 1x / 10x
+  speed toggle.
 - The test UI validates each step before it ticks the shared clock, so input the
   Train Model would reject never advances the clock.
 - Every 30 clock ticks the test UI checks for drift between the shared clock and the
