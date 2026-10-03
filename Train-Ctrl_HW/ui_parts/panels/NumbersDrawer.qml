@@ -153,23 +153,25 @@ ColumnLayout {
             KeyValueRow {
                 Layout.fillWidth: true
                 label: qsTr("Engine")
-                value: root.s.faulted ? qsTr("Fault") : qsTr("Normal")
+                value: root.s.fault_engine ? qsTr("Fault") : qsTr("Normal")
             }
             KeyValueRow {
                 Layout.fillWidth: true
                 label: qsTr("Brake")
-                value: qsTr("Normal")
+                value: root.s.fault_brake ? qsTr("Fault") : qsTr("Normal")
             }
             KeyValueRow {
                 Layout.fillWidth: true
                 label: qsTr("Signal pickup")
-                value: qsTr("Normal")
+                value: root.s.fault_pickup ? qsTr("Fault") : qsTr("Normal")
             }
             KeyValueRow {
                 Layout.fillWidth: true
-                // A block ID, not a measurement: shown unconverted.
+                // A count and an ID, not a measurement: neither is
+                // converted.
                 label: qsTr("Authority")
-                value: root.s.authority_block
+                value: qsTr("%1 to block %2").arg(root.s.authority_blocks)
+                    .arg(root.s.authority_target)
             }
             KeyValueRow {
                 Layout.fillWidth: true

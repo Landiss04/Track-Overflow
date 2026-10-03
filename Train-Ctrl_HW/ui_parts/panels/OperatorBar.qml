@@ -70,13 +70,18 @@ Rectangle {
         SelectField {
             Layout.preferredWidth: 280
             Layout.alignment: Qt.AlignTop
-            enabled: root.s.signed_in
+            enabled: root.s.signed_in && root.s.train_count > 0
             label: qsTr("Current selected train")
-            model: controller.trains
+            model: root.s.train_count > 0
+                ? controller.trains
+                : [{"id": "", "label": qsTr("No trains available")}]
             textRole: "label"
             valueRole: "id"
-            currentIndex: root.s.train_index
-            onCommitted: function (value) { controller.selectTrain(value); }
+            currentIndex: Math.max(0, root.s.train_index)
+            onCommitted: function (value) {
+                if (value !== "")
+                    controller.selectTrain(value);
+            }
         }
     }
 }

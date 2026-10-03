@@ -1,4 +1,8 @@
-// HW Train Controller window.
+// The driver's console window.
+//
+// One window, one job: the Test bench is a separate window with its
+// own entry point, because the two are launched from the home page
+// rather than navigated between. Nothing here can reach it.
 //
 // The design is laid out once on the shared 1440 x 900 reference canvas
 // and scaled as a whole; main.py keeps the window at 16:10 on Windows.
@@ -30,7 +34,7 @@ ScaledWindow {
             // so the header does not repeat them.
             mode: window.s.signed_in ? window.s.mode_label : qsTr("Signed out")
             clock: window.s.clock
-            faulted: window.s.emergency_brake
+            faulted: window.s.emergency_brake || window.s.faulted
         }
 
         OperatorBar {
@@ -41,10 +45,22 @@ ScaledWindow {
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: window.s.signed_in ? 1 : 0
+            currentIndex: !window.s.signed_in ? 0
+                : !window.s.has_train ? 2 : 1
 
             SignInView {}
             ConsoleView {}
+
+            // Nothing runs until a train is spawned, and spawning is
+            // the test bench's job, so the console says so and waits.
+            Item {
+                EmptyState {
+                    anchors.centerIn: parent
+                    heading: qsTr("No train selected")
+                    body: qsTr("Spawn one on the test bench, then pick it "
+                               + "from Current selected train above.")
+                }
+            }
         }
     }
 

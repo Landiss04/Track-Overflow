@@ -56,14 +56,16 @@ Item {
                     unit: "\u00b0F"
                 }
 
-                // Authority is a block ID, not a distance, so this
-                // names the block to stop at rather than counting feet.
+                // Authority is a count of blocks, not a distance, so
+                // this counts the blocks left rather than feet.
                 HeroReadout {
                     Layout.fillWidth: true
-                    label: qsTr("Stop at")
-                    value: root.s.stop_block
-                    valueColor: theme.signal_red
-                    unit: qsTr("block ID")
+                    label: qsTr("Stop in")
+                    value: root.s.authority_blocks
+                    valueColor: root.s.authority_blocks <= 1
+                        ? theme.signal_red : theme.text_primary
+                    unit: root.s.authority_blocks === 1 ? qsTr("block")
+                                                        : qsTr("blocks")
                 }
             }
 

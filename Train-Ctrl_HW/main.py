@@ -7,16 +7,21 @@ QML owns every pixel. The two meet at three context properties:
     controller   ConsoleBackend: one snapshot out, slots in
     trainList    the trains the console can be pointed at
 
-    HardwareInterface   lever + e-stop in, power + brakes out
     ControllerCore      PI speed law; safety enforced on a separate path
     ConsoleBackend      the Qt bridge; computes the snapshot, nothing else
     ui/                 the view; reads the snapshot, computes nothing
 
 Run:
 
-    python main.py                               stub hardware
-    python main.py --real                        SPI + GPIO on the Pi
+    python main.py                               the driver's console
+    python main.py --test                        the Train Model bench
+    python main.py --both                        both windows, one backend
     python main.py --check [--shots DIR]         offscreen self-test
+
+The console and the bench are separate windows with no way to navigate
+between them: the home page launches one or the other. They share a
+controller only when one process opens both, which is what --both is
+for and how the bench drives the console.
 
 Units follow documents/units.md: the state and the control law are
 metric SI, the operator reads imperial with power in kilowatts, and
@@ -53,7 +58,9 @@ from PySide6.QtQuick import QQuickWindow  # noqa: E402,F401  grabWindow()
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
-_MAIN_QML = Path(__file__).resolve().parent / "ui_parts" / "Main.qml"
+_UI_DIR = Path(__file__).resolve().parent / "ui_parts"
+_CONSOLE_QML = _UI_DIR / "ConsoleWindow.qml"
+_TEST_QML = _UI_DIR / "TestWindow.qml"
 
 
 def check_shared_library() -> bool:
@@ -108,21 +115,32 @@ def f_to_c(fahrenheit: float) -> float:
 CABIN_MIN_F, CABIN_MAX_F = 60.0, 80.0
 
 # --- plant model (toy, replaced by the Train Model) ---
-MAX_ACCEL = 1.6         # m/s^2 at full power
-DRAG_BASE = 0.30        # m/s^2 rolling resistance
-DRAG_SPEED = 0.004      # m/s^2 per m/s, stands in for aero drag
+# The control law commands power, and the train turns power into
+# motion the way the module diagram does:
+#
+#     F = P / v        a = F / M        v = v + a dt
+#
+# F = P / v is undefined at a stand, so the division uses a floor
+# speed; below it the train pulls its full tractive effort, which is
+# what a real train does from rest.
+MASS_KG = 40_900.0      # Blackpool Flexity 2, empty
+MAX_ACCEL = 0.5         # m/s^2, the service acceleration limit
+MAX_FORCE_N = MASS_KG * MAX_ACCEL
+V_FLOOR = 1.0           # m/s, below which F = P / v is capped
+# Rolling resistance of steel on steel is about 1 % of weight, which
+# is 0.05 m/s^2, and the speed term stands in for aero drag.
+DRAG_BASE = 0.05        # m/s^2 rolling resistance
+DRAG_SPEED = 0.0008     # m/s^2 per m/s, stands in for aero drag
 SERVICE_DECEL = 1.2     # m/s^2
 EBRAKE_DECEL = 2.7      # m/s^2
 SERVICE_BAND = 0.15     # m/s over target before the service brake helps
+BLOCK_LENGTH_M = 500.0  # until the Track Model supplies real lengths
 
-# ---------------------------------------------------------------- DEMO ONLY
-# Cycles the signal aspect so every state of the Next signal panel can be
-# seen without the Wayside Controller connected. NOT real functionality.
-# To remove: set DEMO_CYCLE_SIGNALS = False, or delete this constant and
-# the _demo_cycle_signal method and its timer in ConsoleBackend.
-DEMO_CYCLE_SIGNALS = True
-DEMO_SIGNAL_PERIOD_MS = 3000
-# -------------------------------------------------------------- END DEMO
+# The simulation runs one plant per train, always. There is no
+# "connected to the Train Model" mode yet: when that module arrives it
+# publishes into the same slots this bench does, and ControllerCore
+# ._plant() is what it replaces.
+
 
 ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
 ASPECT_TEXT = {
@@ -132,12 +150,11 @@ ASPECT_TEXT = {
     "SUPER GREEN": "All clear ahead.",
 }
 
-#: The trains this console can be pointed at. Replaced by the CTC roster.
-TRAINS = [
-    {"id": "T-114", "line": "GREEN LINE", "label": "T-114 \u00b7 GREEN LINE"},
-    {"id": "T-142", "line": "GREEN LINE", "label": "T-142 \u00b7 GREEN LINE"},
-    {"id": "R-301", "line": "RED LINE", "label": "R-301 \u00b7 RED LINE"},
-]
+#: Lines a train can be spawned on, and the id prefix each one uses.
+LINES = {"GREEN LINE": "T", "RED LINE": "R"}
+
+#: Real time per simulated second, as the bench offers it.
+SIM_RATES = (1, 10)
 
 # Tokens this console needs that the style guide does not define yet.
 # Per guide section 1 a missing token is added to the guide first, then
@@ -172,6 +189,17 @@ PENDING_TOKENS: dict[str, Any] = {
 }
 
 
+def block_letter(text: str) -> str:
+    """Take a block as the operator typed it and return its letter.
+
+    They type "a", "A", or whatever is quickest; the backend keeps
+    identifiers in one case so comparisons elsewhere are not a trap
+    (see identifiers.md).
+    """
+    letters = [c for c in str(text) if c.isalpha()]
+    return letters[0].upper() if letters else "A"
+
+
 def build_console_theme() -> dict[str, Any]:
     """Shared tokens plus the open items above, as one table."""
     theme = build_theme()
@@ -179,58 +207,13 @@ def build_console_theme() -> dict[str, Any]:
     return theme
 
 
-# ================================================================ hardware
-class HardwareInterface:
-    """Stub hardware. Every I/O call in the program goes through here."""
-
-    def read_lever(self) -> float:
-        return 0.5
-
-    def read_estop(self) -> bool:
-        return False
-
-    def write_power(self, w: float) -> None: ...
-
-    def write_service_brake(self, on: bool) -> None: ...
-
-    def write_emergency_brake(self, on: bool) -> None: ...
-
-    def close(self) -> None: ...
-
-
-class PiHardware(HardwareInterface):
-    """Lever via SPI ADC, e-stop on GPIO.
-
-    The only place spidev and gpiozero appear.
-    """
-
-    ADC_CHANNEL, ESTOP_PIN, SERVICE_PIN, EMERGENCY_PIN = 0, 17, 27, 22
-
-    def __init__(self) -> None:
-        import spidev
-        from gpiozero import Button, OutputDevice
-        self.spi = spidev.SpiDev()
-        self.spi.open(0, 0)
-        self.spi.max_speed_hz = 1_350_000
-        self._estop = Button(self.ESTOP_PIN, pull_up=True)
-        self._service = OutputDevice(self.SERVICE_PIN)
-        self._emergency = OutputDevice(self.EMERGENCY_PIN)
-
-    def read_lever(self) -> float:
-        r = self.spi.xfer2([1, (8 + self.ADC_CHANNEL) << 4, 0])
-        return (((r[1] & 3) << 8) + r[2]) / 1023.0
-
-    def read_estop(self) -> bool:
-        return bool(self._estop.is_pressed)
-
-    def write_service_brake(self, on: bool) -> None:
-        self._service.value = bool(on)
-
-    def write_emergency_brake(self, on: bool) -> None:
-        self._emergency.value = bool(on)
-
-    def close(self) -> None:
-        self.spi.close()
+# The physical panel is not wired yet, so there is no hardware layer
+# in this file: the console is the whole interface. Putting one back
+# means a small class with read_estop / write_power /
+# write_service_brake / write_emergency_brake, constructed in main()
+# and called from ControllerCore.step() and engage_emergency() where
+# the outputs are already computed. Nothing else has to change, and
+# the lever the old stub exposed was never read by anything.
 
 
 # ================================================================ state
@@ -247,17 +230,32 @@ class State:
     target_mps: float = 21.5
     speed_limit_mps: float = 31.3
     accel_mps2: float = 0.0
-    # Authority itself is a block ID, not a measurement (units.md,
-    # identifiers.md): authority_block below is the block the train may
-    # run to. This is the distance left to the end of it, which is what
-    # the safety path counts down and what the console shows.
-    stop_distance_m: float = 20000.0
+
+    # Authority: how many blocks the train may still enter before it
+    # has to stop, and the block it stops at. A count and an ID, not a
+    # measurement, so neither is ever converted (units.md).
+    authority_blocks: int = 4
+    authority_target: str = "GREEN K"
+    block_progress_m: float = 0.0
 
     power_w: float = 0.0
     service_brake: bool = False
     service_request: bool = False
     emergency_brake: bool = False
-    faults: list = field(default_factory=list)
+
+    # Failure status from the Train Model, one flag per subsystem.
+    failures: dict = field(default_factory=lambda: {
+        "engine": False, "brake": False, "signal_pickup": False})
+
+    # State reported back by the Train Model, as opposed to what this
+    # controller commanded. With no Train Model attached the toy plant
+    # echoes the commands into these.
+    fb_brake: bool = False
+    fb_doors_left: bool = False
+    fb_doors_right: bool = False
+    fb_lights: bool = False
+    fb_headlights: bool = False
+    beacon: str = ""
 
     cabin_temp_c: float = 21.1
     target_temp_c: float = 22.2
@@ -266,14 +264,11 @@ class State:
     lights: bool = True
     headlights: bool = True
 
-    # The block the train is to stop at. An ID, never a distance.
-    stop_block: str = "A"
     next_station: str = "CENTRAL"
     arrives: str = "14:46"
     platform_side: str = "right"
     next_signal: str = "YELLOW"
     signal_block: str = "GREEN J"
-    authority_block: str = "GREEN J"
     current_block: str = "GREEN I"
 
     kp: float = 30000.0     # W per m/s of error
@@ -288,41 +283,48 @@ class ControllerCore:
     correct, and it runs unchanged whether or not a console is open.
     """
 
-    def __init__(self, hw: HardwareInterface) -> None:
-        self.hw = hw
+    def __init__(self) -> None:
         self.state = State()
-        self.dt = 1.0 / CONTROL_HZ
+        self.dt = 1.0 / CONTROL_HZ          # seconds of simulation
         self.integral = 0.0
         self.last_reasons: list[str] = []
+        # Real seconds per tick. The bench multiplies this to run the
+        # simulation faster than real time.
+        self.rate = 1.0
         # The controller is inert until an engineer commissions the gains.
         self.armed = False
 
     def step(self) -> None:
-        if not self.armed:
-            return
+        """One control period.
+
+        Only the speed law waits for the gains. The brakes and the
+        safety path run from the first tick, because a console that
+        has not been commissioned yet still has to be able to stop
+        the train and still has to report what the brakes are doing.
+        """
         s = self.state
-        if not s.manual:
-            s.target_mps = min(s.commanded_mps, s.speed_limit_mps)
+        if self.armed:
+            if not s.manual:
+                s.target_mps = min(s.commanded_mps, s.speed_limit_mps)
 
-        error = s.target_mps - s.actual_mps
-        self.integral += error * self.dt
-        power = s.kp * error + s.ki * self.integral
+            error = s.target_mps - s.actual_mps
+            self.integral += error * self.dt
+            power = s.kp * error + s.ki * self.integral
 
-        if power > MAX_POWER_W:
-            power = MAX_POWER_W
-            self.integral -= error * self.dt
-        elif power < 0.0:
-            power = 0.0
-            self.integral -= error * self.dt
+            if power > MAX_POWER_W:
+                power = MAX_POWER_W
+                self.integral -= error * self.dt
+            elif power < 0.0:
+                power = 0.0
+                self.integral -= error * self.dt
 
-        s.power_w = power
-        s.service_brake = (error < -SERVICE_BAND) or s.service_request
+            s.power_w = power
+            s.service_brake = (error < -SERVICE_BAND) or s.service_request
+        else:
+            s.power_w = 0.0
+            s.service_brake = s.service_request
 
         self.enforce_safety()
-
-        self.hw.write_power(s.power_w)
-        self.hw.write_service_brake(s.service_brake)
-        self.hw.write_emergency_brake(s.emergency_brake)
         self._plant()
 
     def enforce_safety(self) -> None:
@@ -333,13 +335,11 @@ class ControllerCore:
         """
         s = self.state
         reasons = []
-        if self.hw.read_estop():
-            reasons.append("DRIVER E-STOP")
         if s.actual_mps > s.speed_limit_mps * 1.05:
             reasons.append("OVER SPEED LIMIT")
-        if s.stop_distance_m <= 0.0:
+        if s.authority_blocks <= 0:
             reasons.append("AUTHORITY EXCEEDED")
-        if s.faults:
+        if any(s.failures.values()):
             reasons.append("EQUIPMENT FAULT")
         if reasons or s.emergency_brake:
             s.emergency_brake = True
@@ -352,14 +352,11 @@ class ControllerCore:
         """Engage now, without waiting for the next control tick.
 
         Guide section 7 calls the emergency brake immediate, so the
-        safety path runs and the outputs are written on the press
-        rather than up to one control period later.
+        safety path runs on the press rather than up to one control
+        period later.
         """
         self.state.emergency_brake = True
         self.enforce_safety()
-        self.hw.write_power(self.state.power_w)
-        self.hw.write_service_brake(self.state.service_brake)
-        self.hw.write_emergency_brake(True)
 
     def release_emergency(self) -> bool:
         """Latching. Release only when stopped with nothing still wrong."""
@@ -371,6 +368,19 @@ class ControllerCore:
             return True
         s.emergency_brake = True
         return False
+
+    def enter_block(self) -> None:
+        """Spend one block of authority and step the signal ahead.
+
+        The aspect the driver is running towards belongs to the next
+        block, so entering one shows the next one's: red, yellow,
+        green, super green, then round to red again. The Wayside
+        Controller replaces this with the real aspect.
+        """
+        s = self.state
+        s.authority_blocks = max(0, s.authority_blocks - 1)
+        nxt = (ASPECTS.index(s.next_signal) + 1) % len(ASPECTS)
+        s.next_signal = ASPECTS[nxt]
 
     def set_target_mps(self, mps: float) -> None:
         """Set the driver's target, in m/s, capped at the speed limit."""
@@ -385,10 +395,15 @@ class ControllerCore:
         train holds its speed forever, so it can never shed the last mph
         below the point where the controller stops commanding power.
         """
+        # The door, brake and light states the Train Model reports are
+        # not echoed from the commands here: with no Train Model
+        # attached they are whatever the bench says they are, which is
+        # the point of being able to disagree with the command.
         s = self.state
         v = s.actual_mps
+        force = min(MAX_FORCE_N, s.power_w / max(v, V_FLOOR))
         drag = (DRAG_BASE + DRAG_SPEED * v) if v > 0 else 0.0
-        a = (s.power_w / MAX_POWER_W) * MAX_ACCEL - drag
+        a = force / MASS_KG - drag
         if s.emergency_brake:
             a = -EBRAKE_DECEL
         elif s.service_brake:
@@ -399,8 +414,14 @@ class ControllerCore:
         s.actual_mps = max(0.0, v + a * self.dt)
         if s.actual_mps < 0.12 and s.target_mps < 0.12:
             s.actual_mps = 0.0          # settle cleanly at a stand
-        s.stop_distance_m = max(
-            0.0, s.stop_distance_m - s.actual_mps * self.dt)
+
+        # Distance only matters here as block progress: one block
+        # entered is one block of authority spent.
+        s.block_progress_m += s.actual_mps * self.dt
+        while s.block_progress_m >= BLOCK_LENGTH_M:
+            s.block_progress_m -= BLOCK_LENGTH_M
+            self.enter_block()
+
         drift = s.target_temp_c - s.cabin_temp_c
         s.cabin_temp_c += max(-0.011, min(0.011, drift * 0.01))
 
@@ -419,33 +440,83 @@ class ConsoleBackend(QObject):
     #: Roles, by the index the Operator toggle uses. -1 is signed out.
     ROLES = ("driver", "engineer")
 
-    def __init__(self, core: ControllerCore,
-                 parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self.core = core
+        # One plant per train. They all run; the console and the
+        # bench look at whichever one is selected.
+        self.cores: dict[str, ControllerCore] = {}
+        self.order: list[str] = []
+        self.selected = ""
+        self.notes: dict[str, str] = {}
+        self.announcing: set[str] = set()
+        self.sim_rate = 1
+        self.spawn_note = ""
+
         self.operator: str = ""         # "" | "driver" | "engineer"
-        self.gains_locked = False
-        self.engineer_available = True
-        self.announcing = False
-        self.brake_note = ""
         self.gains_note = ""
         self.elapsed = QTime(0, 0, 0)
-        self.train_index = 0
+
+        # Nothing runs until somebody spawns it. This one is never
+        # stepped and never shown: it exists so that the snapshot and
+        # the views have a shape to read while the roster is empty,
+        # rather than every binding needing a null check.
+        self.idle = ControllerCore()
 
         self._control = QTimer(self)
-        self._control.timeout.connect(self.core.step)
+        self._control.timeout.connect(self._step_all)
         self._control.start(int(1000 / CONTROL_HZ))
 
         self._ui = QTimer(self)
         self._ui.timeout.connect(self._tick)
         self._ui.start(int(1000 / UI_HZ))
 
-        # ------------- DEMO ONLY: delete this block to remove ----------
-        if DEMO_CYCLE_SIGNALS:
-            self._demo = QTimer(self)
-            self._demo.timeout.connect(self._demo_cycle_signal)
-            self._demo.start(DEMO_SIGNAL_PERIOD_MS)
-        # ---------------------------------------------- END DEMO -------
+    # ---------------------------------------------------------- fleet
+    def spawn_train(self, number: int, line: str, target: str) -> str:
+        """Put another train in the simulation and select it.
+
+        The number is the operator's to choose; the prefix follows the
+        line, which is how the CTC roster reads. Returns the id, or
+        an empty string if that one is already running.
+        """
+        prefix = LINES.get(line, "T")
+        train_id = f"{prefix}-{int(number)}"
+        if train_id in self.cores:
+            self.spawn_note = f"{train_id} is already running."
+            return ""
+
+        core = ControllerCore()
+        core.rate = float(self.sim_rate)
+        core.dt = self.sim_rate / CONTROL_HZ
+        core.state.train_id = train_id
+        core.state.line = line
+        core.state.authority_target = block_letter(target)
+        self.cores[train_id] = core
+        self.order.append(train_id)
+        self.notes[train_id] = ""
+        self.selected = train_id
+        self.spawn_note = f"{train_id} spawned on the {line.lower()}."
+        return train_id
+
+    def _step_all(self) -> None:
+        for core in self.cores.values():
+            core.step()
+
+    @property
+    def has_train(self) -> bool:
+        return self.selected in self.cores
+
+    @property
+    def core(self) -> ControllerCore:
+        """The train the console and the bench are pointed at."""
+        return self.cores[self.selected] if self.has_train else self.idle
+
+    @property
+    def brake_note(self) -> str:
+        return self.notes.get(self.selected, "")
+
+    @brake_note.setter
+    def brake_note(self, text: str) -> None:
+        self.notes[self.selected] = text
 
     # ------------------------------------------------------- read side
     @property
@@ -459,12 +530,16 @@ class ConsoleBackend(QObject):
         The emergency brake is the exception and stays live for any
         signed-in operator, in either mode (guide section 7).
         """
-        return self.operator == "driver" and self.core.state.manual
+        return (self.has_train and self.operator == "driver"
+                and self.core.state.manual)
 
-    @Property("QVariantList", constant=True)
+    @Property("QVariantList", notify=snapshotChanged)
     def trains(self) -> list[dict[str, Any]]:
-        """The roster the train selector shows."""
-        return list(TRAINS)
+        """The roster the train selectors show."""
+        return [{"id": i,
+                 "line": self.cores[i].state.line,
+                 "label": f"{i} \u00b7 {self.cores[i].state.line}"}
+                for i in self.order]
 
     @Property("QVariantMap", notify=snapshotChanged)
     def snapshot(self) -> dict[str, Any]:
@@ -473,7 +548,13 @@ class ConsoleBackend(QObject):
         return {
             "train_id": s.train_id,
             "line": s.line,
-            "train_index": self.train_index,
+            "has_train": self.has_train,
+            "train_index": (self.order.index(self.selected)
+                            if self.has_train else -1),
+            "train_count": len(self.order),
+            "sim_rate": self.sim_rate,
+            "sim_rate_index": SIM_RATES.index(self.sim_rate),
+            "spawn_note": self.spawn_note,
             "operator": self.operator,
             "operator_index": (self.ROLES.index(self.operator)
                                if self.signed_in else -1),
@@ -482,14 +563,22 @@ class ConsoleBackend(QObject):
             "mode_label": "Manual" if s.manual else "Automatic",
             "can_drive": self.can_drive,
             "armed": self.core.armed,
-            "engineer_available": self.engineer_available,
-            "gains_locked": self.gains_locked,
+            # Gains are commissioned once per train, so both of these
+            # follow that train's controller rather than the console.
+            "engineer_available": not self.core.armed,
+            "gains_locked": self.core.armed,
             "gains_note": self.gains_note,
             "clock": self.elapsed.toString("HH:mm:ss"),
 
             # Converted here and nowhere else. Keys carry the unit the
             # operator sees, so a reader can tell which side of the line
             # a value is on at a glance.
+            # SI, for the Test view: these are the signals as they
+            # cross the interface.
+            "actual_mps": s.actual_mps,
+            "commanded_mps": s.commanded_mps,
+            "limit_mps": s.speed_limit_mps,
+
             "actual_mph": s.actual_mps * MPS_TO_MPH,
             "commanded_mph": s.commanded_mps * MPS_TO_MPH,
             "target_mph": s.target_mps * MPS_TO_MPH,
@@ -504,17 +593,30 @@ class ConsoleBackend(QObject):
             "service_request": s.service_request,
             "emergency_brake": s.emergency_brake,
             "brake_note": self.brake_note,
-            "faulted": bool(s.faults),
+            "faulted": any(s.failures.values()),
+            "fault_engine": s.failures["engine"],
+            "fault_brake": s.failures["brake"],
+            "fault_pickup": s.failures["signal_pickup"],
+            "fb_brake": s.fb_brake,
+            "fb_doors_left": s.fb_doors_left,
+            "fb_doors_right": s.fb_doors_right,
+            "fb_lights": s.fb_lights,
+            "fb_headlights": s.fb_headlights,
+            "beacon": s.beacon,
 
             # Identifiers, so they are shown as they are. The console
             # names the block to stop at; it does not count down a
             # distance, because authority is not a measurement.
-            "stop_block": s.stop_block,
-            "authority_block": s.authority_block,
+            "authority_blocks": s.authority_blocks,
+            "authority_target": s.authority_target,
             "current_block": s.current_block,
 
             "cabin_temp_f": c_to_f(s.cabin_temp_c),
             "target_temp_f": c_to_f(s.target_temp_c),
+            # The Test view shows this interface in the unit it
+            # travels in, which for temperature is Celsius.
+            "cabin_temp_c": s.cabin_temp_c,
+            "target_temp_c": s.target_temp_c,
             "doors_left": s.doors_left,
             "doors_right": s.doors_right,
             "lights": s.lights,
@@ -523,7 +625,7 @@ class ConsoleBackend(QObject):
             "next_station": s.next_station.title(),
             "arrives": s.arrives,
             "platform_side": s.platform_side,
-            "announcing": self.announcing,
+            "announcing": self.selected in self.announcing,
             "announce_label": self._announce_label(),
 
             "next_signal": s.next_signal,
@@ -543,7 +645,7 @@ class ConsoleBackend(QObject):
         return "Set by the CTC. Switch to Manual to take control."
 
     def _announce_label(self) -> str:
-        if self.announcing:
+        if self.selected in self.announcing:
             return "Announcing\u2026"
         if self.operator == "driver" and not self.core.state.manual:
             return "Announced automatically"
@@ -558,7 +660,7 @@ class ConsoleBackend(QObject):
         option stays visible but selecting it is refused, never hidden
         (guide section 8).
         """
-        if index == 1 and not self.engineer_available:
+        if index == 1 and self.core.armed:
             self._publish()
             return
         self.operator = self.ROLES[index] if 0 <= index < 2 else ""
@@ -568,6 +670,8 @@ class ConsoleBackend(QObject):
 
     @Slot(bool)
     def setManual(self, manual: bool) -> None:
+        if not self.has_train:
+            return
         if not self.signed_in:
             return
         self.core.state.manual = manual
@@ -575,15 +679,36 @@ class ConsoleBackend(QObject):
 
     @Slot(str)
     def selectTrain(self, train_id: str) -> None:
-        """Point the console at another train, by the id the roster uses."""
-        if not self.signed_in:
+        """Point the console and the bench at another train."""
+        if train_id in self.cores:
+            self.selected = train_id
+        self._publish()
+
+    @Slot(int, str, str)
+    def spawnTrain(self, number: int, line: str, target: str) -> None:
+        """Add a train to the simulation and select it.
+
+        It starts where every train starts: stopped, uncommissioned,
+        with its own authority and destination, running its own plant
+        from the next tick.
+        """
+        self.spawn_train(number, line, target)
+        self._publish()
+
+    @Slot(int)
+    def setSimRate(self, index: int) -> None:
+        """Run at real time or ten times real time.
+
+        The tick rate does not change; the simulated seconds each tick
+        advances do, so the control law and the plant keep their
+        timestep relationship and only the clock moves faster.
+        """
+        if not 0 <= index < len(SIM_RATES):
             return
-        for index, train in enumerate(TRAINS):
-            if train["id"] == train_id:
-                self.train_index = index
-                self.core.state.train_id = train["id"]
-                self.core.state.line = train["line"]
-                break
+        self.sim_rate = SIM_RATES[index]
+        for core in self.cores.values():
+            core.rate = float(self.sim_rate)
+            core.dt = self.sim_rate / CONTROL_HZ
         self._publish()
 
     @Slot(float)
@@ -602,6 +727,8 @@ class ConsoleBackend(QObject):
         style guide grants (section 7). Release is refused unless the
         train is stopped and the reason is gone.
         """
+        if not self.has_train:
+            return
         if not self.signed_in:
             return
         s = self.core.state
@@ -659,14 +786,175 @@ class ConsoleBackend(QObject):
 
     @Slot()
     def announce(self) -> None:
-        if not self.can_drive or self.announcing:
+        if not self.can_drive or self.selected in self.announcing:
             return
-        self.announcing = True
-        QTimer.singleShot(ANNOUNCE_LOCKOUT_MS, self._announce_done)
+        train = self.selected
+        self.announcing.add(train)
+        QTimer.singleShot(ANNOUNCE_LOCKOUT_MS,
+                          lambda: self._announce_done(train))
         self._publish()
 
-    def _announce_done(self) -> None:
-        self.announcing = False
+    def _announce_done(self, train: str) -> None:
+        self.announcing.discard(train)
+        self._publish()
+
+    # ------------------------------------------------- Train Model
+    # Everything below stands in for the Train Model until it is wired
+    # in, and is driven from the Test view. The same unit rule holds:
+    # the bench speaks the operator's units and converts here.
+
+    @Slot(float)
+    def setCommandedSpeedMps(self, mps: float) -> None:
+        if not self.has_train:
+            return
+        self.core.state.commanded_mps = max(0.0, mps)
+        self._publish()
+
+    @Slot(float)
+    def setSpeedLimitMps(self, mps: float) -> None:
+        if not self.has_train:
+            return
+        self.core.state.speed_limit_mps = max(0.0, mps)
+        self._publish()
+
+    @Slot(float)
+    def setActualSpeedMps(self, mps: float) -> None:
+        if not self.has_train:
+            return
+        self.core.state.actual_mps = max(0.0, mps)
+        self._publish()
+
+    @Slot(float)
+    def setCabinTemperatureC(self, celsius: float) -> None:
+        if not self.has_train:
+            return
+        self.core.state.cabin_temp_c = celsius
+        self._publish()
+
+    @Slot("QVariantMap")
+    def applyInputs(self, values: dict) -> None:
+        """Publish a whole set of staged inputs in one go.
+
+        The Test view collects edits and sends them together, so the
+        controller sees one coherent set of signals rather than a
+        half-typed one. Each key is the signal name on the interface.
+        """
+        if not self.has_train:
+            return
+        s = self.core.state
+        # Every value here is already in its backend unit: the Test
+        # view edits the interface, not the driver's console.
+        if "commanded_speed" in values:
+            s.commanded_mps = max(0.0, float(values["commanded_speed"]))
+        if "actual_speed" in values:
+            s.actual_mps = max(0.0, float(values["actual_speed"]))
+        if "cabin_temperature" in values:
+            s.cabin_temp_c = float(values["cabin_temperature"])
+        if "authority_blocks" in values:
+            s.authority_blocks = max(0, int(values["authority_blocks"]))
+        # Gains come in with the rest of the set: sending the inputs
+        # is what commissions them, so the bench needs no second
+        # button for it. The engineer rule still holds, and they can
+        # still only be set once.
+        if ("kp" in values or "ki" in values) and not self.core.armed:
+            self.commissionGains(float(values.get("kp", s.kp)),
+                                 float(values.get("ki", s.ki)))
+        if "beacon" in values:
+            s.beacon = str(values["beacon"])
+        for key, subsystem in (("failure_engine", "engine"),
+                               ("failure_brake", "brake"),
+                               ("failure_signal_pickup", "signal_pickup")):
+            if key in values:
+                s.failures[subsystem] = bool(values[key])
+        if "signal_light_ahead" in values:
+            aspect = str(values["signal_light_ahead"])
+            if aspect in ASPECTS:
+                s.next_signal = aspect
+        for key, attr in (("brake_state", "fb_brake"),
+                          ("door_state_left", "fb_doors_left"),
+                          ("door_state_right", "fb_doors_right"),
+                          ("light_state_cabin", "fb_lights"),
+                          ("light_state_headlights", "fb_headlights")):
+            if key in values:
+                setattr(s, attr, bool(values[key]))
+        self._publish()
+
+    @Slot(int)
+    def setInputSource(self, index: int) -> None:
+        """Hand the inputs to the plant, the bench, or a real module.
+
+        Connecting the bench stops the toy plant, so nothing writes
+        over what the bench publishes. Choosing the Train Model
+        disconnects the bench; nothing publishes until that module
+        exists, which is the point.
+        """
+        if not 0 <= index < len(INPUT_SOURCES):
+            return
+        self.input_source = INPUT_SOURCES[index]
+        # The plant keeps running for the bench: what the bench sends
+        # is an injection into it, not a replacement for it, so a
+        # commanded speed typed there still makes the train move. A
+        # real Train Model does replace it.
+        self.core.plant_enabled = self.input_source != SOURCE_MODULE
+        self.core.echo_feedback = self.input_source == SOURCE_PLANT
+        self._publish()
+
+    @Slot(int)
+    def setAuthorityBlocks(self, blocks: int) -> None:
+        """Authority is how many blocks are left, not a length."""
+        if not self.has_train:
+            return
+        self.core.state.authority_blocks = max(0, int(blocks))
+        self._publish()
+
+    @Slot(str)
+    def setBeacon(self, text: str) -> None:
+        if not self.has_train:
+            return
+        self.core.state.beacon = text
+        self._publish()
+
+    @Slot(str, bool)
+    def setFailure(self, subsystem: str, failed: bool) -> None:
+        if not self.has_train:
+            return
+        if subsystem in self.core.state.failures:
+            self.core.state.failures[subsystem] = failed
+        self._publish()
+
+    @Slot(int)
+    def setSignalAhead(self, index: int) -> None:
+        if not self.has_train:
+            return
+        if 0 <= index < len(ASPECTS):
+            self.core.state.next_signal = ASPECTS[index]
+        self._publish()
+
+    @Slot(bool)
+    def setBrakeState(self, engaged: bool) -> None:
+        if not self.has_train:
+            return
+        self.core.state.fb_brake = engaged
+        self._publish()
+
+    @Slot(str, bool)
+    def setDoorState(self, side: str, open_: bool) -> None:
+        if not self.has_train:
+            return
+        if side == "left":
+            self.core.state.fb_doors_left = open_
+        else:
+            self.core.state.fb_doors_right = open_
+        self._publish()
+
+    @Slot(str, bool)
+    def setLightState(self, which: str, on: bool) -> None:
+        if not self.has_train:
+            return
+        if which == "headlights":
+            self.core.state.fb_headlights = on
+        else:
+            self.core.state.fb_lights = on
         self._publish()
 
     @Slot(float, float)
@@ -676,7 +964,9 @@ class ConsoleBackend(QObject):
         Gains are frozen afterwards and the engineer role is handed back
         to the driver a moment later, so the confirmation can be read.
         """
-        if self.gains_locked or self.operator != "engineer":
+        if not self.has_train:
+            return
+        if self.core.armed or self.operator != "engineer":
             return
         if not (math.isfinite(kp) and math.isfinite(ki)):
             self.gains_note = "Kp and Ki must be numbers."
@@ -687,7 +977,6 @@ class ConsoleBackend(QObject):
         s.ki = max(0.0, ki)
         self.core.integral = 0.0
         self.core.armed = True
-        self.gains_locked = True
         self.gains_note = (f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. "
                            "Fixed for this run.")
         QTimer.singleShot(GAINS_HANDOVER_MS, self._retire_engineer)
@@ -695,14 +984,14 @@ class ConsoleBackend(QObject):
 
     def _retire_engineer(self) -> None:
         """Close the gains dialog and hand the console to the driver."""
-        self.engineer_available = False
         self.operator = "driver"
         self._publish()
 
     # ----------------------------------------------------------- ticks
     def _tick(self) -> None:
         if self.core.armed:
-            self.elapsed = self.elapsed.addMSecs(int(1000 / UI_HZ))
+            self.elapsed = self.elapsed.addMSecs(
+                int(1000 / UI_HZ) * self.sim_rate)
         if self.core.state.emergency_brake and not self.brake_note:
             self.brake_note = ("Emergency brake engaged. "
                                "Release it from the same control.")
@@ -711,15 +1000,34 @@ class ConsoleBackend(QObject):
     def _publish(self) -> None:
         self.snapshotChanged.emit()
 
-    # ------------- DEMO ONLY: delete this method to remove -------------
-    def _demo_cycle_signal(self) -> None:
-        """Step the aspect RED -> YELLOW -> GREEN -> SUPER GREEN.
+# ========================================================== contract
+def check_snapshot_contract(backend: "ConsoleBackend") -> bool:
+    """Warn if the QML expects snapshot keys this file does not have.
 
-        Replaced by the real aspect from the Wayside Controller.
-        """
-        i = ASPECTS.index(self.core.state.next_signal)
-        self.core.state.next_signal = ASPECTS[(i + 1) % len(ASPECTS)]
-    # ------------------------------------------------ END DEMO --------
+    A view and a backend drift apart one copied file at a time, and
+    the symptom is a wall of "Unable to assign [undefined]" with no
+    hint as to which side is behind. This reads every s.<key> and
+    snapshot.<key> out of the QML and names the missing ones.
+    """
+    import re
+
+    have = set(backend.snapshot)
+    pattern = re.compile(r"(?:\bs|snapshot)\.([a-z_][a-z0-9_]*)")
+    missing: dict[str, set[str]] = {}
+    for qml in sorted(_UI_DIR.rglob("*.qml")):
+        wanted = set(pattern.findall(qml.read_text(encoding="utf-8")))
+        gap = {k for k in wanted - have if not k.startswith("_")}
+        if gap:
+            missing[str(qml.relative_to(_UI_DIR))] = gap
+    if not missing:
+        return True
+
+    print("This main.py is older than the QML beside it. These views "
+          "read snapshot keys it does not provide:", file=sys.stderr)
+    for name, keys in missing.items():
+        print(f"  {name}: {', '.join(sorted(keys))}", file=sys.stderr)
+    print("Copy the matching main.py, or revert the QML.", file=sys.stderr)
+    return False
 
 
 # ================================================================ check
@@ -730,8 +1038,9 @@ def _settle(app: QGuiApplication, ms: int) -> None:
         app.processEvents()
 
 
-def run_check(app: QGuiApplication, window: Any, backend: ConsoleBackend,
-              warnings: list[str], shots: Path | None) -> int:
+def run_check(app: QGuiApplication, window: Any, bench: Any,
+              backend: ConsoleBackend, warnings: list[str],
+              shots: Path | None) -> int:
     """Walk the console offscreen and report anything that went wrong.
 
     Exits non-zero if QML logged a warning or the console let an
@@ -748,6 +1057,18 @@ def run_check(app: QGuiApplication, window: Any, backend: ConsoleBackend,
 
     _settle(app, 200)
     expect(not backend.snapshot["signed_in"], "console opened signed in")
+    expect(not backend.snapshot["has_train"], "a train existed before spawning")
+    expect(backend.snapshot["train_count"] == 0, "the roster started full")
+
+    # Nothing to drive yet, and nothing crashes trying.
+    backend.setCommandedSpeedMps(12)
+    backend.applyInputs({"authority_blocks": 2})
+    backend.toggleEmergencyBrake()
+
+    backend.spawnTrain(114, "GREEN LINE", "GREEN K")
+    expect(backend.snapshot["has_train"], "spawning did not produce a train")
+    expect(backend.snapshot["train_id"] == "T-114",
+           "the spawned train did not take the number asked for")
     expect(not backend.core.armed, "controller armed before commissioning")
     if shots:
         window.grabWindow().save(str(shots / "01-signed-out.png"))
@@ -764,7 +1085,9 @@ def run_check(app: QGuiApplication, window: Any, backend: ConsoleBackend,
     expect(backend.snapshot["operator"] == "engineer", "engineer sign-in failed")
     if shots:
         window.grabWindow().save(str(shots / "02-gains.png"))
-    backend.commissionGains(42000, 7000)
+    # The bench commissions by sending its inputs, with no separate
+    # button for it.
+    backend.applyInputs({"kp": 42000, "ki": 7000})
     expect(backend.core.armed, "commissioning did not arm the controller")
     _settle(app, GAINS_HANDOVER_MS + 400)
     expect(backend.snapshot["operator"] == "driver", "console not handed over")
@@ -812,6 +1135,94 @@ def run_check(app: QGuiApplication, window: Any, backend: ConsoleBackend,
             window.grabWindow().save(str(shots / "05-numbers.png"))
         drawer.setProperty("expanded", False)
 
+    # The bench drives the Train Model interface from its own window,
+    # but only while it is the connected source.
+    _settle(app, 300)
+    backend.setCommandedSpeedMps(19)
+    expect(abs(backend.core.state.commanded_mps - 19) < 1e-6,
+           "the bench could not set commanded speed in m/s")
+    expect(abs(backend.snapshot["commanded_mph"] - 19 * MPS_TO_MPH) < 1e-3,
+           "commanded speed not shown to the driver in mph")
+    backend.setCabinTemperatureC(20)
+    expect(abs(backend.core.state.cabin_temp_c - 20.0) < 0.01,
+           "cabin temperature not taken in Celsius")
+    expect(abs(backend.snapshot["cabin_temp_f"] - 68.0) < 0.01,
+           "cabin temperature not shown to the driver in Fahrenheit")
+
+    # A staged set applies in one call.
+    backend.applyInputs({"commanded_speed": 14, "beacon": "PLATFORM B",
+                         "signal_light_ahead": "GREEN"})
+    expect(backend.snapshot["beacon"] == "PLATFORM B",
+           "staged inputs did not apply")
+    expect(backend.snapshot["next_signal"] == "GREEN",
+           "staged aspect did not apply")
+    backend.applyInputs({"door_state_left": True, "light_state_cabin": False})
+    _settle(app, 400)
+    expect(backend.snapshot["fb_doors_left"],
+           "the plant wrote over a door state the bench published")
+    expect(not backend.snapshot["fb_lights"],
+           "the plant wrote over a light state the bench published")
+
+    # Another train, running its own plant, with its own gains.
+    first = backend.selected
+    backend.spawnTrain(301, "RED LINE", "f")
+    second = backend.selected
+    expect(second == "R-301", "spawning did not add the train asked for")
+    expect(backend.cores[second].state.authority_target == "F",
+           "a block typed in lower case did not come back capitalised")
+    expect(backend.snapshot["train_count"] == 2, "roster did not grow")
+    backend.spawnTrain(301, "RED LINE", "RED F")
+    expect(backend.snapshot["train_count"] == 2,
+           "spawning the same id twice added a second copy")
+    expect(not backend.core.armed, "a new train came up commissioned")
+    expect(backend.cores[first].armed, "spawning disarmed the first train")
+    backend.selectTrain(first)
+    expect(backend.selected == first, "could not go back to the first train")
+
+    # Ten times real time moves the simulation, not the tick rate.
+    before = backend.core.state.actual_mps
+    backend.setSimRate(SIM_RATES.index(10))
+    expect(abs(backend.core.dt - 10 / CONTROL_HZ) < 1e-9,
+           "the simulation rate did not reach the plant")
+    _settle(app, 500)
+    backend.setSimRate(SIM_RATES.index(1))
+    expect(abs(backend.core.state.actual_mps - before) > 1e-6,
+           "ten times real time did not move the train any faster")
+
+    backend.setAuthorityBlocks(3)
+    expect(backend.core.state.authority_blocks == 3,
+           "authority not taken as a block count")
+    backend.setSignalAhead(0)
+    expect(backend.snapshot["next_signal"] == "RED", "aspect not set")
+    backend.setFailure("brake", True)
+    _settle(app, 300)
+    expect(backend.core.state.emergency_brake,
+           "an equipment failure did not stop the train")
+    if shots:
+        bench.grabWindow().save(str(shots / "06-test.png"))
+    backend.setFailure("brake", False)
+
+    backend.toggleEmergencyBrake()
+    _settle(app, 300)
+
+    # Entering a block spends authority and steps the aspect on.
+    before_blocks = backend.core.state.authority_blocks
+    before_aspect = backend.snapshot["signal_index"]
+    backend.core.enter_block()
+    expect(backend.core.state.authority_blocks == before_blocks - 1,
+           "entering a block did not spend authority")
+    expect(backend.snapshot["signal_index"]
+           == (before_aspect + 1) % len(ASPECTS),
+           "entering a block did not step the signal aspect")
+    while backend.core.state.authority_blocks > 0:
+        backend.core.enter_block()
+    backend.core.enforce_safety()
+    expect(backend.core.state.emergency_brake,
+           "running out of authority did not stop the train")
+    backend.applyInputs({"authority_blocks": 6})
+    backend.toggleEmergencyBrake()
+    _settle(app, 300)
+
     # Announcements lock out for their duration.
     backend.announce()
     expect(backend.snapshot["announcing"], "announcement did not start")
@@ -829,8 +1240,10 @@ def run_check(app: QGuiApplication, window: Any, backend: ConsoleBackend,
 # ================================================================ main
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--real", action="store_true",
-                        help="drive the Pi hardware over SPI and GPIO")
+    parser.add_argument("--test", action="store_true",
+                        help="open the Train Model bench instead")
+    parser.add_argument("--both", action="store_true",
+                        help="open the console and the bench together")
     parser.add_argument("--check", action="store_true",
                         help="run offscreen, exercise the console, report")
     parser.add_argument("--shots", metavar="DIR",
@@ -860,14 +1273,14 @@ def main() -> int:
     base_font.setPixelSize(theme["size_body"])
     app.setFont(base_font)
 
-    hw: HardwareInterface = PiHardware() if args.real else HardwareInterface()
-    core = ControllerCore(hw)
     # Keep Python-side references so the objects are not garbage collected
     # while QML holds only C++ pointers to them.
-    backend = ConsoleBackend(core)
+    backend = ConsoleBackend()
 
     if not check_shared_library():
         return 1
+
+    contract_ok = check_snapshot_contract(backend)
 
     engine = QQmlApplicationEngine()
     # Qt logs QML errors through the message handler, which a debugger
@@ -883,29 +1296,39 @@ def main() -> int:
     context.setContextProperty("theme", theme)
     context.setContextProperty("controller", backend)
 
-    engine.load(QUrl.fromLocalFile(str(_MAIN_QML)))
-    if not engine.rootObjects():
-        print(f"Failed to load {_MAIN_QML}.", file=sys.stderr)
+    wanted = []
+    if args.both or args.check or not args.test:
+        wanted.append(_CONSOLE_QML)
+    if args.both or args.check or args.test:
+        wanted.append(_TEST_QML)
+    for qml in wanted:
+        engine.load(QUrl.fromLocalFile(str(qml)))
+    if len(engine.rootObjects()) != len(wanted):
+        print("Failed to load "
+              + ", ".join(str(q) for q in wanted), file=sys.stderr)
         for issue in qml_errors:
             print(f"  {issue}", file=sys.stderr)
         return 1
 
-    window = engine.rootObjects()[0]
-    aspect_lock = install_window_scaling(window)  # noqa: F841  keep alive
+    # Each window scales on its own; the locks stay alive with them.
+    locks = [install_window_scaling(w)  # noqa: F841
+             for w in engine.rootObjects()]
+    windows = {qml.stem: w
+               for qml, w in zip(wanted, engine.rootObjects())}
 
     if args.check:
         shots = Path(args.shots) if args.shots else None
-        code = run_check(app, window, backend, warnings, shots)
+        code = run_check(app, windows["ConsoleWindow"],
+                         windows["TestWindow"], backend, warnings, shots)
+        code = code or (0 if contract_ok else 1)
         qInstallMessageHandler(None)
         del engine
-        hw.close()
         return code
 
     exit_code = app.exec()
     # Tear down QML before the objects it binds to, so bindings do not
     # re-evaluate against deleted objects during shutdown.
     del engine
-    hw.close()
     return exit_code
 
 
