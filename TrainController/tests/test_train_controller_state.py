@@ -246,6 +246,42 @@ class ComfortTests(unittest.TestCase):
         self.assertEqual(self.state.snapshot["announcement"], "")
 
 
+class SignalAspectTests(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.state = TrainControllerState()
+
+    def test_seed_aspect_is_a_placeholder(self) -> None:
+        snap = self.state.snapshot
+        self.assertEqual(snap["signal_aspect"], "GREEN")
+        self.assertEqual(snap["signal_aspect_source"], "placeholder")
+
+    def test_track_model_aspect_replaces_placeholder(self) -> None:
+        self.state.receive_signal_aspect("SUPER GREEN")
+        snap = self.state.snapshot
+        self.assertEqual(snap["signal_aspect"], "SUPER GREEN")
+        self.assertEqual(snap["signal_aspect_source"], "track_model")
+
+    def test_unknown_aspect_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            self.state.receive_signal_aspect("BLUE")
+
+    def test_aspect_is_display_only(self) -> None:
+        green = TrainControllerState()
+        self.state.receive_signal_aspect("RED")
+        _run(green, 20)
+        _run(self.state, 20)
+        self.assertEqual(self.state.current_speed_mps,
+                         green.current_speed_mps)
+        self.assertEqual(self.state.distance_travelled_m,
+                         green.distance_travelled_m)
+
+    def test_driver_ui_cannot_set_the_aspect(self) -> None:
+        meta = self.state.metaObject()
+        self.assertEqual(
+            meta.indexOfMethod("receive_signal_aspect(QString)"), -1)
+
+
 class GainTests(unittest.TestCase):
 
     def setUp(self) -> None:

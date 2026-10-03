@@ -43,6 +43,12 @@ shared component library in the repository-level `ui/` folder.
 - **Toolchain:** PySide6 and PyInstaller now come from `TrainController/.venv`
   only, per truth `conventions/toolchain.md`.
 - **Tests:** 36 cases (was 24), including a new `tests/test_track_layout.py`.
+- **Signal aspect** (addendum, commit "Train Controller: signal aspect is a
+  Track Model input (placeholder)"): the aspect is a Track Model output, fed
+  through `receive_signal_aspect()`, which is not a QML slot. GREEN is a
+  labelled placeholder until then, and the aspect is display only. 41 tests.
+  A truth proposal (`truth/_inbox/Train-Ctrl_SW/20261002-2258-signal-aspect.md`)
+  records the signal.
 
 ### Corrected
 

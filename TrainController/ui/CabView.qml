@@ -91,9 +91,16 @@ RowLayout {
                 : "SIGNAL AHEAD"
         }
 
+        // Read-only: the aspect is a Track Model output, never set here.
         SignalAspectRow {
             Layout.fillWidth: true
             aspect: root.snapshot.signal_aspect
+        }
+
+        HelperText {
+            Layout.fillWidth: true
+            visible: root.snapshot.signal_aspect_source === "placeholder"
+            text: "Placeholder — the Track Model will supply this signal."
         }
 
         FieldLabel {

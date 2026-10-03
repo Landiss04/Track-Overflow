@@ -64,6 +64,16 @@ of section M). Ahead are GLENBURY (block 65) and DORMONT (block 73), both with
 right-side platforms. The speed limit is that of the occupied block, read from
 `TrackModel/green_line.json`.
 
+## Track Model inputs
+
+- **Signal aspect** (RED / YELLOW / GREEN / SUPER GREEN) is a Track Model
+  output. Until the Track Model is connected, the cab shows GREEN as a
+  placeholder and says so under the aspect row. The central harness will call
+  `TrainControllerState.receive_signal_aspect(aspect)` with the real value.
+  It is not a QML slot: the driver can never set it. For now the aspect is
+  **display only** and does not change speed, braking or authority. A truth
+  proposal for this signal is in `truth/_inbox/Train-Ctrl_SW/`.
+
 ## What you can do
 
 | Control | Effect |
@@ -118,3 +128,5 @@ wireframe/                                 reference PNG and HTML wireframe (Fig
    `Popup` would be drawn outside the scaled canvas and would not scale.
 9. **Arrival time** is computed from the distance and current speed, and
    shows `—` when stopped.
+10. **Signal aspect is a placeholder** (GREEN) until the Track Model supplies
+    it, and it has no effect on control yet.

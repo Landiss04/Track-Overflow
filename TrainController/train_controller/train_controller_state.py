@@ -135,7 +135,10 @@ class TrainControllerState(QObject):
         self.clock_s = 21 * 3600 + 26 * 60 + 35
         self.mode = DriveMode.MANUAL
         self.user_role = UserRole.DRIVER
+        # The signal aspect is a Track Model output. Until the Track
+        # Model is connected, GREEN is a placeholder for display.
         self.signal_aspect = SignalAspect.GREEN
+        self.signal_aspect_from_track_model = False
 
         self.distance_travelled_m = 0.0
         self.current_speed_mps = mph_to_mps(SEED_SPEED_MPH)
@@ -333,6 +336,10 @@ class TrainControllerState(QObject):
             "next_block": next_block.block_id if next_block else "",
             "authority_block": self.authority_block_id,
             "signal_aspect": self.signal_aspect.value,
+            "signal_aspect_source": (
+                "track_model" if self.signal_aspect_from_track_model
+                else "placeholder"
+            ),
             "current_speed_mph": round(mps_to_mph(self.current_speed_mps)),
             "speed_limit_mph": round(mps_to_mph(self.speed_limit_mps)),
             "ctc_speed_mph": round(mps_to_mph(self.ctc_speed_mps)),
@@ -409,6 +416,23 @@ class TrainControllerState(QObject):
             })
         tiles.reverse()
         return tiles
+
+    # ------------------------------------------------------------------
+    # Track Model inputs
+    # ------------------------------------------------------------------
+
+    def receive_signal_aspect(self, aspect: str) -> None:
+        """Accept the signal aspect for the block ahead.
+
+        The Track Model produces this value; the central harness will
+        call this method with it. It is deliberately not a QML slot,
+        because the driver cannot set a wayside signal. The aspect is
+        displayed only and does not change speed, braking or authority.
+        Raise ``ValueError`` for an aspect that is not recognised.
+        """
+        self.signal_aspect = SignalAspect(aspect)
+        self.signal_aspect_from_track_model = True
+        self.snapshotChanged.emit()
 
     # ------------------------------------------------------------------
     # Driver actions
