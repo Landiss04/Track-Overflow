@@ -18,7 +18,11 @@ The two pages are **independent windows, each its own process**:
   latch, and reset. Its clock is the shared simulation clock
   (`utils/system_clock.py`): each step is one clock tick, dt is the clock's
   fixed tick length, and the **1x / 10x** speed toggle changes only how often
-  ticks happen.
+  ticks happen. A step is checked with the module's own input rules before
+  its tick, so rejected input never advances the clock, and the clock is held
+  as soon as the Train Model drops. Every 30 ticks the test UI compares the
+  clock with the steps the module accepted and shows any gap as **Clock
+  drift**.
 
 Once the system is integrated, the central harness calls the same
 `TrainModelState.step` the link calls; the test UI and the link are removed

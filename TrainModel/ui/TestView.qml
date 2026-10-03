@@ -242,7 +242,28 @@ ScrollView {
                     Layout.fillWidth: true
                     label: qsTr("Elapsed")
                     value: harness.elapsed
+                }
+
+                // Checked every 30 clock ticks: ticks the shared clock
+                // spent that the Train Model did not take.
+                KeyValueRow {
+                    objectName: "clockDrift"
+                    Layout.fillWidth: true
+                    label: qsTr("Clock drift")
+                    value: (harness.driftTicks === 1 ? qsTr("1 tick")
+                            : qsTr("%1 ticks").arg(harness.driftTicks))
+                        + qsTr(" (%1 s)").arg(
+                            (harness.driftTicks * harness.dt).toFixed(1))
                     rule: false
+                }
+
+                HelperText {
+                    objectName: "driftWarning"
+                    Layout.fillWidth: true
+                    visible: harness.driftTicks > 0
+                    text: qsTr("The Train Model is behind the shared "
+                        + "clock. Reset the module to realign them.")
+                    color: theme.warning
                 }
             }
         }

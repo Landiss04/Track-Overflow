@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / "TrainModel")]
 
 from train_model.harness import TestHarnessState  # noqa: E402
-from train_model.link import LocalLink  # noqa: E402
+from train_model.link import LinkError, LocalLink  # noqa: E402
 from train_model.state import TrainModelState  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
@@ -31,7 +31,8 @@ def walk(item):
 def main():
     app = QGuiApplication([])
     state = TrainModelState()
-    harness = TestHarnessState(LocalLink(state))
+    link = LocalLink(state)
+    harness = TestHarnessState(link)
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("theme", build_theme())
     engine.rootContext().setContextProperty("harness", harness)
@@ -95,6 +96,31 @@ def main():
     assert speed_row.property("value") > before
     assert speed_row.property("value") == harness.outputValues[
         "actual_speed"]
+
+    # Clock drift: none while every tick is a step; a lost step shows
+    # at the next 30-tick check, with a warning, until a reset.
+    drift = named("clockDrift")
+    warning = named("driftWarning")
+    for _ in range(30):
+        harness.advanceTick()
+    QTest.qWait(10)
+    assert drift.property("value") == "0 ticks (0.0 s)"
+    assert not warning.isVisible()
+
+    def lose_reply(*args, **kwargs):
+        del link.step  # back to the real step for the next tick
+        raise LinkError("Train Model did not respond")
+
+    link.step = lose_reply
+    for _ in range(30):
+        harness.advanceTick()
+    QTest.qWait(10)
+    assert drift.property("value") == "1 tick (0.1 s)"
+    assert warning.isVisible()
+    harness.resetModule()
+    QTest.qWait(10)
+    assert drift.property("value") == "0 ticks (0.0 s)"
+    assert not warning.isVisible()
     del engine
     del app
 
