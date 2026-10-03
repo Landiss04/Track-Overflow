@@ -60,7 +60,11 @@ DISPATCHER_DEFAULTS: dict[str, tuple[str, Any, str]] = {
     "dispatch_orders": ("string", "", ""),
     "closed_blocks": ("string", "", ""),
     "maintenance_mode": ("bool", False, ""),
+    "clock_speedup": ("bool", False, ""),
 }
+
+#: Dispatcher rows the CTC UI owns when it is attached.
+_CTC_UI_OWNED = frozenset({"maintenance_mode", "clock_speedup"})
 
 #: How each text row is written. Shown in the test UI.
 INPUT_FORMATS: dict[str, str] = {
@@ -195,6 +199,12 @@ def output_rows(outputs: CtcOutputs, tickets_total: int,
         "value": outputs.track_controller.maintenance_mode,
         "unit": "",
     })
+    rows.append({
+        "name": "clock_speedup",
+        "kind": "bool",
+        "value": outputs.clock_speedup,
+        "unit": "",
+    })
     rows.append({"name": "tickets_sold_total", "kind": "int",
                  "value": tickets_total, "unit": "tickets"})
     rows.append({"name": "elapsed", "kind": "float",
@@ -249,9 +259,10 @@ class CtcTestHarness(QObject):
     def dispatcherInputs(self) -> list[dict[str, Any]]:  # noqa: N802
         rows = _rows(DISPATCHER_DEFAULTS, self._dispatcher)
         if self._link.ctc_ui_attached:
-            # The CTC UI's operating mode owns maintenance mode; it
-            # shows in the outputs instead.
-            rows = [r for r in rows if r["name"] != "maintenance_mode"]
+            # The CTC UI owns maintenance mode (operating mode) and
+            # clock speedup (clock speed); they show in the outputs.
+            rows = [r for r in rows
+                    if r["name"] not in _CTC_UI_OWNED]
         return rows
 
     @Property(list, notify=outputsChanged)
@@ -345,6 +356,8 @@ class CtcTestHarness(QObject):
         if not self._link.ctc_ui_attached:
             self._link.set_maintenance_mode(
                 bool(self._dispatcher["maintenance_mode"]))
+            self._link.set_clock_speedup(
+                bool(self._dispatcher["clock_speedup"]))
         self._applied_orders = orders
         self._applied_closed = closed
 

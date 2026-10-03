@@ -68,6 +68,8 @@ def main() -> int:
     # CTC runs normally if the link cannot start.
     clock_link = ClockLinkServer(sim_clock, parent=app)
     clock_link.listen()
+    # The clock speed control drives the module's clock_speedup output.
+    ctc.follow_clock(sim_clock)
 
     engine.load(QUrl.fromLocalFile(str(_MAIN_QML)))
     if not engine.rootObjects():

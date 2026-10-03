@@ -29,6 +29,7 @@ from ctc.interface import (  # noqa: E402
 from ctc.model import StubCtcOffice  # noqa: E402
 from ctc.socket_link import LinkError, RemoteCtcError, SocketLink  # noqa
 from ctc.wire import inputs_from_wire, snapshot_from_wire, to_wire  # noqa
+from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 
 HOST = Path(__file__).with_name("link_host.py")
 
@@ -52,6 +53,7 @@ class WireTest(unittest.TestCase):
         ctc = StubCtcOffice()
         ctc.dispatch("T1", "A9")
         ctc.set_block_closed("C2", True)
+        ctc.set_clock_speedup(True)
         ctc.step(0.1, CtcInputs(track_model=TrackModelInputs(4)))
         snap = ctc.snapshot()
         self.assertEqual(snapshot_from_wire(to_wire(snap)), snap)
@@ -91,6 +93,16 @@ class SocketLinkTest(unittest.TestCase):
         (suggestion,) = out.track_controller.suggestions
         self.assertEqual(suggestion.authority_block_id, "A9")
         self.assertEqual(self.link.snapshot().tickets_sold_total, 5)
+
+    def test_clock_speedup_reaches_the_remote_module(self) -> None:
+        self.link.set_clock_speedup(True)
+        self.assertTrue(self.link.snapshot().outputs.clock_speedup)
+
+    def test_attached_ui_owns_its_controls(self) -> None:
+        harness = CtcTestHarness(self.link)
+        names = {row["name"] for row in harness.dispatcherInputs}
+        self.assertNotIn("maintenance_mode", names)
+        self.assertNotIn("clock_speedup", names)
 
     def test_remote_rejection_is_reported(self) -> None:
         with self.assertRaises(RemoteCtcError):

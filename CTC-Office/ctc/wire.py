@@ -58,7 +58,8 @@ def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
                               for s in track.get("suggestions", ())),
             closed_block_ids=tuple(track.get("closed_block_ids", ())),
             maintenance_mode=bool(track.get("maintenance_mode", False)),
-        )
+        ),
+        clock_speedup=bool(data.get("clock_speedup", False)),
     )
 
 

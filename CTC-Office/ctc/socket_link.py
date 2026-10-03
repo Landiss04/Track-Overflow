@@ -153,6 +153,8 @@ class CtcLinkServer(QObject):
                                               bool(args["closed"]))
             elif op == "set_maintenance_mode":
                 self._module.set_maintenance_mode(bool(args["active"]))
+            elif op == "set_clock_speedup":
+                self._module.set_clock_speedup(bool(args["active"]))
             elif op != "snapshot":
                 return {"op": "error", "message": f"unknown op {op!r}"}
         except (CtcError, KeyError, TypeError, ValueError) as error:
@@ -221,6 +223,9 @@ class SocketLink(QObject):
 
     def set_maintenance_mode(self, active: bool) -> None:
         self._call("set_maintenance_mode", active=active)
+
+    def set_clock_speedup(self, active: bool) -> None:
+        self._call("set_clock_speedup", active=active)
 
     def reset(self) -> None:
         """Not available: the module belongs to the CTC Office."""

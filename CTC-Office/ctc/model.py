@@ -82,6 +82,7 @@ class StubCtcOffice:
         self._orders: dict[str, str] = {}
         self._closed: set[str] = set()
         self._maintenance = False
+        self._clock_speedup = False
         self._inputs: CtcInputs | None = None
         self._elapsed_s = 0.0
         self._tickets_total = 0
@@ -131,6 +132,9 @@ class StubCtcOffice:
     def set_maintenance_mode(self, active: bool) -> None:
         self._maintenance = bool(active)
 
+    def set_clock_speedup(self, active: bool) -> None:
+        self._clock_speedup = bool(active)
+
     def load_schedule(self, schedule: Schedule) -> None:
         """Replace the schedule. With no scheduling algorithm yet, every
         run stays queued."""
@@ -156,5 +160,6 @@ class StubCtcOffice:
                 suggestions=suggestions,
                 closed_block_ids=tuple(sorted(self._closed)),
                 maintenance_mode=self._maintenance,
-            )
+            ),
+            clock_speedup=self._clock_speedup,
         )

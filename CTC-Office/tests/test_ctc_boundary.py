@@ -71,6 +71,14 @@ class StubModuleTest(unittest.TestCase):
         self.assertEqual(out.closed_block_ids, ("B2",))
         self.assertTrue(out.maintenance_mode)
 
+    def test_clock_speedup_output(self) -> None:
+        ctc = StubCtcOffice()
+        self.assertFalse(ctc.step(DT_S, CtcInputs()).clock_speedup)
+        ctc.set_clock_speedup(True)
+        self.assertTrue(ctc.step(DT_S, CtcInputs()).clock_speedup)
+        ctc.set_clock_speedup(False)
+        self.assertFalse(ctc.snapshot().outputs.clock_speedup)
+
     def test_bad_dt_rejected(self) -> None:
         ctc = StubCtcOffice()
         for dt in (0.0, -0.1, math.inf, math.nan):
@@ -145,6 +153,7 @@ class HarnessSendTest(unittest.TestCase):
         harness.setInput("dispatch_orders", "T1=A9; T2=B3")
         harness.setInput("closed_blocks", "C1")
         harness.setInput("maintenance_mode", True)
+        harness.setInput("clock_speedup", True)
         harness.setInput("ticket_sales", 7)
         harness.send()
         self.assertFalse(harness.statusIsError, harness.status)
@@ -156,6 +165,7 @@ class HarnessSendTest(unittest.TestCase):
                                      * MPS_TO_MPH, 1))
         self.assertEqual(rows["closed_blocks"], "C1")
         self.assertTrue(rows["maintenance_mode"])
+        self.assertTrue(rows["clock_speedup"])
         self.assertEqual(rows["tickets_sold_total"], 7)
 
         # Removing an order on the next Send cancels it.

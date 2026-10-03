@@ -33,8 +33,9 @@ It connects to the running CTC Office over a local socket, so both
 windows act on the one live CTC module; the badge reads **Connected**.
 **Send** applies the input rows and dispatcher actions and advances the
 CTC one 0.1 s tick; outputs are read back from the module, in display
-units (mph, ft). Maintenance mode is owned by the CTC window's
-operating mode, so the test UI shows it in Outputs only.
+units (mph, ft). Maintenance mode and clock speedup are owned by the
+CTC window (its operating mode and clock speed), so the test UI shows
+them in Outputs only; with `--standalone` both are dispatcher rows.
 
 To test the CTC module without the window, run the test UI with its own
 in-process module instead:
@@ -57,7 +58,9 @@ With no backend, only window-level UI state works:
   05:00:00 (24-hour). **Run** / **Pause** start and hold it, and the
   **1× / 10×** toggle sets its speed: at 1× one simulated second lasts one
   real second. The CTC owns the one shared clock until the central harness
-  takes it over.
+  takes it over. The speed is also the CTC's `clock_speedup` output (true
+  at 10×), the command the central harness will relay to every module so
+  they all run at one speed.
 - The **Operating mode** toggle switches the right-hand column between the
   Automatic, Manual, and Maintenance views. Maintenance also sets the
   CTC's `maintenance_mode` output, which the test UI shows.

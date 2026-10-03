@@ -2,15 +2,15 @@
 
 The window owns the one live CTC module. It also serves that module to
 the CTC test UI over ``ctc.socket_link``, so both windows act on the
-same state. Actions taken in the window (for now, the operating mode)
-are applied to the module and pushed to any connected test UI.
+same state. Actions taken in the window (the operating mode and the
+clock speed) are applied to the module and pushed to any connected test UI.
 """
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
@@ -18,6 +18,12 @@ from ctc.interface import CtcOffice
 from ctc.model import StubCtcOffice
 from ctc.schedule import ScheduleError, load_schedule
 from ctc.socket_link import CtcLinkServer
+
+if TYPE_CHECKING:
+    from ctc_ui.sim_clock import SimulationClockBridge
+
+#: The shared clock's fast-forward speed; clock_speedup means this.
+SPEEDUP_FACTOR = 10
 
 
 def _offset(seconds: int) -> str:
@@ -29,6 +35,7 @@ class CtcHost(QObject):
     """Bindable CTC module for ``Main.qml``, served to the test UI."""
 
     maintenanceModeChanged = Signal()
+    clockSpeedupChanged = Signal()
     scheduleChanged = Signal()
 
     def __init__(self, module: CtcOffice | None = None,
@@ -61,6 +68,27 @@ class CtcHost(QObject):
             return
         self._module.set_maintenance_mode(active)
         self.maintenanceModeChanged.emit()
+        self._server.push()
+
+    @Property(bool, notify=clockSpeedupChanged)
+    def clockSpeedup(self) -> bool:  # noqa: N802
+        return self._module.snapshot().outputs.clock_speedup
+
+    def follow_clock(self, clock: SimulationClockBridge) -> None:
+        """Keep clock_speedup in step with the window's clock speed."""
+        def apply() -> None:
+            # speedChanged also fires on pause; repeats are ignored.
+            self.setClockSpeedup(clock.speed == SPEEDUP_FACTOR)
+        clock.speedChanged.connect(apply)
+        apply()
+
+    @Slot(bool)
+    def setClockSpeedup(self, active: bool) -> None:  # noqa: N802
+        """Apply the window's clock speed (10x is True) to the module."""
+        if active == self.clockSpeedup:
+            return
+        self._module.set_clock_speedup(active)
+        self.clockSpeedupChanged.emit()
         self._server.push()
 
     # -- Schedule -----------------------------------------------------

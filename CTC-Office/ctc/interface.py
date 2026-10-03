@@ -124,6 +124,9 @@ class TrackControllerOutputs:
 @dataclass(frozen=True, slots=True)
 class CtcOutputs:
     track_controller: TrackControllerOutputs = TrackControllerOutputs()
+    # Clock speedup command, for the central harness to relay to every
+    # module so all run at one speed: True for 10x, False for 1x.
+    clock_speedup: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +186,10 @@ class CtcOffice(Protocol):
         ...
 
     def set_maintenance_mode(self, active: bool) -> None:
+        ...
+
+    def set_clock_speedup(self, active: bool) -> None:
+        """Command the shared clock to 10x (True) or 1x (False)."""
         ...
 
     def load_schedule(self, schedule: Schedule) -> None:
