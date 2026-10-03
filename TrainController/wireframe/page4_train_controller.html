@@ -94,6 +94,25 @@
   }
   .seg span + span { border-left: 1px solid var(--line-strong); }
   .seg span.on { font-weight: 700; background: var(--fill-btn); box-shadow: inset 0 -2px 0 var(--ink-2); }
+  .badge {
+    margin-left: 12px; padding: 0 10px; height: 22px;
+    display: flex; align-items: center;
+    border: 1px solid var(--ink-2); border-radius: 999px;
+    font: 700 10px/1 var(--ui); letter-spacing: .08em;
+  }
+  .header .line { font: 400 11px/1 var(--mono); color: var(--muted); margin-right: 12px; }
+  .strip {
+    height: 50px; flex: none;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 12px 0 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--fill-panel);
+  }
+  .block-badge {
+    margin-left: 8px; padding: 2px 8px;
+    border: 1px solid var(--ink-2); border-radius: 999px;
+    font: 700 9px/1 var(--ui); letter-spacing: .08em;
+  }
   .clock {
     margin-left: 12px; padding-left: 12px;
     border-left: 1px solid var(--line);
@@ -173,11 +192,11 @@
   .arrow .train { position: absolute; left: 0; bottom: 0; width: 15px; height: 33px; background: var(--fill-dark); }
   .block-row { display: flex; align-items: center; gap: 16px; }
   .block {
-    width: 360px; height: 86px;
+    width: 360px; height: 66px;
     border: 1px solid var(--line-strong);
     background: var(--fill-panel);
     padding: 0 16px;
-    display: flex; flex-direction: column; justify-content: center; gap: 12px;
+    display: flex; flex-direction: column; justify-content: center; gap: 8px;
   }
   .block .name { font: 400 15px/1 var(--ui); letter-spacing: .02em; }
   .block .note { font: 400 11.5px/1 var(--ui); letter-spacing: .03em; color: var(--muted); }
@@ -286,9 +305,14 @@
 
   <header class="header">
     <div class="brand">
-      <h1>TRAIN CONTROLLER</h1>
-      <p class="label">GREEN LINE · BLOCK GREEN I</p>
+      <h1>TRAIN CONTROLLER <span class="mono">T-214</span></h1>
     </div>
+    <span class="badge">MANUAL</span>
+    <div class="spacer"></div>
+    <span class="line">Green Line</span>
+    <div class="clock">21:26:35</div>
+  </header>
+  <div class="strip">
     <div class="train-pick">
       <span class="label">TRAIN</span>
       <div class="select">T-214</div>
@@ -302,8 +326,7 @@
       <span class="label">MODE</span>
       <div class="seg"><span>AUTOMATIC</span><span class="on">MANUAL</span></div>
     </div>
-    <div class="clock">21:26:35</div>
-  </header>
+  </div>
 
   <main class="body">
 
@@ -312,15 +335,15 @@
       <div class="panel grow">
         <div class="panel-head">
           <span>SPEED AND TRACK AHEAD</span>
-          <span class="right">GREEN I · 10,032 FT AUTHORITY</span>
+          <span class="right">BLOCK 62 · SECTION J</span>
         </div>
         <div class="panel-body">
           <div class="readouts">
-            <div class="readout"><span class="label">CURRENT SPEED</span><span class="value">32 MPH</span></div>
-            <div class="readout"><span class="label">SPEED LIMIT</span><span class="value">45 MPH</span></div>
-            <div class="readout"><span class="label">TO STOP POINT</span><span class="value">10,032 FT</span></div>
+            <div class="readout"><span class="label">CURRENT SPEED</span><span class="value">15 MPH</span></div>
+            <div class="readout"><span class="label">SPEED LIMIT</span><span class="value">19 MPH</span></div>
+            <div class="readout"><span class="label">AUTHORITY</span><span class="value">76</span></div>
           </div>
-          <p class="label" style="margin-top:6px">SIGNAL AHEAD · ENTERING GREEN J</p>
+          <p class="label" style="margin-top:6px">SIGNAL AHEAD · ENTERING BLOCK 63</p>
           <div class="aspects">
             <div class="aspect">RED</div>
             <div class="aspect">YELLOW</div>
@@ -331,26 +354,27 @@
           <div class="track">
             <div class="arrow"><div class="train"></div></div>
             <div class="block-row">
-              <div class="block closed"><span class="name">GREEN N</span><span class="note">CLOSED</span></div>
+              <div class="block"><span class="name">67 · FREE</span><span class="note">SECTION K</span></div>
+              <span class="block-dist">2,133 FT</span>
             </div>
             <div class="block-row">
-              <div class="block stop"><span class="name">GREEN M</span><span class="note">STOP IN THIS BLOCK</span></div>
-              <span class="block-dist">10,032 FT</span>
+              <div class="block"><span class="name">66 · FREE</span><span class="note">SECTION K</span></div>
+              <span class="block-dist">1,476 FT</span>
             </div>
             <div class="block-row">
-              <div class="block"><span class="name">GREEN L</span><span class="note">[STATION]</span></div>
-              <span class="block-dist">4,224 FT</span>
+              <div class="block"><span class="name">65 · FREE</span><span class="note">SECTION K · GLENBURY · PLATFORM RIGHT</span></div>
+              <span class="block-dist">820 FT</span>
             </div>
             <div class="block-row">
-              <div class="block"><span class="name">GREEN K</span><span class="note">CLEAR</span></div>
-              <span class="block-dist">2,640 FT</span>
+              <div class="block"><span class="name">64 · FREE</span><span class="note">SECTION K</span></div>
+              <span class="block-dist">492 FT</span>
             </div>
             <div class="block-row">
-              <div class="block"><span class="name">GREEN J</span><span class="note">CLEAR</span></div>
-              <span class="block-dist">1,320 FT</span>
+              <div class="block"><span class="name">63 · FREE</span><span class="note">SECTION K</span></div>
+              <span class="block-dist">164 FT</span>
             </div>
             <div class="block-row">
-              <div class="block current"><span class="name">GREEN I</span><span class="note">T-214 IS HERE</span></div>
+              <div class="block current"><span class="name">62 · OCCUPIED</span><span class="note">SECTION J · T-214 IS HERE</span></div>
             </div>
           </div>
         </div>
@@ -359,20 +383,18 @@
 
     <!-- Middle: speed, brakes, doors -->
     <section class="col">
-      <div class="banner"><b>MANUAL</b><span>CTC speed control is off.</span></div>
-
       <div class="panel">
-        <div class="panel-head"><span>SPEED</span></div>
+        <div class="panel-head"><span>SPEED</span><span class="right small">DRIVER CONTROL</span></div>
         <div class="panel-body">
           <div class="pair">
-            <div class="field"><span class="label">TARGET SPEED</span><div class="box">35 MPH</div></div>
+            <div class="field"><span class="label">TARGET SPEED</span><div class="box">17 MPH</div></div>
             <div class="field"><span class="label">SET BY</span><div class="box">DRIVER</div></div>
           </div>
           <div class="pair">
             <div class="btn big">SLOWER</div>
             <div class="btn big">FASTER</div>
           </div>
-          <div class="btn thin">USE CTC TARGET · 35 MPH</div>
+          <div class="btn thin">USE CTC TARGET · 17 MPH</div>
         </div>
       </div>
 
@@ -383,7 +405,7 @@
           <div class="toggle"><span class="on">OFF</span><span>ON</span></div>
           <div class="ebrake">
             <b>EMERGENCY BRAKE</b>
-            <span>FULL STOP · THE OFFICE MUST RELEASE IT</span>
+            <span>FULL STOP · RELEASE IT ONCE THE TRAIN HAS STOPPED</span>
           </div>
         </div>
       </div>
@@ -392,8 +414,8 @@
         <div class="panel-head"><span>DOORS</span><span class="right small">SHUT</span></div>
         <div class="panel-body">
           <div class="doors">
-            <div class="btn">OPEN LEFT<span class="sub">PLATFORM SIDE</span></div>
-            <div class="btn disabled">OPEN RIGHT<span class="sub">NO PLATFORM</span></div>
+            <div class="btn disabled">OPEN LEFT<span class="sub">NO PLATFORM</span></div>
+            <div class="btn disabled">OPEN RIGHT<span class="sub">STOP AT A PLATFORM</span></div>
           </div>
         </div>
       </div>
@@ -405,10 +427,11 @@
         <div class="panel-head"><span>NEXT STATION</span></div>
         <div class="panel-body">
           <div>
-            <div class="kv"><span class="label">STATION</span><span class="v">[STATION]</span></div>
-            <div class="kv"><span class="label">ARRIVES</span><span class="v">08:47</span></div>
-            <div class="kv"><span class="label">DISTANCE</span><span class="v">4,224 FT</span></div>
-            <div class="kv"><span class="label">DOORS OPEN</span><span class="v">LEFT</span></div>
+            <div class="kv"><span class="label">STATION</span><span class="v">GLENBURY</span></div>
+            <div class="kv"><span class="label">BLOCK</span><span class="v">65</span></div>
+            <div class="kv"><span class="label">ARRIVES</span><span class="v">21:27</span></div>
+            <div class="kv"><span class="label">DISTANCE</span><span class="v">820 FT</span></div>
+            <div class="kv"><span class="label">DOORS OPEN</span><span class="v">RIGHT</span></div>
           </div>
           <div class="btn thin" style="height:38px;font-size:12.5px">ANNOUNCE AGAIN</div>
         </div>
