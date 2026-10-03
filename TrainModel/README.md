@@ -37,6 +37,14 @@ properties: `theme` and `trainModel` in the Train Model window, `theme` and
 See [open issues](docs/open-issues.md) for speed-control ownership,
 vehicle calibration, and the displayed power-consumption limitation.
 
+Detailed documentation in `docs/`:
+
+- [physics.md](docs/physics.md): exactly what each step computes.
+- [module-interface.md](docs/module-interface.md): calls, inputs, outputs,
+  errors and timing at the module boundary.
+- [integration.md](docs/integration.md): removing the test UI and wiring the
+  module into the system.
+
 ## Physics stepping
 
 Commands are held for the complete tick. Traction is evaluated at the
