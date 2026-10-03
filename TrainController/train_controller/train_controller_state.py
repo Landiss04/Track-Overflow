@@ -1,8 +1,12 @@
 """Observable state and light simulation for the Train Controller cab.
 
 The driver's cab (page 4) binds to one ``TrainControllerState``. State
-is held in SI units (``common/Units.md`` backend units) and converted to
-mph, ft and deg F only when the snapshot is built for QML.
+is held in backend units (``truth/conventions/units.md``) and converted
+to mph, ft and deg F only when the snapshot is built for QML.
+
+The route is real Green Line track, loaded from the layout file at
+startup. Authority is a block ID: the train may travel to the end of
+that block and no further.
 
 The simulation is deliberately light: a fixed-rate tick eases the speed
 toward the target, applies brake deceleration, and counts distances
@@ -13,16 +17,22 @@ recorded in ``TrainController/README.md``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
+from train_controller.track_layout import (
+    GREEN_LINE_PATH,
+    TrackBlock,
+    load_line,
+    route_between,
+)
 from train_controller.units import (
     c_to_f,
     f_to_c,
-    ft_to_m,
     m_to_ft,
     mph_to_mps,
     mps_to_mph,
@@ -36,11 +46,22 @@ EMERGENCY_DECEL_MPS2 = 2.73
 SERVICE_DECEL_MPS2 = 1.2
 EASE_ACCEL_MPS2 = 0.5
 CABIN_TEMP_DRIFT_F_PER_S = 0.1
+STANDSTILL_MPS = 0.01
 
 TEMP_SETPOINT_MIN_F = 60
 TEMP_SETPOINT_MAX_F = 80
 ANNOUNCEMENT_DURATION_S = 5.0
 GAIN_STEPS: tuple[float, ...] = (0.001, 0.010, 0.100, 1.000)
+TRACK_AHEAD_SLOTS = 6
+
+# Seed scenario: T-214 entering block 62 (section J) with authority to
+# the end of block 76 (section M). Stations on the way are GLENBURY (65)
+# and DORMONT (73), both with a right-side platform.
+SEED_TRAIN_ID = "T-214"
+SEED_START_BLOCK = "62"
+SEED_AUTHORITY_BLOCK = "76"
+SEED_SPEED_MPH = 15
+SEED_CTC_SPEED_MPH = 17
 
 
 class DriveMode(Enum):
@@ -73,37 +94,6 @@ class SignalAspect(Enum):
     SUPER_GREEN = "SUPER GREEN"
 
 
-class BlockKind(Enum):
-    """What the driver needs to know about a block ahead."""
-
-    CLEAR = "clear"
-    STATION = "station"
-    STOP = "stop"
-    CLOSED = "closed"
-
-
-@dataclass(frozen=True)
-class TrackBlock:
-    """One block on the route, located by where it starts."""
-
-    block_id: str
-    start_m: float
-    kind: BlockKind
-    station_name: str = ""
-
-
-# Seeded to match the page 4 wireframe. Distances are measured from the
-# train's starting position at the entry of GREEN I.
-_SEED_ROUTE: tuple[TrackBlock, ...] = (
-    TrackBlock("GREEN I", ft_to_m(0), BlockKind.CLEAR),
-    TrackBlock("GREEN J", ft_to_m(1320), BlockKind.CLEAR),
-    TrackBlock("GREEN K", ft_to_m(2640), BlockKind.CLEAR),
-    TrackBlock("GREEN L", ft_to_m(4224), BlockKind.STATION, "[STATION]"),
-    TrackBlock("GREEN M", ft_to_m(10032), BlockKind.STOP),
-    TrackBlock("GREEN N", ft_to_m(11352), BlockKind.CLOSED),
-)
-
-
 def _format_clock(seconds: float) -> str:
     whole = int(seconds) % 86400
     return f"{whole // 3600:02d}:{whole % 3600 // 60:02d}:{whole % 60:02d}"
@@ -120,12 +110,27 @@ class TrainControllerState(QObject):
 
     snapshotChanged = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        layout_path: Path = GREEN_LINE_PATH,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
-        self.train_id = "T-214"
-        self.line = "Green Line"
-        self.route = _SEED_ROUTE
-        self.authority_end_m = ft_to_m(10032)
+        line_name, line_blocks = load_line(layout_path)
+        self.train_id = SEED_TRAIN_ID
+        self.line = f"{line_name} Line"
+        self.authority_block_id = SEED_AUTHORITY_BLOCK
+        self.route = route_between(
+            line_blocks, SEED_START_BLOCK, SEED_AUTHORITY_BLOCK)
+
+        # Distance along the route at which each block starts.
+        self._block_starts_m: list[float] = []
+        start_m = 0.0
+        for block in self.route:
+            self._block_starts_m.append(start_m)
+            start_m += block.length_m
+        # The train may travel to the end of its authority block.
+        self.authority_end_m = start_m
 
         self.clock_s = 21 * 3600 + 26 * 60 + 35
         self.mode = DriveMode.MANUAL
@@ -133,10 +138,9 @@ class TrainControllerState(QObject):
         self.signal_aspect = SignalAspect.GREEN
 
         self.distance_travelled_m = 0.0
-        self.current_speed_mps = mph_to_mps(32)
-        self.speed_limit_mps = mph_to_mps(45)
-        self.ctc_speed_mps = mph_to_mps(35)
-        self.target_speed_mps = mph_to_mps(35)
+        self.current_speed_mps = mph_to_mps(SEED_SPEED_MPH)
+        self.ctc_speed_mps = mph_to_mps(SEED_CTC_SPEED_MPH)
+        self.target_speed_mps = mph_to_mps(SEED_CTC_SPEED_MPH)
         self.target_source = SpeedSource.DRIVER
 
         self.service_brake = False
@@ -214,7 +218,7 @@ class TrainControllerState(QObject):
 
     def _must_stop_for_authority(self, dt: float) -> bool:
         # Brake once the service-brake stopping distance, plus one tick
-        # of travel, reaches the end of the authority.
+        # of travel, reaches the end of the authority block.
         speed_mps = self.current_speed_mps
         braking_distance_m = speed_mps ** 2 / (2 * SERVICE_DECEL_MPS2)
         return self.authority_left_m <= braking_distance_m + speed_mps * dt
@@ -226,7 +230,7 @@ class TrainControllerState(QObject):
     @property
     def is_stopped(self) -> bool:
         """Whether the train is at a standstill."""
-        return self.current_speed_mps < 0.01
+        return self.current_speed_mps < STANDSTILL_MPS
 
     @property
     def any_door_open(self) -> bool:
@@ -235,8 +239,27 @@ class TrainControllerState(QObject):
 
     @property
     def authority_left_m(self) -> float:
-        """Distance remaining to the stop point."""
+        """Distance remaining to the end of the authority block."""
         return max(0.0, self.authority_end_m - self.distance_travelled_m)
+
+    @property
+    def current_block_index(self) -> int:
+        """Index in the route of the block the train occupies."""
+        index = 0
+        for position, start_m in enumerate(self._block_starts_m):
+            if start_m <= self.distance_travelled_m:
+                index = position
+        return index
+
+    @property
+    def current_block(self) -> TrackBlock:
+        """The block the train occupies."""
+        return self.route[self.current_block_index]
+
+    @property
+    def speed_limit_mps(self) -> float:
+        """Civil speed limit of the occupied block."""
+        return self.current_block.speed_limit_mps
 
     @property
     def effective_target_mps(self) -> float:
@@ -249,31 +272,31 @@ class TrainControllerState(QObject):
             requested_mps = self.target_speed_mps
         return min(requested_mps, self.speed_limit_mps)
 
-    @property
-    def current_block_index(self) -> int:
-        """Index in the route of the block the train occupies."""
-        index = 0
-        for position, block in enumerate(self.route):
-            if block.start_m <= self.distance_travelled_m:
-                index = position
-        return index
-
-    def next_station(self) -> TrackBlock | None:
-        """Return the next station block ahead, if any."""
-        for block in self.route[self.current_block_index:]:
-            if block.kind is BlockKind.STATION:
-                if block.start_m >= self.distance_travelled_m:
-                    return block
+    def next_station_index(self) -> int | None:
+        """Route index of the occupied or next station block, if any."""
+        for index in range(self.current_block_index, len(self.route)):
+            if self.route[index].is_station:
+                return index
         return None
 
     def platform_side(self) -> str:
-        """Side the doors open at the next station: LEFT, RIGHT or ''."""
-        # The beacon for the seeded station reports a left platform.
-        return "LEFT" if self.next_station() is not None else ""
+        """Side the doors open at the next station, or ''."""
+        index = self.next_station_index()
+        return self.route[index].platform_side if index is not None else ""
 
     def can_open_door(self, side: str) -> bool:
         """Whether the driver may open the doors on ``side`` now."""
-        return self.is_stopped and self.platform_side() == side
+        block = self.current_block
+        return (
+            self.is_stopped
+            and block.is_station
+            and block.platform_side in (side, "BOTH")
+        )
+
+    @property
+    def can_release_emergency_brake(self) -> bool:
+        """Whether the driver may release the emergency brake now."""
+        return self.emergency_brake and self.is_stopped
 
     # ------------------------------------------------------------------
     # QML-facing snapshot
@@ -281,17 +304,21 @@ class TrainControllerState(QObject):
 
     @Property("QVariantMap", notify=snapshotChanged)
     def snapshot(self) -> dict[str, Any]:
-        """Every display value, in frontend units, rebuilt per change."""
+        """Every display value, in display units, rebuilt per change."""
         current_index = self.current_block_index
         current_block = self.route[current_index]
         next_block = (
             self.route[current_index + 1]
             if current_index + 1 < len(self.route) else None
         )
-        station = self.next_station()
+        station_index = self.next_station_index()
+        station = (
+            self.route[station_index] if station_index is not None else None
+        )
         station_distance_m = (
-            station.start_m - self.distance_travelled_m
-            if station is not None else None
+            max(0.0, self._block_starts_m[station_index]
+                - self.distance_travelled_m)
+            if station_index is not None else None
         )
 
         return {
@@ -302,23 +329,27 @@ class TrainControllerState(QObject):
             "mode": self.mode.value,
             "user_role": self.user_role.value,
             "current_block": current_block.block_id,
+            "current_section": current_block.section,
             "next_block": next_block.block_id if next_block else "",
+            "authority_block": self.authority_block_id,
             "signal_aspect": self.signal_aspect.value,
             "current_speed_mph": round(mps_to_mph(self.current_speed_mps)),
             "speed_limit_mph": round(mps_to_mph(self.speed_limit_mps)),
             "ctc_speed_mph": round(mps_to_mph(self.ctc_speed_mps)),
             "target_speed_mph": self._target_mph(),
             "target_set_by": self._displayed_source().value,
-            "authority_ft": round(m_to_ft(self.authority_left_m)),
             "is_stopped": self.is_stopped,
             "service_brake": self.service_brake,
             "emergency_brake": self.emergency_brake,
+            "can_release_emergency_brake": self.can_release_emergency_brake,
             "next_station": station.station_name if station else "",
+            "station_block": station.block_id if station else "",
             "station_distance_ft": (
                 round(m_to_ft(station_distance_m))
                 if station_distance_m is not None else -1
             ),
             "station_arrival": self._arrival_text(station_distance_m),
+            "at_station": current_block.is_station,
             "platform_side": self.platform_side(),
             "left_door": self.left_door_open,
             "right_door": self.right_door_open,
@@ -355,35 +386,26 @@ class TrainControllerState(QObject):
         return _format_clock(eta_s)[:5]
 
     def _blocks_ahead(self) -> list[dict[str, Any]]:
-        """Blocks from the current one onward, farthest first."""
+        """The occupied block and those ahead of it, farthest first."""
         current_index = self.current_block_index
+        last_index = min(
+            len(self.route), current_index + TRACK_AHEAD_SLOTS)
         tiles = []
-        for index, block in enumerate(self.route):
-            if index < current_index:
-                continue
+        for index in range(current_index, last_index):
+            block = self.route[index]
             is_current = index == current_index
-            if is_current:
-                state, note = "current", f"{self.train_id} IS HERE"
-            elif block.kind is BlockKind.CLOSED:
-                state, note = "closed", "CLOSED"
-            elif block.kind is BlockKind.STOP:
-                state, note = "stop", "STOP IN THIS BLOCK"
-            elif block.kind is BlockKind.STATION:
-                state, note = "station", block.station_name
-            else:
-                state, note = "clear", "CLEAR"
-            # Distances past the stop point are not useful to the driver.
-            show_distance = (
-                not is_current and block.kind is not BlockKind.CLOSED)
             distance_ft = (
-                round(m_to_ft(block.start_m - self.distance_travelled_m))
-                if show_distance else -1
+                -1 if is_current else round(m_to_ft(
+                    self._block_starts_m[index] - self.distance_travelled_m))
             )
             tiles.append({
                 "block_id": block.block_id,
-                "state": state,
-                "note": note,
+                "section": block.section,
+                "occupancy": "occupied" if is_current else "free",
+                "station": block.station_name,
+                "platform_side": block.platform_side,
                 "distance_ft": distance_ft,
+                "is_authority": block.block_id == self.authority_block_id,
             })
         tiles.reverse()
         return tiles
@@ -405,7 +427,8 @@ class TrainControllerState(QObject):
     def _nudge_target_mph(self, delta_mph: int) -> None:
         if self.mode is not DriveMode.MANUAL:
             return
-        limit_mph = round(mps_to_mph(self.speed_limit_mps))
+        # Floor, so the target never rounds up past the block's limit.
+        limit_mph = math.floor(mps_to_mph(self.speed_limit_mps))
         target_mph = round(mps_to_mph(self.target_speed_mps)) + delta_mph
         target_mph = max(0, min(limit_mph, target_mph))
         self.target_speed_mps = mph_to_mps(target_mph)
@@ -429,13 +452,15 @@ class TrainControllerState(QObject):
 
     @Slot()
     def pullEmergencyBrake(self) -> None:
-        """Latch the emergency brake. Only the office can release it."""
+        """Latch the emergency brake."""
         self.emergency_brake = True
         self.snapshotChanged.emit()
 
     @Slot()
-    def simulateOfficeRelease(self) -> None:
-        """Test-only stand-in for the office releasing the e-brake."""
+    def releaseEmergencyBrake(self) -> None:
+        """Release the emergency brake, once the train has stopped."""
+        if not self.can_release_emergency_brake:
+            return
         self.emergency_brake = False
         self.snapshotChanged.emit()
 
@@ -489,14 +514,18 @@ class TrainControllerState(QObject):
     @Slot()
     def announceAgain(self) -> None:
         """Replay the next-station announcement."""
-        station = self.next_station()
-        if station is None:
+        index = self.next_station_index()
+        if index is None:
             self.announcement = "No station ahead."
         else:
+            station = self.route[index]
+            side = {
+                "LEFT": "on the left",
+                "RIGHT": "on the right",
+                "BOTH": "on both sides",
+            }.get(station.platform_side, "")
             self.announcement = (
-                f"Next stop {station.station_name}. Doors open on the "
-                f"{self.platform_side().lower()}."
-            )
+                f"Next stop {station.station_name}. Doors open {side}.")
         self._announcement_left_s = ANNOUNCEMENT_DURATION_S
         self.snapshotChanged.emit()
 
@@ -540,6 +569,22 @@ class TrainControllerState(QObject):
             return
         self.ki_pending = max(
             0.0, round(self.ki_pending + direction * self.gain_step, 3))
+        self.snapshotChanged.emit()
+
+    @Slot(float)
+    def setKp(self, value: float) -> None:
+        """Set the pending Kp to a typed value."""
+        if self.user_role is not UserRole.ENGINEER:
+            return
+        self.kp_pending = max(0.0, round(value, 3))
+        self.snapshotChanged.emit()
+
+    @Slot(float)
+    def setKi(self, value: float) -> None:
+        """Set the pending Ki to a typed value."""
+        if self.user_role is not UserRole.ENGINEER:
+            return
+        self.ki_pending = max(0.0, round(value, 3))
         self.snapshotChanged.emit()
 
     @Slot()
