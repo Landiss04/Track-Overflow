@@ -1,10 +1,3 @@
-**Target:** truth/signals/clock-speedup.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-02; 10x as the only fast-forward speed asserted by Landis 2026-10-01 (proposal `truth/_inbox/generic-clock-config/20261001-1658-shared-simulation-clock.md`)
-
----
-
 # clock-speedup
 
 **Status:** current

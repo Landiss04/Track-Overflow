@@ -1,10 +1,3 @@
-**Target:** truth/signals/suggested-authority.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-02 (CTC architecture diagram, `ctc-architecture.html`); types per `conventions/identifiers.md` and `conventions/units.md`, chosen by Landis 2026-10-02 over the diagram's int types
-
----
-
 # suggested-authority
 
 **Status:** current
