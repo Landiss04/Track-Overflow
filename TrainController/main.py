@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QFont, QGuiApplication
+from PySide6.QtGui import QFont, QGuiApplication, QWindow
 from PySide6.QtQml import QQmlApplicationEngine
 
-from train_controller.aspect_lock import install_aspect_lock
-from train_controller.theme import build_theme
 from train_controller.train_controller_state import TrainControllerState
+
+# The design tokens and window scaling are shared by every module's UI,
+# so they live in the repository-level ui/ folder next to the shared QML
+# components.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ui.aspect_lock import install_window_scaling  # noqa: E402
+from ui.theme import build_theme  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
 
@@ -45,12 +51,11 @@ def main() -> int:
         print("Failed to load QML views.", file=sys.stderr)
         return 1
 
-    window = engine.rootObjects()[0]
-    ratio = (
-        window.property("referenceWidth"),
-        window.property("referenceHeight"),
-    )
-    aspect_lock = install_aspect_lock(window, ratio)  # noqa: F841  keep alive
+    # The root of a ScaledWindow is always a window. Keep a reference:
+    # the lock's window procedure must outlive the window, or Windows
+    # calls into freed memory.
+    window_scaling = install_window_scaling(  # noqa: F841
+        cast(QWindow, engine.rootObjects()[0]))
 
     controller.start()
     exit_code = app.exec()

@@ -1,67 +1,108 @@
-// Train Controller application window.
+// Train Controller application window. ScaledWindow gives every module the
+// same 1440 x 900 canvas and resize behaviour (documents/SCALING_GUIDE.md).
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import QtQuick.Window
 import "components"
+import "../../ui"
 
-ApplicationWindow {
+ScaledWindow {
     id: window
 
     readonly property var snapshot: controller.snapshot
-    readonly property int referenceWidth: 1440
-    readonly property int referenceHeight: 900
-    readonly property real canvasScale: Math.min(
-        width / referenceWidth, height / referenceHeight)
+    readonly property var userOptions: ["Driver", "Engineer"]
+    readonly property var modeOptions: ["Automatic", "Manual"]
 
-    visible: true
-    width: referenceWidth
-    height: referenceHeight
-    minimumWidth: 720
-    minimumHeight: 450
     title: qsTr("Train Controller")
-    color: theme.bg_app
 
-    // The design is laid out once at the reference size and scaled as a
-    // whole. On Windows, main.py keeps the window at 16:10 while it is
-    // resized; any other shape is letterboxed around the centered canvas.
-    Item {
-        id: designCanvas
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
 
-        width: window.referenceWidth
-        height: window.referenceHeight
-        x: (window.width - width * window.canvasScale) / 2
-        y: (window.height - height * window.canvasScale) / 2
-        transform: Scale {
-            origin.x: 0
-            origin.y: 0
-            xScale: window.canvasScale
-            yScale: window.canvasScale
+        // Style guide 6.7: name and instance, mode badge, a persistent
+        // E-brake fault badge while the emergency brake is on, and clock.
+        ModuleHeader {
+            Layout.fillWidth: true
+            moduleName: qsTr("Train Controller")
+            instance: window.snapshot.train_id
+            mode: window.snapshot.mode
+            line: window.snapshot.line
+            clock: window.snapshot.clock
+            faulted: window.snapshot.emergency_brake
         }
 
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
+        // Console selectors. ModuleHeader has no slot for controls, so they
+        // sit in a strip directly beneath it.
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: strip.implicitHeight + 2 * theme.space_2
+            color: theme.bg_surface
 
-            CabHeader {
-                Layout.fillWidth: true
-                snapshot: window.snapshot
-                onUserSelected: function (role) { controller.setUser(role); }
-                onModeSelected: function (mode) { controller.setMode(mode); }
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: theme.border
             }
 
-            CabView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: theme.space_3
+            RowLayout {
+                id: strip
+
+                anchors.fill: parent
+                anchors.leftMargin: theme.space_5
+                anchors.rightMargin: theme.space_5
+                anchors.topMargin: theme.space_2
+                anchors.bottomMargin: theme.space_2
+                spacing: theme.space_5
+
+                SelectField {
+                    Layout.preferredWidth: 200
+                    Layout.maximumWidth: 200
+                    label: "Train"
+                    model: window.snapshot.train_ids
+                }
+
+                Item { Layout.fillWidth: true }
+
+                FormField {
+                    Layout.fillWidth: false
+                    label: "User"
+
+                    SegmentedToggle {
+                        options: window.userOptions
+                        currentIndex: window.userOptions.indexOf(window.snapshot.user_role)
+                        onActivated: function (index) {
+                            controller.setUser(window.userOptions[index]);
+                        }
+                    }
+                }
+
+                FormField {
+                    Layout.fillWidth: false
+                    label: "Mode"
+
+                    SegmentedToggle {
+                        options: window.modeOptions
+                        currentIndex: window.modeOptions.indexOf(window.snapshot.mode)
+                        onActivated: function (index) {
+                            controller.setMode(window.modeOptions[index]);
+                        }
+                    }
+                }
             }
         }
 
-        EngineerGainsPopup {
-            anchors.fill: parent
-            visible: window.snapshot.user_role === "Engineer"
-            snapshot: window.snapshot
-            onCloseRequested: controller.setUser("Driver")
+        CabView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.margins: theme.space_3
         }
+    }
+
+    EngineerGainsPopup {
+        anchors.fill: parent
+        visible: window.snapshot.user_role === "Engineer"
+        snapshot: window.snapshot
+        onCloseRequested: controller.setUser("Driver")
     }
 }

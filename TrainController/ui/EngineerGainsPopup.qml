@@ -1,10 +1,12 @@
 // Engineer-only Kp/Ki tuning, shown over the cab when USER is Engineer.
 // This is an in-canvas overlay rather than a QtQuick.Controls Popup: a Popup
 // is reparented to the window overlay, which sits outside the scaled design
-// canvas, so it would not scale with the window.
+// canvas, so it would not scale with the window. There is no shared dialog
+// component, so the frame is local; its contents are shared components.
 import QtQuick
 import QtQuick.Layouts
 import "components"
+import "../../ui"
 
 Item {
     id: root
@@ -42,6 +44,7 @@ Item {
         onWheel: function (wheel) { wheel.accepted = true; }
     }
 
+    // Style guide 5: dialogs carry a 1 px --border-strong.
     Rectangle {
         id: dialog
 
@@ -50,7 +53,7 @@ Item {
         height: column.implicitHeight + 2 * theme.space_5
         color: theme.bg_surface
         radius: theme.radius_lg
-        border.color: theme.border
+        border.color: theme.border_strong
         border.width: 1
         focus: true
 
@@ -84,15 +87,13 @@ Item {
 
             HelperText {
                 Layout.fillWidth: true
-                text: "Adjust the pending values, then apply them. The train "
-                    + "keeps using the values marked In use until you do."
+                text: "Adjust or type the pending values, then apply them. "
+                    + "The train keeps using the In use values until you do."
             }
 
-            ColumnLayout {
+            FormField {
                 Layout.fillWidth: true
-                spacing: theme.space_2
-
-                FieldLabel { text: "STEP SIZE" }
+                label: "Step size"
 
                 SegmentedToggle {
                     Layout.fillWidth: true
@@ -110,6 +111,7 @@ Item {
                 value: root.snapshot.kp
                 inUse: root.snapshot.kp_in_use
                 onStepped: function (direction) { controller.adjustKp(direction); }
+                onTyped: function (value) { controller.setKp(value); }
             }
 
             GainStepper {
@@ -118,6 +120,7 @@ Item {
                 value: root.snapshot.ki
                 inUse: root.snapshot.ki_in_use
                 onStepped: function (direction) { controller.adjustKi(direction); }
+                onTyped: function (value) { controller.setKi(value); }
             }
 
             RowLayout {

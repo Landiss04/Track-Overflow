@@ -1,26 +1,36 @@
-// Page 4: the driver's cab. Three columns — what is ahead, what the driver
-// controls, and passenger comfort. Engineer gain tuning is not part of this
-// view; it lives in EngineerGainsPopup.
+// Page 4: the driver's cab. Three columns: what is ahead, what the driver
+// controls, and passenger comfort. Built from the shared ui/ components;
+// SignalAspectRow and TrackAhead are local because nothing shared fits.
+// Engineer gain tuning is not part of this view (EngineerGainsPopup).
 import QtQuick
 import QtQuick.Layouts
 import "components"
+import "../../ui"
 
 RowLayout {
     id: root
 
     readonly property var snapshot: controller.snapshot
     readonly property bool manual: snapshot.mode === "Manual"
+    readonly property var offOn: ["Off", "On"]
 
     function formatNumber(value) {
         return Number(value).toLocaleString(Qt.locale("en_US"), "f", 0);
     }
 
-    function doorSubtitle(side, open) {
-        if (open)
-            return "Doors are open";
-        if (snapshot.platform_side !== side)
-            return "No platform";
-        return snapshot.is_stopped ? "Platform side" : "Stop the train first";
+    function sideText(side) {
+        return side === "BOTH" ? "Both sides"
+            : side === "LEFT" ? "Left" : side === "RIGHT" ? "Right" : "";
+    }
+
+    function doorHelp() {
+        if (snapshot.left_door || snapshot.right_door)
+            return "Doors are open. The train will not move until they close.";
+        if (!snapshot.at_station)
+            return "Doors open only when stopped at a platform.";
+        if (!snapshot.is_stopped)
+            return "Stop the train fully to open the doors.";
+        return "Platform on the " + sideText(snapshot.platform_side).toLowerCase() + ".";
     }
 
     readonly property string doorStatus: snapshot.left_door && snapshot.right_door
@@ -37,9 +47,13 @@ RowLayout {
         Layout.fillHeight: true
         Layout.preferredWidth: 558
         title: "Speed and track ahead"
-        trailing: root.snapshot.current_block + " · "
-            + root.formatNumber(root.snapshot.authority_ft) + " ft authority"
-        trailingMono: true
+        bodyPadding: theme.space_3
+        headerItems: [
+            MonoText {
+                text: "Block " + root.snapshot.current_block
+                    + " · Section " + root.snapshot.current_section
+            }
+        ]
 
         RowLayout {
             Layout.fillWidth: true
@@ -61,19 +75,19 @@ RowLayout {
                 unit: "mph"
             }
 
+            // Authority is a block ID, not a distance: shown unconverted
+            // and with no unit (truth conventions/units.md).
             TelemetryReadout {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 1
-                label: "To stop point"
-                value: root.formatNumber(root.snapshot.authority_ft)
-                unit: "ft"
+                label: "Authority"
+                value: root.snapshot.authority_block
             }
         }
 
         FieldLabel {
-            Layout.topMargin: theme.space_1
             text: root.snapshot.next_block !== ""
-                ? "SIGNAL AHEAD · ENTERING " + root.snapshot.next_block
+                ? "SIGNAL AHEAD · ENTERING BLOCK " + root.snapshot.next_block
                 : "SIGNAL AHEAD"
         }
 
@@ -83,7 +97,6 @@ RowLayout {
         }
 
         FieldLabel {
-            Layout.topMargin: theme.space_2
             text: "TRACK AHEAD — YOUR TRAIN AT THE BOTTOM"
         }
 
@@ -103,90 +116,57 @@ RowLayout {
         Layout.preferredWidth: 415
         spacing: theme.space_3
 
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: theme.control_h_lg
-            radius: theme.radius_lg
-            color: root.manual ? theme.bg_sunken : theme.accent_subtle
-            border.color: theme.border
-            border.width: 1
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: theme.space_4
-                anchors.rightMargin: theme.space_4
-                spacing: theme.space_3
-
-                Text {
-                    text: root.snapshot.mode.toUpperCase()
-                    color: root.manual ? theme.text_primary : theme.accent
-                    font.family: theme.ui_family
-                    font.pixelSize: theme.size_small
-                    font.weight: theme.weight_bold
-                    font.letterSpacing: theme.label_letter_spacing
-                }
-
-                HelperText {
-                    Layout.fillWidth: true
-                    text: root.manual ? "CTC speed control is off."
-                        : "CTC speed control is on. Speed buttons are locked."
-                }
-            }
-        }
-
         Panel {
             Layout.fillWidth: true
             title: "Speed"
+            bodyPadding: theme.space_3
+            headerItems: [
+                StatusBadge {
+                    variant: root.manual ? "idle" : "info"
+                    label: root.manual ? "Driver control" : "CTC control"
+                }
+            ]
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: theme.space_2
+                spacing: theme.space_3
 
-                ColumnLayout {
+                TelemetryReadout {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
-                    spacing: theme.space_1
-
-                    FieldLabel { text: "TARGET SPEED" }
-
-                    ValueBox {
-                        Layout.fillWidth: true
-                        text: root.snapshot.target_speed_mph + " mph"
-                    }
+                    label: "Target speed"
+                    value: root.snapshot.target_speed_mph
+                    unit: "mph"
                 }
 
-                ColumnLayout {
+                TelemetryReadout {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
-                    spacing: theme.space_1
-
-                    FieldLabel { text: "SET BY" }
-
-                    ValueBox {
-                        Layout.fillWidth: true
-                        text: root.snapshot.target_set_by
-                    }
+                    label: "Set by"
+                    value: root.snapshot.target_set_by
                 }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: theme.space_2
+                spacing: theme.space_3
 
-                BigButton {
+                AppButton {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
-                    Layout.preferredHeight: 76
-                    text: "SLOWER"
+                    Layout.preferredHeight: 56
+                    size: "large"
+                    text: "Slower"
                     enabled: root.manual && root.snapshot.target_speed_mph > 0
                     onClicked: controller.slower()
                 }
 
-                BigButton {
+                AppButton {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
-                    Layout.preferredHeight: 76
-                    text: "FASTER"
+                    Layout.preferredHeight: 56
+                    size: "large"
+                    text: "Faster"
                     enabled: root.manual && root.snapshot.target_speed_mph
                         < root.snapshot.speed_limit_mph
                     onClicked: controller.faster()
@@ -195,7 +175,9 @@ RowLayout {
 
             AppButton {
                 Layout.fillWidth: true
-                text: "Use CTC target · " + root.snapshot.ctc_speed_mph + " mph"
+                text: root.manual
+                    ? "Use CTC target · " + root.snapshot.ctc_speed_mph + " mph"
+                    : "CTC sets the speed in Automatic mode"
                 enabled: root.manual
                 onClicked: controller.useCtcTarget()
             }
@@ -204,34 +186,56 @@ RowLayout {
         Panel {
             Layout.fillWidth: true
             title: "Brakes"
+            bodyPadding: theme.space_3
+            headerItems: [
+                StatusBadge {
+                    visible: root.snapshot.service_brake
+                    variant: "fault"
+                    label: "Service brake on"
+                }
+            ]
 
-            FieldLabel { text: "SERVICE BRAKE" }
-
-            OnOffToggle {
+            // The Train Controller brakes act immediately, with no
+            // confirmation step (style guide 7).
+            FormField {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 56
-                checked: root.snapshot.service_brake
-                dangerWhenOn: true
-                onToggled: function (on) { controller.setServiceBrake(on); }
+                label: "Service brake"
+
+                SegmentedToggle {
+                    Layout.fillWidth: true
+                    options: root.offOn
+                    currentIndex: root.snapshot.service_brake ? 1 : 0
+                    onActivated: function (index) {
+                        controller.setServiceBrake(index === 1);
+                    }
+                }
             }
 
-            // Style guide 7: at least --space-5 between the emergency
-            // control and routine controls.
-            EmergencyBrakeButton {
+            // At least --space-5 from the routine controls (style guide 7).
+            SafetyButton {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 116
-                Layout.topMargin: theme.space_5 - theme.space_2
-                engaged: root.snapshot.emergency_brake
-                onClicked: controller.pullEmergencyBrake()
+                Layout.preferredHeight: 72
+                Layout.topMargin: theme.space_5 - theme.space_3
+                confirmationRequired: false
+                label: "Emergency brake"
+                releaseLabel: "Release emergency brake"
+                applied: root.snapshot.emergency_brake
+                enabled: !applied || root.snapshot.can_release_emergency_brake
+                onConfirmed: {
+                    if (root.snapshot.emergency_brake)
+                        controller.releaseEmergencyBrake();
+                    else
+                        controller.pullEmergencyBrake();
+                }
             }
 
-            AppButton {
+            HelperText {
                 Layout.fillWidth: true
-                visible: root.snapshot.emergency_brake
-                variant: "ghost"
-                size: "small"
-                text: "Simulate office release (test only)"
-                onClicked: controller.simulateOfficeRelease()
+                text: !root.snapshot.emergency_brake
+                    ? "Full stop. You can release it once the train has stopped."
+                    : root.snapshot.can_release_emergency_brake
+                    ? "Train stopped. Release the brake when it is safe."
+                    : "Stopping. Release is available once the train is fully stopped."
             }
         }
 
@@ -239,33 +243,45 @@ RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             title: "Doors"
-            trailing: root.doorStatus
+            bodyPadding: theme.space_3
+            headerItems: [
+                StatusBadge {
+                    variant: root.doorStatus === "Shut" ? "idle" : "warning"
+                    label: root.doorStatus
+                }
+            ]
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: theme.space_2
+                spacing: theme.space_3
 
-                BigButton {
+                AppButton {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
                     Layout.preferredWidth: 1
-                    text: root.snapshot.left_door ? "CLOSE LEFT" : "OPEN LEFT"
-                    subtitle: root.doorSubtitle("LEFT", root.snapshot.left_door)
+                    Layout.preferredHeight: 56
+                    size: "large"
+                    text: root.snapshot.left_door ? "Close left" : "Open left"
                     enabled: root.snapshot.left_door || root.snapshot.can_open_left
                     onClicked: controller.toggleLeftDoor()
                 }
 
-                BigButton {
+                AppButton {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
                     Layout.preferredWidth: 1
-                    text: root.snapshot.right_door ? "CLOSE RIGHT" : "OPEN RIGHT"
-                    subtitle: root.doorSubtitle("RIGHT", root.snapshot.right_door)
+                    Layout.preferredHeight: 56
+                    size: "large"
+                    text: root.snapshot.right_door ? "Close right" : "Open right"
                     enabled: root.snapshot.right_door || root.snapshot.can_open_right
                     onClicked: controller.toggleRightDoor()
                 }
             }
+
+            HelperText {
+                Layout.fillWidth: true
+                text: root.doorHelp()
+            }
+
+            Item { Layout.fillHeight: true }
         }
     }
 
@@ -281,11 +297,18 @@ RowLayout {
         Panel {
             Layout.fillWidth: true
             title: "Next station"
+            bodyPadding: theme.space_3
 
             KeyValueRow {
                 Layout.fillWidth: true
                 label: "Station"
                 value: root.snapshot.next_station
+            }
+
+            KeyValueRow {
+                Layout.fillWidth: true
+                label: "Block"
+                value: root.snapshot.station_block
             }
 
             KeyValueRow {
@@ -304,13 +327,12 @@ RowLayout {
             KeyValueRow {
                 Layout.fillWidth: true
                 label: "Doors open"
-                value: root.snapshot.platform_side
+                value: root.sideText(root.snapshot.platform_side)
                 rule: false
             }
 
             AppButton {
                 Layout.fillWidth: true
-                Layout.topMargin: theme.space_1
                 size: "large"
                 text: "Announce again"
                 onClicked: controller.announceAgain()
@@ -330,49 +352,40 @@ RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             title: "Cabin temperature"
+            bodyPadding: theme.space_3
 
             Item { Layout.fillHeight: true }
 
-            FieldLabel { text: "TARGET" }
-
             RowLayout {
                 Layout.fillWidth: true
-                spacing: theme.space_2
+                spacing: theme.space_3
 
-                BigButton {
-                    Layout.preferredWidth: 110
-                    Layout.preferredHeight: 68
-                    text: "COOLER"
+                AppButton {
+                    Layout.preferredWidth: 124
+                    Layout.fillHeight: true
+                    size: "large"
+                    text: "Cooler"
                     onClicked: controller.cooler()
                 }
 
-                Rectangle {
+                TelemetryReadout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 68
-                    color: theme.bg_sunken
-                    border.color: theme.border
-                    border.width: 1
-                    radius: theme.radius_md
-
-                    MonoText {
-                        anchors.centerIn: parent
-                        text: root.snapshot.temp_setpoint_f + " °F"
-                        font.pixelSize: theme.size_telemetry
-                        font.weight: theme.weight_bold
-                    }
+                    label: "Target"
+                    value: root.snapshot.temp_setpoint_f
+                    unit: "°F"
                 }
 
-                BigButton {
-                    Layout.preferredWidth: 110
-                    Layout.preferredHeight: 68
-                    text: "WARMER"
+                AppButton {
+                    Layout.preferredWidth: 124
+                    Layout.fillHeight: true
+                    size: "large"
+                    text: "Warmer"
                     onClicked: controller.warmer()
                 }
             }
 
             KeyValueRow {
                 Layout.fillWidth: true
-                Layout.topMargin: theme.space_2
                 label: "In the cabin now"
                 value: root.snapshot.cabin_temp_f + " °F"
                 rule: false
@@ -385,40 +398,41 @@ RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             title: "Lights"
+            bodyPadding: theme.space_3
 
             Item { Layout.fillHeight: true }
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: theme.space_3
+                spacing: theme.space_4
 
-                ColumnLayout {
+                FormField {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
-                    spacing: theme.space_1
+                    label: "Cabin"
 
-                    FieldLabel { text: "CABIN" }
-
-                    OnOffToggle {
+                    SegmentedToggle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 64
-                        checked: root.snapshot.cabin_light
-                        onToggled: function (on) { controller.setCabinLight(on); }
+                        options: root.offOn
+                        currentIndex: root.snapshot.cabin_light ? 1 : 0
+                        onActivated: function (index) {
+                            controller.setCabinLight(index === 1);
+                        }
                     }
                 }
 
-                ColumnLayout {
+                FormField {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
-                    spacing: theme.space_1
+                    label: "Headlights"
 
-                    FieldLabel { text: "HEADLIGHTS" }
-
-                    OnOffToggle {
+                    SegmentedToggle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 64
-                        checked: root.snapshot.headlight
-                        onToggled: function (on) { controller.setHeadlight(on); }
+                        options: root.offOn
+                        currentIndex: root.snapshot.headlight ? 1 : 0
+                        onActivated: function (index) {
+                            controller.setHeadlight(index === 1);
+                        }
                     }
                 }
             }
