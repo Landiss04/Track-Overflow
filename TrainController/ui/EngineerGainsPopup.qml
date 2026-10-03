@@ -100,7 +100,7 @@ Item {
                     options: root.steps.map(function (step) { return step.toFixed(3); })
                     currentIndex: root.stepIndex()
                     onActivated: function (index) {
-                        controller.setGainStep(root.steps[index]);
+                        controller.set_gain_step(root.steps[index]);
                     }
                 }
             }
@@ -110,8 +110,8 @@ Item {
                 label: "Kp"
                 value: root.snapshot.kp
                 inUse: root.snapshot.kp_in_use
-                onStepped: function (direction) { controller.adjustKp(direction); }
-                onTyped: function (value) { controller.setKp(value); }
+                onStepped: function (direction) { controller.adjust_kp(direction); }
+                onTyped: function (value) { controller.set_kp(value); }
             }
 
             GainStepper {
@@ -119,8 +119,8 @@ Item {
                 label: "Ki"
                 value: root.snapshot.ki
                 inUse: root.snapshot.ki_in_use
-                onStepped: function (direction) { controller.adjustKi(direction); }
-                onTyped: function (value) { controller.setKi(value); }
+                onStepped: function (direction) { controller.adjust_ki(direction); }
+                onTyped: function (value) { controller.set_ki(value); }
             }
 
             RowLayout {
@@ -141,7 +141,7 @@ Item {
                     text: "Apply gains"
                     enabled: root.snapshot.kp !== root.snapshot.kp_in_use
                         || root.snapshot.ki !== root.snapshot.ki_in_use
-                    onClicked: controller.applyGains()
+                    onClicked: controller.apply_gains()
                 }
             }
         }

@@ -72,7 +72,7 @@ ScaledWindow {
                         options: window.userOptions
                         currentIndex: window.userOptions.indexOf(window.snapshot.user_role)
                         onActivated: function (index) {
-                            controller.setUser(window.userOptions[index]);
+                            controller.set_user(window.userOptions[index]);
                         }
                     }
                 }
@@ -85,7 +85,7 @@ ScaledWindow {
                         options: window.modeOptions
                         currentIndex: window.modeOptions.indexOf(window.snapshot.mode)
                         onActivated: function (index) {
-                            controller.setMode(window.modeOptions[index]);
+                            controller.set_mode(window.modeOptions[index]);
                         }
                     }
                 }
@@ -103,6 +103,6 @@ ScaledWindow {
         anchors.fill: parent
         visible: window.snapshot.user_role === "Engineer"
         snapshot: window.snapshot
-        onCloseRequested: controller.setUser("Driver")
+        onCloseRequested: controller.set_user("Driver")
     }
 }

@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from train_controller.errors import InvalidBlockError  # noqa: E402
 from train_controller.track_layout import (  # noqa: E402
     load_line,
     route_between,
@@ -46,8 +47,10 @@ class LoadLineTests(unittest.TestCase):
         self.assertEqual(len(route), 15)
 
     def test_route_must_run_forward(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InvalidBlockError):
             route_between(self.blocks, "76", "62")
+        with self.assertRaises(InvalidBlockError):
+            route_between(self.blocks, "62", "999")
 
 
 if __name__ == "__main__":

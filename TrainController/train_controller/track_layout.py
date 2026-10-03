@@ -13,6 +13,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from train_controller.errors import InvalidBlockError
 from train_controller.units import kmh_to_mps
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -72,14 +73,20 @@ def load_line(
 def route_between(
     blocks: tuple[TrackBlock, ...], first_id: str, last_id: str
 ) -> tuple[TrackBlock, ...]:
-    """Return the contiguous run of blocks from ``first_id`` to ``last_id``.
+    """Return the contiguous blocks from ``first_id`` to ``last_id``.
 
-    The run follows file order, which is ascending block number. Routing
-    through switches is not modelled.
+    The run follows file order, which is ascending block number.
+    Routing through switches is not modelled. Raise
+    ``InvalidBlockError`` for an unknown block or a backward run.
     """
     ids = [block.block_id for block in blocks]
-    start = ids.index(first_id)
-    end = ids.index(last_id)
+    try:
+        start = ids.index(first_id)
+        end = ids.index(last_id)
+    except ValueError as error:
+        raise InvalidBlockError(
+            f"block not on this line: {error}") from error
     if end < start:
-        raise ValueError(f"block {last_id} is not after block {first_id}")
+        raise InvalidBlockError(
+            f"block {last_id} is not after block {first_id}")
     return blocks[start:end + 1]

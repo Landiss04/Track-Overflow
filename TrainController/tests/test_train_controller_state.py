@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PySide6.QtCore import QCoreApplication  # noqa: E402
 
+from train_controller.errors import InvalidSignalAspectError  # noqa: E402
 from train_controller.train_controller_state import (  # noqa: E402
     TrainControllerState,
 )
@@ -31,7 +32,7 @@ def _stop_in_block(state: TrainControllerState, block_id: str) -> None:
     """Drive to ``block_id`` and stop there with the emergency brake."""
     while state.current_block.block_id != block_id:
         state.step(1.0)
-    state.pullEmergencyBrake()
+    state.pull_emergency_brake()
     _run(state, 6)
 
 
@@ -61,33 +62,33 @@ class SpeedTargetTests(unittest.TestCase):
         self.state = TrainControllerState()
 
     def test_faster_and_slower_step_one_mph(self) -> None:
-        self.state.faster()
+        self.state.increase_target_speed()
         self.assertEqual(self.state.snapshot["target_speed_mph"], 18)
-        self.state.slower()
-        self.state.slower()
+        self.state.decrease_target_speed()
+        self.state.decrease_target_speed()
         self.assertEqual(self.state.snapshot["target_speed_mph"], 16)
 
     def test_faster_clamps_below_block_speed_limit(self) -> None:
         for _ in range(30):
-            self.state.faster()
+            self.state.increase_target_speed()
         # Block 62 is 30 km/h = 18.6 mph; the target never rounds up.
         self.assertEqual(self.state.snapshot["target_speed_mph"], 18)
 
     def test_slower_clamps_at_zero(self) -> None:
         for _ in range(50):
-            self.state.slower()
+            self.state.decrease_target_speed()
         self.assertEqual(self.state.snapshot["target_speed_mph"], 0)
 
     def test_use_ctc_target(self) -> None:
-        self.state.slower()
-        self.state.useCtcTarget()
+        self.state.decrease_target_speed()
+        self.state.use_ctc_target()
         snap = self.state.snapshot
         self.assertEqual(snap["target_speed_mph"], 17)
         self.assertEqual(snap["target_set_by"], "CTC")
 
     def test_automatic_mode_locks_driver_speed(self) -> None:
-        self.state.setMode("Automatic")
-        self.state.faster()
+        self.state.set_mode("Automatic")
+        self.state.increase_target_speed()
         snap = self.state.snapshot
         self.assertEqual(snap["target_speed_mph"], 17)
         self.assertEqual(snap["target_set_by"], "CTC")
@@ -99,26 +100,26 @@ class BrakeTests(unittest.TestCase):
         self.state = TrainControllerState()
 
     def test_service_brake_slows_the_train(self) -> None:
-        self.state.setServiceBrake(True)
+        self.state.set_service_brake(True)
         _run(self.state, 3)
         self.assertLess(self.state.snapshot["current_speed_mph"], 15)
 
     def test_emergency_brake_cannot_be_released_while_moving(self) -> None:
-        self.state.pullEmergencyBrake()
+        self.state.pull_emergency_brake()
         self.state.step(1.0)
         self.assertFalse(
             self.state.snapshot["can_release_emergency_brake"])
-        self.state.releaseEmergencyBrake()
+        self.state.release_emergency_brake()
         self.assertTrue(self.state.snapshot["emergency_brake"])
 
     def test_driver_releases_emergency_brake_once_stopped(self) -> None:
-        self.state.pullEmergencyBrake()
+        self.state.pull_emergency_brake()
         _run(self.state, 6)
         snap = self.state.snapshot
         self.assertEqual(snap["current_speed_mph"], 0)
         self.assertTrue(snap["can_release_emergency_brake"])
 
-        self.state.releaseEmergencyBrake()
+        self.state.release_emergency_brake()
         _run(self.state, 3)
         snap = self.state.snapshot
         self.assertFalse(snap["emergency_brake"])
@@ -126,8 +127,8 @@ class BrakeTests(unittest.TestCase):
 
     def test_emergency_stops_faster_than_service(self) -> None:
         service = TrainControllerState()
-        service.setServiceBrake(True)
-        self.state.pullEmergencyBrake()
+        service.set_service_brake(True)
+        self.state.pull_emergency_brake()
         _run(service, 2)
         _run(self.state, 2)
         self.assertLess(self.state.current_speed_mps,
@@ -191,27 +192,27 @@ class DoorTests(unittest.TestCase):
         self.state = TrainControllerState()
 
     def test_doors_stay_shut_while_moving(self) -> None:
-        self.state.toggleRightDoor()
+        self.state.toggle_right_door()
         self.assertFalse(self.state.snapshot["right_door"])
 
     def test_doors_stay_shut_away_from_a_platform(self) -> None:
-        self.state.pullEmergencyBrake()
+        self.state.pull_emergency_brake()
         _run(self.state, 6)
-        self.state.toggleRightDoor()
+        self.state.toggle_right_door()
         self.assertFalse(self.state.snapshot["right_door"])
 
     def test_platform_side_door_opens_at_station(self) -> None:
         _stop_in_block(self.state, "65")
-        self.state.toggleLeftDoor()
-        self.state.toggleRightDoor()
+        self.state.toggle_left_door()
+        self.state.toggle_right_door()
         snap = self.state.snapshot
         self.assertFalse(snap["left_door"])
         self.assertTrue(snap["right_door"])
 
     def test_open_doors_hold_the_train(self) -> None:
         _stop_in_block(self.state, "65")
-        self.state.toggleRightDoor()
-        self.state.releaseEmergencyBrake()
+        self.state.toggle_right_door()
+        self.state.release_emergency_brake()
         _run(self.state, 5)
         self.assertEqual(self.state.snapshot["current_speed_mph"], 0)
 
@@ -220,7 +221,7 @@ class AutomaticStationStopTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.state = TrainControllerState()
-        self.state.setMode("Automatic")
+        self.state.set_mode("Automatic")
 
     def _run_until_dwell(self) -> int:
         for second in range(300):
@@ -258,7 +259,7 @@ class AutomaticStationStopTests(unittest.TestCase):
 
     def test_driver_cannot_operate_doors_in_automatic(self) -> None:
         self._run_until_dwell()
-        self.state.toggleRightDoor()
+        self.state.toggle_right_door()
         self.assertTrue(self.state.right_door_open)
         snap = self.state.snapshot
         self.assertFalse(snap["can_open_left"])
@@ -266,9 +267,9 @@ class AutomaticStationStopTests(unittest.TestCase):
 
     def test_switching_to_manual_ends_the_dwell(self) -> None:
         self._run_until_dwell()
-        self.state.setMode("Manual")
+        self.state.set_mode("Manual")
         self.assertFalse(self.state.is_dwelling)
-        self.state.toggleRightDoor()
+        self.state.toggle_right_door()
         self.assertFalse(self.state.right_door_open)
 
     def test_manual_mode_does_not_stop_at_stations(self) -> None:
@@ -285,21 +286,21 @@ class ComfortTests(unittest.TestCase):
 
     def test_temperature_setpoint_clamps(self) -> None:
         for _ in range(30):
-            self.state.warmer()
+            self.state.increase_temperature_setpoint()
         self.assertEqual(self.state.snapshot["temp_setpoint_f"], 80)
         for _ in range(30):
-            self.state.cooler()
+            self.state.decrease_temperature_setpoint()
         self.assertEqual(self.state.snapshot["temp_setpoint_f"], 60)
 
     def test_lights_toggle(self) -> None:
-        self.state.setCabinLight(False)
-        self.state.setHeadlight(False)
+        self.state.set_cabin_light(False)
+        self.state.set_headlight(False)
         snap = self.state.snapshot
         self.assertFalse(snap["cabin_light"])
         self.assertFalse(snap["headlight"])
 
     def test_announcement_names_station_and_side(self) -> None:
-        self.state.announceAgain()
+        self.state.announce_next_station()
         self.assertEqual(
             self.state.snapshot["announcement"],
             "Next stop GLENBURY. Doors open on the right.",
@@ -325,7 +326,7 @@ class SignalAspectTests(unittest.TestCase):
         self.assertEqual(snap["signal_aspect_source"], "track_model")
 
     def test_unknown_aspect_is_rejected(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InvalidSignalAspectError):
             self.state.receive_signal_aspect("BLUE")
 
     def test_aspect_is_display_only(self) -> None:
@@ -350,38 +351,38 @@ class GainTests(unittest.TestCase):
         self.state = TrainControllerState()
 
     def test_driver_cannot_change_gains(self) -> None:
-        self.state.adjustKp(1)
-        self.state.setKi(5.0)
-        self.state.applyGains()
+        self.state.adjust_kp(1)
+        self.state.set_ki(5.0)
+        self.state.apply_gains()
         snap = self.state.snapshot
         self.assertEqual(snap["kp"], 12.4)
         self.assertEqual(snap["ki"], 0.85)
 
     def test_engineer_adjusts_and_applies(self) -> None:
-        self.state.setUser("Engineer")
-        self.state.setGainStep(0.1)
-        self.state.adjustKp(1)
-        self.state.adjustKi(-1)
+        self.state.set_user("Engineer")
+        self.state.set_gain_step(0.1)
+        self.state.adjust_kp(1)
+        self.state.adjust_ki(-1)
         snap = self.state.snapshot
         self.assertAlmostEqual(snap["kp"], 12.5)
         self.assertAlmostEqual(snap["ki"], 0.75)
         self.assertEqual(snap["kp_in_use"], 12.4)
 
-        self.state.applyGains()
+        self.state.apply_gains()
         snap = self.state.snapshot
         self.assertAlmostEqual(snap["kp_in_use"], 12.5)
         self.assertAlmostEqual(snap["ki_in_use"], 0.75)
 
     def test_engineer_types_a_gain(self) -> None:
-        self.state.setUser("Engineer")
-        self.state.setKp(9.87654)
+        self.state.set_user("Engineer")
+        self.state.set_kp(9.87654)
         self.assertEqual(self.state.snapshot["kp"], 9.877)
 
     def test_gains_never_go_negative(self) -> None:
-        self.state.setUser("Engineer")
-        self.state.setGainStep(1.0)
-        self.state.adjustKi(-1)
-        self.state.setKp(-3.0)
+        self.state.set_user("Engineer")
+        self.state.set_gain_step(1.0)
+        self.state.adjust_ki(-1)
+        self.state.set_kp(-3.0)
         snap = self.state.snapshot
         self.assertEqual(snap["ki"], 0.0)
         self.assertEqual(snap["kp"], 0.0)

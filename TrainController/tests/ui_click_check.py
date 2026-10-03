@@ -1,8 +1,8 @@
 """Click every Train Controller control through the real QML, per mode.
 
-Run from the repository root with the module's venv::
+Run from ``TrainController/`` with the module's venv::
 
-    TrainController/.venv/Scripts/python TrainController/tests/ui_click_check.py
+    .venv/Scripts/python tests/ui_click_check.py
 
 It loads ``ui/Main.qml`` offscreen, clicks each control with the mouse
 in Manual, Automatic and Engineer modes, checks the resulting state,
@@ -22,14 +22,22 @@ REPO = str(Path(ROOT).parent)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, REPO)
 
-from PySide6.QtCore import QPoint, QPointF, Qt, QUrl, qInstallMessageHandler
-from PySide6.QtGui import QFont, QGuiApplication
-from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtQuick import QQuickItem, QQuickWindow  # noqa: F401
-from PySide6.QtTest import QTest
+from PySide6.QtCore import (  # noqa: E402
+    QPoint,
+    QPointF,
+    Qt,
+    QUrl,
+    qInstallMessageHandler,
+)
+from PySide6.QtGui import QFont, QGuiApplication  # noqa: E402
+from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
+from PySide6.QtQuick import QQuickWindow  # noqa: E402,F401
+from PySide6.QtTest import QTest  # noqa: E402
 
-from ui.theme import build_theme
-from train_controller.train_controller_state import TrainControllerState
+from ui.theme import build_theme  # noqa: E402
+from train_controller.train_controller_state import (  # noqa: E402
+    TrainControllerState,
+)
 
 warnings = []
 qInstallMessageHandler(lambda mode, ctx, msg: warnings.append(msg))
@@ -196,7 +204,8 @@ for _ in range(300):
 check("Auto: stops at next unserved station (GLENBURY) and dwells",
       s()["dwelling"] and s()["current_block"] == "65")
 check("Auto: right doors opened automatically", s()["right_door"])
-check("Auto: dwell badge shown", bool(find(f"DWELL {s()['dwell_left_s']} S", buttons=False)))
+badge = f"DWELL {s()['dwell_left_s']} S"
+check("Auto: dwell badge shown", bool(find(badge, buttons=False)))
 check("Auto: Close right disabled during dwell",
       not enabled("Close right", MID))
 click("On", MID)

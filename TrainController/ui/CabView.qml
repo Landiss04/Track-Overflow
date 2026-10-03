@@ -170,7 +170,7 @@ RowLayout {
                     size: "large"
                     text: "Slower"
                     enabled: root.manual && root.snapshot.target_speed_mph > 0
-                    onClicked: controller.slower()
+                    onClicked: controller.decrease_target_speed()
                 }
 
                 AppButton {
@@ -181,7 +181,7 @@ RowLayout {
                     text: "Faster"
                     enabled: root.manual && root.snapshot.target_speed_mph
                         < root.snapshot.speed_limit_mph
-                    onClicked: controller.faster()
+                    onClicked: controller.increase_target_speed()
                 }
             }
 
@@ -191,7 +191,7 @@ RowLayout {
                     ? "Use CTC target · " + root.snapshot.ctc_speed_mph + " mph"
                     : "CTC sets the speed in Automatic mode"
                 enabled: root.manual
-                onClicked: controller.useCtcTarget()
+                onClicked: controller.use_ctc_target()
             }
         }
 
@@ -218,7 +218,7 @@ RowLayout {
                     options: root.offOn
                     currentIndex: root.snapshot.service_brake ? 1 : 0
                     onActivated: function (index) {
-                        controller.setServiceBrake(index === 1);
+                        controller.set_service_brake(index === 1);
                     }
                 }
             }
@@ -235,9 +235,9 @@ RowLayout {
                 enabled: !applied || root.snapshot.can_release_emergency_brake
                 onConfirmed: {
                     if (root.snapshot.emergency_brake)
-                        controller.releaseEmergencyBrake();
+                        controller.release_emergency_brake();
                     else
-                        controller.pullEmergencyBrake();
+                        controller.pull_emergency_brake();
                 }
             }
 
@@ -275,7 +275,7 @@ RowLayout {
                     text: root.snapshot.left_door ? "Close left" : "Open left"
                     enabled: (root.snapshot.left_door && !root.snapshot.dwelling)
                         || root.snapshot.can_open_left
-                    onClicked: controller.toggleLeftDoor()
+                    onClicked: controller.toggle_left_door()
                 }
 
                 AppButton {
@@ -286,7 +286,7 @@ RowLayout {
                     text: root.snapshot.right_door ? "Close right" : "Open right"
                     enabled: (root.snapshot.right_door && !root.snapshot.dwelling)
                         || root.snapshot.can_open_right
-                    onClicked: controller.toggleRightDoor()
+                    onClicked: controller.toggle_right_door()
                 }
             }
 
@@ -356,7 +356,7 @@ RowLayout {
                 Layout.fillWidth: true
                 size: "large"
                 text: "Announce again"
-                onClicked: controller.announceAgain()
+                onClicked: controller.announce_next_station()
             }
 
             Callout {
@@ -386,7 +386,7 @@ RowLayout {
                     Layout.fillHeight: true
                     size: "large"
                     text: "Cooler"
-                    onClicked: controller.cooler()
+                    onClicked: controller.decrease_temperature_setpoint()
                 }
 
                 TelemetryReadout {
@@ -401,7 +401,7 @@ RowLayout {
                     Layout.fillHeight: true
                     size: "large"
                     text: "Warmer"
-                    onClicked: controller.warmer()
+                    onClicked: controller.increase_temperature_setpoint()
                 }
             }
 
@@ -437,7 +437,7 @@ RowLayout {
                         options: root.offOn
                         currentIndex: root.snapshot.cabin_light ? 1 : 0
                         onActivated: function (index) {
-                            controller.setCabinLight(index === 1);
+                            controller.set_cabin_light(index === 1);
                         }
                     }
                 }
@@ -452,7 +452,7 @@ RowLayout {
                         options: root.offOn
                         currentIndex: root.snapshot.headlight ? 1 : 0
                         onActivated: function (index) {
-                            controller.setHeadlight(index === 1);
+                            controller.set_headlight(index === 1);
                         }
                     }
                 }

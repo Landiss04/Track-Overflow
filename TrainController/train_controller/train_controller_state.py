@@ -24,6 +24,7 @@ from typing import Any
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
+from train_controller.errors import InvalidSignalAspectError
 from train_controller.track_layout import (
     GREEN_LINE_PATH,
     TrackBlock,
@@ -115,7 +116,7 @@ def _approach(value: float, target: float, max_step: float) -> float:
 class TrainControllerState(QObject):
     """Everything the cab view displays, and every driver action."""
 
-    snapshotChanged = Signal()
+    snapshot_changed = Signal()
 
     def __init__(
         self,
@@ -231,7 +232,7 @@ class TrainControllerState(QObject):
             if self._announcement_left_s <= 0:
                 self.announcement = ""
 
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     def _must_stop(self, dt: float) -> bool:
         # Brake once the service-brake stopping distance, plus one tick
@@ -242,8 +243,9 @@ class TrainControllerState(QObject):
         return distance_left_m <= braking_distance_m + speed_mps * dt
 
     def _update_station_stop(self, dt: float) -> None:
-        # Automatic mode: on arriving mid-platform, open the platform-side
-        # doors and dwell; close the doors near the end of the dwell.
+        # Automatic mode: on arriving mid-platform, open the
+        # platform-side doors and dwell; close the doors near the end
+        # of the dwell.
         if self.is_dwelling:
             self.dwell_left_s = max(0.0, self.dwell_left_s - dt)
             if self.dwell_left_s <= DOOR_CLOSE_LEAD_S:
@@ -266,7 +268,7 @@ class TrainControllerState(QObject):
             side = self.route[index].platform_side
             self.left_door_open = side in ("LEFT", "BOTH")
             self.right_door_open = side in ("RIGHT", "BOTH")
-            self.announceAgain()
+            self.announce_next_station()
 
     def _platform_stop_m(self, index: int) -> float:
         block = self.route[index]
@@ -389,7 +391,7 @@ class TrainControllerState(QObject):
     # QML-facing snapshot
     # ------------------------------------------------------------------
 
-    @Property("QVariantMap", notify=snapshotChanged)
+    @Property("QVariantMap", notify=snapshot_changed)
     def snapshot(self) -> dict[str, Any]:
         """Every display value, in display units, rebuilt per change."""
         current_index = self.current_block_index
@@ -514,23 +516,27 @@ class TrainControllerState(QObject):
         call this method with it. It is deliberately not a QML slot,
         because the driver cannot set a wayside signal. The aspect is
         displayed only and does not change speed, braking or authority.
-        Raise ``ValueError`` for an aspect that is not recognised.
+        Raise ``InvalidSignalAspectError`` for an unknown aspect.
         """
-        self.signal_aspect = SignalAspect(aspect)
+        try:
+            self.signal_aspect = SignalAspect(aspect)
+        except ValueError as error:
+            raise InvalidSignalAspectError(
+                f"unknown signal aspect: {aspect!r}") from error
         self.signal_aspect_from_track_model = True
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     # ------------------------------------------------------------------
     # Driver actions
     # ------------------------------------------------------------------
 
     @Slot()
-    def slower(self) -> None:
+    def decrease_target_speed(self) -> None:
         """Lower the driver's target speed by 1 mph."""
         self._nudge_target_mph(-1)
 
     @Slot()
-    def faster(self) -> None:
+    def increase_target_speed(self) -> None:
         """Raise the driver's target speed by 1 mph, up to the limit."""
         self._nudge_target_mph(+1)
 
@@ -543,39 +549,39 @@ class TrainControllerState(QObject):
         target_mph = max(0, min(limit_mph, target_mph))
         self.target_speed_mps = mph_to_mps(target_mph)
         self.target_source = SpeedSource.DRIVER
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def useCtcTarget(self) -> None:
+    def use_ctc_target(self) -> None:
         """Adopt the CTC's commanded speed as the target."""
         if self.mode is not DriveMode.MANUAL:
             return
         self.target_speed_mps = self.ctc_speed_mps
         self.target_source = SpeedSource.CTC
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(bool)
-    def setServiceBrake(self, engaged: bool) -> None:
+    def set_service_brake(self, engaged: bool) -> None:
         """Engage or release the service brake."""
         self.service_brake = engaged
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def pullEmergencyBrake(self) -> None:
+    def pull_emergency_brake(self) -> None:
         """Latch the emergency brake."""
         self.emergency_brake = True
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def releaseEmergencyBrake(self) -> None:
+    def release_emergency_brake(self) -> None:
         """Release the emergency brake, once the train has stopped."""
         if not self.can_release_emergency_brake:
             return
         self.emergency_brake = False
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def toggleLeftDoor(self) -> None:
+    def toggle_left_door(self) -> None:
         """Open or close the left doors, if allowed.
 
         Ignored during an automatic station dwell, which runs the doors.
@@ -586,10 +592,10 @@ class TrainControllerState(QObject):
             self.left_door_open = False
         elif self.can_open_door("LEFT"):
             self.left_door_open = True
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def toggleRightDoor(self) -> None:
+    def toggle_right_door(self) -> None:
         """Open or close the right doors, if allowed.
 
         Ignored during an automatic station dwell, which runs the doors.
@@ -600,15 +606,15 @@ class TrainControllerState(QObject):
             self.right_door_open = False
         elif self.can_open_door("RIGHT"):
             self.right_door_open = True
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def cooler(self) -> None:
+    def decrease_temperature_setpoint(self) -> None:
         """Lower the cabin temperature setpoint by 1 deg F."""
         self._nudge_setpoint_f(-1)
 
     @Slot()
-    def warmer(self) -> None:
+    def increase_temperature_setpoint(self) -> None:
         """Raise the cabin temperature setpoint by 1 deg F."""
         self._nudge_setpoint_f(+1)
 
@@ -617,22 +623,22 @@ class TrainControllerState(QObject):
         setpoint_f = max(TEMP_SETPOINT_MIN_F,
                          min(TEMP_SETPOINT_MAX_F, setpoint_f))
         self.temp_setpoint_c = f_to_c(setpoint_f)
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(bool)
-    def setCabinLight(self, on: bool) -> None:
+    def set_cabin_light(self, on: bool) -> None:
         """Switch the cabin lights."""
         self.cabin_light = on
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(bool)
-    def setHeadlight(self, on: bool) -> None:
+    def set_headlight(self, on: bool) -> None:
         """Switch the headlights."""
         self.headlight = on
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def announceAgain(self) -> None:
+    def announce_next_station(self) -> None:
         """Replay the next-station announcement."""
         index = self.next_station_index()
         if index is None:
@@ -647,10 +653,10 @@ class TrainControllerState(QObject):
             self.announcement = (
                 f"Next stop {station.station_name}. Doors open {side}.")
         self._announcement_left_s = ANNOUNCEMENT_DURATION_S
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(str)
-    def setMode(self, mode: str) -> None:
+    def set_mode(self, mode: str) -> None:
         """Switch between Manual and Automatic speed control.
 
         Leaving Automatic during a station dwell ends the dwell: the
@@ -662,65 +668,65 @@ class TrainControllerState(QObject):
             self._served_stations.add(self.current_block.block_id)
             self.dwell_left_s = 0.0
         self.mode = new_mode
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(str)
-    def setUser(self, role: str) -> None:
+    def set_user(self, role: str) -> None:
         """Switch the console user between Driver and Engineer."""
         self.user_role = UserRole(role)
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     # ------------------------------------------------------------------
     # Engineer actions (gains pop-up)
     # ------------------------------------------------------------------
 
     @Slot(float)
-    def setGainStep(self, step: float) -> None:
+    def set_gain_step(self, step: float) -> None:
         """Choose the increment used by the Kp and Ki steppers."""
         if self.user_role is not UserRole.ENGINEER:
             return
         self.gain_step = step
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(int)
-    def adjustKp(self, direction: int) -> None:
+    def adjust_kp(self, direction: int) -> None:
         """Step the pending Kp up (+1) or down (-1)."""
         if self.user_role is not UserRole.ENGINEER:
             return
         self.kp_pending = max(
             0.0, round(self.kp_pending + direction * self.gain_step, 3))
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(int)
-    def adjustKi(self, direction: int) -> None:
+    def adjust_ki(self, direction: int) -> None:
         """Step the pending Ki up (+1) or down (-1)."""
         if self.user_role is not UserRole.ENGINEER:
             return
         self.ki_pending = max(
             0.0, round(self.ki_pending + direction * self.gain_step, 3))
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(float)
-    def setKp(self, value: float) -> None:
+    def set_kp(self, value: float) -> None:
         """Set the pending Kp to a typed value."""
         if self.user_role is not UserRole.ENGINEER:
             return
         self.kp_pending = max(0.0, round(value, 3))
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot(float)
-    def setKi(self, value: float) -> None:
+    def set_ki(self, value: float) -> None:
         """Set the pending Ki to a typed value."""
         if self.user_role is not UserRole.ENGINEER:
             return
         self.ki_pending = max(0.0, round(value, 3))
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()
 
     @Slot()
-    def applyGains(self) -> None:
+    def apply_gains(self) -> None:
         """Put the pending Kp and Ki into use."""
         if self.user_role is not UserRole.ENGINEER:
             return
         self.kp_in_use = self.kp_pending
         self.ki_in_use = self.ki_pending
-        self.snapshotChanged.emit()
+        self.snapshot_changed.emit()

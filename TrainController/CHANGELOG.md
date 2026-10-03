@@ -5,6 +5,21 @@ entry names the commits that make it up (by hash, or by subject where the
 entry was written before the hash existed), so the history can be traced in
 `git log -- TrainController/`.
 
+## 2026-10-03 — Truth compliance pass
+
+Commit: "Train Controller: naming, exceptions and lint per truth conventions"
+
+- **`naming.md`:** QML-callable slots and the notify signal renamed from
+  mixedCase to `lower_snake_case`, and slot names start with a verb
+  (`slower` → `decrease_target_speed`, `cooler` →
+  `decrease_temperature_setpoint`, `announceAgain` →
+  `announce_next_station`, `snapshotChanged` → `snapshot_changed`, and so on).
+- **`identifiers.md`:** new `train_controller/errors.py` with the module
+  base `TrainControllerError`, plus `InvalidBlockError` and
+  `InvalidSignalAspectError`, raised with `from` chaining.
+- **`files-and-paths.md`:** `flake8 --max-line-length=79
+  --max-doc-length=72` with `pep8-naming` is clean.
+
 ## 2026-10-03 — Automatic station stops; full UI click check
 
 Author: Jonathan Tsang · Branch: `Train-Ctrl_SW`
