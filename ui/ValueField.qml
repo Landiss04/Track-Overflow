@@ -7,6 +7,9 @@ ColumnLayout {
     id: root
 
     property string label: ""
+    // Clear where the surrounding row already names the field; the label
+    // is still used as the accessible name.
+    property bool labelVisible: true
     property string kind: "string" // int | float | string
     property alias text: editor.text
     readonly property bool valid: kind === "string" || editor.acceptableInput
@@ -20,7 +23,7 @@ ColumnLayout {
     FieldLabel {
         Layout.fillWidth: true
         text: root.label.toUpperCase()
-        visible: root.label !== ""
+        visible: root.labelVisible && root.label !== ""
     }
 
     TextField {
