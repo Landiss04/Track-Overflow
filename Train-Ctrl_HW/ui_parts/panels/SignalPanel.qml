@@ -12,9 +12,6 @@ Panel {
     readonly property var s: controller.snapshot
 
     title: qsTr("Next signal")
-    headerItems: [
-        StatusBadge { label: root.s.signal_block; variant: "idle" }
-    ]
 
     SignalHead {
         Layout.alignment: Qt.AlignHCenter

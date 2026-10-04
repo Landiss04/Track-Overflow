@@ -35,6 +35,16 @@ def check_snapshot_contract(backend: Any, ui_dir: Path) -> bool:
     """
     import re
 
+    empty = [str(q.relative_to(ui_dir)) for q in sorted(ui_dir.rglob("*.qml"))
+             if not q.read_text(encoding="utf-8").strip()]
+    if empty:
+        print("These QML files are empty, so every type they define is "
+              "missing:", file=sys.stderr)
+        for name in empty:
+            print(f"  {name}", file=sys.stderr)
+        print("Copy them again: a transfer dropped them.", file=sys.stderr)
+        return False
+
     have = set(backend.snapshot)
     pattern = re.compile(r"(?:\bs|snapshot)\.([a-z_][a-z0-9_]*)")
     missing: dict[str, set[str]] = {}
@@ -55,6 +65,22 @@ def check_snapshot_contract(backend: Any, ui_dir: Path) -> bool:
 
 
 # ============================================================= check
+def _until(app: QGuiApplication, ready, seconds: float = 60.0) -> bool:
+    """Run the loop until something is true, or give up.
+
+    A train accelerates at half a metre per second per second from a
+    stand, so how long anything takes depends on the machine and on
+    the simulation rate. Waiting on the condition keeps the test
+    honest where waiting on a stopwatch made it flaky.
+    """
+    end = QTime.currentTime().addMSecs(int(seconds * 1000))
+    while QTime.currentTime() < end:
+        app.processEvents()
+        if ready():
+            return True
+    return False
+
+
 def _settle(app: QGuiApplication, ms: int) -> None:
     """Run the event loop for ms, so the timers above actually tick."""
     end = QTime.currentTime().addMSecs(ms)
@@ -86,7 +112,7 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
     expect(backend.snapshot["train_count"] == 0, "the roster started full")
 
     # Nothing to drive yet, and nothing crashes trying.
-    backend.applyInputs({"commanded_speed": 12, "authority_blocks": 2})
+    backend.applyInputs({"commanded_speed": 27, "authority_blocks": 2})
     backend.toggleEmergencyBrake()
 
     backend.spawnTrain(114, "GREEN LINE", "GREEN K")
@@ -111,7 +137,7 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
         window.grabWindow().save(str(shots / "02-gains.png"))
     # The bench commissions by sending its inputs, with no separate
     # button for it.
-    backend.applyInputs({"kp": 42000, "ki": 7000})
+    backend.applyInputs({"kp": 400000, "ki": 8000})
     expect(backend.core.armed, "commissioning did not arm the controller")
     _settle(app, mod.GAINS_HANDOVER_MS + 400)
     expect(backend.snapshot["operator"] == "driver", "console not handed over")
@@ -121,33 +147,76 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
     expect(backend.snapshot["operator"] == "driver",
            "engineer role re-entered after the gains were set")
     backend.commissionGains(1, 1)
-    expect(backend.core.state.kp == 42000, "gains changed after being locked")
+    expect(backend.core.state.kp == 400000,
+           "gains changed after being locked")
 
     # Automatic locks the console; Manual hands it to the driver.
     expect(not backend.can_drive, "driver could act in Automatic")
     backend.setManual(True)
     expect(backend.can_drive, "Manual did not unlock the console")
     backend.setTargetMph(35)
-    _settle(app, 1500)
-    expect(backend.core.state.actual_mps > 0, "train never moved")
+    moving = _until(app, lambda: backend.core.state.actual_mps > 2.0, 30)
+    expect(moving, "train never got moving")
+    expect(backend.core.state.accel_mps2 > 0.3,
+           "the train is not pulling anything like its rated acceleration")
     if shots:
         window.grabWindow().save(str(shots / "03-driving.png"))
 
     # The emergency brake stops the train and latches until it is stopped.
     backend.toggleEmergencyBrake()
     expect(backend.core.state.power_w == 0.0, "power stayed on under e-brake")
+    expect(not backend.core.state.service_brake,
+           "the emergency brake reported the service brake as applied too")
     _settle(app, 200)
     if shots:
         window.grabWindow().save(str(shots / "04-ebrake.png"))
     backend.toggleEmergencyBrake()
     expect(backend.core.state.emergency_brake,
            "e-brake released while the train was moving")
-    _settle(app, 9000)
+    stopped = _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
+    expect(stopped, "the emergency brake never brought the train to a stand")
+    expect(not backend.core.state.service_brake,
+           "the e-brake reported the service brake engaged as well")
     backend.toggleEmergencyBrake()
     expect(not backend.core.state.emergency_brake,
            "e-brake would not release at a stand")
+
+    # The Train Model's brake report drives the real brake, and the
+    # train is stopped here, so it releases again cleanly.
+    backend.applyInputs({"ebrake_state": True})
+    expect(backend.core.state.emergency_brake,
+           "the bench's ebrake_state did not engage the brake")
+    backend.applyInputs({"ebrake_state": False})
+    expect(not backend.core.state.emergency_brake,
+           "the bench's ebrake_state did not release the brake")
     if shots:
         window.grabWindow().save(str(shots / "04-stopped.png"))
+
+    # The speed law: up to the rated acceleration, then nothing left
+    # over once the train is sitting on its target. Ten times real
+    # time earns its keep here, because a train takes three quarters
+    # of a minute to reach line speed.
+    backend.setManual(False)
+    backend.applyInputs({"commanded_speed": 12.0 * mod.MPS_TO_MPH})
+    backend.setSimRate(mod.SIM_RATES.index(10))
+    expect(abs(backend.core.dt - 10 / mod.CONTROL_HZ) < 1e-9,
+           "the simulation rate did not reach the plant")
+    pulling = _until(app, lambda: backend.core.state.actual_mps > 1.0, 20)
+    expect(pulling, "the train did not pull away under power")
+    fast = backend.core.state.actual_mps
+    _settle(app, 300)
+    expect(backend.core.state.actual_mps - fast > 1.0,
+           "ten times real time did not move the train any faster")
+    # Settled means on target and no longer pulling, not merely
+    # passing through the right speed on the way up.
+    settled = _until(app, lambda: (
+        abs(backend.core.state.actual_mps - 12.0) < 0.1
+        and abs(backend.core.state.accel_mps2) < 0.02), 90)
+    backend.setSimRate(mod.SIM_RATES.index(1))
+    expect(settled, "the train never settled on its commanded speed")
+    expect(not backend.core.state.service_brake,
+           "the service brake is fighting the speed law at target")
+    backend.setManual(True)
 
     # The numbers drawer renders and closes again.
     drawer = window.findChild(QObject, "numbersDrawer")
@@ -162,19 +231,25 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
     # The bench drives the Train Model interface from its own window,
     # in one coherent set.
     _settle(app, 300)
-    backend.applyInputs({"commanded_speed": 19})
-    expect(abs(backend.core.state.commanded_mps - 19) < 1e-6,
-           "the bench could not set commanded speed in m/s")
-    expect(abs(backend.snapshot["commanded_mph"] - 19 * mod.MPS_TO_MPH) < 1e-3,
-           "commanded speed not shown to the driver in mph")
-    backend.applyInputs({"cabin_temperature": 20})
+    # The bench types what the console reads, and the backend keeps
+    # SI: in mph and Fahrenheit, out m/s and Celsius.
+    backend.applyInputs({"commanded_speed": 42.5})
+    expect(abs(backend.core.state.commanded_mps - 42.5 / mod.MPS_TO_MPH)
+           < 1e-6, "the bench's mph did not convert to m/s")
+    expect(abs(backend.snapshot["commanded_mph"] - 42.5) < 1e-3,
+           "commanded speed did not come back as it was typed")
+    backend.applyInputs({"speed_limit": 60.0})
+    expect(abs(backend.core.state.speed_limit_mps - 60.0 / mod.MPS_TO_MPH)
+           < 1e-6, "the bench could not set the speed limit")
+    backend.applyInputs({"speed_limit": 43.5})
+    backend.applyInputs({"cabin_temperature": 68})
     expect(abs(backend.core.state.cabin_temp_c - 20.0) < 0.01,
-           "cabin temperature not taken in Celsius")
+           "the bench's Fahrenheit did not convert to Celsius")
     expect(abs(backend.snapshot["cabin_temp_f"] - 68.0) < 0.01,
-           "cabin temperature not shown to the driver in Fahrenheit")
+           "cabin temperature did not come back as it was typed")
 
     # A staged set applies in one call.
-    backend.applyInputs({"commanded_speed": 14, "beacon": "PLATFORM B",
+    backend.applyInputs({"commanded_speed": 31, "beacon": "PLATFORM B",
                          "signal_light_ahead": "GREEN"})
     expect(backend.snapshot["beacon"] == "PLATFORM B",
            "staged inputs did not apply")
@@ -200,18 +275,18 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
            "spawning the same id twice added a second copy")
     expect(not backend.core.armed, "a new train came up commissioned")
     expect(backend.cores[first].armed, "spawning disarmed the first train")
+    # A new train is stopped, so this engages and releases cleanly,
+    # and the train beside it is not touched either way.
+    backend.toggleEmergencyBrake()
+    expect(backend.core.state.emergency_brake, "the new train has no e-brake")
+    expect(not backend.cores[first].state.emergency_brake,
+           "one train's emergency brake reached another train")
+    backend.toggleEmergencyBrake()
+    expect(not backend.core.state.emergency_brake,
+           "the new train's e-brake would not release at a stand")
     backend.selectTrain(first)
     expect(backend.selected == first, "could not go back to the first train")
 
-    # Ten times real time moves the simulation, not the tick rate.
-    before = backend.core.state.actual_mps
-    backend.setSimRate(mod.SIM_RATES.index(10))
-    expect(abs(backend.core.dt - 10 / mod.CONTROL_HZ) < 1e-9,
-           "the simulation rate did not reach the plant")
-    _settle(app, 500)
-    backend.setSimRate(mod.SIM_RATES.index(1))
-    expect(abs(backend.core.state.actual_mps - before) > 1e-6,
-           "ten times real time did not move the train any faster")
 
     backend.applyInputs({"authority_blocks": 3,
                          "signal_light_ahead": "RED"})
@@ -226,8 +301,13 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
         bench.grabWindow().save(str(shots / "06-test.png"))
     backend.applyInputs({"failure_brake": False})
 
+    # The brake it pulled is latched, so clear it the way a driver
+    # has to: stopped, with the fault gone.
+    _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
     backend.toggleEmergencyBrake()
     _settle(app, 300)
+    expect(not backend.core.state.emergency_brake,
+           "the emergency brake would not clear once the fault was gone")
 
     # Entering a block spends authority and steps the aspect on.
     before_blocks = backend.core.state.authority_blocks
@@ -241,10 +321,22 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
     while backend.core.state.authority_blocks > 0:
         backend.core.enter_block()
     backend.core.enforce_safety()
-    expect(backend.core.state.emergency_brake,
-           "running out of authority did not stop the train")
-    backend.applyInputs({"authority_blocks": 6})
-    backend.toggleEmergencyBrake()
+    expect(not backend.core.state.emergency_brake,
+           "running out of authority pulled the emergency brake")
+    expect(backend.core.state.target_mps == 0.0,
+           "a train with no authority still has a target to run to")
+    backend.setManual(True)
+    backend.setTargetMph(30)
+    expect(backend.core.state.target_mps == 0.0,
+           "the driver could still ask a train with no authority to move")
+    backend.setManual(False)
+    backend.setManual(True)
+    backend.setTargetMph(30)
+    expect(backend.core.state.target_mps == 0.0,
+           "the driver could set a target with no authority left")
+    backend.applyInputs({"authority_blocks": 6, "speed_limit": 40})
+    expect(abs(backend.core.state.speed_limit_mps - 40 / mod.MPS_TO_MPH)
+           < 1e-6, "the bench could not set the speed limit")
     _settle(app, 300)
 
     # Announcements lock out for their duration.

@@ -87,7 +87,14 @@ def check_shared_library() -> bool:
 
 CONTROL_HZ = 20
 UI_HZ = 10
-MAX_POWER_W = 120_000.0
+# Motor power is 120 kW and the car has two powered bogies, so four
+# motors: 480 kW at the wheel. One motor's worth cannot meet the car's
+# own data sheet — 0.5 m/s^2 at 70 km/h needs 398 kW — and a train
+# limited to 120 kW tops out around 30 km/h with the acceleration
+# falling away the whole time, which is the bug this fixes. If the
+# interface dictionary says the controller may command only 120 kW,
+# that number and this one disagree and the team has to pick one.
+MAX_POWER_W = 480_000.0
 ANNOUNCE_LOCKOUT_MS = 5000
 GAINS_HANDOVER_MS = 1500
 
@@ -99,7 +106,6 @@ GAINS_HANDOVER_MS = 1500
 # the display layer: every conversion in this program happens once, in
 # the snapshot it hands to QML, and the views only round and format.
 MPS_TO_MPH = 2.236936
-MPS2_TO_FTPS2 = 3.280840
 W_TO_KW = 0.001
 
 
@@ -125,17 +131,22 @@ CABIN_MIN_F, CABIN_MAX_F = 60.0, 80.0
 # F = P / v is undefined at a stand, so the division uses a floor
 # speed; below it the train pulls its full tractive effort, which is
 # what a real train does from rest.
-MASS_KG = 40_900.0      # Blackpool Flexity 2, empty
-MAX_ACCEL = 0.5         # m/s^2, the service acceleration limit
+# Blackpool Flexity 2 data sheet: 0.5 m/s^2 medium acceleration from
+# 0 to 70 km/h, 1.2 m/s^2 on the service brake, 2.73 on the
+# emergency brake, 70 km/h maximum. Mass is 40.9 t empty and 56.7 t
+# at 4 pass./m^2, and the acceleration figure is quoted at 2/3 load,
+# so the plant runs at that mass.
+MASS_KG = 51_433.0
+MAX_ACCEL = 0.5         # m/s^2, and the car will not exceed it
 MAX_FORCE_N = MASS_KG * MAX_ACCEL
+MAX_SPEED_MPS = 70 / 3.6
 V_FLOOR = 1.0           # m/s, below which F = P / v is capped
-# Rolling resistance of steel on steel is about 1 % of weight, which
-# is 0.05 m/s^2, and the speed term stands in for aero drag.
-DRAG_BASE = 0.05        # m/s^2 rolling resistance
-DRAG_SPEED = 0.0008     # m/s^2 per m/s, stands in for aero drag
 SERVICE_DECEL = 1.2     # m/s^2
-EBRAKE_DECEL = 2.7      # m/s^2
-SERVICE_BAND = 0.15     # m/s over target before the service brake helps
+EBRAKE_DECEL = 2.73     # m/s^2
+# How far over target the train may drift before the brake helps.
+# With no resistance in the model the brake is the only thing that
+# can slow the train, so this is the band it is allowed to hold.
+SERVICE_BAND = 0.5      # m/s over target before the service brake helps
 BLOCK_LENGTH_M = 500.0  # until the Track Model supplies real lengths
 
 # One plant per train, and they all run. When the real Train Model
@@ -226,10 +237,10 @@ class State:
     line: str = "GREEN LINE"
     manual: bool = False
 
-    actual_mps: float = 11.6
-    commanded_mps: float = 24.6
-    target_mps: float = 21.5
-    speed_limit_mps: float = 31.3
+    actual_mps: float = 0.0
+    commanded_mps: float = 0.0
+    target_mps: float = 0.0
+    speed_limit_mps: float = MAX_SPEED_MPS
     accel_mps2: float = 0.0
 
     # Authority: how many blocks the train may still enter before it
@@ -251,7 +262,6 @@ class State:
     # State reported back by the Train Model, as opposed to what this
     # controller commanded. With no Train Model attached the toy plant
     # echoes the commands into these.
-    fb_brake: bool = False
     fb_doors_left: bool = False
     fb_doors_right: bool = False
     fb_lights: bool = False
@@ -266,11 +276,14 @@ class State:
     headlights: bool = True
 
     next_signal: str = "YELLOW"
-    signal_block: str = "GREEN J"
     current_block: str = "GREEN I"
 
-    kp: float = 30000.0     # W per m/s of error
-    ki: float = 6000.0      # W per (m/s x s) of accumulated error
+    # Defaults that pull the full 0.5 m/s^2 from a stand, reach
+    # 70 km/h in about three quarters of a minute, and then sit
+    # within a tenth of a mile an hour of target without the brake
+    # having to help. An engineer can still commission anything.
+    kp: float = 400000.0    # W per m/s of error
+    ki: float = 8000.0      # W per (m/s x s) of accumulated error
 
 
 # ================================================================ control
@@ -300,7 +313,11 @@ class ControllerCore:
         s = self.state
         if self.armed:
             if not s.manual:
-                s.target_mps = min(s.commanded_mps, s.speed_limit_mps)
+                # In Automatic the CTC's commanded speed already
+                # agrees with the signal ahead, so the only things
+                # left to respect are the line limit and the car.
+                s.target_mps = min(s.commanded_mps, s.speed_limit_mps,
+                                   MAX_SPEED_MPS)
 
             error = s.target_mps - s.actual_mps
             self.integral += error * self.dt
@@ -329,17 +346,25 @@ class ControllerCore:
         it stops.
         """
         s = self.state
+
+        # No authority is not an emergency. The train may not move,
+        # and it comes to a stand on the service brake the way a
+        # driver would stop it, in either mode.
+        if s.authority_blocks <= 0:
+            s.target_mps = 0.0
+            s.power_w = 0.0
+            self.integral = 0.0
+            if s.actual_mps > 0.0:
+                s.service_brake = True
+
         reasons = []
         if s.actual_mps > s.speed_limit_mps * 1.05:
             reasons.append("OVER SPEED LIMIT")
-        if s.authority_blocks <= 0:
-            reasons.append("AUTHORITY EXCEEDED")
         if any(s.failures.values()):
             reasons.append("EQUIPMENT FAULT")
         if reasons or s.emergency_brake:
             s.emergency_brake = True
             s.power_w = 0.0
-            s.service_brake = True
             self.integral = 0.0
         self.last_reasons = reasons
 
@@ -380,15 +405,20 @@ class ControllerCore:
     def set_target_mps(self, mps: float) -> None:
         """Set the driver's target, in m/s, capped at the speed limit."""
         s = self.state
-        if s.manual:
-            s.target_mps = max(0.0, min(mps, s.speed_limit_mps))
+        if s.manual and s.authority_blocks > 0:
+            s.target_mps = max(0.0, min(mps, s.speed_limit_mps,
+                                        MAX_SPEED_MPS))
 
     def _plant(self) -> None:
         """Toy physics until the Train Model is wired in.
 
-        Rolling and aerodynamic drag matter here: without them a coasting
-        train holds its speed forever, so it can never shed the last mph
-        below the point where the controller stops commanding power.
+            F = P / v     a = F / M     v = v + a dt
+
+        No resistance term: the model is the block diagram and
+        nothing else. One consequence worth knowing is that a train
+        with no power applied coasts forever, so the only ways down
+        are the two brakes, and the speed law holds its target from
+        below rather than settling onto it from both sides.
         """
         # The door, brake and light states the Train Model reports are
         # not echoed from the commands here: with no Train Model
@@ -397,8 +427,7 @@ class ControllerCore:
         s = self.state
         v = s.actual_mps
         force = min(MAX_FORCE_N, s.power_w / max(v, V_FLOOR))
-        drag = (DRAG_BASE + DRAG_SPEED * v) if v > 0 else 0.0
-        a = force / MASS_KG - drag
+        a = force / MASS_KG
         if s.emergency_brake:
             a = -EBRAKE_DECEL
         elif s.service_brake:
@@ -574,7 +603,9 @@ class ConsoleBackend(QObject):
             "commanded_mph": s.commanded_mps * MPS_TO_MPH,
             "target_mph": s.target_mps * MPS_TO_MPH,
             "limit_mph": s.speed_limit_mps * MPS_TO_MPH,
-            "accel_ftps2": s.accel_mps2 * MPS2_TO_FTPS2,
+            # Not a signal anybody sends or receives, just a number
+            # to debug with, so it stays in SI (units.md).
+            "accel_mps2": s.accel_mps2,
             "dial_hint": self._dial_hint(),
             "speed_source": "Driver" if s.manual else "From CTC",
 
@@ -588,7 +619,6 @@ class ConsoleBackend(QObject):
             "fault_engine": s.failures["engine"],
             "fault_brake": s.failures["brake"],
             "fault_pickup": s.failures["signal_pickup"],
-            "fb_brake": s.fb_brake,
             "fb_doors_left": s.fb_doors_left,
             "fb_doors_right": s.fb_doors_right,
             "fb_lights": s.fb_lights,
@@ -618,7 +648,6 @@ class ConsoleBackend(QObject):
             "next_signal": s.next_signal,
             "signal_index": ASPECTS.index(s.next_signal),
             "signal_text": ASPECT_TEXT[s.next_signal],
-            "signal_block": s.signal_block,
 
             "kp": s.kp,
             "ki": s.ki,
@@ -800,14 +829,21 @@ class ConsoleBackend(QObject):
         if not self.has_train:
             return
         s = self.core.state
-        # Every value here is already in its backend unit: the Test
-        # view edits the interface, not the driver's console.
+        # The bench speaks the units the operator reads, like every
+        # other view, and the conversion happens here with all the
+        # others (documents/units.md). Counts and identifiers are not
+        # measurements, so they arrive as they are.
         if "commanded_speed" in values:
-            s.commanded_mps = max(0.0, float(values["commanded_speed"]))
+            s.commanded_mps = max(0.0, float(values["commanded_speed"])
+                                  / MPS_TO_MPH)
+        if "speed_limit" in values:
+            s.speed_limit_mps = max(0.0, float(values["speed_limit"])
+                                    / MPS_TO_MPH)
         if "actual_speed" in values:
-            s.actual_mps = max(0.0, float(values["actual_speed"]))
+            s.actual_mps = max(0.0, float(values["actual_speed"])
+                               / MPS_TO_MPH)
         if "cabin_temperature" in values:
-            s.cabin_temp_c = float(values["cabin_temperature"])
+            s.cabin_temp_c = f_to_c(float(values["cabin_temperature"]))
         if "authority_blocks" in values:
             s.authority_blocks = max(0, int(values["authority_blocks"]))
         # Gains come in with the rest of the set: sending the inputs
@@ -828,8 +864,12 @@ class ConsoleBackend(QObject):
             aspect = str(values["signal_light_ahead"])
             if aspect in ASPECTS:
                 s.next_signal = aspect
-        for key, attr in (("brake_state", "fb_brake"),
-                          ("door_state_left", "fb_doors_left"),
+        if "ebrake_state" in values:
+            if bool(values["ebrake_state"]):
+                self.core.engage_emergency()
+            else:
+                self.core.release_emergency()
+        for key, attr in (("door_state_left", "fb_doors_left"),
                           ("door_state_right", "fb_doors_right"),
                           ("light_state_cabin", "fb_lights"),
                           ("light_state_headlights", "fb_headlights")):
@@ -869,12 +909,6 @@ class ConsoleBackend(QObject):
             self.core.state.next_signal = ASPECTS[index]
         self._publish()
 
-    @Slot(bool)
-    def setBrakeState(self, engaged: bool) -> None:
-        if not self.has_train:
-            return
-        self.core.state.fb_brake = engaged
-        self._publish()
 
     @Slot(str, bool)
     def setDoorState(self, side: str, open_: bool) -> None:

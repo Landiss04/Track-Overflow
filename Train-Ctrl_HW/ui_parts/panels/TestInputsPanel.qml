@@ -10,10 +10,13 @@
 // half-typed set of signals. Cab controls act at once, because they
 // are buttons a hand presses, not a message being assembled.
 //
-// Units differ for the same reason. The left column is the module
-// interface, so it is backend SI: m/s, Celsius, a count of blocks.
-// The right column is the cab, so it is what the driver reads: mph
-// and Fahrenheit (documents/units.md).
+// Units are the operator's throughout, in both columns: mph and
+// Fahrenheit, because a bench you type into all day is easier to
+// read in the same units as the console it drives. Only the backend
+// is SI, and the conversion happens where every other one does, in
+// ConsoleBackend (documents/units.md). Counts and identifiers are
+// not measurements, so blocks and block IDs pass through as they
+// are.
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
@@ -28,22 +31,25 @@ Panel {
 
     // What the controller is holding right now.
     readonly property var live: ({
-        "commanded_speed": Math.round(s.commanded_mps * 100) / 100,
+        "commanded_speed": Math.round(s.commanded_mph * 10) / 10,
+        "actual_speed": Math.round(s.actual_mph * 10) / 10,
+        "speed_limit": Math.round(s.limit_mph),
         "authority_blocks": s.authority_blocks,
-        "kp": Math.round(s.kp),
-        "ki": Math.round(s.ki),
         "beacon": s.beacon,
-        "failure_engine": s.fault_engine,
-        "failure_brake": s.fault_brake,
-        "failure_signal_pickup": s.fault_pickup,
-        "cabin_temperature": Math.round(s.cabin_temp_c * 10) / 10,
+        "cabin_temperature": Math.round(s.cabin_temp_f),
         "signal_light_ahead": s.next_signal,
-        "brake_state": s.fb_brake,
+        "ebrake_state": s.emergency_brake,
         "door_state_left": s.fb_doors_left,
         "door_state_right": s.fb_doors_right,
         "light_state_cabin": s.fb_lights,
         "light_state_headlights": s.fb_headlights,
-        "actual_speed": Math.round(s.actual_mps * 100) / 100
+        "failure_engine": s.fault_engine,
+        "failure_brake": s.fault_brake,
+        "failure_signal_pickup": s.fault_pickup,
+        // Staged like the rest, because sending is what commissions
+        // them, but typed in the cab column where they belong.
+        "kp": Math.round(s.kp),
+        "ki": Math.round(s.ki)
     })
 
     // What is typed but not sent, and which rows were typed in. The
@@ -51,6 +57,10 @@ Panel {
     // instead of standing out as edits the moment the train moves.
     property var draft: live
     property var touched: ({})
+    // Paused, the rows stop following the running train, so a set of
+    // values can be typed out without the plant rewriting them
+    // underneath. Sending or discarding still works.
+    property bool paused: false
     readonly property bool dirty: {
         for (var key in touched)
             if (pending(key))
@@ -59,6 +69,8 @@ Panel {
     }
 
     onLiveChanged: {
+        if (paused)
+            return;
         var next = {};
         for (var key in live)
             next[key] = touched[key] ? draft[key] : live[key];
@@ -87,11 +99,23 @@ Panel {
         touched = ({});
     }
 
+    // Edits belong to the train they were typed for. Switching
+    // trains drops them, rather than carrying one train's staged
+    // values across to another and offering to send them.
+    readonly property string editing: s.train_id
+    onEditingChanged: release()
+
     title: qsTr("Inputs")
     headerItems: [
         StatusBadge {
             label: root.dirty ? qsTr("Unsent edits") : qsTr("Sent")
             variant: root.dirty ? "warning" : "ok"
+        },
+        AppButton {
+            size: "small"
+            variant: root.paused ? "primary" : "ghost"
+            text: root.paused ? qsTr("Paused") : qsTr("Pause")
+            onClicked: root.paused = !root.paused
         },
         AppButton {
             size: "small"
@@ -136,12 +160,12 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "commanded_speed"
                 kind: "float"
-                unit: "m/s"
+                unit: "mph"
                 value: root.draft.commanded_speed
                 pending: root.touched["commanded_speed"] === true
                     && root.pending("commanded_speed")
@@ -151,7 +175,37 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "actual_speed"
+                kind: "float"
+                unit: "mph"
+                value: root.draft.actual_speed
+                pending: root.touched["actual_speed"] === true
+                    && root.pending("actual_speed")
+                onEdited: function (v) { root.stage("actual_speed", v); }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "speed_limit"
+                kind: "int"
+                unit: "mph"
+                value: root.draft.speed_limit
+                pending: root.touched["speed_limit"] === true
+                    && root.pending("speed_limit")
+                onEdited: function (v) { root.stage("speed_limit", v); }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "authority_blocks"
@@ -166,7 +220,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "beacon"
@@ -180,56 +234,12 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
-                valueWidth: 160
-                unitWidth: 52
-                name: "failure_engine"
-                kind: "bool"
-                value: root.draft.failure_engine
-                pending: root.touched["failure_engine"] === true
-                    && root.pending("failure_engine")
-                onEdited: function (v) { root.stage("failure_engine", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 42
-                valueWidth: 160
-                unitWidth: 52
-                name: "failure_brake"
-                kind: "bool"
-                value: root.draft.failure_brake
-                pending: root.touched["failure_brake"] === true
-                    && root.pending("failure_brake")
-                onEdited: function (v) { root.stage("failure_brake", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 42
-                valueWidth: 160
-                unitWidth: 52
-                name: "failure_signal_pickup"
-                kind: "bool"
-                value: root.draft.failure_signal_pickup
-                pending: root.touched["failure_signal_pickup"] === true
-                    && root.pending("failure_signal_pickup")
-                onEdited: function (v) {
-                    root.stage("failure_signal_pickup", v);
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "cabin_temperature"
-                kind: "float"
-                unit: "\u00b0C"
+                kind: "int"
+                unit: "\u00b0F"
                 value: root.draft.cabin_temperature
                 pending: root.touched["cabin_temperature"] === true
                     && root.pending("cabin_temperature")
@@ -239,7 +249,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "signal_light_ahead"
@@ -254,21 +264,21 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "brake_state"
+                name: "ebrake_state"
                 kind: "bool"
-                value: root.draft.brake_state
-                pending: root.touched["brake_state"] === true
-                    && root.pending("brake_state")
-                onEdited: function (v) { root.stage("brake_state", v); }
+                value: root.draft.ebrake_state
+                pending: root.touched["ebrake_state"] === true
+                    && root.pending("ebrake_state")
+                onEdited: function (v) { root.stage("ebrake_state", v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "door_state_left"
@@ -282,7 +292,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "door_state_right"
@@ -296,7 +306,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "light_state_cabin"
@@ -310,7 +320,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "light_state_headlights"
@@ -324,19 +334,48 @@ Panel {
             }
             SignalEditRow {
                 Layout.fillWidth: true
-                rule: false
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "actual_speed"
-                kind: "float"
-                unit: "m/s"
-                value: root.draft.actual_speed
-                pending: root.touched["actual_speed"] === true
-                    && root.pending("actual_speed")
-                onEdited: function (v) { root.stage("actual_speed", v); }
+                name: "failure_engine"
+                kind: "bool"
+                value: root.draft.failure_engine
+                pending: root.touched["failure_engine"] === true
+                    && root.pending("failure_engine")
+                onEdited: function (v) { root.stage("failure_engine", v); }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "failure_brake"
+                kind: "bool"
+                value: root.draft.failure_brake
+                pending: root.touched["failure_brake"] === true
+                    && root.pending("failure_brake")
+                onEdited: function (v) { root.stage("failure_brake", v); }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                rule: false
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "failure_signal_pickup"
+                kind: "bool"
+                value: root.draft.failure_signal_pickup
+                pending: root.touched["failure_signal_pickup"] === true
+                    && root.pending("failure_signal_pickup")
+                onEdited: function (v) {
+                    root.stage("failure_signal_pickup", v);
+                }
             }
         }
 
@@ -357,7 +396,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 name: "operator"
@@ -372,7 +411,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.signed_in
@@ -388,7 +427,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: !root.s.gains_locked
@@ -403,7 +442,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: !root.s.gains_locked
@@ -418,7 +457,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
@@ -432,7 +471,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
@@ -446,7 +485,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
@@ -459,7 +498,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
@@ -472,7 +511,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
@@ -485,7 +524,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
@@ -498,7 +537,7 @@ Panel {
                 Layout.fillWidth: true
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.signed_in
@@ -515,7 +554,7 @@ Panel {
                 rule: false
                 editable: true
                 showKind: false
-                rowHeight: 42
+                rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
@@ -550,5 +589,4 @@ Panel {
             }
         }
     }
-
 }

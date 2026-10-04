@@ -67,6 +67,17 @@ Rectangle {
 
         Item { Layout.fillWidth: true }
 
+        // Whether this train has been commissioned. Gains are per
+        // train, so a console pointed at a fresh one says so rather
+        // than leaving the driver to wonder why nothing moves.
+        StatusBadge {
+            Layout.alignment: Qt.AlignBottom
+            Layout.bottomMargin: theme.space_1
+            label: root.s.gains_locked ? qsTr("Gains set")
+                                       : qsTr("Gains missing")
+            variant: root.s.gains_locked ? "ok" : "warning"
+        }
+
         SelectField {
             Layout.preferredWidth: 280
             Layout.alignment: Qt.AlignTop
