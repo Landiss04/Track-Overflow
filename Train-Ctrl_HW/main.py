@@ -1,6 +1,7 @@
 """HW Train Controller — driver / engineer console (ECE1140 Team 3).
 
-Entry point for the module. Python owns hardware, control and state;
+Entry point for the module. Python owns the control law and the
+state;
 QML owns every pixel. The two meet at three context properties:
 
     theme        design tokens, from the shared ui/theme.py
@@ -58,6 +59,8 @@ from PySide6.QtQuick import QQuickWindow  # noqa: E402,F401  grabWindow()
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
+from check import check_snapshot_contract, run_check  # noqa: E402
+
 _UI_DIR = Path(__file__).resolve().parent / "ui_parts"
 _CONSOLE_QML = _UI_DIR / "ConsoleWindow.qml"
 _TEST_QML = _UI_DIR / "TestWindow.qml"
@@ -96,7 +99,6 @@ GAINS_HANDOVER_MS = 1500
 # the display layer: every conversion in this program happens once, in
 # the snapshot it hands to QML, and the views only round and format.
 MPS_TO_MPH = 2.236936
-M_TO_FT = 3.280840
 MPS2_TO_FTPS2 = 3.280840
 W_TO_KW = 0.001
 
@@ -136,10 +138,9 @@ EBRAKE_DECEL = 2.7      # m/s^2
 SERVICE_BAND = 0.15     # m/s over target before the service brake helps
 BLOCK_LENGTH_M = 500.0  # until the Track Model supplies real lengths
 
-# The simulation runs one plant per train, always. There is no
-# "connected to the Train Model" mode yet: when that module arrives it
-# publishes into the same slots this bench does, and ControllerCore
-# ._plant() is what it replaces.
+# One plant per train, and they all run. When the real Train Model
+# arrives it publishes through applyInputs exactly as the bench does,
+# and ControllerCore._plant() is what it replaces.
 
 
 ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
@@ -264,9 +265,6 @@ class State:
     lights: bool = True
     headlights: bool = True
 
-    next_station: str = "CENTRAL"
-    arrives: str = "14:46"
-    platform_side: str = "right"
     next_signal: str = "YELLOW"
     signal_block: str = "GREEN J"
     current_block: str = "GREEN I"
@@ -288,9 +286,6 @@ class ControllerCore:
         self.dt = 1.0 / CONTROL_HZ          # seconds of simulation
         self.integral = 0.0
         self.last_reasons: list[str] = []
-        # Real seconds per tick. The bench multiplies this to run the
-        # simulation faster than real time.
-        self.rate = 1.0
         # The controller is inert until an engineer commissions the gains.
         self.armed = False
 
@@ -485,7 +480,6 @@ class ConsoleBackend(QObject):
             return ""
 
         core = ControllerCore()
-        core.rate = float(self.sim_rate)
         core.dt = self.sim_rate / CONTROL_HZ
         core.state.train_id = train_id
         core.state.line = line
@@ -547,7 +541,6 @@ class ConsoleBackend(QObject):
         s = self.core.state
         return {
             "train_id": s.train_id,
-            "line": s.line,
             "has_train": self.has_train,
             "train_index": (self.order.index(self.selected)
                             if self.has_train else -1),
@@ -565,7 +558,6 @@ class ConsoleBackend(QObject):
             "armed": self.core.armed,
             # Gains are commissioned once per train, so both of these
             # follow that train's controller rather than the console.
-            "engineer_available": not self.core.armed,
             "gains_locked": self.core.armed,
             "gains_note": self.gains_note,
             "clock": self.elapsed.toString("HH:mm:ss"),
@@ -577,7 +569,6 @@ class ConsoleBackend(QObject):
             # cross the interface.
             "actual_mps": s.actual_mps,
             "commanded_mps": s.commanded_mps,
-            "limit_mps": s.speed_limit_mps,
 
             "actual_mph": s.actual_mps * MPS_TO_MPH,
             "commanded_mph": s.commanded_mps * MPS_TO_MPH,
@@ -616,15 +607,11 @@ class ConsoleBackend(QObject):
             # The Test view shows this interface in the unit it
             # travels in, which for temperature is Celsius.
             "cabin_temp_c": s.cabin_temp_c,
-            "target_temp_c": s.target_temp_c,
             "doors_left": s.doors_left,
             "doors_right": s.doors_right,
             "lights": s.lights,
             "headlights": s.headlights,
 
-            "next_station": s.next_station.title(),
-            "arrives": s.arrives,
-            "platform_side": s.platform_side,
             "announcing": self.selected in self.announcing,
             "announce_label": self._announce_label(),
 
@@ -707,7 +694,6 @@ class ConsoleBackend(QObject):
             return
         self.sim_rate = SIM_RATES[index]
         for core in self.cores.values():
-            core.rate = float(self.sim_rate)
             core.dt = self.sim_rate / CONTROL_HZ
         self._publish()
 
@@ -799,37 +785,9 @@ class ConsoleBackend(QObject):
         self._publish()
 
     # ------------------------------------------------- Train Model
-    # Everything below stands in for the Train Model until it is wired
-    # in, and is driven from the Test view. The same unit rule holds:
-    # the bench speaks the operator's units and converts here.
-
-    @Slot(float)
-    def setCommandedSpeedMps(self, mps: float) -> None:
-        if not self.has_train:
-            return
-        self.core.state.commanded_mps = max(0.0, mps)
-        self._publish()
-
-    @Slot(float)
-    def setSpeedLimitMps(self, mps: float) -> None:
-        if not self.has_train:
-            return
-        self.core.state.speed_limit_mps = max(0.0, mps)
-        self._publish()
-
-    @Slot(float)
-    def setActualSpeedMps(self, mps: float) -> None:
-        if not self.has_train:
-            return
-        self.core.state.actual_mps = max(0.0, mps)
-        self._publish()
-
-    @Slot(float)
-    def setCabinTemperatureC(self, celsius: float) -> None:
-        if not self.has_train:
-            return
-        self.core.state.cabin_temp_c = celsius
-        self._publish()
+    # Every signal the Train Model sends arrives through applyInputs,
+    # as one coherent set rather than a slot per field. The bench
+    # sends them in a batch, and so will the module.
 
     @Slot("QVariantMap")
     def applyInputs(self, values: dict) -> None:
@@ -879,25 +837,6 @@ class ConsoleBackend(QObject):
                 setattr(s, attr, bool(values[key]))
         self._publish()
 
-    @Slot(int)
-    def setInputSource(self, index: int) -> None:
-        """Hand the inputs to the plant, the bench, or a real module.
-
-        Connecting the bench stops the toy plant, so nothing writes
-        over what the bench publishes. Choosing the Train Model
-        disconnects the bench; nothing publishes until that module
-        exists, which is the point.
-        """
-        if not 0 <= index < len(INPUT_SOURCES):
-            return
-        self.input_source = INPUT_SOURCES[index]
-        # The plant keeps running for the bench: what the bench sends
-        # is an injection into it, not a replacement for it, so a
-        # commanded speed typed there still makes the train move. A
-        # real Train Model does replace it.
-        self.core.plant_enabled = self.input_source != SOURCE_MODULE
-        self.core.echo_feedback = self.input_source == SOURCE_PLANT
-        self._publish()
 
     @Slot(int)
     def setAuthorityBlocks(self, blocks: int) -> None:
@@ -1000,243 +939,6 @@ class ConsoleBackend(QObject):
     def _publish(self) -> None:
         self.snapshotChanged.emit()
 
-# ========================================================== contract
-def check_snapshot_contract(backend: "ConsoleBackend") -> bool:
-    """Warn if the QML expects snapshot keys this file does not have.
-
-    A view and a backend drift apart one copied file at a time, and
-    the symptom is a wall of "Unable to assign [undefined]" with no
-    hint as to which side is behind. This reads every s.<key> and
-    snapshot.<key> out of the QML and names the missing ones.
-    """
-    import re
-
-    have = set(backend.snapshot)
-    pattern = re.compile(r"(?:\bs|snapshot)\.([a-z_][a-z0-9_]*)")
-    missing: dict[str, set[str]] = {}
-    for qml in sorted(_UI_DIR.rglob("*.qml")):
-        wanted = set(pattern.findall(qml.read_text(encoding="utf-8")))
-        gap = {k for k in wanted - have if not k.startswith("_")}
-        if gap:
-            missing[str(qml.relative_to(_UI_DIR))] = gap
-    if not missing:
-        return True
-
-    print("This main.py is older than the QML beside it. These views "
-          "read snapshot keys it does not provide:", file=sys.stderr)
-    for name, keys in missing.items():
-        print(f"  {name}: {', '.join(sorted(keys))}", file=sys.stderr)
-    print("Copy the matching main.py, or revert the QML.", file=sys.stderr)
-    return False
-
-
-# ================================================================ check
-def _settle(app: QGuiApplication, ms: int) -> None:
-    """Run the event loop for ms, so the timers above actually tick."""
-    end = QTime.currentTime().addMSecs(ms)
-    while QTime.currentTime() < end:
-        app.processEvents()
-
-
-def run_check(app: QGuiApplication, window: Any, bench: Any,
-              backend: ConsoleBackend, warnings: list[str],
-              shots: Path | None) -> int:
-    """Walk the console offscreen and report anything that went wrong.
-
-    Exits non-zero if QML logged a warning or the console let an
-    operator do something the rules forbid.
-    """
-    problems: list[str] = []
-
-    def expect(condition: bool, what: str) -> None:
-        if not condition:
-            problems.append(what)
-
-    if shots:
-        shots.mkdir(parents=True, exist_ok=True)
-
-    _settle(app, 200)
-    expect(not backend.snapshot["signed_in"], "console opened signed in")
-    expect(not backend.snapshot["has_train"], "a train existed before spawning")
-    expect(backend.snapshot["train_count"] == 0, "the roster started full")
-
-    # Nothing to drive yet, and nothing crashes trying.
-    backend.setCommandedSpeedMps(12)
-    backend.applyInputs({"authority_blocks": 2})
-    backend.toggleEmergencyBrake()
-
-    backend.spawnTrain(114, "GREEN LINE", "GREEN K")
-    expect(backend.snapshot["has_train"], "spawning did not produce a train")
-    expect(backend.snapshot["train_id"] == "T-114",
-           "the spawned train did not take the number asked for")
-    expect(not backend.core.armed, "controller armed before commissioning")
-    if shots:
-        window.grabWindow().save(str(shots / "01-signed-out.png"))
-
-    # Signed out, nothing drives.
-    backend.setTargetMph(40)
-    backend.toggleServiceBrake()
-    expect(not backend.core.state.service_request,
-           "service brake answered a signed-out operator")
-
-    # Engineer commissions the gains once; the role is then spent.
-    backend.selectOperator(1)
-    _settle(app, 200)
-    expect(backend.snapshot["operator"] == "engineer", "engineer sign-in failed")
-    if shots:
-        window.grabWindow().save(str(shots / "02-gains.png"))
-    # The bench commissions by sending its inputs, with no separate
-    # button for it.
-    backend.applyInputs({"kp": 42000, "ki": 7000})
-    expect(backend.core.armed, "commissioning did not arm the controller")
-    _settle(app, GAINS_HANDOVER_MS + 400)
-    expect(backend.snapshot["operator"] == "driver", "console not handed over")
-    expect(not backend.snapshot["engineer_available"],
-           "engineer role still offered after commissioning")
-    backend.selectOperator(1)
-    expect(backend.snapshot["operator"] == "driver",
-           "engineer role re-entered after the gains were set")
-    backend.commissionGains(1, 1)
-    expect(backend.core.state.kp == 42000, "gains changed after being locked")
-
-    # Automatic locks the console; Manual hands it to the driver.
-    expect(not backend.can_drive, "driver could act in Automatic")
-    backend.setManual(True)
-    expect(backend.can_drive, "Manual did not unlock the console")
-    backend.setTargetMph(35)
-    _settle(app, 1500)
-    expect(backend.core.state.actual_mps > 0, "train never moved")
-    if shots:
-        window.grabWindow().save(str(shots / "03-driving.png"))
-
-    # The emergency brake stops the train and latches until it is stopped.
-    backend.toggleEmergencyBrake()
-    expect(backend.core.state.power_w == 0.0, "power stayed on under e-brake")
-    _settle(app, 200)
-    if shots:
-        window.grabWindow().save(str(shots / "04-ebrake.png"))
-    backend.toggleEmergencyBrake()
-    expect(backend.core.state.emergency_brake,
-           "e-brake released while the train was moving")
-    _settle(app, 9000)
-    backend.toggleEmergencyBrake()
-    expect(not backend.core.state.emergency_brake,
-           "e-brake would not release at a stand")
-    if shots:
-        window.grabWindow().save(str(shots / "04-stopped.png"))
-
-    # The numbers drawer renders and closes again.
-    drawer = window.findChild(QObject, "numbersDrawer")
-    expect(drawer is not None, "numbers drawer missing")
-    if drawer is not None:
-        drawer.setProperty("expanded", True)
-        _settle(app, 300)
-        if shots:
-            window.grabWindow().save(str(shots / "05-numbers.png"))
-        drawer.setProperty("expanded", False)
-
-    # The bench drives the Train Model interface from its own window,
-    # but only while it is the connected source.
-    _settle(app, 300)
-    backend.setCommandedSpeedMps(19)
-    expect(abs(backend.core.state.commanded_mps - 19) < 1e-6,
-           "the bench could not set commanded speed in m/s")
-    expect(abs(backend.snapshot["commanded_mph"] - 19 * MPS_TO_MPH) < 1e-3,
-           "commanded speed not shown to the driver in mph")
-    backend.setCabinTemperatureC(20)
-    expect(abs(backend.core.state.cabin_temp_c - 20.0) < 0.01,
-           "cabin temperature not taken in Celsius")
-    expect(abs(backend.snapshot["cabin_temp_f"] - 68.0) < 0.01,
-           "cabin temperature not shown to the driver in Fahrenheit")
-
-    # A staged set applies in one call.
-    backend.applyInputs({"commanded_speed": 14, "beacon": "PLATFORM B",
-                         "signal_light_ahead": "GREEN"})
-    expect(backend.snapshot["beacon"] == "PLATFORM B",
-           "staged inputs did not apply")
-    expect(backend.snapshot["next_signal"] == "GREEN",
-           "staged aspect did not apply")
-    backend.applyInputs({"door_state_left": True, "light_state_cabin": False})
-    _settle(app, 400)
-    expect(backend.snapshot["fb_doors_left"],
-           "the plant wrote over a door state the bench published")
-    expect(not backend.snapshot["fb_lights"],
-           "the plant wrote over a light state the bench published")
-
-    # Another train, running its own plant, with its own gains.
-    first = backend.selected
-    backend.spawnTrain(301, "RED LINE", "f")
-    second = backend.selected
-    expect(second == "R-301", "spawning did not add the train asked for")
-    expect(backend.cores[second].state.authority_target == "F",
-           "a block typed in lower case did not come back capitalised")
-    expect(backend.snapshot["train_count"] == 2, "roster did not grow")
-    backend.spawnTrain(301, "RED LINE", "RED F")
-    expect(backend.snapshot["train_count"] == 2,
-           "spawning the same id twice added a second copy")
-    expect(not backend.core.armed, "a new train came up commissioned")
-    expect(backend.cores[first].armed, "spawning disarmed the first train")
-    backend.selectTrain(first)
-    expect(backend.selected == first, "could not go back to the first train")
-
-    # Ten times real time moves the simulation, not the tick rate.
-    before = backend.core.state.actual_mps
-    backend.setSimRate(SIM_RATES.index(10))
-    expect(abs(backend.core.dt - 10 / CONTROL_HZ) < 1e-9,
-           "the simulation rate did not reach the plant")
-    _settle(app, 500)
-    backend.setSimRate(SIM_RATES.index(1))
-    expect(abs(backend.core.state.actual_mps - before) > 1e-6,
-           "ten times real time did not move the train any faster")
-
-    backend.setAuthorityBlocks(3)
-    expect(backend.core.state.authority_blocks == 3,
-           "authority not taken as a block count")
-    backend.setSignalAhead(0)
-    expect(backend.snapshot["next_signal"] == "RED", "aspect not set")
-    backend.setFailure("brake", True)
-    _settle(app, 300)
-    expect(backend.core.state.emergency_brake,
-           "an equipment failure did not stop the train")
-    if shots:
-        bench.grabWindow().save(str(shots / "06-test.png"))
-    backend.setFailure("brake", False)
-
-    backend.toggleEmergencyBrake()
-    _settle(app, 300)
-
-    # Entering a block spends authority and steps the aspect on.
-    before_blocks = backend.core.state.authority_blocks
-    before_aspect = backend.snapshot["signal_index"]
-    backend.core.enter_block()
-    expect(backend.core.state.authority_blocks == before_blocks - 1,
-           "entering a block did not spend authority")
-    expect(backend.snapshot["signal_index"]
-           == (before_aspect + 1) % len(ASPECTS),
-           "entering a block did not step the signal aspect")
-    while backend.core.state.authority_blocks > 0:
-        backend.core.enter_block()
-    backend.core.enforce_safety()
-    expect(backend.core.state.emergency_brake,
-           "running out of authority did not stop the train")
-    backend.applyInputs({"authority_blocks": 6})
-    backend.toggleEmergencyBrake()
-    _settle(app, 300)
-
-    # Announcements lock out for their duration.
-    backend.announce()
-    expect(backend.snapshot["announcing"], "announcement did not start")
-    _settle(app, ANNOUNCE_LOCKOUT_MS + 400)
-    expect(not backend.snapshot["announcing"], "announcement never cleared")
-
-    for message in warnings:
-        print(f"QML warning: {message}", file=sys.stderr)
-    for problem in problems:
-        print(f"Behaviour: {problem}", file=sys.stderr)
-    print(f"{len(warnings)} QML warnings, {len(problems)} behaviour problems")
-    return 1 if warnings or problems else 0
-
-
 # ================================================================ main
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1280,7 +982,7 @@ def main() -> int:
     if not check_shared_library():
         return 1
 
-    contract_ok = check_snapshot_contract(backend)
+    contract_ok = check_snapshot_contract(backend, _UI_DIR)
 
     engine = QQmlApplicationEngine()
     # Qt logs QML errors through the message handler, which a debugger
