@@ -197,8 +197,8 @@ consumer type. The Train Model's side of each edge:
 ### Train Model → Train Controller (`ControllerOutputs`)
 
 Actual speed, Brake State, Door State, Light State, cabin temperature,
-Failure Status, and the passed-through commanded speed, authority, speed
-limit and beacon. See [module-interface.md](module-interface.md#5-outputs-trainmodeloutputs).
+and the passed-through commanded speed, authority, speed limit and beacon.
+Failure status is not sent. See [module-interface.md](module-interface.md#5-outputs-trainmodeloutputs).
 
 ### Train Model → Track Model (`TrackOutputs`)
 

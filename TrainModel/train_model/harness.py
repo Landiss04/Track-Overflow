@@ -5,7 +5,8 @@ from the Track Model and the Train Controller, and drives the clock, so
 the module can be run and graded on its own. It runs in the test UI's
 own process and reaches the module only through its boundary, over a
 link (``train_model/link.py``): it sends ``TrainModelInputs`` each tick
-and reads back only ``TrainModelOutputs``.
+and reads back only ``TrainModelOutputs``. Failure status is not an
+output; the failure flags it shows arrive over the link, test only.
 
 Rows are built from the interface dictionary (v0.2). Array-valued
 signals are presented as one row per element: ``Light Command``
@@ -50,6 +51,7 @@ from train_model.interface import (
 )
 from train_model.link import LinkError, LocalLink, SocketLink
 from train_model.model import InvalidTimeStepError, TrainModel
+from train_model.state import FAILURE_MODES
 
 # The simulation clock is shared by every module, so it lives in the
 # repository-level utils/ package.
@@ -141,13 +143,6 @@ _OUTPUT_SPEC: tuple[tuple[str, str, str], ...] = (
     ("block_changed", "bool", ""),
     ("speed_limit", "float", "mph"),
 )
-
-#: Failure Status element for each failure mode.
-_FAILURE_FIELDS: dict[str, str] = {
-    "engine_failure": "engine",
-    "signal_pickup_failure": "signal_pickup",
-    "brake_failure": "brake",
-}
 
 # Shown where the module reports no block.
 _NONE_SHOWN = "—"
@@ -344,9 +339,6 @@ class TestHarnessState(QObject):
         return [
             {"name": name, "kind": kind, "unit": unit}
             for name, kind, unit in _OUTPUT_SPEC
-        ] + [
-            {"name": name, "kind": "bool", "unit": ""}
-            for name in _FAILURE_FIELDS
         ]
 
     @Property("QVariantMap", notify=outputsChanged)  # type: ignore[arg-type]
@@ -362,7 +354,7 @@ class TestHarnessState(QObject):
     def _output_rows(self) -> list[dict[str, Any]]:
         outputs = self._link.outputs
         values = _output_values(outputs) if outputs is not None else {}
-        rows: list[dict[str, Any]] = [
+        return [
             {
                 "name": name,
                 "kind": kind,
@@ -374,31 +366,17 @@ class TestHarnessState(QObject):
             }
             for name, kind, unit in _OUTPUT_SPEC
         ]
-        rows.extend(
-            {
-                "name": row["name"],
-                "kind": "bool",
-                "unit": "",
-                "value": row["active"] if outputs is not None else None,
-            }
-            for row in self._failure_rows()
-        )
-        return rows
 
     def _failure_rows(self) -> list[dict[str, Any]]:
-        outputs = self._link.outputs
-        failures = outputs.controller.failures if outputs else None
+        failures = self._link.failures or {}
         return [
-            {
-                "name": name,
-                "active": bool(failures and getattr(failures, field)),
-            }
-            for name, field in _FAILURE_FIELDS.items()
+            {"name": name, "active": failures.get(name, False)}
+            for name in FAILURE_MODES
         ]
 
     @Property("QVariantList", notify=outputsChanged)  # type: ignore[arg-type]
     def failures(self) -> list[dict[str, Any]]:
-        """The three Failure Status flags, as the module reports them."""
+        """The three failure flags, test only: they are not outputs."""
         return self._failure_rows()
 
     @Property(int, notify=outputsChanged)

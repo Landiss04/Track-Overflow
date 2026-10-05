@@ -178,10 +178,11 @@ def test_requests_are_answered_once_and_pushed_to_other_clients(served):
     other = RawClient(server._name)
     reply = client.request(op="set_failure", name="brake_failure",
                            active=True)
-    assert outputs_of(reply).controller.failures.brake
+    assert reply["failures"]["brake_failure"]
+    assert not hasattr(outputs_of(reply).controller, "failures")
     assert state.isFailed("brake_failure")
     wait_for(lambda: other.poll() or len(other.pushes()) > 1)
-    assert outputs_of(other.pushes()[-1]).controller.failures.brake
+    assert other.pushes()[-1]["failures"]["brake_failure"]
     client.poll()
     assert len(client.pushes()) == 1  # only the one sent on connect
 

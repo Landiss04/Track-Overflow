@@ -11,14 +11,15 @@ module.
 Three test-only commands ride alongside ``step``; integration never
 uses them: set a failure (Murphy, mirrored from the Train Model UI),
 clear the passenger brake latch (folded into a step so an invalid step
-leaves the latch alone), and reset the module.
+leaves the latch alone), and reset the module. Failure status is not an
+output, so the failure flags ride back beside the outputs, test only.
 
 Wire format: newline-delimited JSON over a local socket (a named pipe on
 Windows, a socket file elsewhere). Every request carries an ``id`` and
-gets one reply with that ``id``: ``{"op": "outputs", ...}`` or ``{"op":
-"error", ...}``. The server also pushes ``{"op": "outputs"}`` with no
-``id`` on connect and whenever a Train Model UI action changes the
-outputs between steps.
+gets one reply with that ``id``: ``{"op": "outputs", "outputs": ...,
+"failures": ...}`` or ``{"op": "error", ...}``. The server also pushes
+``{"op": "outputs"}`` with no ``id`` on connect and whenever a Train
+Model UI action changes the outputs or the failures between steps.
 """
 
 from __future__ import annotations
@@ -35,7 +36,6 @@ from train_model.interface import (
     Beacon,
     ControllerCommands,
     ControllerOutputs,
-    FailureState,
     TrackInfo,
     TrackInputs,
     TrackOutputs,
@@ -44,7 +44,7 @@ from train_model.interface import (
     TrainModelOutputs,
 )
 from train_model.model import InvalidInputError, InvalidTimeStepError
-from train_model.state import TrainModelState
+from train_model.state import FAILURE_MODES, TrainModelState
 
 #: Local socket name; the environment variable lets tests run beside a
 #: Train Model that is already open.
@@ -94,11 +94,15 @@ def outputs_from_wire(data: Mapping[str, Any]) -> TrainModelOutputs:
     """Rebuild outputs exactly as the module produced them."""
     controller = dict(data["controller"])
     controller["beacon"] = _beacon(controller["beacon"])
-    controller["failures"] = FailureState(**controller["failures"])
     return TrainModelOutputs(
         controller=ControllerOutputs(**controller),
         track=TrackOutputs(**data["track"]),
     )
+
+
+def _failure_flags(state: TrainModelState) -> dict[str, bool]:
+    # Test only: failure status is not an output of the module.
+    return {name: state.isFailed(name) for name in FAILURE_MODES}
 
 
 def _write(socket: QLocalSocket, message: Mapping[str, Any]) -> None:
@@ -142,6 +146,11 @@ class LocalLink(QObject):
         """The module's current outputs."""
         return self._state.outputs()
 
+    @property
+    def failures(self) -> dict[str, bool] | None:
+        """Test only: which failure modes are set, by name."""
+        return _failure_flags(self._state)
+
     def step(
         self, dt: float, inputs: TrainModelInputs, *,
         clear_passenger_brake: bool = False,
@@ -177,6 +186,7 @@ class SocketLink(QObject):
         super().__init__(parent)
         self._name = name
         self._outputs: TrainModelOutputs | None = None
+        self._failures: dict[str, bool] | None = None
         self._replies: dict[int, dict[str, Any]] = {}
         self._next_id = 0
         self._socket = QLocalSocket(self)
@@ -202,6 +212,11 @@ class SocketLink(QObject):
     def outputs(self) -> TrainModelOutputs | None:
         """The last outputs received; None while disconnected."""
         return self._outputs
+
+    @property
+    def failures(self) -> dict[str, bool] | None:
+        """Test only: the last failure flags received; None offline."""
+        return self._failures
 
     def step(
         self, dt: float, inputs: TrainModelInputs, *,
@@ -232,6 +247,7 @@ class SocketLink(QObject):
 
     def _on_disconnected(self) -> None:
         self._outputs = None
+        self._failures = None
         self.connectedChanged.emit()
         self.outputsChanged.emit()
 
@@ -257,6 +273,7 @@ class SocketLink(QObject):
         for message in _read(self._socket):
             if message["op"] == "outputs":
                 self._outputs = outputs_from_wire(message["outputs"])
+                self._failures = dict(message["failures"])
                 self.outputsChanged.emit()
             if "id" in message:
                 self._replies[message["id"]] = message
@@ -311,6 +328,7 @@ class TestLinkServer(QObject):
         return {
             "op": "outputs",
             "outputs": outputs_to_wire(self._state.outputs()),
+            "failures": _failure_flags(self._state),
         }
 
     def _accept(self) -> None:

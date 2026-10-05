@@ -199,13 +199,14 @@ class TrainModel:
             n_crew=self.config.n_crew,
             n_passengers=self._n_passengers,
             passenger_ebrake_pulled=self._passenger_ebrake_pulled,
+            failures=self._failures,
             outputs=self._outputs,
             inputs=self._last_inputs,
             elapsed_s=self._elapsed_s,
         )
 
     def set_failures(self, failures: FailureState) -> None:
-        """Report a fault now; the next step integrates its physical effect."""
+        """Apply a fault's discrete effects now; physics acts next step."""
         self._failures = failures
         self._refresh_discrete_outputs()
 
@@ -456,7 +457,6 @@ class TrainModel:
                 authority_blocks=authority_blocks,
                 speed_limit_mps=speed_limit_mps,
                 beacon=beacon,
-                failures=failures,
             ),
             track=TrackOutputs(
                 block_id=block_id,

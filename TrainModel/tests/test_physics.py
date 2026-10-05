@@ -251,7 +251,7 @@ def test_all_failures_compose() -> None:
         assert accel == pytest.approx(expected_accel, rel=1e-9)
         assert outputs.controller.commanded_speed_mps == 0.0
         assert outputs.controller.authority_blocks == 0
-        assert outputs.controller.failures == FailureState(True, True, True)
+        assert model.snapshot().failures == FailureState(True, True, True)
 
 
 def test_passenger_bounds_and_capacity() -> None:

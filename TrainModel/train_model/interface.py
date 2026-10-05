@@ -185,7 +185,6 @@ class ControllerOutputs:
     # Passed through from TrackInfo, provisional.
     speed_limit_mps: float
     beacon: Beacon | None           # between-beacon behaviour open
-    failures: FailureState
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +216,8 @@ class TrainModelSnapshot:
     n_crew: int
     n_passengers: int
     passenger_ebrake_pulled: bool
+    # Shown on the Train Model UI only; not sent to the Train Controller.
+    failures: FailureState
     outputs: TrainModelOutputs
     inputs: TrainModelInputs | None = None
     elapsed_s: float = 0.0

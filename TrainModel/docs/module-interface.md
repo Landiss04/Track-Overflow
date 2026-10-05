@@ -64,8 +64,8 @@ reject a tick before advancing the shared clock.
 ### `snapshot() -> TrainModelSnapshot` (`TrainModel` only)
 
 Full observable state for display, with no side effects: operating mass,
-acceleration, velocity, crew, passengers aboard, passenger-brake latch, the
-last outputs, the last accepted inputs and elapsed time. Not a cross-module
+acceleration, velocity, crew, passengers aboard, passenger-brake latch,
+failure flags, the last outputs, the last accepted inputs and elapsed time. Not a cross-module
 output: other modules must not read it.
 
 ### `outputs() -> TrainModelOutputs` (`TrainModelState` only)
@@ -77,7 +77,7 @@ Train Model UI action happens (failure, passenger pull).
 
 | Call | Effect |
 |---|---|
-| `set_failures(FailureState)` / `TrainModelState.setFailure(name, active)` | Murphy fault injection from the Train Model window. Reported at once; physical effect from the next step. |
+| `set_failures(FailureState)` / `TrainModelState.setFailure(name, active)` | Murphy fault injection from the Train Model window. Shown at once in `snapshot().failures`, never output; physical effect from the next step. |
 | `pull_passenger_emergency_brake()` / `TrainModelState.applyEmergencyBrake()` | A passenger pull. Latches; reported at once; force from the next step. |
 | `clear_passenger_brake_for_test()` | **Test only.** Clears the latch. |
 | `TrainModelState.reset()` | **Test only.** Replaces the train with a fresh one. |
@@ -167,7 +167,6 @@ TrainModelOutputs
 | `authority_blocks` | int | blocks | Passed through; 0 under signal pickup failure or before the first step. |
 | `speed_limit_mps` | float | m/s | Passed through from `TrackInfo`. |
 | `beacon` | Beacon \| None | | This tick's beacon, else `None`. |
-| `failures` | FailureState | | Failure Status: `engine`, `signal_pickup`, `brake`. |
 
 ### `TrackOutputs`
 
@@ -220,7 +219,6 @@ for the rest of the system (section 3 of [integration.md](integration.md)).
 | `door-state` | out | `door_left_open`, `door_right_open` |
 | `light-state` | out | `interior_lights_on`, `exterior_lights_on` |
 | `cabin-temperature` | out | `cabin_temp_c` |
-| `failure-status` | out | `failures` |
 | `train-position` | out | `track.block_id`, `track.offset_m` |
 | `block-change-event` | out | `track.block_changed` |
 | `passenger-capacity` | out | `track.passenger_capacity` |

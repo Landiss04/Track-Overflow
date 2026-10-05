@@ -1468,13 +1468,15 @@ def test_signal_pickup_failure_blanks_only_the_track_signal() -> None:
 @pytest.mark.parametrize("engine", [False, True])
 @pytest.mark.parametrize("pickup", [False, True])
 @pytest.mark.parametrize("brake", [False, True])
-def test_failure_status_reported(engine: bool, pickup: bool,
-                                 brake: bool) -> None:
-    """Check every failure combination is reported as set."""
+def test_failure_status_is_not_sent_to_the_controller(
+        engine: bool, pickup: bool, brake: bool) -> None:
+    """Check every failure combination is held but never output."""
     model = fresh()
     state = FailureState(engine=engine, signal_pickup=pickup, brake=brake)
     model.set_failures(state)
-    assert model.step(DT_S, inp()).controller.failures == state
+    out = model.step(DT_S, inp())
+    assert model.snapshot().failures == state
+    assert not hasattr(out.controller, "failures")
 
 
 @pytest.mark.parametrize(("interior", "exterior"), [
@@ -1494,14 +1496,14 @@ def test_beacon_passes_through_only_on_its_tick() -> None:
     assert model.step(DT_S, inp()).controller.beacon is None
 
 
-def test_failure_reported_now_and_acts_on_the_next_step() -> None:
-    """Check a failure is reported at once; its force acts next step."""
+def test_failure_shown_now_and_acts_on_the_next_step() -> None:
+    """Check a failure is shown at once; its force acts next step."""
     model = fresh()
     launch(model, 5.0)
     before = model.snapshot()
     model.set_failures(FailureState(engine=True))
     snap = model.snapshot()
-    assert snap.outputs.controller.failures == FailureState(engine=True)
+    assert snap.failures == FailureState(engine=True)
     assert snap.velocity_mps == before.velocity_mps
     assert snap.outputs.track.offset_m == before.outputs.track.offset_m
     model.step(DT_S, inp(CFG.p_max_w))

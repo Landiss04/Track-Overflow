@@ -17,7 +17,7 @@ Architecture signal flow (from Final Project vF.pdf, p. 8-9):
   SW Train Controller
       |-- Power Cmd, Brake Cmd, Doors,
       |   Lights, Temp Setpoint -----------> Train Model
-      |<- Current Speed, Failures --------- Train Model
+      |<- Current Speed -------------------- Train Model
 """
 
 from abc import ABC, abstractmethod
@@ -92,9 +92,6 @@ class TrainState:
     acceleration_mps2: float
     position: TrainPosition
     passenger_count: int
-    engine_failed: bool
-    brake_failed: bool
-    signal_pickup_failed: bool
 
 
 # ---------------------------------------------------------------------------

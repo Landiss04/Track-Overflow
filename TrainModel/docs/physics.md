@@ -222,8 +222,8 @@ It never overshoots and gives the same result for any dt.
 ## 12. Failures
 
 Three independent flags, set with `set_failures`. Any combination is valid.
-Each is reported at once in Failure Status; its physical effect starts on
-the next step.
+Each shows at once on the Train Model UI; its physical effect starts on the
+next step. Failure status is not sent to the Train Controller.
 
 | Failure | Effect |
 |---|---|
@@ -236,8 +236,8 @@ the next step.
 To the **Train Controller** (`ControllerOutputs`): actual speed; Brake State
 as engaged emergency and service (section 4, not the commands); door and
 light states; cabin temperature; commanded speed, authority, speed limit and
-beacon, passed through (beacon only on the tick it is received); Failure
-Status.
+beacon, passed through (beacon only on the tick it is received). Failure
+status is not an output.
 
 To the **Track Model** (`TrackOutputs`): block ID, offset, actual speed
 (negative in rollback), block-change flag, remaining passenger capacity.

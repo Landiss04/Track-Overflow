@@ -81,7 +81,8 @@ def test_failure_state_and_affected_values_change_while_paused(pair, failure):
     state, harness = pair
     send(harness, LIVE_VALUES)
     state.setFailure(failure, True)
-    assert outputs(harness)[failure]
+    assert next(r for r in harness.failures if r["name"] == failure)["active"]
+    assert failure not in outputs(harness)  # not sent to the controller
     assert state.activeFailureCount == 1
     assert next(r for r in state.failures if r["name"] == failure)["active"]
     # There is no power output, so engine failure changes no control.

@@ -15,7 +15,8 @@ The two pages are **independent windows, each its own process**:
   `step(dt, TrainModelInputs) -> TrainModelOutputs`, over a local socket
   (`train_model/link.py`), and reads back only `TrainModelOutputs`. Three
   test-only commands ride alongside: set a failure, clear the passenger brake
-  latch, and reset. Its clock is the shared simulation clock
+  latch, and reset. The failure flags ride back beside the outputs, test only,
+  because failure status is not an output. Its clock is the shared simulation clock
   (`utils/system_clock.py`): each step is one clock tick, dt is the clock's
   fixed tick length, and the **1x / 10x** speed toggle changes only how often
   ticks happen. A step is checked with the module's own input rules before
@@ -169,6 +170,9 @@ module's outputs: the Train Model pushes them after every step and after any
 Train Model UI action, so passenger-brake and failure changes reach the test
 UI's controls and outputs immediately, including while paused; the next tick
 integrates their physical effect. Failures can be set from either window.
+Failure status is not an output, since the Train Model does not send it to
+the Train Controller; the test UI's failure card reads the flags over the
+link instead, as test-only data.
 
 Test input rows show live values until edited: brakes, lights, doors,
 commanded speed and authority read back from the outputs; the rest show the

@@ -88,8 +88,10 @@ def main():
             "ebrake_pending": control.property("pending"),
             "ebrake_output": named(
                 "output-", "emergency_brake_state").property("value"),
-            "brake_failure": named(
-                "output-", "brake_failure").property("value"),
+            "brake_failure": next(
+                x for x in walk(failure_row("brake_failure"))
+                if x.property("currentIndex") is not None
+            ).property("currentIndex") == 0,
         }
 
     # stdin blocks, so a thread reads it; the GUI thread runs commands.
