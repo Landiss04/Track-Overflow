@@ -5,6 +5,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
+import "../components"
 
 Panel {
     id: root
@@ -12,10 +13,9 @@ Panel {
     // The CtcHost from __main__.py.
     property var host: null
 
-    readonly property string line: lineSelect.currentIndex >= 0
-        ? lineSelect.currentValue : ""
-    readonly property string trainId: trainSelect.currentIndex >= 0
-        ? trainSelect.currentValue : ""
+    // What the dispatcher picked; '' until they pick (PickField).
+    readonly property string line: lineSelect.value
+    readonly property string trainId: trainSelect.value
     // The selected train's current row; re-read whenever the module
     // changes.
     readonly property var train: {
@@ -27,18 +27,6 @@ Panel {
     // Result of the last action: an error, or a confirmation.
     property string message: ""
     property bool messageIsError: false
-
-    // The train the dispatcher picked, kept by ID: the train list is
-    // rebuilt whenever the module changes.
-    property string pickedTrain: ""
-
-    function indexOfValue(options, value) {
-        for (let i = 0; i < options.length; ++i) {
-            if (options[i].value === value)
-                return i;
-        }
-        return -1;
-    }
 
     function report(error, done) {
         root.messageIsError = error !== "";
@@ -58,7 +46,7 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        SelectField {
+        PickField {
             id: lineSelect
             Layout.preferredWidth: 110
             label: qsTr("Line")
@@ -66,7 +54,7 @@ Panel {
             currentIndex: -1
         }
 
-        SelectField {
+        PickField {
             id: trainSelect
             Layout.preferredWidth: 170
             label: qsTr("Train")
@@ -78,13 +66,9 @@ Panel {
                 root.host.revision;
                 return root.host.trainOptions(root.line);
             }
-            currentIndex: -1
-            onCommitted: function (value) { root.pickedTrain = value; }
-            onModelChanged: currentIndex = root.indexOfValue(
-                model, root.pickedTrain)
         }
 
-        SelectField {
+        PickField {
             id: destinationSelect
             Layout.fillWidth: true
             label: qsTr("Destination station")
@@ -140,7 +124,7 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        SelectField {
+        PickField {
             id: blockSelect
             Layout.fillWidth: true
             label: qsTr("Block on the selected line")
@@ -153,13 +137,13 @@ Panel {
             Layout.alignment: Qt.AlignBottom
             variant: "secondary"
             text: qsTr("Set authority")
-            enabled: root.trainId !== "" && blockSelect.currentIndex >= 0
+            enabled: root.trainId !== "" && blockSelect.value !== ""
             onClicked: root.report(
                 root.host.setAuthority(root.trainId, root.line,
-                    blockSelect.currentValue),
+                    blockSelect.value),
                 qsTr("%1 authority set to %2 block %3.")
                     .arg(root.trainId).arg(root.line)
-                    .arg(blockSelect.currentValue))
+                    .arg(blockSelect.value))
         }
     }
 
@@ -169,10 +153,10 @@ Panel {
         size: "large"
         text: root.train.destinationBlock
             ? qsTr("Reroute train") : qsTr("Dispatch train")
-        enabled: root.trainId !== "" && destinationSelect.currentIndex >= 0
+        enabled: root.trainId !== "" && destinationSelect.value !== ""
         onClicked: root.report(
             root.host.dispatchTrain(root.trainId, root.line,
-                destinationSelect.currentValue, arrivalField.text),
+                destinationSelect.value, arrivalField.text),
             qsTr("%1 dispatched to %2.").arg(root.trainId)
                 .arg(destinationSelect.model[
                     destinationSelect.currentIndex].text))

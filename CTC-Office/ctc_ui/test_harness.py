@@ -278,12 +278,22 @@ def _mirror(snap: CtcSnapshot) -> dict[str, list[Entry]]:
              "arrival": ("" if o.arrival_s is None
                          else format_time_of_day(o.arrival_s))}
             for o in snap.orders],
+        # Closed and still-closing blocks: both are closures asked for.
         "closed_blocks": [{"line": b.line, "block": b.block_id}
-                          for b in track.closed_blocks],
+                          for b in sorted(
+                              (*track.closed_blocks,
+                               *snap.pending_closures),
+                              key=lambda b: (b.line, _number_key(b)))],
         "switch_commands": [
             {"line": c.line, "switch": c.switch_id, "position": c.position}
             for c in track.switch_commands],
     }
+
+
+def _number_key(block: Any) -> tuple[int, str]:
+    # Block number as a number where it is one, for display order.
+    block_id = block.block_id
+    return (int(block_id) if block_id.isdigit() else -1, block_id)
 
 
 def output_rows(outputs: CtcOutputs, tickets_sold: tuple[TicketSales, ...],
@@ -384,14 +394,20 @@ class CtcTestHarness(QObject):
         self._reset_values()
         # Mirrored rows edited since the last Send.
         self._edited: set[str] = set()
+        # Whether the link has been up before: a later connection is a
+        # reconnect, after which the inputs are sent again.
+        self._had_connection = self._link.connected
         self._status = ""
         self._status_error = False
         self._outputs: list[dict[str, Any]] = []
         self._refresh()
         # A socket link reports connection changes and pushes snapshots
         # when the CTC UI changes the module.
+        if self._link.ctc_ui_attached and not self._link.connected:
+            self._set_status("Connecting to the CTC Office…", False)
         for signal, slot in (("connectedChanged", self._on_connected),
-                             ("snapshotChanged", self._on_snapshot)):
+                             ("snapshotChanged", self._on_snapshot),
+                             ("connectionFailed", self._on_failed)):
             source = getattr(self._link, signal, None)
             if source is not None:
                 source.connect(slot)
@@ -527,8 +543,8 @@ class CtcTestHarness(QObject):
         try:
             inputs = build_inputs(self._values, self._values["ticket_sales"],
                                   self._choices["ticket_sales"])
-            self._apply_dispatcher()
-            self._link.set_inputs(inputs)
+            # All or nothing: if any part is rejected, none is applied.
+            self._link.apply_batch(inputs, self._dispatcher_actions())
         except (HarnessInputError, CtcError) as error:
             self._set_status(str(error), True)
             self._refresh()
@@ -601,44 +617,57 @@ class CtcTestHarness(QObject):
         if republish:
             self.inputsChanged.emit()
 
-    def _apply_dispatcher(self) -> None:
-        """Make the module match every edited dispatcher row."""
+    def _dispatcher_actions(self) -> list[tuple[str, dict[str, Any]]]:
+        """The actions that make the module match every edited
+        dispatcher row, in order."""
         snap = self._link.snapshot()
         track = snap.outputs.track_controller
+        actions: list[tuple[str, dict[str, Any]]] = []
         if not self._link.ctc_ui_attached:
-            # First, so switch commands sent with it are accepted.
-            self._link.set_maintenance_mode(
-                bool(self._values["maintenance_mode"]))
-            self._link.set_clock_speedup(
-                bool(self._values["clock_speedup"]))
+            # First, so the closures and switch commands after it are
+            # accepted.
+            actions.append(("set_maintenance_mode", {
+                "active": bool(self._values["maintenance_mode"])}))
+            actions.append(("set_clock_speedup", {
+                "active": bool(self._values["clock_speedup"])}))
         if "dispatch_orders" in self._edited:
             wanted = build_orders(self._values["dispatch_orders"])
             current = {o.train_id: o for o in snap.orders}
-            for train_id in current.keys() - wanted.keys():
-                self._link.cancel_dispatch(train_id)
+            for train_id in sorted(current.keys() - wanted.keys()):
+                actions.append(("cancel_dispatch", {"train_id": train_id}))
             for train_id, order in wanted.items():
                 if current.get(train_id) != order:
-                    self._link.dispatch(train_id, order.line,
-                                        order.destination_block_id,
-                                        order.arrival_s)
+                    actions.append(("dispatch", {
+                        "train_id": train_id, "line": order.line,
+                        "destination_block_id": order.destination_block_id,
+                        "arrival_s": order.arrival_s}))
         if "closed_blocks" in self._edited:
             wanted_blocks = {(e["line"], e["block"])
                              for e in self._values["closed_blocks"]}
-            closed = {(b.line, b.block_id) for b in track.closed_blocks}
-            for line, block_id in closed - wanted_blocks:
-                self._link.set_block_closed(line, block_id, False)
-            for line, block_id in wanted_blocks - closed:
-                self._link.set_block_closed(line, block_id, True)
+            closed = {(b.line, b.block_id)
+                      for b in (*track.closed_blocks,
+                                *snap.pending_closures)}
+            for line, block_id in sorted(closed - wanted_blocks):
+                actions.append(("set_block_closed", {
+                    "line": line, "block_id": block_id, "closed": False}))
+            for line, block_id in sorted(wanted_blocks - closed):
+                actions.append(("set_block_closed", {
+                    "line": line, "block_id": block_id, "closed": True}))
         if "switch_commands" in self._edited:
             wanted_switches = {(e["line"], e["switch"]): e["position"]
                                for e in self._values["switch_commands"]}
             commanded = {(c.line, c.switch_id): c.position
                          for c in track.switch_commands}
-            for line, switch_id in commanded.keys() - wanted_switches:
-                self._link.release_switch(line, switch_id)
+            for line, switch_id in sorted(commanded.keys()
+                                          - wanted_switches):
+                actions.append(("release_switch", {
+                    "line": line, "switch_id": switch_id}))
             for (line, switch_id), position in wanted_switches.items():
                 if commanded.get((line, switch_id)) != position:
-                    self._link.set_switch(line, switch_id, position)
+                    actions.append(("set_switch", {
+                        "line": line, "switch_id": switch_id,
+                        "position": position}))
+        return actions
 
     def _refresh(self) -> None:
         """Read the module back: outputs, and unedited mirrored rows."""
@@ -663,8 +692,33 @@ class CtcTestHarness(QObject):
         self.inputsChanged.emit()
         self._refresh()
         if self._link.connected:
-            self._set_status("Connected to the CTC Office.", False)
+            if self._had_connection:
+                self._resend_inputs()
+            else:
+                self._set_status("Connected to the CTC Office.", False)
+            self._had_connection = True
         else:
+            self._set_status("The CTC Office is not running. Start it with "
+                             "python -m ctc_ui from CTC-Office.", True)
+
+    def _resend_inputs(self) -> None:
+        """After the CTC window restarts its module knows nothing of the
+        inputs shown here: send them again (not the dispatcher rows)."""
+        try:
+            self._link.set_inputs(build_inputs(
+                self._values, self._values["ticket_sales"],
+                self._choices["ticket_sales"]))
+        except (HarnessInputError, CtcError) as error:
+            self._set_status("Reconnected, but your inputs could not be "
+                             f"re-sent: {error}", True)
+            return
+        self._refresh()
+        self._set_status("Reconnected to the CTC Office; your inputs were "
+                         "sent again.", False)
+
+    def _on_failed(self) -> None:
+        # Say so once; the link keeps retrying every second.
+        if not self._status_error:
             self._set_status("The CTC Office is not running. Start it with "
                              "python -m ctc_ui from CTC-Office.", True)
 

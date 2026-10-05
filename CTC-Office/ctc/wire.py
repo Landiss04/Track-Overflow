@@ -13,6 +13,7 @@ from typing import Any, Mapping
 from ctc.interface import (
     BlockOccupancy,
     BlockRef,
+    CancelledOrder,
     CrossingReport,
     CtcInputs,
     CtcOutputs,
@@ -36,24 +37,44 @@ def to_wire(value: Any) -> Any:
     return dataclasses.asdict(value)
 
 
+class WireFormatError(ValueError):
+    """A message does not have the shape of a boundary type."""
+
+
+def _mapping(value: Any, what: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise WireFormatError(f"{what} must be an object, got "
+                              f"{type(value).__name__}")
+    return value
+
+
+def _items(data: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:
+    value = data.get(key, ())
+    if not isinstance(value, (list, tuple)):
+        raise WireFormatError(f"{key} must be a list, got "
+                              f"{type(value).__name__}")
+    return [_mapping(item, f"an entry of {key}") for item in value]
+
+
 def inputs_from_wire(data: Mapping[str, Any]) -> CtcInputs:
-    track = data.get("track_controller", {})
+    data = _mapping(data, "inputs")
+    track = _mapping(data.get("track_controller", {}), "track_controller")
+    track_model = _mapping(data.get("track_model", {}), "track_model")
     return CtcInputs(
         track_controller=TrackControllerInputs(
             occupancy=tuple(BlockOccupancy(**b)
-                            for b in track.get("occupancy", ())),
-            trains=tuple(TrainReport(**t) for t in track.get("trains", ())),
+                            for b in _items(track, "occupancy")),
+            trains=tuple(TrainReport(**t) for t in _items(track, "trains")),
             switches=tuple(SwitchReport(**s)
-                           for s in track.get("switches", ())),
+                           for s in _items(track, "switches")),
             crossings=tuple(CrossingReport(**c)
-                            for c in track.get("crossings", ())),
+                            for c in _items(track, "crossings")),
             failures=tuple(TrackFailureReport(**f)
-                           for f in track.get("failures", ())),
+                           for f in _items(track, "failures")),
         ),
         track_model=TrackModelInputs(
-            ticket_sales=tuple(
-                TicketSales(**t) for t in
-                data.get("track_model", {}).get("ticket_sales", ()))),
+            ticket_sales=tuple(TicketSales(**t) for t in
+                               _items(track_model, "ticket_sales"))),
     )
 
 
@@ -85,4 +106,9 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         queued_trains=tuple(QueuedTrain(**q)
                             for q in data.get("queued_trains", ())),
         orders=tuple(DispatchOrder(**o) for o in data.get("orders", ())),
+        pending_closures=tuple(BlockRef(**b) for b in
+                               data.get("pending_closures", ())),
+        cancelled_orders=tuple(CancelledOrder(**c) for c in
+                               data.get("cancelled_orders", ())),
+        inputs_staged=bool(data.get("inputs_staged", False)),
     )

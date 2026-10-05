@@ -38,6 +38,13 @@ def main() -> int:
     app.setApplicationName("CTC Office")
     install_app_icon(app)
 
+    # One CTC Office at a time: a second would leave the test UI talking
+    # to the first while this one runs a module of its own.
+    if CtcHost.already_running():
+        print("A CTC Office is already running. Close it before starting "
+              "another.", file=sys.stderr)
+        return 1
+
     theme = build_theme()
     font = QFont()
     font.setFamily(theme["ui_family"])

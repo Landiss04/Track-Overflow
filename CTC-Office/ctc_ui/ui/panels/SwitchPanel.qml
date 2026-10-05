@@ -5,6 +5,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
+import "../components"
 
 Panel {
     id: root
@@ -15,10 +16,9 @@ Panel {
     property string lastConfirmation: ""
     property bool lastIsError: false
 
-    readonly property string line: lineSelect.currentIndex >= 0
-        ? lineSelect.currentValue : ""
-    readonly property string switchId: switchSelect.currentIndex >= 0
-        ? switchSelect.currentValue : ""
+    // What the dispatcher picked; '' until they pick (PickField).
+    readonly property string line: lineSelect.value
+    readonly property string switchId: switchSelect.value
     // Connections and positions of the selected switch.
     readonly property var detail: {
         if (!root.host || root.switchId === "")
@@ -38,7 +38,7 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        SelectField {
+        PickField {
             id: lineSelect
             Layout.preferredWidth: 120
             label: qsTr("Line")
@@ -46,7 +46,7 @@ Panel {
             currentIndex: -1
         }
 
-        SelectField {
+        PickField {
             id: switchSelect
             Layout.fillWidth: true
             label: qsTr("Switch")

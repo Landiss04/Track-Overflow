@@ -47,6 +47,17 @@ Panel {
         }
     }
 
+    // Nothing sets `running` until the scheduling algorithm exists, so
+    // say why Pause dispatch is unavailable.
+    HelperText {
+        Layout.fillWidth: true
+        visible: !root.running
+        color: theme.text_muted
+        text: qsTr("Automatic dispatch arrives with the scheduling "
+            + "algorithm; until then no run is dispatched, and Pause "
+            + "dispatch stays unavailable.")
+    }
+
     FileDialog {
         id: scheduleDialog
 

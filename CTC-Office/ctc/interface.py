@@ -197,6 +197,17 @@ class DispatchOrder:
 
 
 @dataclass(frozen=True, slots=True)
+class CancelledOrder:
+    """An order the CTC dropped on its own, and why."""
+
+    train_id: str
+    line: str
+    destination_block_id: str
+    # e.g. "block closed", "block closing", "track failure: power"
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class CtcSnapshot:
     """Full observable state for the CTC UIs."""
 
@@ -209,6 +220,14 @@ class CtcSnapshot:
     queued_trains: tuple[QueuedTrain, ...] = ()
     # Dispatcher orders, by train ID.
     orders: tuple[DispatchOrder, ...] = ()
+    # Closures waiting for a train to leave the block; they close by
+    # themselves once it is clear.
+    pending_closures: tuple[BlockRef, ...] = ()
+    # Orders the CTC cancelled itself, oldest first (the last few).
+    cancelled_orders: tuple[CancelledOrder, ...] = ()
+    # Reports received while time was not passing (the clock paused);
+    # they apply at the next step.
+    inputs_staged: bool = False
 
 
 # ------------------------------------------------------------------ #
@@ -234,6 +253,13 @@ class CtcOffice(Protocol):
         """Raise if ``step`` would reject these inputs. No side effects."""
         ...
 
+    def stage_inputs(self, inputs: CtcInputs) -> None:
+        """Take reports that arrive while no time passes (the clock is
+        paused). They change nothing until the next ``step``, but the
+        dispatcher's safety checks use them at once. Rejects what
+        ``step`` would reject."""
+        ...
+
     # Dispatcher actions from the CTC UI. Not cross-module inputs.
 
     def dispatch(self, train_id: str, line: str,
@@ -242,7 +268,8 @@ class CtcOffice(Protocol):
         """Send a train toward a destination block on its line.
 
         A train that already has an order is rerouted: the new order
-        replaces the old one.
+        replaces the old one. Refused (safety) into a closed, closing or
+        failed block, and onto a line other than the train's own.
         """
         ...
 
@@ -252,12 +279,15 @@ class CtcOffice(Protocol):
 
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
-        """Close a block for maintenance, or reopen it."""
+        """Close a block for maintenance, or reopen it. Maintenance
+        mode only. An occupied block closes once the train has left it;
+        orders into the block are cancelled at once."""
         ...
 
     def set_switch(self, line: str, switch_id: str,
                    position: SwitchPosition) -> None:
-        """Command a switch position. Only in maintenance mode."""
+        """Command a switch position. Maintenance mode only, and
+        refused (safety) while the switch's block is occupied."""
         ...
 
     def release_switch(self, line: str, switch_id: str) -> None:

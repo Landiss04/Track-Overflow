@@ -5,6 +5,7 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PySide6.QtCore import QCoreApplication  # noqa: E402
+from PySide6.QtNetwork import QLocalSocket  # noqa: E402
 
 from ctc.interface import (  # noqa: E402
     BlockOccupancy,
@@ -29,7 +31,13 @@ from ctc.interface import (  # noqa: E402
     TrainReport,
 )
 from ctc.model import StubCtcOffice  # noqa: E402
-from ctc.socket_link import LinkError, RemoteCtcError, SocketLink  # noqa
+from ctc.model import StubCtcOffice as _Module  # noqa: E402
+from ctc.socket_link import (  # noqa: E402
+    CtcLinkServer,
+    LinkError,
+    RemoteCtcError,
+    SocketLink,
+)
 from ctc.wire import inputs_from_wire, snapshot_from_wire, to_wire  # noqa
 from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 
@@ -64,8 +72,8 @@ class WireTest(unittest.TestCase):
     def test_snapshot_round_trip(self) -> None:
         ctc = StubCtcOffice()
         ctc.dispatch("T1", "Green", "65", 30600.0)
-        ctc.set_block_closed("Red", "2", True)
         ctc.set_maintenance_mode(True)
+        ctc.set_block_closed("Red", "2", True)
         ctc.set_switch("Green", "12", "reverse")
         ctc.set_clock_speedup(True)
         ctc.step(0.1, CtcInputs(track_model=_green(4)))
@@ -103,6 +111,7 @@ class SocketLinkTest(unittest.TestCase):
 
     def test_requests_reach_the_remote_module(self) -> None:
         self.link.dispatch("T1", "Green", "65", 30600.0)
+        self.link.set_maintenance_mode(True)
         self.link.set_block_closed("Red", "2", True)
         out = self.link.step(0.1, CtcInputs(track_model=_green(5)))
         (suggestion,) = out.track_controller.suggestions
@@ -170,6 +179,83 @@ class SocketLinkTest(unittest.TestCase):
         out, err = host.communicate(timeout=30)
         self.assertEqual(host.returncode, 0, err)
         self.assertEqual(err.strip(), "")
+
+    def test_second_server_is_refused(self) -> None:
+        # One CTC Office at a time: the name is taken.
+        self.assertTrue(CtcLinkServer.is_running(self.name))
+        self.assertFalse(CtcLinkServer.is_running(self.name + "-nobody"))
+        self.assertFalse(CtcLinkServer(_Module(), name=self.name).listen())
+
+    def _raw(self, payload: bytes) -> list[dict]:
+        # Send raw bytes, then a snapshot request (id 99); return every
+        # reply up to the snapshot's.
+        sock = QLocalSocket()
+        sock.connectToServer(self.name)
+        self.assertTrue(sock.waitForConnected(2000))
+        sock.write(payload + b'{"id": 99, "op": "snapshot"}\n')
+        sock.flush()
+        buffer, replies = b"", []
+        deadline = time.monotonic() + 5
+        while not any(r.get("id") == 99 for r in replies):
+            self.assertLess(time.monotonic(), deadline, "no reply")
+            if sock.waitForReadyRead(50):
+                buffer += bytes(sock.readAll().data())
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                replies.append(json.loads(line))
+        sock.abort()
+        return [r for r in replies if r.get("op") == "error"]
+
+    def test_malformed_requests_get_an_error_reply(self) -> None:
+        for payload in (
+                b"{not json\n",
+                b"[1, 2]\n",
+                b'{"id": 1, "op": "step", "args": {"dt": 0.1, '
+                b'"inputs": []}}\n',
+                b'{"id": 2, "op": "set_maintenance_mode", '
+                b'"args": {"active": "false"}}\n'):
+            with self.subTest(payload=payload):
+                errors = self._raw(payload)
+                self.assertEqual(len(errors), 1, errors)
+        # "false" did not turn maintenance mode on.
+        self.assertFalse(self.link._call("snapshot").outputs
+                         .track_controller.maintenance_mode)
+
+    def test_inputs_are_sent_again_after_a_restart(self) -> None:
+        harness = CtcTestHarness(self.link)
+        self._wait(lambda: harness.connected)
+        harness.addEntry("occupied_blocks")
+        harness.send()
+        # The CTC Office goes away and comes back with a fresh module.
+        self.host.kill()
+        self.host.wait()
+        self.host.stdout.close()
+        self._wait(lambda: not harness.connected)
+        self.host = subprocess.Popen(
+            [sys.executable, str(HOST), self.name, "999999"],
+            stdout=subprocess.PIPE, text=True)
+        self.assertEqual(self.host.stdout.readline().strip(), "ready")
+        self._wait(lambda: harness.connected)
+        self.assertIn("sent again", harness.status)
+        inputs = self.link._call("snapshot").inputs
+        self.assertEqual(
+            [(o.line, o.block_id)
+             for o in inputs.track_controller.occupancy],
+            [("Green", "1")])
+
+    def test_status_says_connecting_then_not_running(self) -> None:
+        harness = CtcTestHarness(SocketLink(self.name + "-nobody"))
+        # Not an error while the first attempt is still being made.
+        self.assertTrue(harness.status.startswith("Connecting"))
+        self.assertFalse(harness.statusIsError)
+        self._wait(lambda: harness.statusIsError)
+        self.assertIn("not running", harness.status)
+
+    def test_a_request_waits_for_the_connection(self) -> None:
+        # Right after start the link is still connecting: a Send then
+        # must not fail with "not running".
+        fresh = SocketLink(self.name)
+        self.assertEqual(fresh.snapshot().outputs.clock_speedup, False)
 
     def test_not_running_is_a_clear_error(self) -> None:
         orphan = SocketLink(self.name + "-nobody")

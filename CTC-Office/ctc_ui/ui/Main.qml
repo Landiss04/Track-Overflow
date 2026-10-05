@@ -32,6 +32,19 @@ ScaledWindow {
 
     title: qsTr("CTC Office")
 
+    // A selected train that is no longer known (not reported, no order)
+    // clears the selection.
+    Connections {
+        target: ctc
+        function onStateChanged() {
+            if (window.selectedTrainId !== ""
+                    && !ctc.trains.some(function (train) {
+                        return train.train === window.selectedTrainId;
+                    }))
+                window.selectedTrainId = "";
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -58,6 +71,33 @@ ScaledWindow {
             onPauseRequested: simClock.pause()
             onResumeRequested: simClock.resume()
             onSpeedRequested: function (speed) { simClock.setSpeed(speed); }
+        }
+
+        // Notices: a Track Controller update staged while the clock is
+        // paused, and orders the CTC cancelled itself (block closed,
+        // closing or failed).
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: theme.space_3
+            Layout.rightMargin: theme.space_3
+            Layout.topMargin: theme.space_3
+            visible: ctc.notices.length > 0
+            spacing: theme.space_3
+
+            Callout {
+                Layout.fillWidth: true
+                variant: "warning"
+                heading: qsTr("Notice")
+                body: ctc.notices.join("\n")
+            }
+
+            AppButton {
+                Layout.alignment: Qt.AlignVCenter
+                variant: "secondary"
+                size: "small"
+                text: qsTr("Dismiss")
+                onClicked: ctc.dismissNotices()
+            }
         }
 
         RowLayout {
@@ -117,7 +157,8 @@ ScaledWindow {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: theme.space_7
         width: 360
-        summary: qsTr("%n trains", "", ctc.trains.length)
+        summary: ctc.trains.length === 1 ? qsTr("1 train")
+            : qsTr("%1 trains").arg(ctc.trains.length)
         visible: window.occupancyState === "docked"
         onExpandRequested: window.occupancyState = "open"
         onCloseRequested: window.occupancyState = "closed"

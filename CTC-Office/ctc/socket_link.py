@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 import shiboken6
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -33,13 +33,23 @@ from ctc.interface import (
     CtcSnapshot,
     SwitchPosition,
 )
+from ctc.actions import Action, apply_action, apply_batch
 from ctc.model import CtcError
-from ctc.wire import inputs_from_wire, snapshot_from_wire, to_wire
+from ctc.wire import (
+    WireFormatError,
+    inputs_from_wire,
+    snapshot_from_wire,
+    to_wire,
+)
 
 #: Local socket name. The environment variable lets tests use their own.
 SERVER_NAME = os.environ.get("CTC_LINK", "trains-ctc-office")
 
 _RECONNECT_MS = 1000
+# How long to wait when checking for an already-running CTC Office.
+_PROBE_TIMEOUT_MS = 300
+# How long a request waits for a connection still being made.
+_CONNECT_WAIT_MS = 1500
 # The fixed time step (decision D006), when no clock steps the module.
 _FIXED_DT_S = 0.1
 _REPLY_TIMEOUT_MS = 2000
@@ -64,14 +74,26 @@ class _LineReader:
     def __init__(self) -> None:
         self._buffer = b""
 
-    def read(self, socket: QLocalSocket) -> list[dict[str, Any]]:
+    def read(self, socket: QLocalSocket) -> list[Any]:
+        """Every complete line, decoded; a line that is not JSON comes
+        back as ``_BadLine`` instead of stopping the rest."""
         self._buffer += bytes(socket.readAll().data())
-        messages = []
+        messages: list[Any] = []
         while b"\n" in self._buffer:
             line, self._buffer = self._buffer.split(b"\n", 1)
             if line.strip():
-                messages.append(json.loads(line))
+                try:
+                    messages.append(json.loads(line))
+                except ValueError as error:
+                    messages.append(_BadLine(str(error)))
         return messages
+
+
+class _BadLine:
+    """A received line that was not valid JSON."""
+
+    def __init__(self, error: str) -> None:
+        self.error = error
 
 
 # -------------------------------------------------------------------- #
@@ -101,8 +123,20 @@ class CtcLinkServer(QObject):
         self._server.newConnection.connect(self._accept)
         self._clients: dict[QLocalSocket, _LineReader] = {}
 
+    @staticmethod
+    def is_running(name: str = SERVER_NAME) -> bool:
+        """True if a CTC Office is already serving under ``name``."""
+        probe = QLocalSocket()
+        probe.connectToServer(name)
+        running = probe.waitForConnected(_PROBE_TIMEOUT_MS)
+        probe.abort()
+        return running
+
     def listen(self) -> bool:
-        """Start serving; clears a stale socket left by a crash."""
+        """Start serving. False if another CTC Office already serves
+        under this name; a stale socket left by a crash is cleared."""
+        if self.is_running(self._name):
+            return False
         if self._server.listen(self._name):
             return True
         QLocalServer.removeServer(self._name)
@@ -152,6 +186,14 @@ class CtcLinkServer(QObject):
             return
         changed = False
         for request in reader.read(client):
+            if isinstance(request, _BadLine):
+                _write(client, {"op": "error", "id": None,
+                                "message": f"not JSON: {request.error}"})
+                continue
+            if not isinstance(request, dict):
+                _write(client, {"op": "error", "id": None,
+                                "message": "a request must be an object"})
+                continue
             reply = self._handle(request)
             changed |= (reply["op"] == "snapshot"
                         and request.get("op") != "snapshot")
@@ -160,44 +202,47 @@ class CtcLinkServer(QObject):
         if changed:
             self.changed.emit()
 
+    def _take_inputs(self, module: CtcOffice, inputs: CtcInputs,
+                     trial: bool) -> None:
+        # The CTC window stages inputs for its clock; without a window,
+        # inputs step the module one fixed tick.
+        if self._set_inputs is None:
+            module.step(_FIXED_DT_S, inputs)
+        elif trial:
+            module.stage_inputs(inputs)
+        else:
+            self._set_inputs(inputs)
+
     def _handle(self, request: Mapping[str, Any]) -> dict[str, Any]:
         op = request.get("op")
         args = request.get("args", {})
         try:
+            if not isinstance(args, Mapping):
+                raise WireFormatError("args must be an object")
             if op == "step":
-                self._module.step(float(args["dt"]),
-                                  inputs_from_wire(args["inputs"]))
+                dt = args["dt"]
+                if isinstance(dt, bool) or not isinstance(dt, (int, float)):
+                    raise WireFormatError(f"dt must be a number, got {dt!r}")
+                self._module.step(float(dt), inputs_from_wire(args["inputs"]))
             elif op == "set_inputs":
-                inputs = inputs_from_wire(args["inputs"])
-                self._module.validate_inputs(inputs)
-                if self._set_inputs is None:
-                    self._module.step(_FIXED_DT_S, inputs)
-                else:
-                    self._set_inputs(inputs)
-            elif op == "dispatch":
-                arrival = args.get("arrival_s")
-                self._module.dispatch(
-                    args["train_id"], args["line"],
-                    args["destination_block_id"],
-                    None if arrival is None else float(arrival))
-            elif op == "cancel_dispatch":
-                self._module.cancel_dispatch(args["train_id"])
-            elif op == "set_block_closed":
-                self._module.set_block_closed(args["line"],
-                                              args["block_id"],
-                                              bool(args["closed"]))
-            elif op == "set_switch":
-                self._module.set_switch(args["line"], args["switch_id"],
-                                        args["position"])
-            elif op == "release_switch":
-                self._module.release_switch(args["line"],
-                                            args["switch_id"])
-            elif op == "set_maintenance_mode":
-                self._module.set_maintenance_mode(bool(args["active"]))
-            elif op == "set_clock_speedup":
-                self._module.set_clock_speedup(bool(args["active"]))
+                self._take_inputs(self._module,
+                                  inputs_from_wire(args["inputs"]), False)
+            elif op == "batch":
+                raw_inputs = args.get("inputs")
+                actions = args.get("actions", [])
+                if not isinstance(actions, list) or not all(
+                        isinstance(a, list) and len(a) == 2
+                        for a in actions):
+                    raise WireFormatError(
+                        "actions must be a list of [op, args] pairs")
+                apply_batch(
+                    self._module,
+                    None if raw_inputs is None
+                    else inputs_from_wire(raw_inputs),
+                    [(str(a[0]), a[1]) for a in actions],
+                    self._take_inputs)
             elif op != "snapshot":
-                return {"op": "error", "message": f"unknown op {op!r}"}
+                apply_action(self._module, str(op), args)
         except (CtcError, KeyError, TypeError, ValueError) as error:
             return {"op": "error", "message": str(error)}
         return self._snapshot_message()
@@ -216,6 +261,8 @@ class SocketLink(QObject):
     """
 
     connectedChanged = Signal()
+    #: A connection attempt failed: no CTC Office is serving yet.
+    connectionFailed = Signal()
     snapshotChanged = Signal()
 
     #: The CTC UI is attached and owns its controls (maintenance).
@@ -232,6 +279,9 @@ class SocketLink(QObject):
         self._snapshot: CtcSnapshot | None = None
         self._socket.connected.connect(self.connectedChanged)
         self._socket.disconnected.connect(self._on_disconnected)
+        self._socket.errorOccurred.connect(
+            lambda _error: self.connectionFailed.emit()
+            if not self.connected else None)
         self._socket.readyRead.connect(self._drain)
         self._retry = QTimer(self)
         self._retry.setInterval(_RECONNECT_MS)
@@ -254,6 +304,12 @@ class SocketLink(QObject):
 
     def set_inputs(self, inputs: CtcInputs) -> None:
         self._call("set_inputs", inputs=to_wire(inputs))
+
+    def apply_batch(self, inputs: CtcInputs | None,
+                    actions: Sequence[Action]) -> None:
+        self._call("batch",
+                   inputs=None if inputs is None else to_wire(inputs),
+                   actions=[[op, dict(args)] for op, args in actions])
 
     def dispatch(self, train_id: str, line: str,
                  destination_block_id: str,
@@ -313,6 +369,11 @@ class SocketLink(QObject):
             self._accept(self._reader.read(self._socket))
 
     def _call(self, op: str, **args: Any) -> CtcSnapshot:
+        # Just started, or reconnecting: give the connection a moment
+        # before calling the CTC Office absent.
+        if not self.connected:
+            self._connect()
+            self._socket.waitForConnected(_CONNECT_WAIT_MS)
         if not self.connected:
             raise LinkError("The CTC Office is not running. Start it with "
                             "python -m ctc_ui from CTC-Office.")

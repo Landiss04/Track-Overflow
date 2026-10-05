@@ -4,18 +4,21 @@ The stub turns dispatcher actions straight into outputs so data can be
 seen crossing the boundary: each dispatched train gets its destination
 as authority and a placeholder suggested speed, and closed blocks,
 switch commands and maintenance mode pass through. Track Controller and
-Track Model inputs are validated against the track layout and recorded
-but drive nothing yet. Real logic replaces this class behind the same
-``CtcOffice`` contract.
+Track Model inputs are validated against the track layout and recorded;
+apart from the safety rules (``StubCtcOffice``) they drive nothing yet.
+Real logic replaces this class behind the same ``CtcOffice`` contract.
 """
 
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Mapping, get_args
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, Mapping, get_args
 
 from ctc.interface import (
     BlockRef,
+    CancelledOrder,
+    CrossingState,
     CtcInputs,
     CtcOutputs,
     CtcSnapshot,
@@ -24,6 +27,7 @@ from ctc.interface import (
     SwitchCommand,
     SwitchPosition,
     TicketSales,
+    TrackFailureKind,
     TrainSuggestion,
     TrackControllerOutputs,
 )
@@ -51,7 +55,12 @@ class InvalidInputError(CtcError):
 
 
 class MaintenanceModeRequiredError(CtcError):
-    """A switch was commanded outside maintenance mode."""
+    """A switch or block closure was commanded outside maintenance
+    mode."""
+
+
+class UnsafeActionError(CtcError):
+    """A dispatcher action was refused by a safety rule."""
 
 
 def _require_id(value: str, what: str) -> None:
@@ -60,8 +69,10 @@ def _require_id(value: str, what: str) -> None:
 
 
 def _require_finite(value: float, what: str) -> None:
-    if not math.isfinite(value):
-        raise InvalidInputError(f"{what} must be finite, got {value!r}")
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value)):
+        raise InvalidInputError(
+            f"{what} must be a finite number, got {value!r}")
 
 
 class _Layout:
@@ -75,6 +86,9 @@ class _Layout:
                           for name, line in lines.items()}
         self._crossings = {name: set(line.crossing_ids())
                            for name, line in lines.items()}
+        self._lengths = {(name, b.block_id): b.length_m
+                         for name, line in lines.items()
+                         for b in line.blocks}
 
     def _line(self, line: str, what: str) -> None:
         _require_id(line, f"line of {what}")
@@ -106,10 +120,23 @@ class _Layout:
                 f"{crossing_id!r}")
 
     def validate_inputs(self, inputs: CtcInputs) -> None:
-        """Raise ``InvalidInputError`` if any input is malformed."""
+        """Raise ``InvalidInputError`` if any input is malformed.
+
+        A report may repeat itself, but not contradict itself: the same
+        switch reported both normal and reverse in one update is
+        rejected.
+        """
         track_controller = inputs.track_controller
+        occupied: dict[tuple[str, str], bool] = {}
         for block in track_controller.occupancy:
             self.block(block.line, block.block_id, "occupancy")
+            if not isinstance(block.occupied, bool):
+                raise InvalidInputError(
+                    f"occupancy of {block.line} {block.block_id} must be "
+                    f"true or false, got {block.occupied!r}")
+            _no_conflict(occupied, (block.line, block.block_id),
+                         block.occupied,
+                         f"occupancy of {block.line} {block.block_id}")
         # Safety: one train per block, so trains cannot collide. Two
         # trains reported in one block is rejected, never applied.
         in_block: dict[tuple[str, str], str] = {}
@@ -119,6 +146,16 @@ class _Layout:
             self.block(train.line, train.block_id, what)
             _require_finite(train.offset_m, f"offset_m of {what}")
             _require_finite(train.speed_mps, f"speed_mps of {what}")
+            if train.speed_mps < 0:
+                raise InvalidInputError(
+                    f"{what}: speed cannot be negative, got "
+                    f"{train.speed_mps:g} m/s")
+            length = self._lengths[(train.line, train.block_id)]
+            if not 0 <= train.offset_m <= length:
+                raise InvalidInputError(
+                    f"{what}: offset {train.offset_m:g} m is outside "
+                    f"{train.line} block {train.block_id} "
+                    f"(0 to {length:g} m)")
             if train.train_id in in_block.values():
                 raise InvalidInputError(
                     f"train {train.train_id} is reported twice")
@@ -129,13 +166,35 @@ class _Layout:
                     f"trains {other} and {train.train_id} are both in "
                     f"{train.line} block {train.block_id}; two trains "
                     "cannot occupy one block")
+        positions: dict[tuple[str, str], str] = {}
         for switch in track_controller.switches:
             self.switch(switch.line, switch.switch_id, "switch state")
+            _require_choice(switch.position, SwitchPosition,
+                            f"position of {switch.line} switch "
+                            f"{switch.switch_id}")
+            _no_conflict(positions, (switch.line, switch.switch_id),
+                         switch.position,
+                         f"{switch.line} switch {switch.switch_id}")
+        states: dict[tuple[str, str], str] = {}
         for crossing in track_controller.crossings:
             self.crossing(crossing.line, crossing.crossing_id,
                           "crossing state")
+            _require_choice(crossing.state, CrossingState,
+                            f"state of {crossing.line} crossing "
+                            f"{crossing.crossing_id}")
+            _no_conflict(states, (crossing.line, crossing.crossing_id),
+                         crossing.state,
+                         f"{crossing.line} crossing {crossing.crossing_id}")
+        kinds: dict[tuple[str, str], str] = {}
         for failure in track_controller.failures:
             self.block(failure.line, failure.block_id, "track failure")
+            _require_choice(failure.kind, TrackFailureKind,
+                            f"failure on {failure.line} block "
+                            f"{failure.block_id}")
+            _no_conflict(kinds, (failure.line, failure.block_id),
+                         failure.kind,
+                         f"failure on {failure.line} block "
+                         f"{failure.block_id}")
         lines_sold = set()
         for sale in inputs.track_model.ticket_sales:
             self._line(sale.line, "ticket sales")
@@ -151,8 +210,51 @@ class _Layout:
                     f">= 0, got {sale.tickets!r}")
 
 
+def _require_choice(value: object, choices: object, what: str) -> None:
+    allowed = get_args(choices)
+    if value not in allowed:
+        raise InvalidInputError(
+            f"{what} must be one of {', '.join(allowed)}, got {value!r}")
+
+
+def _no_conflict(seen: dict[Any, Any], key: Any, value: Any,
+                 what: str) -> None:
+    """Allow a repeated report, but not a contradictory one."""
+    if seen.setdefault(key, value) != value:
+        raise InvalidInputError(
+            f"{what} is reported as both {seen[key]!r} and {value!r}")
+
+
+def _normalize(inputs: CtcInputs) -> CtcInputs:
+    """Train IDs with stray spaces are the same train: trim them."""
+    trains = inputs.track_controller.trains
+    if all(not isinstance(t.train_id, str)
+           or t.train_id == t.train_id.strip() for t in trains):
+        return inputs
+    trimmed = tuple(
+        replace(t, train_id=t.train_id.strip())
+        if isinstance(t.train_id, str) else t for t in trains)
+    return replace(inputs, track_controller=replace(
+        inputs.track_controller, trains=trimmed))
+
+
+def _trim(train_id: str) -> str:
+    _require_id(train_id, "train_id")
+    return train_id.strip()
+
+
+#: How many self-cancelled orders the snapshot keeps.
+_CANCELLED_KEPT = 20
+
+
 class StubCtcOffice:
-    """A ``CtcOffice`` with dispatcher pass-through and no routing."""
+    """A ``CtcOffice`` with dispatcher pass-through and no routing.
+
+    It does enforce the safety rules: no authority into a closed,
+    closing or failed block or onto another line than the train's; no
+    switch thrown under a train; one train per block. Block closures
+    are maintenance-mode only and wait for an occupied block to clear.
+    """
 
     def __init__(
         self, suggested_speed_mps: int = STUB_SUGGESTED_SPEED_MPS,
@@ -170,31 +272,57 @@ class StubCtcOffice:
         self._lines = tuple(sorted(lines))
         self._orders: dict[str, DispatchOrder] = {}
         self._closed: set[BlockRef] = set()
+        # Closures waiting for their (occupied) block to clear.
+        self._pending: set[BlockRef] = set()
+        self._cancelled: list[CancelledOrder] = []
         self._switches: dict[tuple[str, str], SwitchPosition] = {}
         self._maintenance = False
         self._clock_speedup = False
         self._inputs: CtcInputs | None = None
+        # Reports received while no time passes; applied at next step.
+        self._staged: CtcInputs | None = None
         self._elapsed_s = 0.0
         self._tickets: dict[str, int] = {name: 0 for name in self._lines}
         self._schedule: Schedule | None = None
 
+    # -- Stepping -----------------------------------------------------
+
     def step(self, dt: float, inputs: CtcInputs) -> CtcOutputs:
         """Advance one tick; see ``CtcOffice.step``."""
-        if not (isinstance(dt, (int, float)) and math.isfinite(dt)
-                and dt > 0):
+        if (isinstance(dt, bool) or not isinstance(dt, (int, float))
+                or not math.isfinite(dt) or dt <= 0):
             raise InvalidTimeStepError(
                 f"dt must be finite and positive, got {dt!r}")
+        inputs = _normalize(inputs)
         self._layout.validate_inputs(inputs)
 
         self._inputs = inputs
+        self._staged = None
         self._elapsed_s += dt
         for sale in inputs.track_model.ticket_sales:
             self._tickets[sale.line] += sale.tickets
+        # A failure now reported cancels orders into that block.
+        for failure in inputs.track_controller.failures:
+            self._cancel_orders_into(
+                BlockRef(failure.line, failure.block_id),
+                f"track failure: {failure.kind.replace('_', ' ')}")
+        # Pending closures close once their block is clear.
+        occupied = self._occupied(inputs)
+        for block in sorted(self._pending, key=_block_order):
+            if (block.line, block.block_id) not in occupied:
+                self._pending.discard(block)
+                self._closed.add(block)
         return self._outputs()
 
     def validate_inputs(self, inputs: CtcInputs) -> None:
         """Raise ``InvalidInputError`` if any input is malformed."""
+        self._layout.validate_inputs(_normalize(inputs))
+
+    def stage_inputs(self, inputs: CtcInputs) -> None:
+        """See ``CtcOffice.stage_inputs``."""
+        inputs = _normalize(inputs)
         self._layout.validate_inputs(inputs)
+        self._staged = inputs
 
     def snapshot(self) -> CtcSnapshot:
         """Current state for display. No side effects."""
@@ -206,39 +334,87 @@ class StubCtcOffice:
                                for line, tickets in self._tickets.items()),
             queued_trains=self._queued(),
             orders=tuple(self._orders[t] for t in sorted(self._orders)),
+            pending_closures=tuple(sorted(self._pending,
+                                          key=_block_order)),
+            cancelled_orders=tuple(self._cancelled),
+            inputs_staged=self._staged is not None,
         )
+
+    # -- Dispatcher actions -------------------------------------------
 
     def dispatch(self, train_id: str, line: str,
                  destination_block_id: str,
                  arrival_s: float | None = None) -> None:
-        """Send a train toward a block; replaces any earlier order."""
-        _require_id(train_id, "train_id")
+        """Send a train toward a block; replaces any earlier order.
+
+        Refused (safety) into a closed, closing or failed block, and
+        onto a line other than the one the train is reported on.
+        """
+        train_id = _trim(train_id)
         self._layout.block(line, destination_block_id,
                            f"destination of {train_id}")
         if arrival_s is not None:
+            if isinstance(arrival_s, bool):
+                raise InvalidInputError("arrival_s must be a number")
             _require_finite(arrival_s, "arrival_s")
             if not 0 <= arrival_s < _DAY_S:
                 raise InvalidInputError(
                     f"arrival_s must be within one day, got {arrival_s}")
+        target = BlockRef(line, destination_block_id)
+        where = f"{line} block {destination_block_id}"
+        if target in self._closed:
+            raise UnsafeActionError(
+                f"{where} is closed; no train can be sent into it.")
+        if target in self._pending:
+            raise UnsafeActionError(
+                f"{where} is closing; no train can be sent into it.")
+        failure = self._failures().get((line, destination_block_id))
+        if failure is not None:
+            raise UnsafeActionError(
+                f"{where} has a track failure "
+                f"({failure.replace('_', ' ')}); no train can be sent "
+                "into it.")
+        reported = self._train_lines().get(train_id)
+        if reported is not None and reported != line:
+            raise UnsafeActionError(
+                f"{train_id} is on the {reported} line; it cannot be sent "
+                f"to a {line} block.")
         self._orders[train_id] = DispatchOrder(
             train_id, line, destination_block_id, arrival_s)
 
     def cancel_dispatch(self, train_id: str) -> None:
         """Drop a train's dispatch order, if it has one."""
-        self._orders.pop(train_id, None)
+        self._orders.pop(_trim(train_id), None)
 
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
-        """Close a block for maintenance, or reopen it."""
+        """Close or reopen a block; see ``CtcOffice.set_block_closed``."""
         self._layout.block(line, block_id, "block closure")
-        if closed:
-            self._closed.add(BlockRef(line, block_id))
+        if not isinstance(closed, bool):
+            raise InvalidInputError(
+                f"closed must be true or false, got {closed!r}")
+        if not self._maintenance:
+            raise MaintenanceModeRequiredError(
+                "Blocks can be closed or reopened only in maintenance "
+                "mode.")
+        block = BlockRef(line, block_id)
+        if not closed:
+            self._closed.discard(block)
+            self._pending.discard(block)
+            return
+        if block in self._closed:
+            return
+        if (line, block_id) in self._occupied(self._newest()):
+            self._pending.add(block)
+            self._cancel_orders_into(block, "block closing")
         else:
-            self._closed.discard(BlockRef(line, block_id))
+            self._pending.discard(block)
+            self._closed.add(block)
+            self._cancel_orders_into(block, "block closed")
 
     def set_switch(self, line: str, switch_id: str,
                    position: SwitchPosition) -> None:
-        """Command a switch position. Only in maintenance mode."""
+        """Command a switch; see ``CtcOffice.set_switch``."""
         self._layout.switch(line, switch_id, "switch command")
         if position not in get_args(SwitchPosition):
             raise InvalidInputError(
@@ -247,6 +423,10 @@ class StubCtcOffice:
         if not self._maintenance:
             raise MaintenanceModeRequiredError(
                 "Switches can be set only in maintenance mode.")
+        if (line, switch_id) in self._occupied(self._newest()):
+            raise UnsafeActionError(
+                f"{line} block {switch_id} is occupied; its switch cannot "
+                "be moved under a train.")
         self._switches[(line, switch_id)] = position
 
     def release_switch(self, line: str, switch_id: str) -> None:
@@ -254,19 +434,65 @@ class StubCtcOffice:
         self._switches.pop((line, switch_id), None)
 
     def set_maintenance_mode(self, active: bool) -> None:
-        """Enter or leave maintenance mode; leaving drops every switch
-        command, handing the switches back to the Track Controller."""
-        self._maintenance = bool(active)
+        """Enter or leave maintenance mode. Leaving drops every switch
+        command, handing the switches back to the Track Controller;
+        closed blocks stay closed and pending closures still close."""
+        if not isinstance(active, bool):
+            raise InvalidInputError(
+                f"maintenance mode must be true or false, got {active!r}")
+        self._maintenance = active
         if not self._maintenance:
             self._switches.clear()
 
     def set_clock_speedup(self, active: bool) -> None:
-        self._clock_speedup = bool(active)
+        if not isinstance(active, bool):
+            raise InvalidInputError(
+                f"clock speedup must be true or false, got {active!r}")
+        self._clock_speedup = active
 
     def load_schedule(self, schedule: Schedule) -> None:
-        """Replace the schedule. With no scheduling algorithm yet, every
-        run stays queued."""
+        """Replace the schedule. Every stop must be a block of the
+        track layout. With no scheduling algorithm yet, every run stays
+        queued."""
+        for train in schedule.trains:
+            for stop in train.stops:
+                self._layout.block(train.line, stop.block_id,
+                                   f"schedule {train.line} train "
+                                   f"{train.train_id}")
         self._schedule = schedule
+
+    # -- Internals ----------------------------------------------------
+
+    def _newest(self) -> CtcInputs:
+        """The newest reports: staged ones if any, else the applied."""
+        if self._staged is not None:
+            return self._staged
+        return self._inputs if self._inputs is not None else CtcInputs()
+
+    @staticmethod
+    def _occupied(inputs: CtcInputs) -> set[tuple[str, str]]:
+        track = inputs.track_controller
+        blocks = {(t.line, t.block_id) for t in track.trains}
+        blocks |= {(o.line, o.block_id) for o in track.occupancy
+                   if o.occupied}
+        return blocks
+
+    def _failures(self) -> dict[tuple[str, str], str]:
+        return {(f.line, f.block_id): f.kind
+                for f in self._newest().track_controller.failures}
+
+    def _train_lines(self) -> dict[str, str]:
+        return {t.train_id: t.line
+                for t in self._newest().track_controller.trains}
+
+    def _cancel_orders_into(self, block: BlockRef, reason: str) -> None:
+        for train_id, order in sorted(self._orders.items()):
+            if (order.line, order.destination_block_id) == (
+                    block.line, block.block_id):
+                del self._orders[train_id]
+                self._cancelled.append(CancelledOrder(
+                    train_id, block.line, block.block_id, reason))
+        del self._cancelled[:-_CANCELLED_KEPT]
 
     def _queued(self) -> tuple[QueuedTrain, ...]:
         if self._schedule is None:

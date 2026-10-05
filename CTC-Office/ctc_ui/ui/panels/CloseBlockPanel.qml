@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
+import "../components"
 
 Panel {
     id: root
@@ -19,7 +20,7 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        SelectField {
+        PickField {
             id: lineSelect
             Layout.preferredWidth: 120
             label: qsTr("Line")
@@ -27,12 +28,12 @@ Panel {
             currentIndex: -1
         }
 
-        SelectField {
+        PickField {
             id: blockSelect
             Layout.fillWidth: true
             label: qsTr("Block")
-            model: root.host && lineSelect.currentIndex >= 0
-                ? root.host.blockOptions(lineSelect.currentValue) : []
+            model: root.host && lineSelect.value !== ""
+                ? root.host.blockOptions(lineSelect.value) : []
             currentIndex: -1
         }
     }
@@ -45,7 +46,7 @@ Panel {
         text: closeButton.armed
             ? qsTr("Close %1 %2? No train will be given authority over "
                 + "it, and queued runs that use it will be re-routed.")
-                .arg(lineSelect.currentValue).arg(blockSelect.currentValue)
+                .arg(lineSelect.value).arg(blockSelect.value)
             : root.message !== "" ? root.message
             : qsTr("Select a line and block to close.")
     }
@@ -55,14 +56,14 @@ Panel {
         Layout.fillWidth: true
         label: qsTr("Close block")
         confirmLabel: qsTr("Yes, close block")
-        enabled: lineSelect.currentIndex >= 0 && blockSelect.currentIndex >= 0
+        enabled: lineSelect.value !== "" && blockSelect.value !== ""
         onConfirmed: {
-            const error = root.host.closeBlock(lineSelect.currentValue,
-                blockSelect.currentValue);
+            const error = root.host.closeBlock(lineSelect.value,
+                blockSelect.value);
             root.messageIsError = error !== "";
             root.message = error !== "" ? error
-                : qsTr("%1 %2 closed.").arg(lineSelect.currentValue)
-                    .arg(blockSelect.currentValue);
+                : qsTr("%1 %2 closed.").arg(lineSelect.value)
+                    .arg(blockSelect.value);
         }
     }
 

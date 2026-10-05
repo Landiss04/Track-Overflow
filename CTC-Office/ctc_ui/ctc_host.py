@@ -98,6 +98,7 @@ class CtcHost(QObject):
     maintenanceModeChanged = Signal()
     clockSpeedupChanged = Signal()
     scheduleChanged = Signal()
+    noticesChanged = Signal()
 
     def __init__(self, module: CtcOffice | None = None,
                  layout: Mapping[str, Line] | None = None,
@@ -122,12 +123,20 @@ class CtcHost(QObject):
         self._hourly_sales: dict[tuple[int, str], int] = {}
         self._first_hour = 0
         self._current_hour = 0
+        self._clock: SimulationClockBridge | None = None
+        # Self-cancelled orders already dismissed from the notices.
+        self._cancelled_seen = 0
 
     def start(self) -> None:
         """Start serving the test UI. The window works either way."""
         if not self._server.listen():
             print("CTC test UI link unavailable: could not listen.",
                   file=sys.stderr)
+
+    @staticmethod
+    def already_running() -> bool:
+        """True if another CTC Office window is already running."""
+        return CtcLinkServer.is_running()
 
     def stop(self) -> None:
         """Stop serving the test UI; call before the app shuts down."""
@@ -144,6 +153,8 @@ class CtcHost(QObject):
         clock.speedChanged.connect(apply_speed)
         apply_speed()
         self._first_hour = self._current_hour = _hour(clock.clock.sim_time_s)
+        self._clock = clock
+        clock.pausedChanged.connect(self.noticesChanged)
         clock.clock.add_tick_listener(self._on_tick)
 
     def _on_tick(self, sim_time_s: float, tick_s: float) -> None:
@@ -166,8 +177,20 @@ class CtcHost(QObject):
         self._refresh()
 
     def _receive_inputs(self, inputs: CtcInputs) -> None:
-        """New inputs from the test UI, already validated."""
+        """New inputs from the test UI.
+
+        They are staged in the module, so the dispatcher's safety checks
+        use them at once, and applied at the next tick: while the clock
+        is paused they change nothing, and the window keeps showing the
+        last applied reports. Raises if the module rejects them.
+        """
+        self._module.stage_inputs(inputs)
         self._inputs = inputs
+
+    def _applied(self) -> CtcInputs:
+        """The reports the module last stepped with: what to show."""
+        applied = self._module.snapshot().inputs
+        return applied if applied is not None else CtcInputs()
 
     def _refresh(self) -> None:
         """Tell the panels and the test UI about any change."""
@@ -180,6 +203,7 @@ class CtcHost(QObject):
             self._last_state = state
             self._revision += 1
             self.stateChanged.emit()
+            self.noticesChanged.emit()
             self.maintenanceModeChanged.emit()
             self.clockSpeedupChanged.emit()
             self.scheduleChanged.emit()
@@ -250,7 +274,7 @@ class CtcHost(QObject):
     def _train_lines(self, snap: CtcSnapshot) -> dict[str, str]:
         """Every known train and its line: reported first, then ordered."""
         lines = {o.train_id: o.line for o in snap.orders}
-        for report in self._inputs.track_controller.trains:
+        for report in self._applied().track_controller.trains:
             lines[report.train_id] = report.line
         return dict(sorted(lines.items()))
 
@@ -264,7 +288,7 @@ class CtcHost(QObject):
     def _train_row(self, train_id: str, line: str,
                    snap: CtcSnapshot) -> dict[str, Any]:
         reports = {r.train_id: r
-                   for r in self._inputs.track_controller.trains}
+                   for r in self._applied().track_controller.trains}
         report = reports.get(train_id)
         order = self._orders(snap).get(train_id)
         suggestion = self._suggestions(snap).get(train_id)
@@ -335,7 +359,7 @@ class CtcHost(QObject):
         states: dict[str, str] = {}
         for block in snap.outputs.track_controller.closed_blocks:
             states[block_key(block.line, block.block_id)] = "closed"
-        for failure in self._inputs.track_controller.failures:
+        for failure in self._applied().track_controller.failures:
             states[block_key(failure.line, failure.block_id)] = "failure"
         return states
 
@@ -347,7 +371,7 @@ class CtcHost(QObject):
         reported occupied with no train reported on it gets an
         unnamed train at its middle, so occupancy always shows.
         """
-        track = self._inputs.track_controller
+        track = self._applied().track_controller
         trains = []
         placed: set[tuple[str, str]] = set()
         for report in track.trains:
@@ -373,23 +397,29 @@ class CtcHost(QObject):
     def crossingStates(self) -> dict[str, str]:  # noqa: N802
         """``Line:crossing`` -> inactive | active, as last reported."""
         return {block_key(c.line, c.crossing_id): c.state
-                for c in self._inputs.track_controller.crossings}
+                for c in self._applied().track_controller.crossings}
 
     @Property(list, notify=stateChanged)
     def closures(self) -> list[dict[str, Any]]:
-        """Closed and failed blocks, for Active closures."""
+        """Closed, closing and failed blocks, for Active closures."""
         snap = self._module.snapshot()
         rows: list[dict[str, Any]] = []
         for block in snap.outputs.track_controller.closed_blocks:
             rows.append({"block": f"{block.line} {block.block_id}",
                          "state": "Closed", "line": block.line,
-                         "blockId": block.block_id, "reopenable": True})
-        for failure in self._inputs.track_controller.failures:
+                         "blockId": block.block_id, "reopenable": True,
+                         "pending": False})
+        for block in snap.pending_closures:
+            rows.append({"block": f"{block.line} {block.block_id}",
+                         "state": "Closing \u2014 train in block",
+                         "line": block.line, "blockId": block.block_id,
+                         "reopenable": True, "pending": True})
+        for failure in self._applied().track_controller.failures:
             rows.append({
                 "block": f"{failure.line} {failure.block_id}",
                 "state": _FAILURE_LABELS.get(failure.kind, failure.kind),
                 "line": failure.line, "blockId": failure.block_id,
-                "reopenable": False})
+                "reopenable": False, "pending": False})
         rows.sort(key=lambda r: (r["line"], _block_number(r["blockId"])))
         return rows
 
@@ -403,7 +433,7 @@ class CtcHost(QObject):
             return {}
         connections = [part.strip() for part in block.switch.split(";")]
         reported = {(s.line, s.switch_id): s.position
-                    for s in self._inputs.track_controller.switches}
+                    for s in self._applied().track_controller.switches}
         commanded = {
             (c.line, c.switch_id): c.position
             for c in self._module.snapshot()
@@ -468,6 +498,31 @@ class CtcHost(QObject):
                          for count in line_counts), default=0),
             "current": self._current_hour - hours[0],
         }
+
+    # -- Notices ------------------------------------------------------
+
+    @Property(list, notify=noticesChanged)
+    def notices(self) -> list[str]:
+        """Messages for the dispatcher, newest last."""
+        snap = self._module.snapshot()
+        found = []
+        if snap.inputs_staged and self._clock is not None \
+                and self._clock.paused:
+            found.append("Track Controller update staged \u2014 it "
+                         "applies when the clock runs.")
+        for cancelled in snap.cancelled_orders[self._cancelled_seen:]:
+            found.append(
+                f"Order for {cancelled.train_id} to {cancelled.line} "
+                f"block {cancelled.destination_block_id} cancelled: "
+                f"{cancelled.reason}.")
+        return found
+
+    @Slot()
+    def dismissNotices(self) -> None:  # noqa: N802
+        """Clear the cancelled-order notices (a staged update stays
+        until it applies)."""
+        self._cancelled_seen = len(self._module.snapshot().cancelled_orders)
+        self.noticesChanged.emit()
 
     # -- Dispatcher actions -------------------------------------------
 

@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import "../../../../ui"
+import "../components"
 
 Panel {
     id: root
@@ -159,7 +160,7 @@ Panel {
                     Layout.fillWidth: true
                     spacing: theme.space_3
 
-                    SelectField {
+                    PickField {
                         id: rerouteSelect
                         Layout.fillWidth: true
                         label: qsTr("New destination")
@@ -185,10 +186,10 @@ Panel {
                         Layout.fillWidth: true
                         variant: "primary"
                         text: qsTr("Reroute")
-                        enabled: rerouteSelect.currentIndex >= 0
+                        enabled: rerouteSelect.value !== ""
                         onClicked: root.report(
                             root.host.dispatchTrain(root.trainId,
-                                root.train.line, rerouteSelect.currentValue,
+                                root.train.line, rerouteSelect.value,
                                 rerouteArrival.text),
                             qsTr("%1 rerouted.").arg(root.trainId))
                     }

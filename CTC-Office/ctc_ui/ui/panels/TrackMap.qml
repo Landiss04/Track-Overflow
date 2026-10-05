@@ -32,6 +32,38 @@ Item {
     readonly property real mapHeight: model ? model.mapHeight : 1
     readonly property real fitScale: Math.min(width / mapWidth,
                                               height / mapHeight)
+    // Zoom over the fitted map: 1 shows it whole; above 1 it can be
+    // dragged to pan.
+    property real zoom: 1
+    readonly property real minZoom: 1
+    readonly property real maxZoom: 4
+    readonly property real mapScale: fitScale * zoom
+
+    // Zoom by a factor, keeping the point at the centre of the view.
+    function zoomBy(factor) {
+        const next = Math.max(root.minZoom,
+                              Math.min(root.maxZoom, root.zoom * factor));
+        if (next === root.zoom)
+            return;
+        const centreX = (view.contentX + view.width / 2 - canvas.x)
+            / root.mapScale;
+        const centreY = (view.contentY + view.height / 2 - canvas.y)
+            / root.mapScale;
+        root.zoom = next;
+        view.contentX = Math.max(0, Math.min(
+            view.contentWidth - view.width,
+            canvas.x + centreX * root.mapScale - view.width / 2));
+        view.contentY = Math.max(0, Math.min(
+            view.contentHeight - view.height,
+            canvas.y + centreY * root.mapScale - view.height / 2));
+    }
+
+    // Back to the whole map.
+    function fit() {
+        root.zoom = 1;
+        view.contentX = 0;
+        view.contentY = 0;
+    }
 
     function lineShown(line) {
         return root.lineFilter === 0
@@ -132,188 +164,200 @@ Item {
         }
     }
 
-    Item {
-        id: canvas
+    Flickable {
+        id: view
 
-        width: root.mapWidth
-        height: root.mapHeight
-        x: (root.width - width * root.fitScale) / 2
-        y: (root.height - height * root.fitScale) / 2
-        visible: root.model !== null
-        transform: Scale {
-            xScale: root.fitScale
-            yScale: root.fitScale
-        }
+        anchors.fill: parent
+        clip: true
+        contentWidth: Math.max(width, root.mapWidth * root.mapScale)
+        contentHeight: Math.max(height, root.mapHeight * root.mapScale)
+        // Panning only makes sense once zoomed in.
+        interactive: root.zoom > root.minZoom
+        boundsBehavior: Flickable.StopAtBounds
 
-        // Yard connections (no blocks).
-        Repeater {
-            model: root.model ? root.model.spurs : []
+        Item {
+            id: canvas
 
-            delegate: TrackStroke {
-                required property var modelData
-                line: modelData.line
-                points: modelData.points
-                lineWidth: 2
+            width: root.mapWidth
+            height: root.mapHeight
+            x: (view.contentWidth - width * root.mapScale) / 2
+            y: (view.contentHeight - height * root.mapScale) / 2
+            visible: root.model !== null
+            transform: Scale {
+                xScale: root.mapScale
+                yScale: root.mapScale
             }
-        }
 
-        // One shape per block.
-        Repeater {
-            model: root.model ? root.model.blocks : []
+            // Yard connections (no blocks).
+            Repeater {
+                model: root.model ? root.model.spurs : []
 
-            delegate: TrackStroke {
-                required property var modelData
-                objectName: "block-" + modelData.line + "-"
-                    + modelData.blockId
-                line: modelData.line
-                points: modelData.points
-                blockState: root.blockStates[modelData.line + ":"
-                    + modelData.blockId] || ""
+                delegate: TrackStroke {
+                    required property var modelData
+                    line: modelData.line
+                    points: modelData.points
+                    lineWidth: 2
+                }
             }
-        }
 
-        // Yard.
-        Rectangle {
-            readonly property var rect: root.model ? root.model.yard
-                : [0, 0, 0, 0]
-            x: rect[0]
-            y: rect[1]
-            width: rect[2]
-            height: rect[3]
-            color: theme.bg_sunken
-            border.color: theme.text_primary
-            border.width: 2
+            // One shape per block.
+            Repeater {
+                model: root.model ? root.model.blocks : []
 
-            Text {
-                anchors.centerIn: parent
-                text: qsTr("YARD")
-                color: theme.text_primary
-                font.family: theme.ui_family
-                font.pixelSize: theme.size_small
-                font.weight: theme.weight_bold
+                delegate: TrackStroke {
+                    required property var modelData
+                    objectName: "block-" + modelData.line + "-"
+                        + modelData.blockId
+                    line: modelData.line
+                    points: modelData.points
+                    blockState: root.blockStates[modelData.line + ":"
+                        + modelData.blockId] || ""
+                }
             }
-        }
 
-        // Stations: hollow squares.
-        Repeater {
-            model: root.model ? root.model.stations : []
+            // Yard.
+            Rectangle {
+                readonly property var rect: root.model ? root.model.yard
+                    : [0, 0, 0, 0]
+                x: rect[0]
+                y: rect[1]
+                width: rect[2]
+                height: rect[3]
+                color: theme.bg_sunken
+                border.color: theme.text_primary
+                border.width: 2
 
-            delegate: Rectangle {
-                required property var modelData
-                visible: root.lineShown(modelData.line)
-                x: modelData.x - 5
-                y: modelData.y - 5
-                width: 10
-                height: 10
-                color: theme.bg_surface
-                border.color: theme.text_secondary
-                border.width: 1.5
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("YARD")
+                    color: theme.text_primary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_small
+                    font.weight: theme.weight_bold
+                }
             }
-        }
 
-        // Railway crossings: squares with an X, filled --warning while
-        // the crossing is active.
-        Repeater {
-            model: root.model ? root.model.crossings : []
+            // Stations: hollow squares.
+            Repeater {
+                model: root.model ? root.model.stations : []
 
-            delegate: Item {
-                id: crossing
-                required property var modelData
-                readonly property bool active: root.crossingStates[
-                    modelData.line + ":" + modelData.blockId] === "active"
-                visible: root.lineShown(modelData.line)
-                x: modelData.x - 8
-                y: modelData.y - 8
-                width: 16
-                height: 16
-
-                Rectangle {
-                    anchors.fill: parent
-                    color: crossing.active ? theme.warning : theme.bg_surface
-                    border.color: crossing.active
-                        ? theme.warning : theme.text_secondary
+                delegate: Rectangle {
+                    required property var modelData
+                    visible: root.lineShown(modelData.line)
+                    x: modelData.x - 5
+                    y: modelData.y - 5
+                    width: 10
+                    height: 10
+                    color: theme.bg_surface
+                    border.color: theme.text_secondary
                     border.width: 1.5
                 }
+            }
 
-                Shape {
-                    anchors.fill: parent
-                    preferredRendererType: Shape.CurveRenderer
+            // Railway crossings: squares with an X, filled --warning while
+            // the crossing is active.
+            Repeater {
+                model: root.model ? root.model.crossings : []
 
-                    ShapePath {
-                        strokeColor: crossing.active
-                            ? theme.text_inverse : theme.text_secondary
-                        strokeWidth: 1.5
-                        fillColor: "transparent"
-                        PathMove { x: 4; y: 4 }
-                        PathLine { x: 12; y: 12 }
-                        PathMove { x: 12; y: 4 }
-                        PathLine { x: 4; y: 12 }
+                delegate: Item {
+                    id: crossing
+                    required property var modelData
+                    readonly property bool active: root.crossingStates[
+                        modelData.line + ":" + modelData.blockId] === "active"
+                    visible: root.lineShown(modelData.line)
+                    x: modelData.x - 8
+                    y: modelData.y - 8
+                    width: 16
+                    height: 16
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: crossing.active ? theme.warning : theme.bg_surface
+                        border.color: crossing.active
+                            ? theme.warning : theme.text_secondary
+                        border.width: 1.5
+                    }
+
+                    Shape {
+                        anchors.fill: parent
+                        preferredRendererType: Shape.CurveRenderer
+
+                        ShapePath {
+                            strokeColor: crossing.active
+                                ? theme.text_inverse : theme.text_secondary
+                            strokeWidth: 1.5
+                            fillColor: "transparent"
+                            PathMove { x: 4; y: 4 }
+                            PathLine { x: 12; y: 12 }
+                            PathMove { x: 12; y: 4 }
+                            PathLine { x: 4; y: 12 }
+                        }
                     }
                 }
             }
-        }
 
-        // Section letters.
-        Repeater {
-            model: root.model ? root.model.labels : []
+            // Section letters.
+            Repeater {
+                model: root.model ? root.model.labels : []
 
-            delegate: Text {
-                required property var modelData
-                visible: root.lineShown(modelData.line)
-                x: modelData.x - width / 2
-                y: modelData.y - height / 2
-                text: modelData.text
-                color: root.lineColor(modelData.line)
-                font.family: theme.mono_family
-                // The map renders at roughly 0.75x in the Track view,
-                // so H3 keeps letters above the 12 px minimum.
-                font.pixelSize: theme.size_h3
-                font.weight: theme.weight_bold
-            }
-        }
-
-        // Trains, on top of everything else.
-        Repeater {
-            model: root.trains
-
-            delegate: Item {
-                id: placed
-
-                required property var modelData
-
-                visible: root.lineShown(modelData.line)
-                x: modelData.x
-                y: modelData.y
-                objectName: "train-" + modelData.train
-
-                TrainCar {
-                    x: -width / 2
-                    y: -height / 2
-                    rotation: placed.modelData.angle
+                delegate: Text {
+                    required property var modelData
+                    visible: root.lineShown(modelData.line)
+                    x: modelData.x - width / 2
+                    y: modelData.y - height / 2
+                    text: modelData.text
+                    color: root.lineColor(modelData.line)
+                    font.family: theme.mono_family
+                    // The map renders at roughly 0.75x in the Track view,
+                    // so H3 keeps letters above the 12 px minimum.
+                    font.pixelSize: theme.size_h3
+                    font.weight: theme.weight_bold
                 }
+            }
 
-                // The ID stays upright, above the car.
-                Rectangle {
-                    visible: placed.modelData.train !== ""
-                    x: -width / 2
-                    y: -height - 14
-                    width: idText.implicitWidth + 8
-                    height: idText.implicitHeight + 2
-                    radius: 3
-                    color: theme.bg_surface
-                    border.color: theme.info
-                    border.width: 1
+            // Trains, on top of everything else.
+            Repeater {
+                model: root.trains
 
-                    Text {
-                        id: idText
-                        anchors.centerIn: parent
-                        text: placed.modelData.train
-                        color: theme.text_primary
-                        font.family: theme.mono_family
-                        // The map renders at about 0.7x; H3, like the
-                        // section letters, keeps the ID above 12 px.
-                        font.pixelSize: theme.size_h3
-                        font.weight: theme.weight_bold
+                delegate: Item {
+                    id: placed
+
+                    required property var modelData
+
+                    visible: root.lineShown(modelData.line)
+                    x: modelData.x
+                    y: modelData.y
+                    objectName: "train-" + modelData.train
+
+                    TrainCar {
+                        x: -width / 2
+                        y: -height / 2
+                        rotation: placed.modelData.angle
+                    }
+
+                    // The ID stays upright, above the car.
+                    Rectangle {
+                        visible: placed.modelData.train !== ""
+                        x: -width / 2
+                        y: -height - 14
+                        width: idText.implicitWidth + 8
+                        height: idText.implicitHeight + 2
+                        radius: 3
+                        color: theme.bg_surface
+                        border.color: theme.info
+                        border.width: 1
+
+                        Text {
+                            id: idText
+                            anchors.centerIn: parent
+                            text: placed.modelData.train
+                            color: theme.text_primary
+                            font.family: theme.mono_family
+                            // The map renders at about 0.7x; H3, like the
+                            // section letters, keeps the ID above 12 px.
+                            font.pixelSize: theme.size_h3
+                            font.weight: theme.weight_bold
+                        }
                     }
                 }
             }

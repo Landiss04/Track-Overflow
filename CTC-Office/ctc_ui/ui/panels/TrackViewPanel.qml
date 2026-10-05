@@ -20,7 +20,7 @@ Panel {
     property var mapTrains: []
     // Whether a track map renderer is mounted in `mapCanvas`. Zoom and fit
     // stay disabled until then.
-    property bool mapAvailable: false
+    readonly property bool mapAvailable: trackMap !== null
 
     signal lineFilterActivated(int index)
     signal zoomOutRequested()
@@ -28,6 +28,10 @@ Panel {
     signal fitRequested()
 
     title: qsTr("Track view")
+
+    onZoomInRequested: mapView.zoomBy(1.25)
+    onZoomOutRequested: mapView.zoomBy(0.8)
+    onFitRequested: mapView.fit()
 
     headerItems: [
         SegmentedToggle {
@@ -38,14 +42,14 @@ Panel {
         AppButton {
             size: "small"
             text: "−"
-            enabled: root.mapAvailable
+            enabled: root.mapAvailable && mapView.zoom > mapView.minZoom
             Accessible.name: qsTr("Zoom out")
             onClicked: root.zoomOutRequested()
         },
         AppButton {
             size: "small"
             text: "+"
-            enabled: root.mapAvailable
+            enabled: root.mapAvailable && mapView.zoom < mapView.maxZoom
             Accessible.name: qsTr("Zoom in")
             onClicked: root.zoomInRequested()
         },
@@ -64,6 +68,7 @@ Panel {
         Layout.fillHeight: true
 
         TrackMap {
+            id: mapView
             anchors.fill: parent
             model: root.trackMap
             lineFilter: root.lineFilterIndex

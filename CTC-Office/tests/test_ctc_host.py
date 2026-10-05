@@ -80,13 +80,18 @@ class TickTest(unittest.TestCase):
                 occupancy=(BlockOccupancy("Green", "3", True),)),
             track_model=_green(4))
         host._receive_inputs(inputs)
-        # The window shows the new inputs before the module steps.
-        self.assertEqual(host.mapTrains, [
-            {"train": "", "line": "Green", "block": "3", "fraction": 0.5}])
+        # Paused: the update is staged. The window keeps showing the last
+        # applied reports, with a notice, until the clock runs.
+        self.assertEqual(host.mapTrains, [])
         self.assertIsNone(module.snapshot().inputs)
+        self.assertTrue(module.snapshot().inputs_staged)
+        self.assertIn("staged", " ".join(host.notices))
 
         for _ in range(3):
             clock.clock.tick()
+        self.assertEqual(host.mapTrains, [
+            {"train": "", "line": "Green", "block": "3", "fraction": 0.5}])
+        self.assertEqual(host.notices, [])
         snap = module.snapshot()
         self.assertEqual(_sold(snap), 4)
         self.assertAlmostEqual(snap.elapsed_s, 0.3)
@@ -98,7 +103,8 @@ class PanelDataTest(unittest.TestCase):
     """What the panels read, and what their actions do."""
 
     def test_block_states_show_the_most_urgent(self) -> None:
-        host, _, _ = _host()
+        host, _, clock = _host()
+        host.setMaintenanceMode(True)
         host._receive_inputs(CtcInputs(
             track_controller=TrackControllerInputs(
                 occupancy=(BlockOccupancy("Green", "1", True),
@@ -106,17 +112,21 @@ class PanelDataTest(unittest.TestCase):
                 trains=(TrainReport("T1", "Red", "4", 0.0, 5.0),),
                 crossings=(CrossingReport("Green", "19", "active"),),
                 failures=(TrackFailureReport("Green", "2", "power"),))))
+        clock.clock.tick()
+        # Green 1 is occupied, so its closure waits; Green 5 is clear.
         self.assertEqual(host.closeBlock("Green", "1"), "")
+        self.assertEqual(host.closeBlock("Green", "5"), "")
         # Occupancy is drawn as trains, not a block state.
         self.assertEqual(host.blockStates, {
-            "Green:1": "closed", "Green:2": "failure"})
+            "Green:5": "closed", "Green:2": "failure"})
         self.assertEqual(host.crossingStates, {"Green:19": "active"})
         self.assertEqual(
-            [(r["block"], r["reopenable"]) for r in host.closures],
-            [("Green 1", True), ("Green 2", False)])
+            [(r["block"], r["state"]) for r in host.closures],
+            [("Green 1", "Closing \u2014 train in block"),
+             ("Green 2", "Power failure"), ("Green 5", "Closed")])
 
     def test_map_trains(self) -> None:
-        host, _, _ = _host()
+        host, _, clock = _host()
         host._receive_inputs(CtcInputs(
             track_controller=TrackControllerInputs(
                 # Green 3 is 100 m long: 25 m in is a quarter of the way.
@@ -124,6 +134,7 @@ class PanelDataTest(unittest.TestCase):
                 occupancy=(BlockOccupancy("Green", "3", True),
                            BlockOccupancy("Red", "8", True),
                            BlockOccupancy("Red", "9", False)))))
+        clock.clock.tick()
         self.assertEqual(host.mapTrains, [
             {"train": "T1", "line": "Green", "block": "3",
              "fraction": 0.25},
@@ -146,10 +157,11 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(module.snapshot().orders[0].arrival_s, 30600.0)
 
     def test_trains_merge_reports_and_orders(self) -> None:
-        host, _, _ = _host()
+        host, _, clock = _host()
         host._receive_inputs(CtcInputs(
             track_controller=TrackControllerInputs(
                 trains=(TrainReport("T1", "Green", "9", 0.0, 10.0),))))
+        clock.clock.tick()
         host.dispatchTrain("T1", "Green", "65", "08:30")
         host.dispatchTrain("T2", "Red", "7", "")
         rows = {row["train"]: row for row in host.trains}
@@ -211,6 +223,7 @@ class PanelDataTest(unittest.TestCase):
         host, module, _ = _host()
         seen: list[bool] = []
         host.stateChanged.connect(lambda: seen.append(True))
+        module.set_maintenance_mode(True)
         module.set_block_closed("Red", "2", True)
         host._server.changed.emit()
         self.assertEqual(seen, [True])

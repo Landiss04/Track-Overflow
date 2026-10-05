@@ -59,8 +59,10 @@ ScrollView {
             Layout.fillHeight: true
             // Sized from this, not from the panels' content, so a long
             // departures list scrolls inside its own panel.
-            Layout.preferredHeight: root.bottomRowMinimum
-            Layout.minimumHeight: root.bottomRowMinimum
+            Layout.preferredHeight: Math.max(root.bottomRowMinimum,
+                                             throughput.implicitHeight)
+            Layout.minimumHeight: Math.max(root.bottomRowMinimum,
+                                           throughput.implicitHeight)
             spacing: theme.space_3
 
             AutoDispatchPanel {
@@ -76,6 +78,7 @@ ScrollView {
             }
 
             ThroughputPanel {
+                id: throughput
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.preferredWidth: 405

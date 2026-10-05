@@ -102,6 +102,7 @@ class StubModuleTest(unittest.TestCase):
 
     def test_blocks_are_checked_against_the_layout(self) -> None:
         ctc = StubCtcOffice()
+        ctc.set_maintenance_mode(True)
         # Red has 76 blocks, Green 150: the same number, different lines.
         ctc.set_block_closed("Green", "150", True)
         for line, block in (("Red", "150"), ("Blue", "1"), ("Green", "")):
@@ -113,6 +114,7 @@ class StubModuleTest(unittest.TestCase):
 
     def test_closed_blocks_carry_their_line(self) -> None:
         ctc = StubCtcOffice()
+        ctc.set_maintenance_mode(True)
         ctc.set_block_closed("Red", "12", True)
         ctc.set_block_closed("Green", "12", True)
         ctc.set_block_closed("Green", "2", True)
@@ -428,6 +430,7 @@ class HarnessSendTest(unittest.TestCase):
         link = LocalLink()
         harness = CtcTestHarness(link)
         _add(harness, "dispatch_orders", train="T9", block="2")
+        link.set_maintenance_mode(True)
         link.set_block_closed("Red", "3", True)
         link.dispatch("T1", "Green", "65", 30600.0)
         harness.send()

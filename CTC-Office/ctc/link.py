@@ -18,7 +18,7 @@ steps it.
 
 from __future__ import annotations
 
-from typing import Callable, Protocol
+from typing import Callable, Protocol, Sequence
 
 from ctc.interface import (
     CtcInputs,
@@ -27,6 +27,7 @@ from ctc.interface import (
     CtcSnapshot,
     SwitchPosition,
 )
+from ctc.actions import Action, apply_batch
 from ctc.model import StubCtcOffice
 
 #: The fixed time step (decision D006), used when no clock is running.
@@ -52,6 +53,12 @@ class CtcLink(Protocol):
 
     def set_inputs(self, inputs: CtcInputs) -> None:
         """Replace the inputs the CTC window's clock steps with."""
+        ...
+
+    def apply_batch(self, inputs: CtcInputs | None,
+                    actions: Sequence[Action]) -> None:
+        """Inputs, then dispatcher actions, all or nothing: if any is
+        rejected, none is applied (``ctc.actions.apply_batch``)."""
         ...
 
     def dispatch(self, train_id: str, line: str,
@@ -109,6 +116,12 @@ class LocalLink:
     def set_inputs(self, inputs: CtcInputs) -> None:
         # No clock runs in this process, so new inputs take one tick.
         self._module.step(STANDALONE_DT_S, inputs)
+
+    def apply_batch(self, inputs: CtcInputs | None,
+                    actions: Sequence[Action]) -> None:
+        def take(module: CtcOffice, new: CtcInputs, _trial: bool) -> None:
+            module.step(STANDALONE_DT_S, new)
+        apply_batch(self._module, inputs, actions, take)
 
     def dispatch(self, train_id: str, line: str,
                  destination_block_id: str,
