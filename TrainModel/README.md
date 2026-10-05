@@ -25,6 +25,38 @@ The two pages are **independent windows, each its own process**:
   clock with the steps the module accepted and shows any gap as **Clock
   drift**.
 
+The test UI also carries two stand-ins, both removed at integration with the
+rest of it:
+
+- **Blue Line, loaded by default** (`train_model/track_stub.py`). As the
+  stand-in Track Model, the test UI reads the Track Model's
+  `TrackModel/blue_line.json` and follows the train along section A, through
+  the switch at block 5, to Station B at block 10. The track rows (block,
+  grade, elevation, speed limit, polarity, station, beacon) move to the next
+  block once the train's offset reaches the block's 50 m, and polarity flips
+  on each change, which is the Train Model's block-change event. The
+  transponder at block 9 sends the Station B beacon. An edit to a track row
+  lasts until the next block change. Travel is forward only, and the train
+  stays on block 10 at the end of the route. Run Control shows the track.
+- **Speed limiter** (`train_model/speed_limiter.py`). The Train Model does not
+  govern its own speed (D009), so as the stand-in Train Controller the test UI
+  limits it: a PI control law (trapezoidal integration of the speed error, no
+  integration while saturated) lowers the entered power to hold the speed at
+  the cap, the vehicle's 70 km/h or the speed limit where that is lower. More
+  than 0.5 m/s over the cap, it cuts power and applies the service brake until
+  the train is back at the cap. `power_command` keeps showing the entered
+  power; the Train Model window's power readout shows what was sent. Run
+  Control shows the cap and when it is limiting.
+
+The test UI's inputs scroll in place: the left column shows only the rows that
+fit and wraps from the last row back to the first (mouse wheel or drag). The
+right column scrolls on its own. The output table lists only what the Train
+Controller and the Track Model act on: emergency brake state, door state,
+light state, cabin temperature, position block and offset, actual speed,
+passenger capacity and speed limit. The passthroughs (commanded speed,
+authority, beacon) are still outputs of the module and show on the Train
+Model window.
+
 Once the system is integrated, the central harness calls the same
 `TrainModelState.step` the link calls; the test UI and the link are removed
 with no change to the module. Either window starts on its own; the test UI
@@ -145,6 +177,8 @@ train_model/app.py      shared bootstrap: theme, font, QML engine, scaling
 train_model/link.py     test UI link: wire format, server, socket client
 train_model/state.py    TrainModelState — page 3a bindable values + slots
 train_model/harness.py  TestHarnessState — page 3b inputs/outputs/run control
+train_model/track_stub.py  test UI stand-in Track Model (Blue Line)
+train_model/speed_limiter.py  test UI stand-in Train Controller speed limiter
 ui/Main.qml             Train Model window shell around page 3a
 ui/TestMain.qml         test UI window shell around page 3b
 ui/MainView.qml         page 3a

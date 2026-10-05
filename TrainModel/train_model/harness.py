@@ -30,13 +30,27 @@ and for a reachable module, so input the module would reject never
 advances the shared clock. Every ``DRIFT_CHECK_TICKS`` clock ticks the
 harness compares the clock with the steps the module accepted and
 reports any gap as drift.
+
+As the stand-in Track Model, the harness loads the Blue Line by default
+(``train_model/track_stub.py``): the track rows follow the train from
+block to block, and an edit to one lasts until the next block change.
+As the stand-in Train Controller, it limits the train's speed
+(``train_model/speed_limiter.py``): the power sent each tick is the
+entered power, lowered as needed to hold the speed at or below the
+vehicle's maximum speed and the speed limit. The rows keep the entered
+commands; only what is sent is limited.
+
+The output table shows the signals the Train Controller and the Track
+Model act on; the passthroughs the Train Model window already shows are
+left out of it.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
@@ -46,12 +60,15 @@ from train_model.interface import (
     TrackInfo,
     TrackInputs,
     TrackSignal,
+    TrainConfig,
     TrainModelInputs,
     TrainModelOutputs,
 )
 from train_model.link import LinkError, LocalLink, SocketLink
 from train_model.model import InvalidTimeStepError, TrainModel
+from train_model.speed_limiter import SpeedLimiter
 from train_model.state import FAILURE_MODES
+from train_model.track_stub import TrackStub, load_blue_line
 
 # The simulation clock is shared by every module, so it lives in the
 # repository-level utils/ package.
@@ -120,27 +137,21 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Outputs read back from the module, in interface-dictionary order.
-#: Only cross-module outputs: what the Track Model and the Train
-#: Controller would receive.
+#: Outputs read back from the module, in interface-dictionary order:
+#: the signals the Train Controller and the Track Model act on. The
+#: passthroughs the Train Model window already shows (commanded speed,
+#: authority, beacon) and the block-change flag are left out.
 _OUTPUT_SPEC: tuple[tuple[str, str, str], ...] = (
     ("emergency_brake_state", "bool", ""),
-    ("service_brake_state", "bool", ""),
     ("left_door_state", "bool", ""),
     ("right_door_state", "bool", ""),
     ("interior_light_state", "bool", ""),
     ("exterior_light_state", "bool", ""),
     ("cabin_temp", "float", "°F"),
-    ("commanded_speed", "float", "mph"),
-    ("authority", "int", "blocks"),
-    ("beacon_station", "string", ""),
-    ("beacon_platform_side", "string", ""),
-    ("beacon_underground", "bool", ""),
     ("position_block", "string", ""),
     ("position_offset", "float", "ft"),
     ("actual_speed", "float", "mph"),
     ("passenger_capacity", "int", ""),
-    ("block_changed", "bool", ""),
     ("speed_limit", "float", "mph"),
 )
 
@@ -229,12 +240,32 @@ class TestHarnessState(QObject):
     connectedChanged = Signal()
     driftChanged = Signal()
 
-    def __init__(self, link: Link, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        link: Link,
+        parent: QObject | None = None,
+        *,
+        track: TrackStub | None | Literal["blue_line"] = "blue_line",
+    ) -> None:
+        """Stand in for the producers and the clock of one Train Model.
+
+        Args:
+            link: The link to the Train Model.
+            parent: The Qt parent.
+            track: The track to follow: the Blue Line by default, or
+                None to enter every track row by hand.
+        """
         super().__init__(parent)
         self._link = link
         self._input_error = ""
+        self._track = load_blue_line() if track == "blue_line" else track
+        # The stand-in Train Controller's speed cap: the vehicle's
+        # maximum speed, or the speed limit where that is lower.
+        self._limiter = SpeedLimiter()
+        self._v_max_mps = TrainConfig().v_max_mps
+        self._limiting = False
         # The commands the module last accepted from these producers.
-        self._accepted: dict[str, Any] = dict(_INITIAL_COMMANDS)
+        self._accepted: dict[str, Any] = self._initial_commands()
         self._pending_inputs: dict[str, Any] = {}
         self._live_inputs = self._live_input_values()
         self._emergency_override_pending = False
@@ -430,6 +461,22 @@ class TestHarnessState(QObject):
         """
         return self._drift_ticks
 
+    @Property(str, constant=True)
+    def trackName(self) -> str:
+        """The loaded track, or that the track rows are entered by hand."""
+        return self._track.name if self._track is not None else "Manual"
+
+    @Property(float, notify=runControlChanged)
+    def speedCap(self) -> float:
+        """The speed limiter's cap for the accepted inputs, in mph."""
+        cap_mps = self._speed_cap_mps(self._accepted["speed_limit"])
+        return cast(float, self._to_display("mph", cap_mps))
+
+    @Property(bool, notify=runControlChanged)
+    def limiting(self) -> bool:
+        """Whether the last step's power or brake was limited."""
+        return self._limiting
+
     @Slot(str, "QVariant")
     def setDisplayInput(self, name: str, value: Any) -> None:
         """Accept editor units and convert to the backend before staging."""
@@ -510,7 +557,11 @@ class TestHarnessState(QObject):
             self.driftChanged.emit()
         self._set_input_error("")
         self._pending_inputs.clear()
-        self._accepted = dict(_INITIAL_COMMANDS)
+        if self._track is not None:
+            self._track.reset()
+        self._limiter.reset()
+        self._limiting = False
+        self._accepted = self._initial_commands()
         self._emergency_override_pending = False
         self._tick = 0
         try:
@@ -592,21 +643,62 @@ class TestHarnessState(QObject):
         clear_passenger_brake: bool = False,
     ) -> bool:
         """Step the module once on ``values``; report a rejection."""
+        # A rejected step leaves the limiter as it was.
+        limiter_state, limiting = self._limiter.state, self._limiting
         try:
-            self._link.step(
-                dt, self._build_inputs(values),
+            inputs = self._build_inputs(values)
+            # The entered values must be valid before the limiter sees them.
+            TrainModel.validate_inputs(dt, inputs)
+            outputs = self._link.step(
+                dt, self._limit(dt, inputs),
                 clear_passenger_brake=clear_passenger_brake,
             )
         except (ValueError, InvalidTimeStepError, LinkError) as exc:
+            self._limiter.state, self._limiting = limiter_state, limiting
             self.setRunning(False)
             self._set_input_error(str(exc))
             return False
         # A boarding count is consumed by the step that carries it.
         self._accepted = dict(values, passengers_boarded=0)
+        if self._track is not None and self._track.follow(
+                outputs.track.offset_m):
+            self._accepted |= self._track.inputs()
         self._tick += 1
         self._sync_inputs()
         self.runControlChanged.emit()
         return True
+
+    def _initial_commands(self) -> dict[str, Any]:
+        # The loaded track supplies the track rows for its first block.
+        values = dict(_INITIAL_COMMANDS)
+        if self._track is not None:
+            values |= self._track.inputs()
+        return values
+
+    def _speed_cap_mps(self, speed_limit_mps: float) -> float:
+        # A speed limit of 0 means none has been entered.
+        if speed_limit_mps > 0.0:
+            return min(self._v_max_mps, speed_limit_mps)
+        return self._v_max_mps
+
+    def _limit(self, dt: float, inputs: TrainModelInputs) -> TrainModelInputs:
+        # Stand in for the Train Controller's speed regulation: lower the
+        # entered power, and brake if needed, to hold the speed cap.
+        outputs = self._link.outputs
+        speed = outputs.controller.actual_speed_mps if outputs else 0.0
+        cmd = inputs.controller
+        limited = self._limiter.apply(
+            dt,
+            self._speed_cap_mps(inputs.track.track_info.speed_limit_mps),
+            speed,
+            cmd.power_cmd_w,
+            cmd.service_brake,
+        )
+        self._limiting = limited.limiting
+        return dataclasses.replace(inputs, controller=dataclasses.replace(
+            cmd, power_cmd_w=limited.power_w,
+            service_brake=limited.service_brake,
+        ))
 
     @staticmethod
     def _build_inputs(values: dict[str, Any]) -> TrainModelInputs:

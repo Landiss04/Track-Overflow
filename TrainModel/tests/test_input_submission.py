@@ -162,8 +162,10 @@ def test_live_inputs_and_outputs_convert_after_a_send(pair):
     assert harness.displayInputValues["elevation"] == 328.084
     assert harness.displayInputValues["temperature_setpoint"] == 77
     out = {r["name"]: r for r in harness.outputs}
-    assert out["commanded_speed"]["value"] == 22.369
-    assert out["commanded_speed"]["unit"] == "mph"
+    # Passthroughs stay outputs of the module but leave the output table;
+    # the Train Model window shows them.
+    assert "commanded_speed" not in out
+    assert state.outputs().controller.commanded_speed_mps == 10.0
     assert out["speed_limit"]["value"] == 42.502
     assert out["cabin_temp"]["value"] == 68.003
     assert out["cabin_temp"]["unit"] == "°F"
