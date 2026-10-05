@@ -21,6 +21,8 @@ ColumnLayout {
     FieldLabel {
         Layout.fillWidth: true
         text: root.label.toUpperCase()
+        // Unlabeled in tables, where a header row names the column.
+        visible: root.label !== ""
     }
 
     ComboBox {

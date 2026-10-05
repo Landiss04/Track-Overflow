@@ -20,9 +20,11 @@ from ctc.interface import (  # noqa: E402
     BlockOccupancy,
     CrossingReport,
     CtcInputs,
+    CtcSnapshot,
     SwitchReport,
     TrackControllerInputs,
     TrackFailureReport,
+    TicketSales,
     TrackModelInputs,
     TrainReport,
 )
@@ -34,27 +36,39 @@ from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 HOST = Path(__file__).with_name("link_host.py")
 
 
+def _green(tickets: int) -> TrackModelInputs:
+    """Track Model inputs with Green line ticket sales."""
+    return TrackModelInputs((TicketSales("Green", tickets),))
+
+
+def _sold(snap: CtcSnapshot, line: str = "Green") -> int:
+    """Tickets sold so far on one line."""
+    return {t.line: t.tickets for t in snap.tickets_sold}[line]
+
+
 class WireTest(unittest.TestCase):
 
     def test_inputs_round_trip(self) -> None:
         inputs = CtcInputs(
             track_controller=TrackControllerInputs(
-                occupancy=(BlockOccupancy("A1", True),),
-                trains=(TrainReport("T1", "A1", 12.5, 8.0),),
-                switches=(SwitchReport("SW1", "reverse"),),
-                crossings=(CrossingReport("X1", "active"),),
-                failures=(TrackFailureReport("A5", "power"),),
+                occupancy=(BlockOccupancy("Green", "1", True),),
+                trains=(TrainReport("T1", "Green", "1", 12.5, 8.0),),
+                switches=(SwitchReport("Green", "12", "reverse"),),
+                crossings=(CrossingReport("Green", "19", "active"),),
+                failures=(TrackFailureReport("Red", "5", "power"),),
             ),
-            track_model=TrackModelInputs(3),
+            track_model=_green(3),
         )
         self.assertEqual(inputs_from_wire(to_wire(inputs)), inputs)
 
     def test_snapshot_round_trip(self) -> None:
         ctc = StubCtcOffice()
-        ctc.dispatch("T1", "A9")
-        ctc.set_block_closed("C2", True)
+        ctc.dispatch("T1", "Green", "65", 30600.0)
+        ctc.set_block_closed("Red", "2", True)
+        ctc.set_maintenance_mode(True)
+        ctc.set_switch("Green", "12", "reverse")
         ctc.set_clock_speedup(True)
-        ctc.step(0.1, CtcInputs(track_model=TrackModelInputs(4)))
+        ctc.step(0.1, CtcInputs(track_model=_green(4)))
         snap = ctc.snapshot()
         self.assertEqual(snapshot_from_wire(to_wire(snap)), snap)
 
@@ -88,11 +102,39 @@ class SocketLinkTest(unittest.TestCase):
             time.sleep(0.01)
 
     def test_requests_reach_the_remote_module(self) -> None:
-        self.link.dispatch("T1", "A9")
-        out = self.link.step(0.1, CtcInputs(track_model=TrackModelInputs(5)))
+        self.link.dispatch("T1", "Green", "65", 30600.0)
+        self.link.set_block_closed("Red", "2", True)
+        out = self.link.step(0.1, CtcInputs(track_model=_green(5)))
         (suggestion,) = out.track_controller.suggestions
-        self.assertEqual(suggestion.authority_block_id, "A9")
-        self.assertEqual(self.link.snapshot().tickets_sold_total, 5)
+        self.assertEqual(suggestion.authority_block_id, "65")
+        # Still an int after the JSON round trip.
+        self.assertIs(type(suggestion.suggested_speed_mps), int)
+        snap = self.link.snapshot()
+        self.assertEqual(_sold(snap), 5)
+        self.assertEqual(snap.orders[0].arrival_s, 30600.0)
+        self.assertEqual(
+            snap.outputs.track_controller.closed_blocks[0].line, "Red")
+
+    def test_set_inputs_without_a_clock_steps_once(self) -> None:
+        # The headless host has no clock, so new inputs take one tick.
+        self.link.set_inputs(CtcInputs(track_model=_green(3)))
+        snap = self.link.snapshot()
+        self.assertEqual(_sold(snap), 3)
+        self.assertAlmostEqual(snap.elapsed_s, 0.1)
+
+    def test_switch_commands_cross_the_link(self) -> None:
+        with self.assertRaises(RemoteCtcError):
+            self.link.set_switch("Green", "12", "reverse")
+        self._wait(lambda: self.link.snapshot().outputs.track_controller
+                   .maintenance_mode)
+        self.link.set_switch("Green", "12", "reverse")
+        (command,) = (self.link.snapshot().outputs.track_controller
+                      .switch_commands)
+        self.assertEqual((command.switch_id, command.position),
+                         ("12", "reverse"))
+        self.link.release_switch("Green", "12")
+        self.assertEqual(self.link.snapshot().outputs.track_controller
+                         .switch_commands, ())
 
     def test_clock_speedup_reaches_the_remote_module(self) -> None:
         self.link.set_clock_speedup(True)
@@ -106,7 +148,7 @@ class SocketLinkTest(unittest.TestCase):
 
     def test_remote_rejection_is_reported(self) -> None:
         with self.assertRaises(RemoteCtcError):
-            self.link.dispatch("", "A1")
+            self.link.dispatch("T1", "Red", "150")
 
     def test_pushed_change_arrives(self) -> None:
         # The host turns maintenance mode on by itself after 1.5 s.

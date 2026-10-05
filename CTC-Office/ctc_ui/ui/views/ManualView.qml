@@ -8,6 +8,8 @@ ColumnLayout {
     id: root
 
     property string selectedTrainId: ""
+    // The CtcHost from __main__.py.
+    property var host: null
     signal clearSelectionRequested()
 
     spacing: theme.space_3
@@ -24,6 +26,7 @@ ColumnLayout {
     DispatchPanel {
         Layout.fillWidth: true
         Layout.preferredHeight: implicitHeight
+        host: root.host
     }
 
     RowLayout {
@@ -36,6 +39,8 @@ ColumnLayout {
             Layout.fillHeight: true
             Layout.preferredWidth: 343
             trainId: root.selectedTrainId
+            host: root.host
+            canReroute: true
             onClearRequested: root.clearSelectionRequested()
         }
 
@@ -44,6 +49,7 @@ ColumnLayout {
             Layout.fillHeight: true
             Layout.preferredWidth: 405
             showLineTable: false
+            host: root.host
         }
     }
 }

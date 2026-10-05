@@ -21,7 +21,19 @@ ScaledWindow {
         onInputEdited: function (name, value) {
             harness.setInput(name, value);
         }
+        lineNames: harness.lineNames
+        layoutOptions: harness.layoutOptions
+        onEntryAddRequested: function (name) { harness.addEntry(name); }
+        onEntryRemoveRequested: function (name, index) {
+            harness.removeEntry(name, index);
+        }
+        onEntryFieldEdited: function (name, index, key, value) {
+            harness.setEntryField(name, index, key, value);
+        }
         onSendInputsRequested: harness.send()
+        onInputChoiceEdited: function (name, choice) {
+            harness.setInputChoice(name, choice);
+        }
         onResetInputsRequested: harness.resetInputs()
         clockConnected: ctcClock.connected
         clockTime: ctcClock.timeText

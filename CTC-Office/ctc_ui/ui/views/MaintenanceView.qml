@@ -7,6 +7,9 @@ import "../panels"
 ColumnLayout {
     id: root
 
+    // The CtcHost from __main__.py.
+    property var host: null
+
     spacing: theme.space_3
 
     Callout {
@@ -14,8 +17,8 @@ ColumnLayout {
         variant: "warning"
         heading: qsTr("Maintenance mode")
         body: qsTr("Dispatching is suspended on affected blocks. You set "
-            + "switch positions and block closures by hand. Every command "
-            + "here is confirmed before it is sent to the track controller.")
+            + "switch positions and block closures by hand. Switch "
+            + "commands are released when you leave Maintenance.")
     }
 
     RowLayout {
@@ -26,12 +29,14 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 1
+            host: root.host
         }
 
         SwitchPanel {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 1
+            host: root.host
         }
     }
 
@@ -44,12 +49,14 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 343
+            host: root.host
         }
 
         ThroughputPanel {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredWidth: 405
+            host: root.host
         }
     }
 }

@@ -12,12 +12,16 @@ from typing import Any, Mapping
 
 from ctc.interface import (
     BlockOccupancy,
+    BlockRef,
     CrossingReport,
     CtcInputs,
     CtcOutputs,
     CtcSnapshot,
+    DispatchOrder,
     QueuedTrain,
+    SwitchCommand,
     SwitchReport,
+    TicketSales,
     TrackControllerInputs,
     TrackControllerOutputs,
     TrackFailureReport,
@@ -46,7 +50,10 @@ def inputs_from_wire(data: Mapping[str, Any]) -> CtcInputs:
             failures=tuple(TrackFailureReport(**f)
                            for f in track.get("failures", ())),
         ),
-        track_model=TrackModelInputs(**data.get("track_model", {})),
+        track_model=TrackModelInputs(
+            ticket_sales=tuple(
+                TicketSales(**t) for t in
+                data.get("track_model", {}).get("ticket_sales", ()))),
     )
 
 
@@ -56,7 +63,11 @@ def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
         track_controller=TrackControllerOutputs(
             suggestions=tuple(TrainSuggestion(**s)
                               for s in track.get("suggestions", ())),
-            closed_block_ids=tuple(track.get("closed_block_ids", ())),
+            closed_blocks=tuple(BlockRef(**b)
+                                for b in track.get("closed_blocks", ())),
+            switch_commands=tuple(
+                SwitchCommand(**c)
+                for c in track.get("switch_commands", ())),
             maintenance_mode=bool(track.get("maintenance_mode", False)),
         ),
         clock_speedup=bool(data.get("clock_speedup", False)),
@@ -69,7 +80,9 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         outputs=outputs_from_wire(data.get("outputs", {})),
         inputs=None if inputs is None else inputs_from_wire(inputs),
         elapsed_s=float(data.get("elapsed_s", 0.0)),
-        tickets_sold_total=int(data.get("tickets_sold_total", 0)),
+        tickets_sold=tuple(TicketSales(**t)
+                           for t in data.get("tickets_sold", ())),
         queued_trains=tuple(QueuedTrain(**q)
                             for q in data.get("queued_trains", ())),
+        orders=tuple(DispatchOrder(**o) for o in data.get("orders", ())),
     )

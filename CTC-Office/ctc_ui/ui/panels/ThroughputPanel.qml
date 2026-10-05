@@ -1,5 +1,7 @@
-// Throughput metrics: headline readouts, a 12-hour history chart
-// placeholder, and an optional per-line breakdown.
+// Throughput metrics: headline readouts (trains per hour, then tickets
+// per hour on each line, from Track Model ticket sales), tickets sold in
+// each of the last 12 simulated hours per line, and an optional per-line
+// breakdown.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -8,7 +10,14 @@ Panel {
     id: root
 
     property bool showLineTable: true
-    property var lineRows: []
+    // The CtcHost from __main__.py.
+    property var host: null
+    readonly property var lineRows: host ? host.throughputRows : []
+
+    function ticketsPerHour(line) {
+        return root.host && root.host.throughput[line] !== undefined
+            ? root.host.throughput[line] : "—";
+    }
 
     title: qsTr("Throughput metrics")
 
@@ -25,31 +34,25 @@ Panel {
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            label: qsTr("Tickets")
+            // Tickets per hour; the per-line table below says so.
+            label: qsTr("Red line")
+            value: root.ticketsPerHour("Red")
             unit: "/hr"
         }
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            label: qsTr("On time")
-            unit: "%"
+            label: qsTr("Green line")
+            value: root.ticketsPerHour("Green")
+            unit: "/hr"
         }
     }
 
     FieldLabel { text: qsTr("THROUGHPUT, LAST 12 HOURS") }
 
-    // Hourly bar chart renders here.
-    Rectangle {
+    ThroughputHistory {
         Layout.fillWidth: true
-        implicitHeight: theme.space_7 + theme.space_5
-        color: theme.bg_sunken
-        radius: theme.radius_md
-
-        HelperText {
-            anchors.centerIn: parent
-            text: qsTr("No throughput data yet")
-            color: theme.text_muted
-        }
+        history: root.host ? root.host.throughputHistory : null
     }
 
     DataTable {

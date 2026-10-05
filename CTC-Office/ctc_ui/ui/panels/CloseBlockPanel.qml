@@ -8,10 +8,10 @@ import "../../../../ui"
 Panel {
     id: root
 
-    property var lineOptions: []
-    property var blockOptions: []
-
-    signal closeBlockRequested(string line, string block)
+    // The CtcHost from __main__.py.
+    property var host: null
+    property string message: ""
+    property bool messageIsError: false
 
     title: qsTr("Close block for maintenance")
 
@@ -23,7 +23,7 @@ Panel {
             id: lineSelect
             Layout.preferredWidth: 120
             label: qsTr("Line")
-            model: root.lineOptions
+            model: root.host ? root.host.lineNames : []
             currentIndex: -1
         }
 
@@ -31,7 +31,8 @@ Panel {
             id: blockSelect
             Layout.fillWidth: true
             label: qsTr("Block")
-            model: root.blockOptions
+            model: root.host && lineSelect.currentIndex >= 0
+                ? root.host.blockOptions(lineSelect.currentValue) : []
             currentIndex: -1
         }
     }
@@ -39,10 +40,13 @@ Panel {
     HelperText {
         Layout.fillWidth: true
         Layout.topMargin: theme.space_5 - theme.space_3
+        color: !closeButton.armed && root.messageIsError
+            ? theme.danger : theme.text_secondary
         text: closeButton.armed
             ? qsTr("Close %1 %2? No train will be given authority over "
                 + "it, and queued runs that use it will be re-routed.")
                 .arg(lineSelect.currentValue).arg(blockSelect.currentValue)
+            : root.message !== "" ? root.message
             : qsTr("Select a line and block to close.")
     }
 
@@ -52,8 +56,14 @@ Panel {
         label: qsTr("Close block")
         confirmLabel: qsTr("Yes, close block")
         enabled: lineSelect.currentIndex >= 0 && blockSelect.currentIndex >= 0
-        onConfirmed: root.closeBlockRequested(lineSelect.currentValue,
-            blockSelect.currentValue)
+        onConfirmed: {
+            const error = root.host.closeBlock(lineSelect.currentValue,
+                blockSelect.currentValue);
+            root.messageIsError = error !== "";
+            root.message = error !== "" ? error
+                : qsTr("%1 %2 closed.").arg(lineSelect.currentValue)
+                    .arg(blockSelect.currentValue);
+        }
     }
 
     Item { Layout.fillHeight: true }

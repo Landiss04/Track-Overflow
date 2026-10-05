@@ -1,35 +1,39 @@
 """Test harness state for the CTC Office test UI.
 
-The harness stands in for the Track Controller, the Track Model and
-the clock, so the CTC Office can be run on its own. It reaches the
-module only through its boundary, over a link (``ctc/link.py``): each
-Send builds ``CtcInputs`` from the input rows, applies the dispatcher
-rows, advances one fixed tick, and shows only the returned
-``CtcOutputs``.
+The harness stands in for the Track Controller and the Track Model, so
+the CTC Office can be run on its own. It reaches the module only
+through its boundary, over a link (``ctc/link.py``): each Send builds
+``CtcInputs`` from the input rows, applies the dispatcher rows, and
+hands the inputs over. Connected to the CTC window, the window's clock
+steps the module with them every tick; standalone, Send steps one fixed
+tick. The outputs table shows only the module's ``CtcOutputs``.
 
-Rows are ``{name, kind, value, unit}`` dicts for ``SignalRow``. Lists of
-blocks, trains, switches and so on are entered as one text row each, in
-the formats in ``INPUT_FORMATS``. Values are shown in display units
-(mph, ft) and converted to backend SI units at this layer, per
-``truth/conventions/units.md``.
+Rows are dicts for the test UI. Scalar rows are ``{name, kind, value,
+unit}`` for ``SignalRow``. A list row (blocks, trains, switches, ...)
+has ``kind`` ``"list"``, a ``fields`` schema and its ``entries``, one
+dict per entry keyed by field. Lines, blocks, switches and crossings are
+picked from the track layout, so every reference names a real place;
+block numbers repeat across lines, so each entry picks its line first.
+Values are shown in display units (mph, ft) and converted to backend SI
+units at this layer, per ``truth/conventions/units.md``.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Any, get_args
+from typing import Any, Mapping
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from ctc.interface import (
     BlockOccupancy,
     CrossingReport,
-    CrossingState,
     CtcInputs,
     CtcOutputs,
-    SwitchPosition,
+    CtcSnapshot,
+    DispatchOrder,
     SwitchReport,
-    TrackFailureKind,
+    TicketSales,
     TrackFailureReport,
     TrackModelInputs,
     TrainReport,
@@ -37,166 +41,290 @@ from ctc.interface import (
 )
 from ctc.link import CtcLink, LocalLink
 from ctc.model import CtcError
+from ctc.track_layout import Line, load_layout
+from ctc_ui.display import (
+    M_TO_FT,
+    MPS_TO_MPH,
+    TimeOfDayError,
+    block_key,
+    format_time_of_day,
+    parse_time_of_day,
+)
 
-#: Fixed simulated seconds per tick (decision D006), matching the shared
-#: clock's default and the Train Model harness.
-DT_S = 0.1
+__all__ = ["CtcTestHarness", "HarnessInputError", "MPS_TO_MPH",
+           "M_TO_FT", "build_inputs", "output_rows"]
 
-MPS_TO_MPH = 2.236936
-M_TO_FT = 3.280840
+Entry = dict[str, Any]
 
-#: Input rows from the neighboring modules, with their defaults.
+#: Input rows from the neighboring modules: (kind, default, unit).
 INPUT_DEFAULTS: dict[str, tuple[str, Any, str]] = {
-    "occupied_blocks": ("string", "", ""),
-    "train_reports": ("string", "", "ft, mph"),
-    "switch_states": ("string", "", ""),
-    "crossing_states": ("string", "", ""),
-    "track_failures": ("string", "", ""),
+    "occupied_blocks": ("list", (), ""),
+    "train_reports": ("list", (), "ft, mph"),
+    "switch_states": ("list", (), ""),
+    "crossing_states": ("list", (), ""),
+    "track_failures": ("list", (), ""),
     "ticket_sales": ("int", 0, "tickets"),
 }
 
 #: Dispatcher rows: stand-ins for the CTC UI's own actions.
 DISPATCHER_DEFAULTS: dict[str, tuple[str, Any, str]] = {
-    "dispatch_orders": ("string", "", ""),
-    "closed_blocks": ("string", "", ""),
+    "dispatch_orders": ("list", (), ""),
+    "closed_blocks": ("list", (), ""),
+    "switch_commands": ("list", (), ""),
     "maintenance_mode": ("bool", False, ""),
     "clock_speedup": ("bool", False, ""),
+}
+
+#: Rows that also pick one of a few choices, shown as a dropdown in the
+#: same row: ticket sales are for one line at a time.
+INPUT_CHOICES: dict[str, tuple[str, ...]] = {
+    "ticket_sales": ("Green", "Red"),
 }
 
 #: Dispatcher rows the CTC UI owns when it is attached.
 _CTC_UI_OWNED = frozenset({"maintenance_mode", "clock_speedup"})
 
-#: How each text row is written. Shown in the test UI.
-INPUT_FORMATS: dict[str, str] = {
-    "occupied_blocks": "block IDs, comma-separated: A1, A2",
-    "train_reports": "train:block:offset ft:speed mph; ...  T1:A3:40:25",
-    "switch_states": "switch=normal|reverse; ...  SW1=reverse",
-    "crossing_states": "crossing=inactive|active; ...  X1=active",
+#: Dispatcher rows that mirror the module until edited.
+_MIRRORED = ("dispatch_orders", "closed_blocks", "switch_commands")
+
+#: Field types whose options come from the track layout, per line.
+_LAYOUT_TYPES = ("block", "switch", "crossing")
+
+
+def _field(key: str, label: str, kind: str, width: int,
+           options: tuple[tuple[str, str], ...] = ()) -> dict[str, Any]:
+    """One column of a list row.
+
+    ``kind`` is ``line``, ``block``, ``switch``, ``crossing`` (picked
+    from the layout), ``choice`` (picked from ``options``, value and
+    text pairs), ``text`` or ``number``.
+    """
+    return {"key": key, "label": label, "kind": kind, "width": width,
+            "options": [{"value": v, "text": t} for v, t in options]}
+
+
+# Widths fit each dropdown's longest option beside its arrow.
+_LINE = _field("line", "Line", "line", 112)
+_BLOCK = _field("block", "Block", "block", 176)
+_TRAIN = _field("train", "Train", "text", 72)
+_POSITION = _field("position", "Position", "choice", 124,
+                   (("normal", "Normal"), ("reverse", "Reverse")))
+_SWITCH = _field("switch", "Switch", "switch", 204)
+
+#: Columns of each list row.
+LIST_FIELDS: dict[str, tuple[dict[str, Any], ...]] = {
+    "occupied_blocks": (_LINE, _BLOCK),
+    "train_reports": (
+        _TRAIN, _LINE, _BLOCK,
+        _field("offset_ft", "Offset ft", "number", 80),
+        _field("speed_mph", "Speed mph", "number", 80)),
+    "switch_states": (_LINE, _SWITCH, _POSITION),
+    "crossing_states": (
+        _LINE, _field("crossing", "Crossing", "crossing", 104),
+        _field("state", "State", "choice", 124,
+               (("inactive", "Inactive"), ("active", "Active")))),
     "track_failures": (
-        "block=broken_rail|track_circuit|power; ...  A5=broken_rail"),
-    "dispatch_orders": "train=destination block; ...  T1=A9",
-    "closed_blocks": "block IDs, comma-separated: A5, A6",
+        _LINE, _BLOCK,
+        _field("kind", "Failure", "choice", 156,
+               (("broken_rail", "Broken rail"),
+                ("track_circuit", "Track circuit"),
+                ("power", "Power")))),
+    "dispatch_orders": (
+        _TRAIN, _LINE, _BLOCK,
+        _field("arrival", "Arrive (HH:MM)", "text", 112)),
+    "closed_blocks": (_LINE, _BLOCK),
+    "switch_commands": (_LINE, _SWITCH, _POSITION),
+}
+
+#: What each row is. Shown in the test UI under the row's name.
+ROW_HINTS: dict[str, str] = {
+    "occupied_blocks": "Blocks the Track Controller reports occupied.",
+    "train_reports": "Where each train is and how fast it is going.",
+    "switch_states": "Switch positions the Track Controller reports. "
+                     "Normal is the first connection in the layout file.",
+    "crossing_states": "Railway crossings and whether they are active.",
+    "track_failures": "Failed blocks the Track Controller reports.",
+    "ticket_sales": "Tickets sold on the line picked beside it.",
+    "dispatch_orders": "Where each train is sent; arrival is optional.",
+    "closed_blocks": "Blocks closed for maintenance.",
+    "switch_commands": "Switch positions the CTC sets (maintenance mode "
+                       "only).",
+}
+
+
+#: What one entry of a list row is, for its "+ Add" button.
+ROW_NOUNS: dict[str, str] = {
+    "occupied_blocks": "block",
+    "train_reports": "train",
+    "switch_states": "switch",
+    "crossing_states": "crossing",
+    "track_failures": "failure",
+    "dispatch_orders": "order",
+    "closed_blocks": "block",
+    "switch_commands": "command",
 }
 
 
 class HarnessInputError(ValueError):
-    """A row could not be parsed into a boundary value."""
+    """A row could not be turned into a boundary value."""
 
 
-def _ids(text: str) -> list[str]:
-    return [part.strip() for part in text.split(",") if part.strip()]
+def layout_options(
+    layout: Mapping[str, Line],
+) -> dict[str, dict[str, list[dict[str, str]]]]:
+    """Options per layout field type, per line: blocks (with station
+    names), switches (with their connections) and crossings."""
+    options: dict[str, dict[str, list[dict[str, str]]]] = {
+        kind: {} for kind in _LAYOUT_TYPES}
+    for name, line in layout.items():
+        options["block"][name] = [
+            {"value": b.block_id,
+             "text": b.block_id + (f" · {b.station.title()}"
+                                   if b.station else "")}
+            for b in line.blocks]
+        options["switch"][name] = [
+            {"value": b.block_id, "text": f"{b.block_id} ({b.switch})"}
+            for b in line.blocks if b.switch]
+        options["crossing"][name] = [
+            {"value": b.block_id, "text": b.block_id}
+            for b in line.blocks if b.railway_crossing]
+    return options
 
 
-def _entries(text: str) -> list[str]:
-    return [part.strip() for part in text.split(";") if part.strip()]
+def _text(entry: Entry, key: str) -> str:
+    return str(entry.get(key, "")).strip()
 
 
-def _pairs(text: str, row: str, allowed: tuple[str, ...]) -> list[
-    tuple[str, str]
-]:
-    pairs = []
-    for entry in _entries(text):
-        key, sep, value = entry.partition("=")
-        key, value = key.strip(), value.strip()
-        if not sep or not key or value not in allowed:
-            raise HarnessInputError(
-                f"{row}: '{entry}' must be id=" + "|".join(allowed))
-        pairs.append((key, value))
-    return pairs
-
-
-def _number(text: str, row: str, what: str) -> float:
+def _number(entry: Entry, key: str, where: str) -> float:
     try:
-        value = float(text)
-    except ValueError:
+        value = float(entry.get(key, 0))
+    except (TypeError, ValueError):
         raise HarnessInputError(
-            f"{row}: {what} '{text}' is not a number") from None
+            f"{where}: {key} '{entry.get(key)}' is not a number") from None
     if not math.isfinite(value):
-        raise HarnessInputError(f"{row}: {what} must be finite")
+        raise HarnessInputError(f"{where}: {key} must be finite")
     return value
 
 
-def parse_train_reports(text: str) -> tuple[TrainReport, ...]:
-    """Parse ``train:block:offset_ft:speed_mph; ...`` into reports.
-
-    Offsets and speeds are converted from display units to SI.
-    """
-    reports = []
-    for entry in _entries(text):
-        parts = [part.strip() for part in entry.split(":")]
-        if len(parts) != 4 or not all(parts[:2]):
-            raise HarnessInputError(
-                f"train_reports: '{entry}' must be "
-                "train:block:offset ft:speed mph")
-        train_id, block_id, offset_ft, speed_mph = parts
-        reports.append(TrainReport(
-            train_id=train_id,
-            block_id=block_id,
-            offset_m=_number(offset_ft, "train_reports", "offset") / M_TO_FT,
-            speed_mps=(
-                _number(speed_mph, "train_reports", "speed") / MPS_TO_MPH),
-        ))
-    return tuple(reports)
+def _where(row: str, index: int) -> str:
+    return f"{row} entry {index + 1}"
 
 
-def build_inputs(values: dict[str, Any]) -> CtcInputs:
-    """Turn input row values into ``CtcInputs``, or raise."""
-    switches = _pairs(values["switch_states"], "switch_states",
-                      get_args(SwitchPosition))
-    crossings = _pairs(values["crossing_states"], "crossing_states",
-                       get_args(CrossingState))
-    failures = _pairs(values["track_failures"], "track_failures",
-                      get_args(TrackFailureKind))
-    tickets = values["ticket_sales"]
-    if not isinstance(tickets, int) or tickets < 0:
+def _train(entry: Entry, where: str) -> str:
+    train_id = _text(entry, "train")
+    if not train_id:
+        raise HarnessInputError(f"{where}: enter a train ID")
+    return train_id
+
+
+def build_inputs(lists: Mapping[str, list[Entry]], tickets: Any,
+                 ticket_line: str = "Green") -> CtcInputs:
+    """Turn list-row entries and ticket sales into ``CtcInputs``."""
+    if (isinstance(tickets, bool) or not isinstance(tickets, int)
+            or tickets < 0):
         raise HarnessInputError("ticket_sales must be a whole number >= 0")
+    trains = []
+    for i, e in enumerate(lists["train_reports"]):
+        where = _where("train_reports", i)
+        trains.append(TrainReport(
+            train_id=_train(e, where), line=e["line"], block_id=e["block"],
+            offset_m=_number(e, "offset_ft", where) / M_TO_FT,
+            speed_mps=_number(e, "speed_mph", where) / MPS_TO_MPH))
     return CtcInputs(
         track_controller=TrackControllerInputs(
-            occupancy=tuple(
-                BlockOccupancy(block_id, True)
-                for block_id in _ids(values["occupied_blocks"])),
-            trains=parse_train_reports(values["train_reports"]),
-            switches=tuple(
-                SwitchReport(switch_id, position)  # type: ignore[arg-type]
-                for switch_id, position in switches),
-            crossings=tuple(
-                CrossingReport(crossing_id, state)  # type: ignore[arg-type]
-                for crossing_id, state in crossings),
-            failures=tuple(
-                TrackFailureReport(block_id, kind)  # type: ignore[arg-type]
-                for block_id, kind in failures),
+            occupancy=tuple(BlockOccupancy(e["line"], e["block"], True)
+                            for e in lists["occupied_blocks"]),
+            trains=tuple(trains),
+            switches=tuple(SwitchReport(e["line"], e["switch"],
+                                        e["position"])
+                           for e in lists["switch_states"]),
+            crossings=tuple(CrossingReport(e["line"], e["crossing"],
+                                           e["state"])
+                            for e in lists["crossing_states"]),
+            failures=tuple(TrackFailureReport(e["line"], e["block"],
+                                              e["kind"])
+                           for e in lists["track_failures"]),
         ),
-        track_model=TrackModelInputs(ticket_sales=tickets),
+        track_model=TrackModelInputs(ticket_sales=(
+            (TicketSales(ticket_line, tickets),) if tickets else ())),
     )
 
 
-def output_rows(outputs: CtcOutputs, tickets_total: int,
+def build_orders(entries: list[Entry]) -> dict[str, DispatchOrder]:
+    """Dispatch order entries as orders by train; a later entry for the
+    same train wins."""
+    orders: dict[str, DispatchOrder] = {}
+    for i, e in enumerate(entries):
+        where = _where("dispatch_orders", i)
+        arrival_text = _text(e, "arrival")
+        try:
+            arrival = (parse_time_of_day(arrival_text) if arrival_text
+                       else None)
+        except TimeOfDayError as error:
+            raise HarnessInputError(f"{where}: {error}") from None
+        train_id = _train(e, where)
+        orders[train_id] = DispatchOrder(train_id, e["line"], e["block"],
+                                         arrival)
+    return orders
+
+
+def _mirror(snap: CtcSnapshot) -> dict[str, list[Entry]]:
+    """The mirrored dispatcher rows as the module has them now."""
+    track = snap.outputs.track_controller
+    return {
+        "dispatch_orders": [
+            {"train": o.train_id, "line": o.line,
+             "block": o.destination_block_id,
+             "arrival": ("" if o.arrival_s is None
+                         else format_time_of_day(o.arrival_s))}
+            for o in snap.orders],
+        "closed_blocks": [{"line": b.line, "block": b.block_id}
+                          for b in track.closed_blocks],
+        "switch_commands": [
+            {"line": c.line, "switch": c.switch_id, "position": c.position}
+            for c in track.switch_commands],
+    }
+
+
+def output_rows(outputs: CtcOutputs, tickets_sold: tuple[TicketSales, ...],
                 elapsed_s: float) -> list[dict[str, Any]]:
     """Rows for the outputs table, in display units."""
+    track = outputs.track_controller
     rows: list[dict[str, Any]] = []
-    for suggestion in outputs.track_controller.suggestions:
+    for suggestion in track.suggestions:
+        # The type column shows the boundary type (whole m/s); the value
+        # is shown in display units, mph.
         rows.append({
             "name": f"suggested_speed[{suggestion.train_id}]",
-            "kind": "float",
+            "kind": "int",
             "value": round(suggestion.suggested_speed_mps * MPS_TO_MPH, 1),
             "unit": "mph",
         })
         rows.append({
             "name": f"authority[{suggestion.train_id}]",
             "kind": "string",
-            "value": suggestion.authority_block_id,
+            "value": block_key(suggestion.line,
+                               suggestion.authority_block_id),
             "unit": "",
         })
     rows.append({
         "name": "closed_blocks",
         "kind": "string",
-        "value": ", ".join(outputs.track_controller.closed_block_ids),
+        "value": ", ".join(block_key(b.line, b.block_id)
+                           for b in track.closed_blocks),
+        "unit": "",
+    })
+    rows.append({
+        "name": "switch_commands",
+        "kind": "string",
+        "value": "; ".join(f"{block_key(c.line, c.switch_id)}={c.position}"
+                           for c in track.switch_commands),
         "unit": "",
     })
     rows.append({
         "name": "maintenance_mode",
         "kind": "bool",
-        "value": outputs.track_controller.maintenance_mode,
+        "value": track.maintenance_mode,
         "unit": "",
     })
     rows.append({
@@ -205,24 +333,39 @@ def output_rows(outputs: CtcOutputs, tickets_total: int,
         "value": outputs.clock_speedup,
         "unit": "",
     })
-    rows.append({"name": "tickets_sold_total", "kind": "int",
-                 "value": tickets_total, "unit": "tickets"})
+    for sale in tickets_sold:
+        rows.append({"name": f"tickets_sold[{sale.line}]", "kind": "int",
+                     "value": sale.tickets, "unit": "tickets"})
     rows.append({"name": "elapsed", "kind": "float",
                  "value": round(elapsed_s, 1), "unit": "s"})
     return rows
 
 
-def _rows(defaults: dict[str, tuple[str, Any, str]],
-          values: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        {"name": name, "kind": kind, "value": values[name], "unit": unit,
-         "hint": INPUT_FORMATS.get(name, "")}
-        for name, (kind, _default, unit) in defaults.items()
-    ]
+def _from_qml(kind: str, value: Any) -> Any:
+    """A row edit as Python expects it.
+
+    QML has one number type, so an int row's value arrives as a float
+    (10 as 10.0). A whole number becomes an int; anything else is kept
+    for ``build_inputs`` to reject.
+    """
+    if kind == "int" and isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def _default_choices() -> dict[str, str]:
+    return {name: options[0] for name, options in INPUT_CHOICES.items()}
 
 
 class CtcTestHarness(QObject):
-    """Bindable state behind ``TestHarnessView.qml``."""
+    """Bindable state behind ``TestHarnessView.qml``.
+
+    The orders, closed blocks and switch commands rows mirror the
+    module, so changes made in the CTC window show up here; once edited,
+    a row keeps the edit until Send applies it. Send makes the module
+    match every edited row and replaces the Track Controller and Track
+    Model inputs.
+    """
 
     inputsChanged = Signal()
     outputsChanged = Signal()
@@ -230,17 +373,21 @@ class CtcTestHarness(QObject):
     connectedChanged = Signal()
 
     def __init__(self, link: CtcLink | None = None,
+                 layout: Mapping[str, Line] | None = None,
                  parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._link: CtcLink = link if link is not None else LocalLink()
-        self._inputs = {name: d[1] for name, d in INPUT_DEFAULTS.items()}
-        self._dispatcher = {
-            name: d[1] for name, d in DISPATCHER_DEFAULTS.items()}
-        self._applied_orders: dict[str, str] = {}
-        self._applied_closed: set[str] = set()
+        self._layout = dict(load_layout() if layout is None else layout)
+        self._options = layout_options(self._layout)
+        self._values: dict[str, Any] = {}
+        self._choices: dict[str, str] = {}
+        self._reset_values()
+        # Mirrored rows edited since the last Send.
+        self._edited: set[str] = set()
         self._status = ""
         self._status_error = False
-        self._outputs = self._read_back()
+        self._outputs: list[dict[str, Any]] = []
+        self._refresh()
         # A socket link reports connection changes and pushes snapshots
         # when the CTC UI changes the module.
         for signal, slot in (("connectedChanged", self._on_connected),
@@ -249,21 +396,36 @@ class CtcTestHarness(QObject):
             if source is not None:
                 source.connect(slot)
 
+    def _reset_values(self) -> None:
+        self._values = {
+            name: list(default) if kind == "list" else default
+            for defaults in (INPUT_DEFAULTS, DISPATCHER_DEFAULTS)
+            for name, (kind, default, _unit) in defaults.items()}
+        self._choices = _default_choices()
+
     # -- Bindable properties ------------------------------------------
 
     @Property(list, notify=inputsChanged)
     def inputs(self) -> list[dict[str, Any]]:
-        return _rows(INPUT_DEFAULTS, self._inputs)
+        return self._rows(INPUT_DEFAULTS)
 
     @Property(list, notify=inputsChanged)
     def dispatcherInputs(self) -> list[dict[str, Any]]:  # noqa: N802
-        rows = _rows(DISPATCHER_DEFAULTS, self._dispatcher)
+        rows = self._rows(DISPATCHER_DEFAULTS)
         if self._link.ctc_ui_attached:
             # The CTC UI owns maintenance mode (operating mode) and
             # clock speedup (clock speed); they show in the outputs.
-            rows = [r for r in rows
-                    if r["name"] not in _CTC_UI_OWNED]
+            rows = [r for r in rows if r["name"] not in _CTC_UI_OWNED]
         return rows
+
+    @Property(list, constant=True)
+    def lineNames(self) -> list[str]:  # noqa: N802
+        return list(self._layout)
+
+    @Property(dict, constant=True)
+    def layoutOptions(self) -> dict[str, Any]:  # noqa: N802
+        """Options for block, switch and crossing fields, per line."""
+        return self._options
 
     @Property(list, notify=outputsChanged)
     def outputs(self) -> list[dict[str, Any]]:
@@ -283,31 +445,77 @@ class CtcTestHarness(QObject):
 
     # -- Edits --------------------------------------------------------
 
-    # Text edits are stored as drafts without re-publishing the rows, so
-    # the editor being typed in keeps its focus. A toggle, though, draws
-    # itself from its row's value, so bool edits re-publish the rows;
-    # clicking a toggle has already committed any text being edited.
+    # Typed edits (text and numbers) are stored without re-publishing the
+    # rows, so the editor being typed in keeps its focus. Anything drawn
+    # from the row's value (a toggle, a dropdown, the list of entries) is
+    # re-published; clicking it has already committed any typed text.
 
     @Slot(str, "QVariant")
     def setInput(self, name: str, value: Any) -> None:  # noqa: N802
-        """Stage an edit to an input row; applied on Send."""
-        if name in self._inputs:
-            self._inputs[name] = value
-            kind = INPUT_DEFAULTS[name][0]
-        elif name in self._dispatcher:
-            self._dispatcher[name] = value
-            kind = DISPATCHER_DEFAULTS[name][0]
-        else:
+        """Stage an edit to a scalar row; applied on Send."""
+        kind = self._kind(name)
+        if kind is None or kind == "list":
             return
+        self._values[name] = _from_qml(kind, value)
         if kind == "bool":
             self.inputsChanged.emit()
 
+    @Slot(str, str)
+    def setInputChoice(self, name: str,  # noqa: N802
+                       choice: str) -> None:
+        """Pick a row's choice, e.g. the line ticket sales are for."""
+        if choice in INPUT_CHOICES.get(name, ()):
+            self._choices[name] = choice
+            self.inputsChanged.emit()
+
+    @Slot(str)
+    def addEntry(self, name: str) -> None:  # noqa: N802
+        """Add an entry to a list row, filled with the first options."""
+        if self._kind(name) != "list":
+            return
+        entry = {field["key"]: self._default(field, name)
+                 for field in LIST_FIELDS[name]}
+        self._values[name].append(entry)
+        self._touched(name, republish=True)
+
+    @Slot(str, int)
+    def removeEntry(self, name: str, index: int) -> None:  # noqa: N802
+        if self._kind(name) != "list":
+            return
+        entries = self._values[name]
+        if 0 <= index < len(entries):
+            del entries[index]
+            self._touched(name, republish=True)
+
+    @Slot(str, int, str, "QVariant")
+    def setEntryField(self, name: str, index: int,  # noqa: N802
+                      key: str, value: Any) -> None:
+        """Change one field of one entry of a list row."""
+        if self._kind(name) != "list":
+            return
+        entries = self._values[name]
+        field = next((f for f in LIST_FIELDS[name] if f["key"] == key),
+                     None)
+        if field is None or not 0 <= index < len(entries):
+            return
+        entry = entries[index]
+        entry[key] = value
+        if field["kind"] == "line":
+            # A new line has different blocks, switches and crossings.
+            for other in LIST_FIELDS[name]:
+                if other["kind"] in _LAYOUT_TYPES:
+                    entry[other["key"]] = self._default(other, name,
+                                                        line=value)
+        self._touched(name,
+                      republish=field["kind"] not in ("text", "number"))
+
     @Slot()
     def resetInputs(self) -> None:  # noqa: N802
-        """Restore every input and dispatcher row to its default."""
-        self._inputs = {name: d[1] for name, d in INPUT_DEFAULTS.items()}
-        self._dispatcher = {
-            name: d[1] for name, d in DISPATCHER_DEFAULTS.items()}
+        """Restore every row to its default and re-mirror the
+        dispatcher rows."""
+        self._reset_values()
+        self._edited.clear()
+        self._refresh()
         self.inputsChanged.emit()
         self._set_status("Inputs reset. Send to apply them.", False)
 
@@ -315,63 +523,145 @@ class CtcTestHarness(QObject):
 
     @Slot()
     def send(self) -> None:
-        """Apply dispatcher rows, then step the module one tick."""
+        """Apply the edited dispatcher rows, then the inputs."""
         try:
-            inputs = build_inputs(self._inputs)
-            orders = self._parse_orders()
-            closed = set(_ids(self._dispatcher["closed_blocks"]))
-            self._apply_dispatcher(orders, closed)
-            self._link.step(DT_S, inputs)
+            inputs = build_inputs(self._values, self._values["ticket_sales"],
+                                  self._choices["ticket_sales"])
+            self._apply_dispatcher()
+            self._link.set_inputs(inputs)
         except (HarnessInputError, CtcError) as error:
             self._set_status(str(error), True)
+            self._refresh()
             return
-        self._outputs = self._read_back()
-        self.outputsChanged.emit()
-        self._set_status(f"Sent. Stepped {DT_S:g} s.", False)
+        self._edited.clear()
+        self._refresh()
+        self.inputsChanged.emit()
+        if self._link.ctc_ui_attached:
+            self._set_status("Sent. The CTC window's clock applies the "
+                             "inputs on every tick while it runs.", False)
+        else:
+            self._set_status("Sent. Stepped one 0.1 s tick.", False)
 
     # -- Internals ----------------------------------------------------
 
-    def _parse_orders(self) -> dict[str, str]:
-        orders: dict[str, str] = {}
-        for entry in _entries(self._dispatcher["dispatch_orders"]):
-            train_id, sep, block_id = (p.strip() for p in entry.partition("="))
-            if not sep or not train_id or not block_id:
-                raise HarnessInputError(
-                    f"dispatch_orders: '{entry}' must be train=block")
-            orders[train_id] = block_id
-        return orders
+    def _kind(self, name: str) -> str | None:
+        for defaults in (INPUT_DEFAULTS, DISPATCHER_DEFAULTS):
+            if name in defaults:
+                return defaults[name][0]
+        return None
 
-    def _apply_dispatcher(self, orders: dict[str, str],
-                          closed: set[str]) -> None:
-        """Send only what changed since the last Send."""
-        for train_id in self._applied_orders.keys() - orders.keys():
-            self._link.cancel_dispatch(train_id)
-        for train_id, block_id in orders.items():
-            if self._applied_orders.get(train_id) != block_id:
-                self._link.dispatch(train_id, block_id)
-        for block_id in self._applied_closed - closed:
-            self._link.set_block_closed(block_id, False)
-        for block_id in closed - self._applied_closed:
-            self._link.set_block_closed(block_id, True)
+    def _rows(self, defaults: dict[str, tuple[str, Any, str]]
+              ) -> list[dict[str, Any]]:
+        rows = []
+        for name, (kind, _default, unit) in defaults.items():
+            row: dict[str, Any] = {
+                "name": name, "kind": kind, "unit": unit,
+                "hint": ROW_HINTS.get(name, "")}
+            if kind == "list":
+                row["fields"] = list(LIST_FIELDS[name])
+                row["noun"] = ROW_NOUNS[name]
+                # Copies, so QML never holds the harness's own dicts.
+                row["entries"] = [dict(e) for e in self._values[name]]
+            else:
+                row["value"] = self._values[name]
+            if name in self._choices:
+                row["choices"] = list(INPUT_CHOICES[name])
+                row["choice"] = self._choices[name]
+            rows.append(row)
+        return rows
+
+    def _default(self, field: dict[str, Any], row: str,
+                 line: str | None = None) -> Any:
+        """The value a new entry starts with in one field."""
+        first_line = next(iter(self._layout))
+        kind = field["kind"]
+        if kind == "line":
+            return first_line
+        if kind in _LAYOUT_TYPES:
+            options = self._options[kind].get(line or first_line, [])
+            return options[0]["value"] if options else ""
+        if kind == "choice":
+            return field["options"][0]["value"]
+        if kind == "number":
+            return 0.0
+        if field["key"] == "train":
+            return self._next_train(row)
+        return ""
+
+    def _next_train(self, row: str) -> str:
+        used = {_text(e, "train") for e in self._values[row]}
+        number = 1
+        while f"T{number}" in used:
+            number += 1
+        return f"T{number}"
+
+    def _touched(self, name: str, republish: bool) -> None:
+        if name in _MIRRORED:
+            self._edited.add(name)
+        if republish:
+            self.inputsChanged.emit()
+
+    def _apply_dispatcher(self) -> None:
+        """Make the module match every edited dispatcher row."""
+        snap = self._link.snapshot()
+        track = snap.outputs.track_controller
         if not self._link.ctc_ui_attached:
+            # First, so switch commands sent with it are accepted.
             self._link.set_maintenance_mode(
-                bool(self._dispatcher["maintenance_mode"]))
+                bool(self._values["maintenance_mode"]))
             self._link.set_clock_speedup(
-                bool(self._dispatcher["clock_speedup"]))
-        self._applied_orders = orders
-        self._applied_closed = closed
+                bool(self._values["clock_speedup"]))
+        if "dispatch_orders" in self._edited:
+            wanted = build_orders(self._values["dispatch_orders"])
+            current = {o.train_id: o for o in snap.orders}
+            for train_id in current.keys() - wanted.keys():
+                self._link.cancel_dispatch(train_id)
+            for train_id, order in wanted.items():
+                if current.get(train_id) != order:
+                    self._link.dispatch(train_id, order.line,
+                                        order.destination_block_id,
+                                        order.arrival_s)
+        if "closed_blocks" in self._edited:
+            wanted_blocks = {(e["line"], e["block"])
+                             for e in self._values["closed_blocks"]}
+            closed = {(b.line, b.block_id) for b in track.closed_blocks}
+            for line, block_id in closed - wanted_blocks:
+                self._link.set_block_closed(line, block_id, False)
+            for line, block_id in wanted_blocks - closed:
+                self._link.set_block_closed(line, block_id, True)
+        if "switch_commands" in self._edited:
+            wanted_switches = {(e["line"], e["switch"]): e["position"]
+                               for e in self._values["switch_commands"]}
+            commanded = {(c.line, c.switch_id): c.position
+                         for c in track.switch_commands}
+            for line, switch_id in commanded.keys() - wanted_switches:
+                self._link.release_switch(line, switch_id)
+            for (line, switch_id), position in wanted_switches.items():
+                if commanded.get((line, switch_id)) != position:
+                    self._link.set_switch(line, switch_id, position)
 
-    def _read_back(self) -> list[dict[str, Any]]:
+    def _refresh(self) -> None:
+        """Read the module back: outputs, and unedited mirrored rows."""
         try:
             snap = self._link.snapshot()
         except CtcError:
-            return []           # not connected yet
-        return output_rows(snap.outputs, snap.tickets_sold_total,
-                           snap.elapsed_s)
+            self._outputs = []           # not connected yet
+            self.outputsChanged.emit()
+            return
+        self._outputs = output_rows(snap.outputs, snap.tickets_sold,
+                                    snap.elapsed_s)
+        self.outputsChanged.emit()
+        mirrored = {name: entries for name, entries in _mirror(snap).items()
+                    if name not in self._edited}
+        if any(self._values[name] != entries
+               for name, entries in mirrored.items()):
+            self._values.update(mirrored)
+            self.inputsChanged.emit()
 
     def _on_connected(self) -> None:
         self.connectedChanged.emit()
-        self._on_snapshot()
+        self.inputsChanged.emit()
+        self._refresh()
         if self._link.connected:
             self._set_status("Connected to the CTC Office.", False)
         else:
@@ -379,8 +669,7 @@ class CtcTestHarness(QObject):
                              "python -m ctc_ui from CTC-Office.", True)
 
     def _on_snapshot(self) -> None:
-        self._outputs = self._read_back()
-        self.outputsChanged.emit()
+        self._refresh()
 
     def _set_status(self, text: str, is_error: bool) -> None:
         self._status = text

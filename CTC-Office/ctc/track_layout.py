@@ -51,6 +51,33 @@ class Line:
             grouped.setdefault(block.section, []).append(block)
         return {letter: tuple(blocks) for letter, blocks in grouped.items()}
 
+    def block(self, block_id: str) -> Block | None:
+        """The block with this ID, or None."""
+        for block in self.blocks:
+            if block.block_id == block_id:
+                return block
+        return None
+
+    def switch_ids(self) -> tuple[str, ...]:
+        """IDs of the switches: the blocks they are listed on."""
+        return tuple(b.block_id for b in self.blocks if b.switch)
+
+    def crossing_ids(self) -> tuple[str, ...]:
+        """IDs of the railway crossings: the blocks they are on."""
+        return tuple(b.block_id for b in self.blocks if b.railway_crossing)
+
+    def stations(self) -> dict[str, tuple[str, ...]]:
+        """Block IDs per named station, in file order.
+
+        A station name can appear on more than one block (Green's
+        DORMONT is at 73 and 105). Unnamed stations are left out.
+        """
+        found: dict[str, list[str]] = {}
+        for block in self.blocks:
+            if block.station:
+                found.setdefault(block.station, []).append(block.block_id)
+        return {name: tuple(ids) for name, ids in found.items()}
+
 
 def _block(line: str, raw: dict[str, object]) -> Block:
     infrastructure = raw.get("infrastructure") or {}

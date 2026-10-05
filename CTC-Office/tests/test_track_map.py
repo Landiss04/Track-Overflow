@@ -16,8 +16,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc_ui.track_map import (  # noqa: E402
     LABEL_POSITIONS,
+    MAP_HEIGHT,
+    MAP_WIDTH,
     SECTION_PATHS,
+    TrackMapModel,
     build_map,
+    place_on_block,
     split_polyline,
 )
 
@@ -89,6 +93,35 @@ class TrackMapTest(unittest.TestCase):
         for block in self.map["blocks"]:
             for x, y in _pairs(block["points"]):
                 self.assertTrue(0 <= x <= 850 and 0 <= y <= 930)
+
+
+class TrainPlacementTest(unittest.TestCase):
+
+    def test_place_on_block(self) -> None:
+        self.assertEqual(place_on_block([(0, 0), (10, 0)], 0.25),
+                         (2.5, 0.0, 0.0))
+        # Clamped to the block, and never upside down: a track running
+        # left or up still gives an angle within (-90, 90].
+        self.assertEqual(place_on_block([(10, 0), (0, 0)], 2.0),
+                         (0.0, 0.0, 0.0))
+        self.assertEqual(place_on_block([(0, 10), (0, 0)], 0.5),
+                         (0.0, 5.0, 90.0))
+        # Along a bend: the second segment's heading.
+        self.assertEqual(place_on_block([(0, 0), (10, 0), (10, 10)], 0.75),
+                         (10.0, 5.0, 90.0))
+
+    def test_place_trains_on_the_map(self) -> None:
+        model = TrackMapModel()
+        placed = model.placeTrains([
+            {"train": "T1", "line": "Green", "block": "62",
+             "fraction": 0.5},
+            {"train": "T9", "line": "Red", "block": "150",
+             "fraction": 0.5}])                 # no such block: left out
+        (train,) = placed
+        self.assertEqual((train["train"], train["line"]), ("T1", "Green"))
+        self.assertTrue(0 <= train["x"] <= MAP_WIDTH)
+        self.assertTrue(0 <= train["y"] <= MAP_HEIGHT)
+        self.assertTrue(-90 < train["angle"] <= 90)
 
 
 if __name__ == "__main__":

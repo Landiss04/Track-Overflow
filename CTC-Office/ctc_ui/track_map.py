@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from PySide6.QtCore import Property, QObject
+from PySide6.QtCore import Property, QObject, Slot
 
 from ctc.track_layout import Block, Line, load_layout
 
@@ -131,6 +131,26 @@ def _point_at(points: list[Point], distance: float) -> tuple[Point, int]:
     return points[-1], len(points) - 2
 
 
+def place_on_block(piece: list[Point],
+                   fraction: float) -> tuple[float, float, float]:
+    """Point ``fraction`` of the way along a block's piece, and the
+    track's heading there in degrees.
+
+    The heading is kept within (-90, 90] so a drawn train never renders
+    upside down; it says which way the track runs, not which way the
+    train travels.
+    """
+    fraction = min(max(fraction, 0.0), 1.0)
+    (x, y), index = _point_at(piece, _length(piece) * fraction)
+    (ax, ay), (bx, by) = piece[index], piece[index + 1]
+    angle = math.degrees(math.atan2(by - ay, bx - ax))
+    if angle > 90:
+        angle -= 180
+    elif angle <= -90:
+        angle += 180
+    return round(x, 1), round(y, 1), round(angle, 1)
+
+
 def split_polyline(points: list[Point],
                    weights: list[float]) -> list[list[Point]]:
     """Cut a polyline into consecutive pieces sized by ``weights``."""
@@ -172,8 +192,9 @@ def build_map(layout: dict[str, Line]) -> dict[str, list[dict[str, Any]]]:
                                      "y": middle[1],
                                      "name": block.station})
                 if block.railway_crossing:
-                    crossings.append({"line": line_name, "x": middle[0],
-                                      "y": middle[1]})
+                    crossings.append({"line": line_name,
+                                      "blockId": block.block_id,
+                                      "x": middle[0], "y": middle[1]})
             x, y = LABEL_POSITIONS[line_name][letter]
             labels.append({"line": line_name, "text": letter,
                            "x": x, "y": y})
@@ -200,6 +221,27 @@ class TrackMapModel(QObject):
                  parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._map = build_map(load_layout() if layout is None else layout)
+        # Each block's drawn piece, for placing trains on it.
+        self._pieces = {
+            (b["line"], b["blockId"]): list(zip(b["points"][::2],
+                                                b["points"][1::2]))
+            for b in self._map["blocks"]}
+
+    @Slot(list, result=list)
+    def placeTrains(self, trains: list[dict[str, Any]]  # noqa: N802
+                    ) -> list[dict[str, Any]]:
+        """Where to draw each train: ``{train, line, block, fraction}``
+        in, ``{train, line, x, y, angle}`` out. Trains on a block the
+        map does not draw are left out."""
+        placed = []
+        for train in trains:
+            piece = self._pieces.get((train["line"], train["block"]))
+            if piece is None:
+                continue
+            x, y, angle = place_on_block(piece, float(train["fraction"]))
+            placed.append({"train": train["train"], "line": train["line"],
+                           "x": x, "y": y, "angle": angle})
+        return placed
 
     @Property(list, constant=True)
     def blocks(self) -> list[dict[str, Any]]:

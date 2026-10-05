@@ -20,13 +20,19 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import shiboken6
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
-from ctc.interface import CtcInputs, CtcOffice, CtcOutputs, CtcSnapshot
+from ctc.interface import (
+    CtcInputs,
+    CtcOffice,
+    CtcOutputs,
+    CtcSnapshot,
+    SwitchPosition,
+)
 from ctc.model import CtcError
 from ctc.wire import inputs_from_wire, snapshot_from_wire, to_wire
 
@@ -34,6 +40,8 @@ from ctc.wire import inputs_from_wire, snapshot_from_wire, to_wire
 SERVER_NAME = os.environ.get("CTC_LINK", "trains-ctc-office")
 
 _RECONNECT_MS = 1000
+# The fixed time step (decision D006), when no clock steps the module.
+_FIXED_DT_S = 0.1
 _REPLY_TIMEOUT_MS = 2000
 
 
@@ -71,13 +79,24 @@ class _LineReader:
 # -------------------------------------------------------------------- #
 
 class CtcLinkServer(QObject):
-    """Serves one CTC module to test UI clients."""
+    """Serves one CTC module to test UI clients.
+
+    ``set_inputs`` receives the inputs a test UI sends, for whatever
+    steps the module (the CTC window's clock). Without it, new inputs
+    step the module one fixed tick. ``changed`` fires after any request
+    that changed the module or its inputs.
+    """
+
+    changed = Signal()
 
     def __init__(self, module: CtcOffice, name: str = SERVER_NAME,
-                 parent: QObject | None = None) -> None:
+                 parent: QObject | None = None,
+                 set_inputs: Callable[[CtcInputs], None] | None = None,
+                 ) -> None:
         super().__init__(parent)
         self._module = module
         self._name = name
+        self._set_inputs = set_inputs
         self._server = QLocalServer(self)
         self._server.newConnection.connect(self._accept)
         self._clients: dict[QLocalSocket, _LineReader] = {}
@@ -131,10 +150,15 @@ class CtcLinkServer(QObject):
         reader = self._clients.get(client)
         if reader is None:
             return
+        changed = False
         for request in reader.read(client):
             reply = self._handle(request)
+            changed |= (reply["op"] == "snapshot"
+                        and request.get("op") != "snapshot")
             reply["id"] = request.get("id")
             _write(client, reply)
+        if changed:
+            self.changed.emit()
 
     def _handle(self, request: Mapping[str, Any]) -> dict[str, Any]:
         op = request.get("op")
@@ -143,14 +167,31 @@ class CtcLinkServer(QObject):
             if op == "step":
                 self._module.step(float(args["dt"]),
                                   inputs_from_wire(args["inputs"]))
+            elif op == "set_inputs":
+                inputs = inputs_from_wire(args["inputs"])
+                self._module.validate_inputs(inputs)
+                if self._set_inputs is None:
+                    self._module.step(_FIXED_DT_S, inputs)
+                else:
+                    self._set_inputs(inputs)
             elif op == "dispatch":
-                self._module.dispatch(args["train_id"],
-                                      args["destination_block_id"])
+                arrival = args.get("arrival_s")
+                self._module.dispatch(
+                    args["train_id"], args["line"],
+                    args["destination_block_id"],
+                    None if arrival is None else float(arrival))
             elif op == "cancel_dispatch":
                 self._module.cancel_dispatch(args["train_id"])
             elif op == "set_block_closed":
-                self._module.set_block_closed(args["block_id"],
+                self._module.set_block_closed(args["line"],
+                                              args["block_id"],
                                               bool(args["closed"]))
+            elif op == "set_switch":
+                self._module.set_switch(args["line"], args["switch_id"],
+                                        args["position"])
+            elif op == "release_switch":
+                self._module.release_switch(args["line"],
+                                            args["switch_id"])
             elif op == "set_maintenance_mode":
                 self._module.set_maintenance_mode(bool(args["active"]))
             elif op == "set_clock_speedup":
@@ -211,15 +252,31 @@ class SocketLink(QObject):
             return self._call("snapshot")
         return self._snapshot
 
-    def dispatch(self, train_id: str, destination_block_id: str) -> None:
-        self._call("dispatch", train_id=train_id,
-                   destination_block_id=destination_block_id)
+    def set_inputs(self, inputs: CtcInputs) -> None:
+        self._call("set_inputs", inputs=to_wire(inputs))
+
+    def dispatch(self, train_id: str, line: str,
+                 destination_block_id: str,
+                 arrival_s: float | None = None) -> None:
+        self._call("dispatch", train_id=train_id, line=line,
+                   destination_block_id=destination_block_id,
+                   arrival_s=arrival_s)
 
     def cancel_dispatch(self, train_id: str) -> None:
         self._call("cancel_dispatch", train_id=train_id)
 
-    def set_block_closed(self, block_id: str, closed: bool) -> None:
-        self._call("set_block_closed", block_id=block_id, closed=closed)
+    def set_block_closed(self, line: str, block_id: str,
+                         closed: bool) -> None:
+        self._call("set_block_closed", line=line, block_id=block_id,
+                   closed=closed)
+
+    def set_switch(self, line: str, switch_id: str,
+                   position: SwitchPosition) -> None:
+        self._call("set_switch", line=line, switch_id=switch_id,
+                   position=position)
+
+    def release_switch(self, line: str, switch_id: str) -> None:
+        self._call("release_switch", line=line, switch_id=switch_id)
 
     def set_maintenance_mode(self, active: bool) -> None:
         self._call("set_maintenance_mode", active=active)

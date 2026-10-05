@@ -3,10 +3,11 @@
 // test harness template. It fills the separate test UI process's window
 // (test/TestMain.qml); the CTC Office window does not open it.
 //
-// Rows come from ctc_ui/test_harness.py, bound in TestMain.qml. Each row
-// is { name, kind, value, unit, hint } where kind is
-// "bool" | "int" | "float" | "string", matching SignalRow, and hint
-// describes how a text row is written.
+// Rows come from ctc_ui/test_harness.py, bound in TestMain.qml. A scalar
+// row is { name, kind, value, unit, hint } where kind is
+// "bool" | "int" | "float" | "string", matching SignalRow. A list row has
+// kind "list", { fields, entries, noun } and is edited in a ListEditor
+// table. hint says what the row is.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -34,10 +35,20 @@ Rectangle {
     property bool clockPaused: true
     property int clockSpeed: 1
 
-    // Value column width; wide enough for list-valued text rows.
+    // Value column width of scalar rows.
     readonly property int valueWidth: 300
+    // For list rows' layout dropdowns: harness.lineNames and
+    // harness.layoutOptions.
+    property var lineNames: []
+    property var layoutOptions: ({})
 
     signal inputEdited(string name, var value)
+    // A row with `choices` (ticket sales: Green or Red) picked one.
+    signal inputChoiceEdited(string name, string choice)
+    // List rows: add, remove, or change one field of one entry.
+    signal entryAddRequested(string name)
+    signal entryRemoveRequested(string name, int index)
+    signal entryFieldEdited(string name, int index, string key, var value)
     signal sendInputsRequested()
     signal resetInputsRequested()
     signal clockPauseRequested()
@@ -75,16 +86,69 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: 0
 
-                SignalRow {
+                // A list row's name; its table follows the hint below.
+                RowLayout {
                     Layout.fillWidth: true
-                    name: row.modelData.name
-                    kind: row.modelData.kind
-                    value: row.modelData.value
-                    unit: row.modelData.unit
-                    valueWidth: root.valueWidth
-                    editable: true
-                    onEdited: function (newValue) {
-                        root.inputEdited(row.modelData.name, newValue);
+                    visible: row.modelData.kind === "list"
+                    spacing: theme.space_3
+
+                    MonoText {
+                        Layout.fillWidth: true
+                        text: row.modelData.name
+                    }
+
+                    MonoText {
+                        text: row.modelData.unit
+                        color: theme.text_muted
+                    }
+                }
+
+                RowLayout {
+                    id: rowLine
+
+                    visible: row.modelData.kind !== "list"
+                    readonly property bool hasChoices:
+                        (row.modelData.choices || []).length > 0
+                    readonly property int choiceWidth: 110
+
+                    Layout.fillWidth: true
+                    spacing: theme.space_3
+
+                    SignalRow {
+                        Layout.fillWidth: true
+                        name: row.modelData.name
+                        kind: row.modelData.kind
+                        value: row.modelData.value
+                        unit: row.modelData.unit
+                        // A row with a dropdown gives up that much of its
+                        // value column, so its name and type stay aligned
+                        // with the other rows.
+                        valueWidth: rowLine.hasChoices
+                            ? root.valueWidth - rowLine.choiceWidth
+                                - rowLine.spacing
+                            : root.valueWidth
+                        editable: true
+                        onEdited: function (newValue) {
+                            root.inputEdited(row.modelData.name, newValue);
+                        }
+                    }
+
+                    // Only rows with `choices`: which line the value is
+                    // for.
+                    SelectField {
+                        readonly property var choices:
+                            row.modelData.choices || []
+                        // Pinned: the select's own minimum is wider.
+                        Layout.preferredWidth: rowLine.choiceWidth
+                        Layout.minimumWidth: rowLine.choiceWidth
+                        Layout.maximumWidth: rowLine.choiceWidth
+                        visible: rowLine.hasChoices
+                        label: qsTr("Line")
+                        model: choices
+                        currentIndex: choices.indexOf(row.modelData.choice)
+                        onCommitted: function (value) {
+                            root.inputChoiceEdited(row.modelData.name, value);
+                        }
                     }
                 }
 
@@ -93,6 +157,27 @@ Rectangle {
                     visible: (row.modelData.hint || "") !== ""
                     text: row.modelData.hint || ""
                     color: theme.text_muted
+                }
+
+                ListEditor {
+                    Layout.fillWidth: true
+                    Layout.topMargin: theme.space_2
+                    Layout.bottomMargin: theme.space_2
+                    visible: row.modelData.kind === "list"
+                    fields: row.modelData.fields || []
+                    entries: row.modelData.entries || []
+                    noun: row.modelData.noun || qsTr("entry")
+                    lineNames: root.lineNames
+                    layoutOptions: root.layoutOptions
+                    onAddRequested: root.entryAddRequested(
+                        row.modelData.name)
+                    onRemoveRequested: function (index) {
+                        root.entryRemoveRequested(row.modelData.name, index);
+                    }
+                    onFieldEdited: function (index, key, value) {
+                        root.entryFieldEdited(row.modelData.name, index, key,
+                                              value);
+                    }
                 }
             }
         }
@@ -176,9 +261,10 @@ Rectangle {
                     heading: qsTr("Force inputs, read outputs")
                     body: qsTr("Inputs stand in for the Track Controller and "
                         + "the Track Model; dispatcher actions stand in for "
-                        + "the CTC UI. Send applies them and advances the "
-                        + "CTC one tick. Outputs are read back from the "
-                        + "module.")
+                        + "the CTC UI. Send applies them; the CTC window's "
+                        + "clock steps the CTC with the inputs while it "
+                        + "runs. Dispatcher rows follow the CTC window until "
+                        + "you edit them. Outputs come from the module.")
                 }
 
                 RowLayout {
@@ -253,8 +339,8 @@ Rectangle {
                         HelperText {
                             Layout.fillWidth: true
                             Layout.topMargin: theme.space_2
-                            text: qsTr("To the Track Controller, read back "
-                                + "after each Send.")
+                            text: qsTr("To the Track Controller and the "
+                                + "central harness, updated live.")
                             color: theme.text_muted
                         }
                     }
@@ -279,8 +365,7 @@ Rectangle {
             HelperText {
                 Layout.fillWidth: true
                 text: root.status !== "" ? root.status
-                    : qsTr("Edit inputs, then Send to apply them and "
-                        + "advance one tick.")
+                    : qsTr("Edit inputs, then Send to apply them.")
                 color: root.statusIsError ? theme.danger
                     : theme.text_secondary
             }

@@ -1,6 +1,6 @@
-// CTC Office application window. UI only: there is no backend yet, so
-// every panel shows its empty state and actions emit signals nobody
-// handles. Window-level UI state (mode, occupancy window) lives here.
+// CTC Office application window. The panels read and act on the live
+// CTC module through `ctc` (ctc_ui/ctc_host.py). Window-level UI state
+// (mode, occupancy window, selected train) lives here.
 //
 // Sizing and scaling come from the shared ui/ScaledWindow.qml; __main__.py
 // installs the matching aspect lock. Do not resize the window from here.
@@ -69,6 +69,9 @@ ScaledWindow {
             TrackViewPanel {
                 id: trackView
                 trackMap: window.trackMapModel
+                blockStates: ctc.blockStates
+                crossingStates: ctc.crossingStates
+                mapTrains: ctc.mapTrains
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 onLineFilterActivated: function (index) {
@@ -87,6 +90,7 @@ ScaledWindow {
                 currentIndex: window.modeIndex
 
                 AutomaticView {
+                    host: ctc
                     selectedTrainId: window.selectedTrainId
                     scheduleFile: ctc.scheduleFile
                     scheduleError: ctc.scheduleError
@@ -98,11 +102,12 @@ ScaledWindow {
                 }
 
                 ManualView {
+                    host: ctc
                     selectedTrainId: window.selectedTrainId
                     onClearSelectionRequested: window.selectedTrainId = ""
                 }
 
-                MaintenanceView {}
+                MaintenanceView { host: ctc }
             }
         }
     }
@@ -112,6 +117,7 @@ ScaledWindow {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: theme.space_7
         width: 360
+        summary: qsTr("%n trains", "", ctc.trains.length)
         visible: window.occupancyState === "docked"
         onExpandRequested: window.occupancyState = "open"
         onCloseRequested: window.occupancyState = "closed"
@@ -136,6 +142,7 @@ ScaledWindow {
         width: 912
         height: 516
         anchors.centerIn: parent
+        trains: ctc.trains
         visible: window.occupancyState === "open"
         onMinimizeRequested: window.occupancyState = "docked"
         onCloseRequested: window.occupancyState = "closed"

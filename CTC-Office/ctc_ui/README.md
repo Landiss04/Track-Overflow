@@ -31,11 +31,36 @@ python ctc_ui/test_ui.py        # or: python -m ctc_ui.test_ui
 
 It connects to the running CTC Office over a local socket, so both
 windows act on the one live CTC module; the badge reads **Connected**.
-**Send** applies the input rows and dispatcher actions and advances the
-CTC one 0.1 s tick; outputs are read back from the module, in display
-units (mph, ft). Maintenance mode and clock speedup are owned by the
-CTC window (its operating mode and clock speed), so the test UI shows
-them in Outputs only; with `--standalone` both are dispatcher rows.
+The two windows drive each other:
+
+- **Send** replaces the Track Controller and Track Model inputs. The CTC
+  window's simulation clock steps the module with them on every tick
+  while it runs (Run / Pause, 1× / 10×), and the CTC window shows them at
+  once: occupied, closed and failed blocks and active crossings on the
+  track map, trains in the occupancy window, reported switch positions in
+  Maintenance. Ticket sales are per line: enter the count and pick Green
+  or Red in the row's **Line** dropdown. They count tickets sold since
+  the previous tick, so each Send's sales are counted once.
+- The **dispatcher rows** (orders, closed blocks, switch commands)
+  follow what the CTC window does until you edit one; Send then makes
+  the module match every edited row, so either window can override the
+  other.
+- **Outputs** update live from the module, in display units (mph, ft).
+  Maintenance mode and clock speedup are owned by the CTC window (its
+  operating mode and clock speed), so the test UI shows them in Outputs
+  only; with `--standalone` both are dispatcher rows and Send steps one
+  0.1 s tick.
+- Errors (an unknown block, a switch outside maintenance mode) show in
+  the status line of the window where the action was taken.
+
+List rows (occupied blocks, train reports, switch and crossing states,
+failures, dispatch orders, closed blocks, switch commands) are small
+tables: **+ Add** an entry, edit it in place, × to remove it. Each entry
+picks its line first, then a block, switch or crossing on that line from
+the track layout, so there are no IDs to type; block numbers repeat
+across lines, and a switch or crossing is named by the block the layout
+file lists it on. Positions, states and failure kinds are dropdowns; only
+train IDs, offsets, speeds and arrival times are typed.
 
 To test the CTC module without the window, run the test UI with its own
 in-process module instead:
@@ -52,7 +77,8 @@ shows `--:--:--`, greys out its clock controls, and keeps retrying.
 
 ## What is interactive
 
-With no backend, only window-level UI state works:
+The panels read and act on the live CTC module (a stub with no routing
+yet) through `ctc_ui/ctc_host.py`:
 
 - The **Simulation clock** in the header is live. It starts paused at
   05:00:00 (24-hour). **Run** / **Pause** start and hold it, and the
@@ -63,31 +89,61 @@ With no backend, only window-level UI state works:
   they all run at one speed.
 - The **Operating mode** toggle switches the right-hand column between the
   Automatic, Manual, and Maintenance views. Maintenance also sets the
-  CTC's `maintenance_mode` output, which the test UI shows.
-- **Train occupancy** opens the occupancy window. "Keep open at
-  bottom" or the minimize button docks it over the track view.
-  Escape, the close button, or clicking the scrim closes it.
+  CTC's `maintenance_mode` output, which the test UI shows; leaving it
+  releases every switch command.
+- The **Track view** colors each line (`--line-green`, `--line-red`) and
+  draws each train as a small `--info` car on the track at its reported
+  position, turned to follow the track and tagged with its ID; a block
+  reported occupied with no train on it gets an untagged car. Closed
+  (`--warning`) and failed (`--danger`) blocks are drawn heavy, with a
+  halo (style guide 4.6, 6.4). An active crossing fills `--warning`.
+- **Train occupancy** lists every train the Track Controller reports or
+  the dispatcher has ordered, with block, speed (mph), authority,
+  destination and requested arrival. Filter by line, status or train ID;
+  click a row and **Select train** to load it into Selected train.
+  "Keep open at bottom" or the minimize button docks it over the track
+  view. Escape, the close button, or clicking the scrim closes it.
+- **Dispatch train** (Manual): pick a line, a train (or a new one) and a
+  destination station, with an optional arrival time (`HH:MM`). Picking a
+  train that already has an order reroutes it. **Set authority** sends
+  the train straight to a block instead. The readouts show the suggested
+  speed and authority the CTC sends to the Track Controller.
+- **Selected train** shows the train's live readouts; in Manual mode it
+  also reroutes the train or cancels its order.
+- **Close block** and **Active closures** (Maintenance) close a block
+  (with a confirmation step, style guide 7) and reopen it. Failed blocks
+  are listed too; they clear when the Track Controller stops reporting
+  them.
+- **Set switch position** (Maintenance) shows each switch's two
+  connections (normal is the first listed in the layout file), the
+  position the Track Controller reports and the one the CTC commands, and
+  sends or releases a command.
+- **Throughput metrics** show tickets per hour on each line (Red line,
+  Green line) since the simulation started, from Track Model ticket
+  sales, in the tiles and the per-line table. **Throughput, last 12
+  hours** charts the tickets sold on each line in each simulated clock
+  hour, one small chart per line on a shared scale; hover a bar for its
+  value. The window starts at the simulation's start hour and follows
+  the current hour once 12 hours have passed. The charts use `--accent`,
+  not the line colors: the style guide keeps those to track strokes, and
+  red and green bars are not distinguishable with deuteranopia.
 - **Load schedule** (Automatic view) loads a schedule JSON in the
   `utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). Its
   runs appear under **Next departures** as Queued, with due times counted
   from the schedule start. They stay queued until a scheduling algorithm
   exists. A malformed file shows an error and keeps the current schedule.
-- **Run / Pause** by the simulation clock toggles a stand-in paused state
-  until the shared simulation clock is merged.
-- Dispatch, set authority, send to track controller, and close block
-  enable once their selects have a value. The selects are empty, so these
-  stay disabled until options are bound. Close block requires a
-  confirmation step (style guide 7).
+- Trains per hour and the per-line trains and dwell columns stay empty:
+  nothing reports that data yet.
 
 ## Where things go
 
 | Area | Hook |
 | --- | --- |
-| Track map | `panels/TrackViewPanel.qml` → `mapCanvas`. Set `mapAvailable` to enable zoom and fit. The legend goes below the canvas. |
-| Selected train | `SelectedTrainPanel.trainId`. A non-empty ID shows the detail layout. |
-| Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` fires with the picked file's URL. Read and parse it there; set `scheduleFile`, `departures`, and `running` from the result. |
+| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `setAuthority`, `cancelDispatch`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
+| Track map | `panels/TrackViewPanel.qml` → `mapCanvas`; `blockStates` and `crossingStates` style the blocks. Set `mapAvailable` to enable zoom and fit. |
+| Selected train | `SelectedTrainPanel.trainId` and `host`; `canReroute` adds the reroute controls. |
+| Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` → `ctc.loadSchedule`; `scheduleFile`, `scheduleError`, `departures` come back from `ctc`. |
 | Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |
-| Selects | `model` on each `SelectField`, via the panel's `*Options` properties. |
 | Test harness | `ui/test/TestHarnessView.qml` in the test UI process. `inputs` / `outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once linked to a running CTC. |
 | Header | `CtcHeader.clock`, `.paused` and `.speed` are bound to `simClock` (see below); `.operatorName`. |
 | Simulation clock | `simClock` context property, a `SimulationClockBridge` (`sim_clock.py`) that owns the shared `utils.system_clock.SystemClock` and drives it in real time. Read `timeText`, `paused`, `speed`; call `pause()`, `resume()`, `setSpeed(1 or 10)`. Use `simClock.clock` from Python to add tick listeners. |
@@ -154,10 +210,16 @@ the context-property pattern shared with the Train Model UI.
 ## CTC module and link
 
 - `ctc/interface.py` is the CTC's boundary (decision D005): inputs from
-  the Track Controller and Track Model, outputs to the Track Controller,
-  and the `CtcOffice` contract (`step(dt, inputs) -> outputs` plus
-  dispatcher actions and `load_schedule`).
-- `ctc/model.py` is a stub implementation with no routing logic yet.
+  the Track Controller and Track Model, outputs to the Track Controller
+  (suggested speed and authority, closed blocks, switch commands,
+  maintenance mode) and to the central harness (clock speedup), and the
+  `CtcOffice` contract (`step(dt, inputs) -> outputs`, `validate_inputs`,
+  dispatcher actions and `load_schedule`). Every block, switch and
+  crossing reference carries its line.
+- `ctc/model.py` is a stub implementation with no routing logic yet. It
+  checks every reference against the track layout files, accepts switch
+  commands only in maintenance mode, and suggests a placeholder speed
+  with the destination block as authority.
 - The CTC window hosts the module (`ctc_ui/ctc_host.py`) and serves it
   over `ctc/socket_link.py`: a Qt local socket (a named pipe on Windows,
   never a network connection) carrying one JSON message per line. The

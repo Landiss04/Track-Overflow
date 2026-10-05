@@ -1,5 +1,5 @@
 // Track view: the Red and Green line map (TrackMap.qml), drawn from the
-// course layout files. Static for now; per-block state comes later.
+// course layout files, with each block's live state.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -13,6 +13,11 @@ Panel {
     // A TrackMapModel from ctc_ui/track_map.py; the placeholder shows
     // while it is null.
     property var trackMap: null
+    // Live state from the CTC host; see TrackMap.qml.
+    property var blockStates: ({})
+    property var crossingStates: ({})
+    // CtcHost.mapTrains: { train, line, block, fraction } per train.
+    property var mapTrains: []
     // Whether a track map renderer is mounted in `mapCanvas`. Zoom and fit
     // stay disabled until then.
     property bool mapAvailable: false
@@ -62,6 +67,10 @@ Panel {
             anchors.fill: parent
             model: root.trackMap
             lineFilter: root.lineFilterIndex
+            blockStates: root.blockStates
+            crossingStates: root.crossingStates
+            trains: root.trackMap
+                ? root.trackMap.placeTrains(root.mapTrains) : []
         }
 
         EmptyState {
@@ -73,7 +82,7 @@ Panel {
         }
     }
 
-    // Legend. Lines differ by pattern and label, not color.
+    // Legend. Lines differ by pattern and label as well as color.
     Flow {
         Layout.fillWidth: true
         visible: root.trackMap !== null
@@ -100,7 +109,9 @@ Panel {
             id: swatch
 
             property bool dashed: false
-            property color tone: theme.text_secondary
+            // Block states are drawn heavy and round-ended on the map.
+            property bool heavy: false
+            property color tone: theme.line_green
             anchors.verticalCenter: parent.verticalCenter
             spacing: dashed ? 3 : 0
 
@@ -108,7 +119,8 @@ Panel {
                 model: swatch.dashed ? 4 : 1
                 delegate: Rectangle {
                     width: swatch.dashed ? 3 : 24
-                    height: 4
+                    height: swatch.heavy ? 8 : 4
+                    radius: swatch.heavy ? 4 : 0
                     color: swatch.tone
                 }
             }
@@ -116,11 +128,29 @@ Panel {
 
         LegendItem {
             text: qsTr("Green line")
-            LineSwatch { tone: theme.text_secondary }
+            LineSwatch { tone: theme.line_green }
         }
         LegendItem {
             text: qsTr("Red line")
-            LineSwatch { tone: theme.text_primary; dashed: true }
+            LineSwatch { tone: theme.line_red; dashed: true }
+        }
+        LegendItem {
+            text: qsTr("Train (occupied block)")
+            Rectangle {
+                anchors.centerIn: parent
+                width: 22
+                height: 10
+                radius: 4
+                color: theme.info
+            }
+        }
+        LegendItem {
+            text: qsTr("Closed")
+            LineSwatch { tone: theme.warning; heavy: true }
+        }
+        LegendItem {
+            text: qsTr("Failure")
+            LineSwatch { tone: theme.danger; heavy: true }
         }
         LegendItem {
             text: qsTr("Station")

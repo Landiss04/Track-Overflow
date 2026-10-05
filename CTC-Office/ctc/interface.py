@@ -11,12 +11,18 @@ The CTC exchanges data with two modules:
 
 - Track Controller: sends block occupancy, train reports, switch and
   crossing states and track failures in; receives suggested speed and
-  authority per train, closed blocks and maintenance mode out.
-- Track Model: sends ticket sales in.
+  authority per train, closed blocks, switch commands and maintenance
+  mode out.
+- Track Model: sends ticket sales per line in.
+
+It also sends the clock speedup command to the central harness.
 
 Units are backend units per ``truth/conventions/units.md``: speeds in
 m/s, distances in m. Every ID is a string, and authority is a block ID
-(``truth/conventions/identifiers.md``).
+(``truth/conventions/identifiers.md``). Block numbers repeat across
+lines, so every block, switch and crossing reference carries its
+``line`` too. A switch or crossing is identified by the block it is
+listed on in the track layout file.
 """
 
 from __future__ import annotations
@@ -40,6 +46,7 @@ TrackFailureKind = Literal["broken_rail", "track_circuit", "power"]
 class BlockOccupancy:
     """Occupancy of one block, as detected by the Track Controller."""
 
+    line: str
     block_id: str
     occupied: bool
 
@@ -49,6 +56,7 @@ class TrainReport:
     """Where one train is and how fast it is moving."""
 
     train_id: str
+    line: str
     block_id: str
     offset_m: float
     speed_mps: float
@@ -56,18 +64,21 @@ class TrainReport:
 
 @dataclass(frozen=True, slots=True)
 class SwitchReport:
+    line: str
     switch_id: str
     position: SwitchPosition
 
 
 @dataclass(frozen=True, slots=True)
 class CrossingReport:
+    line: str
     crossing_id: str
     state: CrossingState
 
 
 @dataclass(frozen=True, slots=True)
 class TrackFailureReport:
+    line: str
     block_id: str
     kind: TrackFailureKind
 
@@ -84,11 +95,19 @@ class TrackControllerInputs:
 
 
 @dataclass(frozen=True, slots=True)
+class TicketSales:
+    """Tickets sold on one line."""
+
+    line: str
+    tickets: int
+
+
+@dataclass(frozen=True, slots=True)
 class TrackModelInputs:
     """From the Track Model, every tick."""
 
-    # Tickets sold since the previous tick.
-    ticket_sales: int = 0
+    # Tickets sold since the previous tick, at most one entry per line.
+    ticket_sales: tuple[TicketSales, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,9 +125,32 @@ class TrainSuggestion:
     """Suggested speed and authority for one train."""
 
     train_id: str
-    suggested_speed_mps: float
-    # Block the train may travel up to.
+    line: str
+    # Whole m/s: a target for safe spacing, not the train's own speed.
+    suggested_speed_mps: int
+    # Block on ``line`` the train may travel up to.
     authority_block_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class BlockRef:
+    """One block: block numbers repeat across lines."""
+
+    line: str
+    block_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class SwitchCommand:
+    """A switch position set by the dispatcher in maintenance mode.
+
+    Normal is the first connection the layout file lists for the switch,
+    reverse the second.
+    """
+
+    line: str
+    switch_id: str
+    position: SwitchPosition
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +159,9 @@ class TrackControllerOutputs:
 
     suggestions: tuple[TrainSuggestion, ...] = ()
     # Blocks closed by the dispatcher. A block not listed is open.
-    closed_block_ids: tuple[str, ...] = ()
+    closed_blocks: tuple[BlockRef, ...] = ()
+    # Only while maintenance_mode; cleared when it ends.
+    switch_commands: tuple[SwitchCommand, ...] = ()
     maintenance_mode: bool = False
 
 
@@ -141,15 +185,30 @@ class QueuedTrain:
 
 
 @dataclass(frozen=True, slots=True)
+class DispatchOrder:
+    """A dispatcher's order for one train: where, and by when."""
+
+    train_id: str
+    line: str
+    destination_block_id: str
+    # Requested arrival, simulated seconds since midnight; None if the
+    # dispatcher set only a destination.
+    arrival_s: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class CtcSnapshot:
     """Full observable state for the CTC UIs."""
 
     outputs: CtcOutputs
     inputs: CtcInputs | None = None
     elapsed_s: float = 0.0
-    tickets_sold_total: int = 0
+    # Tickets sold since the simulation started, one entry per line.
+    tickets_sold: tuple[TicketSales, ...] = ()
     # Runs from the loaded schedule still waiting, by departure time.
     queued_trains: tuple[QueuedTrain, ...] = ()
+    # Dispatcher orders, by train ID.
+    orders: tuple[DispatchOrder, ...] = ()
 
 
 # ------------------------------------------------------------------ #
@@ -171,21 +230,43 @@ class CtcOffice(Protocol):
         """Current state for display. No side effects."""
         ...
 
+    def validate_inputs(self, inputs: CtcInputs) -> None:
+        """Raise if ``step`` would reject these inputs. No side effects."""
+        ...
+
     # Dispatcher actions from the CTC UI. Not cross-module inputs.
 
-    def dispatch(self, train_id: str, destination_block_id: str) -> None:
-        """Send a train toward a destination block."""
+    def dispatch(self, train_id: str, line: str,
+                 destination_block_id: str,
+                 arrival_s: float | None = None) -> None:
+        """Send a train toward a destination block on its line.
+
+        A train that already has an order is rerouted: the new order
+        replaces the old one.
+        """
         ...
 
     def cancel_dispatch(self, train_id: str) -> None:
         """Drop a train's dispatch order, if it has one."""
         ...
 
-    def set_block_closed(self, block_id: str, closed: bool) -> None:
+    def set_block_closed(self, line: str, block_id: str,
+                         closed: bool) -> None:
         """Close a block for maintenance, or reopen it."""
         ...
 
+    def set_switch(self, line: str, switch_id: str,
+                   position: SwitchPosition) -> None:
+        """Command a switch position. Only in maintenance mode."""
+        ...
+
+    def release_switch(self, line: str, switch_id: str) -> None:
+        """Drop the command for one switch, if there is one."""
+        ...
+
     def set_maintenance_mode(self, active: bool) -> None:
+        """Enter or leave maintenance mode; leaving it drops every
+        switch command."""
         ...
 
     def set_clock_speedup(self, active: bool) -> None:
