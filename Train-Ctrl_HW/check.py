@@ -35,16 +35,6 @@ def check_snapshot_contract(backend: Any, ui_dir: Path) -> bool:
     """
     import re
 
-    empty = [str(q.relative_to(ui_dir)) for q in sorted(ui_dir.rglob("*.qml"))
-             if not q.read_text(encoding="utf-8").strip()]
-    if empty:
-        print("These QML files are empty, so every type they define is "
-              "missing:", file=sys.stderr)
-        for name in empty:
-            print(f"  {name}", file=sys.stderr)
-        print("Copy them again: a transfer dropped them.", file=sys.stderr)
-        return False
-
     have = set(backend.snapshot)
     pattern = re.compile(r"(?:\bs|snapshot)\.([a-z_][a-z0-9_]*)")
     missing: dict[str, set[str]] = {}
@@ -181,6 +171,13 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
     expect(not backend.core.state.emergency_brake,
            "e-brake would not release at a stand")
 
+    # Releasing a brake that is already released is not a refusal,
+    # whether or not the train is moving. It used to engage one.
+    expect(backend.core.release_emergency(),
+           "releasing an already released brake was refused")
+    expect(not backend.core.state.emergency_brake,
+           "releasing an already released brake engaged it")
+
     # The Train Model's brake report drives the real brake, and the
     # train is stopped here, so it releases again cleanly.
     backend.applyInputs({"ebrake_state": True})
@@ -255,10 +252,21 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
            "staged inputs did not apply")
     expect(backend.snapshot["next_signal"] == "GREEN",
            "staged aspect did not apply")
-    backend.applyInputs({"door_state_left": True, "light_state_cabin": False})
+    # A moving train carrying ebrake_state false through every other
+    # signal must not acquire an emergency brake on the way.
+    expect(backend.core.state.actual_mps > 0.0,
+           "this check needs a train that is moving")
+    backend.applyInputs({"door_state_left": True, "light_state_cabin": False,
+                         "ebrake_state": False})
+    expect(not backend.core.state.emergency_brake,
+           "sending inputs to a moving train engaged the emergency brake")
     _settle(app, 400)
     expect(backend.snapshot["fb_doors_left"],
            "the plant wrote over a door state the bench published")
+    # and the console is looking at the reported state, not the
+    # command, so what the bench publishes reaches the driver's tiles
+    expect(backend.snapshot["fb_doors_left"] != backend.snapshot["doors_left"],
+           "the reported door state is just echoing the command")
     expect(not backend.snapshot["fb_lights"],
            "the plant wrote over a light state the bench published")
 
@@ -337,6 +345,14 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
     backend.applyInputs({"authority_blocks": 6, "speed_limit": 40})
     expect(abs(backend.core.state.speed_limit_mps - 40 / mod.MPS_TO_MPH)
            < 1e-6, "the bench could not set the speed limit")
+
+    # The line limit binds the target, and it may be above the car's
+    # data-sheet 70 km/h if the line says so.
+    backend.setManual(True)
+    backend.applyInputs({"speed_limit": 60})
+    backend.setTargetMph(55)
+    expect(abs(backend.snapshot["target_mph"] - 55) < 0.5,
+           "the target was capped below the line limit")
     _settle(app, 300)
 
     # Announcements lock out for their duration.

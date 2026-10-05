@@ -39,6 +39,9 @@ Item {
     property bool inlineUnit: false
     // Narrow columns drop the type, which the name already implies.
     property bool showKind: true
+    // Doors and lights read as switches, not as propositions.
+    property string trueLabel: qsTr("True")
+    property string falseLabel: qsTr("False")
     property real valueWidth: 190
     property real unitWidth: 56
     property real valueSize: theme.size_small
@@ -48,7 +51,8 @@ Item {
 
     readonly property string shown: value === undefined || value === null
         || value === "" ? "\u2014"
-        : kind === "bool" ? (value ? "TRUE" : "FALSE")
+        : kind === "bool" ? (value ? root.trueLabel.toUpperCase()
+                                   : root.falseLabel.toUpperCase())
         : String(value)
 
     signal edited(var newValue)
@@ -145,7 +149,7 @@ Item {
 
         SegmentedToggle {
             implicitHeight: theme.control_h_md
-            options: [qsTr("True"), qsTr("False")]
+            options: [root.trueLabel, root.falseLabel]
             currentIndex: root.value ? 0 : 1
             onActivated: function (index) { root.edited(index === 0); }
         }

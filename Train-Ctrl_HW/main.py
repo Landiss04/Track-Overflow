@@ -87,14 +87,15 @@ def check_shared_library() -> bool:
 
 CONTROL_HZ = 20
 UI_HZ = 10
-# Motor power is 120 kW and the car has two powered bogies, so four
-# motors: 480 kW at the wheel. One motor's worth cannot meet the car's
-# own data sheet — 0.5 m/s^2 at 70 km/h needs 398 kW — and a train
-# limited to 120 kW tops out around 30 km/h with the acceleration
-# falling away the whole time, which is the bug this fixes. If the
-# interface dictionary says the controller may command only 120 kW,
-# that number and this one disagree and the team has to pick one.
-MAX_POWER_W = 480_000.0
+# The Flexity 2 data sheet's power figure, taken as the whole car's.
+#
+# Worth knowing what it costs. The same sheet quotes 0.5 m/s^2 from 0
+# to 70 km/h, and 0.5 m/s^2 at 70 km/h on a 2/3-load car needs
+# F x v = 500 kW. At 120 kW the car pulls its rated acceleration only
+# to about 10 mph and tails off from there, taking roughly a minute
+# and a half to reach 70 km/h. The sheet's two figures cannot both
+# hold; this is the one the team picked.
+MAX_POWER_W = 120_000.0
 ANNOUNCE_LOCKOUT_MS = 5000
 GAINS_HANDOVER_MS = 1500
 
@@ -614,7 +615,9 @@ class ConsoleBackend(QObject):
             # to debug with, so it stays in SI (units.md).
             "accel_mps2": s.accel_mps2,
             "dial_hint": self._dial_hint(),
-            "speed_source": "Driver" if s.manual else "From CTC",
+            # Automatic is the console locked: the CTC owns the
+            # speed and the dial does nothing.
+            "speed_source": "Driver" if s.manual else "Locked",
 
             "power_kw": s.power_w * W_TO_KW,
             "max_power_kw": MAX_POWER_W * W_TO_KW,
@@ -788,8 +791,10 @@ class ConsoleBackend(QObject):
             return
         if side == "left":
             self.core.state.doors_left = open_
+            self.core.state.fb_doors_left = open_
         else:
             self.core.state.doors_right = open_
+            self.core.state.fb_doors_right = open_
         self._publish()
 
     @Slot(bool)
@@ -797,6 +802,7 @@ class ConsoleBackend(QObject):
         if not self.can_drive:
             return
         self.core.state.lights = on
+        self.core.state.fb_lights = on
         self._publish()
 
     @Slot(bool)
@@ -804,6 +810,7 @@ class ConsoleBackend(QObject):
         if not self.can_drive:
             return
         self.core.state.headlights = on
+        self.core.state.fb_headlights = on
         self._publish()
 
     @Slot()

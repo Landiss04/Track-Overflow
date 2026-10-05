@@ -9,7 +9,9 @@ Panel {
     id: root
 
     readonly property var s: controller.snapshot
-    readonly property bool anyDoorOpen: s.doors_left || s.doors_right
+    // What the train reports, which is what the driver should be
+    // looking at. The commands are the outputs beside them.
+    readonly property bool anyDoorOpen: s.fb_doors_left || s.fb_doors_right
 
     title: qsTr("Doors & cabin")
     headerItems: [
@@ -28,19 +30,19 @@ Panel {
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.doors_left
+            on: root.s.fb_doors_left
             tone: "info"
-            text: root.s.doors_left ? qsTr("Close left") : qsTr("Open left")
-            onClicked: controller.setDoor("left", !root.s.doors_left)
+            text: root.s.fb_doors_left ? qsTr("Close left") : qsTr("Open left")
+            onClicked: controller.setDoor("left", !root.s.fb_doors_left)
         }
 
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.doors_right
+            on: root.s.fb_doors_right
             tone: "info"
-            text: root.s.doors_right ? qsTr("Close right") : qsTr("Open right")
-            onClicked: controller.setDoor("right", !root.s.doors_right)
+            text: root.s.fb_doors_right ? qsTr("Close right") : qsTr("Open right")
+            onClicked: controller.setDoor("right", !root.s.fb_doors_right)
         }
     }
 
@@ -62,18 +64,18 @@ Panel {
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.lights
-            text: root.s.lights ? qsTr("Lights on") : qsTr("Lights off")
-            onClicked: controller.setLights(!root.s.lights)
+            on: root.s.fb_lights
+            text: root.s.fb_lights ? qsTr("Lights on") : qsTr("Lights off")
+            onClicked: controller.setLights(!root.s.fb_lights)
         }
 
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.headlights
-            text: root.s.headlights ? qsTr("Headlights on")
+            on: root.s.fb_headlights
+            text: root.s.fb_headlights ? qsTr("Headlights on")
                                     : qsTr("Headlights off")
-            onClicked: controller.setHeadlights(!root.s.headlights)
+            onClicked: controller.setHeadlights(!root.s.fb_headlights)
         }
     }
 }

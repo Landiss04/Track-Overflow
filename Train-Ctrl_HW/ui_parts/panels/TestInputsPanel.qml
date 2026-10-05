@@ -252,21 +252,6 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "signal_light_ahead"
-                kind: "enum"
-                options: root.aspects
-                value: root.draft.signal_light_ahead
-                pending: root.touched["signal_light_ahead"] === true
-                    && root.pending("signal_light_ahead")
-                onEdited: function (v) { root.stage("signal_light_ahead", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
                 name: "ebrake_state"
                 kind: "bool"
                 value: root.draft.ebrake_state
@@ -283,6 +268,8 @@ Panel {
                 unitWidth: 52
                 name: "door_state_left"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.draft.door_state_left
                 pending: root.touched["door_state_left"] === true
                     && root.pending("door_state_left")
@@ -297,6 +284,8 @@ Panel {
                 unitWidth: 52
                 name: "door_state_right"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.draft.door_state_right
                 pending: root.touched["door_state_right"] === true
                     && root.pending("door_state_right")
@@ -311,6 +300,8 @@ Panel {
                 unitWidth: 52
                 name: "light_state_cabin"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.draft.light_state_cabin
                 pending: root.touched["light_state_cabin"] === true
                     && root.pending("light_state_cabin")
@@ -325,6 +316,8 @@ Panel {
                 unitWidth: 52
                 name: "light_state_headlights"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.draft.light_state_headlights
                 pending: root.touched["light_state_headlights"] === true
                     && root.pending("light_state_headlights")
@@ -377,6 +370,29 @@ Panel {
                     root.stage("failure_signal_pickup", v);
                 }
             }
+            LabeledDivider {
+                Layout.fillWidth: true
+                Layout.topMargin: theme.space_3
+                Layout.bottomMargin: theme.space_1
+                text: qsTr("From the Track Model")
+            }
+
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "signal_light_ahead"
+                kind: "enum"
+                options: root.aspects
+                value: root.draft.signal_light_ahead
+                pending: root.touched["signal_light_ahead"] === true
+                    && root.pending("signal_light_ahead")
+                onEdited: function (v) { root.stage("signal_light_ahead", v); }
+            }
+
         }
 
         // ------------------------------------------------ the cab
@@ -491,6 +507,8 @@ Panel {
                 enabled: root.s.can_drive
                 name: "door_command_left"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.s.doors_left
                 onEdited: function (v) { controller.setDoor("left", v); }
             }
@@ -504,6 +522,8 @@ Panel {
                 enabled: root.s.can_drive
                 name: "door_command_right"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.s.doors_right
                 onEdited: function (v) { controller.setDoor("right", v); }
             }
@@ -517,6 +537,8 @@ Panel {
                 enabled: root.s.can_drive
                 name: "cabin_lights_command"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.s.lights
                 onEdited: function (v) { controller.setLights(v); }
             }
@@ -530,6 +552,8 @@ Panel {
                 enabled: root.s.can_drive
                 name: "headlights_command"
                 kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
                 value: root.s.headlights
                 onEdited: function (v) { controller.setHeadlights(v); }
             }

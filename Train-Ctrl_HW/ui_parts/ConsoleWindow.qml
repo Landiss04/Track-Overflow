@@ -27,14 +27,21 @@ ScaledWindow {
 
         // Guide 6.7: name and instance, the mode badge, the clock, and
         // the persistent fault badge an active emergency brake requires.
-        ModuleHeader {
+        ConsoleHeader {
             Layout.fillWidth: true
             moduleName: qsTr("HW Train Controller")
             // The train and its line are named by the selector below,
             // so the header does not repeat them.
             mode: window.s.signed_in ? window.s.mode_label : qsTr("Signed out")
             clock: window.s.clock
-            faulted: window.s.emergency_brake || window.s.faulted
+            faulted: window.s.emergency_brake
+            // One badge per subsystem the Train Model reports failed,
+            // up only while the failure is up, like the e-brake's.
+            alerts: [
+                window.s.fault_engine ? qsTr("Engine fault") : "",
+                window.s.fault_brake ? qsTr("Brake fault") : "",
+                window.s.fault_pickup ? qsTr("Signal pickup fault") : ""
+            ].filter(function (label) { return label !== ""; })
         }
 
         OperatorBar {
