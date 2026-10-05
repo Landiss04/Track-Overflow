@@ -78,8 +78,10 @@ ScrollView {
 
                 TableHeader { Layout.fillWidth: true }
 
+                // Stable rows bound to a value map: rebuilding every row on
+                // each tick cannot keep up with 10x.
                 Repeater {
-                    model: harness.outputs
+                    model: harness.outputDefinitions
 
                     delegate: SignalRow {
                         required property var modelData
@@ -88,7 +90,7 @@ ScrollView {
                         objectName: "output-" + modelData.name
                         name: modelData.name
                         kind: modelData.kind
-                        value: modelData.value
+                        value: harness.outputValues[modelData.name]
                         unit: modelData.unit
                     }
                 }
@@ -164,6 +166,30 @@ ScrollView {
                     }
                 }
 
+                Text {
+                    Layout.fillWidth: true
+                    Layout.topMargin: theme.space_2
+                    text: qsTr("Speed")
+                    color: theme.text_secondary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_small
+                    font.weight: theme.weight_regular
+                }
+
+                // One segment per speed the shared clock accepts. Speed
+                // changes how often ticks happen, never dt.
+                SegmentedToggle {
+                    objectName: "speedToggle"
+                    Layout.fillWidth: true
+                    options: harness.speeds.map(function (speed) {
+                        return qsTr("%1x").arg(speed);
+                    })
+                    currentIndex: harness.speeds.indexOf(harness.speed)
+                    onActivated: function (index) {
+                        harness.setSpeed(harness.speeds[index]);
+                    }
+                }
+
                 AppButton {
                     Layout.fillWidth: true
                     Layout.topMargin: theme.space_2
@@ -216,7 +242,28 @@ ScrollView {
                     Layout.fillWidth: true
                     label: qsTr("Elapsed")
                     value: harness.elapsed
+                }
+
+                // Checked every 30 clock ticks: ticks the shared clock
+                // spent that the Train Model did not take.
+                KeyValueRow {
+                    objectName: "clockDrift"
+                    Layout.fillWidth: true
+                    label: qsTr("Clock drift")
+                    value: (harness.driftTicks === 1 ? qsTr("1 tick")
+                            : qsTr("%1 ticks").arg(harness.driftTicks))
+                        + qsTr(" (%1 s)").arg(
+                            (harness.driftTicks * harness.dt).toFixed(1))
                     rule: false
+                }
+
+                HelperText {
+                    objectName: "driftWarning"
+                    Layout.fillWidth: true
+                    visible: harness.driftTicks > 0
+                    text: qsTr("The Train Model is behind the shared "
+                        + "clock. Reset the module to realign them.")
+                    color: theme.warning
                 }
             }
         }

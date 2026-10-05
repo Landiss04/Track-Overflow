@@ -15,7 +15,14 @@ The two pages are **independent windows, each its own process**:
   `step(dt, TrainModelInputs) -> TrainModelOutputs`, over a local socket
   (`train_model/link.py`), and reads back only `TrainModelOutputs`. Three
   test-only commands ride alongside: set a failure, clear the passenger brake
-  latch, and reset.
+  latch, and reset. Its clock is the shared simulation clock
+  (`utils/system_clock.py`): each step is one clock tick, dt is the clock's
+  fixed tick length, and the **1x / 10x** speed toggle changes only how often
+  ticks happen. A step is checked with the module's own input rules before
+  its tick, so rejected input never advances the clock, and the clock is held
+  as soon as the Train Model drops. Every 30 ticks the test UI compares the
+  clock with the steps the module accepted and shows any gap as **Clock
+  drift**.
 
 Once the system is integrated, the central harness calls the same
 `TrainModelState.step` the link calls; the test UI and the link are removed
@@ -30,6 +37,14 @@ properties: `theme` and `trainModel` in the Train Model window, `theme` and
 See [open issues](docs/open-issues.md) for speed-control ownership,
 vehicle calibration, and the displayed power-consumption limitation.
 
+Detailed documentation in `docs/`:
+
+- [physics.md](docs/physics.md): exactly what each step computes.
+- [module-interface.md](docs/module-interface.md): calls, inputs, outputs,
+  errors and timing at the module boundary.
+- [integration.md](docs/integration.md): removing the test UI and wiring the
+  module into the system.
+
 ## Physics stepping
 
 Commands are held for the complete tick. Traction is evaluated at the
@@ -39,6 +54,41 @@ they do not change the harness clock. Stops are integrated only up to zero
 velocity, then static holding or rollback is evaluated for the remaining
 time. Reported acceleration uses the current forces at the final velocity.
 Nonfinite numeric inputs and negative power are rejected before state changes.
+
+## Reference mass and operating mass
+
+The model uses two masses with different jobs.
+
+**Reference mass** (`TrainConfig.m_ref_kg`, fixed at 51,433 kg) is the mass at
+which the datasheet rates the vehicle's performance: two-thirds load. The
+datasheet gives 40,900 kg empty and 56,700 kg fully loaded (4 pass./m²), so
+the ⅔-load mass is 40,900 + ⅔ × (56,700 − 40,900) = 51,433 kg. It is used only
+to turn the rated rates into force limits, and never changes during a run:
+
+| Force | Rated rate × reference mass |
+|---|---|
+| Max traction (`f_max_n`) | 0.5 m/s² × 51,433 = 25,717 N |
+| Service brake (`f_service_n`) | 1.2 m/s² × 51,433 = 61,720 N |
+| Emergency brake (`f_emergency_n`) | 2.73 m/s² × 51,433 = 140,413 N |
+
+**Operating mass** (`TrainModelSnapshot.mass_kg`) is what the train weighs now,
+and is the *m* in F = m·a every tick: empty mass plus crew and passengers at
+77.11 kg (170 lb) each. It runs from 41,286 kg (5 crew only) to 58,404 kg
+(full, 222 passengers) and is recomputed whenever passengers board or alight.
+
+Because the forces are fixed while the mass varies, the datasheet rates hold
+at ⅔ load, and an empty train accelerates and brakes harder than a full one:
+
+| Train | Operating mass | Emergency deceleration |
+|---|---|---|
+| Crew only | 41,286 kg | ≈ 3.42 m/s² |
+| At the reference mass | 51,433 kg | 2.73 m/s² from the brake, ≈ 2.75 m/s² with rolling resistance |
+| Full | 58,404 kg | ≈ 2.42 m/s² |
+
+The two masses use different passenger weights by design: the reference mass
+comes straight from the datasheet's empty and loaded masses, the operating mass
+from 170 lb per person (customer Q&A). That is why 148 passengers at 170 lb
+(52,312 kg) does not equal the 51,433 kg reference mass.
 
 ## Design sources
 
@@ -153,7 +203,8 @@ door-open rising edge at rest.
 ## Passenger brake override
 
 The test harness emergency-brake input can explicitly override the passenger
-latch. An injected brake failure still prevents braking. The overview offers
+latch. An injected brake failure blocks the service brake only; the emergency
+brake and a passenger pull still work. The overview offers
 no release, pending a decision on normal operation; this test override does
 not define that policy. Its button always reads *Apply emergency brake* and is
 disabled while the emergency brake is engaged from any source (a Train

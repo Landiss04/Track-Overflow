@@ -17,13 +17,27 @@ Controls read back live state from the outputs, with staged edits marked
 pending. Sending applies those edits and advances one tick. Later ticks
 reuse the last accepted inputs. A boarding count is consumed once and
 must be entered again for a later boarding event.
+
+Time comes from the shared simulation clock (``utils/system_clock.py``).
+The module steps once per clock tick, and dt is the clock's fixed tick
+length. ``ClockDriver`` ticks the clock in real time while it runs, at
+1x or 10x; sending and advancing tick it by hand. Speed changes how
+often ticks happen, never dt (D006).
+
+A step is checked before its tick, with the module's own input rules
+and for a reachable module, so input the module would reject never
+advances the shared clock. Every ``DRIFT_CHECK_TICKS`` clock ticks the
+harness compares the clock with the steps the module accepted and
+reports any gap as drift.
 """
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any, cast
 
-from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from train_model.interface import (
     Beacon,
@@ -35,7 +49,13 @@ from train_model.interface import (
     TrainModelOutputs,
 )
 from train_model.link import LinkError, LocalLink, SocketLink
-from train_model.model import InvalidTimeStepError
+from train_model.model import InvalidTimeStepError, TrainModel
+
+# The simulation clock is shared by every module, so it lives in the
+# repository-level utils/ package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from utils.clock_driver import ClockDriver  # noqa: E402
+from utils.system_clock import ALLOWED_SPEEDS, SystemClock  # noqa: E402
 
 #: Inputs, in interface-dictionary order. ``kind`` drives which editor
 #: the view renders; ``unit`` is empty where the signal is
@@ -150,8 +170,13 @@ _INITIAL_COMMANDS: dict[str, Any] = {
 # Float outputs are shown to this many decimal places.
 _OUTPUT_DECIMALS = 3
 
-_DEFAULT_DT = 0.100
 _DISPLAY_FACTORS = {"mph": 2.236936, "ft": 3.280840, "kW": 0.001}
+
+#: Clock ticks between drift checks.
+DRIFT_CHECK_TICKS = 30
+
+# The step was not tried: the Train Model process is not reachable.
+_NOT_CONNECTED = "Train Model is not running"
 
 #: Either link: in this process (tests) or in the Train Model process.
 Link = LocalLink | SocketLink
@@ -207,6 +232,7 @@ class TestHarnessState(QObject):
     runControlChanged = Signal()
     inputErrorChanged = Signal()
     connectedChanged = Signal()
+    driftChanged = Signal()
 
     def __init__(self, link: Link, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -217,15 +243,32 @@ class TestHarnessState(QObject):
         self._pending_inputs: dict[str, Any] = {}
         self._live_inputs = self._live_input_values()
         self._emergency_override_pending = False
-        self._running = False
+        # Accepted steps since the last reset. Steps are checked before
+        # their tick, so a clock tick without one is drift.
         self._tick = 0
-        self._dt = _DEFAULT_DT
-        self._timer = QTimer(self)
-        self._timer.setInterval(round(self._dt * 1000))
-        self._timer.timeout.connect(self._step)
+        # Clock ticks the module did not take, as of the last check.
+        self._drift_ticks = 0
+        # Set while a send ticks the clock, so that tick carries the
+        # staged edits; the tick reports whether the module took them.
+        self._send_requested = False
+        self._send_accepted = False
+        self._clock = SystemClock()
+        self._clock.add_tick_listener(self._on_clock_tick)
+        self._clock.add_state_listener(self.runControlChanged.emit)
+        # The driver idles while the clock is held.
+        self._driver = ClockDriver(self._clock, parent=self)
+        self._driver.start()
         link.outputsChanged.connect(self.outputsChanged)
         link.outputsChanged.connect(self._sync_inputs)
-        link.connectedChanged.connect(self.connectedChanged)
+        link.connectedChanged.connect(self._on_connected_changed)
+
+    def _on_connected_changed(self) -> None:
+        # Hold a running clock as soon as the Train Model drops, rather
+        # than spend a tick on a step that cannot reach it.
+        if not self._link.connected and not self._clock.is_paused:
+            self.setRunning(False)
+            self._set_input_error(_NOT_CONNECTED)
+        self.connectedChanged.emit()
 
     def _live_input_values(self) -> dict[str, Any]:
         # Live controls reflect actual state, not hidden stored commands.
@@ -295,9 +338,28 @@ class TestHarnessState(QObject):
         values = self._display_values()
         return [dict(row, value=values[row["name"]]) for row in INPUT_SPEC]
 
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    def outputDefinitions(self) -> list[dict[str, Any]]:
+        """Stable output rows: a tick updates values, not delegates."""
+        return [
+            {"name": name, "kind": kind, "unit": unit}
+            for name, kind, unit in _OUTPUT_SPEC
+        ] + [
+            {"name": name, "kind": "bool", "unit": ""}
+            for name in _FAILURE_FIELDS
+        ]
+
+    @Property("QVariantMap", notify=outputsChanged)  # type: ignore[arg-type]
+    def outputValues(self) -> dict[str, Any]:
+        """Displayed output values by row name; None while disconnected."""
+        return {row["name"]: row["value"] for row in self._output_rows()}
+
     @Property("QVariantList", notify=outputsChanged)  # type: ignore[arg-type]
     def outputs(self) -> list[dict[str, Any]]:
         """Read-only output rows; empty values while disconnected."""
+        return self._output_rows()
+
+    def _output_rows(self) -> list[dict[str, Any]]:
         outputs = self._link.outputs
         values = _output_values(outputs) if outputs is not None else {}
         rows: list[dict[str, Any]] = [
@@ -353,7 +415,17 @@ class TestHarnessState(QObject):
     @Property(bool, notify=runControlChanged)
     def running(self) -> bool:
         """Whether the simulation clock is running rather than held."""
-        return self._running
+        return not self._clock.is_paused
+
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    def speeds(self) -> list[int]:
+        """Speed multipliers the clock accepts, slowest first."""
+        return list(ALLOWED_SPEEDS)
+
+    @Property(int, notify=runControlChanged)
+    def speed(self) -> int:
+        """Clock speed multiplier; 1 is real time."""
+        return self._clock.speed
 
     @Property(int, notify=runControlChanged)
     def tick(self) -> int:
@@ -362,14 +434,23 @@ class TestHarnessState(QObject):
 
     @Property(float, notify=runControlChanged)
     def dt(self) -> float:
-        """Seconds per tick."""
-        return self._dt
+        """Seconds per tick, fixed by the clock at any speed."""
+        return self._clock.tick_s
 
     @Property(str, notify=runControlChanged)
     def elapsed(self) -> str:
         """Elapsed simulated time as ``hh:mm:ss``."""
-        total = int(self._tick * self._dt + 1e-9)
+        total = int(self._tick * self._clock.tick_s + 1e-9)
         return f"{total // 3600:02d}:{total // 60 % 60:02d}:{total % 60:02d}"
+
+    @Property(int, notify=driftChanged)
+    def driftTicks(self) -> int:
+        """Clock ticks the module has not taken, as of the last check.
+
+        Checked every ``DRIFT_CHECK_TICKS`` clock ticks; zero while the
+        module keeps time with the shared clock.
+        """
+        return self._drift_ticks
 
     @Slot(str, "QVariant")
     def setDisplayInput(self, name: str, value: Any) -> None:
@@ -411,42 +492,49 @@ class TestHarnessState(QObject):
     @Slot(result=bool)
     def sendInputs(self) -> bool:
         """Submit a valid tick, or retain state and drafts with an error."""
-        values = self._accepted | self._pending_inputs
-        if not self._submit(values, self._emergency_override_pending):
+        if not self._can_step(self._next_values(send=True)):
             return False
-        self._emergency_override_pending = False
-        self._pending_inputs.clear()
-        self._set_input_error("")
-        self.inputsChanged.emit()
-        return True
+        # Tick the clock by hand; that tick carries the staged edits.
+        self._send_requested = True
+        self._send_accepted = False
+        try:
+            self._clock.tick()
+        finally:
+            self._send_requested = False
+        return self._send_accepted
 
     @Slot(bool)
     def setRunning(self, running: bool) -> None:
         """Run or hold the simulation clock."""
-        if self._running == running:
-            return
-        self._running = running
-        if running:
-            self._timer.start()
-        else:
-            self._timer.stop()
-        self.runControlChanged.emit()
+        if not running:
+            self._clock.pause()
+        elif self._can_step(self._next_values(send=False)):
+            self._clock.resume()
+
+    @Slot(int)
+    def setSpeed(self, speed: int) -> None:
+        """Set the clock speed multiplier; one of ``speeds``."""
+        self._clock.set_speed(speed)
 
     @Slot()
     def advanceTick(self) -> None:
         """Advance the Train Model one tick on the last sent inputs."""
-        self._step()
+        if self._can_step(self._next_values(send=False)):
+            self._clock.tick()
 
     @Slot()
     def resetModule(self) -> None:
         """Restore a fresh module, the initial commands and zero counters."""
-        self._timer.stop()
+        # Resetting also holds the clock; the speed is kept.
+        self._clock.reset()
+        if self._drift_ticks:
+            self._drift_ticks = 0
+            self.driftChanged.emit()
         self._set_input_error("")
         self._pending_inputs.clear()
         self._accepted = dict(_INITIAL_COMMANDS)
         self._emergency_override_pending = False
         self._tick = 0
-        self._running = False
         try:
             self._link.reset()
         except LinkError as exc:
@@ -455,24 +543,80 @@ class TestHarnessState(QObject):
         self.inputsChanged.emit()
         self.runControlChanged.emit()
 
-    def _step(self) -> None:
-        # The first tick may submit pending edits. Later ticks use only
-        # accepted inputs; they never overwrite or submit drafts.
-        if self._tick == 0 and self._pending_inputs:
-            self.sendInputs()
-            return
-        if self._submit(self._accepted) and not self._pending_inputs:
+    def _on_clock_tick(self, _sim_time_s: float, tick_s: float) -> None:
+        # Every module step happens on a clock tick.
+        send = self._carries_drafts(self._send_requested)
+        # Consume the request first: a rejection holds the clock, and
+        # the driver may run ticks already due before it stops.
+        self._send_requested = False
+        if send:
+            self._send_accepted = self._send(tick_s)
+        elif self._submit(tick_s, self._accepted) and not self._pending_inputs:
             # A pending draft keeps the error that explains why it was
             # not sent; otherwise a good tick clears a stale one.
             self._set_input_error("")
+        if self._clock.tick_count % DRIFT_CHECK_TICKS == 0:
+            self._check_drift()
+
+    def _carries_drafts(self, send: bool) -> bool:
+        # A send, and the first tick while edits are pending, submit the
+        # drafts. Later ticks reuse only the accepted inputs.
+        return send or (self._tick == 0 and bool(self._pending_inputs))
+
+    def _next_values(self, send: bool) -> dict[str, Any]:
+        # The inputs the next tick will submit.
+        if self._carries_drafts(send):
+            return self._accepted | self._pending_inputs
+        return self._accepted
+
+    def _can_step(self, values: dict[str, Any]) -> bool:
+        """Check a step on ``values`` before its tick; report a rejection.
+
+        Uses the module's own input rules, which need no module state;
+        nothing is sent. Input the module would reject, or a module
+        that cannot be reached, holds the clock instead of ticking it.
+        """
+        try:
+            if not self._link.connected:
+                raise LinkError(_NOT_CONNECTED)
+            TrainModel.validate_inputs(
+                self._clock.tick_s, self._build_inputs(values)
+            )
+        except (ValueError, InvalidTimeStepError, LinkError) as exc:
+            self.setRunning(False)
+            self._set_input_error(str(exc))
+            return False
+        return True
+
+    def _check_drift(self) -> None:
+        # Each accepted step advances the module by one tick, so the
+        # module's time is accepted steps x dt. The boundary does not
+        # report the module's own time: a step the module took whose
+        # reply was lost would also show here as drift.
+        drift_ticks = self._clock.tick_count - self._tick
+        if drift_ticks != self._drift_ticks:
+            self._drift_ticks = drift_ticks
+            self.driftChanged.emit()
+
+    def _send(self, dt: float) -> bool:
+        # Step on the accepted inputs with the staged edits applied.
+        values = self._accepted | self._pending_inputs
+        if not self._submit(dt, values, self._emergency_override_pending):
+            return False
+        self._emergency_override_pending = False
+        self._pending_inputs.clear()
+        self._set_input_error("")
+        self.inputsChanged.emit()
+        return True
 
     def _submit(
-        self, values: dict[str, Any], clear_passenger_brake: bool = False,
+        self, dt: float, values: dict[str, Any],
+        clear_passenger_brake: bool = False,
     ) -> bool:
         """Step the module once on ``values``; report a rejection."""
         try:
             self._link.step(
-                self._dt, self._build_inputs(values),
+                dt, self._build_inputs(values),
                 clear_passenger_brake=clear_passenger_brake,
             )
         except (ValueError, InvalidTimeStepError, LinkError) as exc:

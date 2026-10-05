@@ -183,17 +183,23 @@ def main():
         QTest.qWait(800)
         assert not state.running and "paused" in texts()
 
-        # 7. Brake failure: a commanded brake cannot engage, so the
-        #    button stays offered; a pull latches and disables it.
+        # 7. Brake failure blocks only the service brake: a commanded
+        #    emergency brake still engages and disables the button, and
+        #    a pull still latches and disables it.
         drive("failure", name="brake_failure", value="True")
         assert state.isFailed("brake_failure")
         assert drive("query")["brake_failure"] is True
         drive("toggle", name="emergency_brake_command", value="True")
         drive("send")
+        assert state.snapshot["emergency_brake"]
+        assert_blocked()
+        drive("toggle", name="emergency_brake_command", value="False")
+        drive("send")
         assert not state.snapshot["emergency_brake"]
         assert_offered()
         pull()
         assert state.snapshot["passenger_ebrake_pulled"]
+        assert state.snapshot["emergency_brake"]
         assert_blocked()
 
         # 8. Reset from the test UI clears it all: offered again.

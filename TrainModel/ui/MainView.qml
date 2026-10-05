@@ -209,8 +209,7 @@ ScrollView {
                     // Never offers a release: whether passengers may release
                     // it is undecided. Disabled while the emergency brake is
                     // engaged from any source (a Train Controller command or
-                    // a pull) and while a pull is latched, which covers a
-                    // pull the failed brakes cannot engage.
+                    // a pull) and while a pull is latched.
                     enabled: !root.s.emergency_brake
                         && !root.s.passenger_ebrake_pulled
                     tooltip: qsTr("Stops the train at the full braking rate and "

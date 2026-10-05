@@ -81,12 +81,14 @@ def test_invalid_time_cannot_clear_test_latch(pair, dt):
     state.applyEmergencyBrake()
     before = state.snapshot
     harness.setInput("emergency_brake_command", False)
-    harness._dt = dt
+    # dt is the shared clock's tick length, which the clock itself
+    # keeps positive; force it to reach the module's own check.
+    harness._clock._tick_s = dt
     assert not harness.sendInputs()
     assert state.snapshot == before
     assert harness.tick == 0
     assert harness.inputError
-    harness._dt = .1
+    harness._clock._tick_s = .1
     assert harness.sendInputs()
     assert not state.snapshot["passenger_ebrake_pulled"]
 

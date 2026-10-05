@@ -114,10 +114,12 @@ def expected_mass(config: TrainConfig, n_passengers: int) -> float:
 def test_design_constants() -> None:
     """Check the derived design constants match the datasheet values."""
     config = TrainConfig()
-    assert config.m_ref_kg == pytest.approx(52_312, abs=1.0)
-    assert config.f_max_n == pytest.approx(26_156, abs=1.0)
-    assert config.f_service_n == pytest.approx(62_774, abs=1.0)
-    assert config.f_emergency_n == pytest.approx(142_812, abs=1.0)
+    # 2/3 of the datasheet load: 40.9 t empty, 56.7 t loaded.
+    assert config.m_ref_kg == pytest.approx(51_433, abs=1.0)
+    assert config.f_max_n == pytest.approx(25_717, abs=1.0)
+    # The instructor's values: 51,433 kg x 1.2 and x 2.73.
+    assert config.f_service_n == pytest.approx(61_720, abs=1.0)
+    assert config.f_emergency_n == pytest.approx(140_413, abs=1.0)
 
 
 def test_first_tick_acceleration_two_thirds_load() -> None:
@@ -150,20 +152,23 @@ def test_emergency_stop_distance(
 
 
 def test_full_train_grade_threshold() -> None:
-    """Check the full train creeps at 4.3 percent grade but not 4.5."""
+    """Check the full train creeps at 4.2 percent grade but not 4.4.
+
+    The limit, F_max = m g (sin + c_rr cos), is about 4.29 percent.
+    """
     config = TrainConfig()
     model = TrainModel(config)
     board(model, config.capacity)
     for _ in range(200):
         model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, grade_deg=pct_to_deg(4.3)))
+            power_w=config.p_max_w, grade_deg=pct_to_deg(4.2)))
     assert model.snapshot().velocity_mps > 0.0
 
     model = TrainModel(config)
     board(model, config.capacity)
     for _ in range(1000):
         model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, grade_deg=pct_to_deg(4.5)))
+            power_w=config.p_max_w, grade_deg=pct_to_deg(4.4)))
         assert model.snapshot().velocity_mps == 0.0
 
 
@@ -229,7 +234,7 @@ def test_engine_failure_power_has_no_effect() -> None:
 
 
 def test_all_failures_compose() -> None:
-    """Check all three failures leave only rolling resistance acting."""
+    """Check all failures leave only rolling resistance under service."""
     config = TrainConfig()
     model = TrainModel(config)
     run_until_speed(model, 10.0)
@@ -241,7 +246,7 @@ def test_all_failures_compose() -> None:
     for _ in range(500):
         assert model.snapshot().velocity_mps > 0.0
         outputs = model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, service=True, emergency=True))
+            power_w=config.p_max_w, service=True))
         accel = model.snapshot().acceleration_mps2
         assert accel == pytest.approx(expected_accel, rel=1e-9)
         assert outputs.controller.commanded_speed_mps == 0.0
@@ -294,10 +299,11 @@ def test_passenger_bounds_and_capacity() -> None:
         (True, True, False, False, (True, False)),
         (False, False, True, False, (True, False)),
         (True, False, True, False, (True, False)),
-        # Failed brakes are not engaged, whatever is commanded.
+        # Brake failure blocks the service brake only.
         (True, False, False, True, (False, False)),
-        (False, True, False, True, (False, False)),
-        (True, True, True, True, (False, False)),
+        (False, True, False, True, (True, False)),
+        (False, False, True, True, (True, False)),
+        (True, True, True, True, (True, False)),
     ],
 )
 def test_brake_state_reports_engaged_brakes(
@@ -322,6 +328,7 @@ def test_brake_state_matches_applied_force() -> None:
     cfg = TrainConfig()
     for service, emergency, failed in [(True, False, False),
                                        (False, True, False),
+                                       (True, False, True),
                                        (True, True, True)]:
         model = TrainModel(cfg)
         while model.snapshot().velocity_mps < 10.0:

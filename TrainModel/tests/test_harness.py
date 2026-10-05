@@ -157,7 +157,11 @@ def test_test_override_restores_service_brake() -> None:
 
 
 def test_test_override_preserves_brake_failure() -> None:
-    """Testing overrides the passenger request, never injected faults."""
+    """Testing overrides the passenger request, never injected faults.
+
+    Brake failure blocks only the service brake, so the commanded
+    emergency brake still engages while the failure stays injected.
+    """
     state, harness = make_harness()
     harness.sendInputs()
     state.setFailure("brake_failure", True)
@@ -167,7 +171,7 @@ def test_test_override_preserves_brake_failure() -> None:
         harness.sendInputs()
         assert state.isFailed("brake_failure")
         assert not snap(state)["passenger_ebrake_pulled"]
-        assert not snap(state)["emergency_brake"]
+        assert snap(state)["emergency_brake"] is command
 
 
 def test_unrelated_sends_do_not_clear_passenger_latch() -> None:

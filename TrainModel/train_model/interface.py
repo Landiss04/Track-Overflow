@@ -28,6 +28,7 @@ class TrainConfig:
 
     # Vehicle (datasheet)
     m_empty_kg: float = 40_900.0
+    m_loaded_kg: float = 56_700.0           # at 4 pass./m^2
     length_m: float = 32.2
     width_m: float = 2.65
     height_m: float = 3.42
@@ -56,9 +57,9 @@ class TrainConfig:
 
     @property
     def m_ref_kg(self) -> float:
-        """2/3-load reference mass. Excludes crew: datasheet test condition."""
-        n_ref = round(self.capacity * self.ref_load_fraction)
-        return self.m_empty_kg + n_ref * self.passenger_mass_kg
+        """2/3-load reference mass: 2/3 of the datasheet load, 51,433 kg."""
+        load_kg = self.m_loaded_kg - self.m_empty_kg
+        return self.m_empty_kg + self.ref_load_fraction * load_kg
 
     @property
     def f_max_n(self) -> float:
@@ -170,7 +171,7 @@ class ControllerOutputs:
 
     actual_speed_mps: float
     # Brake State, bool[2]: emergency then service. Engaged, not
-    # commanded: both are false while the brakes have failed.
+    # commanded: a brake failure blocks only the service brake.
     emergency_brake_active: bool    # controller or passenger
     service_brake_active: bool
     door_left_open: bool

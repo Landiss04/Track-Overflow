@@ -73,13 +73,12 @@ def _brakes_engaged(
     Returns:
         ``(emergency, service)``: whether each brake is engaged.
     """
-    # Brake failure disables both brakes, passenger pull included.
-    if brake_failed:
-        return False, False
+    # Brake failure blocks the service brake only; the emergency brake,
+    # commanded or pulled by a passenger, still works.
     emergency = emergency_cmd or passenger_pulled
     # OPEN(5.8): the emergency brake supersedes the service brake, so
     # the service brake is not engaged while the emergency brake is.
-    service = service_cmd and not emergency
+    service = service_cmd and not emergency and not brake_failed
     return emergency, service
 
 
