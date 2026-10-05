@@ -111,7 +111,8 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     {"name": "polarity", "kind": "bool", "unit": ""},
     # Station in the current block; empty where there is none.
     {"name": "station", "kind": "string", "unit": ""},
-    {"name": "passengers_boarded", "kind": "int", "unit": ""},
+    # A count, edited with PositiveIntField: 0 and up.
+    {"name": "passengers_boarded", "kind": "uint", "unit": ""},
     {"name": "temperature_setpoint", "kind": "float", "unit": "°F"},
     {
         "name": "announcement",
@@ -674,7 +675,7 @@ class TestHarnessState(QObject):
         kind: str, value: Any, decimals: int = _OUTPUT_DECIMALS,
     ) -> Any:
         """Round a numeric output for display in its declared kind."""
-        if kind == "int":
+        if kind in ("int", "uint"):
             return round(value)
         if kind == "float":
             return round(value, decimals)
@@ -685,7 +686,7 @@ class TestHarnessState(QObject):
         """Convert a value from QML into the type the row declares."""
         if kind == "bool":
             return bool(value)
-        if kind == "int":
+        if kind in ("int", "uint"):
             return int(float(value))
         if kind == "float":
             return float(value)

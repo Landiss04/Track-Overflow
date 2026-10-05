@@ -35,6 +35,7 @@ Rectangle {
 
             Text {
                 text: root.title
+                textFormat: Text.PlainText
                 color: theme.text_primary
                 font.family: theme.ui_family
                 font.pixelSize: root.framed ? theme.size_h3 : theme.size_h2

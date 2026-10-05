@@ -19,6 +19,7 @@ ColumnLayout {
         Text {
             Layout.fillWidth: true
             text: root.label
+            textFormat: Text.PlainText
             color: theme.text_secondary
             font.family: theme.ui_family
             font.pixelSize: theme.size_small

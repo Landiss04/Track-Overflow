@@ -45,21 +45,46 @@ from ui.theme import build_theme
 engine.rootContext().setContextProperty("theme", build_theme())
 ```
 
+## Window scaling
+
+Every module window resizes the same way, through two shared pieces:
+
+- **`ScaledWindow.qml`**: use it as the root of your module's `Main.qml`
+  instead of `ApplicationWindow`. It lays content out on a fixed 1440 x 900
+  canvas, scales it uniformly, letterboxes other shapes, and sets the
+  720 x 450 minimum.
+- **`aspect_lock.py`**: after loading the QML, call
+  `install_window_scaling(engine.rootObjects()[0])` and keep the returned
+  object alive. On Windows it holds the window at 16:10 while it is dragged,
+  and a window already at the minimum stays put instead of snapping.
+
+Never resize the window from QML or Python after the fact (for example from
+`onWidthChanged` or a timer). See
+[`documents/SCALING_GUIDE.md`](../documents/SCALING_GUIDE.md).
+
 ## Component catalog
 
 | Component | Host-facing action / data |
 | --- | --- |
 | `AppButton` | Native `clicked()`; primary, secondary, ghost, danger, success |
-| `ValueField` | `label`, `kind`, `text`; `committed(value)` sends a number for int/float, a string otherwise; invalid numbers never commit |
-| `SelectField` | `model`, `textRole`, `valueRole`, `currentIndex`; `committed(value)` sends the selected model value |
+| `IntField`, `FloatField` | `label`, `labelVisible`, `text`; `committed(value)` sends a number; invalid numbers never commit. A `ValueField` with `kind` fixed to `int` or `float`: use these for numeric entry. A refused keystroke or paste is named in the error line, never dropped silently |
+| `PositiveIntField` | An `IntField` that accepts 0 and up; a typed minus sign is refused with a message. Use it for counts such as passengers |
+| `ValueField` | `label`, `kind`, `text`; `committed(value)` sends a number for int/float, a string otherwise; invalid numbers never commit. `labelVisible: false` hides the label where a surrounding row already names the field, keeping it as the accessible name. Bind `modelValue` instead of `text` when the host can change the value while the user types: a new host value never overwrites an unsent edit, and Escape reverts the edit to the host value. Use it for text, or when the kind comes from data, as in `SignalRow` |
+| `SelectField` | `model`, `textRole`, `valueRole`, `currentIndex`, `labelVisible`; `committed(value)` sends the selected model value |
 | `SegmentedToggle`, `NavRail` | `activated(index)`; bind `currentIndex` to host state |
 | `ModuleHeader` | `navigationActivated(index)`; bind navigation index, mode, clock and fault state |
-| `SafetyButton` | `confirmed()` after confirmation; bind `applied` to acknowledged state; `confirmationRequired: false` is reserved for the Train Controller emergency brake |
-| `SignalRow` | `edited(value)` forwards typed edits; bind `value` to host state |
+| `SafetyButton` | `confirmed()` after confirmation; bind `applied` to acknowledged state; moving focus off the confirmation prompt cancels it; `confirmationRequired: false` is reserved for the Train Controller emergency brake |
+| `SignalRow` | `edited(value)` forwards typed edits; bind `value` to host state. `kind` is `bool`, `int`, `uint`, `float`, `string` or `enum`; a `uint` row is a count edited with `PositiveIntField`, and an `enum` row takes its allowed values from `options`. A host value change never overwrites the user's unsent typing |
 | `DataTable` | `columns` (`key`, `label`, optional `numeric`, `mono`, `width`) and `rows`; `rowActivated(index, row)`; bind `currentIndex` to host state |
 | `TrackBlock` | Read-only `blockId` and `occupancy` (`free`, `occupied`, `closed`, `failure`, `maintenance`) |
 | `StatusBadge`, `TelemetryReadout`, `UsageBar` | Read-only presentation properties |
-| `Card`, `Callout`, `FieldLabel`, `HelperText`, `KeyValueRow`, `MonoText`, `TableHeader` | Layout and text components |
+| `Card`, `FieldLabel`, `HelperText`, `KeyValueRow`, `MonoText`, `TableHeader` | Layout and text components |
+| `Callout` | `heading`, `body`, `variant` (`info` default, or `warning`); a side-bar callout on the matching subtle background. The heading renders uppercase |
+| `Panel` | `title`; `headerItems: [...]` for trailing badges or small buttons; children fill the body. A header-bar panel for full-height workspace regions, where `Card` suits compact, content-sized sections |
+| `EmptyState` | `heading`, `body`; framed placeholder that shrinks to fit a narrow parent. Center it in the region it replaces |
+| `FormField` | `label`; the Label-token heading above a control that has no label of its own, such as a `SegmentedToggle`. `ValueField` and `SelectField` carry their own labels and do not need it |
+| `LabeledDivider` | `text`; a horizontal rule with a centered Label-token caption |
+| `ScaledWindow` | Module root window; `referenceWidth`, `referenceHeight`, `canvasScale`, `canvas`. See [Window scaling](#window-scaling). Not shown in the gallery, since it is a window |
 
 Selection and toggle signals request changes; the host updates the bound
 state. Programmatic updates do not emit user commands. Numeric input emits

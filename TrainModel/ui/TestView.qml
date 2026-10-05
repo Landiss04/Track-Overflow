@@ -54,7 +54,6 @@ ScrollView {
                         value: harness.displayInputValues[modelData.name]
                         unit: modelData.unit
                         editable: true
-                        preserveActiveEdit: true
                         property bool pending: !!harness.pendingInputs[modelData.name]
                         name: modelData.name + (pending ? " (pending)" : "")
                         onEdited: function (newValue) {

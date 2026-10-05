@@ -28,6 +28,7 @@ ApplicationWindow {
     property bool editBool: true
     property var editFloat: 118000.5
     property var editInt: 12
+    property var editCount: 30
     property string editString: "GREEN M"
     property real liveValue: 0
     property string clockText: Qt.formatTime(new Date(), "hh:mm:ss")
@@ -326,7 +327,7 @@ ApplicationWindow {
 
                         Card {
                             Layout.fillWidth: true
-                            title: "ValueField · SelectField"
+                            title: "IntField · FloatField · ValueField · SelectField"
 
                             GridLayout {
                                 Layout.fillWidth: true
@@ -334,24 +335,22 @@ ApplicationWindow {
                                 columnSpacing: theme.space_4
                                 rowSpacing: theme.space_3
 
-                                ValueField {
+                                IntField {
                                     Layout.fillWidth: true
-                                    label: "Integer (kind int)"
-                                    kind: "int"
+                                    label: "Integer (IntField)"
                                     text: "42"
                                     onCommitted: function (v) {
-                                        gallery.log("ValueField int committed "
+                                        gallery.log("IntField committed "
                                             + v + " (" + typeof v + ")");
                                     }
                                 }
 
-                                ValueField {
+                                FloatField {
                                     Layout.fillWidth: true
-                                    label: "Float (kind float)"
-                                    kind: "float"
+                                    label: "Float (FloatField)"
                                     text: "12.5"
                                     onCommitted: function (v) {
-                                        gallery.log("ValueField float committed "
+                                        gallery.log("FloatField committed "
                                             + v + " (" + typeof v + ")");
                                     }
                                 }
@@ -366,22 +365,29 @@ ApplicationWindow {
                                     }
                                 }
 
-                                ValueField {
+                                FloatField {
                                     Layout.fillWidth: true
                                     label: "Invalid float (shows error)"
-                                    kind: "float"
                                     text: "-"
                                     onCommitted: function (v) {
-                                        gallery.log("ValueField invalid committed " + v);
+                                        gallery.log("FloatField invalid committed " + v);
                                     }
                                 }
 
-                                ValueField {
+                                IntField {
                                     Layout.fillWidth: true
                                     label: "Disabled"
-                                    kind: "int"
                                     text: "7"
                                     enabled: false
+                                }
+
+                                PositiveIntField {
+                                    Layout.fillWidth: true
+                                    label: "Count (PositiveIntField, refuses -)"
+                                    text: "12"
+                                    onCommitted: function (v) {
+                                        gallery.log("PositiveIntField committed " + v);
+                                    }
                                 }
 
                                 ValueField {
@@ -416,9 +422,13 @@ ApplicationWindow {
 
                                 // Narrow on purpose: long text must end in "…"
                                 // before the arrow, never run underneath it.
+                                // The maximum is a hard cap; the grid column can
+                                // stretch a preferred width past what the label
+                                // needs on narrower fonts.
                                 SelectField {
                                     objectName: "elideSelect"
-                                    Layout.preferredWidth: 220
+                                    Layout.preferredWidth: 200
+                                    Layout.maximumWidth: 200
                                     label: "Long option (elides)"
                                     model: [{
                                         label: "Green Line — Dormont to South Hills Junction",
@@ -560,6 +570,19 @@ ApplicationWindow {
                                 onEdited: function (v) {
                                     gallery.editInt = v;
                                     gallery.log("SignalRow edit_int edited " + v
+                                        + " (" + typeof v + ")");
+                                }
+                            }
+
+                            SignalRow {
+                                Layout.fillWidth: true
+                                name: "edit_count"
+                                kind: "uint"
+                                value: gallery.editCount
+                                editable: true
+                                onEdited: function (v) {
+                                    gallery.editCount = v;
+                                    gallery.log("SignalRow edit_count edited " + v
                                         + " (" + typeof v + ")");
                                 }
                             }
@@ -708,6 +731,14 @@ ApplicationWindow {
                                 heading: "Callout with heading only"
                             }
 
+                            Callout {
+                                Layout.fillWidth: true
+                                variant: "warning"
+                                heading: "Warning callout"
+                                body: "variant: \"warning\" uses --warning on --warning-bg, "
+                                    + "for caution states such as a maintenance mode."
+                            }
+
                             Card {
                                 Layout.fillWidth: true
                                 title: "Nested framed card"
@@ -721,6 +752,69 @@ ApplicationWindow {
                                 framed: false
                                 title: "Unframed card (flat section)"
                                 HelperText { text: "No border, H2 title, no rule." }
+                            }
+                        }
+
+                        Card {
+                            Layout.fillWidth: true
+                            title: "Panel · EmptyState · FormField · LabeledDivider"
+
+                            Panel {
+                                Layout.fillWidth: true
+                                title: "Panel with header items"
+                                headerItems: [
+                                    StatusBadge { label: "Running"; variant: "ok" },
+                                    AppButton {
+                                        variant: "ghost"
+                                        size: "small"
+                                        text: "Clear"
+                                        onClicked: gallery.log("Panel header button clicked")
+                                    }
+                                ]
+                                HelperText {
+                                    Layout.fillWidth: true
+                                    text: "Body slot. Children land in the body column."
+                                }
+                            }
+
+                            Panel {
+                                Layout.fillWidth: true
+                                title: "Panel with a very long title that should elide before it reaches the header items"
+                                headerItems: [StatusBadge { label: "Idle" }]
+                                HelperText { text: "Long title elides." }
+                            }
+
+                            Panel {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 200
+                                title: "Panel with EmptyState"
+                                Item {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    EmptyState {
+                                        anchors.centerIn: parent
+                                        heading: "Nothing to show"
+                                        body: "EmptyState shrinks to fit a narrow parent."
+                                    }
+                                }
+                            }
+
+                            FormField {
+                                Layout.fillWidth: true
+                                label: "FormField around a toggle"
+                                SegmentedToggle {
+                                    options: ["Normal", "Reverse"]
+                                    currentIndex: -1
+                                    onActivated: function (index) {
+                                        currentIndex = index;
+                                        gallery.log("FormField toggle -> " + index);
+                                    }
+                                }
+                            }
+
+                            LabeledDivider {
+                                Layout.fillWidth: true
+                                text: "or labeled divider"
                             }
                         }
                     }
