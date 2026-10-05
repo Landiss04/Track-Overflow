@@ -139,6 +139,9 @@ CABIN_MIN_F, CABIN_MAX_F = 60.0, 80.0
 MASS_KG = 51_433.0
 MAX_ACCEL = 0.5         # m/s^2, and the car will not exceed it
 MAX_FORCE_N = MASS_KG * MAX_ACCEL
+# The data sheet's 70 km/h. It is the default line limit a train
+# spawns with, not a hard ceiling: raise speed_limit on the bench and
+# the train will chase it.
 MAX_SPEED_MPS = 70 / 3.6
 V_FLOOR = 1.0           # m/s, below which F = P / v is capped
 SERVICE_DECEL = 1.2     # m/s^2
@@ -316,8 +319,7 @@ class ControllerCore:
                 # In Automatic the CTC's commanded speed already
                 # agrees with the signal ahead, so the only things
                 # left to respect are the line limit and the car.
-                s.target_mps = min(s.commanded_mps, s.speed_limit_mps,
-                                   MAX_SPEED_MPS)
+                s.target_mps = min(s.commanded_mps, s.speed_limit_mps)
 
             error = s.target_mps - s.actual_mps
             self.integral += error * self.dt
@@ -379,8 +381,14 @@ class ControllerCore:
         self.enforce_safety()
 
     def release_emergency(self) -> bool:
-        """Latching. Release only when stopped with nothing still wrong."""
+        """Latching. Release only when stopped with nothing still wrong.
+
+        Asking a released brake to release is not a refusal: it is
+        already where the caller wants it.
+        """
         s = self.state
+        if not s.emergency_brake:
+            return True
         s.emergency_brake = False
         self.enforce_safety()
         if abs(s.actual_mps) < 0.1 and not self.last_reasons:
@@ -406,8 +414,7 @@ class ControllerCore:
         """Set the driver's target, in m/s, capped at the speed limit."""
         s = self.state
         if s.manual and s.authority_blocks > 0:
-            s.target_mps = max(0.0, min(mps, s.speed_limit_mps,
-                                        MAX_SPEED_MPS))
+            s.target_mps = max(0.0, min(mps, s.speed_limit_mps))
 
     def _plant(self) -> None:
         """Toy physics until the Train Model is wired in.
@@ -865,10 +872,12 @@ class ConsoleBackend(QObject):
             if aspect in ASPECTS:
                 s.next_signal = aspect
         if "ebrake_state" in values:
-            if bool(values["ebrake_state"]):
-                self.core.engage_emergency()
-            else:
-                self.core.release_emergency()
+            wanted = bool(values["ebrake_state"])
+            if wanted != s.emergency_brake:
+                if wanted:
+                    self.core.engage_emergency()
+                else:
+                    self.core.release_emergency()
         for key, attr in (("door_state_left", "fb_doors_left"),
                           ("door_state_right", "fb_doors_right"),
                           ("light_state_cabin", "fb_lights"),
