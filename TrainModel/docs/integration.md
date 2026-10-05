@@ -190,7 +190,7 @@ consumer type. The Train Model's side of each edge:
 | `track_info.speed_limit_mps` | block speed limit | m/s. |
 | `track_info.polarity` | track-circuit polarity | Must flip on each block entry; that flip is the block change. |
 | `track_info.station_name` | the block's station, else `None` | Needed for boarding. **No catalog field yet**: add one to the Track Model edge. |
-| `track_signal.commanded_speed_mps`, `authority_block_id` | track circuit | |
+| `track_signal.commanded_speed_mps`, `authority_blocks` | track circuit | Authority is an `int` count of blocks, ≥ 0. |
 | `beacon` | beacon under the train this tick, else `None` | |
 | `passengers_boarded` | boarding count | Send once per boarding event, at a station with a door open, ≤ last `passenger_capacity`. Otherwise 0. |
 

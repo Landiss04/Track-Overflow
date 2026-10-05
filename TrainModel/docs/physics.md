@@ -228,7 +228,7 @@ the next step.
 | Failure | Effect |
 |---|---|
 | Engine | Traction is 0 (P treated as 0). |
-| Signal pickup | Commanded speed is reported as 0 and authority as `None`. Track Info (block, grade, speed limit) is unaffected. |
+| Signal pickup | Commanded speed and authority are both reported as 0. Track Info (block, grade, speed limit) is unaffected. |
 | Brake | The service brake is blocked. The emergency brake, commanded or pulled, still works. |
 
 ## 13. Outputs
@@ -254,7 +254,8 @@ Before any state changes, `step` rejects:
 - any non-finite numeric input: power, setpoint, grade, elevation, speed
   limit, commanded speed, boarding count (`InvalidInputError`);
 - negative power (`InvalidInputError`);
-- a boarding count that is not an `int` (`InvalidInputError`).
+- a boarding count that is not an `int` (`InvalidInputError`);
+- an authority that is not an `int` or is negative (`InvalidInputError`).
 
 A rejected step leaves the model exactly as it was, including the random
 generator. `validate_inputs` is static, so a caller can check a step without

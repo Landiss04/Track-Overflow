@@ -50,7 +50,7 @@ Advances one tick. This is the only call the rest of the system needs.
 | `dt` | Tick length in seconds: the shared clock's fixed tick (`utils/system_clock.py`, 0.1 s). Constant for the whole run (D006). Fast-forward and pause change how often `step` is called, never `dt`. |
 | `inputs` | `TrainModelInputs` for this tick (section 4). Send a complete set every tick; nothing is remembered between calls except the train's own state. |
 | Returns | `TrainModelOutputs` for this tick (section 5). |
-| Raises | `InvalidTimeStepError` if `dt` is not finite and positive. `InvalidInputError` (also a `ValueError`) if a numeric input is not finite, power is negative, or `passengers_boarded` is not an `int`. Both are `TrainModelError`. A rejected step changes nothing. |
+| Raises | `InvalidTimeStepError` if `dt` is not finite and positive. `InvalidInputError` (also a `ValueError`) if a numeric input is not finite, power is negative, `passengers_boarded` is not an `int`, or `authority_blocks` is not a nonnegative `int`. Both are `TrainModelError`. A rejected step changes nothing. |
 
 `TrainModelState.step(dt, inputs, *, override_passenger_brake=False)` has
 the same contract, also refreshes the window, and marks the module as
@@ -124,9 +124,9 @@ TrainModelInputs
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
 | `commanded_speed_mps` | float | m/s | Passed through to the Train Controller. |
-| `authority_block_id` | str | | Block the train may travel up to. Passed through. |
+| `authority_blocks` | int | blocks | Blocks the train may travel before it must stop. Nonnegative. Passed through. |
 
-Both are reported as 0 and `None` while signal pickup has failed.
+Both are reported as 0 while signal pickup has failed.
 
 ### `Beacon` (Track Model, only on the tick the train passes one)
 
@@ -164,7 +164,7 @@ TrainModelOutputs
 | `interior_lights_on`, `exterior_lights_on` | bool | | Light State: follows the command. |
 | `cabin_temp_c` | float | °C | Cabin temperature. |
 | `commanded_speed_mps` | float | m/s | Passed through; 0 under signal pickup failure. |
-| `authority_block_id` | str \| None | | Passed through; `None` under signal pickup failure or before the first step. |
+| `authority_blocks` | int | blocks | Passed through; 0 under signal pickup failure or before the first step. |
 | `speed_limit_mps` | float | m/s | Passed through from `TrackInfo`. |
 | `beacon` | Beacon \| None | | This tick's beacon, else `None`. |
 | `failures` | FailureState | | Failure Status: `engine`, `signal_pickup`, `brake`. |
@@ -194,7 +194,7 @@ TrainModelOutputs
 | Exception | When | State after |
 |---|---|---|
 | `InvalidTimeStepError` | dt nonfinite or ≤ 0 | Unchanged |
-| `InvalidInputError` | Nonfinite number, negative power, non-int boarding count | Unchanged |
+| `InvalidInputError` | Nonfinite number, negative power, non-int boarding count, negative or non-int authority | Unchanged |
 
 Both derive from `TrainModelError`. A rejected step does not advance the
 train or its random generator. Decide in the harness what a rejection means
@@ -212,7 +212,7 @@ for the rest of the system (section 3 of [integration.md](integration.md)).
 | `temperature-setpoint` | in | `controller.temp_setpoint_c` |
 | `announcement` | in | `controller.announcement` |
 | `track-info` | in | `track.track_info` |
-| `track-signal` | in, passed out | `track.track_signal` → `commanded_speed_mps`, `authority_block_id` |
+| `track-signal` | in, passed out | `track.track_signal` → `commanded_speed_mps`, `authority_blocks` |
 | `beacon` | in, passed out | `track.beacon` → `controller.beacon` |
 | `passengers-boarded` | in | `track.passengers_boarded` |
 | `actual-speed` | out | `controller.actual_speed_mps`, `track.actual_speed_mps` |
@@ -250,7 +250,7 @@ inputs = TrainModelInputs(
                              elevation_m=0.5, speed_limit_mps=12.5,
                              polarity=True, station_name=None),
         track_signal=TrackSignal(commanded_speed_mps=12.5,
-                                 authority_block_id="GREEN A3"),
+                                 authority_blocks=2),
         beacon=None,
         passengers_boarded=0,
     ),
