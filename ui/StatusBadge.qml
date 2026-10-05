@@ -43,6 +43,7 @@ Rectangle {
 
         Text {
             text: root.label.toUpperCase()
+            textFormat: Text.PlainText
             color: root.tone
             font.family: theme.ui_family
             font.pixelSize: theme.size_label

@@ -40,6 +40,7 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             text: root.heading.toUpperCase()
+            textFormat: Text.PlainText
             color: root.tone
             font.family: theme.ui_family
             font.pixelSize: theme.size_small

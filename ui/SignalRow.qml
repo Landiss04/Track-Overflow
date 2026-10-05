@@ -7,6 +7,7 @@ RowLayout {
     id: root
 
     property string name: ""
+    // bool, int, uint (a count: whole number, 0 and up), float, string or enum.
     property string kind: "string"
     property var value: undefined
     property string unit: ""
@@ -49,7 +50,8 @@ RowLayout {
             visible: !root.editable
             text: root.displayValue
             width: parent.width
-            horizontalAlignment: root.kind === "int" || root.kind === "float"
+            horizontalAlignment: root.kind === "int" || root.kind === "uint"
+                || root.kind === "float"
                 ? Text.AlignRight : Text.AlignLeft
         }
 
@@ -61,7 +63,8 @@ RowLayout {
             visible: root.editable
             active: root.editable
             sourceComponent: root.kind === "bool" ? boolEditor
-                : root.kind === "enum" ? enumEditor : textEditor
+                : root.kind === "enum" ? enumEditor
+                : root.kind === "uint" ? countEditor : textEditor
         }
     }
 
@@ -100,8 +103,19 @@ RowLayout {
             label: root.name
             labelVisible: false
             kind: root.kind
-            text: root.value === undefined || root.value === null
-                ? "" : String(root.value)
+            modelValue: root.value === undefined ? null : root.value
+            onCommitted: function (newValue) { root.edited(newValue); }
+        }
+    }
+
+    // Counts: whole numbers, 0 and up.
+    Component {
+        id: countEditor
+
+        PositiveIntField {
+            label: root.name
+            labelVisible: false
+            modelValue: root.value === undefined ? null : root.value
             onCommitted: function (newValue) { root.edited(newValue); }
         }
     }
