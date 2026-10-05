@@ -301,21 +301,21 @@ def run_check(app: QGuiApplication, window: Any, bench: Any,
     expect(backend.core.state.authority_blocks == 3,
            "authority not taken as a block count")
     expect(backend.snapshot["next_signal"] == "RED", "aspect not set")
+    # A reported failure shows and does nothing else, for now: each
+    # subsystem is to get its own response later.
+    moving = backend.core.state.actual_mps
     backend.applyInputs({"failure_brake": True})
     _settle(app, 300)
-    expect(backend.core.state.emergency_brake,
-           "an equipment failure did not stop the train")
+    expect(backend.snapshot["fault_brake"], "the failure was not recorded")
+    expect(not backend.core.state.emergency_brake,
+           "a reported failure pulled the emergency brake")
+    expect(backend.core.state.actual_mps > 0 or moving == 0,
+           "a reported failure stopped the train")
     if shots:
         bench.grabWindow().save(str(shots / "06-test.png"))
     backend.applyInputs({"failure_brake": False})
-
-    # The brake it pulled is latched, so clear it the way a driver
-    # has to: stopped, with the fault gone.
-    _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
-    backend.toggleEmergencyBrake()
-    _settle(app, 300)
-    expect(not backend.core.state.emergency_brake,
-           "the emergency brake would not clear once the fault was gone")
+    _settle(app, 200)
+    expect(not backend.snapshot["fault_brake"], "the failure would not clear")
 
     # Entering a block spends authority and steps the aspect on.
     before_blocks = backend.core.state.authority_blocks

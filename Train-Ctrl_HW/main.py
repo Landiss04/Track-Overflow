@@ -302,7 +302,6 @@ class ControllerCore:
         self.state = State()
         self.dt = 1.0 / CONTROL_HZ          # seconds of simulation
         self.integral = 0.0
-        self.last_reasons: list[str] = []
         # The controller is inert until an engineer commissions the gains.
         self.armed = False
 
@@ -339,14 +338,31 @@ class ControllerCore:
             s.power_w = 0.0
             s.service_brake = s.service_request
 
+        self.respond_to_failures()
         self.enforce_safety()
         self._plant()
+
+    def respond_to_failures(self) -> None:
+        """What a reported failure makes the controller do.
+
+        Nothing yet, by decision: the console shows the fault and the
+        train keeps running. Each subsystem is to get its own
+        response, so each one has its own branch here waiting for it
+        rather than a single rule they would all have to share.
+        """
+        s = self.state
+        if s.failures["engine"]:
+            pass        # TODO: engine failure response
+        if s.failures["brake"]:
+            pass        # TODO: brake failure response
+        if s.failures["signal_pickup"]:
+            pass        # TODO: signal pickup failure response
 
     def enforce_safety(self) -> None:
         """Run after the PI law and override it.
 
-        Gains change how the train drives; they can never change whether
-        it stops.
+        Gains change how the train drives; they can never change
+        whether it stops.
         """
         s = self.state
 
@@ -360,16 +376,12 @@ class ControllerCore:
             if s.actual_mps > 0.0:
                 s.service_brake = True
 
-        reasons = []
-        if s.actual_mps > s.speed_limit_mps * 1.05:
-            reasons.append("OVER SPEED LIMIT")
-        if any(s.failures.values()):
-            reasons.append("EQUIPMENT FAULT")
-        if reasons or s.emergency_brake:
-            s.emergency_brake = True
+        # The emergency brake has two sources and no others: the
+        # driver pulls it, or the Train Model reports it pulled.
+        # Nothing in here pulls it on their behalf.
+        if s.emergency_brake:
             s.power_w = 0.0
             self.integral = 0.0
-        self.last_reasons = reasons
 
     def engage_emergency(self) -> None:
         """Engage now, without waiting for the next control tick.
@@ -392,7 +404,7 @@ class ControllerCore:
             return True
         s.emergency_brake = False
         self.enforce_safety()
-        if abs(s.actual_mps) < 0.1 and not self.last_reasons:
+        if abs(s.actual_mps) < 0.1:
             s.emergency_brake = False
             return True
         s.emergency_brake = True
@@ -764,9 +776,8 @@ class ConsoleBackend(QObject):
         elif self.core.release_emergency():
             self.brake_note = ""
         else:
-            why = (", ".join(self.core.last_reasons).lower()
-                   or "the train is still moving")
-            self.brake_note = f"Cannot release: {why}."
+            self.brake_note = ("Cannot release: the train is still "
+                               "moving.")
         self._publish()
 
     @Slot()
