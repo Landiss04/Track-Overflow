@@ -110,12 +110,25 @@ class _Layout:
         track_controller = inputs.track_controller
         for block in track_controller.occupancy:
             self.block(block.line, block.block_id, "occupancy")
+        # Safety: one train per block, so trains cannot collide. Two
+        # trains reported in one block is rejected, never applied.
+        in_block: dict[tuple[str, str], str] = {}
         for train in track_controller.trains:
             _require_id(train.train_id, "train_id")
             what = f"train {train.train_id}"
             self.block(train.line, train.block_id, what)
             _require_finite(train.offset_m, f"offset_m of {what}")
             _require_finite(train.speed_mps, f"speed_mps of {what}")
+            if train.train_id in in_block.values():
+                raise InvalidInputError(
+                    f"train {train.train_id} is reported twice")
+            other = in_block.setdefault((train.line, train.block_id),
+                                        train.train_id)
+            if other != train.train_id:
+                raise InvalidInputError(
+                    f"trains {other} and {train.train_id} are both in "
+                    f"{train.line} block {train.block_id}; two trains "
+                    "cannot occupy one block")
         for switch in track_controller.switches:
             self.switch(switch.line, switch.switch_id, "switch state")
         for crossing in track_controller.crossings:

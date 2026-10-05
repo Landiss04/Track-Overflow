@@ -153,6 +153,28 @@ class StubModuleTest(unittest.TestCase):
                     ctc.set_switch(line, switch_id,
                                    position)  # type: ignore[arg-type]
 
+    def test_two_trains_cannot_share_a_block(self) -> None:
+        # Safety: trains must not collide, so the report is rejected and
+        # nothing is applied.
+        ctc = StubCtcOffice()
+        before = ctc.snapshot()
+        same_block = CtcInputs(track_controller=TrackControllerInputs(
+            trains=(TrainReport("T1", "Green", "12", 0.0, 0.0),
+                    TrainReport("T2", "Green", "12", 40.0, 5.0))))
+        with self.assertRaisesRegex(InvalidInputError,
+                                    "T1 and T2 .* Green block 12"):
+            ctc.step(DT_S, same_block)
+        self.assertEqual(ctc.snapshot(), before)
+        twice = CtcInputs(track_controller=TrackControllerInputs(
+            trains=(TrainReport("T1", "Green", "12", 0.0, 0.0),
+                    TrainReport("T1", "Green", "13", 0.0, 0.0))))
+        with self.assertRaisesRegex(InvalidInputError, "reported twice"):
+            ctc.validate_inputs(twice)
+        # The same block number on the other line is a different block.
+        ctc.step(DT_S, CtcInputs(track_controller=TrackControllerInputs(
+            trains=(TrainReport("T1", "Green", "12", 0.0, 0.0),
+                    TrainReport("T2", "Red", "12", 0.0, 0.0)))))
+
     def test_clock_speedup_output(self) -> None:
         ctc = StubCtcOffice()
         self.assertFalse(ctc.step(DT_S, CtcInputs()).clock_speedup)
@@ -465,6 +487,16 @@ QtObject { Component.onCompleted: {
         harness.setInput("ticket_sales", 2.5)
         harness.send()
         self.assertIn("whole number", harness.status)
+
+    def test_two_trains_in_one_block_is_refused(self) -> None:
+        link = LocalLink()
+        harness = CtcTestHarness(link)
+        _add(harness, "train_reports", block="12")
+        _add(harness, "train_reports", block="12")
+        harness.send()
+        self.assertTrue(harness.statusIsError)
+        self.assertIn("cannot occupy one block", harness.status)
+        self.assertIsNone(link.snapshot().inputs)      # nothing applied
 
     def test_unknown_block_is_reported(self) -> None:
         # The table only offers real blocks; the module still checks.
