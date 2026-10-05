@@ -6,7 +6,8 @@ modules' types into these and back. Other modules' struct layouts do not
 appear here.
 
 Field names carry their backend units, per ``truth/conventions/units.md``:
-temperature in degrees Celsius, grade in degrees, and authority as a block ID.
+temperature in degrees Celsius, grade in degrees, and authority as a count
+of blocks.
 """
 
 from dataclasses import dataclass
@@ -138,8 +139,8 @@ class TrackSignal:
     """Track circuit data. Ignored while signal pickup has failed."""
 
     commanded_speed_mps: float
-    # Block the train may travel up to.
-    authority_block_id: str
+    # Blocks the train may travel before it must stop; nonnegative.
+    authority_blocks: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,7 +180,7 @@ class ControllerOutputs:
     cabin_temp_c: float
     # Passed through; zeros or stale under pickup failure, open.
     commanded_speed_mps: float
-    authority_block_id: str | None  # passed through; None = no authority
+    authority_blocks: int           # passed through; 0 = must stop
     # Passed through from TrackInfo, provisional.
     speed_limit_mps: float
     beacon: Beacon | None           # between-beacon behaviour open

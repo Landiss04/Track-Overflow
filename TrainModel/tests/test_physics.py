@@ -70,7 +70,7 @@ def make_inputs(
             ),
             track_signal=TrackSignal(
                 commanded_speed_mps=10.0,
-                authority_block_id="A9",
+                authority_blocks=9,
             ),
             beacon=None,
             passengers_boarded=boarded,
@@ -245,7 +245,7 @@ def test_all_failures_compose() -> None:
         accel = model.snapshot().acceleration_mps2
         assert accel == pytest.approx(expected_accel, rel=1e-9)
         assert outputs.controller.commanded_speed_mps == 0.0
-        assert outputs.controller.authority_block_id is None
+        assert outputs.controller.authority_blocks == 0
         assert outputs.controller.failures == FailureState(True, True, True)
 
 

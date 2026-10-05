@@ -65,11 +65,7 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
     {"name": "left_door_command", "kind": "bool", "unit": ""},
     {"name": "right_door_command", "kind": "bool", "unit": ""},
     {"name": "commanded_speed", "kind": "float", "unit": "mph"},
-    {
-        "name": "authority_block",
-        "kind": "string",
-        "unit": "",
-    },
+    {"name": "authority", "kind": "int", "unit": "blocks"},
     {
         "name": "beacon_station",
         "kind": "string",
@@ -114,7 +110,7 @@ _OUTPUT_SPEC: tuple[tuple[str, str, str], ...] = (
     ("exterior_light_state", "bool", ""),
     ("cabin_temp", "float", "°F"),
     ("commanded_speed", "float", "mph"),
-    ("authority", "string", ""),
+    ("authority", "int", "blocks"),
     ("beacon_station", "string", ""),
     ("beacon_platform_side", "string", ""),
     ("beacon_underground", "bool", ""),
@@ -133,7 +129,7 @@ _FAILURE_FIELDS: dict[str, str] = {
     "brake_failure": "brake",
 }
 
-# Shown where the module reports no block or no authority.
+# Shown where the module reports no block.
 _NONE_SHOWN = "—"
 
 #: What the stand-in producers send before anything has been entered.
@@ -143,7 +139,7 @@ _INITIAL_COMMANDS: dict[str, Any] = {
     "interior_light_command": False,
     "exterior_light_command": False,
     "left_door_command": False, "right_door_command": False,
-    "commanded_speed": 0.0, "authority_block": "",
+    "commanded_speed": 0.0, "authority": 0,
     "beacon_station": "", "beacon_platform_side": "L",
     "beacon_underground": False, "block": "", "grade": 0.0,
     "elevation": 0.0, "speed_limit": 0.0, "polarity": False,
@@ -175,7 +171,7 @@ def _output_values(outputs: TrainModelOutputs) -> dict[str, Any]:
         "exterior_light_state": ctl.exterior_lights_on,
         "cabin_temp": ctl.cabin_temp_c,
         "commanded_speed": ctl.commanded_speed_mps,
-        "authority": ctl.authority_block_id or _NONE_SHOWN,
+        "authority": ctl.authority_blocks,
         "beacon_station": beacon.station_name if beacon else "",
         "beacon_platform_side": beacon.platform_side if beacon else "",
         "beacon_underground": beacon.underground if beacon else False,
@@ -199,7 +195,7 @@ def _live_values(outputs: TrainModelOutputs) -> dict[str, Any]:
         "left_door_command": ctl.door_left_open,
         "right_door_command": ctl.door_right_open,
         "commanded_speed": ctl.commanded_speed_mps,
-        "authority_block": ctl.authority_block_id or "",
+        "authority": ctl.authority_blocks,
     }
 
 
@@ -529,7 +525,7 @@ class TestHarnessState(QObject):
                 ),
                 track_signal=TrackSignal(
                     commanded_speed_mps=values["commanded_speed"],
-                    authority_block_id=values["authority_block"],
+                    authority_blocks=values["authority"],
                 ),
                 beacon=beacon,
                 passengers_boarded=values["passengers_boarded"],

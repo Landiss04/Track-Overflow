@@ -49,7 +49,7 @@ _FAILURE_LABELS: dict[str, str] = {
     "signal_pickup_failure": "Signal pickup",
 }
 
-# Shown where the model has not reported a block or an authority yet.
+# Shown where the model has not reported a value yet.
 _NONE_SHOWN = "—"
 
 # The window reads "Paused" once no step has arrived for this long.
@@ -154,7 +154,7 @@ class TrainModelState(QObject):
                 "interior_light_command": False,
                 "exterior_light_command": False,
                 "left_door_command": False, "right_door_command": False,
-                "commanded_speed": 0.0, "authority_block": "",
+                "commanded_speed": 0.0, "authority": 0,
                 "beacon_station": "", "beacon_platform_side": "L",
                 "beacon_underground": False, "block": "", "grade": 0.0,
                 "elevation": 0.0, "speed_limit": 0.0, "polarity": False,
@@ -172,7 +172,7 @@ class TrainModelState(QObject):
             "left_door_command": cmd.door_left_open,
             "right_door_command": cmd.door_right_open,
             "commanded_speed": track.track_signal.commanded_speed_mps,
-            "authority_block": track.track_signal.authority_block_id,
+            "authority": track.track_signal.authority_blocks,
             "beacon_station": beacon.station_name if beacon else "",
             "beacon_platform_side": beacon.platform_side if beacon else "L",
             "beacon_underground": beacon.underground if beacon else False,
@@ -294,7 +294,7 @@ class TrainModelState(QObject):
             "actual_speed": ctl.actual_speed_mps,
             "commanded_speed": ctl.commanded_speed_mps,
             "speed_limit": ctl.speed_limit_mps,
-            "authority_block": ctl.authority_block_id or _NONE_SHOWN,
+            "authority": ctl.authority_blocks,
             "acceleration": snap.acceleration_mps2,
             "passengers": snap.n_passengers,
             "loaded_mass": snap.mass_kg,

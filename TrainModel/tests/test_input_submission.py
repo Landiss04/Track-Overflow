@@ -117,7 +117,7 @@ DISPLAY_CASES = [
     ("temperature_setpoint", -40.0, -40.0, "°F"),
     ("grade", 3.5, 3.5, "deg"),
     ("announcement", "Next station", "Next station", ""),
-    ("authority_block", "B3", "B3", ""),
+    ("authority", 3, 3, "blocks"),
     ("interior_light_command", True, True, ""),
 ]
 
@@ -150,7 +150,7 @@ def test_live_inputs_and_outputs_convert_after_a_send(pair):
     state, harness = pair
     for name, value in {
         "power_command": 100000, "commanded_speed": 10.0,
-        "authority_block": "A9", "block": "A1", "speed_limit": 19.0,
+        "authority": 9, "block": "A1", "speed_limit": 19.0,
         "polarity": True, "elevation": 100, "temperature_setpoint": 25,
     }.items():
         harness.setInput(name, value)

@@ -94,7 +94,8 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Authority")
-                    value: root.s.authority_block
+                    value: root.s.authority
+                        + (root.s.authority === 1 ? qsTr(" block") : qsTr(" blocks"))
                 }
 
                 KeyValueRow {

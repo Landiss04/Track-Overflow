@@ -74,7 +74,7 @@ def inp(
     station: str | None = None,
     speed_limit_mps: float = 19.0,
     cmd_speed_mps: float = 10.0,
-    authority: str = "A9",
+    authority: int = 9,
     beacon: Beacon | None = None,
 ) -> TrainModelInputs:
     """Return a fully populated input set with the named overrides."""
@@ -101,7 +101,7 @@ def inp(
             ),
             track_signal=TrackSignal(
                 commanded_speed_mps=cmd_speed_mps,
-                authority_block_id=authority,
+                authority_blocks=authority,
             ),
             beacon=beacon,
             passengers_boarded=boarded,
@@ -1410,19 +1410,31 @@ def test_cabin_temperature_single_tick_exact() -> None:
 
 def test_track_signal_passes_through() -> None:
     """Check commanded speed and authority reach the controller."""
-    out = fresh().step(DT_S, inp(cmd_speed_mps=13.5, authority="C12"))
+    out = fresh().step(DT_S, inp(cmd_speed_mps=13.5, authority=12))
     assert out.controller.commanded_speed_mps == 13.5
-    assert out.controller.authority_block_id == "C12"
+    assert out.controller.authority_blocks == 12
+
+
+@pytest.mark.parametrize("authority", [-1, 2.0, "3"])
+def test_invalid_authority_is_rejected_without_side_effects(
+        authority: object) -> None:
+    """Check authority must be a nonnegative whole number of blocks."""
+    model = fresh(20)
+    launch(model, 10.0)
+    before = model.snapshot()
+    with pytest.raises(InvalidInputError, match="authority_blocks"):
+        model.step(DT_S, inp(authority=authority))  # type: ignore[arg-type]
+    assert model.snapshot() == before
 
 
 def test_signal_pickup_failure_blanks_only_the_track_signal() -> None:
     """Check pickup failure blanks the signal but not the track info."""
     model = fresh()
     model.set_failures(FailureState(signal_pickup=True))
-    out = model.step(DT_S, inp(cmd_speed_mps=13.5, authority="C12",
+    out = model.step(DT_S, inp(cmd_speed_mps=13.5, authority=12,
                                speed_limit_mps=12.0, block_id="C3"))
     assert out.controller.commanded_speed_mps == 0.0
-    assert out.controller.authority_block_id is None
+    assert out.controller.authority_blocks == 0
     assert out.controller.speed_limit_mps == 12.0
     assert out.track.block_id == "C3"
 

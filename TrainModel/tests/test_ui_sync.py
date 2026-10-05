@@ -46,7 +46,7 @@ LIVE_VALUES = {
     "service_brake_command": True, "emergency_brake_command": False,
     "interior_light_command": True, "exterior_light_command": True,
     "left_door_command": True, "right_door_command": True,
-    "commanded_speed": 12.5, "authority_block": "B9",
+    "commanded_speed": 12.5, "authority": 9,
     "beacon_station": "Station", "beacon_platform_side": "R",
     "beacon_underground": True, "block": "B2", "grade": 2.0,
     "elevation": 17.0, "speed_limit": 18.0, "polarity": True,
@@ -87,7 +87,7 @@ def test_failure_state_and_affected_values_change_while_paused(pair, failure):
     # There is no power output, so engine failure changes no control.
     fields = {
         "engine_failure": {},
-        "signal_pickup_failure": {"commanded_speed": 0, "authority_block": ""},
+        "signal_pickup_failure": {"commanded_speed": 0, "authority": 0},
         "brake_failure": {"service_brake_command": False},
     }[failure]
     for name, value in fields.items():

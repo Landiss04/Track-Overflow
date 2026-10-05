@@ -22,7 +22,7 @@ def test_stub_returns_safe_values() -> None:
     assert ctl.cabin_temp_c == 0.0
     assert ctl.commanded_speed_mps == 0.0
     assert ctl.speed_limit_mps == 0.0
-    assert ctl.authority_block_id is None
+    assert ctl.authority_blocks == 0
     assert ctl.beacon is None
     assert not any((ctl.emergency_brake_active, ctl.service_brake_active,
                     ctl.door_left_open, ctl.door_right_open,

@@ -185,6 +185,11 @@ class TrainModel:
             raise InvalidInputError("power_cmd_w must be nonnegative")
         if not isinstance(track.passengers_boarded, int):
             raise InvalidInputError("passengers_boarded must be an integer")
+        authority_blocks = track.track_signal.authority_blocks
+        if not isinstance(authority_blocks, int):
+            raise InvalidInputError("authority_blocks must be an integer")
+        if authority_blocks < 0:
+            raise InvalidInputError("authority_blocks must be nonnegative")
 
     def snapshot(self) -> TrainModelSnapshot:
         """Return the current state for display. No side effects."""
@@ -411,7 +416,7 @@ class TrainModel:
         service_cmd = False
         emergency_cmd = False
         commanded_speed_mps = 0.0
-        authority_block_id: str | None = None
+        authority_blocks = 0
         speed_limit_mps = 0.0
         block_id = _NO_BLOCK_ID
         interior = False
@@ -429,10 +434,10 @@ class TrainModel:
             # OPEN(5.7): pass through this tick's beacon; None otherwise.
             beacon = track.beacon
             # OPEN(5.3): under signal pickup failure, commanded speed
-            # is 0.0 and there is no authority.
+            # is 0.0 and authority is 0 blocks.
             if not failures.signal_pickup:
                 commanded_speed_mps = track.track_signal.commanded_speed_mps
-                authority_block_id = track.track_signal.authority_block_id
+                authority_blocks = track.track_signal.authority_blocks
         ebrake, service = _brakes_engaged(
             service_cmd, emergency_cmd,
             self._passenger_ebrake_pulled, failures.brake,
@@ -449,7 +454,7 @@ class TrainModel:
                 exterior_lights_on=exterior,
                 cabin_temp_c=self._cabin_temp_c,
                 commanded_speed_mps=commanded_speed_mps,
-                authority_block_id=authority_block_id,
+                authority_blocks=authority_blocks,
                 speed_limit_mps=speed_limit_mps,
                 beacon=beacon,
                 failures=failures,

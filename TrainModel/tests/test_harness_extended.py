@@ -70,6 +70,17 @@ def test_negative_power_send_is_rejected() -> None:
     assert snap(state) == before
 
 
+def test_negative_authority_send_is_rejected() -> None:
+    """Check a negative authority row is refused with a visible error."""
+    state, harness = make()
+    before = snap(state)
+    harness.setInput("authority", -1)
+    assert not harness.sendInputs()
+    assert harness.property("inputError")
+    assert harness.property("tick") == 0
+    assert snap(state) == before
+
+
 def test_power_consumption_zero_under_engine_failure() -> None:
     """Check no power is displayed while the engine has failed."""
     state, harness = make()

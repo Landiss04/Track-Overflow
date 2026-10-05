@@ -59,7 +59,7 @@ class Beacon:
 class TrackSignal:
     """Encoded track-circuit signal the Train Controller reads off the rail."""
     commanded_speed_mps: float
-    authority_block_id: str     # destination block the train may travel up to
+    authority_blocks: int       # blocks the train may travel before it must stop
     beacon: Optional[Beacon] = None
 
 
