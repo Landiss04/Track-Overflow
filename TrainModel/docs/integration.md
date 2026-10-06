@@ -18,6 +18,8 @@ sketch, not existing code.
 | `train_model/model.py`: physics | `train_model/harness.py`: test UI state, stand-in producers, clock driving |
 | `train_model/state.py`: module wrapper the window binds to | `train_model/link.py`: socket link, wire format, `TestLinkServer` |
 | `train_model/app.py`: window bootstrap | `ui/TestMain.qml`, `ui/TestView.qml`: test UI window |
+| | `train_model/track_stub.py`: stand-in Track Model, Blue Line loaded by default |
+| | `train_model/speed_limiter.py`: stand-in Train Controller speed limiter |
 | `ui/Main.qml`, `ui/MainView.qml`: Train Model window | |
 | `main.py`: standalone Train Model window (optional after integration) | |
 
@@ -59,13 +61,15 @@ Do these in one commit, then run the checks in section 6.
 TrainModel/test_ui.py
 TrainModel/train_model/harness.py
 TrainModel/train_model/link.py
+TrainModel/train_model/speed_limiter.py
+TrainModel/train_model/track_stub.py
 TrainModel/ui/TestMain.qml
 TrainModel/ui/TestView.qml
 ```
 
 ### 2.2 Delete the tests that exist only for the test UI
 
-These import `harness`, `link` or the test UI QML:
+These import `harness`, `link`, the stand-ins or the test UI QML:
 
 ```
 TrainModel/tests/test_harness.py
@@ -73,8 +77,11 @@ TrainModel/tests/test_harness_clock.py
 TrainModel/tests/test_harness_extended.py
 TrainModel/tests/test_input_submission.py
 TrainModel/tests/test_link.py
+TrainModel/tests/test_speed_limiter.py
+TrainModel/tests/test_track_stub.py
 TrainModel/tests/test_ui_sync.py
 TrainModel/tests/qml_sync_check.py
+TrainModel/tests/input_list_check.py
 TrainModel/tests/clock_ui_check.py
 TrainModel/tests/drive_test_ui.py
 TrainModel/tests/ebrake_button_check.py

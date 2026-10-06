@@ -143,13 +143,16 @@ def test_beacon_disappearance_and_clock_refresh(pair):
         "beacon_station": "Station", "beacon_platform_side": "L",
         "beacon_underground": True,
     })
-    assert outputs(harness)["beacon_station"] == "Station"
+    # The beacon is not in the test UI's output table; the Train Model
+    # window shows it, and the module still outputs it.
+    assert "beacon_station" not in outputs(harness)
+    assert state.snapshot["next_station"] == "Station"
+    assert state.outputs().controller.beacon is not None
     send(harness, {"beacon_station": "", "beacon_underground": False})
     for _ in range(8):
         harness.advanceTick()
     assert state.snapshot["next_station"] == "—"
-    assert outputs(harness)["beacon_station"] == ""
-    assert not outputs(harness)["beacon_underground"]
+    assert state.outputs().controller.beacon is None
     assert state.snapshot["clock"] == harness.elapsed == "00:00:01"
 
 
@@ -171,6 +174,11 @@ def run_gui_check(name, timeout):
 def test_qml_live_bindings_and_edit_focus():
     """Exercise actual Qt Quick bindings in a separate GUI application."""
     run_gui_check("qml_sync_check.py", timeout=20)
+
+
+def test_input_list_scrolls_in_place_and_outputs_are_trimmed():
+    """The looping input list and the trimmed output table, in Qt Quick."""
+    run_gui_check("input_list_check.py", timeout=30)
 
 
 def test_emergency_brake_button_with_the_real_test_ui():

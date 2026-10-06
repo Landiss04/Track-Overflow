@@ -212,9 +212,9 @@ ScrollView {
                     // a pull) and while a pull is latched.
                     enabled: !root.s.emergency_brake
                         && !root.s.passenger_ebrake_pulled
-                    tooltip: qsTr("Stops the train at the full braking rate and "
-                        + "reports the stop to the track controller and the "
-                        + "CTC. Confirmation is required.")
+                    // tooltip: qsTr("Stops the train at the full braking rate and "
+                        // + "reports the stop to the track controller and the "
+                        // + "CTC. Confirmation is required.")
                     onConfirmed: trainModel.applyEmergencyBrake()
                 }
 
@@ -311,9 +311,9 @@ ScrollView {
                         variant: modelData.active ? "success" : "secondary"
                         text: (modelData.active ? qsTr("Clear ") : qsTr("Induce "))
                             + modelData.label + qsTr(" failure")
-                        tooltip: qsTr("A failure stays set until it is cleared here. "
-                            + "With signal pickup failed, no new commanded speed "
-                            + "or authority reaches this train.")
+                        // tooltip: qsTr("A failure stays set until it is cleared here. "
+                            // + "With signal pickup failed, no new commanded speed "
+                            // + "or authority reaches this train.")
                         onClicked: trainModel.setFailure(
                             modelData.name, !modelData.active)
                     }

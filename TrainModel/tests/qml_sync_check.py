@@ -128,10 +128,11 @@ def main():
     assert editor.property("text") == "0"
     assert not power_row.property("pending")
     assert state.snapshot["clock"] == harness.elapsed == "00:00:00"
+    # Reset returns to the first block of the Blue Line: 50 km/h, flat.
     for name, unit, value in [
         ("power_command", "kW", 0),
         ("commanded_speed", "mph", 0),
-        ("speed_limit", "mph", 0),
+        ("speed_limit", "mph", round(50 / 3.6 * 2.236936, 6)),
         ("elevation", "ft", 0),
         ("temperature_setpoint", "°F", 68),
     ]:
@@ -164,10 +165,13 @@ def main():
     assert row("power_command").property("value") == 100
     assert row("temperature_setpoint").property("value") == 77
     assert not row("power_command").property("pending")
+    # Passthroughs are left out of the output table; converted rows stay.
+    assert not [x for x in items()
+                if x.objectName() == "output-commanded_speed"]
     output = next(x for x in items()
-                  if x.objectName() == "output-commanded_speed")
+                  if x.objectName() == "output-speed_limit")
     assert output.property("unit") == "mph"
-    assert output.property("value") == 22.369
+    assert output.property("value") == 31.069
     del engine
     del app
 
