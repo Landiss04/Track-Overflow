@@ -144,14 +144,21 @@ class TrainModel:
         cmd = inputs.controller
         track = inputs.track
 
+        # The door interlock is commented out, not deleted: whether the
+        # Train Model enforces it is with the course instructor, and
+        # Kevin believes it does not (2026-10-06). Until that is
+        # settled the doors follow the commands, whatever the speed.
         # Door interlock: a door can only open at 0 mph. An open command
         # while moving is refused, and takes effect once the train stops.
         stopped = self._velocity_mps == 0.0
-        door_left = cmd.door_left_open and stopped
-        door_right = cmd.door_right_open and stopped
+        # door_left = cmd.door_left_open and stopped
+        # door_right = cmd.door_right_open and stopped
+        door_left = cmd.door_left_open
+        door_right = cmd.door_right_open
         self._update_passengers(
             door_left, door_right, track.passengers_boarded,
             at_station=bool(track.track_info.station_name),
+            stopped=stopped,
         )
         self._door_left_open = door_left
         self._door_right_open = door_right
@@ -163,9 +170,10 @@ class TrainModel:
         grade_rad = math.radians(track.track_info.grade_deg)
         self._integrate(dt, inputs, grade_rad)
         if self._velocity_mps != 0.0:
+            # Door interlock, commented out with the one above:
             # The interlock holds: no door stays open once the train moves.
-            self._door_left_open = False
-            self._door_right_open = False
+            # self._door_left_open = False
+            # self._door_right_open = False
             self._stop_drawn = False
         self._update_cabin_temp(dt, cmd.temp_setpoint_c)
 
@@ -484,25 +492,24 @@ class TrainModel:
 
     def _update_passengers(
         self, door_left: bool, door_right: bool, boarded: int, *,
-        at_station: bool,
+        at_station: bool, stopped: bool,
     ) -> None:
         # Section 5.2: disembark first, then board, bounded both ways.
-        # The door arguments are the interlocked door states, so an
-        # opened door already implies the train is stopped.
+        # Passengers move only with the train at rest. With the door
+        # interlock commented out, an open door no longer implies that,
+        # so it is checked here.
         cfg = self.config
-        opened = (
-            (door_left and not self._door_left_open)
-            or (door_right and not self._door_right_open)
-        )
-        # OPEN(5.2): uniform integer 0..onboard, drawn once per stop,
-        # on its first door-open rising edge (either side) at v = 0
-        # (Kevin).
-        if opened and self._velocity_mps == 0.0 and not self._stop_drawn:
+        # OPEN(5.2): uniform integer 0..onboard, drawn once per stop
+        # (Kevin), on the first tick at rest with a door open. Without
+        # the interlock a door can open before the train stops, so the
+        # draw no longer waits for a door to open at rest.
+        door_open = door_left or door_right
+        if door_open and stopped and not self._stop_drawn:
             self._n_passengers -= self._rng.randint(0, self._n_passengers)
             self._stop_drawn = True
-        # Passengers can only board at a station with a door open; a
-        # count received at any other time boards nobody.
-        if not (at_station and (door_left or door_right)):
+        # Passengers can only board at rest at a station with a door
+        # open; a count received at any other time boards nobody.
+        if not (stopped and at_station and (door_left or door_right)):
             return
         room = cfg.capacity - self._n_passengers
         self._n_passengers += max(0, min(boarded, room))

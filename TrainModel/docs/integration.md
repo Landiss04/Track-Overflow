@@ -183,7 +183,7 @@ consumer type. The Train Model's side of each edge:
 | `power_cmd_w` | power command | W, ≥ 0; a negative value is rejected. |
 | `service_brake`, `emergency_brake` | brake commands | |
 | `interior_lights`, `exterior_lights` | light command | |
-| `door_left_open`, `door_right_open` | door command | The model enforces the 0 mph interlock itself. |
+| `door_left_open`, `door_right_open` | door command | The model no longer enforces a 0 mph interlock; see open-issues.md. |
 | `temp_setpoint_c` | temperature setpoint | °C. |
 | `announcement` | announcement | `""` if none. |
 

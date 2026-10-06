@@ -160,7 +160,7 @@ TrainModelOutputs
 | `actual_speed_mps` | float | m/s | Signed; negative in rollback. |
 | `emergency_brake_active` | bool | | Brake State [0]: emergency brake **engaged** (commanded or passenger), not the command. |
 | `service_brake_active` | bool | | Brake State [1]: service brake engaged. False while the emergency brake is engaged or the brakes have failed. |
-| `door_left_open`, `door_right_open` | bool | | Door State: actual doors after the interlock. |
+| `door_left_open`, `door_right_open` | bool | | Door State: follows Door Command; the interlock is commented out pending the instructor. |
 | `interior_lights_on`, `exterior_lights_on` | bool | | Light State: follows the command. |
 | `cabin_temp_c` | float | °C | Cabin temperature. |
 | `commanded_speed_mps` | float | m/s | Passed through; 0 under signal pickup failure. |

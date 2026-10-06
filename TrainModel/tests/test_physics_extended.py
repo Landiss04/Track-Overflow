@@ -1298,6 +1298,14 @@ def test_block_id_passes_through() -> None:
 # J. Door interlock
 # --------------------------------------------------------------------------- #
 
+# The door interlock is commented out of the model, not deleted: whether
+# the Train Model enforces it is with the course instructor, and Kevin
+# believes it does not (2026-10-06). Its tests are kept, skipped, to come
+# back with it.
+INTERLOCK_OFF = pytest.mark.skip(
+    reason="door interlock commented out pending the course instructor")
+
+
 @pytest.mark.parametrize("side", ["left", "right", "both"])
 def test_doors_open_at_rest(side: str) -> None:
     """Check a door commanded open at 0 mph opens."""
@@ -1307,6 +1315,7 @@ def test_doors_open_at_rest(side: str) -> None:
     assert doors(out) == (left, right)
 
 
+@INTERLOCK_OFF
 @pytest.mark.parametrize("speed", [0.5, 5.0, 15.0])
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_door_refuses_to_open_while_moving(speed: float, side: str) -> None:
@@ -1319,6 +1328,7 @@ def test_door_refuses_to_open_while_moving(speed: float, side: str) -> None:
     assert doors(out) == (False, False)
 
 
+@INTERLOCK_OFF
 def test_door_refuses_to_open_during_rollback() -> None:
     """Check the interlock also holds while rolling backward."""
     model = fresh()
@@ -1330,6 +1340,7 @@ def test_door_refuses_to_open_during_rollback() -> None:
     assert doors(out) == (False, False)
 
 
+@INTERLOCK_OFF
 def test_open_door_closes_once_the_train_moves() -> None:
     """Check an open door does not stay open after the train starts."""
     model = fresh()
@@ -1340,6 +1351,7 @@ def test_open_door_closes_once_the_train_moves() -> None:
         assert doors(out) == (False, False)
 
 
+@INTERLOCK_OFF
 def test_brake_failure_rollback_closes_open_doors() -> None:
     """Check open doors close when a held train starts to roll."""
     model = fresh()
@@ -1353,6 +1365,7 @@ def test_brake_failure_rollback_closes_open_doors() -> None:
     assert doors(out) == (False, False)
 
 
+@INTERLOCK_OFF
 def test_held_open_command_waits_for_the_stop() -> None:
     """Check a held open command takes effect only once stopped."""
     model = fresh()
@@ -1361,6 +1374,42 @@ def test_held_open_command_waits_for_the_stop() -> None:
     assert doors(out) == (False, False)
     out = model.step(DT_S, inp(0.0, service=True, door_left=True))
     assert doors(out) == (True, False)
+
+
+@pytest.mark.parametrize("speed", [0.5, 5.0, 15.0])
+def test_doors_follow_the_command_while_moving(speed: float) -> None:
+    """Check the Train Model makes no door decision of its own."""
+    model = fresh()
+    launch(model, speed)
+    out = model.step(DT_S, inp(0.0, door_left=True, door_right=True))
+    assert vel(model) > 0.0
+    assert doors(out) == (True, True)
+
+
+def test_nobody_boards_while_moving() -> None:
+    """Check a boarding count at a station boards nobody at speed."""
+    model = fresh()
+    launch(model, 5.0)
+    model.step(DT_S, inp(0.0, door_left=True, boarded=20, station="S"))
+    assert vel(model) > 0.0
+    assert onboard(model) == 0
+
+
+def test_a_door_opened_before_the_stop_still_draws_once() -> None:
+    """Check passengers alight once when a door was open on arrival."""
+    changed = False
+    for seed in range(10):
+        model = fresh(FULL, TrainConfig(seed=seed))
+        launch(model, 3.0)
+        run_to_stop(model, lambda: inp(0.0, service=True, door_left=True))
+        assert onboard(model) == FULL
+        model.step(DT_S, inp(0.0, service=True, door_left=True))
+        after = onboard(model)
+        changed = changed or after < FULL
+        for _ in range(5):
+            model.step(DT_S, inp(0.0, service=True, door_left=True))
+        assert onboard(model) == after
+    assert changed
 
 
 def test_door_closes_on_command_at_rest() -> None:
@@ -1383,6 +1432,7 @@ def test_disembark_waits_for_the_interlocked_door() -> None:
     assert changed
 
 
+@INTERLOCK_OFF
 def test_door_reported_open_only_at_zero_speed() -> None:
     """Check across a random run that an open door means 0 mph."""
     rng = random.Random(7)
@@ -1767,8 +1817,9 @@ def test_random_runs_keep_physical_invariants() -> None:
                 assert dx >= 0.0
             if v0 <= 0.0 and v1 <= 0.0:
                 assert dx <= 0.0
-            if any(doors(out)):
-                assert v1 == 0.0
+            # Door interlock, commented out with the model's:
+            # if any(doors(out)):
+            #     assert v1 == 0.0
             if snap.n_passengers > before.n_passengers:
                 assert station and v0 == 0.0
             assert 0 <= snap.n_passengers <= CFG.capacity

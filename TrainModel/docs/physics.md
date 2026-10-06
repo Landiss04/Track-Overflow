@@ -9,7 +9,7 @@ temperature (°C).
 Contents: [constants](#1-constants) · [masses](#2-masses) ·
 [forces](#3-forces) · [brakes](#4-brakes) · [integration](#5-integration) ·
 [stops, holding and rollback](#6-stops-holding-and-rollback) ·
-[order of one step](#7-order-of-one-step) · [doors](#8-doors-and-the-interlock) ·
+[order of one step](#7-order-of-one-step) · [doors](#8-doors) ·
 [passengers](#9-passengers) · [position and blocks](#10-position-and-block-changes) ·
 [cabin temperature](#11-cabin-temperature) · [failures](#12-failures) ·
 [outputs](#13-outputs) · [validation](#14-input-validation) ·
@@ -179,7 +179,7 @@ or the static rule of section 6 at v = 0.
 `step(dt, inputs)` does, in order:
 
 1. Validate dt and inputs (section 14). On rejection, nothing changes.
-2. Door interlock and passengers, from the speed at the **start** of the tick
+2. Doors and passengers, from the speed at the **start** of the tick
    (sections 8 and 9).
 3. Block change: if polarity differs from the previous tick, offset resets
    to 0 (section 10).
@@ -190,31 +190,34 @@ or the static rule of section 6 at v = 0.
    sum stays within an ulp of exact over any run), and build the outputs
    (section 13).
 
-## 8. Doors and the interlock
+## 8. Doors
 
-A door can only open at 0 mph. For each side,
-door_open = command_open AND (speed at the start of the tick = 0).
+Each door follows its command: door_open = command_open, whatever the speed.
 
-- An open command while moving is refused; if it is held, the door opens on
-  the first tick that starts at rest.
-- An open door closes as soon as the train moves (step 5 above), so a door is
-  never reported open at nonzero speed.
-- A close command closes the door immediately.
+The door interlock is commented out of `model.py`, not deleted. Whether the
+Train Model enforces it is with the course instructor, and Kevin believes it
+does not (2026-10-06). While it is out, nothing in the Train Model keeps a door
+shut while moving. The commented-out rule was:
 
-Door State reports these actual doors, which can differ from Door Command.
+- door_open = command_open AND (speed at the start of the tick = 0); an open
+  command while moving was refused and, if held, took effect at the stop;
+- an open door closed as soon as the train moved (step 5 above).
+
+Door State reports the doors, which now always match Door Command.
 
 ## 9. Passengers
 
-Evaluated before motion, using the interlocked door states:
+Evaluated before motion, from the door states and the speed at the start of
+the tick:
 
-1. **Disembark.** Once per stop, on its first door-open rising edge (either
-   side goes from closed to open) at rest, a uniform random integer from 0
-   to the number aboard alights. Opening the other door, or closing and
+1. **Disembark.** Once per stop, on the first tick at rest with a door open
+   (either side, including one opened before the train stopped), a uniform
+   random integer from 0 to the number aboard alights. Opening the other door, or closing and
    reopening one, draws nobody more; the next stop begins once the train
    has moved. The generator is `random.Random(config.seed)`, one per train, so
    runs are reproducible.
-2. **Board.** Only if the train is **at a station** (`TrackInfo.station_name`
-   is a non-empty string) **and** a door is open:
+2. **Board.** Only if the train is **at rest at a station**
+   (`TrackInfo.station_name` is a non-empty string) **and** a door is open:
    aboard += max(0, min(passengers_boarded, capacity − aboard)).
    A count received at any other time boards nobody and is not kept.
 

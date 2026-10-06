@@ -242,17 +242,19 @@ failures, pending edits, and elapsed time.
 
 ## Doors and boarding
 
-The doors are interlocked: a door can only open at 0 mph. An open command
-while the train is moving leaves the door closed, and a held command opens it
-on the first tick that starts at rest. An open door closes as soon as the
-train moves. Door state therefore reports the actual doors, which can differ
-from the command.
+The doors follow the Door Command, whatever the speed. The door interlock (a
+door opens only at 0 mph and closes once the train moves) is commented out of
+`model.py`, not deleted: whether the Train Model enforces it is with the course
+instructor, and Kevin believes it does not (2026-10-06). Until that is settled
+nothing in the Train Model keeps a door shut while moving; see
+[open issues](docs/open-issues.md). Its tests are skipped, not removed.
 
-Passengers board only at a station with a door open. The `station` input row
+Passengers board only at rest at a station with a door open. The `station` input row
 names the station in the current block (`TrackInfo.station_name`); leave it
 empty away from a station. A boarding count sent at any other time boards
-nobody and is not kept for later. Disembarking is one draw per stop, on its
-first door opening at rest; the next stop begins once the train has moved.
+nobody and is not kept for later. Disembarking is one draw per stop, on the
+first tick at rest with a door open; the next stop begins once the train has
+moved.
 
 ## Passenger brake override
 
@@ -267,8 +269,6 @@ Controller command from the test UI, or a pull) and while a pull is latched.
 ## Remaining display limitations
 
 - Train ID, line, and arrival time have no model source and display a dash.
-- Manual door buttons remain disabled: the model displays the commanded doors
-  as the interlock allows them.
 - Power command (Train Model window) displays the commanded power, capped at
   the maximum and zero on engine failure. It is not the power delivered or
   consumed, which the model does not account for.

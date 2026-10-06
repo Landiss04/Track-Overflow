@@ -26,3 +26,16 @@ datasheet load between 40.9 t empty and 56.7 t loaded: 25,717 N traction,
 reference mass excludes crew while operating mass includes crew. Validate
 acceleration, braking and grade performance across loads before treating
 the model as a calibrated representation of the vehicle.
+
+## Door interlock ownership
+
+The door interlock (a door opens only at 0 mph and closes once the train
+moves) is commented out of `train_model/model.py`, not deleted. Whether the
+Train Model enforces it is with the course instructor; Kevin believes it does
+not (2026-10-06). Until that is answered the doors follow Door Command at any
+speed and nothing in the Train Model keeps a door shut while moving: a known
+gap. Passengers still board only at rest, and the disembark draw happens on
+the first tick at rest with a door open. The interlock's tests are skipped,
+not deleted (`INTERLOCK_OFF` in `tests/test_physics_extended.py`). If the
+instructor puts the interlock back in the Train Model, uncomment it and drop
+the skips; otherwise it belongs with the Train Controller.

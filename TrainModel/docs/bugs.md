@@ -42,8 +42,8 @@ Medium.
 
 - **Reproduce:** manual track, grade −4°, station `S`. Stop, open a door so
   the dwell starts, then induce a brake failure in the Train Model window.
-  Within 10 s the train is at 14.9 mph, the doors have closed under the
-  interlock, and the dwell is still counting down.
+  Within 10 s the train is at 14.9 mph with the doors still open, and the
+  dwell is still counting down.
 - **Cause:** the dwell holds the train with the service brake only, and a
   brake failure blocks the service brake.
 - **Reach:** a downhill station on the Green Line (grades to −5%) is enough;
@@ -232,9 +232,8 @@ These follow the current rules but came up in testing:
 - **Passengers alight at any stop, not only at stations.** The disembark draw
   needs only a door opening at rest (physics §9, `OPEN(5.2)`); boarding needs
   a station.
-- **A train can drive off in the tick it boards.** At rest, with power on, a
+- **A train can drive off with its doors open.** At rest, with power on, a
   door open and a boarding count, it boards and moves in the same tick, and
-  the door closes as it moves. The door interlock
-  (`truth/signals/door-command.md`) stops a door opening while the train
-  moves; nothing stops the train moving with a door commanded open. Which
-  module should prevent that is not settled.
+  the door stays open as it moves. The door interlock is commented out of the
+  Train Model pending the course instructor (open-issues.md), so nothing keeps
+  a door shut while moving. Which module should is not settled.
