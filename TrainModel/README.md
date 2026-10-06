@@ -89,6 +89,7 @@ Detailed documentation in `docs/`:
   errors and timing at the module boundary.
 - [integration.md](docs/integration.md): removing the test UI and wiring the
   module into the system.
+- [bugs.md](docs/bugs.md): open known bugs, with how to reproduce each.
 
 ## Physics stepping
 
