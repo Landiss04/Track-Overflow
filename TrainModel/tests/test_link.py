@@ -194,7 +194,7 @@ def test_a_second_test_ui_is_refused(served):
 
 
 def test_a_test_ui_that_takes_over_starts_a_fresh_train(served):
-    """A new test UI's stand-ins start fresh, so the train does (Kevin)."""
+    """A new test UI's stand-ins start fresh; so does the train."""
     state, server, client = served
     for _ in range(20):
         client.step(make_inputs(power_w=480_000, station="GLENBURY"))

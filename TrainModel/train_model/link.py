@@ -377,8 +377,9 @@ class TestLinkServer(QObject):
                 socket.disconnected.connect(socket.deleteLater)
                 continue
             if self._driven:
-                # A new test UI takes over a train another one drove. Its
-                # stand-ins start fresh, so the train does too (Kevin).
+                # A new test UI takes over a train another one drove.
+                # Its stand-ins start fresh, so the train does too
+                # (Kevin).
                 self._state.reset()
                 self._driven = False
             self._clients.append(socket)
