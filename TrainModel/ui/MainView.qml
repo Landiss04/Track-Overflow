@@ -318,9 +318,10 @@ ScrollView {
                         required property var modelData
 
                         Layout.fillWidth: true
-                        // Setting a simulated failure is a test action, not a
-                        // success state. Clearing an active fault is success.
-                        variant: modelData.active ? "success" : "secondary"
+                        // An active failure is a fault, so its button shows
+                        // red (Kevin 2026-10-06), where style guide 6.1 gives
+                        // a clear-fault action the green success fill.
+                        variant: modelData.active ? "danger" : "secondary"
                         text: (modelData.active ? qsTr("Clear ") : qsTr("Induce "))
                             + modelData.label + qsTr(" failure")
                         // tooltip: qsTr("A failure stays set until it is cleared here. "

@@ -64,5 +64,70 @@ ApplicationWindow {
                 Layout.fillHeight: true
             }
         }
+
+        // The Train Controller's announcement, shown to passengers as a
+        // popup each time a new one arrives. It is not modal, so the
+        // passenger emergency brake stays in reach; an empty announcement
+        // closes it.
+        Popup {
+            id: announcementPopup
+
+            readonly property string message: window.snapshot.announcement
+
+            objectName: "announcementPopup"
+            parent: designCanvas
+            // Over the left column, clear of the emergency brake button.
+            x: (designCanvas.width / 2 - width) / 2
+            y: theme.control_h_lg * 3
+            width: 560
+            padding: theme.space_5
+            modal: false
+            closePolicy: Popup.CloseOnEscape
+
+            onMessageChanged: {
+                if (message !== "")
+                    open();
+                else
+                    close();
+            }
+
+            background: Rectangle {
+                color: theme.bg_surface
+                border.color: theme.border_strong
+                border.width: 1
+                radius: theme.radius_lg
+            }
+
+            contentItem: ColumnLayout {
+                spacing: theme.space_4
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Announcement")
+                    color: theme.text_primary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_h3
+                    font.weight: theme.weight_bold
+                }
+
+                Text {
+                    objectName: "announcementText"
+                    Layout.fillWidth: true
+                    text: announcementPopup.message
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    color: theme.text_primary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_body
+                }
+
+                AppButton {
+                    Layout.alignment: Qt.AlignRight
+                    variant: "ghost"
+                    text: qsTr("Dismiss")
+                    onClicked: announcementPopup.close()
+                }
+            }
+        }
     }
 }

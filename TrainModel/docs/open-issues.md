@@ -39,3 +39,12 @@ the first tick at rest with a door open. The interlock's tests are skipped,
 not deleted (`INTERLOCK_OFF` in `tests/test_physics_extended.py`). If the
 instructor puts the interlock back in the Train Model, uncomment it and drop
 the skips; otherwise it belongs with the Train Controller.
+
+## Train ID, line and arrival time have no source
+
+The Train Model window's header and Position card show a dash for the train
+ID, the line and the next arrival time. No defined interface supplies them:
+the Train Model's inputs (`train_model/interface.py`) carry none of them, and
+no `truth/signals/` entry names a producer. Decide which module sends each one
+(the CTC Office dispatches trains and knows their IDs, lines and schedules)
+and add it to the interface before the window can show them.

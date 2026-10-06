@@ -90,6 +90,7 @@ class TrainModelState(QObject):
             "arrival": _NONE_SHOWN,
             "grade": 0.0,
             "elevation": 0.0,
+            "announcement": "",
             "station": _NONE_SHOWN,
             "next_station": _NONE_SHOWN,
             "platform_side": _NONE_SHOWN,
@@ -346,6 +347,7 @@ class TrainModelState(QObject):
         updates["next_station"] = next_name
         updates["platform_side"] = side
         if inputs is not None:
+            updates["announcement"] = inputs.controller.announcement
             updates["grade"] = inputs.track.track_info.grade_deg
             updates["elevation"] = inputs.track.track_info.elevation_m
             # The model does not report power; show the command, capped

@@ -205,6 +205,11 @@ def test_readouts_never_show_a_negative_zero():
     run_gui_check("readout_sign_check.py", timeout=20)
 
 
+def test_announcement_popup_and_red_active_failures():
+    """The announcement popup and the failure buttons, in Qt Quick."""
+    run_gui_check("announcement_check.py", timeout=30)
+
+
 def test_emergency_brake_button_with_the_real_test_ui():
     """The overview button, driven from the test UI in its own process."""
     run_gui_check("ebrake_button_check.py", timeout=120)

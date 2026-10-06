@@ -280,9 +280,23 @@ not define that policy. Its button always reads *Apply emergency brake* and is
 disabled while the emergency brake is engaged from any source (a Train
 Controller command from the test UI, or a pull) and while a pull is latched.
 
+## Train Model window
+
+- **Announcements.** Each new announcement from the Train Controller opens a
+  popup with its text, over the left column and clear of the emergency brake
+  button. It is not modal; **Dismiss** or Escape closes it, the same
+  announcement on later ticks does not reopen it, and an empty announcement
+  closes it.
+- **Stations.** The Position card's *Station* row names the station in the
+  current block. *Next station* is the last beacon's station, kept until the
+  train reaches it.
+- **Failures.** An active failure's button is red (danger) and reads *Clear*;
+  an idle one is the secondary style and reads *Induce*.
+
 ## Remaining display limitations
 
-- Train ID, line, and arrival time have no model source and display a dash.
+- Train ID, line, and arrival time have no defined source and display a dash;
+  see [open issues](docs/open-issues.md).
 - Power command (Train Model window) displays the commanded power, capped at
   the maximum and zero on engine failure. It is not the power delivered or
   consumed, which the model does not account for.
