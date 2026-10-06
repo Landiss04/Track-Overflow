@@ -319,8 +319,9 @@ ScrollView {
 
                         Layout.fillWidth: true
                         // An active failure is a fault, so its button shows
-                        // red (Kevin 2026-10-06), where style guide 6.1 gives
-                        // a clear-fault action the green success fill.
+                        // red: a Train Model exception (Kevin 2026-10-06) to
+                        // style guide 6.1, which gives a clear-fault action
+                        // the green success fill. 6.1 itself is unchanged.
                         variant: modelData.active ? "danger" : "secondary"
                         text: (modelData.active ? qsTr("Clear ") : qsTr("Induce "))
                             + modelData.label + qsTr(" failure")

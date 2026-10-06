@@ -291,7 +291,9 @@ Controller command from the test UI, or a pull) and while a pull is latched.
   current block. *Next station* is the last beacon's station, kept until the
   train reaches it.
 - **Failures.** An active failure's button is red (danger) and reads *Clear*;
-  an idle one is the secondary style and reads *Induce*.
+  an idle one is the secondary style and reads *Induce*. The red is a Train
+  Model exception to style guide §6.1, which gives a clear-fault action the
+  green success fill; the guide itself is unchanged.
 
 ## Remaining display limitations
 
