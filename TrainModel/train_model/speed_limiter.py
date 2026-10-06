@@ -10,9 +10,11 @@ The limiter is a PI control law in the course's discrete form: the speed
 error is integrated with the trapezoidal rule, and the integration stops
 while the output saturates (anti-windup). Its output only ever lowers the
 entered power, so the speed settles at the cap instead of passing it. Well
-over the cap, it cuts power, drops the integral and applies the service
-brake until the train is back down to it. Like the rest of the test UI,
-this file is test scaffolding and is removed at integration.
+over the cap, or over it and still speeding up with no power, as on a
+downhill, it cuts power, drops the integral and applies the service
+brake until the train is back under it by ``RELEASE_MARGIN_MPS``. Like
+the rest of the test UI, this file is test scaffolding and is removed at
+integration.
 """
 
 from __future__ import annotations
@@ -25,6 +27,10 @@ KP_W_PER_MPS = 200_000.0
 KI_W_PER_M = 20_000.0
 #: Over the cap by more than this, the service brake is applied.
 BRAKE_MARGIN_MPS = 0.5
+#: Once braking, the brake holds until the speed is this far under the
+#: cap. The service brake is on or off, so a downhill cycles it; a wide
+#: band keeps that slow.
+RELEASE_MARGIN_MPS = 1.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +40,7 @@ class LimiterState:
     integral_m: float = 0.0
     last_error_mps: float = 0.0
     braking: bool = False
+    last_power_w: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +66,7 @@ class SpeedLimiter:
         self._kp = kp
         self._ki = ki
         self._brake_margin_mps = brake_margin_mps
+        self._release_margin_mps = RELEASE_MARGIN_MPS
         self.state = LimiterState()
 
     def reset(self) -> None:
@@ -88,8 +96,14 @@ class SpeedLimiter:
         """
         prev = self.state
         error = cap_mps - speed_mps
-        braking = speed_mps > cap_mps + self._brake_margin_mps or (
-            prev.braking and speed_mps > cap_mps
+        # Over the cap and sped up through a tick with no power: gravity,
+        # which the power cannot fight, so brake now, not at the margin.
+        runaway = (error < min(0.0, prev.last_error_mps)
+                   and prev.last_power_w == 0.0)
+        braking = (
+            speed_mps > cap_mps + self._brake_margin_mps or runaway
+            or (prev.braking
+                and speed_mps > cap_mps - self._release_margin_mps)
         )
         # The Train Controller cuts traction when it brakes.
         ceiling = 0.0 if braking else power_cmd_w
@@ -106,7 +120,7 @@ class SpeedLimiter:
             power = self._kp * error + self._ki * integral
         power = min(max(power, 0.0), ceiling)
 
-        self.state = LimiterState(integral, error, braking)
+        self.state = LimiterState(integral, error, braking, power)
         return LimitedCommand(
             power_w=power,
             service_brake=service_brake or braking,

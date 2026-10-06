@@ -20,6 +20,7 @@ from train_model.interface import TrainConfig  # noqa: E402
 from train_model.link import LocalLink  # noqa: E402
 from train_model.speed_limiter import (  # noqa: E402
     BRAKE_MARGIN_MPS,
+    RELEASE_MARGIN_MPS,
     SpeedLimiter,
 )
 from train_model.state import TrainModelState  # noqa: E402
@@ -68,16 +69,17 @@ def test_the_limiter_never_raises_the_power(
 
 
 def test_well_over_the_cap_power_is_cut_and_the_brake_applied() -> None:
-    """Check the brake engages past the margin and holds down to the cap."""
+    """Check the brake engages past the margin and holds under the cap."""
     limiter = SpeedLimiter()
     over = limiter.apply(DT, CAP, CAP + BRAKE_MARGIN_MPS + 0.1, 480e3, False)
     assert over.service_brake and over.limiting
     assert over.power_w == 0.0
-    # Still over the cap, inside the margin: the brake stays on.
-    held = limiter.apply(DT, CAP, CAP + 0.1, 480e3, False)
+    # Back under the cap, inside the release margin: still braking.
+    held = limiter.apply(DT, CAP, CAP - 0.1, 480e3, False)
     assert held.service_brake and held.power_w == 0.0
-    # Back at the cap: released.
-    released = limiter.apply(DT, CAP, CAP - 0.1, 480e3, False)
+    # Past the release margin: released.
+    released = limiter.apply(
+        DT, CAP, CAP - RELEASE_MARGIN_MPS - 0.1, 480e3, False)
     assert not released.service_brake
 
 
@@ -197,6 +199,44 @@ def test_after_an_engine_failure_the_speed_settles_without_hunting() -> None:
     assert applications <= 1
     # Settled for the last 20 s.
     assert all(abs(v - CAP) < 0.05 for v in speeds[-200:])
+
+
+def test_level_track_never_needs_the_brake() -> None:
+    """Check full power to the cap on level track never brakes."""
+    state, harness = make_harness(track=None)
+    harness.setInput("power_command", 480_000.0)
+    harness.setInput("speed_limit", CAP)
+    assert harness.sendInputs()
+    for _ in range(900):
+        harness.advanceTick()
+        assert not state.outputs().controller.service_brake_active
+
+
+@pytest.mark.parametrize("grade_deg", [-3.0, -5.0, -8.0])
+def test_a_downhill_holds_the_cap_without_chattering(
+        grade_deg: float) -> None:
+    """Check a downhill cycles the brake slowly and stays at the cap.
+
+    The service brake is on or off, so holding a downhill speed takes
+    some cycling; braking as soon as gravity takes the train over the
+    cap, and releasing well under it, keeps that slow (Kevin).
+    """
+    state, harness = make_harness(track=None)
+    for name, value in {"power_command": 480_000.0, "speed_limit": CAP,
+                        "grade": grade_deg}.items():
+        harness.setInput(name, value)
+    assert harness.sendInputs()
+    run(harness, 1200)
+    braking, speeds = [], []
+    for _ in range(600):
+        harness.advanceTick()
+        braking.append(state.outputs().controller.service_brake_active)
+        speeds.append(state.outputs().controller.actual_speed_mps)
+    applications = sum(1 for was, now in zip(braking, braking[1:])
+                       if now and not was)
+    assert applications <= 16  # a minute; it was 38 at -5 degrees
+    assert max(speeds) < CAP + 0.3
+    assert min(speeds) > CAP - RELEASE_MARGIN_MPS - 0.25
 
 
 def test_reset_clears_the_limiter() -> None:

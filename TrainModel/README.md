@@ -43,8 +43,11 @@ rest of it:
   limits it: a PI control law (trapezoidal integration of the speed error, no
   integration while saturated) lowers the entered power to hold the speed at
   the cap, the vehicle's 70 km/h or the speed limit where that is lower. More
-  than 0.5 m/s over the cap, it cuts power and applies the service brake until
-  the train is back at the cap, and drops its integral: the limiter cannot see
+  than 0.5 m/s over the cap, or over it and still speeding up with no power as
+  on a downhill, it cuts power and applies the service brake until the train
+  is 1.5 m/s under the cap. The service brake is on or off, so a downhill
+  cycles it; the wide band keeps that to about one application every 4 s at
+  -5°, rather than one every 1.6 s. It also drops its integral: the limiter cannot see
   an engine failure, so its integral grows while the train coasts, and kept
   past a brake it would return as a surge on every release, a power and brake
   cycle lasting about a minute. `power_command` keeps showing the entered
