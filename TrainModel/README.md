@@ -211,18 +211,19 @@ Failure status is not an output, since the Train Model does not send it to
 the Train Controller; the test UI's failure card reads the flags over the
 link instead, as test-only data.
 
-Test input rows show live values until edited: brakes, lights, doors,
-commanded speed and authority read back from the outputs; the rest show the
-last accepted command. There is no power output, so `power_command` shows the
-accepted command even while the engine has failed. Explicit edits are marked
+Test input rows show the command being sent, even where a failure or the
+door interlock keeps it from taking effect; the outputs and the Train Model
+window show the effect. So a service brake commanded during a brake failure
+stays shown as on, and engages when the failure clears, rather than appearing
+to switch itself on. The emergency brake row alone reads back from the
+outputs, so a passenger pull shows there and can be cleared. Explicit edits are marked
 **pending** and remain staged until **Send inputs**, which also advances one
 tick. Starting or advancing a fresh simulation also sends its initial edits.
 Live updates preserve the focused editor and its unfinished text. A rejected
 submission displays an error, pauses running, and retains the model state and
 pending edits for correction. Validation happens before a passenger-brake
 override, so invalid inputs cannot release the brake.
-Later ticks reuse accepted producer commands, so a suppressed readout during
-a failure does not overwrite the underlying command. `passengers_boarded`
+Later ticks reuse accepted producer commands. `passengers_boarded`
 is a one-time event: sending consumes the count and returns its row to zero;
 enter another count for another boarding event. Reset clears the model,
 failures, pending edits, and elapsed time.
