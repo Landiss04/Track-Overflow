@@ -289,6 +289,18 @@ Item {
                             + (harness.limiting ? qsTr(" · limiting") : "")
                     }
 
+                    // The stand-in Train Controller holds the train at a
+                    // station for the 45 s dwell (D007) once a door opens.
+                    KeyValueRow {
+                        objectName: "dwell"
+                        Layout.fillWidth: true
+                        label: qsTr("Station dwell")
+                        value: harness.dwellLeft > 0
+                            ? qsTr("%1 s left").arg(
+                                Math.ceil(harness.dwellLeft - 1e-9))
+                            : "—"
+                    }
+
                     KeyValueRow {
                         Layout.fillWidth: true
                         label: qsTr("Tick")

@@ -100,8 +100,8 @@ class TrainModel:
         self._last_polarity: bool | None = None
         self._door_left_open = False
         self._door_right_open = False
-        # Whether this stop has drawn its disembark; a stop ends when the
-        # train moves.
+        # Whether this stop has drawn its disembark; a stop ends
+        # when the train moves.
         self._stop_drawn = False
         self._last_inputs: TrainModelInputs | None = None
         self._elapsed_s = 0.0
@@ -444,8 +444,9 @@ class TrainModel:
             (door_left and not self._door_left_open)
             or (door_right and not self._door_right_open)
         )
-        # OPEN(5.2): uniform integer 0..onboard, drawn once per stop, on
-        # its first door-open rising edge (either side) at v = 0 (Kevin).
+        # OPEN(5.2): uniform integer 0..onboard, drawn once per stop,
+        # on its first door-open rising edge (either side) at v = 0
+        # (Kevin).
         if opened and self._velocity_mps == 0.0 and not self._stop_drawn:
             self._n_passengers -= self._rng.randint(0, self._n_passengers)
             self._stop_drawn = True

@@ -38,7 +38,10 @@ As the stand-in Train Controller, it limits the train's speed
 (``train_model/speed_limiter.py``): the power sent each tick is the
 entered power, lowered as needed to hold the speed at or below the
 vehicle's maximum speed and the speed limit. The rows keep the entered
-commands; only what is sent is limited.
+commands; only what is sent is limited. It also holds the station dwell
+(D007): once a door opens with the train at rest at a station, it sends
+no power, the service brake and the open doors for ``DWELL_S``, whatever
+is entered, once per stop.
 
 The output table shows the signals the Train Controller and the Track
 Model act on; the passthroughs the Train Model window already shows are
@@ -181,6 +184,10 @@ _DISPLAY_FACTORS = {"mph": 2.236936, "ft": 3.280840, "kW": 0.001}
 #: Clock ticks between drift checks.
 DRIFT_CHECK_TICKS = 30
 
+#: Station dwell in seconds, fixed (D007). The stand-in Train Controller
+#: holds the train at a station this long once a door opens there.
+DWELL_S = 45.0
+
 # The step was not tried: the Train Model process is not reachable.
 _NOT_CONNECTED = "Train Model is not running"
 
@@ -264,6 +271,10 @@ class TestHarnessState(QObject):
         self._limiter = SpeedLimiter()
         self._v_max_mps = TrainConfig().v_max_mps
         self._limiting = False
+        # The station dwell still to run, and whether this stop has had
+        # one; the next stop begins once the train moves.
+        self._dwell_left_s = 0.0
+        self._dwell_served = False
         # The commands the module last accepted from these producers.
         self._accepted: dict[str, Any] = self._initial_commands()
         self._pending_inputs: dict[str, Any] = {}
@@ -460,6 +471,11 @@ class TestHarnessState(QObject):
         """Whether the last step's power or brake was limited."""
         return self._limiting
 
+    @Property(float, notify=runControlChanged)
+    def dwellLeft(self) -> float:
+        """Seconds of station dwell left; 0 when not dwelling."""
+        return self._dwell_left_s
+
     @Slot(str, "QVariant")
     def setDisplayInput(self, name: str, value: Any) -> None:
         """Accept editor units and convert to the backend before staging."""
@@ -536,6 +552,8 @@ class TestHarnessState(QObject):
             self._track.reset()
         self._limiter.reset()
         self._limiting = False
+        self._dwell_left_s = 0.0
+        self._dwell_served = False
         self._accepted = self._initial_commands()
         self._emergency_override_pending = False
         self._tick = 0
@@ -618,18 +636,20 @@ class TestHarnessState(QObject):
         clear_passenger_brake: bool = False,
     ) -> bool:
         """Step the module once on ``values``; report a rejection."""
-        # A rejected step leaves the limiter as it was.
+        # A rejected step leaves the limiter and the dwell as they were.
         limiter_state, limiting = self._limiter.state, self._limiting
+        dwell = self._dwell_left_s, self._dwell_served
         try:
             inputs = self._build_inputs(values)
             # The entered values must be valid before the limiter sees them.
             TrainModel.validate_inputs(dt, inputs)
             outputs = self._link.step(
-                dt, self._limit(dt, inputs),
+                dt, self._dwell(dt, self._limit(dt, inputs)),
                 clear_passenger_brake=clear_passenger_brake,
             )
         except (ValueError, InvalidTimeStepError, LinkError) as exc:
             self._limiter.state, self._limiting = limiter_state, limiting
+            self._dwell_left_s, self._dwell_served = dwell
             self.setRunning(False)
             self._set_input_error(str(exc))
             return False
@@ -677,6 +697,36 @@ class TestHarnessState(QObject):
         return dataclasses.replace(inputs, controller=dataclasses.replace(
             cmd, power_cmd_w=limited.power_w,
             service_brake=limited.service_brake,
+        ))
+
+    def _dwell(
+        self, dt: float, inputs: TrainModelInputs,
+    ) -> TrainModelInputs:
+        # Stand in for the Train Controller's station dwell (D007):
+        # once a door opens with the train at rest at a station, hold
+        # it there, doors open, for DWELL_S. Once per stop.
+        outputs = self._link.outputs
+        if outputs is None:
+            return inputs
+        ctl = outputs.controller
+        if ctl.actual_speed_mps != 0.0:
+            self._dwell_served = False
+        doors_open = ctl.door_left_open or ctl.door_right_open
+        at_station = bool(inputs.track.track_info.station_name)
+        if (self._dwell_left_s == 0.0 and not self._dwell_served
+                and ctl.actual_speed_mps == 0.0 and doors_open
+                and at_station):
+            self._dwell_left_s = DWELL_S
+        if self._dwell_left_s == 0.0:
+            return inputs
+        # Whole ticks, so the dwell ends exactly on a tick.
+        self._dwell_left_s = max(0.0, round(self._dwell_left_s - dt, 9))
+        self._dwell_served = self._dwell_left_s == 0.0
+        cmd = inputs.controller
+        return dataclasses.replace(inputs, controller=dataclasses.replace(
+            cmd, power_cmd_w=0.0, service_brake=True,
+            door_left_open=cmd.door_left_open or ctl.door_left_open,
+            door_right_open=cmd.door_right_open or ctl.door_right_open,
         ))
 
     @staticmethod

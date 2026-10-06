@@ -25,7 +25,7 @@ The two pages are **independent windows, each its own process**:
   clock with the steps the module accepted and shows any gap as **Clock
   drift**.
 
-The test UI also carries two stand-ins, both removed at integration with the
+The test UI also carries three stand-ins, all removed at integration with the
 rest of it:
 
 - **Blue Line, loaded by default** (`train_model/track_stub.py`). As the
@@ -50,6 +50,11 @@ rest of it:
   cycle lasting about a minute. `power_command` keeps showing the entered
   power; the Train Model window's power readout shows what was sent. Run
   Control shows the cap and when it is limiting.
+- **Station dwell** (D007). Also as the stand-in Train Controller, once a door
+  opens with the train at rest at a station, the test UI holds it there for
+  45 s: no power, service brake on, the open doors kept open, whatever is
+  entered. Once per stop; the next stop begins once the train has moved. Run
+  Control counts the dwell down.
 
 The test UI's inputs scroll in place: the left column shows only the rows that
 fit and wraps from the last row back to the first (mouse wheel or drag). The
@@ -70,8 +75,8 @@ QML owns all visuals; Python owns state. The two talk through QML context
 properties: `theme` and `trainModel` in the Train Model window, `theme` and
 `harness` in the test UI.
 
-See [open issues](docs/open-issues.md) for speed-control ownership,
-vehicle calibration, and the displayed power-consumption limitation.
+See [open issues](docs/open-issues.md) for speed-control ownership and
+vehicle calibration.
 
 Detailed documentation in `docs/`:
 

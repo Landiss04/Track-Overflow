@@ -96,6 +96,8 @@ def main():
     assert track.property("value") == "Blue Line"
     limiter = next(x for x in items if x.objectName() == "speedLimiter")
     assert limiter.property("value") == "31.1 mph cap"
+    dwell = next(x for x in items if x.objectName() == "dwell")
+    assert dwell.property("value") == "\u2014"
 
     del engine
     del app
