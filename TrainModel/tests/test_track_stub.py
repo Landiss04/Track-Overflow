@@ -173,6 +173,27 @@ def test_a_typed_track_row_lasts_until_the_next_block() -> None:
     assert harness.inputValues["block"] == "2"
 
 
+def test_every_block_is_a_block_change_after_a_typed_polarity() -> None:
+    """Check a hand-flipped polarity does not hide the next block change.
+
+    The model sees a block change only when the polarity differs from
+    the last one sent, so the track must flip what was sent, not what it
+    sent itself.
+    """
+    state, harness = make_harness()
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    harness.setInput("polarity", not harness.inputValues["polarity"])
+    assert harness.sendInputs()
+    while harness.inputValues["block"] == "1":
+        harness.advanceTick()
+    harness.advanceTick()
+    outputs = state.outputs()
+    assert outputs.track.block_id == "2"
+    assert outputs.track.block_changed
+    assert outputs.track.offset_m < 1.5
+
+
 def test_reset_returns_to_the_first_block() -> None:
     """Check that resetting the module also resets the track."""
     _, harness = make_harness()

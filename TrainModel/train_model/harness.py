@@ -637,7 +637,11 @@ class TestHarnessState(QObject):
         self._accepted = dict(values, passengers_boarded=0)
         if self._track is not None and self._track.follow(
                 outputs.track.offset_m):
-            self._accepted |= self._track.inputs()
+            # The model sees a block change as a polarity flip, so flip
+            # the polarity sent, which the tester may have typed.
+            self._accepted |= self._track.inputs() | {
+                "polarity": not values["polarity"],
+            }
         self._tick += 1
         self._sync_inputs()
         self.runControlChanged.emit()
