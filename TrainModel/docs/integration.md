@@ -82,13 +82,15 @@ TrainModel/tests/test_track_stub.py
 TrainModel/tests/test_ui_sync.py
 TrainModel/tests/qml_sync_check.py
 TrainModel/tests/input_list_check.py
+TrainModel/tests/announcement_check.py
 TrainModel/tests/clock_ui_check.py
 TrainModel/tests/drive_test_ui.py
 TrainModel/tests/ebrake_button_check.py
 ```
 
 `ebrake_button_check.py` also checks the Train Model window's emergency
-brake button. If that coverage matters after integration, rewrite it to
+brake button, and `announcement_check.py` its announcement popup and failure
+buttons. If that coverage matters after integration, rewrite them to
 drive `TrainModelState` directly instead of through the test UI.
 
 These stay and need no change, because they use only the module:
