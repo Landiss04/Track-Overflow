@@ -272,6 +272,9 @@ Before any state changes, `step` rejects:
 - any non-finite numeric input: power, setpoint, grade, elevation, speed
   limit, commanded speed, boarding count (`InvalidInputError`);
 - negative power (`InvalidInputError`);
+- a grade not strictly between −90° and 90°, a negative speed limit or a
+  negative commanded speed: values with no physical meaning
+  (`InvalidInputError`);
 - a boarding count that is not an `int` (`InvalidInputError`);
 - an authority that is not an `int` or is negative (`InvalidInputError`).
 

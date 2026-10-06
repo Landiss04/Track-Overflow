@@ -81,6 +81,20 @@ def test_negative_authority_send_is_rejected() -> None:
     assert snap(state) == before
 
 
+@pytest.mark.parametrize(("name", "value"), [
+    ("speed_limit", -1.0), ("commanded_speed", -1.0), ("grade", 95.0),
+])
+def test_meaningless_track_rows_are_rejected(name: str, value: float) -> None:
+    """Check the test UI refuses them with the module's own error."""
+    state, harness = make()
+    before = snap(state)
+    harness.setInput(name, value)
+    assert not harness.sendInputs()
+    assert harness.property("inputError")
+    assert harness.property("tick") == 0
+    assert snap(state) == before
+
+
 def test_power_command_zero_under_engine_failure() -> None:
     """Check no power is displayed while the engine has failed."""
     state, harness = make()

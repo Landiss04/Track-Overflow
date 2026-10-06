@@ -1535,6 +1535,35 @@ def test_invalid_authority_is_rejected_without_side_effects(
     assert model.snapshot() == before
 
 
+@pytest.mark.parametrize(("field", "overrides"), [
+    ("speed_limit_mps", {"speed_limit_mps": -0.1}),
+    ("commanded_speed_mps", {"cmd_speed_mps": -1.0}),
+    ("grade_deg", {"grade_deg": 90.0}),
+    ("grade_deg", {"grade_deg": -90.0}),
+    ("grade_deg", {"grade_deg": 135.0}),
+    ("grade_deg", {"grade_deg": -270.0}),
+])
+def test_meaningless_inputs_are_rejected_without_side_effects(
+        field: str, overrides: dict[str, Any]) -> None:
+    """Check values with no physical meaning are refused (Kevin)."""
+    model = fresh(20)
+    launch(model, 10.0)
+    before = model.snapshot()
+    with pytest.raises(InvalidInputError, match=field):
+        model.step(DT_S, inp(**overrides))
+    assert model.snapshot() == before
+
+
+@pytest.mark.parametrize("overrides", [
+    {"speed_limit_mps": 0.0}, {"cmd_speed_mps": 0.0},
+    {"grade_deg": 89.9}, {"grade_deg": -89.9},
+])
+def test_the_limits_themselves_are_accepted(
+        overrides: dict[str, Any]) -> None:
+    """Check zero speeds and any grade short of vertical still step."""
+    fresh().step(DT_S, inp(**overrides))
+
+
 def test_signal_pickup_failure_blanks_only_the_track_signal() -> None:
     """Check pickup failure blanks the signal but not the track info."""
     model = fresh()

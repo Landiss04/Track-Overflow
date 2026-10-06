@@ -182,6 +182,16 @@ class TrainModel:
                 raise InvalidInputError(f"{name} must be finite, got {value}")
         if cmd.power_cmd_w < 0.0:
             raise InvalidInputError("power_cmd_w must be nonnegative")
+        # Values with no physical meaning (Kevin 2026-10-06).
+        grade_deg = track.track_info.grade_deg
+        if not -90.0 < grade_deg < 90.0:
+            raise InvalidInputError(
+                f"grade_deg must be between -90 and 90, got {grade_deg}"
+            )
+        if track.track_info.speed_limit_mps < 0.0:
+            raise InvalidInputError("speed_limit_mps must be nonnegative")
+        if track.track_signal.commanded_speed_mps < 0.0:
+            raise InvalidInputError("commanded_speed_mps must be nonnegative")
         if not isinstance(track.passengers_boarded, int):
             raise InvalidInputError("passengers_boarded must be an integer")
         authority_blocks = track.track_signal.authority_blocks
