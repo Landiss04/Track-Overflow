@@ -7,10 +7,13 @@ to the Track Model. Signal names, directions and types come from the
 wayside controller interface diagram; nothing else on the controller's
 current UI is represented here.
 
-IDs are strings, per ``truth/conventions/identifiers.md`` — including
-authority, which names a destination block. Values are in backend units
-(m/s, m), because this page probes the module interface rather than
-presenting it to an operator.
+Every signal is per block, including speed and authority, which reach a
+train down the track circuit of the block it occupies. One block
+selector addresses all four signal tables at once.
+
+Values are in backend units (m/s, m), because this page probes the
+module interface rather than presenting it to an operator. Authority is
+a count of blocks remaining, not a block ID.
 """
 
 from __future__ import annotations
@@ -33,37 +36,35 @@ FAILURE_STATUSES: tuple[str, ...] = (
 )
 BLOCK_COMMANDS: tuple[str, ...] = ("OPEN", "CLOSE")
 
-#: Sample territory. The wayside under test owns these blocks, and the
-#: CTC inputs below are sent for one train at a time.
-TRAIN_IDS: tuple[str, ...] = ("TRN-011", "TRN-014", "TRN-021")
-BLOCK_IDS: tuple[str, ...] = (
-    "GREEN E-13",
-    "GREEN E-14",
-    "GREEN E-15",
-    "GREEN E-16",
+#: Sample territory. Not every block carries a switch, a crossing or a
+#: signal; a signal that needs absent equipment is marked as not
+#: applying, and the view greys it out and leaves it empty.
+BLOCK_SPEC: tuple[dict[str, Any], ...] = (
+    {"id": "GREEN E-13", "switch": False, "crossing": False,
+     "signal": True},
+    {"id": "GREEN E-14", "switch": True, "crossing": False,
+     "signal": True},
+    {"id": "GREEN E-15", "switch": False, "crossing": True,
+     "signal": True},
+    {"id": "GREEN E-16", "switch": False, "crossing": False,
+     "signal": False},
 )
 
-#: CTC Office to wayside controller. Per train, except the block
-#: open/close command and maintenance mode, which are per block.
+#: Which piece of wayside equipment each signal needs. A signal absent
+#: from this table applies to every block.
+_EQUIPMENT_BY_SIGNAL: dict[str, str] = {
+    "switch_state": "switch",
+    "switch_position_command": "switch",
+    "crossing_state": "crossing",
+    "crossing_state_command": "crossing",
+    "signal_color": "signal",
+    "signal_light_command": "signal",
+}
+
+#: CTC Office to wayside controller, per block.
 _CTC_INPUT_SPEC: tuple[dict[str, Any], ...] = (
-    {
-        "name": "suggested_speed",
-        "kind": "float",
-        "unit": "m/s",
-        "value": 15.0,
-    },
-    {
-        "name": "authority_block_1",
-        "kind": "string",
-        "unit": "",
-        "value": "GREEN E-16",
-    },
-    {
-        "name": "authority_block_2",
-        "kind": "string",
-        "unit": "",
-        "value": "GREEN E-17",
-    },
+    {"name": "suggested_speed", "kind": "int", "unit": "m/s", "value": 15},
+    {"name": "authority", "kind": "int", "unit": "blocks", "value": 3},
     {
         "name": "block_open_close",
         "kind": "enum",
@@ -79,7 +80,7 @@ _CTC_INPUT_SPEC: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Track Model to wayside controller. Per block.
+#: Track Model to wayside controller, per block.
 _TRACK_MODEL_INPUT_SPEC: tuple[dict[str, Any], ...] = (
     {
         "name": "block_occupancy",
@@ -117,12 +118,15 @@ _TRACK_MODEL_INPUT_SPEC: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Wayside controller to CTC Office.
+#: Wayside controller to CTC Office, per block. Train location and speed
+#: report the train occupying this block, if any.
 _CTC_OUTPUT_SPEC: tuple[dict[str, Any], ...] = (
     {"name": "block_occupancy", "kind": "bool", "unit": "", "value": None},
+    {"name": "switch_state", "kind": "enum", "unit": "", "value": None},
+    {"name": "crossing_state", "kind": "enum", "unit": "", "value": None},
     {
-        "name": "train_location_block",
-        "kind": "string",
+        "name": "track_failure_report",
+        "kind": "enum",
         "unit": "",
         "value": None,
     },
@@ -133,29 +137,17 @@ _CTC_OUTPUT_SPEC: tuple[dict[str, Any], ...] = (
         "value": None,
     },
     {"name": "train_speed", "kind": "float", "unit": "m/s", "value": None},
-    {"name": "switch_state", "kind": "enum", "unit": "", "value": None},
-    {"name": "crossing_state", "kind": "enum", "unit": "", "value": None},
-    {
-        "name": "track_failure_report",
-        "kind": "enum",
-        "unit": "",
-        "value": None,
-    },
 )
 
-#: Wayside controller to Track Model. Per block, except the commanded
-#: authority, which names the destination block for one train.
+#: Wayside controller to Track Model, per block. Speed and authority are
+#: addressed to a block because they reach the train down that block's
+#: track circuit.
 _TRACK_MODEL_OUTPUT_SPEC: tuple[dict[str, Any], ...] = (
-    {
-        "name": "commanded_speed",
-        "kind": "float",
-        "unit": "m/s",
-        "value": None,
-    },
+    {"name": "commanded_speed", "kind": "int", "unit": "m/s", "value": None},
     {
         "name": "commanded_authority",
-        "kind": "string",
-        "unit": "",
+        "kind": "int",
+        "unit": "blocks",
         "value": None,
     },
     {
@@ -165,8 +157,8 @@ _TRACK_MODEL_OUTPUT_SPEC: tuple[dict[str, Any], ...] = (
         "value": None,
     },
     {
-        "name": "crossing_gate_closed",
-        "kind": "bool",
+        "name": "crossing_state_command",
+        "kind": "enum",
         "unit": "",
         "value": None,
     },
@@ -194,13 +186,11 @@ _PASS_THROUGH: dict[tuple[str, str], tuple[str, str]] = {
         "track_failure_report",
     ),
     (CTC_GROUP, "suggested_speed"): (TRACK_MODEL_GROUP, "commanded_speed"),
-    (CTC_GROUP, "authority_block_1"): (
-        TRACK_MODEL_GROUP,
-        "commanded_authority",
-    ),
+    (CTC_GROUP, "authority"): (TRACK_MODEL_GROUP, "commanded_authority"),
 }
 
 _DEFAULT_DT = 0.100
+_DEFAULT_TICK_STEP = 10
 
 
 def _coerce(kind: str, value: Any) -> Any:
@@ -208,10 +198,29 @@ def _coerce(kind: str, value: Any) -> Any:
     if kind == "bool":
         return bool(value)
     if kind == "int":
-        return int(value)
+        return int(float(value))
     if kind == "float":
         return float(value)
     return str(value)
+
+
+def _rows_for_block(
+    spec: tuple[dict[str, Any], ...], block: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Return one block's own copy of a signal spec.
+
+    A signal needing equipment the block does not have is marked as not
+    applying and carries no value, so the view can grey it out.
+    """
+    rows: list[dict[str, Any]] = []
+    for template in spec:
+        row = dict(template)
+        equipment = _EQUIPMENT_BY_SIGNAL.get(row["name"])
+        row["applies"] = equipment is None or bool(block[equipment])
+        if not row["applies"]:
+            row["value"] = None
+        rows.append(row)
+    return rows
 
 
 class TrackCtrlTestHarness(QObject):
@@ -229,67 +238,65 @@ class TrackCtrlTestHarness(QObject):
 
     def _load_defaults(self) -> None:
         """Set every input, output and clock field to its default."""
-        self._inputs: dict[str, list[dict[str, Any]]] = {
-            CTC_GROUP: [dict(row) for row in _CTC_INPUT_SPEC],
-            TRACK_MODEL_GROUP: [
-                dict(row) for row in _TRACK_MODEL_INPUT_SPEC
-            ],
+        self._inputs = {
+            CTC_GROUP: {
+                block["id"]: _rows_for_block(_CTC_INPUT_SPEC, block)
+                for block in BLOCK_SPEC
+            },
+            TRACK_MODEL_GROUP: {
+                block["id"]: _rows_for_block(_TRACK_MODEL_INPUT_SPEC, block)
+                for block in BLOCK_SPEC
+            },
         }
-        self._outputs: dict[str, list[dict[str, Any]]] = {
-            CTC_GROUP: [dict(row) for row in _CTC_OUTPUT_SPEC],
-            TRACK_MODEL_GROUP: [
-                dict(row) for row in _TRACK_MODEL_OUTPUT_SPEC
-            ],
+        self._outputs = {
+            CTC_GROUP: {
+                block["id"]: _rows_for_block(_CTC_OUTPUT_SPEC, block)
+                for block in BLOCK_SPEC
+            },
+            TRACK_MODEL_GROUP: {
+                block["id"]: _rows_for_block(_TRACK_MODEL_OUTPUT_SPEC, block)
+                for block in BLOCK_SPEC
+            },
         }
-        self._selected_train = TRAIN_IDS[1]
-        self._selected_block = BLOCK_IDS[2]
+        self._selected_block = str(BLOCK_SPEC[0]["id"])
         self._program_name = ""
         self._running = False
         self._tick = 0
+        self._tick_step = _DEFAULT_TICK_STEP
         self._dt = _DEFAULT_DT
 
     # -- signal tables ---------------------------------------------------
 
     @Property("QVariantList", notify=inputsChanged)
     def ctcInputs(self) -> list[dict[str, Any]]:
-        """Editable rows the CTC Office would send to the wayside."""
-        return [dict(row) for row in self._inputs[CTC_GROUP]]
+        """Editable rows the CTC Office would send for this block."""
+        return self._rows(self._inputs, CTC_GROUP)
 
     @Property("QVariantList", notify=inputsChanged)
     def trackModelInputs(self) -> list[dict[str, Any]]:
-        """Editable rows the Track Model would send to the wayside."""
-        return [dict(row) for row in self._inputs[TRACK_MODEL_GROUP]]
+        """Editable rows the Track Model would send for this block."""
+        return self._rows(self._inputs, TRACK_MODEL_GROUP)
 
     @Property("QVariantList", notify=outputsChanged)
     def ctcOutputs(self) -> list[dict[str, Any]]:
-        """Read-only rows the wayside reports to the CTC Office."""
-        return [dict(row) for row in self._outputs[CTC_GROUP]]
+        """Read-only rows reported to the CTC Office for this block."""
+        return self._rows(self._outputs, CTC_GROUP)
 
     @Property("QVariantList", notify=outputsChanged)
     def trackModelOutputs(self) -> list[dict[str, Any]]:
-        """Read-only rows the wayside commands onto the Track Model."""
-        return [dict(row) for row in self._outputs[TRACK_MODEL_GROUP]]
+        """Read-only rows commanded onto the Track Model for this block."""
+        return self._rows(self._outputs, TRACK_MODEL_GROUP)
 
     # -- selection and program -------------------------------------------
 
     @Property("QVariantList", constant=True)
-    def trains(self) -> list[str]:
-        """Train IDs the CTC inputs can be addressed to."""
-        return list(TRAIN_IDS)
-
-    @Property("QVariantList", constant=True)
     def blocks(self) -> list[str]:
         """Block IDs this wayside governs."""
-        return list(BLOCK_IDS)
-
-    @Property(str, notify=selectionChanged)
-    def selectedTrain(self) -> str:
-        """Train the per-train inputs apply to."""
-        return self._selected_train
+        return [str(block["id"]) for block in BLOCK_SPEC]
 
     @Property(str, notify=selectionChanged)
     def selectedBlock(self) -> str:
-        """Block the per-block inputs and outputs apply to."""
+        """Block every signal table on the page is addressed to."""
         return self._selected_block
 
     @Property(str, notify=programChanged)
@@ -309,6 +316,11 @@ class TrackCtrlTestHarness(QObject):
         """Ticks elapsed since the last reset."""
         return self._tick
 
+    @Property(int, notify=runControlChanged)
+    def tickStep(self) -> int:
+        """Ticks one advance moves the clock by."""
+        return self._tick_step
+
     @Property(float, notify=runControlChanged)
     def dt(self) -> float:
         """Seconds per tick."""
@@ -326,26 +338,22 @@ class TrackCtrlTestHarness(QObject):
 
     @Slot(str, str, "QVariant")
     def setInput(self, group: str, name: str, value: Any) -> None:
-        """Write one input row, coercing to the declared kind."""
-        for row in self._inputs.get(group, ()):
-            if row["name"] == name:
+        """Write one input row of the selected block."""
+        rows = self._inputs.get(group, {}).get(self._selected_block, ())
+        for row in rows:
+            if row["name"] == name and row["applies"]:
                 row["value"] = _coerce(row["kind"], value)
                 self.inputsChanged.emit()
                 return
 
     @Slot(str)
-    def setSelectedTrain(self, train_id: str) -> None:
-        """Address the per-train inputs to another train."""
-        if train_id != self._selected_train:
-            self._selected_train = train_id
-            self.selectionChanged.emit()
-
-    @Slot(str)
     def setSelectedBlock(self, block_id: str) -> None:
-        """Address the per-block inputs and outputs to another block."""
+        """Address every signal table on the page to another block."""
         if block_id != self._selected_block:
             self._selected_block = block_id
             self.selectionChanged.emit()
+            self.inputsChanged.emit()
+            self.outputsChanged.emit()
 
     @Slot(str)
     def loadProgram(self, path: str) -> None:
@@ -357,17 +365,17 @@ class TrackCtrlTestHarness(QObject):
     def sendInputs(self) -> None:
         """Push the inputs at the module and read the outputs back.
 
-        Only the declared pass-through relays resolve until the PLC
-        program drives the rest; every other output stays an em dash.
+        Every block resolves, not only the one on screen. Only the
+        declared pass-through relays resolve until the PLC program
+        drives the rest; every other output stays an em dash.
         """
-        for (in_group, in_name), (out_group, out_name) in (
-            _PASS_THROUGH.items()
-        ):
-            value = self._input_value(in_group, in_name)
-            self._set_output(out_group, out_name, value)
-        self._set_output(
-            CTC_GROUP, "train_location_block", self._selected_block
-        )
+        for block in BLOCK_SPEC:
+            block_id = str(block["id"])
+            for (in_group, in_name), (out_group, out_name) in (
+                _PASS_THROUGH.items()
+            ):
+                value = self._value(self._inputs, in_group, block_id, in_name)
+                self._set_output(out_group, block_id, out_name, value)
         self.outputsChanged.emit()
 
     @Slot(bool)
@@ -377,10 +385,18 @@ class TrackCtrlTestHarness(QObject):
             self._running = running
             self.runControlChanged.emit()
 
+    @Slot("QVariant")
+    def setTickStep(self, ticks: Any) -> None:
+        """Set how many ticks one advance moves the clock by."""
+        step = max(1, int(float(ticks)))
+        if step != self._tick_step:
+            self._tick_step = step
+            self.runControlChanged.emit()
+
     @Slot()
-    def advanceTick(self) -> None:
-        """Step the simulation clock by one tick."""
-        self._tick += 1
+    def advanceTicks(self) -> None:
+        """Step the simulation clock by ``tickStep`` ticks."""
+        self._tick += self._tick_step
         self.runControlChanged.emit()
 
     @Slot()
@@ -395,16 +411,30 @@ class TrackCtrlTestHarness(QObject):
 
     # -- internals --------------------------------------------------------
 
-    def _input_value(self, group: str, name: str) -> Any:
-        """Return the current value of one input row."""
-        for row in self._inputs[group]:
+    def _rows(
+        self, table: dict[str, dict[str, list[dict[str, Any]]]], group: str
+    ) -> list[dict[str, Any]]:
+        """Return a copy of one group's rows for the selected block."""
+        return [dict(row) for row in table[group][self._selected_block]]
+
+    def _value(
+        self,
+        table: dict[str, dict[str, list[dict[str, Any]]]],
+        group: str,
+        block_id: str,
+        name: str,
+    ) -> Any:
+        """Return the current value of one row."""
+        for row in table[group][block_id]:
             if row["name"] == name:
                 return row["value"]
-        raise KeyError(f"no input {group}.{name}")
+        raise KeyError(f"no signal {group}.{block_id}.{name}")
 
-    def _set_output(self, group: str, name: str, value: Any) -> None:
+    def _set_output(
+        self, group: str, block_id: str, name: str, value: Any
+    ) -> None:
         """Write one output row without emitting."""
-        for row in self._outputs[group]:
-            if row["name"] == name:
+        for row in self._outputs[group][block_id]:
+            if row["name"] == name and row["applies"]:
                 row["value"] = value
                 return
