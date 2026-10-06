@@ -17,6 +17,7 @@ integration), the **link** between the two processes, or the **UI** (QML).
 | ID | Area | Severity | Summary |
 |---|---|---|---|
 | [B1](#b1) | Test UI | Medium | A brake failure during a station dwell lets the train roll away |
+| [B18](#b18) | UI | Medium | The Train Model window never names the station the train is at |
 | [B3](#b3) | Test UI | Low | The limiter never uses the emergency brake |
 | [B4](#b4) | Test UI | Low | Nothing in the test UI holds a rollback |
 | [B5](#b5) | Model, UI | Low | Finite but absurd inputs have no upper bound |
@@ -50,6 +51,24 @@ Medium.
   gravity there beats rolling resistance.
 - **Fix:** if the train moves during a dwell, command the emergency brake,
   which still works under a brake failure.
+
+### B18
+
+**The Train Model window never names the station the train is at.** UI,
+Medium.
+
+- **Reproduce:** Blue Line, full power. Brake when the train enters block 9,
+  stop in block 10 at Station B and open a door. With the train boarding at
+  the station, *Next station · arrival* reads `— (—) · —`, and nothing else
+  in the window names the station.
+- **Cause:** *Next station* comes only from the beacon received this tick
+  (`train_model/state.py`), and the Blue Line's beacon is sent only in block
+  9, about 3.6 s at 1x and 0.36 s at 10x. The window has no row for the
+  station in the current block.
+- **Reach:** every stop at every station; rubric item 5.7 (beacon inputs
+  are received) is hard to show.
+- **Fix:** keep the last beacon's station as the next station until the
+  train reaches it, and show the current block's station.
 
 ### B3
 
