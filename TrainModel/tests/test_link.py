@@ -173,15 +173,42 @@ def test_train_model_ui_actions_are_pushed_without_a_step(served):
     assert outputs_of(client.pushes()[-1]).controller.emergency_brake_active
 
 
-def test_requests_are_answered_once_and_pushed_to_other_clients(served):
-    state, server, client = served
-    other = RawClient(server._name)
+def test_requests_are_answered_once(served):
+    state, _, client = served
     reply = client.step(make_inputs(power_w=100000))
     assert outputs_of(reply) == state.outputs()
-    wait_for(lambda: other.poll() or len(other.pushes()) > 1)
-    assert outputs_of(other.pushes()[-1]) == state.outputs()
     client.poll()
     assert len(client.pushes()) == 1  # only the one sent on connect
+
+
+def test_a_second_test_ui_is_refused(served):
+    """One test UI at a time: a second would step the module (Kevin)."""
+    _, server, client = served
+    other = RawClient(server._name)
+    assert other.messages[0]["op"] == "busy"
+    assert "Another test UI" in other.messages[0]["message"]
+    wait_for(lambda: other.socket.state()
+             == QLocalSocket.LocalSocketState.UnconnectedState)
+    # The first is still served.
+    assert client.step(make_inputs())["op"] == "outputs"
+
+
+def test_a_refused_test_ui_takes_over_when_the_first_leaves(served):
+    """Check a refused link says why, then connects once it is free."""
+    _, server, client = served
+    link = SocketLink(server._name)
+    harness = Harness(link)
+    wait_for(lambda: link.refusal != "")
+    assert not link.connected and not harness.connected
+    assert harness.disconnectedReason == "Another test UI open"
+    assert not harness.sendInputs()
+    assert "Another test UI" in harness.inputError
+    client.socket.disconnectFromServer()
+    wait_for(lambda: link.connected, timeout=5.0)
+    assert link.refusal == ""
+    assert harness.connected
+    # Stepping over the link is covered with real processes below: here
+    # a blocking request would wait on a server in this same thread.
 
 
 def test_failures_are_set_only_in_the_train_model_window(served):
@@ -270,7 +297,21 @@ def test_both_windows_run_as_separate_processes(app):
     model = start("main.py")
     test_ui = start("test_ui.py")
     try:
+        # Wait for the real test UI to hold the link: a probe is then
+        # refused, as is a second test UI, until the first one closes.
+        def test_ui_holds_the_link():
+            try:
+                probe = RawClient(name)
+            except AssertionError:
+                return False
+            probe.socket.disconnectFromServer()
+            return probe.messages[0]["op"] == "busy"
+        wait_for(test_ui_holds_the_link, timeout=15)
         link = SocketLink(name)
+        wait_for(lambda: link.refusal != "", timeout=5)
+        assert not link.connected
+        test_ui.terminate()
+        test_ui.wait(10)
         wait_for(lambda: link.connected, timeout=15)
         harness = Harness(link)
         harness.setInput("power_command", 100000)

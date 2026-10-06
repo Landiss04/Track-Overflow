@@ -46,7 +46,7 @@ ApplicationWindow {
             ModuleHeader {
                 Layout.fillWidth: true
                 moduleName: qsTr("Train Model Test UI")
-                mode: !harness.connected ? qsTr("Not connected")
+                mode: !harness.connected ? harness.disconnectedReason
                     : harness.running ? qsTr("Running") : qsTr("Paused")
                 clock: harness.elapsed
                 faulted: !harness.connected || harness.emergencyBrakeActive

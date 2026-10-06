@@ -190,6 +190,8 @@ DWELL_S = 45.0
 
 # The step was not tried: the Train Model process is not reachable.
 _NOT_CONNECTED = "Train Model is not running"
+# Shown in the header while the Train Model serves another test UI.
+_REFUSED = "Another test UI open"
 
 #: Either link: in this process (tests) or in the Train Model process.
 Link = LocalLink | SocketLink
@@ -304,8 +306,12 @@ class TestHarnessState(QObject):
         # than spend a tick on a step that cannot reach it.
         if not self._link.connected and not self._clock.is_paused:
             self.setRunning(False)
-            self._set_input_error(_NOT_CONNECTED)
+            self._set_input_error(self._not_connected())
         self.connectedChanged.emit()
+
+    def _not_connected(self) -> str:
+        # Why a step cannot reach the module.
+        return getattr(self._link, "refusal", "") or _NOT_CONNECTED
 
     def _live_input_values(self) -> dict[str, Any]:
         # Live controls reflect actual state, not hidden stored commands.
@@ -325,6 +331,12 @@ class TestHarnessState(QObject):
     def connected(self) -> bool:
         """Whether the Train Model can be reached."""
         return self._link.connected
+
+    @Property(str, notify=connectedChanged)
+    def disconnectedReason(self) -> str:
+        """The header's word for why this test UI is not connected."""
+        return _REFUSED if getattr(self._link, "refusal", "") else (
+            "Not connected")
 
     @Property("QVariantList", constant=True)  # type: ignore[arg-type]
     def inputDefinitions(self) -> list[dict[str, Any]]:
@@ -600,7 +612,7 @@ class TestHarnessState(QObject):
         """
         try:
             if not self._link.connected:
-                raise LinkError(_NOT_CONNECTED)
+                raise LinkError(self._not_connected())
             TrainModel.validate_inputs(
                 self._clock.tick_s, self._build_inputs(values)
             )

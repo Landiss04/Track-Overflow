@@ -8,6 +8,10 @@ harness calls that same :meth:`TrainModelState.step` in place of this
 link, and the test UI and this file are removed with no change to the
 module.
 
+One test UI at a time drives the Train Model: a second would step it
+too, so the server refuses it with ``{"op": "busy"}`` until the first
+leaves (Kevin).
+
 Two test-only commands ride alongside ``step``; integration never uses
 them: clear the passenger brake latch (folded into a step so an invalid
 step leaves the latch alone), and reset the module. Failures are set
@@ -53,6 +57,9 @@ SERVER_NAME = os.environ.get("TRAIN_MODEL_LINK", "trains-train-model")
 
 _RECONNECT_MS = 1000
 _REPLY_TIMEOUT_MS = 2000
+
+#: Why the server refused a second test UI.
+BUSY_MESSAGE = "Another test UI is connected to this Train Model"
 
 
 class LinkError(Exception):
@@ -173,10 +180,10 @@ class SocketLink(QObject):
         super().__init__(parent)
         self._name = name
         self._outputs: TrainModelOutputs | None = None
+        self._refusal = ""
         self._replies: dict[int, dict[str, Any]] = {}
         self._next_id = 0
         self._socket = QLocalSocket(self)
-        self._socket.connected.connect(self.connectedChanged)
         self._socket.disconnected.connect(self._on_disconnected)
         self._socket.readyRead.connect(self._drain)
         # Retry until the Train Model is up, and again if it restarts.
@@ -188,11 +195,20 @@ class SocketLink(QObject):
 
     @property
     def connected(self) -> bool:
-        """Whether the Train Model process is reachable."""
-        return (
+        """Whether the Train Model is reachable and serving this link.
+
+        A connection counts once the Train Model has sent its outputs,
+        so one it refuses never shows as connected.
+        """
+        return self._outputs is not None and (
             self._socket.state()
             == QLocalSocket.LocalSocketState.ConnectedState
         )
+
+    @property
+    def refusal(self) -> str:
+        """Why the Train Model last refused this link; empty if not."""
+        return self._refusal
 
     @property
     def outputs(self) -> TrainModelOutputs | None:
@@ -223,13 +239,16 @@ class SocketLink(QObject):
             self._socket.connectToServer(self._name)
 
     def _on_disconnected(self) -> None:
+        # A refused or dropped-before-served link was never connected.
+        if self._outputs is None:
+            return
         self._outputs = None
         self.connectedChanged.emit()
         self.outputsChanged.emit()
 
     def _call(self, request: dict[str, Any]) -> None:
         if not self.connected:
-            raise LinkError("Train Model is not running")
+            raise LinkError(self._refusal or "Train Model is not running")
         self._next_id += 1
         request_id = self._next_id
         _write(self._socket, dict(request, id=request_id))
@@ -247,8 +266,15 @@ class SocketLink(QObject):
 
     def _drain(self) -> None:
         for message in _read(self._socket):
+            if message["op"] == "busy":
+                self._refusal = message["message"]
+                self.connectedChanged.emit()
             if message["op"] == "outputs":
+                served = self._outputs is None
                 self._outputs = outputs_from_wire(message["outputs"])
+                if served:
+                    self._refusal = ""
+                    self.connectedChanged.emit()
                 self.outputsChanged.emit()
             if "id" in message:
                 self._replies[message["id"]] = message
@@ -308,6 +334,13 @@ class TestLinkServer(QObject):
     def _accept(self) -> None:
         while self._server.hasPendingConnections():
             socket = self._server.nextPendingConnection()
+            if self._clients:
+                # One test UI at a time: a second would step the module
+                # too, its commands alternating with the first's.
+                _write(socket, {"op": "busy", "message": BUSY_MESSAGE})
+                socket.disconnectFromServer()
+                socket.disconnected.connect(socket.deleteLater)
+                continue
             self._clients.append(socket)
             # Bound slots, not lambdas: Qt drops these connections when
             # the server is destroyed, before its sockets die with it.
