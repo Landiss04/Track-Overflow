@@ -24,7 +24,9 @@ gets one reply with that ``id``: ``{"op": "outputs", "outputs":
 ...}`` or ``{"op": "error", ...}``. The server also pushes ``{"op":
 "outputs"}`` with no ``id`` on connect and whenever a Train Model UI
 action, a passenger pull or a failure, changes the outputs between
-steps.
+steps. Each line is handled on its own: one that is not a JSON object,
+or a request with no integer ``id``, gets an error reply and is not
+acted on, and the lines after it are still served.
 """
 
 from __future__ import annotations
@@ -112,13 +114,35 @@ def _write(socket: QLocalSocket, message: Mapping[str, Any]) -> None:
     socket.write((json.dumps(message) + "\n").encode())
 
 
-def _read(socket: QLocalSocket) -> list[dict[str, Any]]:
-    messages = []
+def _parse_line(data: bytes) -> tuple[dict[str, Any] | None, str]:
+    """Decode one wire line: the message, or None and why not."""
+    try:
+        message = json.loads(data.decode("utf-8"))
+    except UnicodeError:
+        return None, "not UTF-8"
+    except ValueError as exc:
+        return None, f"not JSON: {exc}"
+    if not isinstance(message, dict):
+        return None, "not a JSON object"
+    return message, ""
+
+
+def _usable_id(message: Mapping[str, Any]) -> int | None:
+    """The request's id, if it is a JSON integer; bool is not."""
+    request_id = message.get("id")
+    if isinstance(request_id, int) and not isinstance(request_id, bool):
+        return request_id
+    return None
+
+
+def _lines(socket: QLocalSocket) -> list[bytes]:
+    """Every complete, nonblank line waiting on ``socket``."""
+    lines = []
     while socket.canReadLine():
         line = bytes(socket.readLine().data()).strip()
         if line:
-            messages.append(json.loads(line))
-    return messages
+            lines.append(line)
+    return lines
 
 
 # ---------------------------------------------------------------------- #
@@ -265,11 +289,16 @@ class SocketLink(QObject):
             raise _error_from_wire(reply)
 
     def _drain(self) -> None:
-        for message in _read(self._socket):
-            if message["op"] == "busy":
+        for line in _lines(self._socket):
+            # A line that is not a message is skipped: it must not stop
+            # the lines after it.
+            message, _ = _parse_line(line)
+            if message is None:
+                continue
+            if message.get("op") == "busy":
                 self._refusal = message["message"]
                 self.connectedChanged.emit()
-            if message["op"] == "outputs":
+            if message.get("op") == "outputs":
                 served = self._outputs is None
                 self._outputs = outputs_from_wire(message["outputs"])
                 if served:
@@ -369,16 +398,29 @@ class TestLinkServer(QObject):
                 _write(socket, message)
 
     def _receive(self, socket: QLocalSocket) -> None:
-        for request in _read(socket):
+        # Answer each line on its own, in order: a malformed line gets
+        # an error reply and never blocks the lines after it.
+        for line in _lines(socket):
+            request, reason = _parse_line(line)
+            if request is None:
+                _write(socket, {"op": "error", "kind": "request",
+                                "message": reason})
+                continue
+            request_id = _usable_id(request)
+            if request_id is None:
+                # No reply could be matched to it, so do not act on it.
+                _write(socket, {"op": "error", "kind": "request",
+                                "message": "no integer id"})
+                continue
             self._requester = socket
             try:
                 reply = self._handle(request)
             finally:
                 self._requester = None
-            _write(socket, dict(reply, id=request["id"]))
+            _write(socket, dict(reply, id=request_id))
 
     def _handle(self, request: Mapping[str, Any]) -> dict[str, Any]:
-        op = request["op"]
+        op = request.get("op")
         try:
             if op == "step":
                 self._state.step(
