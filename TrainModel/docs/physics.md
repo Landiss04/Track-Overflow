@@ -271,7 +271,10 @@ advancing time.
 
 Before any state changes, `step` rejects:
 
-- dt that is not finite or not positive (`InvalidTimeStepError`);
+- dt that is not finite, not positive, or longer than 60 s
+  (`InvalidTimeStepError`); the clock ticks 0.1 s;
+- an on/off input (brake, light and door commands, polarity, beacon
+  underground) that is not a `bool` (`InvalidInputError`);
 - any non-finite numeric input: power, setpoint, grade, elevation, speed
   limit, commanded speed, boarding count (`InvalidInputError`);
 - negative power (`InvalidInputError`);

@@ -122,6 +122,8 @@ def _parse_line(data: bytes) -> tuple[dict[str, Any] | None, str]:
         return None, "not UTF-8"
     except ValueError as exc:
         return None, f"not JSON: {exc}"
+    except RecursionError:
+        return None, "nested too deeply"
     if not isinstance(message, dict):
         return None, "not a JSON object"
     return message, ""

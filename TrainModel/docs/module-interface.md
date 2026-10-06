@@ -50,7 +50,7 @@ Advances one tick. This is the only call the rest of the system needs.
 | `dt` | Tick length in seconds: the shared clock's fixed tick (`utils/system_clock.py`, 0.1 s). Constant for the whole run (D006). Fast-forward and pause change how often `step` is called, never `dt`. |
 | `inputs` | `TrainModelInputs` for this tick (section 4). Send a complete set every tick; nothing is remembered between calls except the train's own state. |
 | Returns | `TrainModelOutputs` for this tick (section 5). |
-| Raises | `InvalidTimeStepError` if `dt` is not finite and positive. `InvalidInputError` (also a `ValueError`) if a numeric input is not finite, power, `speed_limit_mps` or `commanded_speed_mps` is negative, `grade_deg` is not strictly between −90 and 90, `passengers_boarded` or `authority_blocks` is not an `int` from 0 to 2³¹ − 1, the largest count Qt and QML carry. Both are `TrainModelError`. A rejected step changes nothing. |
+| Raises | `InvalidTimeStepError` if `dt` is not finite and positive, or is longer than 60 s. `InvalidInputError` (also a `ValueError`) if an on/off input is not a `bool`, a numeric input is not finite, power, `speed_limit_mps` or `commanded_speed_mps` is negative, `grade_deg` is not strictly between −90 and 90, `passengers_boarded` or `authority_blocks` is not an `int` from 0 to 2³¹ − 1, the largest count Qt and QML carry. Both are `TrainModelError`. A rejected step changes nothing. |
 
 `TrainModelState.step(dt, inputs, *, override_passenger_brake=False)` has
 the same contract, also refreshes the window, and marks the module as
@@ -192,8 +192,8 @@ TrainModelOutputs
 
 | Exception | When | State after |
 |---|---|---|
-| `InvalidTimeStepError` | dt nonfinite or ≤ 0 | Unchanged |
-| `InvalidInputError` | Nonfinite number; negative power, speed limit or commanded speed; grade not strictly between −90° and 90°; boarding count or authority not an int from 0 to 2³¹ − 1 | Unchanged |
+| `InvalidTimeStepError` | dt nonfinite, ≤ 0 or > 60 s | Unchanged |
+| `InvalidInputError` | On/off input not a `bool`; nonfinite number; negative power, speed limit or commanded speed; grade not strictly between −90° and 90°; boarding count or authority not an int from 0 to 2³¹ − 1 | Unchanged |
 
 Both derive from `TrainModelError`. A rejected step does not advance the
 train or its random generator. Decide in the harness what a rejection means

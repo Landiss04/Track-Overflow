@@ -35,6 +35,7 @@ from train_model.interface import (
     TrainModelSnapshot,
 )
 from train_model.model import (
+    MAX_DT_S,
     InvalidInputError,
     InvalidTimeStepError,
     TrainModel,
@@ -1020,6 +1021,63 @@ def test_invalid_dt_rejected(dt: float) -> None:
     model = fresh()
     with pytest.raises(InvalidTimeStepError):
         model.step(dt, inp(CFG.p_max_w))
+
+
+@pytest.mark.parametrize("dt", [MAX_DT_S * 1.001, 1e300, 1e308])
+def test_a_step_longer_than_a_minute_is_rejected(dt: float) -> None:
+    """Check a step far beyond any tick is refused (Kevin).
+
+    Two steps of 1e308 s overflowed the elapsed time to infinity, and
+    every later step failed until the module was reset.
+    """
+    model = fresh(20)
+    launch(model, 5.0)
+    before = model.snapshot()
+    with pytest.raises(InvalidTimeStepError, match="at most"):
+        model.step(dt, inp(CFG.p_max_w))
+    assert model.snapshot() == before
+
+
+_FLAGS = ["service_brake", "emergency_brake", "interior_lights",
+          "exterior_lights", "door_left_open", "door_right_open"]
+
+
+def _with_flag(inputs: TrainModelInputs, field: str,
+               value: Any) -> TrainModelInputs:
+    """Return ``inputs`` with one on/off field set to ``value``."""
+    rep = dataclasses.replace
+    track = inputs.track
+    if field in _FLAGS:
+        return rep(inputs, controller=rep(inputs.controller,
+                                          **{field: value}))
+    if field == "polarity":
+        return rep(inputs, track=rep(track, track_info=rep(
+            track.track_info, polarity=value)))
+    return rep(inputs, track=rep(track, beacon=Beacon(
+        "Dormont", "R", value)))
+
+
+@pytest.mark.parametrize("field", _FLAGS + ["polarity", "underground"])
+@pytest.mark.parametrize("value", ["false", "yes", 1, 0, None])
+def test_an_on_off_input_that_is_not_a_bool_is_rejected(
+        field: str, value: Any) -> None:
+    """Check on/off inputs must be True or False (Kevin).
+
+    A string "false" is truthy: as the service brake, it engaged it.
+    """
+    model = fresh(20)
+    launch(model, 5.0)
+    before = model.snapshot()
+    with pytest.raises(InvalidInputError, match=field):
+        model.step(DT_S, _with_flag(inp(), field, value))
+    assert model.snapshot() == before
+
+
+def test_a_one_minute_step_is_accepted() -> None:
+    """Check the longest step allowed still steps."""
+    model = fresh()
+    model.step(MAX_DT_S, inp(CFG.p_max_w))
+    assert model.snapshot().elapsed_s == MAX_DT_S
 
 
 @pytest.mark.parametrize("dt", [-1.0, math.nan, math.inf])

@@ -73,6 +73,8 @@ GOOD_STEP = json.dumps({"op": "step", "dt": 0.1, "id": 50,
     (b'{"id": 4}\n', True),
     (b'{"op": "reset", "id": 1}{"op": "reset", "id": 2}\n', False),
     (b"\xff\xfe\xfa\n", False),
+    pytest.param(b"[" * 100_000 + b"]" * 100_000 + b"\n", False,
+                 id="deeply-nested"),
 ])
 def test_each_malformed_line_gets_one_error_reply(served, payload, has_id):
     state, socket, escaped = served
@@ -99,6 +101,39 @@ def test_a_good_line_after_a_bad_one_in_one_write_is_answered(served):
     assert [r["op"] for r in replies] == ["error", "outputs"]
     assert replies[1]["id"] == 7
     assert not escaped, escaped
+
+
+def test_huge_time_steps_are_refused_and_the_module_keeps_stepping(
+        served):
+    """Two steps of 1e308 s used to brick the module until reset."""
+    _, socket, escaped = served
+    for request_id in (60, 61):
+        step = GOOD_STEP.replace(b'"dt": 0.1', b'"dt": 1e308')
+        step = step.replace(b'"id": 50', b'"id": %d' % request_id)
+        reply = send(socket, step)
+        assert reply[0]["op"] == "error" and reply[0]["kind"] == "time_step"
+    reply = send(socket, GOOD_STEP)
+    assert reply[0]["op"] == "outputs" and reply[0]["id"] == 50
+    assert not escaped, escaped
+
+
+def test_a_good_line_after_a_deeply_nested_one_is_answered(served):
+    _, socket, escaped = served
+    nested = b"[" * 100_000 + b"]" * 100_000 + b"\n"
+    replies = send(socket, nested + b'{"op": "reset", "id": 8}\n', want=2)
+    assert [r["op"] for r in replies] == ["error", "outputs"]
+    assert not escaped, escaped
+
+
+def test_a_string_for_an_on_off_input_is_refused(served):
+    """A string "false" is truthy; it used to engage the brake."""
+    state, socket, _ = served
+    request = json.loads(GOOD_STEP)
+    request["inputs"]["controller"]["service_brake"] = "false"
+    reply = send(socket, json.dumps(request).encode() + b"\n")
+    assert reply[0]["op"] == "error" and reply[0]["kind"] == "input"
+    assert "service_brake" in reply[0]["message"]
+    assert not state.outputs().controller.service_brake_active
 
 
 def test_after_every_kind_of_junk_a_step_is_served(served):

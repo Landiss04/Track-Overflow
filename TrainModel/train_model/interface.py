@@ -235,7 +235,8 @@ class TrainModel(Protocol):
     def step(self, dt: float, inputs: TrainModelInputs) -> TrainModelOutputs:
         """Advance one tick.
 
-        dt is fixed by the harness and must be finite and positive.
+        dt is fixed by the harness and must be finite, positive and at
+        most 60 s. On/off inputs must be bools.
         Numeric inputs must be finite; power, the speed limit, the
         commanded speed, authority and the boarding count must be
         nonnegative, and the grade strictly between -90 and 90 degrees.

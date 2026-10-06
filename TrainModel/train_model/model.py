@@ -39,6 +39,10 @@ _NO_BLOCK_ID = ""
 #: 32-bit signed ints.
 MAX_COUNT = 2**31 - 1
 
+#: The longest step accepted, in s. The shared clock ticks 0.1 s
+#: (D006); a far longer step overflowed elapsed time (Kevin).
+MAX_DT_S = 60.0
+
 
 class TrainModelError(Exception):
     """Base class for every Train Model error."""
@@ -177,9 +181,31 @@ class TrainModel:
             raise InvalidTimeStepError(
                 f"dt must be finite and positive, got {dt}"
             )
+        if dt > MAX_DT_S:
+            raise InvalidTimeStepError(
+                f"dt must be at most {MAX_DT_S} s, got {dt}"
+            )
 
         cmd = inputs.controller
         track = inputs.track
+        # On/off inputs must be bools: a string "false" is truthy, and
+        # sent as the service brake it engaged it (Kevin).
+        flags = {
+            "service_brake": cmd.service_brake,
+            "emergency_brake": cmd.emergency_brake,
+            "interior_lights": cmd.interior_lights,
+            "exterior_lights": cmd.exterior_lights,
+            "door_left_open": cmd.door_left_open,
+            "door_right_open": cmd.door_right_open,
+            "polarity": track.track_info.polarity,
+        }
+        if track.beacon is not None:
+            flags["underground"] = track.beacon.underground
+        for name, flag in flags.items():
+            if not isinstance(flag, bool):
+                raise InvalidInputError(
+                    f"{name} must be True or False, got {flag!r}"
+                )
         numeric = {
             "power_cmd_w": cmd.power_cmd_w,
             "temp_setpoint_c": cmd.temp_setpoint_c,
