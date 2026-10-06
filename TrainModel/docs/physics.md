@@ -186,7 +186,8 @@ or the static rule of section 6 at v = 0.
 4. Integrate motion over dt (sections 5 and 6).
 5. If the train is now moving, force both doors closed.
 6. Update cabin temperature (section 11).
-7. Store the inputs, add dt to elapsed time, and build the outputs
+7. Store the inputs, add dt to elapsed time (compensated summation, so the
+   sum stays within an ulp of exact over any run), and build the outputs
    (section 13).
 
 ## 8. Doors and the interlock

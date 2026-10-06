@@ -109,6 +109,10 @@ class TrainModel:
         self._stop_drawn = False
         self._last_inputs: TrainModelInputs | None = None
         self._elapsed_s = 0.0
+        # Rounding lost from the running sum of dt so far (Kahan). Steps
+        # of 0.1 s are not exact in binary; summed plainly, the clock
+        # falls a second behind on whole seconds within an hour.
+        self._elapsed_carry_s = 0.0
 
         self._outputs = self._build_outputs(
             inputs=None, block_changed=False
@@ -162,7 +166,7 @@ class TrainModel:
         self._update_cabin_temp(dt, cmd.temp_setpoint_c)
 
         self._last_inputs = inputs
-        self._elapsed_s += dt
+        self._add_elapsed(dt)
         self._outputs = self._build_outputs(inputs, block_changed)
         return self._outputs
 
@@ -217,6 +221,14 @@ class TrainModel:
             raise InvalidInputError(
                 f"authority_blocks must be at most {MAX_COUNT}"
             )
+
+    def _add_elapsed(self, dt: float) -> None:
+        # Compensated (Kahan) summation: the sum stays within an ulp of
+        # exact however many steps it adds.
+        step = dt - self._elapsed_carry_s
+        total = self._elapsed_s + step
+        self._elapsed_carry_s = (total - self._elapsed_s) - step
+        self._elapsed_s = total
 
     def snapshot(self) -> TrainModelSnapshot:
         """Return the current state for display. No side effects."""
