@@ -1,7 +1,7 @@
 **Target:** truth/signals/failure-status.md
 **Action:** replace
 **Proposed by:** Claude (Claude Code) on Train-model-Interface
-**Provenance:** failure status no longer sent to the Train Controller, asserted by Kevin Schillinger 2026-10-05 in this chat ("the train model no longer is to send the failure mode status to the train controllers strip that out"); not in the repository. Replaces the inbox proposal `20261002-2107-failure-status.md`; its brake failure scope is kept in `modules/train-model.md` (inbox proposal `20261005-1821-train-model.md`).
+**Provenance:** failure status no longer sent to the Train Controller, asserted by Kevin Schillinger 2026-10-05 in this chat ("the train model no longer is to send the failure mode status to the train controllers strip that out"); not in the repository. Replaces an earlier inbox proposal for this entry, deleted as duplicates on 2026-10-06 at Kevin Schillinger's request ("review all the proposals and dedupe"). Its brake failure scope (blocking only the service brake, clarified by the course instructor and relayed by Kevin Schillinger 2026-10-02) is kept in `modules/train-model.md`, inbox proposal `20261006-1218-train-model.md`.
 
 ---
 
