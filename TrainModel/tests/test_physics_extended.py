@@ -356,12 +356,15 @@ def test_overboarding_clamps_to_capacity(boarded: int) -> None:
     assert model.snapshot().outputs.track.passenger_capacity == 0
 
 
-def test_negative_boarding_is_ignored() -> None:
-    """Check a negative boarding count removes nobody."""
+def test_negative_boarding_is_rejected_without_side_effects() -> None:
+    """Check a negative boarding count is refused (Kevin)."""
     model = TrainModel(CFG)
     at_station = {"door_left": True, "station": STATION}
     model.step(DT_S, inp(boarded=10, **at_station))
-    model.step(DT_S, inp(boarded=-5, **at_station))
+    before = model.snapshot()
+    with pytest.raises(InvalidInputError, match="passengers_boarded"):
+        model.step(DT_S, inp(boarded=-5, **at_station))
+    assert model.snapshot() == before
     assert onboard(model) == 10
 
 

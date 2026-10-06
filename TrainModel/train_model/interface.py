@@ -236,7 +236,9 @@ class TrainModel(Protocol):
         """Advance one tick.
 
         dt is fixed by the harness and must be finite and positive.
-        Numeric inputs must be finite; power must be nonnegative.
+        Numeric inputs must be finite; power, the speed limit, the
+        commanded speed, authority and the boarding count must be
+        nonnegative, and the grade strictly between -90 and 90 degrees.
         Invalid inputs are rejected before any state is changed.
         """
         ...

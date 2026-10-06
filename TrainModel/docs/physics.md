@@ -275,7 +275,7 @@ Before any state changes, `step` rejects:
 - a grade not strictly between −90° and 90°, a negative speed limit or a
   negative commanded speed: values with no physical meaning
   (`InvalidInputError`);
-- a boarding count that is not an `int` (`InvalidInputError`);
+- a boarding count that is not an `int` or is negative (`InvalidInputError`);
 - an authority that is not an `int` or is negative (`InvalidInputError`).
 
 A rejected step leaves the model exactly as it was, including the random

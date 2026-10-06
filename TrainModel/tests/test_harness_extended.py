@@ -83,6 +83,7 @@ def test_negative_authority_send_is_rejected() -> None:
 
 @pytest.mark.parametrize(("name", "value"), [
     ("speed_limit", -1.0), ("commanded_speed", -1.0), ("grade", 95.0),
+    ("passengers_boarded", -1),
 ])
 def test_meaningless_track_rows_are_rejected(name: str, value: float) -> None:
     """Check the test UI refuses them with the module's own error."""

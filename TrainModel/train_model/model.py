@@ -194,6 +194,8 @@ class TrainModel:
             raise InvalidInputError("commanded_speed_mps must be nonnegative")
         if not isinstance(track.passengers_boarded, int):
             raise InvalidInputError("passengers_boarded must be an integer")
+        if track.passengers_boarded < 0:
+            raise InvalidInputError("passengers_boarded must be nonnegative")
         authority_blocks = track.track_signal.authority_blocks
         if not isinstance(authority_blocks, int):
             raise InvalidInputError("authority_blocks must be an integer")

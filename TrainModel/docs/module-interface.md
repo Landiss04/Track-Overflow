@@ -50,7 +50,7 @@ Advances one tick. This is the only call the rest of the system needs.
 | `dt` | Tick length in seconds: the shared clock's fixed tick (`utils/system_clock.py`, 0.1 s). Constant for the whole run (D006). Fast-forward and pause change how often `step` is called, never `dt`. |
 | `inputs` | `TrainModelInputs` for this tick (section 4). Send a complete set every tick; nothing is remembered between calls except the train's own state. |
 | Returns | `TrainModelOutputs` for this tick (section 5). |
-| Raises | `InvalidTimeStepError` if `dt` is not finite and positive. `InvalidInputError` (also a `ValueError`) if a numeric input is not finite, power is negative, `passengers_boarded` is not an `int`, or `authority_blocks` is not a nonnegative `int`. Both are `TrainModelError`. A rejected step changes nothing. |
+| Raises | `InvalidTimeStepError` if `dt` is not finite and positive. `InvalidInputError` (also a `ValueError`) if a numeric input is not finite, power, `speed_limit_mps` or `commanded_speed_mps` is negative, `grade_deg` is not strictly between −90 and 90, `passengers_boarded` is not a nonnegative `int`, or `authority_blocks` is not a nonnegative `int`. Both are `TrainModelError`. A rejected step changes nothing. |
 
 `TrainModelState.step(dt, inputs, *, override_passenger_brake=False)` has
 the same contract, also refreshes the window, and marks the module as
@@ -113,9 +113,9 @@ TrainModelInputs
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
 | `block_id` | str | | Block the train is in. |
-| `grade_deg` | float | deg | Grade, positive uphill in the direction of travel. Layout files give percent; the loader converts. |
+| `grade_deg` | float | deg | Grade, positive uphill in the direction of travel. Strictly between −90 and 90. Layout files give percent; the loader converts. |
 | `elevation_m` | float | m | Elevation. Validated, not used by the physics. |
-| `speed_limit_mps` | float | m/s | Passed through to the Train Controller. |
+| `speed_limit_mps` | float | m/s | Nonnegative. Passed through to the Train Controller. |
 | `polarity` | bool | | Track-circuit polarity. A change from the previous tick is a block change. |
 | `station_name` | str \| None | | Station in this block, or `None`. Default `None`. Boarding needs a station. |
 
@@ -123,7 +123,7 @@ TrainModelInputs
 
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
-| `commanded_speed_mps` | float | m/s | Passed through to the Train Controller. |
+| `commanded_speed_mps` | float | m/s | Nonnegative. Passed through to the Train Controller. |
 | `authority_blocks` | int | blocks | Blocks the train may travel before it must stop. Nonnegative. Passed through. |
 
 Both are reported as 0 while signal pickup has failed.
@@ -140,8 +140,8 @@ Send `None` on every other tick.
 
 ### `passengers_boarded` (Track Model)
 
-An `int`, 0 except on a boarding event. It boards only at a station with a
-door open, and never beyond capacity. It is consumed by the step that
+An `int`, 0 except on a boarding event, never negative. It boards only at a
+station with a door open, and never beyond capacity. It is consumed by the step that
 carries it: send it on one tick only, and never more than the
 `passenger_capacity` last reported.
 
@@ -193,7 +193,7 @@ TrainModelOutputs
 | Exception | When | State after |
 |---|---|---|
 | `InvalidTimeStepError` | dt nonfinite or ≤ 0 | Unchanged |
-| `InvalidInputError` | Nonfinite number, negative power, non-int boarding count, negative or non-int authority | Unchanged |
+| `InvalidInputError` | Nonfinite number; negative power, speed limit or commanded speed; grade not strictly between −90° and 90°; negative or non-int boarding count; negative or non-int authority | Unchanged |
 
 Both derive from `TrainModelError`. A rejected step does not advance the
 train or its random generator. Decide in the harness what a rejection means

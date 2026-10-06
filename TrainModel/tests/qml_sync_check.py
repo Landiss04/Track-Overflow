@@ -172,6 +172,9 @@ def main():
                   if x.objectName() == "output-speed_limit")
     assert output.property("unit") == "mph"
     assert output.property("value") == 31.069
+    # A count refuses a typed minus sign, so no negative is staged.
+    edit("passengers_boarded", "-5")
+    assert harness.inputValues["passengers_boarded"] == 5
     del engine
     del app
 
