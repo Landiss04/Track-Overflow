@@ -150,9 +150,29 @@ def test_beacon_disappearance_and_clock_refresh(pair):
     send(harness, {"beacon_station": "", "beacon_underground": False})
     for _ in range(8):
         harness.advanceTick()
-    assert state.snapshot["next_station"] == "—"
+    # The module's beacon output is gone; the window keeps the station
+    # as the next one until the train reaches it.
     assert state.outputs().controller.beacon is None
+    assert state.snapshot["next_station"] == "Station"
     assert state.snapshot["clock"] == harness.elapsed == "00:00:01"
+
+
+def test_the_window_names_the_station_on_the_blue_line(pair):
+    """B18: stopped at Station B, the window names the station."""
+    state, harness = pair
+    send(harness, {"power_command": 480_000.0})
+    while state.outputs().track.block_id != "9":
+        harness.advanceTick()
+    # Past the beacon block, Station B is still the next station.
+    send(harness, {"power_command": 0.0, "service_brake_command": True})
+    while state.outputs().track.block_id == "9":
+        harness.advanceTick()
+    while state.outputs().controller.actual_speed_mps > 0.0:
+        harness.advanceTick()
+    send(harness, {"left_door_command": True})
+    assert state.outputs().track.block_id == "10"
+    assert state.snapshot["station"] == "Station B"
+    assert state.snapshot["next_station"] == "—"
 
 
 def run_gui_check(name, timeout):

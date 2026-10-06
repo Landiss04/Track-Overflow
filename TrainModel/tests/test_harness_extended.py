@@ -152,15 +152,23 @@ def test_previous_block_tracks_block_changes() -> None:
     assert snap(state)["previous_block"] == "GREEN I"
 
 
-def test_next_station_shows_only_a_received_beacon() -> None:
-    """Check the beacon station shows while received, then clears."""
+def test_next_station_is_kept_until_the_train_is_there() -> None:
+    """Check a beacon's station stays next until the train reaches it."""
     state, harness = make()
     harness.setInput("beacon_station", "Dormont")
     harness.sendInputs()
     assert snap(state)["next_station"] == "Dormont"
     harness.setInput("beacon_station", "")
     harness.sendInputs()
+    # The beacon is gone, but the train has not reached Dormont yet.
+    assert snap(state)["next_station"] == "Dormont"
+    assert snap(state)["station"] == "—"
+    harness.setInput("station", "Dormont")
+    harness.sendInputs()
+    assert snap(state)["station"] == "Dormont"
     assert snap(state)["next_station"] == "—"
+    harness.resetModule()
+    assert snap(state)["next_station"] == snap(state)["station"] == "—"
 
 
 @pytest.mark.parametrize(("ticks", "shown"), [

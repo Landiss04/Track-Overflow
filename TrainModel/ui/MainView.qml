@@ -283,7 +283,17 @@ ScrollView {
                     value: root.fixed(root.ft(root.s.position_offset), 1) + " ft"
                 }
 
+                // The station in the current block. The next station is
+                // the last beacon's, kept until the train reaches it.
                 KeyValueRow {
+                    objectName: "currentStation"
+                    Layout.fillWidth: true
+                    label: qsTr("Station")
+                    value: root.s.station
+                }
+
+                KeyValueRow {
+                    objectName: "nextStation"
                     Layout.fillWidth: true
                     label: qsTr("Next station · arrival")
                     value: root.s.next_station + " ("

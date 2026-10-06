@@ -72,6 +72,9 @@ class TrainModelState(QObject):
         self._config = config if config is not None else TrainConfig()
         self._model = TrainModel(self._config)
         self._failures: dict[str, bool] = dict.fromkeys(FAILURE_MODES, False)
+        # The last beacon's station and platform side, kept until the
+        # train is at that station: a beacon is sent only near it.
+        self._next_station: tuple[str, str] | None = None
         self._snapshot: dict[str, Any] = self._initial_snapshot()
         self._running = False
         self._idle: QTimer | None = None
@@ -87,6 +90,7 @@ class TrainModelState(QObject):
             "arrival": _NONE_SHOWN,
             "grade": 0.0,
             "elevation": 0.0,
+            "station": _NONE_SHOWN,
             "next_station": _NONE_SHOWN,
             "platform_side": _NONE_SHOWN,
             "previous_block": _NONE_SHOWN,
@@ -191,6 +195,7 @@ class TrainModelState(QObject):
         """Replace the model with a fresh one and clear every failure."""
         self._model = TrainModel(self._config)
         self._failures = dict.fromkeys(FAILURE_MODES, False)
+        self._next_station = None
         self._snapshot = self._initial_snapshot()
         self._refresh()
         self.failuresChanged.emit()
@@ -323,12 +328,23 @@ class TrainModelState(QObject):
         }
         if block != self._snapshot["current_block"]:
             updates["previous_block"] = self._snapshot["current_block"]
-        updates["next_station"] = (
-            ctl.beacon.station_name if ctl.beacon else _NONE_SHOWN
-        )
-        updates["platform_side"] = (
-            ctl.beacon.platform_side if ctl.beacon else _NONE_SHOWN
-        )
+        # The station in the current block, from Track Info.
+        station = (
+            inputs.track.track_info.station_name if inputs is not None
+            else None
+        ) or ""
+        if ctl.beacon is not None:
+            self._next_station = (
+                ctl.beacon.station_name, ctl.beacon.platform_side
+            )
+        if (self._next_station is not None
+                and station == self._next_station[0]):
+            # Arrived: the station is now the current one.
+            self._next_station = None
+        updates["station"] = station or _NONE_SHOWN
+        next_name, side = self._next_station or (_NONE_SHOWN, _NONE_SHOWN)
+        updates["next_station"] = next_name
+        updates["platform_side"] = side
         if inputs is not None:
             updates["grade"] = inputs.track.track_info.grade_deg
             updates["elevation"] = inputs.track.track_info.elevation_m
