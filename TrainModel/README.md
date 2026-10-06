@@ -205,25 +205,24 @@ python3 -m venv .venv
 The Train Model window reads the model snapshot. The test UI reads only the
 module's outputs: the Train Model pushes them after every step and after any
 Train Model UI action, so passenger-brake and failure changes reach the test
-UI's outputs immediately, including while paused; the next tick integrates
-their physical effect. Failures are set only in the Train Model window: the
+UI's controls and outputs immediately, including while paused; the next tick
+integrates their physical effect. Failures are set only in the Train Model window: the
 test UI had its own failure card, removed as redundant. Failure status is not
 an output, since the Train Model does not send it to the Train Controller, so
 the test UI does not show which failures are set, only their effect.
 
-Test input rows show the command being sent, even where a failure or the
-door interlock keeps it from taking effect; the outputs and the Train Model
-window show the effect. So a service brake commanded during a brake failure
-stays shown as on, and engages when the failure clears, rather than appearing
-to switch itself on. The emergency brake row alone reads back from the
-outputs, so a passenger pull shows there and can be cleared. Explicit edits are marked
+Test input rows show live values until edited: brakes, lights, doors,
+commanded speed and authority read back from the outputs; the rest show the
+last accepted command. There is no power output, so `power_command` shows the
+accepted command even while the engine has failed. Explicit edits are marked
 **pending** and remain staged until **Send inputs**, which also advances one
 tick. Starting or advancing a fresh simulation also sends its initial edits.
 Live updates preserve the focused editor and its unfinished text. A rejected
 submission displays an error, pauses running, and retains the model state and
 pending edits for correction. Validation happens before a passenger-brake
 override, so invalid inputs cannot release the brake.
-Later ticks reuse accepted producer commands. `passengers_boarded`
+Later ticks reuse accepted producer commands, so a suppressed readout during
+a failure does not overwrite the underlying command. `passengers_boarded`
 is a one-time event: sending consumes the count and returns its row to zero;
 enter another count for another boarding event. Reset clears the model,
 failures, pending edits, and elapsed time.

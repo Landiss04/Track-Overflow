@@ -14,9 +14,8 @@ signals are presented as one row per element: ``Light Command``
 (``bool[2]``) becomes left and right, and the ``Track Signal`` struct is
 flattened into its fields.
 
-Controls show the commands being sent, with staged edits marked pending;
-only the emergency brake reads back live state, to show a passenger pull.
-Sending applies those edits and advances one tick. Later ticks
+Controls read back live state from the outputs, with staged edits marked
+pending. Sending applies those edits and advances one tick. Later ticks
 reuse the last accepted inputs. A boarding count is consumed once and
 must be entered again for a later boarding event.
 
@@ -217,16 +216,17 @@ def _output_values(outputs: TrainModelOutputs) -> dict[str, Any]:
 
 
 def _live_values(outputs: TrainModelOutputs) -> dict[str, Any]:
-    """Input rows that read back what the train is actually doing.
-
-    Only the emergency brake: a passenger pull engages it with no
-    command, and the row is how a tester sees and clears that latch.
-    Every other row shows the command being sent, even where a failure
-    or an interlock keeps it from taking effect, so nothing switches on
-    by itself when the fault clears or the train stops.
-    """
+    """Input rows that read back what the train is actually doing."""
+    ctl = outputs.controller
     return {
-        "emergency_brake_command": outputs.controller.emergency_brake_active,
+        "service_brake_command": ctl.service_brake_active,
+        "emergency_brake_command": ctl.emergency_brake_active,
+        "interior_light_command": ctl.interior_lights_on,
+        "exterior_light_command": ctl.exterior_lights_on,
+        "left_door_command": ctl.door_left_open,
+        "right_door_command": ctl.door_right_open,
+        "commanded_speed": ctl.commanded_speed_mps,
+        "authority": ctl.authority_blocks,
     }
 
 
@@ -297,7 +297,7 @@ class TestHarnessState(QObject):
         self.connectedChanged.emit()
 
     def _live_input_values(self) -> dict[str, Any]:
-        # The sent commands, with the emergency brake's live state.
+        # Live controls reflect actual state, not hidden stored commands.
         values = dict(self._accepted)
         outputs = self._link.outputs
         if outputs is not None:

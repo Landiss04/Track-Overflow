@@ -193,10 +193,7 @@ def test_harness_boarding_needs_station_and_open_door(
 
 
 def test_door_interlock_is_visible_in_the_test_ui() -> None:
-    """Check a door commanded open while moving shows closed until the stop.
-
-    The output shows the interlock; the input row keeps the command.
-    """
+    """Check a door command while moving shows closed until the stop."""
     state, harness = make()
     harness.setInput("power_command", CFG.p_max_w)
     harness.sendInputs()
@@ -207,7 +204,7 @@ def test_door_interlock_is_visible_in_the_test_ui() -> None:
     harness.sendInputs()
     assert snap(state)["actual_speed"] > 0.0
     assert outputs(harness)["left_door_state"] is False
-    assert harness.property("inputValues")["left_door_command"] is True
+    assert harness.property("inputValues")["left_door_command"] is False
     harness.setInput("service_brake_command", True)
     harness.sendInputs()
     for _ in range(100):

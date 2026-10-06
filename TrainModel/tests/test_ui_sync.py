@@ -84,61 +84,21 @@ def test_failure_state_and_affected_values_change_while_paused(pair, failure):
     assert failure not in outputs(harness)  # not sent to the controller
     assert state.activeFailureCount == 1
     assert next(r for r in state.failures if r["name"] == failure)["active"]
-    # The failure shows in the outputs at once; the rows keep what the
-    # stand-in producers are sending.
-    ctl = state.outputs().controller
-    affected = {
+    # There is no power output, so engine failure changes no control.
+    fields = {
         "engine_failure": {},
-        "signal_pickup_failure": {
-            "commanded_speed": ctl.commanded_speed_mps,
-            "authority": ctl.authority_blocks,
-        },
-        "brake_failure": {"service_brake_command": ctl.service_brake_active},
+        "signal_pickup_failure": {"commanded_speed": 0, "authority": 0},
+        "brake_failure": {"service_brake_command": False},
     }[failure]
-    assert all(not value for value in affected.values())
-    for name in affected:
-        assert harness.inputValues[name] == LIVE_VALUES[name]
+    for name, value in fields.items():
+        assert harness.inputValues[name] == value
+    # Sending an unrelated field must not feed failed readbacks into the
+    # stored producer commands. Clearing the fault restores them.
     harness.setInput("announcement", "Updated")
     harness.sendInputs()
     state.setFailure(failure, False)
-    for name in affected:
+    for name in fields:
         assert harness.inputValues[name] == LIVE_VALUES[name]
-    ctl = state.outputs().controller
-    assert ctl.commanded_speed_mps == LIVE_VALUES["commanded_speed"]
-    assert ctl.authority_blocks == LIVE_VALUES["authority"]
-    assert ctl.service_brake_active
-
-
-def test_a_service_brake_held_through_a_brake_failure_stays_shown(pair):
-    """The row shows the command all along, so clearing the fault moves no row.
-
-    While the brakes have failed the command does nothing; once they are
-    back it engages, as it was commanded.
-    """
-    state, harness = pair
-    send(harness, {"power_command": 480_000.0})
-    for _ in range(300):
-        harness.advanceTick()
-    state.setFailure("brake_failure", True)
-    send(harness, {"service_brake_command": True})
-    assert harness.inputValues["service_brake_command"] is True
-    assert not state.outputs().controller.service_brake_active
-    state.setFailure("brake_failure", False)
-    harness.advanceTick()
-    assert harness.inputValues["service_brake_command"] is True
-    assert state.outputs().controller.service_brake_active
-
-
-def test_a_door_command_sent_while_moving_stays_shown(pair):
-    """The interlock holds the door shut while moving; the row keeps the command."""
-    state, harness = pair
-    send(harness, {"power_command": 100_000.0})
-    for _ in range(50):
-        harness.advanceTick()
-    send(harness, {"left_door_command": True})
-    assert harness.inputValues["left_door_command"] is True
-    assert not state.outputs().controller.door_left_open
-    assert not outputs(harness)["left_door_state"]
 
 
 def test_pending_edits_survive_ticks_and_are_not_automatically_sent(pair):

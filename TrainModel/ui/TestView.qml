@@ -42,10 +42,9 @@ Item {
                     + "a station with a door open. Doors open only at 0 mph. "
                     + "Select emergency_brake_command and send to override "
                     + "a passenger brake latch. Failures are set in the Train "
-                    + "Model window and show here in the outputs. Controls "
-                    + "show the commands sent, and emergency_brake_command a "
-                    + "passenger pull too; pending edits are marked until "
-                    + "sent. Boarding counts are consumed once.")
+                    + "Model window. Controls show live model state; pending "
+                    + "edits are marked until sent. Boarding counts are "
+                    + "consumed once.")
             }
 
             Card {
