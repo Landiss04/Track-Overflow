@@ -50,13 +50,13 @@ def outputs(harness: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize(("power_w", "shown_w"), [
     (0.0, 0.0), (100_000.0, 100_000.0), (1_000_000.0, CFG.p_max_w)])
-def test_power_consumption_display_is_clamped(
+def test_power_command_display_is_clamped(
         power_w: float, shown_w: float) -> None:
     """Check displayed power is the command clamped to P_max."""
     state, harness = make()
     harness.setInput("power_command", power_w)
     assert harness.sendInputs()
-    assert snap(state)["power_consumption"] == shown_w
+    assert snap(state)["power_command"] == shown_w
 
 
 def test_negative_power_send_is_rejected() -> None:
@@ -81,13 +81,13 @@ def test_negative_authority_send_is_rejected() -> None:
     assert snap(state) == before
 
 
-def test_power_consumption_zero_under_engine_failure() -> None:
+def test_power_command_zero_under_engine_failure() -> None:
     """Check no power is displayed while the engine has failed."""
     state, harness = make()
     state.setFailure("engine_failure", True)
     harness.setInput("power_command", 100_000.0)
     harness.sendInputs()
-    assert snap(state)["power_consumption"] == 0.0
+    assert snap(state)["power_command"] == 0.0
 
 
 def test_grade_row_reaches_the_model_in_degrees() -> None:

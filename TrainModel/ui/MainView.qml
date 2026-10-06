@@ -170,15 +170,15 @@ ScrollView {
 
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: qsTr("Power consumption")
-                    value: root.fixed(root.kw(root.s.power_consumption), 0) + " / "
+                    label: qsTr("Power command")
+                    value: root.fixed(root.kw(root.s.power_command), 0) + " / "
                         + root.fixed(root.kw(root.s.power_limit), 0) + " kW"
                     rule: false
                 }
 
                 UsageBar {
                     Layout.fillWidth: true
-                    value: root.s.power_consumption
+                    value: root.s.power_command
                     ceiling: root.s.power_limit
                 }
 

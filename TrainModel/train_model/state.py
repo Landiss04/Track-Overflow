@@ -98,7 +98,7 @@ class TrainModelState(QObject):
             "width": cfg.width_m,
             "height": cfg.height_m,
             "power_limit": cfg.p_max_w,
-            "power_consumption": 0.0,
+            "power_command": 0.0,
         }
 
     # ------------------------------------------------------------------ #
@@ -338,7 +338,7 @@ class TrainModelState(QObject):
                           self._config.p_max_w)
             if self._failures["engine_failure"]:
                 power_w = 0.0
-            updates["power_consumption"] = power_w
+            updates["power_command"] = power_w
 
         if any(self._snapshot.get(key) != value
                for key, value in updates.items()):

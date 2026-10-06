@@ -26,13 +26,3 @@ datasheet load between 40.9 t empty and 56.7 t loaded: 25,717 N traction,
 reference mass excludes crew while operating mass includes crew. Validate
 acceleration, braking and grade performance across loads before treating
 the model as a calibrated representation of the vehicle.
-
-## Displayed power consumption
-
-The overview's "power consumption" is the commanded power capped to the
-configured maximum (and displayed as zero on engine failure). It is not a
-measurement of mechanical or electrical consumption. In particular,
-traction-limited operation need not use all commanded power. Actual power
-accounting, losses and regeneration are not modeled. Decide whether to
-relabel this readout as commanded power or supply a separately defined
-physical power measurement.

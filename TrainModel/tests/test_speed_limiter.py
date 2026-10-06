@@ -144,7 +144,7 @@ def test_full_power_settles_at_the_blue_line_speed_limit(
     assert harness.limiting
     # The row keeps the entered power; the model receives less.
     assert harness.inputValues["power_command"] == 480_000.0
-    assert state.snapshot["power_consumption"] < 480_000.0
+    assert state.snapshot["power_command"] < 480_000.0
 
 
 def test_without_a_speed_limit_the_cap_is_the_maximum_speed() -> None:

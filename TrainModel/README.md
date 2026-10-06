@@ -256,9 +256,9 @@ Controller command from the test UI, or a pull) and while a pull is latched.
 - Train ID, line, and arrival time have no model source and display a dash.
 - Manual door buttons remain disabled: the model displays the commanded doors
   as the interlock allows them.
-- Power consumption (Train Model window) displays capped commanded power,
-  suppressed on engine failure; see [open issues](docs/open-issues.md) for the
-  measurement limitation.
+- Power command (Train Model window) displays the commanded power, capped at
+  the maximum and zero on engine failure. It is not the power delivered or
+  consumed, which the model does not account for.
 - The test UI shows no onboard passenger count: it is not a cross-module
   output. The Train Model window shows it; the test UI shows the remaining
   `passenger_capacity`.
