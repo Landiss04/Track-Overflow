@@ -1,4 +1,8 @@
-"""The test UI's input list scrolls in place and wraps; outputs are trimmed."""
+"""The test UI's input list scrolls in place and wraps; outputs are trimmed.
+
+Failures are set only in the Train Model window, so the test UI has no
+failure controls.
+"""
 
 from pathlib import Path
 import sys
@@ -14,7 +18,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "TrainModel")]
 
 from train_model.harness import TestHarnessState  # noqa: E402
 from train_model.link import LocalLink  # noqa: E402
-from train_model.state import TrainModelState  # noqa: E402
+from train_model.state import FAILURE_MODES, TrainModelState  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
 # What the Train Controller and the Track Model act on, and no more.
@@ -82,6 +86,11 @@ def main():
     outputs = {x.objectName().removeprefix("output-") for x in items
                if x.objectName().startswith("output-")}
     assert outputs == EXPECTED_OUTPUTS, outputs
+
+    titles = {x.property("title") for x in items}
+    assert "Failure modes" not in titles, titles
+    texts = {x.property("text") for x in items}
+    assert not texts & set(FAILURE_MODES), texts & set(FAILURE_MODES)
 
     track = next(x for x in items if x.objectName() == "track")
     assert track.property("value") == "Blue Line"

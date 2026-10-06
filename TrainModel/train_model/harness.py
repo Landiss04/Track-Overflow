@@ -5,8 +5,8 @@ from the Track Model and the Train Controller, and drives the clock, so
 the module can be run and graded on its own. It runs in the test UI's
 own process and reaches the module only through its boundary, over a
 link (``train_model/link.py``): it sends ``TrainModelInputs`` each tick
-and reads back only ``TrainModelOutputs``. Failure status is not an
-output; the failure flags it shows arrive over the link, test only.
+and reads back only ``TrainModelOutputs``. Failures are set only in the
+Train Model window; the test UI sees their effect in the outputs.
 
 Rows are built from the interface dictionary (v0.2). Array-valued
 signals are presented as one row per element: ``Light Command``
@@ -68,7 +68,6 @@ from train_model.interface import (
 from train_model.link import LinkError, LocalLink, SocketLink
 from train_model.model import InvalidTimeStepError, TrainModel
 from train_model.speed_limiter import SpeedLimiter
-from train_model.state import FAILURE_MODES
 from train_model.track_stub import TrackStub, load_blue_line
 
 # The simulation clock is shared by every module, so it lives in the
@@ -399,23 +398,6 @@ class TestHarnessState(QObject):
             for name, kind, unit in _OUTPUT_SPEC
         ]
 
-    def _failure_rows(self) -> list[dict[str, Any]]:
-        failures = self._link.failures or {}
-        return [
-            {"name": name, "active": failures.get(name, False)}
-            for name in FAILURE_MODES
-        ]
-
-    @Property("QVariantList", notify=outputsChanged)  # type: ignore[arg-type]
-    def failures(self) -> list[dict[str, Any]]:
-        """The three failure flags, test only: they are not outputs."""
-        return self._failure_rows()
-
-    @Property(int, notify=outputsChanged)
-    def activeFailureCount(self) -> int:
-        """How many failure modes the module reports as set."""
-        return sum(1 for row in self._failure_rows() if row["active"])
-
     @Property(bool, notify=outputsChanged)
     def emergencyBrakeActive(self) -> bool:
         """Whether the module reports its emergency brake engaged."""
@@ -506,14 +488,6 @@ class TestHarnessState(QObject):
             self.inputsChanged.emit()
             return
         raise KeyError(f"unknown input: {name}")
-
-    @Slot(str, bool)
-    def setFailure(self, name: str, active: bool) -> None:
-        """Test only: ask the module to set or clear one failure mode."""
-        try:
-            self._link.set_failure(name, active)
-        except LinkError as exc:
-            self._set_input_error(str(exc))
 
     @Slot(result=bool)
     def sendInputs(self) -> bool:

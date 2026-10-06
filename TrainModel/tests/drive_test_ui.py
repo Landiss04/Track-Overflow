@@ -57,23 +57,10 @@ def main():
     def named(prefix, name):
         return next(x for x in items() if x.objectName() == prefix + name)
 
-    def failure_row(name):
-        # The failure card's row: the name label beside a True button.
-        for item in items():
-            if item.property("text") != name:
-                continue
-            row = item.parentItem()
-            if any(x.property("text") == "True" and hasattr(x, "clicked")
-                   for x in walk(row)):
-                return row
-        raise LookupError(name)
-
     def run(command):
         op = command["op"]
         if op == "toggle":
             press(command["value"], named("input-", command["name"]))
-        elif op == "failure":
-            press(command["value"], failure_row(command["name"]))
         elif op in ("send", "reset", "clock"):
             press({"send": "Send inputs to train model",
                    "reset": "Reset module"}.get(op, command.get("value")))
@@ -88,10 +75,6 @@ def main():
             "ebrake_pending": control.property("pending"),
             "ebrake_output": named(
                 "output-", "emergency_brake_state").property("value"),
-            "brake_failure": next(
-                x for x in walk(failure_row("brake_failure"))
-                if x.property("currentIndex") is not None
-            ).property("currentIndex") == 0,
         }
 
     # stdin blocks, so a thread reads it; the GUI thread runs commands.

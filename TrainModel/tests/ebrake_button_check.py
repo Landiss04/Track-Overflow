@@ -185,10 +185,11 @@ def main():
 
         # 7. Brake failure blocks only the service brake: a commanded
         #    emergency brake still engages and disables the button, and
-        #    a pull still latches and disables it.
-        drive("failure", name="brake_failure", value="True")
+        #    a pull still latches and disables it. Failures are set
+        #    here, in the Train Model window; the test UI has none.
+        next(x for x in items() if hasattr(x, "clicked")
+             and x.property("text") == "Induce Brake failure").clicked.emit()
         assert state.isFailed("brake_failure")
-        assert drive("query")["brake_failure"] is True
         drive("toggle", name="emergency_brake_command", value="True")
         drive("send")
         assert state.snapshot["emergency_brake"]

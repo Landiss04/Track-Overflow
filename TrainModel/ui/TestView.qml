@@ -41,9 +41,11 @@ Item {
                     + "sent inputs; passengers board once per send, only at "
                     + "a station with a door open. Doors open only at 0 mph. "
                     + "Select emergency_brake_command and send to override "
-                    + "a passenger brake latch. Brake failure still applies. "
-                    + "Controls show live model state; pending edits are "
-                    + "marked until sent. Boarding counts are consumed once.")
+                    + "a passenger brake latch. Failures are set in the Train "
+                    + "Model window and show here in the outputs. Controls "
+                    + "show the commands sent, and emergency_brake_command a "
+                    + "passenger pull too; pending edits are marked until "
+                    + "sent. Boarding counts are consumed once.")
             }
 
             Card {
@@ -141,8 +143,8 @@ Item {
             }
         }
 
-        // The output, failure and run-control cards are taller than the
-        // window, so this column scrolls on its own.
+        // The output and run-control cards can be taller than the window,
+        // so this column scrolls on its own.
         ScrollView {
             id: rightColumn
 
@@ -186,49 +188,6 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("Read back from the module. Values refresh "
                             + "whenever the module state changes.")
-                    }
-                }
-
-                Card {
-                    Layout.fillWidth: true
-                    title: qsTr("Failure modes")
-
-                    StatusBadge {
-                        label: harness.activeFailureCount > 0
-                            ? harness.activeFailureCount + qsTr(" active")
-                            : qsTr("Clear")
-                        variant: harness.activeFailureCount > 0 ? "fault" : "ok"
-                    }
-
-                    Repeater {
-                        model: harness.failures
-
-                        delegate: RowLayout {
-                            required property var modelData
-
-                            Layout.fillWidth: true
-                            spacing: theme.space_3
-
-                            MonoText {
-                                Layout.fillWidth: true
-                                text: modelData.name
-                            }
-
-                            SegmentedToggle {
-                                options: [qsTr("True"), qsTr("False")]
-                                currentIndex: modelData.active ? 0 : 1
-                                onActivated: function (index) {
-                                    harness.setFailure(
-                                        modelData.name, index === 0);
-                                }
-                            }
-                        }
-                    }
-
-                    HelperText {
-                        Layout.fillWidth: true
-                        text: qsTr("Test only: Murphy sets these from the Train "
-                            + "Model window. Shown as the module reports them.")
                     }
                 }
 

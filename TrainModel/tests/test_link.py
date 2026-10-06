@@ -176,21 +176,35 @@ def test_train_model_ui_actions_are_pushed_without_a_step(served):
 def test_requests_are_answered_once_and_pushed_to_other_clients(served):
     state, server, client = served
     other = RawClient(server._name)
-    reply = client.request(op="set_failure", name="brake_failure",
-                           active=True)
-    assert reply["failures"]["brake_failure"]
-    assert not hasattr(outputs_of(reply).controller, "failures")
-    assert state.isFailed("brake_failure")
+    reply = client.step(make_inputs(power_w=100000))
+    assert outputs_of(reply) == state.outputs()
     wait_for(lambda: other.poll() or len(other.pushes()) > 1)
-    assert other.pushes()[-1]["failures"]["brake_failure"]
+    assert outputs_of(other.pushes()[-1]) == state.outputs()
     client.poll()
     assert len(client.pushes()) == 1  # only the one sent on connect
+
+
+def test_failures_are_set_only_in_the_train_model_window(served):
+    """The test UI cannot set a failure; it sees one only in the outputs."""
+    state, _, client = served
+    reply = client.request(op="set_failure", name="brake_failure",
+                           active=True)
+    assert reply["op"] == "error" and reply["kind"] == "request"
+    assert not state.isFailed("brake_failure")
+    reply = client.step(make_inputs(service=True))
+    assert "failures" not in reply
+    assert outputs_of(reply).controller.service_brake_active
+    state.setFailure("brake_failure", True)
+    wait_for(lambda: client.poll() or len(client.pushes()) > 1)
+    pushed = client.pushes()[-1]
+    assert "failures" not in pushed
+    assert not outputs_of(pushed).controller.service_brake_active
 
 
 def test_reset_and_unknown_requests(served):
     state, _, client = served
     client.step(make_inputs(power_w=100000))
-    client.request(op="set_failure", name="engine_failure", active=True)
+    state.setFailure("engine_failure", True)
     outputs = outputs_of(client.request(op="reset"))
     assert outputs == state.outputs()
     assert outputs.controller.actual_speed_mps == 0
@@ -268,10 +282,7 @@ def test_both_windows_run_as_separate_processes(app):
             link.step(0.1, make_inputs(power_w=-1))
         with pytest.raises(InvalidTimeStepError):
             link.step(0.0, make_inputs())
-        harness.setFailure("brake_failure", True)
-        assert harness.activeFailureCount == 1
         harness.resetModule()
-        assert harness.activeFailureCount == 0
         assert link.outputs.controller.actual_speed_mps == 0
         assert harness.inputError == ""
         model.terminate()

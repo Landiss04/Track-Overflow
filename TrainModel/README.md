@@ -13,10 +13,10 @@ The two pages are **independent windows, each its own process**:
 - **Test UI** (`test_ui.py`) stands in for the Track Model, the Train
   Controller and the clock. It drives the module only through its interface,
   `step(dt, TrainModelInputs) -> TrainModelOutputs`, over a local socket
-  (`train_model/link.py`), and reads back only `TrainModelOutputs`. Three
-  test-only commands ride alongside: set a failure, clear the passenger brake
-  latch, and reset. The failure flags ride back beside the outputs, test only,
-  because failure status is not an output. Its clock is the shared simulation clock
+  (`train_model/link.py`), and reads back only `TrainModelOutputs`. Two
+  test-only commands ride alongside: clear the passenger brake latch, and
+  reset. Failures are set only in the Train Model window; the test UI sees
+  their effect in the outputs. Its clock is the shared simulation clock
   (`utils/system_clock.py`): each step is one clock tick, dt is the clock's
   fixed tick length, and the **1x / 10x** speed toggle changes only how often
   ticks happen. A step is checked with the module's own input rules before
@@ -205,11 +205,11 @@ python3 -m venv .venv
 The Train Model window reads the model snapshot. The test UI reads only the
 module's outputs: the Train Model pushes them after every step and after any
 Train Model UI action, so passenger-brake and failure changes reach the test
-UI's controls and outputs immediately, including while paused; the next tick
-integrates their physical effect. Failures can be set from either window.
-Failure status is not an output, since the Train Model does not send it to
-the Train Controller; the test UI's failure card reads the flags over the
-link instead, as test-only data.
+UI's outputs immediately, including while paused; the next tick integrates
+their physical effect. Failures are set only in the Train Model window: the
+test UI had its own failure card, removed as redundant. Failure status is not
+an output, since the Train Model does not send it to the Train Controller, so
+the test UI does not show which failures are set, only their effect.
 
 Test input rows show the command being sent, even where a failure or the
 door interlock keeps it from taking effect; the outputs and the Train Model
