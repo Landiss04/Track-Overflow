@@ -11,7 +11,9 @@ ScrollView {
     readonly property var s: trainModel.snapshot
 
     function fixed(value, digits) {
-        return Number(value).toFixed(digits);
+        const text = Number(value).toFixed(digits);
+        // A small negative value rounds to "-0.00"; zero carries no sign.
+        return Number(text) === 0 ? (0).toFixed(digits) : text;
     }
 
     function mph(val) { return Number(val) * 2.236936; }

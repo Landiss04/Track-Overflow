@@ -181,6 +181,11 @@ def test_input_list_scrolls_in_place_and_outputs_are_trimmed():
     run_gui_check("input_list_check.py", timeout=30)
 
 
+def test_readouts_never_show_a_negative_zero():
+    """A value that rounds to zero reads 0.00, never -0.00."""
+    run_gui_check("readout_sign_check.py", timeout=20)
+
+
 def test_emergency_brake_button_with_the_real_test_ui():
     """The overview button, driven from the test UI in its own process."""
     run_gui_check("ebrake_button_check.py", timeout=120)
