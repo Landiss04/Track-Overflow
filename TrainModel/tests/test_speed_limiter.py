@@ -95,6 +95,22 @@ def test_the_integral_does_not_wind_up_while_saturated() -> None:
     assert limiter.state.integral_m == 0.0
 
 
+def test_braking_discards_the_wound_up_integral() -> None:
+    """Check that the integral is dropped once the limiter has to brake.
+
+    An integral built up while the train could not respond, such as
+    during an engine failure, would otherwise come back as power every
+    time the brake released.
+    """
+    limiter = SpeedLimiter()
+    for _ in range(300):
+        limiter.apply(DT, CAP, CAP - 0.3, 480e3, False)
+    assert limiter.state.integral_m > 1.0
+    over = limiter.apply(DT, CAP, CAP + BRAKE_MARGIN_MPS + 0.1, 480e3, False)
+    assert over.service_brake
+    assert limiter.state.integral_m == 0.0
+
+
 def test_reset_forgets_the_state() -> None:
     """Check that reset clears the integral and the brake."""
     limiter = SpeedLimiter()
@@ -156,6 +172,31 @@ def test_lowering_the_speed_limit_brakes_down_to_it() -> None:
     assert harness.speedCap == pytest.approx(8.0 * MPH)
     speed = state.outputs().controller.actual_speed_mps
     assert speed == pytest.approx(8.0, abs=0.05)
+
+
+def test_after_an_engine_failure_the_speed_settles_without_hunting() -> None:
+    """Check one brake application, not a cycle, once the engine is back.
+
+    The limiter cannot see the failure, so its integral grows while the
+    train coasts. Clearing the failure brings that power back at once.
+    """
+    state, harness = make_harness()
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    run(harness, 600)
+    state.setFailure("engine_failure", True)
+    run(harness, 600)
+    state.setFailure("engine_failure", False)
+    braking, speeds = [], []
+    for _ in range(600):
+        harness.advanceTick()
+        braking.append(state.outputs().controller.service_brake_active)
+        speeds.append(state.outputs().controller.actual_speed_mps)
+    applications = sum(1 for was, now in zip(braking, braking[1:])
+                       if now and not was) + braking[0]
+    assert applications <= 1
+    # Settled for the last 20 s.
+    assert all(abs(v - CAP) < 0.05 for v in speeds[-200:])
 
 
 def test_reset_clears_the_limiter() -> None:

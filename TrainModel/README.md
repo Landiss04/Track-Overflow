@@ -44,7 +44,10 @@ rest of it:
   integration while saturated) lowers the entered power to hold the speed at
   the cap, the vehicle's 70 km/h or the speed limit where that is lower. More
   than 0.5 m/s over the cap, it cuts power and applies the service brake until
-  the train is back at the cap. `power_command` keeps showing the entered
+  the train is back at the cap, and drops its integral: the limiter cannot see
+  an engine failure, so its integral grows while the train coasts, and kept
+  past a brake it would return as a surge on every release, a power and brake
+  cycle lasting about a minute. `power_command` keeps showing the entered
   power; the Train Model window's power readout shows what was sent. Run
   Control shows the cap and when it is limiting.
 

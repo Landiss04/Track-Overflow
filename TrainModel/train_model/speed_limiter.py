@@ -10,9 +10,9 @@ The limiter is a PI control law in the course's discrete form: the speed
 error is integrated with the trapezoidal rule, and the integration stops
 while the output saturates (anti-windup). Its output only ever lowers the
 entered power, so the speed settles at the cap instead of passing it. Well
-over the cap, it cuts power and applies the service brake until the train
-is back down to it. Like the rest of the test UI, this file is test
-scaffolding and is removed at integration.
+over the cap, it cuts power, drops the integral and applies the service
+brake until the train is back down to it. Like the rest of the test UI,
+this file is test scaffolding and is removed at integration.
 """
 
 from __future__ import annotations
@@ -93,12 +93,16 @@ class SpeedLimiter:
         )
         # The Train Controller cuts traction when it brakes.
         ceiling = 0.0 if braking else power_cmd_w
+        # Having to brake means the integral holds far more power than
+        # the cap needs, as after an engine failure the limiter cannot
+        # see. Drop it, or each release brings that power back.
+        start = 0.0 if braking and not prev.braking else prev.integral_m
 
-        integral = prev.integral_m + dt / 2.0 * (error + prev.last_error_mps)
+        integral = start + dt / 2.0 * (error + prev.last_error_mps)
         power = self._kp * error + self._ki * integral
         if not 0.0 < power < ceiling:
             # Saturated: hold the integral rather than wind it up.
-            integral = prev.integral_m
+            integral = start
             power = self._kp * error + self._ki * integral
         power = min(max(power, 0.0), ceiling)
 
