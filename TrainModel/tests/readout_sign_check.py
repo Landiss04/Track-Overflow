@@ -45,7 +45,7 @@ def main():
 
     harness.setInput("power_command", 480_000.0)
     assert harness.sendInputs()
-    # The case under test: below zero, but zero to two decimals in ft/s².
+    # The case under test: below zero, yet 0.00 in ft/s².
     for _ in range(900):
         harness.advanceTick()
         if -0.005 / 3.28084 < state.snapshot["acceleration"] < 0.0:

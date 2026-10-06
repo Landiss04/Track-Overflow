@@ -1,11 +1,11 @@
 """Seeded invariant fuzz of the Train Model's public protocol.
 
-Random but reproducible tick sequences drive ``TrainModel`` through its
-boundary only: steps, failures, passenger pulls and the test-only latch
-clear, with most inputs held for a while so the train actually moves,
-brakes, rolls back and stops. After every step the outputs and snapshot
-must satisfy physical and contract invariants. Each failure message names
-the seed and tick, so a failing case can be replayed.
+Random but reproducible tick sequences drive ``TrainModel`` through
+its boundary only: steps, failures, passenger pulls and the test-only
+latch clear, with most inputs held for a while so the train actually
+moves, brakes, rolls back and stops. After every step the outputs and
+snapshot must satisfy physical and contract invariants. Each failure
+message names the seed and tick, so a failing case can be replayed.
 """
 
 from __future__ import annotations
@@ -26,7 +26,11 @@ from train_model.interface import (
     TrainConfig,
     TrainModelInputs,
 )
-from train_model.model import InvalidInputError, InvalidTimeStepError, TrainModel
+from train_model.model import (
+    InvalidInputError,
+    InvalidTimeStepError,
+    TrainModel,
+)
 
 DT_S = 0.1
 TICKS = 300
@@ -36,7 +40,7 @@ CFG = TrainConfig()
 
 @dataclass
 class Tick:
-    """One tick of a scenario: actions taken before the step, then inputs."""
+    """One tick: actions taken before the step, then its inputs."""
 
     inputs: TrainModelInputs
     failures: FailureState | None
@@ -45,7 +49,7 @@ class Tick:
 
 
 def _held(rng: random.Random, draw):
-    """Yield draw()'s values, each held for a random run of 1 to 40 ticks."""
+    """Yield draw()'s values, each held for 1 to 40 ticks."""
     while True:
         value = draw()
         for _ in range(rng.randint(1, 40)):
@@ -118,7 +122,7 @@ def scenario(seed: int, ticks: int = TICKS) -> list[Tick]:
 
 
 def apply_actions(model: TrainModel, tick: Tick) -> None:
-    """Take a tick's Train Model UI and test actions, before its step."""
+    """Take a tick's UI and test actions, before its step."""
     if tick.failures is not None:
         model.set_failures(tick.failures)
     if tick.pull:
@@ -137,7 +141,7 @@ def force_bound_n(mass_kg: float, grade_deg: float) -> float:
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_every_step_keeps_the_invariants(seed: int) -> None:
-    """Check physical and contract invariants after every random step."""
+    """Check the invariants after every random step."""
     model = TrainModel(TrainConfig(seed=seed))
     for n, tick in enumerate(scenario(seed)):
         apply_actions(model, tick)
@@ -151,7 +155,8 @@ def test_every_step_keeps_the_invariants(seed: int) -> None:
         snap = model.snapshot()
         ctl, out = outputs.controller, outputs.track
         v0, v = before.velocity_mps, snap.velocity_mps
-        where = f"seed {seed} tick {n}: v {v0!r} -> {v!r}, inputs {tick.inputs}"
+        where = (f"seed {seed} tick {n}: v {v0!r} -> {v!r}, "
+                 f"inputs {tick.inputs}")
 
         assert elapsed < 0.25, f"{where}: step took {elapsed:.3f} s"
 
@@ -161,7 +166,8 @@ def test_every_step_keeps_the_invariants(seed: int) -> None:
         assert all(math.isfinite(x) for x in floats), f"{where}: {floats}"
 
         assert 0 <= snap.n_passengers <= CFG.capacity, where
-        assert out.passenger_capacity == CFG.capacity - snap.n_passengers, where
+        assert out.passenger_capacity == (
+            CFG.capacity - snap.n_passengers), where
         assert ctl.actual_speed_mps == out.actual_speed_mps == v, where
 
         if ctl.door_left_open or ctl.door_right_open:
@@ -180,7 +186,8 @@ def test_every_step_keeps_the_invariants(seed: int) -> None:
         else:
             assert ctl.commanded_speed_mps == (
                 trk.track_signal.commanded_speed_mps), where
-            assert ctl.authority_blocks == trk.track_signal.authority_blocks, where
+            assert ctl.authority_blocks == (
+                trk.track_signal.authority_blocks), where
 
         bound = force_bound_n(snap.mass_kg, grade)
         assert abs(snap.acceleration_mps2) <= bound / snap.mass_kg + 1e-9, (
@@ -216,7 +223,7 @@ def _valid() -> TrainModelInputs:
 
 
 def _with(inputs: TrainModelInputs, **changes) -> TrainModelInputs:
-    """Return ``inputs`` with controller or track info fields changed."""
+    """Return ``inputs`` with controller or track fields changed."""
     controller, info, signal = {}, {}, {}
     for name, value in changes.items():
         if name in ControllerCommands.__dataclass_fields__:

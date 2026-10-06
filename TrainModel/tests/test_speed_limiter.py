@@ -175,7 +175,7 @@ def test_lowering_the_speed_limit_brakes_down_to_it() -> None:
 
 
 def test_after_an_engine_failure_the_speed_settles_without_hunting() -> None:
-    """Check one brake application, not a cycle, once the engine is back.
+    """Check one brake application, not a cycle, after the failure.
 
     The limiter cannot see the failure, so its integral grows while the
     train coasts. Clearing the failure brings that power back at once.

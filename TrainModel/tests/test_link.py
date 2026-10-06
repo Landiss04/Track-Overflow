@@ -185,7 +185,7 @@ def test_requests_are_answered_once_and_pushed_to_other_clients(served):
 
 
 def test_failures_are_set_only_in_the_train_model_window(served):
-    """The test UI cannot set a failure; it sees one only in the outputs."""
+    """The test UI cannot set a failure; it sees only its effect."""
     state, _, client = served
     reply = client.request(op="set_failure", name="brake_failure",
                            active=True)

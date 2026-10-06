@@ -16,10 +16,11 @@ outputs.
 
 Wire format: newline-delimited JSON over a local socket (a named pipe on
 Windows, a socket file elsewhere). Every request carries an ``id`` and
-gets one reply with that ``id``: ``{"op": "outputs", "outputs": ...}``
-or ``{"op": "error", ...}``. The server also pushes ``{"op": "outputs"}``
-with no ``id`` on connect and whenever a Train Model UI action, a
-passenger pull or a failure, changes the outputs between steps.
+gets one reply with that ``id``: ``{"op": "outputs", "outputs":
+...}`` or ``{"op": "error", ...}``. The server also pushes ``{"op":
+"outputs"}`` with no ``id`` on connect and whenever a Train Model UI
+action, a passenger pull or a failure, changes the outputs between
+steps.
 """
 
 from __future__ import annotations
