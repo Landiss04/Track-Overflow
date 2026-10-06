@@ -9,13 +9,29 @@ signals are presented as one row per element: ``Light Command``
 (``bool[2]``) becomes the cabin and headlight rows, ``Door command``
 (``bool[2]``) becomes left and right, and the ``Track Signal`` struct is
 flattened into its fields.
+
+The input rows are owned by a :class:`QAbstractListModel`. Editing one
+input emits a row-scoped ``dataChanged`` for that index only; the model
+is not reset, so delegates keep identity and focus through commits.
+Only :meth:`TestHarnessState.resetModule` tears down and rebuilds every
+row, via ``beginResetModel`` / ``endResetModel``.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import (
+    Property,
+    QAbstractListModel,
+    QByteArray,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    Qt,
+    Signal,
+    Slot,
+)
 
 from train_model.state import FAILURE_MODES, TrainModelState
 
@@ -65,16 +81,11 @@ INPUT_SPEC: tuple[dict[str, Any], ...] = (
         "unit": "",
         "value": "L",
     },
-    {
-        "name": "beacon_underground",
-        "kind": "bool",
-        "unit": "",
-        "value": False,
-    },
+    {"name": "beacon_underground", "kind": "bool", "unit": "", "value": False},
     {"name": "grade", "kind": "float", "unit": "deg", "value": 0.7},
     {"name": "elevation", "kind": "float", "unit": "m", "value": 0.0},
     {"name": "speed_limit", "kind": "float", "unit": "m/s", "value": 18.0},
-    {"name": "passengers_boarded", "kind": "int", "unit": "", "value": 12},
+    {"name": "passengers_boarded", "kind": "uint", "unit": "", "value": 12},
     {"name": "temperature_setpoint", "kind": "int", "unit": "F", "value": 68},
     {
         "name": "announcement",
@@ -124,10 +135,90 @@ _OUTPUT_SPEC: tuple[tuple[str, str, str, str], ...] = (
 _DEFAULT_DT = 0.100
 
 
+class _InputRowsModel(QAbstractListModel):
+    """Editable input rows, exposed to QML as a role-based list model.
+
+    Roles start at ``Qt.UserRole`` and are mapped to names in
+    :meth:`roleNames`. Editing one row overwrites only its ``value`` and
+    emits ``dataChanged`` for that single index; the model is not reset,
+    so existing delegates keep their identity and any focus the user has
+    placed in them.
+    """
+
+    NAME_ROLE: Final[int] = Qt.ItemDataRole.UserRole + 0
+    KIND_ROLE: Final[int] = Qt.ItemDataRole.UserRole + 1
+    VALUE_ROLE: Final[int] = Qt.ItemDataRole.UserRole + 2
+    UNIT_ROLE: Final[int] = Qt.ItemDataRole.UserRole + 3
+
+    #: (role, dict-field) mapping; rows are stored as plain dicts.
+    _FIELDS: Final[tuple[tuple[int, str], ...]] = (
+        (NAME_ROLE, "name"),
+        (KIND_ROLE, "kind"),
+        (VALUE_ROLE, "value"),
+        (UNIT_ROLE, "unit"),
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._rows: list[dict[str, Any]] = [dict(row) for row in INPUT_SPEC]
+
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
+        """Row count; the model is flat, so any valid parent yields zero."""
+        if parent.isValid():
+            return 0
+        return len(self._rows)
+
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
+        """Return the row's field for a role, or ``None`` if unresolvable."""
+        if not index.isValid() or not (0 <= index.row() < len(self._rows)):
+            return None
+        for role_id, field in self._FIELDS:
+            if role == role_id:
+                return self._rows[index.row()][field]
+        return None
+
+    def roleNames(self) -> dict[int, QByteArray]:
+        """Role identifiers to QML-readable names."""
+        return {role_id: QByteArray(field.encode()) for role_id, field in self._FIELDS}
+
+    def find(self, name: str) -> int:
+        """Index of the row with this input name, or ``-1`` if absent."""
+        for index, row in enumerate(self._rows):
+            if row["name"] == name:
+                return index
+        return -1
+
+    def row_at(self, index: int) -> dict[str, Any]:
+        """A copy of the row so callers can inspect without mutating state."""
+        return dict(self._rows[index])
+
+    def update_value(self, index: int, value: Any) -> None:
+        """Overwrite one row's value and emit a row-scoped ``dataChanged``.
+
+        Only the ``VALUE_ROLE`` is announced so existing delegates that
+        already hold the name/kind/unit can reuse them and not re-bind
+        unrelated visual state.
+        """
+        self._rows[index]["value"] = value
+        model_index = self.index(index)
+        self.dataChanged.emit(model_index, model_index, [self.VALUE_ROLE])
+
+    def reset_to_seed(self) -> None:
+        """Restore every row to its seeded value as a full model reset."""
+        self.beginResetModel()
+        self._rows = [dict(row) for row in INPUT_SPEC]
+        self.endResetModel()
+
+
 class TestHarnessState(QObject):
     """Editable inputs, read-only outputs and run control (page 3b)."""
 
-    inputsChanged = Signal()
     outputsChanged = Signal()
     runControlChanged = Signal()
 
@@ -136,17 +227,19 @@ class TestHarnessState(QObject):
     ) -> None:
         super().__init__(parent)
         self._model = model
-        self._inputs: list[dict[str, Any]] = [dict(row) for row in INPUT_SPEC]
+        # The model outlives self via the attribute reference; no QObject
+        # parent ownership is needed because main.py holds `harness` alive.
+        self._inputs = _InputRowsModel()
         self._running = False
         self._tick = 0
         self._dt = _DEFAULT_DT
         self._model.snapshotChanged.connect(self.outputsChanged)
         self._model.failuresChanged.connect(self.outputsChanged)
 
-    @Property("QVariantList", notify=inputsChanged)
-    def inputs(self) -> list[dict[str, Any]]:
-        """Editable input rows."""
-        return [dict(row) for row in self._inputs]
+    @Property(QObject, constant=True)
+    def inputs(self) -> _InputRowsModel:
+        """Editable input rows, exposed as a role-based list model."""
+        return self._inputs
 
     @Property("QVariantList", notify=outputsChanged)
     def outputs(self) -> list[dict[str, Any]]:
@@ -197,23 +290,28 @@ class TestHarnessState(QObject):
 
     @Slot(str, "QVariant")
     def setInput(self, name: str, value: Any) -> None:
-        """Write one input row, coercing to the declared type."""
-        for row in self._inputs:
-            if row["name"] != name:
-                continue
-            coerced = self._coerce(row["kind"], value)
-            if row["value"] == coerced:
-                return
-            row["value"] = coerced
-            self.inputsChanged.emit()
+        """Write one input row, coercing to the declared type.
+
+        Only the affected row emits ``dataChanged``; the model is not
+        reset, so any delegate that already holds identity and focus
+        keeps both through the commit. Raises :class:`KeyError` when the
+        name is unknown.
+        """
+        index = self._inputs.find(name)
+        if index < 0:
+            raise KeyError(f"unknown input: {name}")
+        row = self._inputs.row_at(index)
+        coerced = self._coerce(row["kind"], value)
+        if row["value"] == coerced:
             return
-        raise KeyError(f"unknown input: {name}")
+        self._inputs.update_value(index, coerced)
 
     @Slot()
     def sendInputs(self) -> None:
         """Push the declared pass-through inputs into the module."""
         updates: dict[str, Any] = {}
-        for row in self._inputs:
+        for index in range(self._inputs.rowCount()):
+            row = self._inputs.row_at(index)
             field = _PASS_THROUGH.get(row["name"])
             if field is not None:
                 updates[field] = row["value"]
@@ -236,10 +334,9 @@ class TestHarnessState(QObject):
     @Slot()
     def resetModule(self) -> None:
         """Restore the seeded inputs and zero the run counters."""
-        self._inputs = [dict(row) for row in INPUT_SPEC]
+        self._inputs.reset_to_seed()
         self._tick = 0
         self._running = False
-        self.inputsChanged.emit()
         self.runControlChanged.emit()
 
     @staticmethod
@@ -249,6 +346,8 @@ class TestHarnessState(QObject):
             return bool(value)
         if kind == "int":
             return int(float(value))
+        if kind == "uint":
+            return max(0, int(float(value)))
         if kind == "float":
             return float(value)
         return str(value)

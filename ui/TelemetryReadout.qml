@@ -1,6 +1,7 @@
 // Telemetry readout, style guide 6.5. Label above, value in mono at 28 px
 // bold, unit immediately after. The container does not resize as digits
-// change, so give every readout in a group the same width.
+// change, so give every readout in a group the same width. Without one it
+// reserves room for six digits; a longer value elides.
 import QtQuick
 import QtQuick.Layouts
 
@@ -15,7 +16,15 @@ Rectangle {
     border.color: theme.border
     border.width: 1
     radius: theme.radius_md
+    implicitWidth: Math.max(labelText.implicitWidth, Math.ceil(digitReserve.advanceWidth)
+        + theme.space_2 + unitText.implicitWidth) + 2 * theme.space_4
     implicitHeight: column.implicitHeight + 2 * theme.space_3
+
+    TextMetrics {
+        id: digitReserve
+        font: valueText.font
+        text: "000000"
+    }
 
     ColumnLayout {
         id: column
@@ -27,6 +36,7 @@ Rectangle {
         spacing: theme.space_1
 
         FieldLabel {
+            id: labelText
             Layout.fillWidth: true
             text: root.label.toUpperCase()
             elide: Text.ElideRight
@@ -37,7 +47,15 @@ Rectangle {
             spacing: theme.space_2
 
             Text {
+                id: valueText
+                Layout.fillWidth: true
+                // Whole pixels: the layout rounds a fractional width down,
+                // which would elide a value that fits.
+                Layout.preferredWidth: Math.ceil(implicitWidth)
+                Layout.maximumWidth: Math.ceil(implicitWidth)
                 text: root.value
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
                 color: theme.text_primary
                 font.family: theme.mono_family
                 font.pixelSize: theme.size_telemetry
@@ -45,6 +63,7 @@ Rectangle {
             }
 
             MonoText {
+                id: unitText
                 Layout.alignment: Qt.AlignBottom
                 Layout.bottomMargin: theme.space_1
                 text: root.unit
