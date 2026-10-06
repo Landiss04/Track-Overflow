@@ -74,11 +74,14 @@ under an engine failure. Then
 
 - moving forward (v > 0): F_t = min(P / v, F_max);
 - at rest (v = 0): F_t = F_max if P > 0, else 0 (P/v saturates);
-- rolling backward (v < 0): F_t = 0. The motors drive forward only.
+- rolling backward (v < 0): F_t = min(P / |v|, F_max), still forward. The
+  motors drive forward only, so under power they push against a rollback:
+  they slow it and, where they can, stop it and drive the train forward.
 
 The speed where the two limits meet is the **base speed**
-v_b = P / F_max: at full power 18.66 m/s (67.2 km/h). Below v_b traction is
-force-limited (constant F_max); above it, power-limited (P/v).
+v_b = P / F_max: at full power 18.66 m/s (67.2 km/h). Below v_b in speed
+(either direction) traction is force-limited (constant F_max); above it,
+power-limited (P/|v|).
 
 Traction is **not** cut while a brake is applied: commanded power still
 acts. Cutting power when braking is the Train Controller's decision.
@@ -114,8 +117,8 @@ Within a substep the net force on a moving train is
 
 and the substep is solved according to the regime:
 
-1. **No traction** (P = 0, or v < 0): all forces are constant, so the update
-   is exact: v' = v + a·h, x' = x + h·(v + v')/2.
+1. **No traction** (P = 0): all forces are constant, so the update is
+   exact: v' = v + a·h, x' = x + h·(v + v')/2.
 2. **Force-limited** (0 ≤ v < v_b): traction is the constant F_max, so the
    update is exact as above. If the train would pass v_b inside the substep,
    the substep ends exactly at v_b and the rest of the tick continues
@@ -131,6 +134,16 @@ and the substep is solved according to the regime:
 Substep length is capped at the traction relaxation time m·s²/P, with
 s = max(v, v_b), which keeps the midpoint solution stable. At floating-point
 equilibrium (P/v = R) the rest of the tick is covered at constant speed.
+
+**Rolling back under power** is solved the same way in the backward speed
+w = −v, with R = F_g − F_b − F_r the net force driving the rollback:
+force-limited below v_b (constant F_max against the rollback, exact), and
+power-limited above it, where m·(w − w') = h·(P / w_m − R) with
+w_m = (w + w')/2. Again the traction work in the substep is exactly P·h, now
+taken out of the rollback. The substep is capped at m·s²/(8P), and at
+m·w/|R| when R < 0, which keeps the quadratic's roots real; it ends at v_b
+when the rollback slows through it. The balance P/w = R is unstable: a
+slower rollback is stopped, a faster one keeps accelerating.
 
 The scheme is second-order: halving dt cuts the error about fourfold. At
 dt = 0.1 s a 60 s full-power launch matches the closed-form solution to about
@@ -154,6 +167,11 @@ or the static rule of section 6 at v = 0.
 - **Rollback** is allowed. An unbraked train on a grade steeper than
   rolling resistance can hold rolls downhill, with negative speed and offset.
   Gravity can stop a train and reverse it within the same tick.
+- **Power against a rollback.** Commanded power pushes forward while the
+  train rolls back (section 3). Where F_max exceeds the grade force less
+  rolling resistance it stops the rollback, and where F_max also exceeds the
+  grade force plus rolling resistance the train then drives forward; in
+  between it holds at rest. On a steeper grade it only slows the rollback.
 - Brakes and rolling resistance stop a train but never reverse it.
 
 ## 7. Order of one step

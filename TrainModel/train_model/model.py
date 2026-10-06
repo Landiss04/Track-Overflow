@@ -238,16 +238,16 @@ class TrainModel:
         return cfg.m_empty_kg + occupants * cfg.passenger_mass_kg
 
     def _traction_n(self, power_cmd_w: float, velocity_mps: float) -> float:
-        # Section 1: P/v saturated at F_max; motors drive forward only.
+        # Section 1: P/|v| saturated at F_max. The motors push forward
+        # only, so while the train rolls back they oppose the rollback.
         cfg = self.config
         if self._failures.engine:
             return 0.0
         # OPEN(1): no speed governing here; power is capped at P_max.
         p_eff_w = min(power_cmd_w, cfg.p_max_w)
-        if velocity_mps > 0.0:
-            return min(p_eff_w / velocity_mps, cfg.f_max_n)
-        if velocity_mps < 0.0:
-            return 0.0
+        speed = abs(velocity_mps)
+        if speed > 0.0:
+            return min(p_eff_w / speed, cfg.f_max_n)
         # At v = 0, P/v saturates to F_max for any positive power.
         return cfg.f_max_n if p_eff_w > 0.0 else 0.0
 
@@ -335,8 +335,50 @@ class TrainModel:
                         if net < 0.0:
                             h = min(h, m * (v_base - v) / net)
                             v_next = v_base
+            elif direction < 0.0 and power > 0.0:
+                # Rolling back, the motors still push forward. The same
+                # solve as above, in the backward speed w = -v.
+                w = -v
+                w_base = power / cfg.f_max_n
+                if 0.0 < resistance < cfg.f_max_n:
+                    equilibrium = power / resistance
+                    if math.isclose(w, equilibrium, rel_tol=1e-12,
+                                    abs_tol=math.ulp(equilibrium)):
+                        # Traction balances the rollback.
+                        v = -equilibrium
+                        self._offset_m += v * remaining
+                        break
+                if w < w_base or (
+                        w == w_base and resistance <= cfg.f_max_n):
+                    # Force-limited: F_max is constant: exact.
+                    w_next = w + h * (resistance - cfg.f_max_n) / m
+                    if w_next > w_base:
+                        h = min(h, (w_base - w) * m
+                                / (resistance - cfg.f_max_n))
+                        w_next = w_base
+                else:
+                    # Power-limited: traction P/u at the midpoint
+                    # backward speed u takes exactly P*h out of the
+                    # rollback. Both bounds on h keep the roots real.
+                    scale = max(w, w_base, math.ulp(0.0))
+                    h = min(h, m * scale * (scale / power) / 8.0)
+                    if resistance < 0.0:
+                        h = min(h, m * w / -resistance)
+                    b = w / scale + (h / scale) * resistance / (2.0 * m)
+                    c = (h / scale) * (power / scale) / (2.0 * m)
+                    root = math.sqrt(max(b * b - 4.0 * c, 0.0))
+                    u = scale * (b + root) / 2.0
+                    w_next = 2.0 * u - w
+                    if w_next < w_base < w:
+                        # Slowing into the force limit: end where the
+                        # same midpoint rule reaches w_base.
+                        net = power / ((w + w_base) / 2.0) - resistance
+                        if net > 0.0:
+                            h = min(h, m * (w - w_base) / net)
+                            w_next = w_base
+                v_next = -w_next
             else:
-                # No traction during rollback; all forces are constant.
+                # No traction; all forces are constant.
                 v_next = v - h * resistance / m
 
             if (v > 0.0 and v_next <= 0.0) or (v < 0.0 and v_next >= 0.0):

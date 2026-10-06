@@ -503,18 +503,100 @@ def test_negative_power_is_rejected_without_side_effects(
     assert model.snapshot() == before
 
 
-def test_no_traction_while_rolling_back() -> None:
-    """Check, per design, that the motors drive forward only."""
+def roll_back(model: TrainModel, grade_pct: float, seconds: float) -> None:
+    """Let an unpowered, unbraked train roll back down an upgrade."""
+    for _ in range(round(seconds / DT_S)):
+        model.step(DT_S, inp(0.0, grade_deg=pct(grade_pct)))
+    assert vel(model) < 0.0
+
+
+def grade_and_roll_n(m: float, grade_pct: float) -> tuple[float, float]:
+    """Return grade force and rolling resistance on ``grade_pct``."""
+    th = math.radians(pct(grade_pct))
+    return m * G * math.sin(th), CFG.c_rr * m * G * math.cos(th)
+
+
+def test_traction_slows_a_rollback_then_drives_forward() -> None:
+    """Check the motors push forward while rolling back.
+
+    Below the base speed P/F_max the traction is the constant F_max, so
+    the rollback slows at a constant rate, stops, and the train then
+    drives forward up the grade.
+    """
     model = fresh()
-    for _ in range(20):
-        model.step(DT_S, inp(0.0, grade_deg=pct(3.0)))
+    roll_back(model, 3.0, 2.0)
     v0 = vel(model)
-    assert v0 < 0.0
+    assert -v0 < CFG.p_max_w / CFG.f_max_n
+    m = mass_of(0)
+    f_grade, f_roll = grade_and_roll_n(m, 3.0)
+    expected = (CFG.f_max_n - f_grade + f_roll) / m
     model.step(DT_S, inp(CFG.p_max_w, grade_deg=pct(3.0)))
-    th = math.radians(pct(3.0))
-    rollback = -G * math.sin(th) + CFG.c_rr * G * math.cos(th)
-    assert acc(model) == pytest.approx(rollback, rel=1e-12)
-    assert vel(model) == pytest.approx(v0 + rollback * DT_S, rel=1e-12)
+    assert acc(model) == pytest.approx(expected, rel=1e-12)
+    assert vel(model) == pytest.approx(v0 + expected * DT_S, rel=1e-12)
+    speeds = [vel(model)]
+    for _ in range(60):
+        model.step(DT_S, inp(CFG.p_max_w, grade_deg=pct(3.0)))
+        speeds.append(vel(model))
+    assert speeds[-1] > 0.0
+    stopped = next(i for i, v in enumerate(speeds) if v >= 0.0)
+    assert (stopped + 1) * DT_S == pytest.approx(-v0 / expected, abs=DT_S)
+
+
+def test_traction_slows_a_rollback_it_cannot_stop() -> None:
+    """Check the motors still help on a grade too steep for them."""
+    model = fresh()
+    roll_back(model, 8.0, 1.0)
+    m = mass_of(0)
+    f_grade, f_roll = grade_and_roll_n(m, 8.0)
+    assert f_grade - f_roll > CFG.f_max_n
+    model.step(DT_S, inp(CFG.p_max_w, grade_deg=pct(8.0)))
+    assert acc(model) == pytest.approx(
+        (CFG.f_max_n - f_grade + f_roll) / m, rel=1e-12)
+    assert (f_roll - f_grade) / m < acc(model) < 0.0
+
+
+def test_power_limited_traction_absorbs_exactly_the_commanded_power() -> None:
+    """Check the energy balance of a power-limited rollback tick.
+
+    Above the base speed the traction is P/|v| at the midpoint speed, so
+    over a tick the motors take exactly P·dt out of the rollback.
+    """
+    power = 20_000.0
+    model = fresh()
+    roll_back(model, 6.0, 3.0)
+    assert -vel(model) > power / CFG.f_max_n
+    m = mass_of(0)
+    f_grade, f_roll = grade_and_roll_n(m, 6.0)
+    v0, x0 = vel(model), pos(model)
+    model.step(DT_S, inp(power, grade_deg=pct(6.0)))
+    v1, dx = vel(model), pos(model) - x0
+    assert dx < 0.0 and -v1 > power / CFG.f_max_n
+    kinetic = 0.5 * m * (v1 * v1 - v0 * v0)
+    work = -power * DT_S - f_grade * dx + f_roll * dx
+    assert kinetic == pytest.approx(work, rel=1e-9)
+
+
+def test_a_fast_rollback_slows_through_the_base_speed_and_reverses() -> None:
+    """Check a power-limited rollback slows, stops, goes forward."""
+    power = 100_000.0
+    v_base = power / CFG.f_max_n
+    model = fresh()
+    roll_back(model, 10.0, 7.0)
+    assert -vel(model) > v_base
+    m = mass_of(0)
+    bound = (CFG.f_max_n + m * G) / m * DT_S
+    last = vel(model)
+    speeds = []
+    for _ in range(200):
+        model.step(DT_S, inp(power, grade_deg=pct(2.0)))
+        assert math.isfinite(vel(model))
+        assert abs(vel(model) - last) <= bound
+        last = vel(model)
+        speeds.append(last)
+    assert min(speeds) < -v_base < 0.0 < speeds[-1]
+    # It slows monotonically to the stop: the motors never let go.
+    stop = next(i for i, v in enumerate(speeds) if v >= 0.0)
+    assert all(a <= b for a, b in zip(speeds[:stop], speeds[1:stop + 1]))
 
 
 def test_speed_is_not_governed_by_the_model() -> None:
