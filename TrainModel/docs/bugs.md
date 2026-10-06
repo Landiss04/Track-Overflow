@@ -17,7 +17,6 @@ integration), the **link** between the two processes, or the **UI** (QML).
 | ID | Area | Severity | Summary |
 |---|---|---|---|
 | [B1](#b1) | Test UI | Medium | A brake failure during a station dwell lets the train roll away |
-| [B2](#b2) | Test UI, link | Medium | A second test UI takes over a running train with fresh stand-ins |
 | [B3](#b3) | Test UI | Low | The limiter never uses the emergency brake |
 | [B4](#b4) | Test UI | Low | Nothing in the test UI holds a rollback |
 | [B5](#b5) | Model, UI | Low | Finite but absurd inputs have no upper bound |
@@ -51,21 +50,6 @@ Medium.
   gravity there beats rolling resistance.
 - **Fix:** if the train moves during a dwell, command the emergency brake,
   which still works under a brake failure.
-
-### B2
-
-**A second test UI takes over a running train with fresh stand-ins.** Test
-UI and link, Medium.
-
-- **Reproduce:** test UI A drives the Blue Line to block 6 at 31.8 mph. Open
-  test UI B (refused: *Another test UI open*), then close A. B connects. Its
-  rows show block 1, 0 W and a clock of 00:00:00, and its first send moves the
-  train back to block 1.
-- **Cause:** the train keeps its state across the takeover; B's Blue Line
-  stub, limiter, dwell and clock start from scratch.
-- **Fix (needs a decision):** reset the module when a test UI starts driving a
-  train it did not start, which loses the running train; or carry the stand-in
-  state across, which the link does not hold.
 
 ### B3
 

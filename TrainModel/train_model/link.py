@@ -10,7 +10,8 @@ module.
 
 One test UI at a time drives the Train Model: a second would step it
 too, so the server refuses it with ``{"op": "busy"}`` until the first
-leaves (Kevin).
+leaves (Kevin). A test UI that takes over a train another one drove
+gets it reset, to match its own fresh stand-ins (Kevin).
 
 Two test-only commands ride alongside ``step``; integration never uses
 them: clear the passenger brake latch (folded into a step so an invalid
@@ -340,6 +341,9 @@ class TestLinkServer(QObject):
         self._name = name
         self._clients: list[QLocalSocket] = []
         self._requester: QLocalSocket | None = None
+        # Whether a test UI has stepped the train since it was last
+        # reset; the next test UI to take over then starts it fresh.
+        self._driven = False
         self._server = QLocalServer(self)
         self._server.newConnection.connect(self._accept)
         state.snapshotChanged.connect(self._push)
@@ -372,6 +376,11 @@ class TestLinkServer(QObject):
                 socket.disconnectFromServer()
                 socket.disconnected.connect(socket.deleteLater)
                 continue
+            if self._driven:
+                # A new test UI takes over a train another one drove. Its
+                # stand-ins start fresh, so the train does too (Kevin).
+                self._state.reset()
+                self._driven = False
             self._clients.append(socket)
             # Bound slots, not lambdas: Qt drops these connections when
             # the server is destroyed, before its sockets die with it.
@@ -432,8 +441,10 @@ class TestLinkServer(QObject):
                         "clear_passenger_brake"
                     ],
                 )
+                self._driven = True
             elif op == "reset":
                 self._state.reset()
+                self._driven = False
             else:
                 raise LinkError(f"unknown request: {op!r}")
         except InvalidTimeStepError as exc:

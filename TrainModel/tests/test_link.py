@@ -193,6 +193,35 @@ def test_a_second_test_ui_is_refused(served):
     assert client.step(make_inputs())["op"] == "outputs"
 
 
+def test_a_test_ui_that_takes_over_starts_a_fresh_train(served):
+    """A new test UI's stand-ins start fresh, so the train does (Kevin)."""
+    state, server, client = served
+    for _ in range(20):
+        client.step(make_inputs(power_w=480_000, station="GLENBURY"))
+    state.setFailure("engine_failure", True)
+    assert state.outputs().controller.actual_speed_mps > 0
+    client.socket.disconnectFromServer()
+    wait_for(lambda: not server._clients)
+    taker = RawClient(server._name)
+    served_outputs = outputs_of(taker.messages[-1])
+    assert served_outputs.controller.actual_speed_mps == 0
+    assert served_outputs.track.block_id == ""
+    assert state.snapshot["clock"] == "00:00:00"
+    assert not state.isFailed("engine_failure")
+
+
+def test_the_first_test_ui_keeps_what_the_train_model_ui_set(served):
+    """Before any test UI drives it, the train is not reset."""
+    state, server, client = served
+    client.socket.disconnectFromServer()
+    wait_for(lambda: not server._clients)
+    state.setFailure("brake_failure", True)
+    state.applyEmergencyBrake()
+    RawClient(server._name)
+    assert state.isFailed("brake_failure")
+    assert state.snapshot["passenger_ebrake_pulled"]
+
+
 def test_a_refused_test_ui_takes_over_when_the_first_leaves(served):
     """Check a refused link says why, then connects once it is free."""
     _, server, client = served

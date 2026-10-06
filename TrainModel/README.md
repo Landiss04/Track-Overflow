@@ -73,7 +73,10 @@ Once the system is integrated, the central harness calls the same
 with no change to the module. Either window starts on its own; the test UI
 reads *Not connected* until the Train Model is up, and reconnects if it
 restarts. One test UI at a time drives a Train Model: a second one reads
-*Another test UI open* and takes over once the first closes.
+*Another test UI open* and takes over once the first closes. A test UI that
+takes over a train another one drove gets it reset, to match its own fresh
+stand-ins; failures or a passenger pull set before the first test UI drives
+are kept.
 
 QML owns all visuals; Python owns state. The two talk through QML context
 properties: `theme` and `trainModel` in the Train Model window, `theme` and
