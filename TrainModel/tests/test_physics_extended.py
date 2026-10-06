@@ -183,6 +183,12 @@ def run_to_stop(
     pytest.fail("never stopped")
 
 
+def next_stop(model: TrainModel) -> None:
+    """Depart and stop again: a new stop, which draws a disembark."""
+    model.step(DT_S, inp(CFG.p_max_w))
+    run_to_stop(model, lambda: inp(0.0, service=True))
+
+
 def solve_grade(threshold: Callable[[float], float]) -> float:
     """Bisect for the grade in degrees where ``threshold`` crosses zero."""
     lo, hi = 0.0, 60.0
@@ -1401,6 +1407,28 @@ def test_disembark_only_on_rising_door_edge() -> None:
         assert onboard(model) == after_edge
 
 
+def test_one_disembark_draw_per_stop() -> None:
+    """Check a stop draws once, however its doors open (Kevin).
+
+    Opening the other door, or closing and reopening one, draws nobody
+    more; the next stop, once the train has moved, draws again.
+    """
+    drew_again = False
+    for seed in range(10):
+        model = fresh(FULL, TrainConfig(seed=seed))
+        next_stop(model)
+        model.step(DT_S, inp(door_left=True))
+        first = onboard(model)
+        for left, right in [(True, True), (False, False), (False, True),
+                            (False, False), (True, False), (True, True)]:
+            model.step(DT_S, inp(door_left=left, door_right=right))
+            assert onboard(model) == first, f"seed {seed}"
+        next_stop(model)
+        model.step(DT_S, inp(door_right=True))
+        drew_again = drew_again or onboard(model) < first
+    assert drew_again
+
+
 def test_no_disembark_when_doors_commanded_open_while_moving() -> None:
     """Check nobody leaves through doors commanded open while moving."""
     model = fresh(FULL)
@@ -1415,6 +1443,7 @@ def test_either_door_edge_triggers_disembark(side: str) -> None:
     changed = False
     for seed in range(10):
         model = fresh(FULL, TrainConfig(seed=seed))
+        next_stop(model)
         model.step(DT_S, inp(door_left=side == "left",
                              door_right=side == "right"))
         changed = changed or onboard(model) < FULL
@@ -1426,6 +1455,7 @@ def test_disembark_draw_is_uniform_over_onboard() -> None:
     draws = []
     for seed in range(300):
         model = fresh(FULL, TrainConfig(seed=seed))
+        next_stop(model)
         model.step(DT_S, inp(door_left=True))
         draws.append(FULL - onboard(model))
     assert all(0 <= d <= FULL for d in draws)
@@ -1438,6 +1468,7 @@ def test_disembark_bounded_by_onboard(n_onboard: int) -> None:
     """Check no more passengers leave than are aboard."""
     for seed in range(20):
         model = fresh(n_onboard, TrainConfig(seed=seed))
+        next_stop(model)
         model.step(DT_S, inp(door_left=True))
         assert 0 <= onboard(model) <= n_onboard
 
@@ -1445,7 +1476,9 @@ def test_disembark_bounded_by_onboard(n_onboard: int) -> None:
 def test_capacity_output_is_after_the_draw() -> None:
     """Check reported capacity reflects the disembark of the same tick."""
     model = fresh(FULL, TrainConfig(seed=3))
+    next_stop(model)
     out = model.step(DT_S, inp(door_left=True))
+    assert onboard(model) < FULL
     assert out.track.passenger_capacity == FULL - onboard(model)
 
 

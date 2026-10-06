@@ -100,6 +100,9 @@ class TrainModel:
         self._last_polarity: bool | None = None
         self._door_left_open = False
         self._door_right_open = False
+        # Whether this stop has drawn its disembark; a stop ends when the
+        # train moves.
+        self._stop_drawn = False
         self._last_inputs: TrainModelInputs | None = None
         self._elapsed_s = 0.0
 
@@ -151,6 +154,7 @@ class TrainModel:
             # The interlock holds: no door stays open once the train moves.
             self._door_left_open = False
             self._door_right_open = False
+            self._stop_drawn = False
         self._update_cabin_temp(dt, cmd.temp_setpoint_c)
 
         self._last_inputs = inputs
@@ -440,10 +444,11 @@ class TrainModel:
             (door_left and not self._door_left_open)
             or (door_right and not self._door_right_open)
         )
-        # OPEN(5.2): uniform integer 0..onboard, drawn on a door-open
-        # rising edge (either side) at v = 0.
-        if opened and self._velocity_mps == 0.0:
+        # OPEN(5.2): uniform integer 0..onboard, drawn once per stop, on
+        # its first door-open rising edge (either side) at v = 0 (Kevin).
+        if opened and self._velocity_mps == 0.0 and not self._stop_drawn:
             self._n_passengers -= self._rng.randint(0, self._n_passengers)
+            self._stop_drawn = True
         # Passengers can only board at a station with a door open; a
         # count received at any other time boards nobody.
         if not (at_station and (door_left or door_right)):

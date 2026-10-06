@@ -274,6 +274,10 @@ def test_passenger_bounds_and_capacity() -> None:
 
     disembarked = False
     for _ in range(20):
+        # Each pass is a new stop, which draws once: depart, stop again.
+        model.step(DT_S, make_inputs(power_w=config.p_max_w))
+        while model.snapshot().velocity_mps > 0.0:
+            model.step(DT_S, make_inputs(service=True))
         before = model.snapshot().n_passengers
         model.step(DT_S, make_inputs(door_left=True))
         snap = model.snapshot()

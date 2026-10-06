@@ -206,9 +206,11 @@ Door State reports these actual doors, which can differ from Door Command.
 
 Evaluated before motion, using the interlocked door states:
 
-1. **Disembark.** On a door-open rising edge (either side goes from closed to
-   open) at rest, a uniform random integer from 0 to the number aboard
-   alights. The generator is `random.Random(config.seed)`, one per train, so
+1. **Disembark.** Once per stop, on its first door-open rising edge (either
+   side goes from closed to open) at rest, a uniform random integer from 0
+   to the number aboard alights. Opening the other door, or closing and
+   reopening one, draws nobody more; the next stop begins once the train
+   has moved. The generator is `random.Random(config.seed)`, one per train, so
    runs are reproducible.
 2. **Board.** Only if the train is **at a station** (`TrackInfo.station_name`
    is a non-empty string) **and** a door is open:

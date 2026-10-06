@@ -238,8 +238,8 @@ from the command.
 Passengers board only at a station with a door open. The `station` input row
 names the station in the current block (`TrackInfo.station_name`); leave it
 empty away from a station. A boarding count sent at any other time boards
-nobody and is not kept for later. Disembarking is unchanged: a draw on each
-door-open rising edge at rest.
+nobody and is not kept for later. Disembarking is one draw per stop, on its
+first door opening at rest; the next stop begins once the train has moved.
 
 ## Passenger brake override
 
