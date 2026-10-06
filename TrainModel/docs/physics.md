@@ -277,8 +277,10 @@ Before any state changes, `step` rejects:
 - a grade not strictly between −90° and 90°, a negative speed limit or a
   negative commanded speed: values with no physical meaning
   (`InvalidInputError`);
-- a boarding count that is not an `int` or is negative (`InvalidInputError`);
-- an authority that is not an `int` or is negative (`InvalidInputError`).
+- a boarding count that is not an `int`, is negative or exceeds 2³¹ − 1
+  (`InvalidInputError`);
+- an authority that is not an `int`, is negative or exceeds 2³¹ − 1
+  (`InvalidInputError`).
 
 A rejected step leaves the model exactly as it was, including the random
 generator. `validate_inputs` is static, so a caller can check a step without

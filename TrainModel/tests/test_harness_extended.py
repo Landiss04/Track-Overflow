@@ -96,6 +96,20 @@ def test_meaningless_track_rows_are_rejected(name: str, value: float) -> None:
     assert snap(state) == before
 
 
+@pytest.mark.parametrize("name", ["authority", "passengers_boarded"])
+@pytest.mark.parametrize("value", [2**31, 2**70])
+def test_counts_too_large_to_show_are_not_staged(
+        name: str, value: int) -> None:
+    """Check a huge count is refused before it can break the rows."""
+    _, harness = make()
+    for stage in (harness.setInput, harness.setDisplayInput):
+        with pytest.raises(ValueError, match="too large"):
+            stage(name, value)
+    assert name not in harness.property("pendingInputs")
+    shown = harness.property("displayInputValues")
+    assert shown[name] == 0
+
+
 def test_power_command_zero_under_engine_failure() -> None:
     """Check no power is displayed while the engine has failed."""
     state, harness = make()

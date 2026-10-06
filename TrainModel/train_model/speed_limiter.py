@@ -96,8 +96,9 @@ class SpeedLimiter:
         """
         prev = self.state
         error = cap_mps - speed_mps
-        # Over the cap and sped up through a tick with no power: gravity,
-        # which the power cannot fight, so brake now, not at the margin.
+        # Over the cap and sped up through a tick with no power: that
+        # is gravity, which power cannot fight, so brake now, not at
+        # the margin.
         runaway = (error < min(0.0, prev.last_error_mps)
                    and prev.last_power_w == 0.0)
         braking = (

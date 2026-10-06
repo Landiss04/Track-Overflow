@@ -69,7 +69,7 @@ def test_the_limiter_never_raises_the_power(
 
 
 def test_well_over_the_cap_power_is_cut_and_the_brake_applied() -> None:
-    """Check the brake engages past the margin and holds under the cap."""
+    """Check the brake engages over the margin, holds under the cap."""
     limiter = SpeedLimiter()
     over = limiter.apply(DT, CAP, CAP + BRAKE_MARGIN_MPS + 0.1, 480e3, False)
     assert over.service_brake and over.limiting

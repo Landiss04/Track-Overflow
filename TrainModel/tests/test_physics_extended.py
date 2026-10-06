@@ -1590,7 +1590,27 @@ def test_meaningless_inputs_are_rejected_without_side_effects(
     assert model.snapshot() == before
 
 
+@pytest.mark.parametrize(("field", "overrides"), [
+    ("authority_blocks", {"authority": 2**31}),
+    ("authority_blocks", {"authority": 2**70}),
+    ("passengers_boarded", {"boarded": 2**31}),
+])
+def test_counts_too_large_to_carry_are_rejected(
+        field: str, overrides: dict[str, Any]) -> None:
+    """Check counts beyond a 32-bit int are refused (Kevin).
+
+    Qt and QML carry counts as 32-bit ints; a larger one would break
+    the views that show it.
+    """
+    model = fresh(20)
+    before = model.snapshot()
+    with pytest.raises(InvalidInputError, match=field):
+        model.step(DT_S, inp(**overrides))
+    assert model.snapshot() == before
+
+
 @pytest.mark.parametrize("overrides", [
+    {"authority": 2**31 - 1}, {"boarded": 2**31 - 1},
     {"speed_limit_mps": 0.0}, {"cmd_speed_mps": 0.0},
     {"grade_deg": 89.9}, {"grade_deg": -89.9},
 ])

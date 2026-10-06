@@ -68,7 +68,7 @@ from train_model.interface import (
     TrainModelOutputs,
 )
 from train_model.link import LinkError, LocalLink, SocketLink
-from train_model.model import InvalidTimeStepError, TrainModel
+from train_model.model import MAX_COUNT, InvalidTimeStepError, TrainModel
 from train_model.speed_limiter import SpeedLimiter
 from train_model.track_stub import TrackStub, load_blue_line
 
@@ -807,7 +807,11 @@ class TestHarnessState(QObject):
         if kind == "bool":
             return bool(value)
         if kind in ("int", "uint"):
-            return int(float(value))
+            count = int(float(value))
+            # The rows could not show it; the module would refuse it.
+            if abs(count) > MAX_COUNT:
+                raise ValueError(f"{count} is too large for a count")
+            return count
         if kind == "float":
             return float(value)
         return str(value)

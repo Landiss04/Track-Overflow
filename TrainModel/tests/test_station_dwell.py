@@ -34,7 +34,7 @@ def qt_app() -> Iterator[None]:
 
 
 def make_harness() -> tuple[TrainModelState, Any]:
-    """Return a model and a harness with the track rows typed by hand."""
+    """Return a model and a harness with hand-typed track rows."""
     state = TrainModelState()
     return state, harness_module.TestHarnessState(
         LocalLink(state), track=None)

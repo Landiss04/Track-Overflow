@@ -35,6 +35,10 @@ INITIAL_CABIN_TEMP_C = 20.0
 # No Track Info has been received before the first step.
 _NO_BLOCK_ID = ""
 
+#: The largest count the views can carry: Qt and QML hold counts as
+#: 32-bit signed ints.
+MAX_COUNT = 2**31 - 1
+
 
 class TrainModelError(Exception):
     """Base class for every Train Model error."""
@@ -200,11 +204,19 @@ class TrainModel:
             raise InvalidInputError("passengers_boarded must be an integer")
         if track.passengers_boarded < 0:
             raise InvalidInputError("passengers_boarded must be nonnegative")
+        if track.passengers_boarded > MAX_COUNT:
+            raise InvalidInputError(
+                f"passengers_boarded must be at most {MAX_COUNT}"
+            )
         authority_blocks = track.track_signal.authority_blocks
         if not isinstance(authority_blocks, int):
             raise InvalidInputError("authority_blocks must be an integer")
         if authority_blocks < 0:
             raise InvalidInputError("authority_blocks must be nonnegative")
+        if authority_blocks > MAX_COUNT:
+            raise InvalidInputError(
+                f"authority_blocks must be at most {MAX_COUNT}"
+            )
 
     def snapshot(self) -> TrainModelSnapshot:
         """Return the current state for display. No side effects."""
