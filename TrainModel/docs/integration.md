@@ -18,7 +18,7 @@ sketch, not existing code.
 | `train_model/model.py`: physics | `train_model/harness.py`: test UI state, stand-in producers, clock driving |
 | `train_model/state.py`: module wrapper the window binds to | `train_model/link.py`: socket link, wire format, `TestLinkServer` |
 | `train_model/app.py`: window bootstrap | `ui/TestMain.qml`, `ui/TestView.qml`: test UI window |
-| | `train_model/track_stub.py`: stand-in Track Model, Blue Line loaded by default |
+| | `train_model/track_stub.py`: stand-in Track Model; Blue Line by default, Red or Green by flag |
 | | `train_model/speed_limiter.py`: stand-in Train Controller speed limiter |
 | `ui/Main.qml`, `ui/MainView.qml`: Train Model window | |
 | `main.py`: standalone Train Model window (optional after integration) | |

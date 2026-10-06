@@ -38,6 +38,17 @@ rest of it:
   transponder at block 9 sends the Station B beacon. An edit to a track row
   lasts until the next block change. Travel is forward only, and the train
   stays on block 10 at the end of the route. Run Control shows the track.
+  Flags load another line instead (see [Run](#run)): `--line red` or
+  `--line green` loads that line's layout, and `--route` sets the blocks to
+  travel as ranges in order. A range that counts down is travelled against the
+  block numbering, so its grades change sign. Default routes: Red `9-1,16-66`,
+  from the yard to South Hills Junction; Green
+  `63-100,85-77,101-150,28-1,13-57`, the loop from the yard back to it. The
+  Red and Green layouts mark no transponders, so the block before each station
+  sends its beacon, with the station's platform side (left where it has both)
+  and underground flag. The limiter below reacts to each block's limit as the
+  train enters it, so where a line's limit drops it brakes down after the
+  fact rather than before.
 - **Speed limiter** (`train_model/speed_limiter.py`). The Train Model does not
   govern its own speed (D009), so as the stand-in Train Controller the test UI
   limits it: a PI control law (trapezoidal integration of the speed error, no
@@ -157,6 +168,9 @@ cd TrainModel
 source .venv/bin/activate        # PySide6 6.11 + mypy; see "Setup" if missing
 python main.py                   # Train Model window
 python test_ui.py                # test UI window, in a second terminal
+python test_ui.py --line green   # the same on the Green Line loop
+python test_ui.py --line red --route 9-1,16-66   # a line and a route
+python test_ui.py --help         # every flag and default route
 ```
 
 Offscreen smoke test (no display needed):

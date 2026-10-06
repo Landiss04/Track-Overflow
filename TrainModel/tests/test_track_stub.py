@@ -24,7 +24,10 @@ from train_model.track_stub import (  # noqa: E402
     TrackBlock,
     TrackStub,
     blocks_from_layout,
+    blocks_from_route,
     load_blue_line,
+    load_line,
+    parse_route,
 )
 
 
@@ -205,3 +208,151 @@ def test_reset_returns_to_the_first_block() -> None:
     harness.resetModule()
     assert harness.inputValues["block"] == "1"
     assert not harness.inputValues["polarity"]
+
+
+# --------------------------------------------------------------------------- #
+# Red and Green lines, and the test UI's flags
+# --------------------------------------------------------------------------- #
+
+def layout_of(*rows: dict[str, Any]) -> dict[str, Any]:
+    """Return a layout file of flat 50 m blocks with the given fields."""
+    base = {"section": "A", "length_m": 50, "grade_percent": 0,
+            "speed_limit_kmh": 36, "elevation_m": 0,
+            "cumulative_elevation_m": 0}
+    return {"blocks": [dict(base, **row) for row in rows]}
+
+
+@pytest.mark.parametrize(("line", "first", "last", "count", "stations"), [
+    ("blue", "1", "10", 10, 1),
+    ("red", "9", "66", 60, 8),
+    ("green", "63", "57", 170, 21),
+])
+def test_each_line_loads_along_its_default_route(
+        line: str, first: str, last: str, count: int, stations: int) -> None:
+    """Check each line's default route, from its first block to its last."""
+    stub = load_line(line)
+    route = stub.route
+    assert stub.name == f"{line.title()} Line"
+    assert (route[0].block_id, route[-1].block_id) == (first, last)
+    assert len(route) == count
+    assert sum(1 for b in route if b.station) == stations
+
+
+def test_the_green_loop_follows_its_switches() -> None:
+    """Check the Green route turns at blocks 100, 77, 150 and 1."""
+    ids = [b.block_id for b in load_line("green").route]
+    for here, there in [("100", "85"), ("77", "101"), ("150", "28"),
+                        ("1", "13")]:
+        # Blocks 77 to 85 are passed twice; the turn is on the last pass.
+        last = len(ids) - 1 - ids[::-1].index(here)
+        assert ids[last + 1] == there
+
+
+def test_stations_and_beacons_come_from_the_layout() -> None:
+    """Check names, platform sides and underground from the layout."""
+    green = {b.block_id: b for b in load_line("green").route}
+    assert green["65"].station == "Glenbury"
+    # No transponders on the Green Line: the block before announces.
+    assert green["64"].beacon_station == "Glenbury"
+    assert green["64"].beacon_side == "R"
+    red = load_line("red")
+    assert red.route[1].block_id == "8"
+    assert red.route[1].beacon_station == "Shadyside"
+    # Platforms on both sides: the beacon carries the left one.
+    assert red.route[1].beacon_side == "L"
+    assert load_line("green").route[0].beacon_station == ""
+
+
+def test_an_unnamed_station_is_named_for_its_block() -> None:
+    """Check Green block 16, which the layout leaves unnamed."""
+    green = {b.block_id: b for b in load_line("green").route}
+    assert green["16"].station == "Station 16"
+
+
+def test_beacon_side_and_underground_follow_the_station() -> None:
+    """Check the announced station's side and underground flag."""
+    layout = layout_of(
+        {"block_number": 1},
+        {"block_number": 2, "station_side": "Right",
+         "infrastructure": {"station": "DEEP", "underground": True}},
+    )
+    first, second = blocks_from_route(layout, parse_route("1-2"))
+    assert first.beacon_station == "Deep"
+    assert (first.beacon_side, first.beacon_underground) == ("R", True)
+    assert second.station == "Deep"
+    assert stub_inputs(first)["beacon_underground"] is True
+
+
+def stub_inputs(block_: TrackBlock) -> dict[str, Any]:
+    """Return the input rows a stub sends for one block."""
+    return TrackStub("One", [block_]).inputs()
+
+
+def test_a_range_against_the_numbering_negates_the_grade() -> None:
+    """Check grade is positive uphill in the direction of travel."""
+    layout = layout_of({"block_number": 1, "grade_percent": 2},
+                       {"block_number": 2, "grade_percent": 0})
+    up, flat = blocks_from_route(layout, parse_route("1-2"))
+    flat_back, down = blocks_from_route(layout, parse_route("2-1"))
+    assert up.grade_deg == pytest.approx(math.degrees(math.atan(0.02)))
+    assert down.grade_deg == pytest.approx(-up.grade_deg)
+    # A flat block reads 0, never -0.
+    assert math.copysign(1.0, flat_back.grade_deg) == 1.0
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("3", [(3, 1)]),
+    ("1-3", [(1, 1), (2, 1), (3, 1)]),
+    ("3-1, 7", [(3, -1), (2, -1), (1, -1), (7, 1)]),
+])
+def test_routes_parse_as_block_ranges(
+        text: str, expected: list[tuple[int, int]]) -> None:
+    """Check block numbers and ranges in travel order."""
+    assert parse_route(text) == expected
+
+
+@pytest.mark.parametrize("text", ["", "a", "1-2-3", "9-x", "-4", "1,,2"])
+def test_a_malformed_route_is_refused(text: str) -> None:
+    """Check text that is not block ranges is refused."""
+    with pytest.raises(ValueError):
+        parse_route(text)
+
+
+def test_a_route_off_the_line_is_refused() -> None:
+    """Check a block the line does not have is named in the error."""
+    with pytest.raises(ValueError, match="999"):
+        load_line("red", "9-1,999")
+
+
+def test_the_flags_pick_the_line_and_route() -> None:
+    """Check --line and --route, leaving other arguments to Qt."""
+    import test_ui
+    args, qt_args = test_ui.parse_args([])
+    assert (args.line, args.route) == ("blue", None)
+    args, qt_args = test_ui.parse_args(
+        ["--line", "green", "--route", "63-70", "-platform", "offscreen"])
+    assert (args.line, args.route) == ("green", "63-70")
+    assert qt_args == ["-platform", "offscreen"]
+    stub = test_ui.load_track(args)
+    assert [b.block_id for b in stub.route] == [str(n) for n in range(63, 71)]
+
+
+def test_a_bad_route_flag_exits_with_the_reason() -> None:
+    """Check the test UI refuses to start on a route it cannot load."""
+    import test_ui
+    args, _ = test_ui.parse_args(["--line", "red", "--route", "9-1,999"])
+    with pytest.raises(SystemExit, match="999"):
+        test_ui.load_track(args)
+
+
+def test_the_harness_follows_a_red_line_stub() -> None:
+    """Check the harness drives the Red Line from its first block."""
+    state, harness = make_harness(track=load_line("red"))
+    assert harness.trackName == "Red Line"
+    assert harness.inputValues["block"] == "9"
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    while state.outputs().track.block_id == "9":
+        harness.advanceTick()
+    harness.advanceTick()
+    assert state.outputs().track.block_id == "8"
