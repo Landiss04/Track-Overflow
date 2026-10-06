@@ -1,8 +1,9 @@
 """Stub CTC Office: satisfies the contract with no routing logic yet.
 
 The stub turns dispatcher actions straight into outputs so data can be
-seen crossing the boundary: each dispatched train gets its destination
-as authority and a placeholder suggested speed, and closed blocks,
+seen crossing the boundary: each dispatched train on the track gets its
+destination as authority and a suggested speed a little under its
+current block's speed limit, and closed blocks,
 switch commands and maintenance mode pass through. Track Controller and
 Track Model inputs are validated against the track layout and recorded;
 apart from the safety rules (``StubCtcOffice``) they drive nothing yet.
@@ -36,8 +37,12 @@ from ctc.track_layout import Line, load_layout
 if TYPE_CHECKING:
     from ctc.schedule import Schedule
 
-# Placeholder until the CTC computes speeds. Not a decided value.
-STUB_SUGGESTED_SPEED_MPS = 10
+#: How far below the current block's speed limit the suggested speed
+#: is, in m/s (asserted by Landis 2026-10-06; it will be adjusted on the
+#: fly once several trains share the track).
+SUGGESTED_SPEED_MARGIN_MPS = 1
+
+_KMH_PER_MPS = 3.6
 
 _DAY_S = 24 * 60 * 60
 
@@ -89,6 +94,9 @@ class _Layout:
         self._lengths = {(name, b.block_id): b.length_m
                          for name, line in lines.items()
                          for b in line.blocks}
+        self.speed_limits_kmh = {(name, b.block_id): b.speed_limit_kmh
+                                 for name, line in lines.items()
+                                 for b in line.blocks}
 
     def _line(self, line: str, what: str) -> None:
         _require_id(line, f"line of {what}")
@@ -256,17 +264,7 @@ class StubCtcOffice:
     are maintenance-mode only and wait for an occupied block to clear.
     """
 
-    def __init__(
-        self, suggested_speed_mps: int = STUB_SUGGESTED_SPEED_MPS,
-        layout: Mapping[str, Line] | None = None,
-    ) -> None:
-        if (isinstance(suggested_speed_mps, bool)
-                or not isinstance(suggested_speed_mps, int)
-                or suggested_speed_mps < 0):
-            raise InvalidInputError(
-                "suggested_speed_mps must be a whole number of m/s >= 0, "
-                f"got {suggested_speed_mps!r}")
-        self._suggested_speed_mps = suggested_speed_mps
+    def __init__(self, layout: Mapping[str, Line] | None = None) -> None:
         lines = load_layout() if layout is None else layout
         self._layout = _Layout(lines)
         self._lines = tuple(sorted(lines))
@@ -504,12 +502,26 @@ class StubCtcOffice:
                         t.stops[0].block_id)
             for t in runs)
 
+    def _suggested_speed_mps(self, line: str, block_id: str) -> int:
+        """A little under the block's speed limit: the limit in whole
+        m/s (rounded down) less ``SUGGESTED_SPEED_MARGIN_MPS``."""
+        limit_kmh = self._layout.speed_limits_kmh[(line, block_id)]
+        return max(0, int(limit_kmh / _KMH_PER_MPS)
+                   - SUGGESTED_SPEED_MARGIN_MPS)
+
     def _outputs(self) -> CtcOutputs:
+        # The yard is a black box: a train gets speed and authority once
+        # it is reported on the track, from the block it is in then.
+        applied = self._inputs if self._inputs is not None else CtcInputs()
+        positions = {t.train_id: (t.line, t.block_id)
+                     for t in applied.track_controller.trains}
         suggestions = tuple(
             TrainSuggestion(order.train_id, order.line,
-                            self._suggested_speed_mps,
+                            self._suggested_speed_mps(
+                                *positions[order.train_id]),
                             order.destination_block_id)
             for _, order in sorted(self._orders.items())
+            if order.train_id in positions
         )
         return CtcOutputs(
             track_controller=TrackControllerOutputs(

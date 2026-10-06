@@ -33,10 +33,12 @@ from ctc.model import (  # noqa: E402
     UnsafeActionError,
 )
 from ctc.schedule import parse_schedule  # noqa: E402
+from ctc.track_layout import load_layout  # noqa: E402
 from ctc.wire import WireFormatError, inputs_from_wire  # noqa: E402
 from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
 
 DT_S = 0.1
+_GREEN = load_layout()["Green"]
 
 
 def _report(*trains: TrainReport, occupancy=(), failures=()) -> CtcInputs:
@@ -95,6 +97,39 @@ class AuthoritySafetyTest(unittest.TestCase):
         ctc.dispatch("T5", "Green", "65")
         # A train not reported anywhere yet may go to either line.
         ctc.dispatch("T9", "Red", "7")
+
+
+class SuggestedSpeedTest(unittest.TestCase):
+    """Suggested speed stays under the current block's speed limit."""
+
+    def test_a_little_under_the_current_block_limit(self) -> None:
+        ctc = StubCtcOffice()
+        ctc.dispatch("T1", "Green", "65")
+        # Green 117 is limited to 15 km/h (4.2 m/s): suggest 3 m/s.
+        out = ctc.step(DT_S, _report(TrainReport("T1", "Green", "117", 0,
+                                                 0)))
+        self.assertEqual(out.track_controller.suggestions[0]
+                         .suggested_speed_mps, 3)
+
+    def test_never_above_any_block_limit(self) -> None:
+        ctc = StubCtcOffice()
+        ctc.dispatch("T1", "Green", "65")
+        for block in range(1, 151):
+            report = _report(TrainReport("T1", "Green", str(block), 0, 0))
+            out = ctc.step(DT_S, report)
+            (suggestion,) = out.track_controller.suggestions
+            limit_mps = [b.speed_limit_kmh for b in
+                         _GREEN.blocks if b.block_id == str(block)][0] / 3.6
+            with self.subTest(block=block):
+                self.assertLess(suggestion.suggested_speed_mps, limit_mps)
+
+    def test_no_suggestion_before_the_train_is_on_the_track(self) -> None:
+        ctc = StubCtcOffice()
+        ctc.dispatch("T9", "Green", "65")
+        self.assertEqual(ctc.step(DT_S, CtcInputs())
+                         .track_controller.suggestions, ())
+        self.assertEqual([o.train_id for o in ctc.snapshot().orders],
+                         ["T9"])
 
 
 class SwitchSafetyTest(unittest.TestCase):

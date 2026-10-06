@@ -251,8 +251,11 @@ the context-property pattern shared with the Train Model UI.
 - `ctc/model.py` is a stub implementation with no routing logic yet. It
   checks every reference and value against the track layout files and
   the boundary types, enforces the safety rules above, accepts switch
-  commands and block closures only in maintenance mode, and suggests a
-  placeholder speed with the destination block as authority.
+  commands and block closures only in maintenance mode, and gives each
+  dispatched train on the track its destination block as authority and
+  a suggested speed 1 m/s under its current block's speed limit (whole
+  m/s, rounded down). A train not yet on the track (the yard is a black
+  box) gets neither until it is reported.
 - `ctc/actions.py` runs dispatcher actions sent by name over a link,
   with strict argument types, and applies a test UI Send all or nothing
   (tried on a copy of the module first).

@@ -126,7 +126,8 @@ class TrainSuggestion:
 
     train_id: str
     line: str
-    # Whole m/s: a target for safe spacing, not the train's own speed.
+    # Whole m/s: a target for safe spacing, not the train's own speed;
+    # never above the speed limit of the block the train is in.
     suggested_speed_mps: int
     # Block on ``line`` the train may travel up to.
     authority_block_id: str

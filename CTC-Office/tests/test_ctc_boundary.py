@@ -31,7 +31,7 @@ from ctc.interface import (  # noqa: E402
 )
 from ctc.link import STANDALONE_DT_S as DT_S, LocalLink  # noqa: E402
 from ctc.model import (  # noqa: E402
-    STUB_SUGGESTED_SPEED_MPS,
+    SUGGESTED_SPEED_MARGIN_MPS,
     InvalidInputError,
     InvalidTimeStepError,
     MaintenanceModeRequiredError,
@@ -42,6 +42,7 @@ from ctc_ui.display import (  # noqa: E402
     format_time_of_day,
     parse_time_of_day,
 )
+from ctc.track_layout import load_layout  # noqa: E402
 from ctc_ui.test_harness import (  # noqa: E402
     M_TO_FT,
     MPS_TO_MPH,
@@ -57,6 +58,17 @@ def _green(tickets: int) -> TrackModelInputs:
 def _sold(snap: CtcSnapshot, line: str = "Green") -> int:
     """Tickets sold so far on one line."""
     return {t.line: t.tickets for t in snap.tickets_sold}[line]
+
+
+_LAYOUT = load_layout()
+
+
+def _suggested(line: str, block_id: str) -> int:
+    """The suggested speed in a block: its limit in whole m/s, less the
+    margin."""
+    (limit,) = [b.speed_limit_kmh for b in _LAYOUT[line].blocks
+                if b.block_id == block_id]
+    return int(limit / 3.6) - SUGGESTED_SPEED_MARGIN_MPS
 
 
 def _values(**overrides: object) -> dict[str, object]:
@@ -77,18 +89,21 @@ class StubModuleTest(unittest.TestCase):
     def test_dispatch_becomes_suggestion_and_authority(self) -> None:
         ctc = StubCtcOffice()
         ctc.dispatch("T1", "Green", "65", arrival_s=8 * 3600)
+        # Not on the track yet (the yard is a black box): no suggestion.
         out = ctc.step(DT_S, CtcInputs())
+        self.assertEqual(out.track_controller.suggestions, ())
+        out = ctc.step(DT_S, CtcInputs(
+            track_controller=TrackControllerInputs(
+                trains=(TrainReport("T1", "Green", "62", 0.0, 0.0),))))
         (suggestion,) = out.track_controller.suggestions
         self.assertEqual(
             (suggestion.train_id, suggestion.line,
              suggestion.authority_block_id), ("T1", "Green", "65"))
+        # A little under Green 62's limit: whole m/s, less the margin.
         self.assertEqual(suggestion.suggested_speed_mps,
-                         STUB_SUGGESTED_SPEED_MPS)
+                         _suggested("Green", "62"))
         # A whole number of m/s, sent to the Track Controller as an int.
         self.assertIs(type(suggestion.suggested_speed_mps), int)
-        for bad in (10.5, -1, True):
-            with self.subTest(bad=bad), self.assertRaises(InvalidInputError):
-                StubCtcOffice(suggested_speed_mps=bad)  # type: ignore
         self.assertEqual(ctc.snapshot().orders,
                          (DispatchOrder("T1", "Green", "65", 28800.0),))
 
@@ -384,6 +399,9 @@ class HarnessSendTest(unittest.TestCase):
 
     def test_send_applies_dispatcher_and_reads_outputs(self) -> None:
         harness = CtcTestHarness(LocalLink())
+        # Both trains on the track, so they get speed and authority.
+        _add(harness, "train_reports", train="T1", block="62")
+        _add(harness, "train_reports", train="T2", line="Red", block="40")
         _add(harness, "dispatch_orders", block="65")
         _add(harness, "dispatch_orders", line="Red", block="7",
              arrival="09:15")
@@ -401,7 +419,7 @@ class HarnessSendTest(unittest.TestCase):
         self.assertEqual(rows["authority[T1]"], "Green:65")
         self.assertEqual(rows["authority[T2]"], "Red:7")
         self.assertAlmostEqual(rows["suggested_speed[T1]"],
-                               round(STUB_SUGGESTED_SPEED_MPS
+                               round(_suggested("Green", "62")
                                      * MPS_TO_MPH, 1))
         self.assertEqual(rows["closed_blocks"], "Green:5")
         self.assertEqual(rows["switch_commands"], "Green:12=reverse")

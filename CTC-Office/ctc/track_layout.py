@@ -31,6 +31,7 @@ class Block:
     block_id: str
     section: str
     length_m: float
+    speed_limit_kmh: float = 0.0
     station: str | None = None
     switch: str | None = None
     railway_crossing: bool = False
@@ -89,6 +90,7 @@ def _block(line: str, raw: dict[str, object]) -> Block:
         block_id=str(raw["block_number"]),
         section=str(raw["section"]),
         length_m=float(raw["length_m"]),  # type: ignore[arg-type]
+        speed_limit_kmh=float(raw["speed_limit_kmh"]),  # type: ignore
         # A few stations are listed with no name; keep them as stations.
         station=(str(station) if station else
                  ("" if "station" in infrastructure else None)),

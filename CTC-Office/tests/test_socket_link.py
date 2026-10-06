@@ -113,7 +113,10 @@ class SocketLinkTest(unittest.TestCase):
         self.link.dispatch("T1", "Green", "65", 30600.0)
         self.link.set_maintenance_mode(True)
         self.link.set_block_closed("Red", "2", True)
-        out = self.link.step(0.1, CtcInputs(track_model=_green(5)))
+        out = self.link.step(0.1, CtcInputs(
+            track_controller=TrackControllerInputs(
+                trains=(TrainReport("T1", "Green", "62", 0.0, 0.0),)),
+            track_model=_green(5)))
         (suggestion,) = out.track_controller.suggestions
         self.assertEqual(suggestion.authority_block_id, "65")
         # Still an int after the JSON round trip.
