@@ -1,4 +1,9 @@
 // Labeled native select, style guide 6.2. Emits the value, not display text.
+//
+// Options are never cut short: the list widens to its longest option
+// (never narrower than the field, and kept inside the window), and a
+// picked value too long for the field shows in full in a tooltip on
+// hover.
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Controls.impl
@@ -46,11 +51,48 @@ ColumnLayout {
         // disabled, on top of this field's own 42 %. Draw both from tokens so
         // disabled is dimmed exactly once, like every other control.
         contentItem: Text {
+            id: shown
             text: control.displayText
             color: theme.text_primary
             font: control.font
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
+        }
+
+        // Measures options, so the list can fit the longest.
+        FontMetrics {
+            id: optionMetrics
+            font: control.font
+        }
+
+        // The longest option's text width, in pixels.
+        readonly property real widestOption: {
+            let widest = 0;
+            for (let i = 0; i < control.count; ++i)
+                widest = Math.max(widest,
+                                  optionMetrics.advanceWidth(control.textAt(i)));
+            return widest;
+        }
+
+        // The picked value in full, when the field cuts it short.
+        ToolTip {
+            id: fullText
+            visible: control.hovered && shown.truncated && !control.popup.visible
+            delay: 400
+            text: control.displayText
+            padding: theme.space_2
+
+            contentItem: Text {
+                text: fullText.text
+                color: theme.text_primary
+                font: control.font
+            }
+
+            background: Rectangle {
+                color: theme.bg_surface
+                radius: theme.radius_md
+                border.color: theme.border_strong
+            }
         }
 
         indicator: ColorImage {
@@ -109,7 +151,13 @@ ColumnLayout {
 
         popup: Popup {
             y: control.height + theme.space_1
-            width: control.width
+            // Wide enough for the longest option (its padding, the
+            // popup's, and room for the scroll indicator), never narrower
+            // than the field; the side margins keep it inside the window.
+            width: Math.max(control.width, control.widestOption
+                + 2 * theme.space_3 + 2 * padding + theme.space_2)
+            leftMargin: theme.space_2
+            rightMargin: theme.space_2
             height: Math.min(contentItem.implicitHeight + 2 * padding,
                 control.Window.height - topMargin - bottomMargin)
             topMargin: theme.space_2
