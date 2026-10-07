@@ -13,17 +13,28 @@ Panel {
 
     title: qsTr("Next signal")
 
+    // Signal pickup failure: the track signal cannot be read, so the
+    // aspect is unknown and the controller stops the train.
+    Callout {
+        Layout.fillWidth: true
+        visible: root.s.fault_pickup
+        variant: "warning"
+        heading: qsTr("Signal pickup failure")
+        body: qsTr("Speed and authority cannot be read. The train is "
+                   + "being stopped.")
+    }
+
     SignalHead {
         Layout.alignment: Qt.AlignHCenter
         Layout.fillHeight: true
         Layout.preferredWidth: 92
-        aspectIndex: root.s.signal_index
+        aspectIndex: root.s.fault_pickup ? -1 : root.s.signal_index
     }
 
     Text {
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
-        text: root.s.next_signal
+        text: root.s.fault_pickup ? qsTr("UNKNOWN") : root.s.next_signal
         color: theme.text_primary
         font.family: theme.mono_family
         font.pixelSize: theme.size_h2
@@ -34,6 +45,6 @@ Panel {
         Layout.fillWidth: true
         Layout.preferredHeight: 34
         horizontalAlignment: Text.AlignHCenter
-        text: root.s.signal_text
+        text: root.s.fault_pickup ? "" : root.s.signal_text
     }
 }

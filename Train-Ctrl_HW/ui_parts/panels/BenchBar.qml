@@ -18,6 +18,10 @@ Rectangle {
     property int spawnNumber: 1
     property string spawnLine: "GREEN LINE"
     property string spawnTarget: "A"
+    // Removing a train is a second press: the first only arms it.
+    property bool confirmRemove: false
+    readonly property string selectedTrain: root.s.train_id
+    onSelectedTrainChanged: confirmRemove = false
 
     color: theme.bg_raised
     implicitHeight: content.implicitHeight + 2 * theme.space_2
@@ -96,10 +100,41 @@ Rectangle {
                                              root.spawnTarget)
         }
 
+        AppButton {
+            Layout.alignment: Qt.AlignBottom
+            visible: !root.confirmRemove
+            enabled: root.s.has_train
+            variant: "ghost"
+            text: qsTr("Remove train")
+            onClicked: root.confirmRemove = true
+        }
+
+        AppButton {
+            Layout.alignment: Qt.AlignBottom
+            visible: root.confirmRemove
+            variant: "danger"
+            text: qsTr("Remove %1").arg(root.s.train_id)
+            onClicked: {
+                root.confirmRemove = false;
+                controller.remove_train(root.s.train_id);
+            }
+        }
+
+        AppButton {
+            Layout.alignment: Qt.AlignBottom
+            visible: root.confirmRemove
+            variant: "ghost"
+            text: qsTr("Cancel")
+            onClicked: root.confirmRemove = false
+        }
+
         HelperText {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: theme.space_1
+            // One line, elided: a wrapped note would grow the bar and
+            // push the bench's last rows off the window.
+            wrapMode: Text.NoWrap
             elide: Text.ElideRight
             text: root.s.spawn_note
         }

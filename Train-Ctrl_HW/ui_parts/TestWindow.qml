@@ -9,6 +9,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../ui"
+import "components"
 import "views"
 
 ScaledWindow {
@@ -22,13 +23,20 @@ ScaledWindow {
         anchors.fill: parent
         spacing: 0
 
-        ModuleHeader {
+        // The E-brake badge is the emergency brake and nothing else;
+        // failures get their own pills, as on the console.
+        ConsoleHeader {
             Layout.fillWidth: true
             moduleName: qsTr("Train Controller test bench")
-            instance: window.s.train_id
-            mode: window.s.mode_label
+            instance: window.s.has_train ? window.s.train_id : ""
+            mode: window.s.has_train ? window.s.mode_label : ""
             clock: window.s.clock
-            faulted: window.s.emergency_brake || window.s.faulted
+            faulted: window.s.emergency_brake
+            alerts: [
+                window.s.fault_engine ? qsTr("Engine fault") : "",
+                window.s.fault_pickup ? qsTr("Signal pickup fault") : "",
+                window.s.fault_brake ? qsTr("Brake fault") : ""
+            ].filter(function (label) { return label !== ""; })
         }
 
         TestView {

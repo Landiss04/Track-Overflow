@@ -13,13 +13,29 @@ Panel {
 
     title: qsTr("Stop the train")
     headerItems: [
+        // What the brakes are actually doing, as the Train Model
+        // reports it (Brake State), not what was asked of them.
         StatusBadge {
-            label: root.s.emergency_brake ? qsTr("Emergency")
-                : root.s.service_request ? qsTr("Braking") : qsTr("Running")
-            variant: root.s.emergency_brake ? "fault"
-                : root.s.service_request ? "warning" : "ok"
+            label: root.s.fault_brake ? qsTr("Brakes failed")
+                : root.s.fb_emergency_brake ? qsTr("Emergency")
+                : root.s.fb_service_brake ? qsTr("Braking")
+                : qsTr("Running")
+            variant: root.s.fault_brake || root.s.fb_emergency_brake
+                ? "fault"
+                : root.s.fb_service_brake ? "warning" : "ok"
         }
     ]
+
+    // Brake failure: neither brake answers, so cutting power is all
+    // the controller can do and the train coasts.
+    Callout {
+        Layout.fillWidth: true
+        visible: root.s.fault_brake
+        variant: "warning"
+        heading: qsTr("Brake failure")
+        body: qsTr("Brakes unavailable. Power is cut and the train "
+                   + "coasts.")
+    }
 
     // Live for any signed-in operator, in either mode. It engages the
     // moment it is pressed; releasing is a second press, and the core

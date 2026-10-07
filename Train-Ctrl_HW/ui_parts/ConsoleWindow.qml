@@ -41,8 +41,8 @@ ScaledWindow {
             // up only while the failure is up, like the e-brake's.
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
-                window.s.fault_brake ? qsTr("Brake fault") : "",
-                window.s.fault_pickup ? qsTr("Signal pickup fault") : ""
+                window.s.fault_pickup ? qsTr("Signal pickup fault") : "",
+                window.s.fault_brake ? qsTr("Brake fault") : ""
             ].filter(function (label) { return label !== ""; })
         }
 

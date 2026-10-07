@@ -110,9 +110,9 @@ Panel {
             valueWidth: 150
             inlineUnit: true
             valueSize: theme.size_small
-            name: "cabin_lights_command"
+            name: "interior_lights_command"
             kind: "bool"
-            value: root.s.lights
+            value: root.s.interior_lights
         }
         SignalEditRow {
             Layout.fillWidth: true
@@ -121,9 +121,9 @@ Panel {
             valueWidth: 150
             inlineUnit: true
             valueSize: theme.size_small
-            name: "headlights_command"
+            name: "exterior_lights_command"
             kind: "bool"
-            value: root.s.headlights
+            value: root.s.exterior_lights
         }
         SignalEditRow {
             Layout.fillWidth: true

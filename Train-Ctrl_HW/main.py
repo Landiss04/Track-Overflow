@@ -176,6 +176,18 @@ ASPECT_TEXT = {
     "SUPER GREEN": "All clear ahead.",
 }
 
+#: Failure Status, in the bool[3] order truth signals/failure-status.md
+#: gives: engine, signal pickup, brake.
+FAILURES = ("engine", "signal_pickup", "brake")
+FAILURE_TEXT = {
+    "engine": "engine failure",
+    "signal_pickup": "signal pickup failure",
+    "brake": "brake failure",
+}
+
+#: Beacon platform sides (truth signals/beacon.md).
+BEACON_SIDES = ("L", "R")
+
 #: Lines a train can be spawned on, and the id prefix each one uses.
 LINES = {"GREEN LINE": "T", "RED LINE": "R"}
 
@@ -294,19 +306,27 @@ class State:
     service_request: bool = False
     emergency_brake: bool = False
 
-    # Failure status from the Train Model, one flag per subsystem.
-    failures: dict = field(default_factory=lambda: {
-        "engine": False, "brake": False, "signal_pickup": False})
+    # Failure Status from the Train Model, one flag per subsystem, in
+    # the FAILURES order.
+    failures: dict = field(
+        default_factory=lambda: {name: False for name in FAILURES})
 
     # State reported back by the Train Model, as opposed to what this
-    # controller commanded. With no Train Model attached the toy plant
-    # echoes the commands into these.
+    # controller commanded (truth door-state, light-state,
+    # brake-state). With no Train Model attached the toy plant stands
+    # in for it, and the bench can publish them too.
     fb_doors_left: bool = False
     fb_doors_right: bool = False
-    fb_lights: bool = False
-    fb_headlights: bool = False
-    beacon: str = ""
-    # What the Announcement signal carries: the station text while an
+    fb_interior_lights: bool = False
+    fb_exterior_lights: bool = False
+    fb_emergency_brake: bool = False
+    fb_service_brake: bool = False
+
+    # Beacon: three fields, near a station only (truth beacon.md).
+    beacon_station: str = ""
+    beacon_side: str = "L"
+    beacon_underground: bool = False
+    # What the Announcement signal carries: the station name while an
     # announcement plays, empty otherwise.
     announcement: str = ""
 
@@ -314,8 +334,8 @@ class State:
     target_temp_c: float = DEFAULT_TARGET_TEMP_C
     doors_left: bool = False
     doors_right: bool = False
-    lights: bool = True
-    headlights: bool = True
+    interior_lights: bool = True
+    exterior_lights: bool = True
 
     next_signal: str = "YELLOW"
 
@@ -356,6 +376,28 @@ class ControllerCore:
         self.integral = 0.0
         # Inert until an engineer commissions the gains.
         self.armed = False
+        # The door and light commands the plant last acted on, so it
+        # answers a command once, on its edge, and leaves a state the
+        # bench published alone in between.
+        self._acted_doors = (False, False)
+        self._acted_lights = (True, True)
+
+    @property
+    def failed(self) -> list[str]:
+        """The reported failures that are active, in FAILURES order."""
+        return [name for name in FAILURES if self.state.failures[name]]
+
+    @property
+    def authority_blocks(self) -> int:
+        """The authority the controller may act on.
+
+        With signal pickup failed the Track Signal cannot be trusted,
+        so it fails safe to none (truth failure-status.md).
+        """
+        s = self.state
+        if s.failures["signal_pickup"]:
+            return 0
+        return s.authority_blocks
 
     def step(self) -> None:
         """Run one control period.
@@ -374,8 +416,12 @@ class ControllerCore:
                 s.target_mps = min(s.commanded_mps, s.speed_limit_mps)
 
             error = s.target_mps - s.actual_mps
+            # A target of zero means stop, so the brake holds to a
+            # stand rather than leaving the train creeping inside the
+            # band with no resistance to bring it down.
+            stopping = s.target_mps <= 0.0 and s.actual_mps > 0.0
             s.service_brake = (
-                error < -SERVICE_BAND_MPS or s.service_request
+                error < -SERVICE_BAND_MPS or s.service_request or stopping
             )
             if s.service_brake:
                 # Traction is cut whenever a brake is applied, and
@@ -401,20 +447,26 @@ class ControllerCore:
         self._plant()
 
     def respond_to_failures(self) -> None:
-        """Apply what a reported failure makes the controller do.
+        """Bring the train to a stand while any failure is reported.
 
-        Nothing yet, by decision: the console shows the fault and the
-        train keeps running. Each subsystem is to get its own
-        response, so each one has its own branch here waiting for it
-        rather than a single rule they would all have to share.
+        REQ-FUNC-037.2: the controller stops the train when a failure
+        is detected. Each failure ends the same way, with no target,
+        no power and the service brake, but for different reasons:
+
+            engine         no traction is left to drive with
+            signal pickup  commanded speed and authority cannot be
+                           trusted, so they fail safe to zero
+            brake          the brakes do not answer; cutting power
+                           is all that is left, and the train coasts
         """
+        if not self.failed:
+            return
         s = self.state
-        if s.failures["engine"]:
-            pass        # TODO: engine failure response
-        if s.failures["brake"]:
-            pass        # TODO: brake failure response
-        if s.failures["signal_pickup"]:
-            pass        # TODO: signal pickup failure response
+        s.target_mps = 0.0
+        s.power_w = 0.0
+        self.integral = 0.0
+        if s.actual_mps > 0.0:
+            s.service_brake = True
 
     def enforce_safety(self) -> None:
         """Override the PI law with the safety rules.
@@ -427,7 +479,7 @@ class ControllerCore:
         # No authority is not an emergency. The train may not move,
         # and it comes to a stand on the service brake the way a
         # driver would stop it, in either mode.
-        if s.authority_blocks <= 0:
+        if self.authority_blocks <= 0:
             s.target_mps = 0.0
             s.power_w = 0.0
             self.integral = 0.0
@@ -452,7 +504,7 @@ class ControllerCore:
         self.enforce_safety()
 
     def release_emergency(self) -> bool:
-        """Release the latched brake, but only at a stand.
+        """Release the latched brake, at a stand with no failure.
 
         Asking a released brake to release is not a refusal: it is
         already where the caller wants it.
@@ -460,15 +512,15 @@ class ControllerCore:
         s = self.state
         if not s.emergency_brake:
             return True
-        if abs(s.actual_mps) < STANDSTILL_MPS:
-            s.emergency_brake = False
-            return True
-        return False
+        if self.failed or abs(s.actual_mps) >= STANDSTILL_MPS:
+            return False
+        s.emergency_brake = False
+        return True
 
     def set_target_mps(self, mps: float) -> None:
         """Set the driver's target in m/s, capped at the limit."""
         s = self.state
-        if s.manual and s.authority_blocks > 0:
+        if s.manual and self.authority_blocks > 0 and not self.failed:
             s.target_mps = max(0.0, min(mps, s.speed_limit_mps))
 
     def commands(self) -> TrainModelCommands:
@@ -479,13 +531,14 @@ class ControllerCore:
             service_brake=s.service_brake,
             emergency_brake=s.emergency_brake,
             door_command=(s.doors_left, s.doors_right),
-            light_command=(s.lights, s.headlights),
+            light_command=(s.interior_lights, s.exterior_lights),
             temperature_setpoint_c=s.target_temp_c,
             announcement=s.announcement,
         )
 
     def _plant(self) -> None:
-        # Toy physics until the Train Model is wired in:
+        # Toy physics standing in for the Train Model until it is
+        # wired in:
         #
         #     F = P / v     a = F / M     v = v + a dt
         #
@@ -493,26 +546,49 @@ class ControllerCore:
         # nothing else. A train with no power applied coasts forever,
         # so the only ways down are the two brakes, and the speed law
         # holds its target from below rather than settling onto it
-        # from both sides.
-        #
-        # The door, brake and light states the Train Model reports
-        # are not echoed from the commands here: with no Train Model
-        # attached they are whatever the bench says they are, which
-        # is the point of being able to disagree with the command.
+        # from both sides. The failures act here the way truth
+        # failure-status.md says the Train Model applies them.
         s = self.state
+        brakes_work = not s.failures["brake"]
+        power = 0.0 if s.failures["engine"] else s.power_w
         v = s.actual_mps
-        force = min(MAX_FORCE_N, s.power_w / max(v, V_FLOOR_MPS))
+        force = min(MAX_FORCE_N, power / max(abs(v), V_FLOOR_MPS))
         a = force / MASS_KG
-        if s.emergency_brake:
-            a = -EBRAKE_DECEL_MPS2
-        elif s.service_brake:
-            a = -SERVICE_DECEL_MPS2
-        if v <= 0.0 and a < 0.0:
-            a = 0.0
+        decel = 0.0
+        if brakes_work and s.emergency_brake:
+            decel = EBRAKE_DECEL_MPS2
+        elif brakes_work and s.service_brake:
+            decel = SERVICE_DECEL_MPS2
+        if decel:
+            # A brake opposes the motion and never reverses it.
+            a = -math.copysign(decel, v) if v else 0.0
+        new_v = v + a * self.dt
+        if decel and v * new_v < 0.0:
+            new_v = 0.0
         s.accel_mps2 = a
-        s.actual_mps = max(0.0, v + a * self.dt)
-        if s.actual_mps < SETTLE_MPS and s.target_mps < SETTLE_MPS:
+        s.actual_mps = new_v
+        if abs(s.actual_mps) < SETTLE_MPS and s.target_mps < SETTLE_MPS:
             s.actual_mps = 0.0          # settle cleanly at a stand
+
+        # Brake State reports what is actually engaged, so a failed
+        # brake reads false whatever was commanded (truth
+        # brake-state.md).
+        s.fb_emergency_brake = s.emergency_brake and brakes_work
+        s.fb_service_brake = s.service_brake and brakes_work
+
+        # Door and light commands are answered on their edge. A door
+        # only opens at a stand (the door interlock, truth
+        # door-command.md); a command to open while moving is ignored.
+        doors = (s.doors_left, s.doors_right)
+        if doors != self._acted_doors:
+            at_stand = abs(s.actual_mps) < STANDSTILL_MPS
+            s.fb_doors_left = s.doors_left and at_stand
+            s.fb_doors_right = s.doors_right and at_stand
+            self._acted_doors = doors
+        lights = (s.interior_lights, s.exterior_lights)
+        if lights != self._acted_lights:
+            s.fb_interior_lights, s.fb_exterior_lights = lights
+            self._acted_lights = lights
 
         drift = s.target_temp_c - s.cabin_temp_c
         s.cabin_temp_c += max(
@@ -595,6 +671,29 @@ class ConsoleBackend(QObject):
         self.selected = train_id
         self.spawn_note = f"{train_id} spawned on the {line.lower()}."
         return train_id
+
+    def drop_train(self, train_id: str) -> bool:
+        """Take a train out of the simulation.
+
+        Everything kept per train goes with it. If it was the
+        selected one, selection moves to the next train in the
+        roster, or to none. Returns whether there was such a train.
+        """
+        if train_id not in self.cores:
+            return False
+        index = self.order.index(train_id)
+        del self.cores[train_id]
+        self.order.remove(train_id)
+        self.notes.pop(train_id, None)
+        self.announcing.discard(train_id)
+        self._last_commands.pop(train_id, None)
+        if self.selected == train_id:
+            remaining = len(self.order)
+            self.selected = (
+                self.order[min(index, remaining - 1)] if remaining else ""
+            )
+        self.spawn_note = f"{train_id} removed."
+        return True
 
     def _step_all(self) -> None:
         for train_id, core in self.cores.items():
@@ -706,9 +805,13 @@ class ConsoleBackend(QObject):
             "fault_pickup": s.failures["signal_pickup"],
             "fb_doors_left": s.fb_doors_left,
             "fb_doors_right": s.fb_doors_right,
-            "fb_lights": s.fb_lights,
-            "fb_headlights": s.fb_headlights,
-            "beacon": s.beacon,
+            "fb_interior_lights": s.fb_interior_lights,
+            "fb_exterior_lights": s.fb_exterior_lights,
+            "fb_emergency_brake": s.fb_emergency_brake,
+            "fb_service_brake": s.fb_service_brake,
+            "beacon_station": s.beacon_station,
+            "beacon_side": s.beacon_side,
+            "beacon_underground": s.beacon_underground,
             "announcement": s.announcement,
 
             # Identifiers and counts, so they are shown as they are.
@@ -719,8 +822,8 @@ class ConsoleBackend(QObject):
             "target_temp_f": c_to_f(s.target_temp_c),
             "doors_left": s.doors_left,
             "doors_right": s.doors_right,
-            "lights": s.lights,
-            "headlights": s.headlights,
+            "interior_lights": s.interior_lights,
+            "exterior_lights": s.exterior_lights,
 
             "announcing": self.selected in self.announcing,
             "announce_label": self._announce_label(),
@@ -733,7 +836,21 @@ class ConsoleBackend(QObject):
             "ki": s.ki,
         }
 
+    def _failure_note(self) -> str:
+        failed = self.core.failed
+        if not failed:
+            return ""
+        names = ", ".join(FAILURE_TEXT[name] for name in failed)
+        # The panel callouts say what each failure is doing to the
+        # train; this only says what is locked and until when.
+        return (f"{names[0].upper()}{names[1:]}. Driving and brake "
+                "release resume once it clears.")
+
     def _dial_hint(self) -> str:
+        # While a failure is up, the hint says why the train is
+        # stopping and what has to happen before it can be driven.
+        if self.core.failed:
+            return self._failure_note()
         if not self.core.armed:
             return "Waiting for the engineer to set the control gains."
         if self.core.state.manual:
@@ -767,8 +884,15 @@ class ConsoleBackend(QObject):
 
     @Slot(bool)
     def set_manual(self, manual: bool) -> None:
-        """Switch the selected train between Manual and Automatic."""
+        """Switch the selected train between Manual and Automatic.
+
+        Refused while a failure is up: the train is being stopped,
+        and nothing may hand it back a speed until the failure clears.
+        """
         if not self.has_train or not self.signed_in:
+            return
+        if self.core.failed:
+            self._publish()
             return
         self.core.state.manual = manual
         self._publish()
@@ -789,6 +913,12 @@ class ConsoleBackend(QObject):
         plant from the next tick.
         """
         self.add_train(number, line, target)
+        self._publish()
+
+    @Slot(str)
+    def remove_train(self, train_id: str) -> None:
+        """Take a train out of the simulation, from the bench."""
+        self.drop_train(train_id)
         self._publish()
 
     @Slot(int)
@@ -820,7 +950,7 @@ class ConsoleBackend(QObject):
 
         Engagement is immediate and unconfirmed, the one exception the
         style guide grants (section 7). Release is refused unless the
-        train is stopped.
+        train is stopped and no failure is reported.
         """
         if not self.has_train or not self.signed_in:
             return
@@ -833,6 +963,9 @@ class ConsoleBackend(QObject):
             )
         elif self.core.release_emergency():
             self.brake_note = ""
+        elif self.core.failed:
+            names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
+            self.brake_note = f"Cannot release: {names} is still active."
         else:
             self.brake_note = "Cannot release: the train is still moving."
         self._publish()
@@ -857,33 +990,33 @@ class ConsoleBackend(QObject):
 
     @Slot(str, bool)
     def set_door(self, side: str, open_: bool) -> None:
-        """Command the left or right doors open or shut."""
+        """Command the left or right doors open or shut.
+
+        Only the command changes here. Whether the door actually
+        opens is the Train Model's to report (truth door-state.md).
+        """
         if not self.can_drive:
             return
         if side == "left":
             self.core.state.doors_left = open_
-            self.core.state.fb_doors_left = open_
         else:
             self.core.state.doors_right = open_
-            self.core.state.fb_doors_right = open_
         self._publish()
 
     @Slot(bool)
-    def set_lights(self, on: bool) -> None:
-        """Command the cabin lights on or off."""
+    def set_interior_lights(self, on: bool) -> None:
+        """Command the interior lights on or off."""
         if not self.can_drive:
             return
-        self.core.state.lights = on
-        self.core.state.fb_lights = on
+        self.core.state.interior_lights = on
         self._publish()
 
     @Slot(bool)
-    def set_headlights(self, on: bool) -> None:
-        """Command the headlights on or off."""
+    def set_exterior_lights(self, on: bool) -> None:
+        """Command the exterior lights on or off."""
         if not self.can_drive:
             return
-        self.core.state.headlights = on
-        self.core.state.fb_headlights = on
+        self.core.state.exterior_lights = on
         self._publish()
 
     @Slot()
@@ -893,7 +1026,7 @@ class ConsoleBackend(QObject):
             return
         train = self.selected
         self.announcing.add(train)
-        self.core.state.announcement = self.core.state.beacon
+        self.core.state.announcement = self.core.state.beacon_station
         QTimer.singleShot(ANNOUNCE_LOCKOUT_MS,
                           lambda: self._announce_done(train))
         self._publish()
@@ -906,41 +1039,110 @@ class ConsoleBackend(QObject):
 
     # ------------------------------------------------- Train Model
     # Every signal the Train Model sends arrives through apply_inputs,
-    # as one coherent set rather than a slot per field. The bench
-    # sends them in a batch, and so will the module.
+    # in SI and in the shapes truth signals/ gives, as one coherent
+    # set rather than a slot per field. The bench reaches it through
+    # apply_bench_inputs, which converts from the operator's units.
 
     @Slot("QVariantMap")
     def apply_inputs(self, values: dict) -> None:
-        """Publish a whole set of staged inputs in one go.
+        """Take a whole set of Train Model signals in one go, in SI.
 
-        The Test view collects edits and sends them together, so the
-        controller sees one coherent set of signals rather than a
-        half-typed one. Each key is the signal name on the interface.
-        Raises InvalidInputError for a value that is not a number
-        where one is expected.
+        Keys and shapes follow truth signals/: commanded_speed,
+        speed_limit and actual_speed (m/s, actual signed),
+        cabin_temperature (C), authority_blocks, signal_light_ahead,
+        beacon_station / beacon_side / beacon_underground,
+        failure_status bool[3] (engine, pickup, brake), brake_state
+        bool[2] (emergency, service), door_state bool[2] (left,
+        right) and light_state bool[2] (interior, exterior).
+        Raises InvalidInputError for a number that is not one.
         """
         if not self.has_train:
             return
         s = self.core.state
-        # The bench speaks the units the operator reads, like every
-        # other view, and the conversion happens here with all the
-        # others (truth conventions/units.md). Counts and identifiers
-        # are not measurements, so they arrive as they are.
         if "commanded_speed" in values:
-            mph = _read_number(values, "commanded_speed")
-            s.commanded_mps = max(0.0, mph / MPS_TO_MPH)
+            s.commanded_mps = max(
+                0.0, _read_number(values, "commanded_speed"))
         if "speed_limit" in values:
-            mph = _read_number(values, "speed_limit")
-            s.speed_limit_mps = max(0.0, mph / MPS_TO_MPH)
+            s.speed_limit_mps = max(
+                0.0, _read_number(values, "speed_limit"))
         if "actual_speed" in values:
-            mph = _read_number(values, "actual_speed")
-            s.actual_mps = max(0.0, mph / MPS_TO_MPH)
+            s.actual_mps = _read_number(values, "actual_speed")
         if "cabin_temperature" in values:
-            s.cabin_temp_c = f_to_c(
-                _read_number(values, "cabin_temperature"))
+            s.cabin_temp_c = _read_number(values, "cabin_temperature")
         if "authority_blocks" in values:
             s.authority_blocks = max(
                 0, int(_read_number(values, "authority_blocks")))
+        if "beacon_station" in values:
+            s.beacon_station = str(values["beacon_station"])
+        if values.get("beacon_side") in BEACON_SIDES:
+            s.beacon_side = values["beacon_side"]
+        if "beacon_underground" in values:
+            s.beacon_underground = bool(values["beacon_underground"])
+        if "failure_status" in values:
+            for name, failed in zip(FAILURES, values["failure_status"]):
+                s.failures[name] = bool(failed)
+        if values.get("signal_light_ahead") in ASPECTS:
+            s.next_signal = values["signal_light_ahead"]
+        if "brake_state" in values:
+            # A reported emergency brake that this controller did not
+            # command is a passenger pull: latch it and cut power. A
+            # report of false never releases it; only the driver does
+            # (D011, arbitration/passenger-emergency-brake).
+            emergency, service = (bool(v) for v in values["brake_state"])
+            if emergency and not s.emergency_brake:
+                self.core.engage_emergency()
+            s.fb_emergency_brake, s.fb_service_brake = emergency, service
+        if "door_state" in values:
+            s.fb_doors_left, s.fb_doors_right = (
+                bool(v) for v in values["door_state"])
+        if "light_state" in values:
+            s.fb_interior_lights, s.fb_exterior_lights = (
+                bool(v) for v in values["light_state"])
+        self._publish()
+
+    @Slot("QVariantMap")
+    def apply_bench_inputs(self, values: dict) -> None:
+        """Take the bench's staged rows, convert, and apply them.
+
+        The bench is a view, so it speaks the operator's units (mph,
+        Fahrenheit) and one row per element. This converts once, here
+        on the display side, and hands apply_inputs the SI signals in
+        their truth shapes. Gains ride along because sending the set
+        is what commissions them; they are not a Train Model signal.
+        """
+        if not self.has_train:
+            return
+        s = self.core.state
+        si: dict[str, Any] = {}
+        for key in ("commanded_speed", "speed_limit", "actual_speed"):
+            if key in values:
+                si[key] = _read_number(values, key) / MPS_TO_MPH
+        if "cabin_temperature" in values:
+            si["cabin_temperature"] = f_to_c(
+                _read_number(values, "cabin_temperature"))
+        for key in ("authority_blocks", "signal_light_ahead",
+                    "beacon_station", "beacon_side",
+                    "beacon_underground"):
+            if key in values:
+                si[key] = values[key]
+        groups = (
+            ("failure_status",
+             ("failure_engine", "failure_signal_pickup", "failure_brake"),
+             [s.failures[name] for name in FAILURES]),
+            ("brake_state",
+             ("brake_state_emergency", "brake_state_service"),
+             [s.fb_emergency_brake, s.fb_service_brake]),
+            ("door_state",
+             ("door_state_left", "door_state_right"),
+             [s.fb_doors_left, s.fb_doors_right]),
+            ("light_state",
+             ("light_state_interior", "light_state_exterior"),
+             [s.fb_interior_lights, s.fb_exterior_lights]),
+        )
+        for signal, rows, current in groups:
+            if any(row in values for row in rows):
+                si[signal] = [bool(values.get(row, now))
+                              for row, now in zip(rows, current)]
         # Gains come in with the rest of the set: sending the inputs
         # is what commissions them, so the bench needs no second
         # button for it. The engineer rule still holds, and they can
@@ -949,87 +1151,7 @@ class ConsoleBackend(QObject):
             kp = _read_number(values, "kp") if "kp" in values else s.kp
             ki = _read_number(values, "ki") if "ki" in values else s.ki
             self.commission_gains(kp, ki)
-        if "beacon" in values:
-            s.beacon = str(values["beacon"])
-        for key, subsystem in (("failure_engine", "engine"),
-                               ("failure_brake", "brake"),
-                               ("failure_signal_pickup", "signal_pickup")):
-            if key in values:
-                s.failures[subsystem] = bool(values[key])
-        if "signal_light_ahead" in values:
-            aspect = str(values["signal_light_ahead"])
-            if aspect in ASPECTS:
-                s.next_signal = aspect
-        if "ebrake_state" in values:
-            wanted = bool(values["ebrake_state"])
-            if wanted != s.emergency_brake:
-                if wanted:
-                    self.core.engage_emergency()
-                else:
-                    self.core.release_emergency()
-        for key, attr in (("door_state_left", "fb_doors_left"),
-                          ("door_state_right", "fb_doors_right"),
-                          ("light_state_cabin", "fb_lights"),
-                          ("light_state_headlights", "fb_headlights")):
-            if key in values:
-                setattr(s, attr, bool(values[key]))
-        self._publish()
-
-    @Slot(int)
-    def set_authority_blocks(self, blocks: int) -> None:
-        """Set how many blocks of authority are left, not a length."""
-        if not self.has_train:
-            return
-        self.core.state.authority_blocks = max(0, int(blocks))
-        self._publish()
-
-    @Slot(str)
-    def set_beacon(self, text: str) -> None:
-        """Set the beacon text the Train Model reports."""
-        if not self.has_train:
-            return
-        self.core.state.beacon = text
-        self._publish()
-
-    @Slot(str, bool)
-    def set_failure(self, subsystem: str, failed: bool) -> None:
-        """Set or clear one reported subsystem failure."""
-        if not self.has_train:
-            return
-        if subsystem in self.core.state.failures:
-            self.core.state.failures[subsystem] = failed
-        self._publish()
-
-    @Slot(int)
-    def set_signal_ahead(self, index: int) -> None:
-        """Set the aspect of the signal ahead, by its index."""
-        if not self.has_train:
-            return
-        if 0 <= index < len(ASPECTS):
-            self.core.state.next_signal = ASPECTS[index]
-        self._publish()
-
-    @Slot(str, bool)
-    def set_door_state(self, side: str, open_: bool) -> None:
-        """Set the door state the Train Model reports."""
-        if not self.has_train:
-            return
-        if side == "left":
-            self.core.state.fb_doors_left = open_
-        else:
-            self.core.state.fb_doors_right = open_
-        self._publish()
-
-    @Slot(str, bool)
-    def set_light_state(self, which: str, on: bool) -> None:
-        """Set the light state the Train Model reports."""
-        if not self.has_train:
-            return
-        if which == "headlights":
-            self.core.state.fb_headlights = on
-        else:
-            self.core.state.fb_lights = on
-        self._publish()
+        self.apply_inputs(si)
 
     @Slot(float, float)
     def commission_gains(self, kp: float, ki: float) -> None:

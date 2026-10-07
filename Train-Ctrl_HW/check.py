@@ -108,7 +108,7 @@ def run_check(
     expect(backend.snapshot["train_count"] == 0, "the roster started full")
 
     # Nothing to drive yet, and nothing crashes trying.
-    backend.apply_inputs({"commanded_speed": 27, "authority_blocks": 2})
+    backend.apply_bench_inputs({"commanded_speed": 27, "authority_blocks": 2})
     backend.toggle_emergency_brake()
 
     backend.spawn_train(114, "GREEN LINE", "GREEN K")
@@ -134,10 +134,11 @@ def run_check(
         window.grabWindow().save(str(shots / "02-gains.png"))
     # The bench commissions by sending its inputs, with no separate
     # button for it.
-    backend.apply_inputs({"kp": 400000, "ki": 8000})
+    backend.apply_bench_inputs({"kp": 400000, "ki": 8000})
     expect(backend.core.armed, "commissioning did not arm the controller")
     _settle(app, mod.GAINS_HANDOVER_MS + 400)
-    expect(backend.snapshot["operator"] == "driver", "console not handed over")
+    expect(backend.snapshot["operator"] == "driver",
+           "console not handed over")
     expect(backend.snapshot["gains_locked"],
            "the gains did not lock after commissioning")
     backend.select_operator(1)
@@ -155,16 +156,19 @@ def run_check(
     moving = _until(app, lambda: backend.core.state.actual_mps > 2.0, 30)
     expect(moving, "train never got moving")
     expect(backend.core.state.accel_mps2 > 0.3,
-           "the train is not pulling anything like its rated acceleration")
+           "the train is not pulling anything like its rated "
+           "acceleration")
     if shots:
         window.grabWindow().save(str(shots / "03-driving.png"))
 
     # The emergency brake stops the train and latches until it is
     # stopped.
     backend.toggle_emergency_brake()
-    expect(backend.core.state.power_w == 0.0, "power stayed on under e-brake")
+    expect(backend.core.state.power_w == 0.0,
+           "power stayed on under e-brake")
     expect(not backend.core.state.service_brake,
-           "the emergency brake reported the service brake as applied too")
+           "the emergency brake reported the service brake as applied "
+           "too")
     _settle(app, 200)
     if shots:
         window.grabWindow().save(str(shots / "04-ebrake.png"))
@@ -172,7 +176,8 @@ def run_check(
     expect(backend.core.state.emergency_brake,
            "e-brake released while the train was moving")
     stopped = _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
-    expect(stopped, "the emergency brake never brought the train to a stand")
+    expect(stopped,
+           "the emergency brake never brought the train to a stand")
     expect(not backend.core.state.service_brake,
            "the e-brake reported the service brake engaged as well")
     backend.toggle_emergency_brake()
@@ -186,14 +191,18 @@ def run_check(
     expect(not backend.core.state.emergency_brake,
            "releasing an already released brake engaged it")
 
-    # The Train Model's brake report drives the real brake, and the
-    # train is stopped here, so it releases again cleanly.
-    backend.apply_inputs({"ebrake_state": True})
+    # A reported emergency brake (a passenger pull) latches the
+    # controller's own; a report of false never releases it, only
+    # the driver does (D011).
+    backend.apply_inputs({"brake_state": [True, False]})
     expect(backend.core.state.emergency_brake,
-           "the bench's ebrake_state did not engage the brake")
-    backend.apply_inputs({"ebrake_state": False})
+           "a reported pull did not latch the emergency brake")
+    backend.apply_inputs({"brake_state": [False, False]})
+    expect(backend.core.state.emergency_brake,
+           "a report of false released the emergency brake")
+    backend.toggle_emergency_brake()
     expect(not backend.core.state.emergency_brake,
-           "the bench's ebrake_state did not release the brake")
+           "the driver could not release it at a stand")
     if shots:
         window.grabWindow().save(str(shots / "04-stopped.png"))
 
@@ -202,7 +211,7 @@ def run_check(
     # time earns its keep here, because a train takes three quarters
     # of a minute to reach line speed.
     backend.set_manual(False)
-    backend.apply_inputs({"commanded_speed": 12.0 * mod.MPS_TO_MPH})
+    backend.apply_inputs({"commanded_speed": 12.0})
     backend.set_sim_rate(mod.SIM_RATES.index(10))
     expect(abs(backend.core.dt - 10 / mod.CONTROL_HZ) < 1e-9,
            "the simulation rate did not reach the plant")
@@ -238,39 +247,54 @@ def run_check(
             window.grabWindow().save(str(shots / "05-numbers.png"))
         drawer.setProperty("expanded", False)
 
-    # The bench drives the Train Model interface from its own window,
-    # in one coherent set.
+    # The Train Model interface is SI, in the shapes truth gives.
     _settle(app, 300)
-    # The bench types what the console reads, and the backend keeps
-    # SI: in mph and Fahrenheit, out m/s and Celsius.
-    backend.apply_inputs({"commanded_speed": 42.5})
+    actual = backend.core.state.actual_mps
+    backend.apply_inputs({"commanded_speed": 10.0, "actual_speed": -0.5})
+    expect(backend.core.state.commanded_mps == 10.0,
+           "the Train Model interface did not take m/s")
+    expect(backend.core.state.actual_mps == -0.5,
+           "a negative actual speed (rollback) was not kept signed")
+    backend.apply_inputs({"actual_speed": actual})
+
+    # The bench types what the console reads, and converts once on
+    # the display side: in mph and Fahrenheit, out m/s and Celsius.
+    backend.apply_bench_inputs({"commanded_speed": 42.5})
     expect(abs(backend.core.state.commanded_mps - 42.5 / mod.MPS_TO_MPH)
            < 1e-6, "the bench's mph did not convert to m/s")
     expect(abs(backend.snapshot["commanded_mph"] - 42.5) < 1e-3,
            "commanded speed did not come back as it was typed")
-    backend.apply_inputs({"speed_limit": 60.0})
+    backend.apply_bench_inputs({"speed_limit": 60.0})
     expect(abs(backend.core.state.speed_limit_mps - 60.0 / mod.MPS_TO_MPH)
            < 1e-6, "the bench could not set the speed limit")
-    backend.apply_inputs({"speed_limit": 43.5})
-    backend.apply_inputs({"cabin_temperature": 68})
+    backend.apply_bench_inputs({"speed_limit": 43.5})
+    backend.apply_bench_inputs({"cabin_temperature": 68})
     expect(abs(backend.core.state.cabin_temp_c - 20.0) < 0.01,
            "the bench's Fahrenheit did not convert to Celsius")
     expect(abs(backend.snapshot["cabin_temp_f"] - 68.0) < 0.01,
            "cabin temperature did not come back as it was typed")
 
     # A staged set applies in one call.
-    backend.apply_inputs({"commanded_speed": 31, "beacon": "PLATFORM B",
-                         "signal_light_ahead": "GREEN"})
-    expect(backend.snapshot["beacon"] == "PLATFORM B",
-           "staged inputs did not apply")
+    backend.apply_bench_inputs({
+        "commanded_speed": 31,
+        "beacon_station": "DORMONT",
+        "beacon_side": "R",
+        "beacon_underground": True,
+        "signal_light_ahead": "GREEN",
+    })
+    expect(backend.snapshot["beacon_station"] == "DORMONT"
+           and backend.snapshot["beacon_side"] == "R"
+           and backend.snapshot["beacon_underground"],
+           "the beacon's three fields did not apply")
     expect(backend.snapshot["next_signal"] == "GREEN",
            "staged aspect did not apply")
-    # A moving train carrying ebrake_state false through every other
-    # signal must not acquire an emergency brake on the way.
+    # A moving train carrying a false emergency report through every
+    # other signal must not acquire an emergency brake on the way.
     expect(backend.core.state.actual_mps > 0.0,
            "this check needs a train that is moving")
-    backend.apply_inputs({"door_state_left": True, "light_state_cabin": False,
-                         "ebrake_state": False})
+    backend.apply_bench_inputs({"door_state_left": True,
+                                "light_state_interior": False,
+                                "brake_state_emergency": False})
     expect(not backend.core.state.emergency_brake,
            "sending inputs to a moving train engaged the emergency brake")
     _settle(app, 400)
@@ -278,10 +302,20 @@ def run_check(
            "the plant wrote over a door state the bench published")
     # and the console is looking at the reported state, not the
     # command, so what the bench publishes reaches the driver's tiles
-    expect(backend.snapshot["fb_doors_left"] != backend.snapshot["doors_left"],
+    expect(backend.snapshot["fb_doors_left"]
+           != backend.snapshot["doors_left"],
            "the reported door state is just echoing the command")
-    expect(not backend.snapshot["fb_lights"],
+    expect(not backend.snapshot["fb_interior_lights"],
            "the plant wrote over a light state the bench published")
+
+    # The door interlock: a door commanded open while moving stays
+    # shut (truth door-command.md).
+    backend.apply_bench_inputs({"door_state_left": False})
+    backend.set_door("left", True)
+    _settle(app, 300)
+    expect(not backend.snapshot["fb_doors_left"],
+           "a door opened while the train was moving")
+    backend.set_door("left", False)
 
     # Another train, running its own plant, with its own gains.
     first = backend.selected
@@ -299,7 +333,8 @@ def run_check(
     # A new train is stopped, so this engages and releases cleanly,
     # and the train beside it is not touched either way.
     backend.toggle_emergency_brake()
-    expect(backend.core.state.emergency_brake, "the new train has no e-brake")
+    expect(backend.core.state.emergency_brake,
+           "the new train has no e-brake")
     expect(not backend.cores[first].state.emergency_brake,
            "one train's emergency brake reached another train")
     backend.toggle_emergency_brake()
@@ -309,26 +344,59 @@ def run_check(
     expect(backend.selected == first,
            "could not go back to the first train")
 
-    backend.apply_inputs({"authority_blocks": 3,
-                         "signal_light_ahead": "RED"})
+    backend.apply_bench_inputs({"authority_blocks": 3,
+                                "signal_light_ahead": "RED"})
     expect(backend.core.state.authority_blocks == 3,
            "authority not taken as a block count")
     expect(backend.snapshot["next_signal"] == "RED", "aspect not set")
-    # A reported failure shows and does nothing else, for now: each
-    # subsystem is to get its own response later.
-    moving = backend.core.state.actual_mps
-    backend.apply_inputs({"failure_brake": True})
-    _settle(app, 300)
-    expect(backend.snapshot["fault_brake"], "the failure was not recorded")
-    expect(not backend.core.state.emergency_brake,
-           "a reported failure pulled the emergency brake")
-    expect(backend.core.state.actual_mps > 0 or moving == 0,
-           "a reported failure stopped the train")
-    if shots:
-        bench.grabWindow().save(str(shots / "06-test.png"))
-    backend.apply_inputs({"failure_brake": False})
-    _settle(app, 200)
-    expect(not backend.snapshot["fault_brake"], "the failure would not clear")
+
+    # Each reported failure stops the train (REQ-FUNC-037.2), refuses
+    # driving and brake release while it is up, and lets go once it
+    # clears. A brake failure cannot stop the train: power is cut and
+    # it coasts. Ten times real time keeps the stops short.
+    backend.set_sim_rate(mod.SIM_RATES.index(10))
+    for row, name in (("failure_engine", "engine"),
+                      ("failure_signal_pickup", "signal pickup"),
+                      ("failure_brake", "brake")):
+        backend.set_target_mph(30)
+        moving = _until(
+            app, lambda: backend.core.state.actual_mps > 5.0, 20)
+        expect(moving, f"the train did not move before the {name} test")
+        backend.apply_bench_inputs({row: True})
+        _settle(app, 100)
+        expect(backend.core.state.power_w == 0.0,
+               f"power stayed on after a {name} failure")
+        if name == "brake":
+            speed = backend.core.state.actual_mps
+            _settle(app, 300)
+            expect(speed > 0.0
+                   and abs(backend.core.state.actual_mps - speed) < 0.01,
+                   "a brake failure did not leave the train coasting")
+            expect(not backend.core.state.fb_service_brake,
+                   "a failed brake reported itself engaged")
+            if shots:
+                window.grabWindow().save(str(shots / "06-failure.png"))
+                bench.grabWindow().save(str(shots / "07-test.png"))
+        else:
+            stopped = _until(
+                app, lambda: backend.core.state.actual_mps == 0.0, 20)
+            expect(stopped, f"a {name} failure did not stop the train")
+        backend.toggle_emergency_brake()
+        backend.toggle_emergency_brake()
+        expect(backend.core.state.emergency_brake,
+               f"the emergency brake released during a {name} failure")
+        backend.set_target_mph(30)
+        expect(backend.core.state.target_mps == 0.0,
+               f"the driver set a target during a {name} failure")
+        backend.apply_bench_inputs({row: False})
+        stopped = _until(
+            app, lambda: backend.core.state.actual_mps == 0.0, 20)
+        expect(stopped, f"the train did not stop after the {name} test")
+        backend.toggle_emergency_brake()
+        expect(not backend.core.state.emergency_brake,
+               f"the brake would not release once the {name} failure "
+               "cleared")
+    backend.set_sim_rate(mod.SIM_RATES.index(1))
 
     # Authority is the count the Track Model sends; the controller
     # does not track blocks itself, so moving does not spend it.
@@ -351,22 +419,37 @@ def run_check(
     backend.set_target_mph(30)
     expect(backend.core.state.target_mps == 0.0,
            "the driver could set a target with no authority left")
-    backend.apply_inputs({"authority_blocks": 6, "speed_limit": 40})
+    backend.apply_bench_inputs({"authority_blocks": 6, "speed_limit": 40})
     expect(abs(backend.core.state.speed_limit_mps - 40 / mod.MPS_TO_MPH)
            < 1e-6, "the bench could not set the speed limit")
 
     # The line limit binds the target, and it may be above the car's
     # data-sheet 70 km/h if the line says so.
     backend.set_manual(True)
-    backend.apply_inputs({"speed_limit": 60})
+    backend.apply_bench_inputs({"speed_limit": 60})
     backend.set_target_mph(55)
     expect(abs(backend.snapshot["target_mph"] - 55) < 0.5,
            "the target was capped below the line limit")
     _settle(app, 300)
 
-    # Announcements lock out for their duration.
+    # Removing a train takes everything of it out and moves the
+    # selection on; removing it twice changes nothing.
+    backend.select_train(second)
+    backend.remove_train(second)
+    expect(second not in backend.cores and second not in backend.order,
+           "removing a train left it in the simulation")
+    expect(backend.selected == first,
+           "the selection did not move to the remaining train")
+    backend.remove_train(second)
+    expect(backend.snapshot["train_count"] == 1,
+           "removing a missing train changed the roster")
+
+    # Announcements lock out for their duration, and carry the
+    # beacon's station while they play.
     backend.announce()
     expect(backend.snapshot["announcing"], "announcement did not start")
+    expect(backend.snapshot["announcement"] == "DORMONT",
+           "the announcement did not carry the beacon's station")
     _settle(app, mod.ANNOUNCE_LOCKOUT_MS + 400)
     expect(not backend.snapshot["announcing"], "announcement never cleared")
 
@@ -374,5 +457,6 @@ def run_check(
         print(f"QML warning: {message}", file=sys.stderr)
     for problem in problems:
         print(f"Behaviour: {problem}", file=sys.stderr)
-    print(f"{len(warnings)} QML warnings, {len(problems)} behaviour problems")
+    print(f"{len(warnings)} QML warnings, {len(problems)} behaviour "
+          "problems")
     return 1 if warnings or problems else 0

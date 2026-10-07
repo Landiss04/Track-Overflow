@@ -64,18 +64,21 @@ Panel {
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.fb_lights
-            text: root.s.fb_lights ? qsTr("Lights on") : qsTr("Lights off")
-            onClicked: controller.set_lights(!root.s.fb_lights)
+            on: root.s.fb_interior_lights
+            text: root.s.fb_interior_lights ? qsTr("Interior on")
+                                            : qsTr("Interior off")
+            onClicked: controller.set_interior_lights(
+                !root.s.fb_interior_lights)
         }
 
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.fb_headlights
-            text: root.s.fb_headlights ? qsTr("Headlights on")
-                                    : qsTr("Headlights off")
-            onClicked: controller.set_headlights(!root.s.fb_headlights)
+            on: root.s.fb_exterior_lights
+            text: root.s.fb_exterior_lights ? qsTr("Exterior on")
+                                            : qsTr("Exterior off")
+            onClicked: controller.set_exterior_lights(
+                !root.s.fb_exterior_lights)
         }
     }
 }
