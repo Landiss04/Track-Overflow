@@ -8,10 +8,10 @@ a section holds one or more blocks.
 Block IDs are strings, never integers, per
 ``truth/conventions/identifiers.md``.
 
-Each block may give its direction of travel, traced from the course
-Red & Green Line diagram: ``ascending`` (trains run toward higher block
-numbers through it), ``descending``, or ``both``; a block that gives
-none is ``both``.
+Each block may list its ``next_blocks``: the blocks a train in it may
+move on to, and ``"yard"`` where it may run into the yard. That is the
+direction of travel. A file that lists none (the Red line, for now) is
+run both ways.
 """
 
 from __future__ import annotations
@@ -19,10 +19,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
-Direction = Literal["ascending", "descending", "both"]
-DIRECTIONS: tuple[Direction, ...] = ("ascending", "descending", "both")
+#: How ``next_blocks`` names the yard.
+YARD = "yard"
 
 #: The course-provided layout files, one per line.
 LAYOUT_DIR = Path(__file__).resolve().parents[2] / "TrackModel"
@@ -45,7 +44,11 @@ class Block:
     switch: str | None = None
     railway_crossing: bool = False
     underground: bool = False
-    direction: Direction = "both"
+    # Blocks a train in this block may move on to, in file order; None
+    # when the file does not say (then any neighbor will do).
+    next_blocks: tuple[str, ...] | None = None
+    # Whether a train in this block may run into the yard.
+    to_yard: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,10 +98,12 @@ def _block(line: str, raw: dict[str, object]) -> Block:
     assert isinstance(infrastructure, dict)
     station = infrastructure.get("station")
     switch = infrastructure.get("switch")
-    direction = raw.get("direction", "both")
-    if direction not in DIRECTIONS:
-        raise ValueError(f"{line} block {raw['block_number']}: direction "
-                         f"must be one of {DIRECTIONS}, got {direction!r}")
+    listed = raw.get("next_blocks")
+    if listed is not None and not isinstance(listed, list):
+        raise ValueError(f"{line} block {raw['block_number']}: next_blocks "
+                         f"must be a list, got {listed!r}")
+    nexts = (None if listed is None else
+             tuple(str(n) for n in listed if str(n).lower() != YARD))
     return Block(
         line=line,
         block_id=str(raw["block_number"]),
@@ -111,7 +116,8 @@ def _block(line: str, raw: dict[str, object]) -> Block:
         switch=str(switch) if switch else None,
         railway_crossing=bool(infrastructure.get("railway_crossing")),
         underground=bool(infrastructure.get("underground")),
-        direction=direction,  # type: ignore[arg-type]
+        next_blocks=nexts,
+        to_yard=any(str(n).lower() == YARD for n in listed or ()),
     )
 
 

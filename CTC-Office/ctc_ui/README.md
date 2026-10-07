@@ -269,8 +269,12 @@ the context-property pattern shared with the Train Model UI.
 - `ctc/routing.py` reads how blocks connect from the layout files
   (neighbouring blocks, and each switch's normal and reverse
   connections; the yard is left out) and counts authority along the
-  shortest route a train can run. Direction of travel is not modeled
-  yet.
+  shortest route a train can run: never turning back, and moving on only
+  to the blocks each block's `next_blocks` lists (its direction of
+  travel; a line whose file has none, Red for now, runs both ways).
+  Routes go round unusable blocks and trains that are not moving where a
+  reasonable detour exists; when only reversing would get round, the
+  train waits and the dispatcher gets a reversal alert.
 - `ctc/actions.py` runs dispatcher actions sent by name over a link,
   with strict argument types, and applies a test UI Send all or nothing
   (tried on a copy of the module first).

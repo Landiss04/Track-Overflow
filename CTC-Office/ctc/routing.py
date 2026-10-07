@@ -29,9 +29,10 @@ switch's far block at the same end as the switch's other connection
 - A train leaves a block by the other end from the one it came in by,
   so it never turns back, nor passes from one connection of a switch
   straight into the other (Green 12 -> 13 -> 1).
-- Each block's direction of travel (``ctc.track_layout``) is kept: an
-  ``ascending`` block is run from its low end to its high end, a
-  ``descending`` one the other way, a ``both`` block either way.
+- Each block's direction of travel is kept: a train moves on only to a
+  block its ``next_blocks`` lists (``ctc.track_layout``). A line whose
+  file lists none is run both ways. Every listed next block must be one
+  the layout joins to it.
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ from dataclasses import dataclass
 from typing import Collection, Mapping
 
 from ctc.interface import SwitchPosition
-from ctc.track_layout import Direction, Line
+from ctc.track_layout import Line
 
 _POSITIONS: tuple[SwitchPosition, ...] = ("normal", "reverse")
 _YARD = "yard"
@@ -117,8 +118,11 @@ class TrackGraph:
         self._legs: dict[frozenset[str], SwitchLeg] = {}
         # (block, neighbor) -> the end of ``block`` the neighbor joins.
         self._ends: dict[tuple[str, str], str] = {}
-        self._direction: dict[str, Direction] = {
-            block.block_id: block.direction for block in line.blocks}
+        # block -> the blocks a train in it may move on to; absent when
+        # the file does not say (any neighbor will do).
+        self._next: dict[str, frozenset[str]] = {
+            block.block_id: frozenset(block.next_blocks)
+            for block in line.blocks if block.next_blocks is not None}
 
         switches: list[tuple[str, list[tuple[str, str]]]] = []
         far_ends: set[str] = set()
@@ -153,6 +157,11 @@ class TrackGraph:
                 self._ends[(b, a)] = _LOW
         for switch_id, legs in switches:
             self._place_far_legs(f"{line.name} switch {switch_id}", legs)
+        for block_id, nexts in self._next.items():
+            for after in sorted(nexts - self._neighbors[block_id]):
+                raise ValueError(
+                    f"{line.name} block {block_id} lists next block "
+                    f"{after!r}, which the layout does not join to it")
 
     def _next_in_file(self, a: str, b: str) -> bool:
         return abs(self._order[a] - self._order[b]) == 1
@@ -201,11 +210,11 @@ class TrackGraph:
         return self._ends[(block_id, neighbor)]
 
     def can_run(self, here: str, after: str) -> bool:
-        """Whether the directions of travel let a train run from
-        ``here`` into ``after``."""
-        out, into = self._ends[(here, after)], self._ends[(after, here)]
-        return (_allows(self._direction[here], out, leaving=True)
-                and _allows(self._direction[after], into, leaving=False))
+        """Whether the direction of travel lets a train run from
+        ``here`` into ``after``: ``here`` lists it as a next block, or
+        lists none."""
+        nexts = self._next.get(here)
+        return nexts is None or after in nexts
 
     def turns_back(self, before: str | None, here: str,
                    after: str) -> bool:
@@ -252,15 +261,6 @@ class TrackGraph:
                     return tuple(reversed(path))
                 queue.append(nxt)
         return None
-
-
-def _allows(direction: Direction, end: str, leaving: bool) -> bool:
-    """Whether a block with this direction can be left (or entered) at
-    this end."""
-    if direction == "both":
-        return True
-    exit_end = _HIGH if direction == "ascending" else _LOW
-    return (end == exit_end) == leaving
 
 
 def reversing_route(graph: TrackGraph, start: str, destination: str,

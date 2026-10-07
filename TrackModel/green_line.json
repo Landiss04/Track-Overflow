@@ -10,7 +10,7 @@
       "elevation_m": 0.5,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [13]
     },
     {
       "block_number": 2,
@@ -25,7 +25,7 @@
       },
       "station_side": "Left",
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [1]
     },
     {
       "block_number": 3,
@@ -36,7 +36,7 @@
       "elevation_m": 1.5,
       "cumulative_elevation_m": 3,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [2]
     },
     {
       "block_number": 4,
@@ -47,7 +47,7 @@
       "elevation_m": 2,
       "cumulative_elevation_m": 5,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [3]
     },
     {
       "block_number": 5,
@@ -58,7 +58,7 @@
       "elevation_m": 3,
       "cumulative_elevation_m": 8,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [4]
     },
     {
       "block_number": 6,
@@ -69,7 +69,7 @@
       "elevation_m": 4,
       "cumulative_elevation_m": 12,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [5]
     },
     {
       "block_number": 7,
@@ -80,7 +80,7 @@
       "elevation_m": 5,
       "cumulative_elevation_m": 17,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [6]
     },
     {
       "block_number": 8,
@@ -91,7 +91,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 17,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [7]
     },
     {
       "block_number": 9,
@@ -106,7 +106,7 @@
       },
       "station_side": "Left",
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [8]
     },
     {
       "block_number": 10,
@@ -117,7 +117,7 @@
       "elevation_m": -4.5,
       "cumulative_elevation_m": 7.5,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [9]
     },
     {
       "block_number": 11,
@@ -128,7 +128,7 @@
       "elevation_m": -4,
       "cumulative_elevation_m": 3.5,
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [10]
     },
     {
       "block_number": 12,
@@ -142,7 +142,7 @@
         "switch": "12-13; 1-13"
       },
       "seconds_to_traverse": 8,
-      "direction": "descending"
+      "next_blocks": [11]
     },
     {
       "block_number": 13,
@@ -153,7 +153,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 7.7143,
-      "direction": "both"
+      "next_blocks": [12, 14]
     },
     {
       "block_number": 14,
@@ -164,7 +164,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 7.7143,
-      "direction": "both"
+      "next_blocks": [13, 15]
     },
     {
       "block_number": 15,
@@ -175,7 +175,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 7.7143,
-      "direction": "both"
+      "next_blocks": [14, 16]
     },
     {
       "block_number": 16,
@@ -190,7 +190,7 @@
       },
       "station_side": "Left/Right",
       "seconds_to_traverse": 7.7143,
-      "direction": "both"
+      "next_blocks": [15, 17]
     },
     {
       "block_number": 17,
@@ -201,7 +201,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "both"
+      "next_blocks": [16, 18]
     },
     {
       "block_number": 18,
@@ -212,7 +212,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "both"
+      "next_blocks": [17, 19]
     },
     {
       "block_number": 19,
@@ -226,7 +226,7 @@
         "railway_crossing": true
       },
       "seconds_to_traverse": 9,
-      "direction": "both"
+      "next_blocks": [18, 20]
     },
     {
       "block_number": 20,
@@ -237,7 +237,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "both"
+      "next_blocks": [19, 21]
     },
     {
       "block_number": 21,
@@ -248,7 +248,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [20, 22]
     },
     {
       "block_number": 22,
@@ -263,7 +263,7 @@
       },
       "station_side": "Left/Right",
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [21, 23]
     },
     {
       "block_number": 23,
@@ -274,7 +274,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [22, 24]
     },
     {
       "block_number": 24,
@@ -285,7 +285,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [23, 25]
     },
     {
       "block_number": 25,
@@ -296,7 +296,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.2857,
-      "direction": "both"
+      "next_blocks": [24, 26]
     },
     {
       "block_number": 26,
@@ -307,7 +307,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 5.1429,
-      "direction": "both"
+      "next_blocks": [25, 27]
     },
     {
       "block_number": 27,
@@ -318,7 +318,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "both"
+      "next_blocks": [26, 28]
     },
     {
       "block_number": 28,
@@ -332,7 +332,7 @@
         "switch": "28-29; 150-28"
       },
       "seconds_to_traverse": 6,
-      "direction": "both"
+      "next_blocks": [27, 29]
     },
     {
       "block_number": 29,
@@ -343,7 +343,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [30]
     },
     {
       "block_number": 30,
@@ -354,7 +354,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [31]
     },
     {
       "block_number": 31,
@@ -369,7 +369,7 @@
       },
       "station_side": "Left",
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [32]
     },
     {
       "block_number": 32,
@@ -380,7 +380,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [33]
     },
     {
       "block_number": 33,
@@ -391,7 +391,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [34]
     },
     {
       "block_number": 34,
@@ -402,7 +402,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [35]
     },
     {
       "block_number": 35,
@@ -413,7 +413,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [36]
     },
     {
       "block_number": 36,
@@ -427,7 +427,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [37]
     },
     {
       "block_number": 37,
@@ -441,7 +441,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [38]
     },
     {
       "block_number": 38,
@@ -455,7 +455,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [39]
     },
     {
       "block_number": 39,
@@ -471,7 +471,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [40]
     },
     {
       "block_number": 40,
@@ -485,7 +485,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [41]
     },
     {
       "block_number": 41,
@@ -499,7 +499,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [42]
     },
     {
       "block_number": 42,
@@ -513,7 +513,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [43]
     },
     {
       "block_number": 43,
@@ -527,7 +527,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [44]
     },
     {
       "block_number": 44,
@@ -541,7 +541,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [45]
     },
     {
       "block_number": 45,
@@ -555,7 +555,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [46]
     },
     {
       "block_number": 46,
@@ -569,7 +569,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [47]
     },
     {
       "block_number": 47,
@@ -583,7 +583,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [48]
     },
     {
       "block_number": 48,
@@ -599,7 +599,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [49]
     },
     {
       "block_number": 49,
@@ -613,7 +613,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [50]
     },
     {
       "block_number": 50,
@@ -627,7 +627,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [51]
     },
     {
       "block_number": 51,
@@ -641,7 +641,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [52]
     },
     {
       "block_number": 52,
@@ -655,7 +655,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [53]
     },
     {
       "block_number": 53,
@@ -669,7 +669,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [54]
     },
     {
       "block_number": 54,
@@ -683,7 +683,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [55]
     },
     {
       "block_number": 55,
@@ -697,7 +697,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [56]
     },
     {
       "block_number": 56,
@@ -711,7 +711,7 @@
         "underground": true
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [57]
     },
     {
       "block_number": 57,
@@ -727,7 +727,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [58, "yard"]
     },
     {
       "block_number": 58,
@@ -741,7 +741,7 @@
         "switch": "57-yard"
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [59]
     },
     {
       "block_number": 59,
@@ -752,7 +752,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [60]
     },
     {
       "block_number": 60,
@@ -763,7 +763,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [61]
     },
     {
       "block_number": 61,
@@ -774,7 +774,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [62]
     },
     {
       "block_number": 62,
@@ -788,7 +788,7 @@
         "switch": "Yard-63"
       },
       "seconds_to_traverse": 6,
-      "direction": "ascending"
+      "next_blocks": [63]
     },
     {
       "block_number": 63,
@@ -799,7 +799,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 5.1429,
-      "direction": "ascending"
+      "next_blocks": [64]
     },
     {
       "block_number": 64,
@@ -810,7 +810,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 5.1429,
-      "direction": "ascending"
+      "next_blocks": [65]
     },
     {
       "block_number": 65,
@@ -825,7 +825,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 10.2857,
-      "direction": "ascending"
+      "next_blocks": [66]
     },
     {
       "block_number": 66,
@@ -836,7 +836,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.2857,
-      "direction": "ascending"
+      "next_blocks": [67]
     },
     {
       "block_number": 67,
@@ -847,7 +847,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [68]
     },
     {
       "block_number": 68,
@@ -858,7 +858,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [69]
     },
     {
       "block_number": 69,
@@ -869,7 +869,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [70]
     },
     {
       "block_number": 70,
@@ -880,7 +880,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [71]
     },
     {
       "block_number": 71,
@@ -891,7 +891,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [72]
     },
     {
       "block_number": 72,
@@ -902,7 +902,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [73]
     },
     {
       "block_number": 73,
@@ -917,7 +917,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [74]
     },
     {
       "block_number": 74,
@@ -928,7 +928,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [75]
     },
     {
       "block_number": 75,
@@ -939,7 +939,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [76]
     },
     {
       "block_number": 76,
@@ -953,7 +953,7 @@
         "switch": "76-77;77-101"
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [77]
     },
     {
       "block_number": 77,
@@ -968,7 +968,7 @@
       },
       "station_side": "Left/Right",
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [78, 101]
     },
     {
       "block_number": 78,
@@ -979,7 +979,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [77, 79]
     },
     {
       "block_number": 79,
@@ -990,7 +990,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [78, 80]
     },
     {
       "block_number": 80,
@@ -1001,7 +1001,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [79, 81]
     },
     {
       "block_number": 81,
@@ -1012,7 +1012,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [80, 82]
     },
     {
       "block_number": 82,
@@ -1023,7 +1023,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [81, 83]
     },
     {
       "block_number": 83,
@@ -1034,7 +1034,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [82, 84]
     },
     {
       "block_number": 84,
@@ -1045,7 +1045,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [83, 85]
     },
     {
       "block_number": 85,
@@ -1059,7 +1059,7 @@
         "switch": "85-86; 100-85"
       },
       "seconds_to_traverse": 15.4286,
-      "direction": "both"
+      "next_blocks": [84, 86]
     },
     {
       "block_number": 86,
@@ -1070,7 +1070,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 14.4,
-      "direction": "ascending"
+      "next_blocks": [87]
     },
     {
       "block_number": 87,
@@ -1081,7 +1081,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12.4704,
-      "direction": "ascending"
+      "next_blocks": [88]
     },
     {
       "block_number": 88,
@@ -1096,7 +1096,7 @@
       },
       "station_side": "Left",
       "seconds_to_traverse": 14.4,
-      "direction": "ascending"
+      "next_blocks": [89]
     },
     {
       "block_number": 89,
@@ -1107,7 +1107,7 @@
       "elevation_m": -0.375,
       "cumulative_elevation_m": 0.125,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [90]
     },
     {
       "block_number": 90,
@@ -1118,7 +1118,7 @@
       "elevation_m": -0.75,
       "cumulative_elevation_m": -0.625,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [91]
     },
     {
       "block_number": 91,
@@ -1129,7 +1129,7 @@
       "elevation_m": -1.5,
       "cumulative_elevation_m": -2.125,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [92]
     },
     {
       "block_number": 92,
@@ -1140,7 +1140,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": -2.125,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [93]
     },
     {
       "block_number": 93,
@@ -1151,7 +1151,7 @@
       "elevation_m": 1.5,
       "cumulative_elevation_m": -0.625,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [94]
     },
     {
       "block_number": 94,
@@ -1162,7 +1162,7 @@
       "elevation_m": 0.75,
       "cumulative_elevation_m": 0.125,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [95]
     },
     {
       "block_number": 95,
@@ -1173,7 +1173,7 @@
       "elevation_m": 0.375,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [96]
     },
     {
       "block_number": 96,
@@ -1188,7 +1188,7 @@
       },
       "station_side": "Left",
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [97]
     },
     {
       "block_number": 97,
@@ -1199,7 +1199,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [98]
     },
     {
       "block_number": 98,
@@ -1210,7 +1210,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [99]
     },
     {
       "block_number": 99,
@@ -1221,7 +1221,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [100]
     },
     {
       "block_number": 100,
@@ -1232,7 +1232,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.8,
-      "direction": "ascending"
+      "next_blocks": [85]
     },
     {
       "block_number": 101,
@@ -1243,7 +1243,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 4.8462,
-      "direction": "ascending"
+      "next_blocks": [102]
     },
     {
       "block_number": 102,
@@ -1254,7 +1254,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12.8571,
-      "direction": "ascending"
+      "next_blocks": [103]
     },
     {
       "block_number": 103,
@@ -1265,7 +1265,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12.8571,
-      "direction": "ascending"
+      "next_blocks": [104]
     },
     {
       "block_number": 104,
@@ -1276,7 +1276,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 10.2857,
-      "direction": "ascending"
+      "next_blocks": [105]
     },
     {
       "block_number": 105,
@@ -1291,7 +1291,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 12.8571,
-      "direction": "ascending"
+      "next_blocks": [106]
     },
     {
       "block_number": 106,
@@ -1302,7 +1302,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12.8571,
-      "direction": "ascending"
+      "next_blocks": [107]
     },
     {
       "block_number": 107,
@@ -1313,7 +1313,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 11.5714,
-      "direction": "ascending"
+      "next_blocks": [108]
     },
     {
       "block_number": 108,
@@ -1327,7 +1327,7 @@
         "railway_crossing": true
       },
       "seconds_to_traverse": 12.8571,
-      "direction": "ascending"
+      "next_blocks": [109]
     },
     {
       "block_number": 109,
@@ -1338,7 +1338,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12.8571,
-      "direction": "ascending"
+      "next_blocks": [110]
     },
     {
       "block_number": 110,
@@ -1349,7 +1349,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [111]
     },
     {
       "block_number": 111,
@@ -1360,7 +1360,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [112]
     },
     {
       "block_number": 112,
@@ -1371,7 +1371,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [113]
     },
     {
       "block_number": 113,
@@ -1382,7 +1382,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [114]
     },
     {
       "block_number": 114,
@@ -1397,7 +1397,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 19.44,
-      "direction": "ascending"
+      "next_blocks": [115]
     },
     {
       "block_number": 115,
@@ -1408,7 +1408,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [116]
     },
     {
       "block_number": 116,
@@ -1419,7 +1419,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [117]
     },
     {
       "block_number": 117,
@@ -1430,7 +1430,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [118]
     },
     {
       "block_number": 118,
@@ -1441,7 +1441,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [119]
     },
     {
       "block_number": 119,
@@ -1452,7 +1452,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9.6,
-      "direction": "ascending"
+      "next_blocks": [120]
     },
     {
       "block_number": 120,
@@ -1463,7 +1463,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [121]
     },
     {
       "block_number": 121,
@@ -1474,7 +1474,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 12,
-      "direction": "ascending"
+      "next_blocks": [122]
     },
     {
       "block_number": 122,
@@ -1488,7 +1488,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [123]
     },
     {
       "block_number": 123,
@@ -1504,7 +1504,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [124]
     },
     {
       "block_number": 124,
@@ -1518,7 +1518,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [125]
     },
     {
       "block_number": 125,
@@ -1532,7 +1532,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [126]
     },
     {
       "block_number": 126,
@@ -1546,7 +1546,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [127]
     },
     {
       "block_number": 127,
@@ -1560,7 +1560,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [128]
     },
     {
       "block_number": 128,
@@ -1574,7 +1574,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [129]
     },
     {
       "block_number": 129,
@@ -1588,7 +1588,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [130]
     },
     {
       "block_number": 130,
@@ -1602,7 +1602,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [131]
     },
     {
       "block_number": 131,
@@ -1616,7 +1616,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [132]
     },
     {
       "block_number": 132,
@@ -1632,7 +1632,7 @@
       },
       "station_side": "Left",
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [133]
     },
     {
       "block_number": 133,
@@ -1646,7 +1646,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [134]
     },
     {
       "block_number": 134,
@@ -1660,7 +1660,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [135]
     },
     {
       "block_number": 135,
@@ -1674,7 +1674,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [136]
     },
     {
       "block_number": 136,
@@ -1688,7 +1688,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [137]
     },
     {
       "block_number": 137,
@@ -1702,7 +1702,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [138]
     },
     {
       "block_number": 138,
@@ -1716,7 +1716,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [139]
     },
     {
       "block_number": 139,
@@ -1730,7 +1730,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [140]
     },
     {
       "block_number": 140,
@@ -1744,7 +1744,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [141]
     },
     {
       "block_number": 141,
@@ -1760,7 +1760,7 @@
       },
       "station_side": "Right",
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [142]
     },
     {
       "block_number": 142,
@@ -1774,7 +1774,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [143]
     },
     {
       "block_number": 143,
@@ -1788,7 +1788,7 @@
         "underground": true
       },
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [144]
     },
     {
       "block_number": 144,
@@ -1799,7 +1799,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [145]
     },
     {
       "block_number": 145,
@@ -1810,7 +1810,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [146]
     },
     {
       "block_number": 146,
@@ -1821,7 +1821,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [147]
     },
     {
       "block_number": 147,
@@ -1832,7 +1832,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 9,
-      "direction": "ascending"
+      "next_blocks": [148]
     },
     {
       "block_number": 148,
@@ -1843,7 +1843,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 33.12,
-      "direction": "ascending"
+      "next_blocks": [149]
     },
     {
       "block_number": 149,
@@ -1854,7 +1854,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 7.2,
-      "direction": "ascending"
+      "next_blocks": [150]
     },
     {
       "block_number": 150,
@@ -1865,7 +1865,7 @@
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
       "seconds_to_traverse": 6.3,
-      "direction": "ascending"
+      "next_blocks": [28]
     }
   ]
 }

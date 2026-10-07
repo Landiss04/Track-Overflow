@@ -6,7 +6,9 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -29,7 +31,7 @@ from ctc.routing import (  # noqa: E402
     first_reversal,
     reversing_route,
 )
-from ctc.track_layout import load_layout  # noqa: E402
+from ctc.track_layout import Line, load_layout, load_line  # noqa: E402
 
 DT_S = 0.1
 _LAYOUT = load_layout()
@@ -96,6 +98,46 @@ class TrackGraphTest(unittest.TestCase):
         assert route is not None
         self.assertEqual(route[:3], ("12", "11", "10"))
         self.assertEqual(route[-1], "1")
+
+
+def _line_from(blocks: list[dict]) -> Line:
+    """A line read from a layout file holding ``blocks``."""
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "line.json"
+        path.write_text(json.dumps({"line": "Test", "blocks": [
+            {"block_number": n, "section": "A", "length_m": 100,
+             "speed_limit_kmh": 50, **extra}
+            for n, extra in blocks]}), encoding="utf-8")
+        return load_line("Test", path)
+
+
+class NextBlocksTest(unittest.TestCase):
+    """``next_blocks`` in the layout files."""
+
+    def test_read_with_the_yard_apart(self) -> None:
+        line = _line_from([(1, {"next_blocks": [2]}),
+                           (2, {"next_blocks": [3, "yard"]}),
+                           (3, {"next_blocks": []})])
+        first, second, _ = line.blocks
+        self.assertEqual(first.next_blocks, ("2",))
+        self.assertEqual((second.next_blocks, second.to_yard),
+                         (("3",), True))
+
+    def test_only_listed_moves_are_run(self) -> None:
+        graph = TrackGraph(_line_from([(1, {"next_blocks": [2]}),
+                                       (2, {"next_blocks": [3]}),
+                                       (3, {"next_blocks": []})]))
+        self.assertEqual(graph.route("1", "3"), ("1", "2", "3"))
+        self.assertIsNone(graph.route("3", "1"))
+
+    def test_without_next_blocks_both_ways(self) -> None:
+        graph = TrackGraph(_line_from([(1, {}), (2, {}), (3, {})]))
+        self.assertEqual(graph.route("3", "1"), ("3", "2", "1"))
+
+    def test_a_next_block_the_layout_does_not_join_is_refused(self) -> None:
+        line = _line_from([(1, {"next_blocks": [3]}), (2, {}), (3, {})])
+        with self.assertRaisesRegex(ValueError, "does not join"):
+            TrackGraph(line)
 
 
 class DirectionTest(unittest.TestCase):
