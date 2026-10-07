@@ -237,6 +237,19 @@ def run_check(
            "the service brake is fighting the speed law at target")
     backend.set_manual(True)
 
+    # Slowing to a lower target ends on it, not a mile an hour above
+    # it: the brake lets go just over target and rolling resistance
+    # closes the rest.
+    backend.set_sim_rate(mod.SIM_RATES.index(10))
+    backend.set_target_mph(35)
+    _until(app, lambda: backend.snapshot["actual_mph"] > 34.8, 60)
+    backend.set_target_mph(30)
+    slowed = _until(app, lambda: (
+        abs(backend.snapshot["actual_mph"] - 30.0) < 0.25
+        and not backend.core.state.service_brake), 60)
+    backend.set_sim_rate(mod.SIM_RATES.index(1))
+    expect(slowed, "slowing to a lower target did not settle on it")
+
     # The numbers drawer renders and closes again.
     drawer = window.findChild(QObject, "numbersDrawer")
     expect(drawer is not None, "numbers drawer missing")
@@ -367,11 +380,15 @@ def run_check(
         expect(backend.core.state.power_w == 0.0,
                f"power stayed on after a {name} failure")
         if name == "brake":
+            # No brake answers, so only rolling resistance slows it:
+            # a gentle coast down, not a stop.
             speed = backend.core.state.actual_mps
             _settle(app, 300)
-            expect(speed > 0.0
-                   and abs(backend.core.state.actual_mps - speed) < 0.01,
-                   "a brake failure did not leave the train coasting")
+            expect(0.0 < backend.core.state.actual_mps < speed
+                   and abs(backend.core.state.accel_mps2
+                           + mod.ROLLING_DECEL_MPS2) < 1e-6,
+                   "a brake failure did not leave the train coasting "
+                   "down on rolling resistance")
             expect(not backend.core.state.fb_service_brake,
                    "a failed brake reported itself engaged")
             if shots:

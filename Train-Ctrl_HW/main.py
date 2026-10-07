@@ -146,10 +146,15 @@ MAX_SPEED_MPS = 70 / KMH_PER_MPS
 V_FLOOR_MPS = 1.0               # below which F = P / v is capped
 SERVICE_DECEL_MPS2 = 1.2
 EBRAKE_DECEL_MPS2 = 2.73
+# Rolling resistance, from truth modules/train-model.md: it opposes
+# motion, holds the train at rest, and never reverses it.
+ROLLING_RESISTANCE_COEFF = 0.002
+GRAVITY_MPS2 = 9.81
+ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
 # How far over target the train may drift before the brake helps.
-# With no resistance in the model the brake is the only thing that
-# can slow the train, so this is the band it is allowed to hold.
-SERVICE_BAND_MPS = 0.5
+# Rolling resistance closes anything inside the band in a few
+# seconds, so it is kept narrow: about 0.2 mph.
+SERVICE_BAND_MPS = 0.1
 # Below this the emergency brake may be released: the train is at a
 # stand (D011: the Train Controller releases the emergency brake).
 STANDSTILL_MPS = 0.1
@@ -542,29 +547,32 @@ class ControllerCore:
         #
         #     F = P / v     a = F / M     v = v + a dt
         #
-        # No resistance term: the model is the block diagram and
-        # nothing else. A train with no power applied coasts forever,
-        # so the only ways down are the two brakes, and the speed law
-        # holds its target from below rather than settling onto it
-        # from both sides. The failures act here the way truth
-        # failure-status.md says the Train Model applies them.
+        # Rolling resistance and the brakes oppose the motion, hold
+        # the train at rest, and never reverse it (truth
+        # modules/train-model.md), so an unpowered train coasts down
+        # and the speed law settles onto its target from either
+        # side. The failures act here the way truth failure-status.md
+        # says the Train Model applies them.
         s = self.state
         brakes_work = not s.failures["brake"]
         power = 0.0 if s.failures["engine"] else s.power_w
         v = s.actual_mps
         force = min(MAX_FORCE_N, power / max(abs(v), V_FLOOR_MPS))
-        a = force / MASS_KG
-        decel = 0.0
+        traction = force / MASS_KG          # forward only
+        resist = ROLLING_DECEL_MPS2
         if brakes_work and s.emergency_brake:
-            decel = EBRAKE_DECEL_MPS2
+            resist += EBRAKE_DECEL_MPS2
         elif brakes_work and s.service_brake:
-            decel = SERVICE_DECEL_MPS2
-        if decel:
-            # A brake opposes the motion and never reverses it.
-            a = -math.copysign(decel, v) if v else 0.0
+            resist += SERVICE_DECEL_MPS2
+        if v:
+            a = traction - math.copysign(resist, v)
+        else:
+            # At rest the resistance is a holding force: the train
+            # only moves once traction overcomes it.
+            a = max(0.0, traction - resist)
         new_v = v + a * self.dt
-        if decel and v * new_v < 0.0:
-            new_v = 0.0
+        if v * new_v < 0.0:
+            new_v = 0.0             # stopped, never reversed
         s.accel_mps2 = a
         s.actual_mps = new_v
         if abs(s.actual_mps) < SETTLE_MPS and s.target_mps < SETTLE_MPS:
