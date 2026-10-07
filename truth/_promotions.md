@@ -58,3 +58,17 @@ One line per promoted or denied proposal, appended at promotion time. See
 | 2026-10-07 | Train-model-Interface | 20261005-0744-identifiers-authority-not-an-id.md | conventions/identifiers.md | denied — superseded by ctc-interfacing 20261006-1621-identifiers-authority-not-an-id.md (D013) |
 | 2026-10-07 | Train-model-Interface | 20261005-0744-track-signal-authority-block-count.md | signals/track-signal.md | denied — superseded by ctc-interfacing 20261006-1621-track-signal-authority-block-count.md (D013) |
 | 2026-10-07 | generic-clock-config | 20261001-1658-shared-simulation-clock.md | decisions/D009-shared-simulation-clock.md | denied — superseded by train-model-clock-update 20261002-2127-D017-shared-simulation-clock.md |
+| 2026-10-03 | ctc-interfacing | 20261002-1129-maintenance-mode.md | signals/maintenance-mode.md | promoted |
+| 2026-10-03 | ctc-interfacing | 20261002-1129-suggested-authority.md | signals/suggested-authority.md | promoted |
+| 2026-10-03 | ctc-interfacing | 20261002-1129-suggested-speed.md | signals/suggested-speed.md | promoted |
+| 2026-10-03 | ctc-interfacing | 20261002-1142-style-guide-line-tokens.md | ui/style-guide.md | promoted |
+| 2026-10-03 | ctc-interfacing | 20261002-1807-clock-speedup.md | signals/clock-speedup.md | promoted |
+| 2026-10-07 | ctc-interfacing | 20261006-1621-D013-authority-block-count.md | decisions/D013-authority-block-count.md | promoted |
+| 2026-10-07 | ctc-interfacing | 20261006-1621-units-authority-block-count.md | conventions/units.md | promoted |
+| 2026-10-07 | ctc-interfacing | 20261006-1621-identifiers-authority-not-an-id.md | conventions/identifiers.md | promoted |
+| 2026-10-07 | ctc-interfacing | 20261006-1621-track-signal-authority-block-count.md | signals/track-signal.md | promoted |
+| 2026-10-07 | ctc-interfacing | 20261006-1621-suggested-authority-block-count.md | signals/suggested-authority.md | promoted |
+| 2026-10-07 | ctc-interfacing | 20261003-1059-identifiers-line-and-block.md | conventions/identifiers.md | denied — superseded by 20261006-1621-identifiers-authority-not-an-id.md, which carries its changes |
+| 2026-10-07 | Train-Ctrl_HW | 20261006-2108-units-authority-conflict.md | conventions/units.md | denied — conflict resolved by D013 |
+| 2026-10-07 | Train-Ctrl_HW | 20261006-2108-identifiers-authority-conflict.md | conventions/identifiers.md | denied — conflict resolved by D013 |
+| 2026-10-07 | Train-Ctrl_HW | 20261006-2108-track-signal-authority-conflict.md | signals/track-signal.md | denied — conflict resolved by D013 |

@@ -6,8 +6,8 @@ This file is read at the start of every agent session. Shards are read on demand
 | --- | --- | --- | --- |
 | UI design | [style-guide.md](ui/style-guide.md) | Visual tokens, component and accessibility rules | 2026-09-29 |
 | Conventions: naming | [naming.md](conventions/naming.md) | Module names and aliases, Python naming, docstrings | 2026-10-02 |
-| Conventions: units | [units.md](conventions/units.md) | Backend and display units, conversion factors | 2026-09-30 |
-| Conventions: identifiers | [identifiers.md](conventions/identifiers.md) | ID values, requirement IDs, exceptions, design token names | 2026-09-30 |
+| Conventions: units | [units.md](conventions/units.md) | Backend and display units, conversion factors | 2026-10-07 |
+| Conventions: identifiers | [identifiers.md](conventions/identifiers.md) | ID values, requirement IDs, exceptions, design token names | 2026-10-07 |
 | Conventions: files and paths | [files-and-paths.md](conventions/files-and-paths.md) | Paths, file names, delivery, module boundaries, layout, repository, linting | 2026-09-29 |
 | Conventions: toolchain | [toolchain.md](conventions/toolchain.md) | Minimum tool versions checked at session start | 2026-10-01 |
 | Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — all are placeholders except Train Model | 2026-10-07 |
@@ -29,6 +29,7 @@ This file is read at the start of every agent session. Shards are read on demand
 | D009 | [The Train Model is physics only; control belongs to the Train Controller](decisions/D009-train-model-control-boundary.md) |
 | D010 | [The Train Model test UI is a separate, removable process](decisions/D010-train-model-test-ui-boundary.md) |
 | D011 | [The passenger emergency brake button only applies](decisions/D011-passenger-emergency-brake-button.md) |
+| D013 | [Authority is a count of blocks ahead of the train](decisions/D013-authority-block-count.md) |
 | D017 | [One shared simulation clock, run by the harness at 1x or 10x](decisions/D017-shared-simulation-clock.md) |
 
 ## Module shards
