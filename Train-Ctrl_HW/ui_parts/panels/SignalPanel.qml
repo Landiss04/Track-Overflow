@@ -41,9 +41,11 @@ Panel {
         font.weight: theme.weight_bold
     }
 
+    // Two lines of room while there is a sentence to show; none while
+    // pickup has failed, so the head gets the space the notice took.
     HelperText {
         Layout.fillWidth: true
-        Layout.preferredHeight: 34
+        Layout.preferredHeight: text === "" ? 0 : 34
         horizontalAlignment: Text.AlignHCenter
         text: root.s.fault_pickup ? "" : root.s.signal_text
     }

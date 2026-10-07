@@ -18,11 +18,24 @@ Item {
     // colour; the ring and the panel's words tell them apart.
     readonly property var lamps: [theme.danger, theme.warning,
                                   theme.success, theme.success]
-    readonly property real pad: theme.space_3
-    readonly property real gap: theme.space_2
-    // The ring sits 5 px outside its lamp, so every slot reserves it.
-    readonly property real ring: 5
-    readonly property real lampSize: Math.max(8, Math.min(
+    // Full spacing: a 5 px ring outside each lamp (every slot reserves
+    // it), 8 px between lamps, 12 px inside the housing. When a notice
+    // above leaves too little height for that, the ring, gap and
+    // padding shrink with the lamp instead, so four lamps always fit
+    // inside the housing rather than spilling out of it.
+    readonly property real fullRing: 5
+    readonly property real minLamp: 8
+    readonly property bool roomy: (height - 2 * theme.space_3
+        - 3 * theme.space_2) / 4 - 2 * fullRing >= minLamp
+    readonly property real fitLamp: height / (4 * (1 + 2 * 0.15)
+        + 3 * 0.2 + 2 * 0.25)
+    readonly property real ring: roomy ? fullRing
+        : Math.min(fullRing, 0.15 * fitLamp)
+    readonly property real gap: roomy ? theme.space_2
+        : Math.min(theme.space_2, 0.2 * fitLamp)
+    readonly property real pad: roomy ? theme.space_3
+        : Math.min(theme.space_3, 0.25 * fitLamp)
+    readonly property real lampSize: Math.max(0, Math.min(
         (height - 2 * pad - 3 * gap) / 4 - 2 * ring,
         width - 2 * theme.space_4 - 2 * ring))
 
