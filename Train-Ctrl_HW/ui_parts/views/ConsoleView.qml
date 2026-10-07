@@ -63,7 +63,7 @@ Item {
                     label: qsTr("Stop in")
                     value: root.s.authority_blocks
                     valueColor: root.s.authority_blocks <= 1
-                        ? theme.signal_red : theme.text_primary
+                        ? theme.danger : theme.text_primary
                     unit: root.s.authority_blocks === 1 ? qsTr("block")
                                                         : qsTr("blocks")
                 }

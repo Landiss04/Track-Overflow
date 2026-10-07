@@ -39,6 +39,28 @@ Item {
         return Math.max(0, Math.min(1, delta / sweepDeg)) * limit;
     }
 
+    function nudge(step) {
+        if (root.interactive)
+            root.targetRequested(Math.max(0, Math.round(root.target) + step));
+    }
+
+    // Keyboard reach and a visible focus ring (guide 8): arrows step
+    // the target by one, the same request a drag makes.
+    activeFocusOnTab: root.interactive
+    Keys.onUpPressed: root.nudge(1)
+    Keys.onRightPressed: root.nudge(1)
+    Keys.onDownPressed: root.nudge(-1)
+    Keys.onLeftPressed: root.nudge(-1)
+
+    Rectangle {
+        anchors.fill: parent
+        visible: root.activeFocus && root.interactive
+        color: "transparent"
+        radius: width / 2
+        border.width: 2
+        border.color: theme.focus_ring
+    }
+
     onTargetChanged: face.requestPaint()
     onActualChanged: face.requestPaint()
     onLimitChanged: face.requestPaint()
@@ -130,7 +152,7 @@ Item {
             text: Math.round(root.target)
             color: theme.text_primary
             font.family: theme.mono_family
-            font.pixelSize: Math.max(32, root.radius * 0.6)
+            font.pixelSize: theme.size_display
             font.weight: theme.weight_bold
         }
 

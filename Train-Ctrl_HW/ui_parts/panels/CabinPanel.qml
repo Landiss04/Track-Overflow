@@ -33,7 +33,7 @@ Panel {
             on: root.s.fb_doors_left
             tone: "info"
             text: root.s.fb_doors_left ? qsTr("Close left") : qsTr("Open left")
-            onClicked: controller.setDoor("left", !root.s.fb_doors_left)
+            onClicked: controller.set_door("left", !root.s.fb_doors_left)
         }
 
         ToggleTile {
@@ -42,7 +42,7 @@ Panel {
             on: root.s.fb_doors_right
             tone: "info"
             text: root.s.fb_doors_right ? qsTr("Close right") : qsTr("Open right")
-            onClicked: controller.setDoor("right", !root.s.fb_doors_right)
+            onClicked: controller.set_door("right", !root.s.fb_doors_right)
         }
     }
 
@@ -53,7 +53,7 @@ Panel {
         actual: root.s.cabin_temp_f
         interactive: root.s.can_drive
         onTargetRequested: function (degrees) {
-            controller.setTargetTemp(degrees);
+            controller.set_target_temp_f(degrees);
         }
     }
 
@@ -66,7 +66,7 @@ Panel {
             enabled: root.s.can_drive
             on: root.s.fb_lights
             text: root.s.fb_lights ? qsTr("Lights on") : qsTr("Lights off")
-            onClicked: controller.setLights(!root.s.fb_lights)
+            onClicked: controller.set_lights(!root.s.fb_lights)
         }
 
         ToggleTile {
@@ -75,7 +75,7 @@ Panel {
             on: root.s.fb_headlights
             text: root.s.fb_headlights ? qsTr("Headlights on")
                                     : qsTr("Headlights off")
-            onClicked: controller.setHeadlights(!root.s.fb_headlights)
+            onClicked: controller.set_headlights(!root.s.fb_headlights)
         }
     }
 }

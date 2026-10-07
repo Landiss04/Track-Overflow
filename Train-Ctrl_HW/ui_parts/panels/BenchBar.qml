@@ -21,7 +21,7 @@ Rectangle {
 
     color: theme.bg_raised
     implicitHeight: content.implicitHeight + 2 * theme.space_2
-    radius: theme.radius_md
+    radius: theme.radius_lg
     border.color: theme.border
     border.width: 1
 
@@ -47,7 +47,7 @@ Rectangle {
             currentIndex: Math.max(0, root.s.train_index)
             onCommitted: function (value) {
                 if (value !== "")
-                    controller.selectTrain(value);
+                    controller.select_train(value);
             }
         }
 
@@ -91,7 +91,7 @@ Rectangle {
             Layout.alignment: Qt.AlignBottom
             variant: "secondary"
             text: qsTr("Spawn train")
-            onClicked: controller.spawnTrain(root.spawnNumber,
+            onClicked: controller.spawn_train(root.spawnNumber,
                                              root.spawnLine,
                                              root.spawnTarget)
         }
@@ -128,7 +128,7 @@ Rectangle {
                 options: [qsTr("1x"), qsTr("10x")]
                 currentIndex: root.s.sim_rate_index
                 onActivated: function (index) {
-                    controller.setSimRate(index);
+                    controller.set_sim_rate(index);
                 }
             }
         }

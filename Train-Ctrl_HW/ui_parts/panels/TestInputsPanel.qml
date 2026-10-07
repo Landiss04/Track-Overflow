@@ -14,7 +14,7 @@
 // Fahrenheit, because a bench you type into all day is easier to
 // read in the same units as the console it drives. Only the backend
 // is SI, and the conversion happens where every other one does, in
-// ConsoleBackend (documents/units.md). Counts and identifiers are
+// ConsoleBackend (truth conventions/units.md). Counts and identifiers are
 // not measurements, so blocks and block IDs pass through as they
 // are.
 import QtQuick
@@ -130,7 +130,7 @@ Panel {
             enabled: root.dirty
             text: qsTr("Send to controller")
             onClicked: {
-                controller.applyInputs(root.draft);
+                controller.apply_inputs(root.draft);
                 root.release();
             }
         }
@@ -420,7 +420,7 @@ Panel {
                 options: root.roles
                 value: root.roles[root.s.operator_index + 1]
                 onEdited: function (v) {
-                    controller.selectOperator(root.roles.indexOf(v) - 1);
+                    controller.select_operator(root.roles.indexOf(v) - 1);
                 }
             }
             SignalEditRow {
@@ -436,7 +436,7 @@ Panel {
                 options: ["Automatic", "Manual"]
                 value: root.s.manual ? "Manual" : "Automatic"
                 onEdited: function (v) {
-                    controller.setManual(v === "Manual");
+                    controller.set_manual(v === "Manual");
                 }
             }
             SignalEditRow {
@@ -481,7 +481,7 @@ Panel {
                 kind: "float"
                 unit: "mph"
                 value: Math.round(root.s.target_mph)
-                onEdited: function (v) { controller.setTargetMph(v); }
+                onEdited: function (v) { controller.set_target_mph(v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -495,7 +495,7 @@ Panel {
                 kind: "int"
                 unit: "\u00b0F"
                 value: Math.round(root.s.target_temp_f)
-                onEdited: function (v) { controller.setTargetTemp(v); }
+                onEdited: function (v) { controller.set_target_temp_f(v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -510,7 +510,7 @@ Panel {
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
                 value: root.s.doors_left
-                onEdited: function (v) { controller.setDoor("left", v); }
+                onEdited: function (v) { controller.set_door("left", v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -525,7 +525,7 @@ Panel {
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
                 value: root.s.doors_right
-                onEdited: function (v) { controller.setDoor("right", v); }
+                onEdited: function (v) { controller.set_door("right", v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -540,7 +540,7 @@ Panel {
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
                 value: root.s.lights
-                onEdited: function (v) { controller.setLights(v); }
+                onEdited: function (v) { controller.set_lights(v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -555,7 +555,7 @@ Panel {
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
                 value: root.s.headlights
-                onEdited: function (v) { controller.setHeadlights(v); }
+                onEdited: function (v) { controller.set_headlights(v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -570,7 +570,7 @@ Panel {
                 value: root.s.emergency_brake
                 onEdited: function (v) {
                     if (v !== root.s.emergency_brake)
-                        controller.toggleEmergencyBrake();
+                        controller.toggle_emergency_brake();
                 }
             }
             SignalEditRow {
@@ -587,7 +587,7 @@ Panel {
                 value: root.s.service_request
                 onEdited: function (v) {
                     if (v !== root.s.service_request)
-                        controller.toggleServiceBrake();
+                        controller.toggle_service_brake();
                 }
             }
 

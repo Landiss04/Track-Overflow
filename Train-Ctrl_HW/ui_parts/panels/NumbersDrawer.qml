@@ -11,7 +11,7 @@ ColumnLayout {
     property bool expanded: false
     readonly property var s: controller.snapshot
 
-    // Display units only (documents/units.md): the backend converted
+    // Display units only (truth conventions/units.md): the backend converted
     // these on the way out, so nothing here does arithmetic beyond
     // rounding.
     function mph(value) { return Math.round(value) + " mph"; }
@@ -87,14 +87,14 @@ ColumnLayout {
             }
             KeyValueRow {
                 Layout.fillWidth: true
-                label: qsTr("Speed limit, %1").arg(root.s.current_block)
+                label: qsTr("Speed limit")
                 value: root.mph(root.s.limit_mph)
             }
             KeyValueRow {
                 Layout.fillWidth: true
                 rule: false
                 label: qsTr("Acceleration")
-                value: Number(root.s.accel_mps2).toFixed(2) + " m/s^2"
+                value: Number(root.s.accel_ftps2).toFixed(2) + " ft/s^2"
             }
             }
         }

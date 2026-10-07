@@ -14,7 +14,7 @@ AppButton {
     property string tone: "success"
 
     variant: "secondary"
-    implicitHeight: 52
+    implicitHeight: theme.control_h_lg
     Accessible.name: text
 
     background: Rectangle {
@@ -52,9 +52,8 @@ AppButton {
             text: tile.text
             color: theme.text_primary
             font.family: theme.ui_family
-            font.pixelSize: theme.size_label
+            font.pixelSize: theme.size_body
             font.weight: theme.weight_bold
-            font.letterSpacing: theme.label_letter_spacing
             elide: Text.ElideRight
         }
 

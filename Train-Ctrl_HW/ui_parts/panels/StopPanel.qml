@@ -32,7 +32,7 @@ Panel {
         applied: root.s.emergency_brake
         text: root.s.emergency_brake ? qsTr("Release emergency brake")
                                      : qsTr("Emergency brake")
-        onClicked: controller.toggleEmergencyBrake()
+        onClicked: controller.toggle_emergency_brake()
     }
 
     // Guide 7 separation, so neither brake is hit by reaching for the
@@ -51,7 +51,7 @@ Panel {
         applied: root.s.service_request
         text: root.s.service_request ? qsTr("Release service brake")
                                      : qsTr("Service brake")
-        onClicked: controller.toggleServiceBrake()
+        onClicked: controller.toggle_service_brake()
     }
 
     HelperText {

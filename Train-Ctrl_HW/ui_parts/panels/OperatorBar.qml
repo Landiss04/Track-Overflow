@@ -43,7 +43,7 @@ Rectangle {
                 options: [qsTr("Driver"), qsTr("Engineer")]
                 currentIndex: root.s.operator_index
                 onActivated: function (index) {
-                    controller.selectOperator(index);
+                    controller.select_operator(index);
                 }
             }
         }
@@ -60,7 +60,7 @@ Rectangle {
                 options: [qsTr("Automatic"), qsTr("Manual")]
                 currentIndex: root.s.manual ? 1 : 0
                 onActivated: function (index) {
-                    controller.setManual(index === 1);
+                    controller.set_manual(index === 1);
                 }
             }
         }
@@ -91,7 +91,7 @@ Rectangle {
             currentIndex: Math.max(0, root.s.train_index)
             onCommitted: function (value) {
                 if (value !== "")
-                    controller.selectTrain(value);
+                    controller.select_train(value);
             }
         }
     }

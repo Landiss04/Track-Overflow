@@ -26,10 +26,7 @@ ScaledWindow {
             Layout.fillWidth: true
             moduleName: qsTr("Train Controller test bench")
             instance: window.s.train_id
-            mode: window.s.sim_rate > 1
-                ? qsTr("%1 \u00b7 %2x speed").arg(window.s.mode_label)
-                    .arg(window.s.sim_rate)
-                : window.s.mode_label
+            mode: window.s.mode_label
             clock: window.s.clock
             faulted: window.s.emergency_brake || window.s.faulted
         }

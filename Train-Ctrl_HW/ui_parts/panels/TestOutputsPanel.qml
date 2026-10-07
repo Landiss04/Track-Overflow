@@ -2,7 +2,7 @@
 // produced by the control law and the driver's controls, so the way to
 // change one is to drive the console, not to type here.
 //
-// Shown in the display units (documents/units.md): power in
+// Shown in the display units (truth conventions/units.md): power in
 // kilowatts, temperature in Fahrenheit. The payload itself leaves in
 // watts and Celsius; this column is the readable side of it, which is
 // why it differs from the SI inputs beside it.
@@ -53,7 +53,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
+            valueSize: theme.size_small
             name: "power_commanded"
             kind: "float"
             unit: "kW"
@@ -65,7 +65,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
+            valueSize: theme.size_small
             name: "service_brake_command"
             kind: "bool"
             value: root.s.service_brake
@@ -76,7 +76,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
+            valueSize: theme.size_small
             name: "emergency_brake_command"
             kind: "bool"
             value: root.s.emergency_brake
@@ -87,7 +87,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
+            valueSize: theme.size_small
             name: "door_command_left"
             kind: "bool"
             value: root.s.doors_left
@@ -98,7 +98,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
+            valueSize: theme.size_small
             name: "door_command_right"
             kind: "bool"
             value: root.s.doors_right
@@ -109,7 +109,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
+            valueSize: theme.size_small
             name: "cabin_lights_command"
             kind: "bool"
             value: root.s.lights
@@ -120,7 +120,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
+            valueSize: theme.size_small
             name: "headlights_command"
             kind: "bool"
             value: root.s.headlights
@@ -131,12 +131,23 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_h3
-            rule: false
+            valueSize: theme.size_small
             name: "temperature_setpoint"
             kind: "int"
             unit: "\u00b0F"
             value: Math.round(root.s.target_temp_f)
+        }
+        SignalEditRow {
+            Layout.fillWidth: true
+            rowHeight: 44
+            showKind: false
+            valueWidth: 150
+            inlineUnit: true
+            valueSize: theme.size_small
+            rule: false
+            name: "announcement"
+            kind: "string"
+            value: root.s.announcement
         }
     }
 

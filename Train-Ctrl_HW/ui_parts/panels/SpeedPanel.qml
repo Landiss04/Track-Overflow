@@ -31,7 +31,7 @@ Panel {
         actual: root.s.actual_mph
         limit: root.s.limit_mph
         interactive: root.s.can_drive && root.s.armed
-        onTargetRequested: function (mph) { controller.setTargetMph(mph); }
+        onTargetRequested: function (mph) { controller.set_target_mph(mph); }
     }
 
     // Two lines of room, always: the panel never resizes under the hand
