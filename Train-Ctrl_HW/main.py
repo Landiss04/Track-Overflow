@@ -258,6 +258,16 @@ def build_console_theme() -> dict[str, Any]:
     return theme
 
 
+def _read_flags(values: dict, key: str, count: int) -> list[bool]:
+    # A bool[N] signal arrives as a list; anything else, or a list of
+    # the wrong length, is a caller error.
+    flags = values[key]
+    if not isinstance(flags, (list, tuple)) or len(flags) != count:
+        raise InvalidInputError(
+            f"{key} must be {count} flags, not {flags!r}")
+    return [bool(flag) for flag in flags]
+
+
 def _read_number(values: dict, key: str) -> float:
     # Bench values arrive from QML untyped; a value that is not a
     # number is a caller error, raised in this module's own terms.
@@ -379,8 +389,8 @@ class ControllerCore:
         # The door and light commands the plant last acted on, so it
         # answers a command once, on its edge, and leaves a state the
         # bench published alone in between.
-        self._acted_doors = (False, False)
-        self._acted_lights = (True, True)
+        self._acted_doors: tuple[bool, bool] | None = (False, False)
+        self._acted_lights: tuple[bool, bool] | None = (True, True)
 
     @property
     def failed(self) -> list[str]:
@@ -523,6 +533,27 @@ class ControllerCore:
         if s.manual and self.authority_blocks > 0 and not self.failed:
             s.target_mps = max(0.0, min(mps, s.speed_limit_mps))
 
+    def command_door(self, side: str, open_: bool) -> None:
+        """Command one side's doors, and have the plant answer it.
+
+        The plant answers a command on its edge. Pressing a tile
+        again with the same command, because the reported state still
+        disagrees (the door interlock held it, say), has to be
+        answered too, or the tile could never change anything.
+        """
+        s = self.state
+        if side == "left":
+            s.doors_left = open_
+        else:
+            s.doors_right = open_
+        self._acted_doors = None
+
+    def command_lights(self, interior: bool, exterior: bool) -> None:
+        """Command the lights, and have the plant answer it."""
+        s = self.state
+        s.interior_lights, s.exterior_lights = interior, exterior
+        self._acted_lights = None
+
     def commands(self) -> TrainModelCommands:
         """Return this tick's commands to the Train Model, in SI."""
         s = self.state
@@ -607,6 +638,10 @@ class ConsoleBackend(QObject):
     """
 
     snapshot_changed = Signal()
+    # The roster changes only when a train is added or removed. It has
+    # its own signal so the train lists are not rebuilt on every UI
+    # tick, which reset their scroll and dropped clicks mid-pick.
+    roster_changed = Signal()
     # The selected train's commands, as a plain dict with its id, each
     # time they change. The central harness (D005) connects here.
     commands_changed = Signal(dict)
@@ -670,6 +705,7 @@ class ConsoleBackend(QObject):
         self.notes[train_id] = ""
         self.selected = train_id
         self.spawn_note = f"{train_id} spawned on the {line.lower()}."
+        self.roster_changed.emit()
         return train_id
 
     def drop_train(self, train_id: str) -> bool:
@@ -693,6 +729,7 @@ class ConsoleBackend(QObject):
                 self.order[min(index, remaining - 1)] if remaining else ""
             )
         self.spawn_note = f"{train_id} removed."
+        self.roster_changed.emit()
         return True
 
     def _step_all(self) -> None:
@@ -743,7 +780,7 @@ class ConsoleBackend(QObject):
             and self.core.state.manual
         )
 
-    @Property("QVariantList", notify=snapshot_changed)
+    @Property("QVariantList", notify=roster_changed)
     def trains(self) -> list[dict[str, Any]]:
         """The roster the train selectors show."""
         return [{"id": i,
@@ -997,10 +1034,7 @@ class ConsoleBackend(QObject):
         """
         if not self.can_drive:
             return
-        if side == "left":
-            self.core.state.doors_left = open_
-        else:
-            self.core.state.doors_right = open_
+        self.core.command_door(side, open_)
         self._publish()
 
     @Slot(bool)
@@ -1008,7 +1042,7 @@ class ConsoleBackend(QObject):
         """Command the interior lights on or off."""
         if not self.can_drive:
             return
-        self.core.state.interior_lights = on
+        self.core.command_lights(on, self.core.state.exterior_lights)
         self._publish()
 
     @Slot(bool)
@@ -1016,7 +1050,7 @@ class ConsoleBackend(QObject):
         """Command the exterior lights on or off."""
         if not self.can_drive:
             return
-        self.core.state.exterior_lights = on
+        self.core.command_lights(self.core.state.interior_lights, on)
         self._publish()
 
     @Slot()
@@ -1054,61 +1088,83 @@ class ConsoleBackend(QObject):
         failure_status bool[3] (engine, pickup, brake), brake_state
         bool[2] (emergency, service), door_state bool[2] (left,
         right) and light_state bool[2] (interior, exterior).
-        Raises InvalidInputError for a number that is not one.
+
+        Every value is read before any is applied, so a set with one
+        bad value changes nothing. Raises InvalidInputError for a
+        value that cannot be read as its type.
         """
         if not self.has_train:
             return
+        staged = self._read_inputs(values)
         s = self.core.state
-        if "commanded_speed" in values:
-            s.commanded_mps = max(
-                0.0, _read_number(values, "commanded_speed"))
-        if "speed_limit" in values:
-            s.speed_limit_mps = max(
-                0.0, _read_number(values, "speed_limit"))
-        if "actual_speed" in values:
-            s.actual_mps = _read_number(values, "actual_speed")
-        if "cabin_temperature" in values:
-            s.cabin_temp_c = _read_number(values, "cabin_temperature")
-        if "authority_blocks" in values:
-            s.authority_blocks = max(
-                0, int(_read_number(values, "authority_blocks")))
-        if "beacon_station" in values:
-            s.beacon_station = str(values["beacon_station"])
-        if values.get("beacon_side") in BEACON_SIDES:
-            s.beacon_side = values["beacon_side"]
-        if "beacon_underground" in values:
-            s.beacon_underground = bool(values["beacon_underground"])
-        if "failure_status" in values:
-            for name, failed in zip(FAILURES, values["failure_status"]):
-                s.failures[name] = bool(failed)
-        if values.get("signal_light_ahead") in ASPECTS:
-            s.next_signal = values["signal_light_ahead"]
-        if "brake_state" in values:
+        failures = staged.pop("failure_status", None)
+        brakes = staged.pop("brake_state", None)
+        for attr, value in staged.items():
+            setattr(s, attr, value)
+        if failures is not None:
+            s.failures.update(zip(FAILURES, failures))
+        if brakes is not None:
             # A reported emergency brake that this controller did not
             # command is a passenger pull: latch it and cut power. A
             # report of false never releases it; only the driver does
             # (D011, arbitration/passenger-emergency-brake).
-            emergency, service = (bool(v) for v in values["brake_state"])
+            emergency, service = brakes
             if emergency and not s.emergency_brake:
                 self.core.engage_emergency()
             s.fb_emergency_brake, s.fb_service_brake = emergency, service
-        if "door_state" in values:
-            s.fb_doors_left, s.fb_doors_right = (
-                bool(v) for v in values["door_state"])
-        if "light_state" in values:
-            s.fb_interior_lights, s.fb_exterior_lights = (
-                bool(v) for v in values["light_state"])
         self._publish()
+
+    @staticmethod
+    def _read_inputs(values: dict) -> dict[str, Any]:
+        # Read and check the whole set, touching no state, so that
+        # apply_inputs can refuse it outright.
+        staged: dict[str, Any] = {}
+        for key, attr in (("commanded_speed", "commanded_mps"),
+                          ("speed_limit", "speed_limit_mps")):
+            if key in values:
+                staged[attr] = max(0.0, _read_number(values, key))
+        if "actual_speed" in values:
+            staged["actual_mps"] = _read_number(values, "actual_speed")
+        if "cabin_temperature" in values:
+            staged["cabin_temp_c"] = _read_number(
+                values, "cabin_temperature")
+        if "authority_blocks" in values:
+            staged["authority_blocks"] = max(
+                0, int(_read_number(values, "authority_blocks")))
+        if "beacon_station" in values:
+            staged["beacon_station"] = str(values["beacon_station"])
+        if values.get("beacon_side") in BEACON_SIDES:
+            staged["beacon_side"] = values["beacon_side"]
+        if "beacon_underground" in values:
+            staged["beacon_underground"] = bool(
+                values["beacon_underground"])
+        if values.get("signal_light_ahead") in ASPECTS:
+            staged["next_signal"] = values["signal_light_ahead"]
+        if "failure_status" in values:
+            staged["failure_status"] = _read_flags(
+                values, "failure_status", len(FAILURES))
+        if "brake_state" in values:
+            staged["brake_state"] = _read_flags(values, "brake_state", 2)
+        if "door_state" in values:
+            staged["fb_doors_left"], staged["fb_doors_right"] = (
+                _read_flags(values, "door_state", 2))
+        if "light_state" in values:
+            (staged["fb_interior_lights"],
+             staged["fb_exterior_lights"]) = _read_flags(
+                values, "light_state", 2)
+        return staged
 
     @Slot("QVariantMap")
     def apply_bench_inputs(self, values: dict) -> None:
-        """Take the bench's staged rows, convert, and apply them.
+        """Take the bench's edited rows, convert, and apply them.
 
         The bench is a view, so it speaks the operator's units (mph,
         Fahrenheit) and one row per element. This converts once, here
         on the display side, and hands apply_inputs the SI signals in
         their truth shapes. Gains ride along because sending the set
-        is what commissions them; they are not a Train Model signal.
+        is what commissions them; they are not a Train Model signal,
+        and they are committed only once the rest of the set has
+        applied, since commissioning cannot be undone.
         """
         if not self.has_train:
             return
@@ -1143,15 +1199,14 @@ class ConsoleBackend(QObject):
             if any(row in values for row in rows):
                 si[signal] = [bool(values.get(row, now))
                               for row, now in zip(rows, current)]
-        # Gains come in with the rest of the set: sending the inputs
-        # is what commissions them, so the bench needs no second
-        # button for it. The engineer rule still holds, and they can
-        # still only be set once.
-        if ("kp" in values or "ki" in values) and not self.core.armed:
+        commission = ("kp" in values or "ki" in values
+                      ) and not self.core.armed
+        if commission:
             kp = _read_number(values, "kp") if "kp" in values else s.kp
             ki = _read_number(values, "ki") if "ki" in values else s.ki
-            self.commission_gains(kp, ki)
         self.apply_inputs(si)
+        if commission:
+            self.commission_gains(kp, ki)
 
     @Slot(float, float)
     def commission_gains(self, kp: float, ki: float) -> None:

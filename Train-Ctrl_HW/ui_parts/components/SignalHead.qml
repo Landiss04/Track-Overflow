@@ -19,22 +19,24 @@ Item {
     readonly property var lamps: [theme.danger, theme.warning,
                                   theme.success, theme.success]
     // Full spacing: a 5 px ring outside each lamp (every slot reserves
-    // it), 8 px between lamps, 12 px inside the housing. When a notice
-    // above leaves too little height for that, the ring, gap and
-    // padding shrink with the lamp instead, so four lamps always fit
-    // inside the housing rather than spilling out of it.
+    // it), 8 px between lamps, 12 px inside the housing. With less
+    // height, the ring, gap and padding shrink with the lamp instead,
+    // so four lamps always fit inside the housing. Whichever layout
+    // gives the bigger lamp wins, so the lamps only ever shrink as the
+    // height does; the two meet at about 241 px.
     readonly property real fullRing: 5
-    readonly property real minLamp: 8
-    readonly property bool roomy: (height - 2 * theme.space_3
-        - 3 * theme.space_2) / 4 - 2 * fullRing >= minLamp
+    readonly property real fullLamp: (height - 2 * theme.space_3
+        - 3 * theme.space_2) / 4 - 2 * fullRing
     readonly property real fitLamp: height / (4 * (1 + 2 * 0.15)
         + 3 * 0.2 + 2 * 0.25)
-    readonly property real ring: roomy ? fullRing
-        : Math.min(fullRing, 0.15 * fitLamp)
-    readonly property real gap: roomy ? theme.space_2
-        : Math.min(theme.space_2, 0.2 * fitLamp)
-    readonly property real pad: roomy ? theme.space_3
-        : Math.min(theme.space_3, 0.25 * fitLamp)
+    readonly property real fitRing: Math.min(fullRing, 0.15 * fitLamp)
+    readonly property real fitGap: Math.min(theme.space_2, 0.2 * fitLamp)
+    readonly property real fitPad: Math.min(theme.space_3, 0.25 * fitLamp)
+    readonly property bool roomy: fullLamp
+        >= (height - 2 * fitPad - 3 * fitGap) / 4 - 2 * fitRing
+    readonly property real ring: roomy ? fullRing : fitRing
+    readonly property real gap: roomy ? theme.space_2 : fitGap
+    readonly property real pad: roomy ? theme.space_3 : fitPad
     readonly property real lampSize: Math.max(0, Math.min(
         (height - 2 * pad - 3 * gap) / 4 - 2 * ring,
         width - 2 * theme.space_4 - 2 * ring))

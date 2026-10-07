@@ -20,7 +20,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Q_ARG, QMetaObject, QObject, QTime
+from PySide6.QtCore import (
+    Q_ARG,
+    Q_RETURN_ARG,
+    QMetaObject,
+    QObject,
+    QTime,
+)
 from PySide6.QtGui import QGuiApplication
 
 
@@ -315,7 +321,16 @@ def run_check(
     _settle(app, 300)
     expect(not backend.snapshot["fb_doors_left"],
            "a door opened while the train was moving")
+    # Pressed again at a stand, the same command still opens it: the
+    # tile re-sends a command the plant has already answered once.
+    backend.toggle_emergency_brake()
+    _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
+    backend.set_door("left", True)
+    _settle(app, 300)
+    expect(backend.snapshot["fb_doors_left"],
+           "re-pressing 'Open left' at a stand did not open the door")
     backend.set_door("left", False)
+    backend.toggle_emergency_brake()
 
     # Another train, running its own plant, with its own gains.
     first = backend.selected
@@ -358,6 +373,54 @@ def run_check(
                "picking a search result did not select that train")
         picker.setProperty("query", "")
         backend.select_train(first)
+
+    # The roster only signals when a train is added or removed, so the
+    # pickers' lists are not rebuilt on every UI tick.
+    roster_signals = []
+    backend.roster_changed.connect(lambda: roster_signals.append(1))
+    _settle(app, 500)
+    expect(not roster_signals,
+           "the roster signalled without a train being added or removed")
+
+    # A set with one bad value changes nothing, and commissioning,
+    # which cannot be undone, waits for the rest to apply.
+    commanded = backend.core.state.commanded_mps
+    try:
+        backend.apply_inputs({"commanded_speed": commanded + 5.0,
+                              "authority_blocks": "abc"})
+        expect(False, "a bad authority value was accepted")
+    except mod.InvalidInputError:
+        pass
+    expect(backend.core.state.commanded_mps == commanded,
+           "a set with a bad value was half applied")
+    backend.select_train(second)
+    backend.select_operator(1)
+    try:
+        backend.apply_bench_inputs({"kp": 1000, "ki": 10,
+                                    "door_state_left": True,
+                                    "failure_status": "x",
+                                    "speed_limit": "fast"})
+    except mod.InvalidInputError:
+        pass
+    expect(not backend.core.armed,
+           "a bad bench set commissioned the gains anyway")
+    backend.select_operator(0)
+    backend.select_train(first)
+
+    # The bench sends only the rows that were edited, never the
+    # rounded or paused readings of the rest.
+    inputs = bench.findChild(QObject, "testInputs")
+    expect(inputs is not None, "the bench inputs panel is missing")
+    if inputs is not None:
+        QMetaObject.invokeMethod(inputs, "stage",
+                                 Q_ARG("QVariant", "commanded_speed"),
+                                 Q_ARG("QVariant", 20))
+        sent = QMetaObject.invokeMethod(
+            inputs, "payload", Q_RETURN_ARG("QVariant"))
+        sent = sent.toVariant() if hasattr(sent, "toVariant") else sent
+        expect(sorted(sent) == ["commanded_speed"],
+               f"the bench would send {sorted(sent)}, not just the edit")
+        QMetaObject.invokeMethod(inputs, "release")
 
     backend.apply_bench_inputs({"authority_blocks": 3,
                                 "signal_light_ahead": "RED"})

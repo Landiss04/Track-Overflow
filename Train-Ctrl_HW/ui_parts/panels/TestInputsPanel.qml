@@ -6,8 +6,8 @@
 //
 // The two columns behave differently on purpose. Train Model signals
 // are staged: typing fills a draft, edited rows are marked, and Send
-// publishes the set in one call, so the controller never sees a
-// half-typed set of signals. Cab controls act at once, because they
+// publishes the edited rows in one call, so the controller never sees
+// a half-typed set of signals. Cab controls act at once, because they
 // are buttons a hand presses, not a message being assembled.
 //
 // Units are the operator's throughout, in both columns: mph and
@@ -24,6 +24,7 @@ import "../components"
 
 Panel {
     id: root
+    objectName: "testInputs"
 
     readonly property var s: controller.snapshot
     readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
@@ -98,6 +99,19 @@ Panel {
         return String(draft[key]) !== String(live[key]);
     }
 
+    // Only the rows that were edited and still differ from what the
+    // controller holds. Sending the whole draft would also write back
+    // rounded readings (actual speed to 0.1 mph, the limit to a whole
+    // mph) and, while paused, stale ones, such as an e-brake report
+    // the driver has since released.
+    function payload() {
+        var edits = {};
+        for (var key in touched)
+            if (pending(key))
+                edits[key] = draft[key];
+        return edits;
+    }
+
     function release() {
         draft = live;
         touched = ({});
@@ -134,7 +148,7 @@ Panel {
             enabled: root.dirty
             text: qsTr("Send to controller")
             onClicked: {
-                controller.apply_bench_inputs(root.draft);
+                controller.apply_bench_inputs(root.payload());
                 root.release();
             }
         }
