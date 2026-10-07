@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, QTime
+from PySide6.QtCore import Q_ARG, QMetaObject, QObject, QTime
 from PySide6.QtGui import QGuiApplication
 
 
@@ -356,6 +356,21 @@ def run_check(
     backend.select_train(first)
     expect(backend.selected == first,
            "could not go back to the first train")
+
+    # The console's train picker narrows the roster as the operator
+    # types, and a pick selects that train.
+    picker = window.findChild(QObject, "trainPicker")
+    expect(picker is not None, "the console train picker is missing")
+    if picker is not None:
+        picker.setProperty("query", "r-301")
+        found = [t["id"] for t in picker.property("matches").toVariant()]
+        expect(found == [second],
+               f"searching 'r-301' found {found}, not [{second}]")
+        QMetaObject.invokeMethod(picker, "choose", Q_ARG("QVariant", 0))
+        expect(backend.selected == second,
+               "picking a search result did not select that train")
+        picker.setProperty("query", "")
+        backend.select_train(first)
 
     backend.apply_bench_inputs({"authority_blocks": 3,
                                 "signal_light_ahead": "RED"})

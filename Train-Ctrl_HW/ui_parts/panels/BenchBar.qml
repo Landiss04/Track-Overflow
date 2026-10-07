@@ -10,6 +10,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
+import "../components"
 
 Rectangle {
     id: root
@@ -38,21 +39,15 @@ Rectangle {
         spacing: theme.space_3
 
         // ---------------------------------------------- select
-        SelectField {
+        TrainPicker {
+            objectName: "benchTrainPicker"
             Layout.fillWidth: false
             Layout.preferredWidth: 250
             label: qsTr("Editing train")
             enabled: root.s.train_count > 0
-            model: root.s.train_count > 0
-                ? controller.trains
-                : [{"id": "", "label": qsTr("No trains available")}]
-            textRole: "label"
-            valueRole: "id"
-            currentIndex: Math.max(0, root.s.train_index)
-            onCommitted: function (value) {
-                if (value !== "")
-                    controller.select_train(value);
-            }
+            trains: controller.trains
+            currentId: root.s.has_train ? root.s.train_id : ""
+            onPicked: function (trainId) { controller.select_train(trainId); }
         }
 
         Rectangle {

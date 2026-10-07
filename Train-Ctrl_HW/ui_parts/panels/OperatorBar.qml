@@ -3,6 +3,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
+import "../components"
 
 Rectangle {
     id: root
@@ -78,21 +79,15 @@ Rectangle {
             variant: root.s.gains_locked ? "ok" : "warning"
         }
 
-        SelectField {
+        TrainPicker {
+            objectName: "trainPicker"
             Layout.preferredWidth: 280
             Layout.alignment: Qt.AlignTop
             enabled: root.s.signed_in && root.s.train_count > 0
             label: qsTr("Current selected train")
-            model: root.s.train_count > 0
-                ? controller.trains
-                : [{"id": "", "label": qsTr("No trains available")}]
-            textRole: "label"
-            valueRole: "id"
-            currentIndex: Math.max(0, root.s.train_index)
-            onCommitted: function (value) {
-                if (value !== "")
-                    controller.select_train(value);
-            }
+            trains: controller.trains
+            currentId: root.s.has_train ? root.s.train_id : ""
+            onPicked: function (trainId) { controller.select_train(trainId); }
         }
     }
 }
