@@ -41,3 +41,20 @@ One line per promoted or denied proposal, appended at promotion time. See
 | 2026-10-02 | Train-model-Interface | 20261001-1922-D010-train-model-test-ui-boundary.md | decisions/D010-train-model-test-ui-boundary.md | promoted |
 | 2026-10-02 | Train-model-Interface | 20261001-1922-train-model-separate-ui-processes.md | modules/train-model.md | promoted |
 | 2026-10-02 | Train-model-Interface | 20261001-1942-D011-passenger-emergency-brake-button.md | decisions/D011-passenger-emergency-brake-button.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261002-2107-brake-state.md | signals/brake-state.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261002-2107-passenger-emergency-brake.md | arbitration/passenger-emergency-brake.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261005-1821-failure-status.md | signals/failure-status.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261006-1218-train-model.md | modules/train-model.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261006-1237-D010-train-model-test-ui-boundary.md | decisions/D010-train-model-test-ui-boundary.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261006-1908-door-command.md | signals/door-command.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261006-1908-traction-cut-under-braking.md | arbitration/traction-cut-under-braking.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261007-0034-passenger-capacity.md | signals/passenger-capacity.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261007-1203-beacon-both-sides.md | signals/beacon.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261007-1221-emergency-brake-command.md | signals/emergency-brake-command.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261007-1221-service-brake-command.md | signals/service-brake-command.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261007-1221-passengers-boarded.md | signals/passengers-boarded.md | promoted |
+| 2026-10-07 | train-model-clock-update | 20261002-2127-D017-shared-simulation-clock.md | decisions/D017-shared-simulation-clock.md | promoted |
+| 2026-10-07 | Train-model-Interface | 20261005-0744-units-authority-block-count.md | conventions/units.md | denied — superseded by ctc-interfacing 20261006-1621-units-authority-block-count.md (D013) |
+| 2026-10-07 | Train-model-Interface | 20261005-0744-identifiers-authority-not-an-id.md | conventions/identifiers.md | denied — superseded by ctc-interfacing 20261006-1621-identifiers-authority-not-an-id.md (D013) |
+| 2026-10-07 | Train-model-Interface | 20261005-0744-track-signal-authority-block-count.md | signals/track-signal.md | denied — superseded by ctc-interfacing 20261006-1621-track-signal-authority-block-count.md (D013) |
+| 2026-10-07 | generic-clock-config | 20261001-1658-shared-simulation-clock.md | decisions/D009-shared-simulation-clock.md | denied — superseded by train-model-clock-update 20261002-2127-D017-shared-simulation-clock.md |

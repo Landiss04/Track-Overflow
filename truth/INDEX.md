@@ -10,10 +10,10 @@ This file is read at the start of every agent session. Shards are read on demand
 | Conventions: identifiers | [identifiers.md](conventions/identifiers.md) | ID values, requirement IDs, exceptions, design token names | 2026-09-30 |
 | Conventions: files and paths | [files-and-paths.md](conventions/files-and-paths.md) | Paths, file names, delivery, module boundaries, layout, repository, linting | 2026-09-29 |
 | Conventions: toolchain | [toolchain.md](conventions/toolchain.md) | Minimum tool versions checked at session start | 2026-10-01 |
-| Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — all are placeholders except Train Model | 2026-10-02 |
-| Signals | `truth/signals/` | One file per signal | 2026-10-02 |
-| Arbitration | `truth/arbitration/` | One file per precedence rule | 2026-10-02 |
-| Decisions | `truth/decisions/` | One file per decision | 2026-10-02 |
+| Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — all are placeholders except Train Model | 2026-10-07 |
+| Signals | `truth/signals/` | One file per signal | 2026-10-07 |
+| Arbitration | `truth/arbitration/` | One file per precedence rule | 2026-10-07 |
+| Decisions | `truth/decisions/` | One file per decision | 2026-10-07 |
 
 ## Decisions on record
 
@@ -29,6 +29,7 @@ This file is read at the start of every agent session. Shards are read on demand
 | D009 | [The Train Model is physics only; control belongs to the Train Controller](decisions/D009-train-model-control-boundary.md) |
 | D010 | [The Train Model test UI is a separate, removable process](decisions/D010-train-model-test-ui-boundary.md) |
 | D011 | [The passenger emergency brake button only applies](decisions/D011-passenger-emergency-brake-button.md) |
+| D017 | [One shared simulation clock, run by the harness at 1x or 10x](decisions/D017-shared-simulation-clock.md) |
 
 ## Module shards
 
