@@ -1,7 +1,17 @@
-// Module window header, style guide 6.7. Module name and instance at H3, the
-// current mode badge, and the simulation clock in mono at 13 px muted.
+// The console's own header.
+//
+// A local copy of the shared ui/ModuleHeader, carrying one addition:
+// `alerts`, a list of fault labels shown beside the emergency badge.
+// The shared component has no slot for them and this module did not
+// want to change a file every other module uses. If that slot is
+// ever added upstream, delete this file and go back to the shared
+// header with `alerts` bound the same way.
+//
+// Everything else here is the shared component as it stands, so keep
+// the two in step if the style guide's section 6.7 moves.
 import QtQuick
 import QtQuick.Layouts
+import "../../../ui"
 
 Rectangle {
     id: root
@@ -12,6 +22,8 @@ Rectangle {
     property string line: ""
     property string clock: ""
     property bool faulted: false
+    //: Fault labels shown after the emergency badge, hidden when empty.
+    property var alerts: []
     property var navigationEntries: []
     property int currentNavigationIndex: -1
     signal navigationActivated(int index)
@@ -35,7 +47,6 @@ Rectangle {
 
         Text {
             text: root.moduleName
-            textFormat: Text.PlainText
             color: theme.text_primary
             font.family: theme.ui_family
             font.pixelSize: theme.size_h3
@@ -59,6 +70,16 @@ Rectangle {
             label: "E-brake"
             variant: "fault"
             visible: root.faulted
+        }
+
+        Repeater {
+            model: root.alerts
+
+            delegate: StatusBadge {
+                required property string modelData
+                label: modelData
+                variant: "fault"
+            }
         }
 
         RowLayout {

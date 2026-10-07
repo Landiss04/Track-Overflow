@@ -49,6 +49,7 @@ ColumnLayout {
         // disabled is dimmed exactly once, like every other control.
         contentItem: Text {
             text: control.displayText
+            textFormat: Text.PlainText
             color: theme.text_primary
             font: control.font
             verticalAlignment: Text.AlignVCenter
@@ -97,6 +98,7 @@ ColumnLayout {
             contentItem: Text {
                 text: control.textRole
                     ? option.model[control.textRole] : option.model.modelData
+                textFormat: Text.PlainText
                 color: option.selected ? theme.on_accent : theme.text_primary
                 font: control.font
                 verticalAlignment: Text.AlignVCenter
