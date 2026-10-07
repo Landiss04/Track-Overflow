@@ -8,7 +8,8 @@
       "grade_percent": 0.5,
       "speed_limit_kmh": 40,
       "elevation_m": 0.25,
-      "cumulative_elevation_m": 0.25
+      "cumulative_elevation_m": 0.25,
+      "direction": "both"
     },
     {
       "block_number": 2,
@@ -17,7 +18,8 @@
       "grade_percent": 1,
       "speed_limit_kmh": 40,
       "elevation_m": 0.5,
-      "cumulative_elevation_m": 0.75
+      "cumulative_elevation_m": 0.75,
+      "direction": "both"
     },
     {
       "block_number": 3,
@@ -26,7 +28,8 @@
       "grade_percent": 1.5,
       "speed_limit_kmh": 40,
       "elevation_m": 0.75,
-      "cumulative_elevation_m": 1.5
+      "cumulative_elevation_m": 1.5,
+      "direction": "both"
     },
     {
       "block_number": 4,
@@ -35,7 +38,8 @@
       "grade_percent": 2,
       "speed_limit_kmh": 40,
       "elevation_m": 1,
-      "cumulative_elevation_m": 2.5
+      "cumulative_elevation_m": 2.5,
+      "direction": "both"
     },
     {
       "block_number": 5,
@@ -44,7 +48,8 @@
       "grade_percent": 1.5,
       "speed_limit_kmh": 40,
       "elevation_m": 0.75,
-      "cumulative_elevation_m": 3.25
+      "cumulative_elevation_m": 3.25,
+      "direction": "both"
     },
     {
       "block_number": 6,
@@ -53,7 +58,8 @@
       "grade_percent": 1,
       "speed_limit_kmh": 40,
       "elevation_m": 0.5,
-      "cumulative_elevation_m": 3.75
+      "cumulative_elevation_m": 3.75,
+      "direction": "both"
     },
     {
       "block_number": 7,
@@ -66,7 +72,8 @@
       "infrastructure": {
         "station": "SHADYSIDE"
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 8,
@@ -75,7 +82,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 40,
       "elevation_m": 0,
-      "cumulative_elevation_m": 4.125
+      "cumulative_elevation_m": 4.125,
+      "direction": "both"
     },
     {
       "block_number": 9,
@@ -87,7 +95,8 @@
       "cumulative_elevation_m": 4.125,
       "infrastructure": {
         "switch": "75-yard"
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 10,
@@ -96,7 +105,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 40,
       "elevation_m": 0,
-      "cumulative_elevation_m": 4.125
+      "cumulative_elevation_m": 4.125,
+      "direction": "both"
     },
     {
       "block_number": 11,
@@ -108,7 +118,8 @@
       "cumulative_elevation_m": 3.75,
       "infrastructure": {
         "railway_crossing": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 12,
@@ -117,7 +128,8 @@
       "grade_percent": -1,
       "speed_limit_kmh": 40,
       "elevation_m": -0.75,
-      "cumulative_elevation_m": 3
+      "cumulative_elevation_m": 3,
+      "direction": "both"
     },
     {
       "block_number": 13,
@@ -126,7 +138,8 @@
       "grade_percent": -2,
       "speed_limit_kmh": 40,
       "elevation_m": -1.4,
-      "cumulative_elevation_m": 1.6
+      "cumulative_elevation_m": 1.6,
+      "direction": "both"
     },
     {
       "block_number": 14,
@@ -135,7 +148,8 @@
       "grade_percent": -1.25,
       "speed_limit_kmh": 40,
       "elevation_m": -0.75,
-      "cumulative_elevation_m": 0.85
+      "cumulative_elevation_m": 0.85,
+      "direction": "both"
     },
     {
       "block_number": 15,
@@ -147,7 +161,8 @@
       "cumulative_elevation_m": 0.25,
       "infrastructure": {
         "switch": "15-16; 1-16"
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 16,
@@ -160,7 +175,8 @@
       "infrastructure": {
         "station": "HERRON AVE"
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 17,
@@ -169,7 +185,8 @@
       "grade_percent": -0.5,
       "speed_limit_kmh": 55,
       "elevation_m": -1,
-      "cumulative_elevation_m": -1
+      "cumulative_elevation_m": -1,
+      "direction": "both"
     },
     {
       "block_number": 18,
@@ -178,7 +195,8 @@
       "grade_percent": -0.06025,
       "speed_limit_kmh": 70,
       "elevation_m": -0.241,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 19,
@@ -187,7 +205,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 70,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 20,
@@ -196,7 +215,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 70,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 21,
@@ -209,7 +229,8 @@
       "infrastructure": {
         "station": "SWISSVILLE"
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 22,
@@ -218,7 +239,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 55,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 23,
@@ -227,7 +249,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 55,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 24,
@@ -239,7 +262,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 25,
@@ -253,7 +277,8 @@
         "station": "PENN STATION",
         "underground": true
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 26,
@@ -265,7 +290,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 27,
@@ -278,7 +304,8 @@
       "infrastructure": {
         "switch": "27-28; 27-76",
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 28,
@@ -290,7 +317,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 29,
@@ -302,7 +330,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 30,
@@ -314,7 +343,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 31,
@@ -326,7 +356,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 32,
@@ -339,7 +370,8 @@
       "infrastructure": {
         "switch": "32-33; 33-72",
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 33,
@@ -351,7 +383,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 34,
@@ -363,7 +396,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 35,
@@ -377,7 +411,8 @@
         "station": "STEEL PLAZA",
         "underground": true
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 36,
@@ -389,7 +424,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 37,
@@ -401,7 +437,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 38,
@@ -414,7 +451,8 @@
       "infrastructure": {
         "switch": "38-39; 38-71",
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 39,
@@ -426,7 +464,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 40,
@@ -438,7 +477,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 41,
@@ -450,7 +490,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 42,
@@ -462,7 +503,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 43,
@@ -475,7 +517,8 @@
       "infrastructure": {
         "switch": "43-44; 44-67",
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 44,
@@ -487,7 +530,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 45,
@@ -501,7 +545,8 @@
         "station": "FIRST AVE",
         "underground": true
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 46,
@@ -513,7 +558,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 47,
@@ -525,7 +571,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "railway_crossing": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 48,
@@ -538,7 +585,8 @@
       "infrastructure": {
         "station": "STATION SQUARE"
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 49,
@@ -547,7 +595,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 60,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 50,
@@ -556,7 +605,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 60,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 51,
@@ -565,7 +615,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 55,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 52,
@@ -577,7 +628,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "switch": "52-53; 52-66"
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 53,
@@ -586,7 +638,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 55,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 54,
@@ -595,7 +648,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 55,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 55,
@@ -604,7 +658,8 @@
       "grade_percent": 0.5,
       "speed_limit_kmh": 55,
       "elevation_m": 0.375,
-      "cumulative_elevation_m": -0.866
+      "cumulative_elevation_m": -0.866,
+      "direction": "both"
     },
     {
       "block_number": 56,
@@ -613,7 +668,8 @@
       "grade_percent": 0.5,
       "speed_limit_kmh": 55,
       "elevation_m": 0.375,
-      "cumulative_elevation_m": -0.491
+      "cumulative_elevation_m": -0.491,
+      "direction": "both"
     },
     {
       "block_number": 57,
@@ -622,7 +678,8 @@
       "grade_percent": 0.5,
       "speed_limit_kmh": 55,
       "elevation_m": 0.375,
-      "cumulative_elevation_m": -0.116
+      "cumulative_elevation_m": -0.116,
+      "direction": "both"
     },
     {
       "block_number": 58,
@@ -631,7 +688,8 @@
       "grade_percent": 1,
       "speed_limit_kmh": 55,
       "elevation_m": 0.75,
-      "cumulative_elevation_m": 0.634
+      "cumulative_elevation_m": 0.634,
+      "direction": "both"
     },
     {
       "block_number": 59,
@@ -640,7 +698,8 @@
       "grade_percent": 0.5,
       "speed_limit_kmh": 55,
       "elevation_m": 0.375,
-      "cumulative_elevation_m": 1.009
+      "cumulative_elevation_m": 1.009,
+      "direction": "both"
     },
     {
       "block_number": 60,
@@ -653,7 +712,8 @@
       "infrastructure": {
         "station": "SOUTH HILLS JUNCTION"
       },
-      "station_side": "Left/Right"
+      "station_side": "Left/Right",
+      "direction": "both"
     },
     {
       "block_number": 61,
@@ -662,7 +722,8 @@
       "grade_percent": -0.5,
       "speed_limit_kmh": 55,
       "elevation_m": -0.375,
-      "cumulative_elevation_m": 0.634
+      "cumulative_elevation_m": 0.634,
+      "direction": "both"
     },
     {
       "block_number": 62,
@@ -671,7 +732,8 @@
       "grade_percent": -1,
       "speed_limit_kmh": 55,
       "elevation_m": -0.75,
-      "cumulative_elevation_m": -0.116
+      "cumulative_elevation_m": -0.116,
+      "direction": "both"
     },
     {
       "block_number": 63,
@@ -680,7 +742,8 @@
       "grade_percent": -1,
       "speed_limit_kmh": 55,
       "elevation_m": -0.75,
-      "cumulative_elevation_m": -0.866
+      "cumulative_elevation_m": -0.866,
+      "direction": "both"
     },
     {
       "block_number": 64,
@@ -689,7 +752,8 @@
       "grade_percent": -0.5,
       "speed_limit_kmh": 55,
       "elevation_m": -0.375,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 65,
@@ -698,7 +762,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 55,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 66,
@@ -707,7 +772,8 @@
       "grade_percent": 0,
       "speed_limit_kmh": 55,
       "elevation_m": 0,
-      "cumulative_elevation_m": -1.241
+      "cumulative_elevation_m": -1.241,
+      "direction": "both"
     },
     {
       "block_number": 67,
@@ -719,7 +785,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 68,
@@ -731,7 +798,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 69,
@@ -743,7 +811,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 70,
@@ -755,7 +824,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 71,
@@ -767,7 +837,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 72,
@@ -779,7 +850,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 73,
@@ -791,7 +863,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 74,
@@ -803,7 +876,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 75,
@@ -815,7 +889,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     },
     {
       "block_number": 76,
@@ -827,7 +902,8 @@
       "cumulative_elevation_m": -1.241,
       "infrastructure": {
         "underground": true
-      }
+      },
+      "direction": "both"
     }
   ]
 }
