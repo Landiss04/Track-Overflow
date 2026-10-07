@@ -262,6 +262,11 @@ class TrackMapModel(QObject):
                  parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._map = build_map(load_layout() if layout is None else layout)
+        # Every block's entry by "Line:block". QML asks for the few it
+        # needs through blockInfo and blocksIn: looping over ``blocks`` in
+        # QML re-reads the whole list on every element, which is slow.
+        self._by_key = {f"{b['line']}:{b['blockId']}": b
+                        for b in self._map["blocks"]}
         # Each block's drawn piece, for placing trains on it.
         self._pieces = {
             (b["line"], b["blockId"]): list(zip(b["points"][::2],
@@ -284,6 +289,19 @@ class TrackMapModel(QObject):
                            "block": train["block"],
                            "x": x, "y": y, "angle": angle})
         return placed
+
+    @Slot(str, result="QVariantMap")
+    def blockInfo(self, key: str) -> dict[str, Any]:  # noqa: N802
+        """One block's entry by ``Line:block``; empty if there is none."""
+        return self._by_key.get(key, {})
+
+    @Slot(list, result=list)
+    def blocksIn(self, keys: list[str]) -> list[dict[str, Any]]:  # noqa
+        """The entries of the blocks named by ``Line:block`` keys, in map
+        order."""
+        wanted = set(keys)
+        return [entry for key, entry in self._by_key.items()
+                if key in wanted]
 
     @Slot(float, float, float, int, result="QVariantMap")
     def blockAt(self, x: float, y: float,  # noqa: N802

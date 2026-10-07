@@ -130,6 +130,17 @@ class BlockLabelTest(unittest.TestCase):
         # A line the map hides is never hit.
         self.assertEqual(self.model.blockAt(x, y, 5.0, 1), {})
 
+    def test_block_lookups(self) -> None:
+        # QML asks for single blocks and small sets, never loops over
+        # all of them (that re-reads the whole list per element).
+        self.assertEqual(self.model.blockInfo("Green:24"),
+                         self.blocks[("Green", "24")])
+        self.assertEqual(self.model.blockInfo("Green:999"), {})
+        found = self.model.blocksIn(["Red:23", "Green:24", "Red:999"])
+        self.assertEqual([(b["line"], b["blockId"]) for b in found],
+                         [("Green", "24"), ("Red", "23")])
+        self.assertEqual(self.model.blocksIn([]), [])
+
     def test_placed_trains_keep_their_block(self) -> None:
         (train,) = self.model.placeTrains([
             {"train": "T1", "line": "Green", "block": "24",

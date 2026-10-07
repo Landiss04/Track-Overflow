@@ -39,17 +39,16 @@ Item {
 
     // Block numbers show from this zoom on; below it they would crowd.
     readonly property real numbersFromZoom: 2
-    // Every block by "Line:block", for the hover card.
-    readonly property var blockInfo: {
-        const info = {};
-        if (root.model) {
-            for (const block of root.model.blocks)
-                info[block.line + ":" + block.blockId] = block;
-        }
-        return info;
-    }
     // The block under the pointer, "Line:block", or "".
     property string hoveredKey: ""
+    // Its entry from the model, or null. Looked up in Python: looping
+    // over model.blocks in QML re-reads the whole list on every element.
+    readonly property var hoveredBlock: {
+        if (!root.model || root.hoveredKey === "")
+            return null;
+        const block = root.model.blockInfo(root.hoveredKey);
+        return block.blockId !== undefined ? block : null;
+    }
     // Where the pointer is, in map units.
     property point hoverPoint: Qt.point(0, 0)
 
@@ -282,9 +281,11 @@ Item {
             // The selected train's route (--accent, style guide 4.3), under
             // the track so a block's own state still shows on top. Within
             // authority the band is solid; beyond it, thinner and dashed,
-            // so the two differ by pattern as well as weight.
+            // so the two differ by pattern as well as weight. Only the
+            // route's blocks get a shape.
             Repeater {
-                model: root.model ? root.model.blocks : []
+                model: root.model
+                    ? root.model.blocksIn(Object.keys(root.routeStates)) : []
 
                 delegate: Shape {
                     id: band
@@ -316,10 +317,10 @@ Item {
             // The hovered block: a soft halo under the track.
             Shape {
                 id: hoverHalo
-                readonly property var block: root.blockInfo[root.hoveredKey]
+                readonly property var block: root.hoveredBlock
                 anchors.fill: parent
                 preferredRendererType: Shape.CurveRenderer
-                visible: block !== undefined
+                visible: block !== null
                 opacity: 0.3
 
                 ShapePath {
@@ -502,12 +503,8 @@ Item {
             // short block a train next to it would hide the block's own
             // state color. Sized in screen pixels.
             Repeater {
-                model: {
-                    const states = root.blockStates;
-                    return root.model ? root.model.blocks.filter(
-                        block => states[block.line + ":" + block.blockId])
-                        : [];
-                }
+                model: root.model
+                    ? root.model.blocksIn(Object.keys(root.blockStates)) : []
 
                 delegate: Rectangle {
                     id: badge
@@ -605,7 +602,7 @@ Item {
     Rectangle {
         id: card
 
-        readonly property var block: root.blockInfo[root.hoveredKey]
+        readonly property var block: root.hoveredBlock
         readonly property point anchor: {
             // Re-place when the map zooms or pans.
             view.contentX; view.contentY; root.mapScale;
@@ -613,7 +610,7 @@ Item {
                                     root.hoverPoint.y);
         }
 
-        visible: block !== undefined
+        visible: block !== null
         z: 10
         x: Math.max(0, Math.min(root.width - width, anchor.x + 14))
         y: Math.max(0, Math.min(root.height - height, anchor.y + 14))
@@ -648,7 +645,7 @@ Item {
             }
             Text {
                 // null: no station; "": a station with no name.
-                visible: card.block !== undefined
+                visible: card.block !== null
                     && card.block.station !== null
                     && card.block.station !== undefined
                 text: card.block && card.block.station
