@@ -11,11 +11,16 @@ ScrollView {
     readonly property var s: trainModel.snapshot
 
     function fixed(value, digits) {
-        return Number(value).toFixed(digits);
+        const text = Number(value).toFixed(digits);
+        // A small negative value rounds to "-0.00"; zero carries no sign.
+        return Number(text) === 0 ? (0).toFixed(digits) : text;
     }
 
-    function mph(val) { return Number(val) * 2.23694; }
+    function mph(val) { return Number(val) * 2.236936; }
     function ft(val)  { return Number(val) * 3.28084; }
+    function tons(val) { return Number(val) * 0.001102311; }
+    function kw(val)  { return Number(val) * 0.001; }
+    function degF(val) { return Number(val) * 9 / 5 + 32; }
 
     clip: true
     contentWidth: availableWidth
@@ -46,15 +51,15 @@ ScrollView {
                 }
 
                 StatusBadge {
-                    label: root.s.cabin_light
-                        ? qsTr("Cabin on") : qsTr("Cabin off")
-                    variant: root.s.cabin_light ? "ok" : "idle"
+                    label: root.s.interior_light
+                        ? qsTr("Interior on") : qsTr("Interior off")
+                    variant: root.s.interior_light ? "ok" : "idle"
                 }
 
                 StatusBadge {
-                    label: root.s.headlight
-                        ? qsTr("Headlight on") : qsTr("Headlight off")
-                    variant: root.s.headlight ? "ok" : "idle"
+                    label: root.s.exterior_light
+                        ? qsTr("Exterior on") : qsTr("Exterior off")
+                    variant: root.s.exterior_light ? "ok" : "idle"
                 }
             }
 
@@ -91,13 +96,8 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Authority")
-                    value: root.s.authority_block
-                }
-
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: qsTr("Distance to end of authority")
-                    value: root.fixed(root.ft(root.s.authority_distance), 1) + " ft"
+                    value: root.s.authority
+                        + (root.s.authority === 1 ? qsTr(" block") : qsTr(" blocks"))
                 }
 
                 KeyValueRow {
@@ -110,6 +110,12 @@ ScrollView {
                     Layout.fillWidth: true
                     label: qsTr("Grade")
                     value: root.fixed(root.s.grade, 1) + " deg"
+                }
+
+                KeyValueRow {
+                    Layout.fillWidth: true
+                    label: qsTr("Elevation")
+                    value: root.fixed(root.ft(root.s.elevation), 1) + " ft"
                     rule: false
                 }
             }
@@ -136,14 +142,14 @@ ScrollView {
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Loaded mass")
-                        value: root.fixed(root.s.loaded_mass, 1)
-                        unit: "t"
+                        value: root.fixed(root.tons(root.s.loaded_mass), 1)
+                        unit: "ton"
                     }
 
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Cabin temp")
-                        value: String(root.s.cabin_temp)
+                        value: root.fixed(root.degF(root.s.cabin_temp), 0)
                         unit: "F"
                     }
                 }
@@ -165,20 +171,20 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Empty mass")
-                    value: root.fixed(root.s.empty_mass, 1) + " t"
+                    value: root.fixed(root.tons(root.s.empty_mass), 1) + " ton"
                 }
 
                 KeyValueRow {
                     Layout.fillWidth: true
-                    label: qsTr("Power consumption")
-                    value: root.fixed(root.s.power_consumption, 0) + " / "
-                        + root.fixed(root.s.power_limit, 0) + " kW"
+                    label: qsTr("Power command")
+                    value: root.fixed(root.kw(root.s.power_command), 0) + " / "
+                        + root.fixed(root.kw(root.s.power_limit), 0) + " kW"
                     rule: false
                 }
 
                 UsageBar {
                     Layout.fillWidth: true
-                    value: root.s.power_consumption
+                    value: root.s.power_command
                     ceiling: root.s.power_limit
                 }
 
@@ -206,17 +212,18 @@ ScrollView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: theme.safety_emphasis_height
                     Layout.topMargin: theme.space_5
+                    objectName: "passengerEmergencyBrake"
                     label: qsTr("Apply emergency brake")
-                    applied: root.s.emergency_brake
-                    tooltip: qsTr("Stops the train at the full braking rate and "
-                        + "reports the stop to the track controller and the "
-                        + "CTC. Confirmation is required.")
-                    onConfirmed: {
-                        if (root.s.emergency_brake)
-                            trainModel.releaseEmergencyBrake()
-                        else
-                            trainModel.applyEmergencyBrake()
-                    }
+                    // Never offers a release: whether passengers may release
+                    // it is undecided. Disabled while the emergency brake is
+                    // engaged from any source (a Train Controller command or
+                    // a pull) and while a pull is latched.
+                    enabled: !root.s.emergency_brake
+                        && !root.s.passenger_ebrake_pulled
+                    // tooltip: qsTr("Stops the train at the full braking rate and "
+                        // + "reports the stop to the track controller and the "
+                        // + "CTC. Confirmation is required.")
+                    onConfirmed: trainModel.applyEmergencyBrake()
                 }
 
                 RowLayout {
@@ -282,7 +289,17 @@ ScrollView {
                     value: root.fixed(root.ft(root.s.position_offset), 1) + " ft"
                 }
 
+                // The station in the current block. The next station is
+                // the last beacon's, kept until the train reaches it.
                 KeyValueRow {
+                    objectName: "currentStation"
+                    Layout.fillWidth: true
+                    label: qsTr("Station")
+                    value: root.s.station
+                }
+
+                KeyValueRow {
+                    objectName: "nextStation"
                     Layout.fillWidth: true
                     label: qsTr("Next station · arrival")
                     value: root.s.next_station + " ("
@@ -307,14 +324,16 @@ ScrollView {
                         required property var modelData
 
                         Layout.fillWidth: true
-                        // Setting a simulated failure is a test action, not a
-                        // success state. Clearing an active fault is success.
-                        variant: modelData.active ? "success" : "secondary"
+                        // An active failure is a fault, so its button shows
+                        // red: a Train Model exception (Kevin 2026-10-06) to
+                        // style guide 6.1, which gives a clear-fault action
+                        // the green success fill. 6.1 itself is unchanged.
+                        variant: modelData.active ? "danger" : "secondary"
                         text: (modelData.active ? qsTr("Clear ") : qsTr("Induce "))
                             + modelData.label + qsTr(" failure")
-                        tooltip: qsTr("A failure stays set until it is cleared here. "
-                            + "With signal pickup failed, no new commanded speed "
-                            + "or authority reaches this train.")
+                        // tooltip: qsTr("A failure stays set until it is cleared here. "
+                            // + "With signal pickup failed, no new commanded speed "
+                            // + "or authority reaches this train.")
                         onClicked: trainModel.setFailure(
                             modelData.name, !modelData.active)
                     }
