@@ -28,6 +28,7 @@ from ctc.interface import (  # noqa: E402
     TrackFailureReport,
     TicketSales,
     TrackModelInputs,
+    TrainAuthority,
     TrainReport,
 )
 from ctc.model import StubCtcOffice  # noqa: E402
@@ -118,10 +119,15 @@ class SocketLinkTest(unittest.TestCase):
                 trains=(TrainReport("T1", "Green", "62", 0.0, 0.0),)),
             track_model=_green(5)))
         (suggestion,) = out.track_controller.suggestions
-        self.assertEqual(suggestion.authority_block_id, "65")
-        # Still an int after the JSON round trip.
+        self.assertEqual(suggestion.authority_blocks, 3)
+        # Still ints after the JSON round trip.
         self.assertIs(type(suggestion.suggested_speed_mps), int)
+        self.assertIs(type(suggestion.authority_blocks), int)
         snap = self.link.snapshot()
+        # The route survives the JSON round trip as a tuple.
+        self.assertEqual(snap.authorities, (TrainAuthority(
+            "T1", "Green", 3, "65", "destination",
+            route=("62", "63", "64", "65")),))
         self.assertEqual(_sold(snap), 5)
         self.assertEqual(snap.orders[0].arrival_s, 30600.0)
         self.assertEqual(
@@ -137,8 +143,7 @@ class SocketLinkTest(unittest.TestCase):
     def test_switch_commands_cross_the_link(self) -> None:
         with self.assertRaises(RemoteCtcError):
             self.link.set_switch("Green", "12", "reverse")
-        self._wait(lambda: self.link.snapshot().outputs.track_controller
-                   .maintenance_mode)
+        self._wait(lambda: self.link.snapshot().maintenance_mode)
         self.link.set_switch("Green", "12", "reverse")
         (command,) = (self.link.snapshot().outputs.track_controller
                       .switch_commands)
@@ -164,8 +169,7 @@ class SocketLinkTest(unittest.TestCase):
 
     def test_pushed_change_arrives(self) -> None:
         # The host turns maintenance mode on by itself after 1.5 s.
-        self._wait(lambda: self.link.snapshot().outputs.track_controller
-                   .maintenance_mode)
+        self._wait(lambda: self.link.snapshot().maintenance_mode)
 
     def test_host_shutdown_with_client_is_silent(self) -> None:
         # Closing the CTC window with a test UI connected used to print
@@ -221,8 +225,7 @@ class SocketLinkTest(unittest.TestCase):
                 errors = self._raw(payload)
                 self.assertEqual(len(errors), 1, errors)
         # "false" did not turn maintenance mode on.
-        self.assertFalse(self.link._call("snapshot").outputs
-                         .track_controller.maintenance_mode)
+        self.assertFalse(self.link._call("snapshot").maintenance_mode)
 
     def test_inputs_are_sent_again_after_a_restart(self) -> None:
         harness = CtcTestHarness(self.link)

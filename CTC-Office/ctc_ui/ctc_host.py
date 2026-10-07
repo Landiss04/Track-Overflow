@@ -26,11 +26,13 @@ from typing import TYPE_CHECKING, Any, Mapping
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
 from ctc.interface import (
+    BlockRef,
     CtcInputs,
     CtcOffice,
     CtcSnapshot,
     DispatchOrder,
     TrackModelInputs,
+    TrainAuthority,
     TrainSuggestion,
 )
 from ctc.model import CtcError, StubCtcOffice
@@ -62,6 +64,38 @@ _FAILURE_LABELS = {
 
 _SWITCH_POSITIONS = ("normal", "reverse")
 
+_BLOCKED_LABELS = {
+    "occupied": "occupied",
+    "closed": "closed",
+    "closing": "closing",
+    "failed": "failed",
+}
+
+
+def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
+    """Closed blocks, without the ones still closing: ``closed_blocks``
+    lists both, since the Track Controller is locked out of either."""
+    pending = set(snap.pending_closures)
+    return [b for b in snap.outputs.track_controller.closed_blocks
+            if b not in pending]
+
+
+def _authority_limit(limit: TrainAuthority) -> str:
+    """Why a train's authority ends where it does, short enough for a
+    key-value row: "Block 24 occupied", "Switch 12 not set"."""
+    if limit.reason == "destination":
+        return "At destination" if limit.blocks == 0 else "Destination"
+    if limit.reason == "switch":
+        return f"Switch {limit.at} not set"
+    if limit.reason in _BLOCKED_LABELS:
+        return f"Block {limit.at} {_BLOCKED_LABELS[limit.reason]}"
+    if limit.reason == "reserved":
+        return f"Block {limit.at} held by {limit.held_by}"
+    return "No route"
+
+
+#: Blocks within authority shown as chips in the Selected train panel.
+ROUTE_CHIPS = 8
 
 #: Hours of ticket sales the throughput history shows.
 HISTORY_HOURS = 12
@@ -126,6 +160,10 @@ class CtcHost(QObject):
         self._clock: SimulationClockBridge | None = None
         # Self-cancelled orders already dismissed from the notices.
         self._cancelled_seen = 0
+        # Reversal alerts the dispatcher dismissed: (train, line, block
+        # it would reverse in). Forgotten once the situation clears, so
+        # it alerts again if it comes back.
+        self._reversals_seen: set[tuple[str, str, str]] = set()
 
     def start(self) -> None:
         """Start serving the test UI. The window works either way."""
@@ -201,6 +239,7 @@ class CtcHost(QObject):
         new_second = second != self._last_second
         if changed:
             self._last_state = state
+            self._reversals_seen &= self._reversal_keys(snap)
             self._revision += 1
             self.stateChanged.emit()
             self.noticesChanged.emit()
@@ -292,6 +331,7 @@ class CtcHost(QObject):
         report = reports.get(train_id)
         order = self._orders(snap).get(train_id)
         suggestion = self._suggestions(snap).get(train_id)
+        limit = {a.train_id: a for a in snap.authorities}.get(train_id)
         return {
             "train": train_id,
             "line": line,
@@ -299,8 +339,15 @@ class CtcHost(QObject):
             "speed": _mph(report.speed_mps) if report else NO_VALUE,
             "speedLimit": (_mph(suggestion.suggested_speed_mps)
                            if suggestion else NO_VALUE),
-            "authority": (suggestion.authority_block_id
-                          if suggestion else NO_VALUE),
+            # The table's compact form; the readouts show the count
+            # alone (a telemetry value is a short number and a unit).
+            "authority": (f"{limit.blocks} (to {limit.end_block_id})"
+                          if limit else NO_VALUE),
+            "authorityBlocks": str(limit.blocks) if limit else NO_VALUE,
+            "authorityEnd": (f"Block {limit.end_block_id}"
+                             if limit else NO_VALUE),
+            "authorityLimit": (_authority_limit(limit)
+                               if limit else NO_VALUE),
             "destination": (self._destination(
                 order.line, order.destination_block_id)
                 if order else NO_VALUE),
@@ -330,6 +377,81 @@ class CtcHost(QObject):
             return {}
         return self._train_row(train_id, line, snap)
 
+    def _authority(self, train_id: str) -> TrainAuthority | None:
+        snap = self._module.snapshot()
+        return {a.train_id: a for a in snap.authorities}.get(train_id)
+
+    @Slot(str, result="QVariantMap")
+    def routeStates(self, train_id: str) -> dict[str, str]:  # noqa: N802
+        """A train's route for the map: ``Line:block`` -> ``authority``
+        (blocks it may still enter) or ``beyond`` (the rest of the way
+        to its destination). Empty with no train, order or route."""
+        limit = self._authority(train_id)
+        if limit is None:
+            return {}
+        ahead = limit.route[1:]
+        return {block_key(limit.line, block_id):
+                ("authority" if i < limit.blocks else "beyond")
+                for i, block_id in enumerate(ahead)}
+
+    @Slot(str, result="QVariantMap")
+    def routeDetail(self, train_id: str) -> dict[str, Any]:  # noqa: N802
+        """A train's route for the Selected train panel.
+
+        ``chips``: its own block, then the blocks within authority (the
+        first ``ROUTE_CHIPS``, then ``{more: n}`` for the rest), then the
+        block the authority stops before, if a block stops it; each
+        ``{block, occupancy}`` for a TrackBlock (style guide 6.4).
+        ``summary``: one line on the rest of the way.
+        """
+        limit = self._authority(train_id)
+        if limit is None or not limit.route:
+            return {"chips": [],
+                    "summary": ("No route to its destination."
+                                if limit else "")}
+        snap = self._module.snapshot()
+        applied = self._applied()
+        line = limit.line
+        track = applied.track_controller
+        occupied = ({t.block_id for t in track.trains if t.line == line}
+                    | {o.block_id for o in track.occupancy
+                       if o.occupied and o.line == line})
+        closed = {b.block_id
+                  for b in snap.outputs.track_controller.closed_blocks
+                  if b.line == line}
+        failed = {f.block_id for f in track.failures if f.line == line}
+
+        def occupancy(block_id: str) -> str:
+            return ("failure" if block_id in failed
+                    else "closed" if block_id in closed
+                    else "occupied" if block_id in occupied else "free")
+
+        ahead = limit.route[1:limit.blocks + 1]
+        chips: list[dict[str, Any]] = [
+            {"block": b, "occupancy": occupancy(b)}
+            for b in (limit.route[0], *ahead[:ROUTE_CHIPS])]
+        if len(ahead) > ROUTE_CHIPS:
+            chips.append({"more": len(ahead) - ROUTE_CHIPS})
+        if limit.reason in _BLOCKED_LABELS:
+            chips.append({"block": limit.at,
+                          "occupancy": occupancy(limit.at)})
+        destination = limit.route[-1]
+        remaining = len(limit.route) - 1 - limit.blocks
+        if limit.blocks == 0 and remaining == 0:
+            summary = f"At its destination, block {destination}."
+        elif remaining == 0:
+            summary = (f"Authority runs to its destination, block "
+                       f"{destination}.")
+        else:
+            summary = (f"Authority ends at block {limit.end_block_id}; "
+                       f"{remaining} more to its destination, block "
+                       f"{destination}.")
+        if limit.reverse_at:
+            summary += (f" Getting round means reversing at block "
+                        f"{limit.reverse_at}; the CTC does not reverse "
+                        "trains, so it waits.")
+        return {"chips": chips, "summary": summary}
+
     @Slot(str, result=list)
     def trainOptions(self, line: str) -> list[dict[str, str]]:  # noqa
         """Trains on a line, then a new train with the next free ID."""
@@ -357,7 +479,7 @@ class CtcHost(QObject):
         """
         snap = self._module.snapshot()
         states: dict[str, str] = {}
-        for block in snap.outputs.track_controller.closed_blocks:
+        for block in _closed_only(snap):
             states[block_key(block.line, block.block_id)] = "closed"
         for failure in self._applied().track_controller.failures:
             states[block_key(failure.line, failure.block_id)] = "failure"
@@ -404,7 +526,7 @@ class CtcHost(QObject):
         """Closed, closing and failed blocks, for Active closures."""
         snap = self._module.snapshot()
         rows: list[dict[str, Any]] = []
-        for block in snap.outputs.track_controller.closed_blocks:
+        for block in _closed_only(snap):
             rows.append({"block": f"{block.line} {block.block_id}",
                          "state": "Closed", "line": block.line,
                          "blockId": block.block_id, "reopenable": True,
@@ -517,6 +639,62 @@ class CtcHost(QObject):
                 f"{cancelled.reason}.")
         return found
 
+    @staticmethod
+    def _reversal_keys(snap: CtcSnapshot) -> set[tuple[str, str, str]]:
+        return {(a.train_id, a.line, a.reverse_at)
+                for a in snap.authorities if a.reverse_at}
+
+    def _blocked_by(self, limit: TrainAuthority) -> str:
+        """What stops a held train, as a clause: "T5 is standing in
+        block 28", "block 29 has failed"."""
+        if limit.reason == "occupied":
+            standing = [t.train_id
+                        for t in self._applied().track_controller.trains
+                        if (t.line, t.block_id) == (limit.line, limit.at)]
+            if standing:
+                return (f"{standing[0]} is standing in block {limit.at} "
+                        "and is not moving")
+            return f"block {limit.at} is occupied"
+        return {
+            "failed": f"block {limit.at} has failed",
+            "closed": f"block {limit.at} is closed",
+            "closing": f"block {limit.at} is closing",
+            "reserved": f"block {limit.at} is held by {limit.held_by}",
+            "switch": f"switch {limit.at} is not set for its route",
+        }.get(limit.reason, "there is no route without reversing")
+
+    @Property(list, notify=noticesChanged)
+    def reversalAlerts(self) -> list[dict[str, str]]:  # noqa: N802
+        """Trains the CTC holds because only reversing would get them
+        round what blocks them: ``{train, line, reverseAt, destination,
+        blockedBy}``. The CTC never reverses a train; the dispatcher
+        decides."""
+        snap = self._module.snapshot()
+        orders = self._orders(snap)
+        alerts = []
+        for limit in snap.authorities:
+            key = (limit.train_id, limit.line, limit.reverse_at)
+            if not limit.reverse_at or key in self._reversals_seen:
+                continue
+            order = orders.get(limit.train_id)
+            alerts.append({
+                "train": limit.train_id,
+                "line": limit.line,
+                "reverseAt": limit.reverse_at,
+                "destination": (order.destination_block_id
+                                if order else ""),
+                "blockedBy": self._blocked_by(limit),
+            })
+        return alerts
+
+    @Slot(str)
+    def dismissReversal(self, train_id: str) -> None:  # noqa: N802
+        """Stop alerting about one train's reversal until it clears."""
+        snap = self._module.snapshot()
+        self._reversals_seen |= {key for key in self._reversal_keys(snap)
+                                 if key[0] == train_id}
+        self.noticesChanged.emit()
+
     @Slot()
     def dismissNotices(self) -> None:  # noqa: N802
         """Clear the cancelled-order notices (a staged update stays
@@ -577,8 +755,7 @@ class CtcHost(QObject):
 
     @Property(bool, notify=maintenanceModeChanged)
     def maintenanceMode(self) -> bool:  # noqa: N802
-        outputs = self._module.snapshot().outputs
-        return outputs.track_controller.maintenance_mode
+        return self._module.snapshot().maintenance_mode
 
     @Slot(bool)
     def setMaintenanceMode(self, active: bool) -> None:  # noqa: N802

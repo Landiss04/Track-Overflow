@@ -7,6 +7,11 @@ a section holds one or more blocks.
 
 Block IDs are strings, never integers, per
 ``truth/conventions/identifiers.md``.
+
+Each block may give its direction of travel, traced from the course
+Red & Green Line diagram: ``ascending`` (trains run toward higher block
+numbers through it), ``descending``, or ``both``; a block that gives
+none is ``both``.
 """
 
 from __future__ import annotations
@@ -14,6 +19,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+Direction = Literal["ascending", "descending", "both"]
+DIRECTIONS: tuple[Direction, ...] = ("ascending", "descending", "both")
 
 #: The course-provided layout files, one per line.
 LAYOUT_DIR = Path(__file__).resolve().parents[2] / "TrackModel"
@@ -36,6 +45,7 @@ class Block:
     switch: str | None = None
     railway_crossing: bool = False
     underground: bool = False
+    direction: Direction = "both"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +95,10 @@ def _block(line: str, raw: dict[str, object]) -> Block:
     assert isinstance(infrastructure, dict)
     station = infrastructure.get("station")
     switch = infrastructure.get("switch")
+    direction = raw.get("direction", "both")
+    if direction not in DIRECTIONS:
+        raise ValueError(f"{line} block {raw['block_number']}: direction "
+                         f"must be one of {DIRECTIONS}, got {direction!r}")
     return Block(
         line=line,
         block_id=str(raw["block_number"]),
@@ -97,6 +111,7 @@ def _block(line: str, raw: dict[str, object]) -> Block:
         switch=str(switch) if switch else None,
         railway_crossing=bool(infrastructure.get("railway_crossing")),
         underground=bool(infrastructure.get("underground")),
+        direction=direction,  # type: ignore[arg-type]
     )
 
 

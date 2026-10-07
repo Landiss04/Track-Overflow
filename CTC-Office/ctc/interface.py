@@ -11,15 +11,17 @@ The CTC exchanges data with two modules:
 
 - Track Controller: sends block occupancy, train reports, switch and
   crossing states and track failures in; receives suggested speed and
-  authority per train, closed blocks, switch commands and maintenance
-  mode out.
+  authority per train, the blocks closed in maintenance mode (which it
+  may not override) and switch commands out.
 - Track Model: sends ticket sales per line in.
 
 It also sends the clock speedup command to the central harness.
 
 Units are backend units per ``truth/conventions/units.md``: speeds in
-m/s, distances in m. Every ID is a string, and authority is a block ID
-(``truth/conventions/identifiers.md``). Block numbers repeat across
+m/s, distances in m. Every ID is a string
+(``truth/conventions/identifiers.md``). Authority is a count of blocks,
+not an ID (decision D013, proposed on ``ctc-interfacing``). Block
+numbers repeat across
 lines, so every block, switch and crossing reference carries its
 ``line`` too. A switch or crossing is identified by the block it is
 listed on in the track layout file.
@@ -129,8 +131,9 @@ class TrainSuggestion:
     # Whole m/s: a target for safe spacing, not the train's own speed;
     # never above the speed limit of the block the train is in.
     suggested_speed_mps: int
-    # Block on ``line`` the train may travel up to.
-    authority_block_id: str
+    # Blocks ahead of the train's current block it may still enter; 0
+    # means stop before leaving the current block.
+    authority_blocks: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,11 +162,15 @@ class TrackControllerOutputs:
     """To the Track Controller, every tick."""
 
     suggestions: tuple[TrainSuggestion, ...] = ()
-    # Blocks closed by the dispatcher. A block not listed is open.
+    # Blocks the dispatcher closed in maintenance mode, the full set
+    # every tick; a block not listed is open. A block is listed from the
+    # moment its closure is requested (even with a train still in it)
+    # until it is reopened. The Track Controller may not override a
+    # listed block (``maintenance-closure-lock``, proposed on
+    # ``ctc-interfacing``).
     closed_blocks: tuple[BlockRef, ...] = ()
-    # Only while maintenance_mode; cleared when it ends.
+    # Only while in maintenance mode; cleared when it ends.
     switch_commands: tuple[SwitchCommand, ...] = ()
-    maintenance_mode: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +216,35 @@ class CancelledOrder:
 
 
 @dataclass(frozen=True, slots=True)
+class TrainAuthority:
+    """Where one train's authority runs out, and why, for display."""
+
+    train_id: str
+    line: str
+    blocks: int
+    # The last block the train may enter: its own when ``blocks`` is 0.
+    end_block_id: str
+    # "destination", "occupied", "closed", "closing", "failed",
+    # "reserved" (within another train's authority), "switch" or
+    # "no route".
+    reason: str
+    # The block or switch the reason names; "" for "destination" and
+    # "no route".
+    at: str = ""
+    # The route the authority is counted along: the train's own block
+    # first, then every block to the destination. The first ``blocks``
+    # after the train's own are within authority. Empty for "no route".
+    route: tuple[str, ...] = ()
+    # For "reserved": the train whose authority holds that block.
+    held_by: str = ""
+    # Where the train would have to reverse to get round what blocks
+    # its route (a closed or failed block, or a train that is not
+    # moving), when no other route gets it there; "" otherwise. The CTC
+    # never reverses a train: it waits, and the dispatcher is alerted.
+    reverse_at: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class CtcSnapshot:
     """Full observable state for the CTC UIs."""
 
@@ -222,13 +258,18 @@ class CtcSnapshot:
     # Dispatcher orders, by train ID.
     orders: tuple[DispatchOrder, ...] = ()
     # Closures waiting for a train to leave the block; they close by
-    # themselves once it is clear.
+    # themselves once it is clear. Already in ``closed_blocks``.
     pending_closures: tuple[BlockRef, ...] = ()
     # Orders the CTC cancelled itself, oldest first (the last few).
     cancelled_orders: tuple[CancelledOrder, ...] = ()
+    # Authority of every train that has one, by train ID.
+    authorities: tuple[TrainAuthority, ...] = ()
     # Reports received while time was not passing (the clock paused);
     # they apply at the next step.
     inputs_staged: bool = False
+    # The dispatcher's operating mode. Not sent to any module: the
+    # Track Controller gets ``closed_blocks`` instead.
+    maintenance_mode: bool = False
 
 
 # ------------------------------------------------------------------ #

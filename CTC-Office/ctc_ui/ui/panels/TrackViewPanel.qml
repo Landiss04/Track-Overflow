@@ -18,6 +18,9 @@ Panel {
     property var crossingStates: ({})
     // CtcHost.mapTrains: { train, line, block, fraction } per train.
     property var mapTrains: []
+    // The selected train and its route (CtcHost.routeStates).
+    property string selectedTrainId: ""
+    property var routeStates: ({})
     // Whether a track map renderer is mounted in `mapCanvas`. Zoom and fit
     // stay disabled until then.
     readonly property bool mapAvailable: trackMap !== null
@@ -74,6 +77,8 @@ Panel {
             lineFilter: root.lineFilterIndex
             blockStates: root.blockStates
             crossingStates: root.crossingStates
+            routeStates: root.routeStates
+            selectedTrain: root.selectedTrainId
             trains: root.trackMap
                 ? root.trackMap.placeTrains(root.mapTrains) : []
         }
@@ -150,6 +155,16 @@ Panel {
             }
         }
         LegendItem {
+            visible: root.selectedTrainId !== ""
+            text: qsTr("Route, within authority")
+            LineSwatch { tone: theme.accent; heavy: true }
+        }
+        LegendItem {
+            visible: root.selectedTrainId !== ""
+            text: qsTr("Route, beyond authority")
+            LineSwatch { tone: theme.accent; dashed: true }
+        }
+        LegendItem {
             text: qsTr("Closed")
             LineSwatch { tone: theme.warning; heavy: true }
         }
@@ -187,6 +202,22 @@ Panel {
             }
         }
         LegendItem {
+            text: qsTr("Block boundary")
+            Rectangle {
+                anchors.centerIn: parent
+                width: 24
+                height: 4
+                color: theme.line_green
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 2
+                    height: 12
+                    color: theme.line_green
+                }
+            }
+        }
+        LegendItem {
             text: qsTr("Yard")
             Rectangle {
                 anchors.centerIn: parent
@@ -197,5 +228,12 @@ Panel {
                 border.width: 1.5
             }
         }
+    }
+
+    HelperText {
+        Layout.fillWidth: true
+        visible: root.trackMap !== null
+        text: qsTr("Point at a block for its details. Zoom in (+) to see "
+            + "every block's number.")
     }
 }

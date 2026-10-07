@@ -152,7 +152,7 @@ Rectangle {
                   mono: true },
                 { label: qsTr("Speed (mph)"), key: "speed", width: 96,
                   numeric: true },
-                { label: qsTr("Authority"), key: "authority", width: 88,
+                { label: qsTr("Authority"), key: "authority", width: 104,
                   mono: true },
                 { label: qsTr("Destination"), key: "destination" },
                 { label: qsTr("Arrive"), key: "eta", width: 64,

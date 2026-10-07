@@ -22,6 +22,13 @@ Panel {
         root.host.revision;
         return root.host.trainDetail(root.trainId);
     }
+    // The train's route for the chips below: CtcHost.routeDetail.
+    readonly property var route: {
+        if (!root.host || root.trainId === "")
+            return ({ chips: [], summary: "" });
+        root.host.revision;
+        return root.host.routeDetail(root.trainId);
+    }
     property string message: ""
     property bool messageIsError: false
 
@@ -107,7 +114,8 @@ Panel {
                 TelemetryReadout {
                     Layout.fillWidth: true
                     label: qsTr("Authority")
-                    value: root.show("authority")
+                    value: root.show("authorityBlocks")
+                    unit: "blocks"
                 }
                 TelemetryReadout {
                     Layout.fillWidth: true
@@ -123,16 +131,63 @@ Panel {
 
             FieldLabel { text: qsTr("ROUTE — HIGHLIGHTED ON TRACK VIEW") }
 
-            // Route block chips (style guide 6.4) are populated here.
+            // Route blocks (style guide 6.4): the train's own block, the
+            // blocks within its authority, and the block it stops before.
             Flow {
                 Layout.fillWidth: true
                 spacing: theme.space_1
+                visible: root.route.chips.length > 0
+
+                Repeater {
+                    model: root.route.chips
+
+                    // A block, or "+n more" for authority blocks left out.
+                    delegate: Item {
+                        id: chip
+                        required property var modelData
+                        readonly property bool isMore:
+                            modelData.more !== undefined
+                        width: isMore ? more.implicitWidth
+                            : block.implicitWidth
+                        height: block.implicitHeight
+
+                        TrackBlock {
+                            id: block
+                            visible: !chip.isMore
+                            blockId: chip.modelData.block || ""
+                            occupancy: chip.modelData.occupancy || "free"
+                        }
+
+                        HelperText {
+                            id: more
+                            visible: chip.isMore
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: qsTr("+%1 more").arg(chip.modelData.more)
+                        }
+                    }
+                }
+            }
+
+            HelperText {
+                Layout.fillWidth: true
+                visible: root.route.summary !== ""
+                text: root.route.summary
             }
 
             KeyValueRow {
                 Layout.fillWidth: true
                 label: qsTr("Destination")
                 value: root.show("destination")
+            }
+            KeyValueRow {
+                Layout.fillWidth: true
+                label: qsTr("Authority to")
+                value: root.show("authorityEnd")
+            }
+            KeyValueRow {
+                Layout.fillWidth: true
+                label: qsTr("Limited by")
+                value: root.show("authorityLimit")
             }
             KeyValueRow {
                 Layout.fillWidth: true

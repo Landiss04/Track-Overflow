@@ -95,6 +95,48 @@ class TrackMapTest(unittest.TestCase):
                 self.assertTrue(0 <= x <= 850 and 0 <= y <= 930)
 
 
+class BlockLabelTest(unittest.TestCase):
+    """What the map needs to tell blocks apart."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.model = TrackMapModel()
+        cls.blocks = {(b["line"], b["blockId"]): b
+                      for b in cls.model.blocks}
+
+    def test_block_details_in_display_units(self) -> None:
+        # Green 24: 70 km/h, 300 m in the layout file.
+        block = self.blocks[("Green", "24")]
+        self.assertEqual(block["section"], "F")
+        self.assertEqual(block["speedLimitMph"], 43)
+        self.assertEqual(block["lengthFt"], 984)
+
+    def test_label_and_tick_geometry(self) -> None:
+        for block in self.blocks.values():
+            points = _pairs(block["points"])
+            # The tick sits where the block starts.
+            self.assertEqual(tuple(block["tick"][:2]), points[0])
+            # The normal is a unit vector.
+            self.assertAlmostEqual(math.hypot(*block["normal"]), 1.0,
+                                   places=2)
+            self.assertGreater(block["drawnLength"], 0)
+
+    def test_block_at_finds_the_nearest_block(self) -> None:
+        x, y = self.blocks[("Green", "24")]["mid"]
+        self.assertEqual(self.model.blockAt(x, y, 5.0, 0),
+                         {"line": "Green", "blockId": "24"})
+        # Off the track: nothing.
+        self.assertEqual(self.model.blockAt(5.0, 5.0, 5.0, 0), {})
+        # A line the map hides is never hit.
+        self.assertEqual(self.model.blockAt(x, y, 5.0, 1), {})
+
+    def test_placed_trains_keep_their_block(self) -> None:
+        (train,) = self.model.placeTrains([
+            {"train": "T1", "line": "Green", "block": "24",
+             "fraction": 0.5}])
+        self.assertEqual(train["block"], "24")
+
+
 class TrainPlacementTest(unittest.TestCase):
 
     def test_place_on_block(self) -> None:

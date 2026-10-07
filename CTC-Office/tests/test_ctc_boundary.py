@@ -96,9 +96,11 @@ class StubModuleTest(unittest.TestCase):
             track_controller=TrackControllerInputs(
                 trains=(TrainReport("T1", "Green", "62", 0.0, 0.0),))))
         (suggestion,) = out.track_controller.suggestions
+        # Three blocks ahead of 62 to the destination: 63, 64 and 65.
         self.assertEqual(
             (suggestion.train_id, suggestion.line,
-             suggestion.authority_block_id), ("T1", "Green", "65"))
+             suggestion.authority_blocks), ("T1", "Green", 3))
+        self.assertIs(type(suggestion.authority_blocks), int)
         # A little under Green 62's limit: whole m/s, less the margin.
         self.assertEqual(suggestion.suggested_speed_mps,
                          _suggested("Green", "62"))
@@ -146,7 +148,9 @@ class StubModuleTest(unittest.TestCase):
         ctc.set_switch("Green", "12", "reverse")
         ctc.set_switch("Red", "9", "normal")
         track = ctc.step(DT_S, CtcInputs()).track_controller
-        self.assertTrue(track.maintenance_mode)
+        self.assertTrue(ctc.snapshot().maintenance_mode)
+        # The mode itself is not sent to the Track Controller.
+        self.assertFalse(hasattr(track, "maintenance_mode"))
         self.assertEqual(track.switch_commands, (
             SwitchCommand("Green", "12", "reverse"),
             SwitchCommand("Red", "9", "normal")))
@@ -397,6 +401,16 @@ class HarnessEntryTest(unittest.TestCase):
 
 class HarnessSendTest(unittest.TestCase):
 
+    def test_closing_block_is_mirrored_once(self) -> None:
+        link = LocalLink()
+        link.set_maintenance_mode(True)
+        link.set_inputs(CtcInputs(track_controller=TrackControllerInputs(
+            trains=(TrainReport("T1", "Green", "65", 0.0, 0.0),))))
+        link.set_block_closed("Green", "65", True)
+        harness = CtcTestHarness(link)
+        self.assertEqual(_entries(harness, "closed_blocks"),
+                         [{"line": "Green", "block": "65"}])
+
     def test_send_applies_dispatcher_and_reads_outputs(self) -> None:
         harness = CtcTestHarness(LocalLink())
         # Both trains on the track, so they get speed and authority.
@@ -416,14 +430,16 @@ class HarnessSendTest(unittest.TestCase):
         harness.send()
         self.assertFalse(harness.statusIsError, harness.status)
         rows = _outputs(harness)
-        self.assertEqual(rows["authority[T1]"], "Green:65")
-        self.assertEqual(rows["authority[T2]"], "Red:7")
+        self.assertEqual(rows["authority[T1]"], 3)
+        # Red 40 toward 7 passes switch 38, which nothing has reported
+        # set: the authority stops at 39, one block ahead.
+        self.assertEqual(rows["authority[T2]"], 1)
         self.assertAlmostEqual(rows["suggested_speed[T1]"],
                                round(_suggested("Green", "62")
                                      * MPS_TO_MPH, 1))
         self.assertEqual(rows["closed_blocks"], "Green:5")
         self.assertEqual(rows["switch_commands"], "Green:12=reverse")
-        self.assertTrue(rows["maintenance_mode"])
+        self.assertNotIn("maintenance_mode", rows)
         self.assertTrue(rows["clock_speedup"])
         self.assertEqual(rows["tickets_sold[Red]"], 7)
         self.assertEqual(rows["tickets_sold[Green]"], 0)

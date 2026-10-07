@@ -102,8 +102,9 @@ Panel {
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            label: qsTr("Authority → block")
-            value: root.train.authority || "—"
+            label: qsTr("Authority")
+            value: root.train.authorityBlocks || "—"
+            unit: "blocks"
         }
     }
 
@@ -141,7 +142,7 @@ Panel {
             onClicked: root.report(
                 root.host.setAuthority(root.trainId, root.line,
                     blockSelect.value),
-                qsTr("%1 authority set to %2 block %3.")
+                qsTr("%1 given authority toward %2 block %3.")
                     .arg(root.trainId).arg(root.line)
                     .arg(blockSelect.value))
         }

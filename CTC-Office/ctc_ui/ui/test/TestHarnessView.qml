@@ -364,10 +364,17 @@ Rectangle {
 
             HelperText {
                 Layout.fillWidth: true
-                text: root.status !== "" ? root.status
+                // While the CTC clock is paused nothing sent applies, so
+                // say so: otherwise a Send looks like it did nothing.
+                readonly property bool heldByPause: root.clockConnected
+                    && root.clockPaused && !root.statusIsError
+                text: heldByPause
+                    ? qsTr("The CTC clock is paused: inputs apply once it "
+                        + "runs (press Run).")
+                    : root.status !== "" ? root.status
                     : qsTr("Edit inputs, then Send to apply them.")
                 color: root.statusIsError ? theme.danger
-                    : theme.text_secondary
+                    : heldByPause ? theme.warning : theme.text_secondary
             }
 
             AppButton {

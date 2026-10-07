@@ -278,11 +278,10 @@ def _mirror(snap: CtcSnapshot) -> dict[str, list[Entry]]:
              "arrival": ("" if o.arrival_s is None
                          else format_time_of_day(o.arrival_s))}
             for o in snap.orders],
-        # Closed and still-closing blocks: both are closures asked for.
+        # Closed and still-closing blocks: the output lists both.
         "closed_blocks": [{"line": b.line, "block": b.block_id}
                           for b in sorted(
-                              (*track.closed_blocks,
-                               *snap.pending_closures),
+                              track.closed_blocks,
                               key=lambda b: (b.line, _number_key(b)))],
         "switch_commands": [
             {"line": c.line, "switch": c.switch_id, "position": c.position}
@@ -312,10 +311,9 @@ def output_rows(outputs: CtcOutputs, tickets_sold: tuple[TicketSales, ...],
         })
         rows.append({
             "name": f"authority[{suggestion.train_id}]",
-            "kind": "string",
-            "value": block_key(suggestion.line,
-                               suggestion.authority_block_id),
-            "unit": "",
+            "kind": "int",
+            "value": suggestion.authority_blocks,
+            "unit": "blocks",
         })
     rows.append({
         "name": "closed_blocks",
@@ -329,12 +327,6 @@ def output_rows(outputs: CtcOutputs, tickets_sold: tuple[TicketSales, ...],
         "kind": "string",
         "value": "; ".join(f"{block_key(c.line, c.switch_id)}={c.position}"
                            for c in track.switch_commands),
-        "unit": "",
-    })
-    rows.append({
-        "name": "maintenance_mode",
-        "kind": "bool",
-        "value": track.maintenance_mode,
         "unit": "",
     })
     rows.append({
@@ -644,9 +636,7 @@ class CtcTestHarness(QObject):
         if "closed_blocks" in self._edited:
             wanted_blocks = {(e["line"], e["block"])
                              for e in self._values["closed_blocks"]}
-            closed = {(b.line, b.block_id)
-                      for b in (*track.closed_blocks,
-                                *snap.pending_closures)}
+            closed = {(b.line, b.block_id) for b in track.closed_blocks}
             for line, block_id in sorted(closed - wanted_blocks):
                 actions.append(("set_block_closed", {
                     "line": line, "block_id": block_id, "closed": False}))

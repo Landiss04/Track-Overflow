@@ -19,6 +19,9 @@ from typing import Any
 from PySide6.QtCore import Property, QObject, Slot
 
 from ctc.track_layout import Block, Line, load_layout
+from ctc_ui.display import M_TO_FT, MPS_TO_MPH
+
+_KMH_PER_MPS = 3.6
 
 Point = tuple[float, float]
 
@@ -151,6 +154,21 @@ def place_on_block(piece: list[Point],
     return round(x, 1), round(y, 1), round(angle, 1)
 
 
+def _distance_to_segment(p: Point, a: Point, b: Point) -> float:
+    (ax, ay), (bx, by) = a, b
+    dx, dy = bx - ax, by - ay
+    span = dx * dx + dy * dy
+    t = 0.0 if span == 0 else max(0.0, min(1.0, (
+        (p[0] - ax) * dx + (p[1] - ay) * dy) / span))
+    return math.dist(p, (ax + t * dx, ay + t * dy))
+
+
+def distance_to_piece(point: Point, piece: list[Point]) -> float:
+    """Shortest distance from a point to a block's drawn piece."""
+    return min(_distance_to_segment(point, a, b)
+               for a, b in zip(piece, piece[1:]))
+
+
 def split_polyline(points: list[Point],
                    weights: list[float]) -> list[list[Point]]:
     """Cut a polyline into consecutive pieces sized by ``weights``."""
@@ -206,11 +224,34 @@ def build_map(layout: dict[str, Line]) -> dict[str, list[dict[str, Any]]]:
 
 
 def _block_entry(block: Block, piece: list[Point]) -> dict[str, Any]:
+    """A block to draw, with where to label it and what it is.
+
+    ``mid`` and ``normal`` (a unit vector to the left of the drawing
+    direction there) place its number beside the track; ``tick`` (x, y,
+    degrees) marks where it starts. Speed limit and length are in
+    display units (mph, ft): this is the UI edge.
+    """
+    (mx, my), index = _point_at(piece, _length(piece) / 2)
+    (ax, ay), (bx, by) = piece[index], piece[index + 1]
+    span = math.hypot(bx - ax, by - ay) or 1.0
+    (sx, sy), (tx, ty) = piece[0], piece[1]
     return {
         "line": block.line,
         "blockId": block.block_id,
         "section": block.section,
         "points": _flat(piece),
+        "mid": [round(mx, 1), round(my, 1)],
+        # Drawn length in map units, to skip numbering blocks too short
+        # on screen to label.
+        "drawnLength": round(_length(piece), 1),
+        "normal": [round((ay - by) / span, 3), round((bx - ax) / span, 3)],
+        "tick": [round(sx, 1), round(sy, 1),
+                 round(math.degrees(math.atan2(ty - sy, tx - sx)), 1)],
+        "speedLimitMph": round(block.speed_limit_kmh / _KMH_PER_MPS
+                               * MPS_TO_MPH),
+        "lengthFt": round(block.length_m * M_TO_FT),
+        # None: no station; "": a station the file leaves unnamed.
+        "station": block.station,
     }
 
 
@@ -240,8 +281,28 @@ class TrackMapModel(QObject):
                 continue
             x, y, angle = place_on_block(piece, float(train["fraction"]))
             placed.append({"train": train["train"], "line": train["line"],
+                           "block": train["block"],
                            "x": x, "y": y, "angle": angle})
         return placed
+
+    @Slot(float, float, float, int, result="QVariantMap")
+    def blockAt(self, x: float, y: float,  # noqa: N802
+                tolerance: float, line_filter: int) -> dict[str, Any]:
+        """The drawn block nearest a map point, within ``tolerance`` map
+        units: ``{line, blockId}``, or empty if none is that close.
+        ``line_filter`` is the map's: 0 both lines, 1 Red, 2 Green."""
+        shown = {0: ("Green", "Red"), 1: ("Red",), 2: ("Green",)}.get(
+            line_filter, ("Green", "Red"))
+        best: tuple[float, str, str] | None = None
+        for (line, block_id), piece in self._pieces.items():
+            if line not in shown:
+                continue
+            distance = distance_to_piece((x, y), piece)
+            if distance <= tolerance and (best is None
+                                          or distance < best[0]):
+                best = (distance, line, block_id)
+        return {} if best is None else {"line": best[1],
+                                        "blockId": best[2]}
 
     @Property(list, constant=True)
     def blocks(self) -> list[dict[str, Any]]:

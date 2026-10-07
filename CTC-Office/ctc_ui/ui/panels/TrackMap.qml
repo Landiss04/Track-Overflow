@@ -7,6 +7,10 @@
 // is dashed. A block's state (6.4) overrides its line color: closed
 // --warning, failure --danger. Occupancy is shown as trains: a small
 // --info car on the track at the train's position, labeled with its ID.
+//
+// To tell blocks apart: a tick in the line color marks every block
+// boundary; zoomed in to 2x or more, every block shows its number; and
+// hovering a block highlights it and shows a card with what it is.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -27,11 +31,74 @@ Item {
     property var trains: []
     // "Line:crossing" -> inactive | active, as reported.
     property var crossingStates: ({})
+    // The selected train's route, CtcHost.routeStates: "Line:block" ->
+    // authority | beyond. Drawn as an --accent band under the track.
+    property var routeStates: ({})
+    // The selected train's ID; its tag is outlined in --accent.
+    property string selectedTrain: ""
+
+    // Block numbers show from this zoom on; below it they would crowd.
+    readonly property real numbersFromZoom: 2
+    // Every block by "Line:block", for the hover card.
+    readonly property var blockInfo: {
+        const info = {};
+        if (root.model) {
+            for (const block of root.model.blocks)
+                info[block.line + ":" + block.blockId] = block;
+        }
+        return info;
+    }
+    // The block under the pointer, "Line:block", or "".
+    property string hoveredKey: ""
+    // Where the pointer is, in map units.
+    property point hoverPoint: Qt.point(0, 0)
+
+    function updateHover(position) {
+        if (!root.model) {
+            root.hoveredKey = "";
+            return;
+        }
+        // Within about 10 px on screen of the track.
+        const found = root.model.blockAt(position.x, position.y,
+                                         10 / root.mapScale,
+                                         root.lineFilter);
+        root.hoveredKey = found.line ? found.line + ":" + found.blockId : "";
+        root.hoverPoint = position;
+    }
+
+    // Who is in a block: train IDs, "" for occupancy with no train.
+    function occupants(key) {
+        const found = [];
+        for (const train of root.trains) {
+            if (train.line + ":" + train.block === key)
+                found.push(train.train);
+        }
+        return found;
+    }
+
+    function stateText(key) {
+        const state = root.blockStates[key] || "";
+        if (state === "failure")
+            return qsTr("Failure");
+        if (state === "closed")
+            return qsTr("Closed");
+        const inBlock = root.occupants(key);
+        if (inBlock.length === 0)
+            return qsTr("Free");
+        const named = inBlock.filter(id => id !== "");
+        return named.length > 0
+            ? qsTr("Occupied by %1").arg(named.join(", "))
+            : qsTr("Occupied");
+    }
 
     readonly property real mapWidth: model ? model.mapWidth : 1
     readonly property real mapHeight: model ? model.mapHeight : 1
+    // Room above the drawing, in map units, so the ID tag of a train on
+    // the topmost track (about 40 units above its car) is not clipped.
+    readonly property real topHeadroom: 32
+    readonly property real canvasHeight: mapHeight + topHeadroom
     readonly property real fitScale: Math.min(width / mapWidth,
-                                              height / mapHeight)
+                                              height / canvasHeight)
     // Zoom over the fitted map: 1 shows it whole; above 1 it can be
     // dragged to pan.
     property real zoom: 1
@@ -170,7 +237,7 @@ Item {
         anchors.fill: parent
         clip: true
         contentWidth: Math.max(width, root.mapWidth * root.mapScale)
-        contentHeight: Math.max(height, root.mapHeight * root.mapScale)
+        contentHeight: Math.max(height, root.canvasHeight * root.mapScale)
         // Panning only makes sense once zoomed in.
         interactive: root.zoom > root.minZoom
         boundsBehavior: Flickable.StopAtBounds
@@ -179,13 +246,25 @@ Item {
             id: canvas
 
             width: root.mapWidth
-            height: root.mapHeight
+            height: root.canvasHeight
             x: (view.contentWidth - width * root.mapScale) / 2
             y: (view.contentHeight - height * root.mapScale) / 2
             visible: root.model !== null
-            transform: Scale {
-                xScale: root.mapScale
-                yScale: root.mapScale
+            // Map coordinates start below the headroom.
+            transform: [
+                Translate { y: root.topHeadroom },
+                Scale {
+                    xScale: root.mapScale
+                    yScale: root.mapScale
+                }
+            ]
+
+            HoverHandler {
+                onPointChanged: root.updateHover(point.position)
+                onHoveredChanged: {
+                    if (!hovered)
+                        root.hoveredKey = "";
+                }
             }
 
             // Yard connections (no blocks).
@@ -197,6 +276,63 @@ Item {
                     line: modelData.line
                     points: modelData.points
                     lineWidth: 2
+                }
+            }
+
+            // The selected train's route (--accent, style guide 4.3), under
+            // the track so a block's own state still shows on top. Within
+            // authority the band is solid; beyond it, thinner and dashed,
+            // so the two differ by pattern as well as weight.
+            Repeater {
+                model: root.model ? root.model.blocks : []
+
+                delegate: Shape {
+                    id: band
+
+                    required property var modelData
+                    readonly property string part: root.routeStates[
+                        modelData.line + ":" + modelData.blockId] || ""
+
+                    anchors.fill: parent
+                    preferredRendererType: Shape.CurveRenderer
+                    visible: part !== "" && root.lineShown(modelData.line)
+
+                    ShapePath {
+                        strokeColor: theme.accent
+                        strokeWidth: band.part === "authority" ? 14 : 9
+                        strokeStyle: band.part === "authority"
+                            ? ShapePath.SolidLine : ShapePath.DashLine
+                        dashPattern: [1.2, 0.8]
+                        fillColor: "transparent"
+                        capStyle: band.part === "authority"
+                            ? ShapePath.RoundCap : ShapePath.FlatCap
+                        joinStyle: ShapePath.RoundJoin
+
+                        PathPolyline { path: root.toPoints(band.modelData.points) }
+                    }
+                }
+            }
+
+            // The hovered block: a soft halo under the track.
+            Shape {
+                id: hoverHalo
+                readonly property var block: root.blockInfo[root.hoveredKey]
+                anchors.fill: parent
+                preferredRendererType: Shape.CurveRenderer
+                visible: block !== undefined
+                opacity: 0.3
+
+                ShapePath {
+                    strokeColor: theme.text_secondary
+                    strokeWidth: 16
+                    fillColor: "transparent"
+                    capStyle: ShapePath.RoundCap
+                    joinStyle: ShapePath.RoundJoin
+
+                    PathPolyline {
+                        path: hoverHalo.block
+                            ? root.toPoints(hoverHalo.block.points) : []
+                    }
                 }
             }
 
@@ -212,6 +348,23 @@ Item {
                     points: modelData.points
                     blockState: root.blockStates[modelData.line + ":"
                         + modelData.blockId] || ""
+                }
+            }
+
+            // Block boundaries: a short tick across the track, in the line
+            // color, where each block starts.
+            Repeater {
+                model: root.model ? root.model.blocks : []
+
+                delegate: Rectangle {
+                    required property var modelData
+                    visible: root.lineShown(modelData.line)
+                    width: 1.5
+                    height: 11
+                    x: modelData.tick[0] - width / 2
+                    y: modelData.tick[1] - height / 2
+                    rotation: modelData.tick[2]
+                    color: root.lineColor(modelData.line)
                 }
             }
 
@@ -315,6 +468,87 @@ Item {
                 }
             }
 
+            // Block numbers beside the track, once zoomed in far enough to
+            // read them. Sized in screen pixels, so 12 px at any zoom; a
+            // block shorter than 18 px on screen is left unnumbered until
+            // zoomed further (hovering still names it).
+            Repeater {
+                model: root.zoom >= root.numbersFromZoom && root.model
+                    ? root.model.blocks : []
+
+                delegate: Text {
+                    required property var modelData
+                    // Clear of the route band (7 map units each side of
+                    // the track), plus half the text across the track.
+                    readonly property real offset: 9
+                        + (Math.abs(modelData.normal[0]) * width
+                           + Math.abs(modelData.normal[1]) * height) / 2
+                    visible: root.lineShown(modelData.line)
+                        && modelData.drawnLength * root.mapScale >= 18
+                    x: modelData.mid[0] + modelData.normal[0] * offset
+                        - width / 2
+                    y: modelData.mid[1] + modelData.normal[1] * offset
+                        - height / 2
+                    text: modelData.blockId
+                    color: root.lineColor(modelData.line)
+                    font.family: theme.mono_family
+                    font.pixelSize: 12 / root.mapScale
+                    font.weight: theme.weight_bold
+                }
+            }
+
+            // A badge for every closed or failed block, beside the track
+            // and above the trains (style guide 6.4 fill and label): on a
+            // short block a train next to it would hide the block's own
+            // state color. Sized in screen pixels.
+            Repeater {
+                model: {
+                    const states = root.blockStates;
+                    return root.model ? root.model.blocks.filter(
+                        block => states[block.line + ":" + block.blockId])
+                        : [];
+                }
+
+                delegate: Rectangle {
+                    id: badge
+                    required property var modelData
+                    readonly property string state: root.blockStates[
+                        modelData.line + ":" + modelData.blockId] || ""
+                    // Map units per screen pixel.
+                    readonly property real px: 1 / root.mapScale
+                    // Clear of the track and the route band, plus half
+                    // the badge across the track.
+                    readonly property real offset: 12 * px
+                        + (Math.abs(modelData.normal[0]) * width
+                           + Math.abs(modelData.normal[1]) * height) / 2
+
+                    visible: root.lineShown(modelData.line)
+                    z: 2
+                    width: badgeText.implicitWidth + 8 * px
+                    height: badgeText.implicitHeight + 2 * px
+                    radius: 3 * px
+                    x: modelData.mid[0] + modelData.normal[0] * offset
+                        - width / 2
+                    y: modelData.mid[1] + modelData.normal[1] * offset
+                        - height / 2
+                    color: state === "failure" ? theme.danger : theme.warning
+                    border.color: theme.bg_surface
+                    border.width: px
+
+                    Text {
+                        id: badgeText
+                        anchors.centerIn: parent
+                        text: badge.modelData.blockId + " · "
+                            + (badge.state === "failure" ? qsTr("FAILURE")
+                                : qsTr("CLOSED"))
+                        color: theme.text_inverse
+                        font.family: theme.mono_family
+                        font.pixelSize: 12 * badge.px
+                        font.weight: theme.weight_bold
+                    }
+                }
+            }
+
             // Trains, on top of everything else.
             Repeater {
                 model: root.trains
@@ -335,17 +569,20 @@ Item {
                         rotation: placed.modelData.angle
                     }
 
-                    // The ID stays upright, above the car.
+                    // The ID stays upright, above the car. The selected
+                    // train's tag is outlined in --accent.
                     Rectangle {
+                        readonly property bool selected:
+                            placed.modelData.train === root.selectedTrain
                         visible: placed.modelData.train !== ""
                         x: -width / 2
                         y: -height - 14
                         width: idText.implicitWidth + 8
                         height: idText.implicitHeight + 2
                         radius: 3
-                        color: theme.bg_surface
-                        border.color: theme.info
-                        border.width: 1
+                        color: selected ? theme.accent_subtle : theme.bg_surface
+                        border.color: selected ? theme.accent : theme.info
+                        border.width: selected ? 2.5 : 1
 
                         Text {
                             id: idText
@@ -360,6 +597,86 @@ Item {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // What the hovered block is. Kept inside the map, beside the pointer.
+    Rectangle {
+        id: card
+
+        readonly property var block: root.blockInfo[root.hoveredKey]
+        readonly property point anchor: {
+            // Re-place when the map zooms or pans.
+            view.contentX; view.contentY; root.mapScale;
+            return canvas.mapToItem(root, root.hoverPoint.x,
+                                    root.hoverPoint.y);
+        }
+
+        visible: block !== undefined
+        z: 10
+        x: Math.max(0, Math.min(root.width - width, anchor.x + 14))
+        y: Math.max(0, Math.min(root.height - height, anchor.y + 14))
+        width: details.implicitWidth + 2 * theme.space_3
+        height: details.implicitHeight + 2 * theme.space_2
+        radius: theme.radius_md
+        color: theme.bg_surface
+        border.color: theme.border_strong
+        border.width: 1
+
+        Column {
+            id: details
+            x: theme.space_3
+            y: theme.space_2
+            spacing: 2
+
+            Text {
+                text: card.block ? qsTr("%1 line · Block %2")
+                    .arg(card.block.line).arg(card.block.blockId) : ""
+                color: theme.text_primary
+                font.family: theme.ui_family
+                font.pixelSize: theme.size_body
+                font.weight: theme.weight_bold
+            }
+            Text {
+                text: card.block ? qsTr("Section %1 · %2 mph · %3 ft")
+                    .arg(card.block.section).arg(card.block.speedLimitMph)
+                    .arg(card.block.lengthFt) : ""
+                color: theme.text_secondary
+                font.family: theme.ui_family
+                font.pixelSize: theme.size_small
+            }
+            Text {
+                // null: no station; "": a station with no name.
+                visible: card.block !== undefined
+                    && card.block.station !== null
+                    && card.block.station !== undefined
+                text: card.block && card.block.station
+                    ? qsTr("Station: %1").arg(card.block.station)
+                    : qsTr("Station")
+                color: theme.text_secondary
+                font.family: theme.ui_family
+                font.pixelSize: theme.size_small
+            }
+            Text {
+                text: root.hoveredKey !== ""
+                    ? root.stateText(root.hoveredKey) : ""
+                color: theme.text_primary
+                font.family: theme.ui_family
+                font.pixelSize: theme.size_small
+            }
+            Text {
+                readonly property string part:
+                    root.routeStates[root.hoveredKey] || ""
+                visible: part !== ""
+                text: part === "authority"
+                    ? qsTr("On %1's route, within authority")
+                        .arg(root.selectedTrain)
+                    : qsTr("On %1's route, beyond authority")
+                        .arg(root.selectedTrain)
+                color: theme.accent
+                font.family: theme.ui_family
+                font.pixelSize: theme.size_small
             }
         }
     }

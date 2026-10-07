@@ -27,6 +27,7 @@ from ctc.interface import (
     TrackControllerOutputs,
     TrackFailureReport,
     TrackModelInputs,
+    TrainAuthority,
     TrainReport,
     TrainSuggestion,
 )
@@ -89,7 +90,6 @@ def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
             switch_commands=tuple(
                 SwitchCommand(**c)
                 for c in track.get("switch_commands", ())),
-            maintenance_mode=bool(track.get("maintenance_mode", False)),
         ),
         clock_speedup=bool(data.get("clock_speedup", False)),
     )
@@ -110,5 +110,9 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
                                data.get("pending_closures", ())),
         cancelled_orders=tuple(CancelledOrder(**c) for c in
                                data.get("cancelled_orders", ())),
+        authorities=tuple(
+            TrainAuthority(**{**a, "route": tuple(a.get("route", ()))})
+            for a in data.get("authorities", ())),
         inputs_staged=bool(data.get("inputs_staged", False)),
+        maintenance_mode=bool(data.get("maintenance_mode", False)),
     )

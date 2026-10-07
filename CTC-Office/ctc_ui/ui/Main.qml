@@ -60,7 +60,7 @@ ScaledWindow {
             occupancyOpen: window.occupancyState !== "closed"
             onModeActivated: function (index) {
                 window.modeIndex = index;
-                // Maintenance mode is the CTC's maintenance_mode output.
+                // Maintenance mode lets the dispatcher close blocks and set switches.
                 ctc.setMaintenanceMode(index === 2);
             }
             onOccupancyClicked: window.occupancyState = "open"
@@ -112,6 +112,11 @@ ScaledWindow {
                 blockStates: ctc.blockStates
                 crossingStates: ctc.crossingStates
                 mapTrains: ctc.mapTrains
+                selectedTrainId: window.selectedTrainId
+                routeStates: {
+                    ctc.revision;
+                    return ctc.routeStates(window.selectedTrainId);
+                }
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 onLineFilterActivated: function (index) {
@@ -190,6 +195,35 @@ ScaledWindow {
         onTrainSelected: function (trainId) {
             window.selectedTrainId = trainId;
             window.occupancyState = "docked";
+        }
+    }
+
+    // Reversal alerts: on top of everything, with their own scrim. The
+    // scrim swallows clicks but does not dismiss: the dispatcher picks.
+    Rectangle {
+        anchors.fill: parent
+        color: window.scrimColor
+        visible: reversalAlert.visible
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onWheel: function (wheel) { wheel.accepted = true; }
+        }
+    }
+
+    ReversalAlert {
+        id: reversalAlert
+        anchors.centerIn: parent
+        alerts: ctc.reversalAlerts
+        onDismissRequested: function (trainId) {
+            ctc.dismissReversal(trainId);
+        }
+        onSelectRequested: function (trainId) {
+            ctc.dismissReversal(trainId);
+            window.selectedTrainId = trainId;
+            if (window.occupancyState === "open")
+                window.occupancyState = "docked";
         }
     }
 }

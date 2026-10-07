@@ -5,6 +5,7 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 import unittest
 from pathlib import Path
@@ -19,6 +20,7 @@ from ctc.interface import (  # noqa: E402
     CrossingReport,
     CtcInputs,
     CtcSnapshot,
+    SwitchReport,
     TrackControllerInputs,
     TrackFailureReport,
     TicketSales,
@@ -169,9 +171,115 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(rows["T1"]["speed"], "22.4")         # mph
         self.assertEqual(rows["T1"]["destination"], "Glenbury (65)")
         self.assertEqual(rows["T1"]["eta"], "08:30")
+        # Green 9 toward 65 runs down to 1, then through switch 12 (1 to
+        # 13), which nothing has reported set: authority ends at 1.
+        self.assertEqual(rows["T1"]["authority"], "8 (to 1)")
+        self.assertEqual(rows["T1"]["authorityBlocks"], "8")
+        self.assertEqual(rows["T1"]["authorityEnd"], "Block 1")
+        self.assertEqual(rows["T1"]["authorityLimit"], "Switch 12 not set")
         self.assertEqual(rows["T2"]["block"], "—")
+        self.assertEqual(rows["T2"]["authority"], "—")
         self.assertEqual(
             [o["value"] for o in host.trainOptions("Green")], ["T1", "T3"])
+
+    def test_selected_train_route(self) -> None:
+        # T1 on Green 30 toward 37, T2 standing on 32: authority 1.
+        host, _, clock = _host()
+        host._receive_inputs(CtcInputs(
+            track_controller=TrackControllerInputs(trains=(
+                TrainReport("T1", "Green", "30", 0.0, 0.0),
+                TrainReport("T2", "Green", "32", 0.0, 0.0)))))
+        clock.clock.tick()
+        host.dispatchTrain("T1", "Green", "37", "")
+        states = host.routeStates("T1")
+        self.assertEqual(states["Green:31"], "authority")
+        self.assertEqual(states["Green:32"], "beyond")
+        self.assertEqual(states["Green:37"], "beyond")
+        self.assertNotIn("Green:30", states)      # its own block
+        detail = host.routeDetail("T1")
+        self.assertEqual(detail["chips"], [
+            {"block": "30", "occupancy": "occupied"},
+            {"block": "31", "occupancy": "free"},
+            {"block": "32", "occupancy": "occupied"}])
+        self.assertEqual(detail["summary"], "Authority ends at block 31; "
+                         "6 more to its destination, block 37.")
+        # No order, no route.
+        self.assertEqual(host.routeStates("T2"), {})
+        self.assertEqual(host.routeDetail("T2")["chips"], [])
+
+    def test_long_authority_chips_are_capped(self) -> None:
+        host, _, clock = _host()
+        host._receive_inputs(CtcInputs(
+            track_controller=TrackControllerInputs(trains=(
+                TrainReport("T1", "Green", "63", 0.0, 0.0),))))
+        clock.clock.tick()
+        host.dispatchTrain("T1", "Green", "75", "")
+        chips = host.routeDetail("T1")["chips"]
+        # Own block, eight within authority, then the other four.
+        self.assertEqual(len(chips), 10)
+        self.assertEqual(chips[-1], {"more": 4})
+        self.assertEqual(host.routeDetail("T1")["summary"],
+                         "Authority runs to its destination, block 75.")
+
+    def test_authority_held_by_another_train(self) -> None:
+        # T1 and T2 face each other on Green F, both bound for 24.
+        host, _, clock = _host()
+        host._receive_inputs(CtcInputs(
+            track_controller=TrackControllerInputs(trains=(
+                TrainReport("T1", "Green", "20", 0.0, 0.0),
+                TrainReport("T2", "Green", "28", 0.0, 0.0)))))
+        clock.clock.tick()
+        host.dispatchTrain("T1", "Green", "24", "")
+        host.dispatchTrain("T2", "Green", "24", "")
+        self.assertEqual(host.trainDetail("T2")["authorityLimit"],
+                         "Block 24 held by T1")
+
+    def test_reversal_alerts(self) -> None:
+        # T5 on Red 28 cannot move (29 failed); T4 behind it wants 31,
+        # which only reversing would reach.
+        host, module, clock = _host()
+        reports = CtcInputs(track_controller=TrackControllerInputs(
+            trains=(TrainReport("T4", "Red", "20", 0.0, 0.0),
+                    TrainReport("T5", "Red", "28", 0.0, 0.0)),
+            failures=(TrackFailureReport("Red", "29", "power"),),
+            switches=(SwitchReport("Red", "27", "normal"),)))
+        host._receive_inputs(reports)
+        host.dispatchTrain("T4", "Red", "31", "")
+        host.dispatchTrain("T5", "Red", "45", "")
+        clock.clock.tick()
+        clock.clock.tick()
+        alerts = {a["train"]: a for a in host.reversalAlerts}
+        self.assertEqual(alerts["T4"], {
+            "train": "T4", "line": "Red", "reverseAt": "33",
+            "destination": "31",
+            "blockedBy": "T5 is standing in block 28 and is not moving"})
+        self.assertEqual(alerts["T5"]["blockedBy"], "block 29 has failed")
+        self.assertIn("reversing at block 33",
+                      host.routeDetail("T4")["summary"])
+        # Dismissed: gone until the situation clears and comes back.
+        host.dismissReversal("T4")
+        self.assertEqual([a["train"] for a in host.reversalAlerts], ["T5"])
+        host._receive_inputs(dataclasses.replace(
+            reports, track_controller=dataclasses.replace(
+                reports.track_controller, failures=())))
+        clock.clock.tick()
+        clock.clock.tick()
+        self.assertEqual(host.reversalAlerts, [])
+        host._receive_inputs(reports)
+        clock.clock.tick()
+        clock.clock.tick()
+        self.assertIn("T4", [a["train"] for a in host.reversalAlerts])
+
+    def test_authority_limit_at_the_destination(self) -> None:
+        host, _, clock = _host()
+        host._receive_inputs(CtcInputs(
+            track_controller=TrackControllerInputs(
+                trains=(TrainReport("T1", "Green", "30", 0.0, 0.0),))))
+        clock.clock.tick()
+        host.dispatchTrain("T1", "Green", "30", "")
+        row = host.trainDetail("T1")
+        self.assertEqual(row["authority"], "0 (to 30)")
+        self.assertEqual(row["authorityLimit"], "At destination")
 
     def test_throughput_per_line(self) -> None:
         host, _, clock = _host()
@@ -228,6 +336,22 @@ class PanelDataTest(unittest.TestCase):
         host._server.changed.emit()
         self.assertEqual(seen, [True])
         self.assertEqual(host.blockStates, {"Red:2": "closed"})
+
+    def test_closing_block_is_shown_once_and_not_as_closed(self) -> None:
+        # closed_blocks lists a closing block too; the window still
+        # shows it once, as closing, with its train on the map.
+        host, module, clock = _host()
+        host._receive_inputs(CtcInputs(
+            track_controller=TrackControllerInputs(
+                trains=(TrainReport("T1", "Green", "65", 0.0, 0.0),))))
+        clock.clock.tick()
+        module.set_maintenance_mode(True)
+        module.set_block_closed("Green", "65", True)
+        self.assertEqual(
+            [(r["block"], r["pending"]) for r in host.closures],
+            [("Green 65", True)])
+        self.assertEqual(host.blockStates, {})
+        self.assertTrue(host.maintenanceMode)
 
 
 if __name__ == "__main__":

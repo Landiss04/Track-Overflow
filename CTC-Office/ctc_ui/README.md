@@ -102,9 +102,12 @@ yet) through `ctc_ui/ctc_host.py`:
   at 10×), the command the central harness will relay to every module so
   they all run at one speed.
 - The **Operating mode** toggle switches the right-hand column between the
-  Automatic, Manual, and Maintenance views. Maintenance also sets the
-  CTC's `maintenance_mode` output, which the test UI shows; leaving it
-  releases every switch command.
+  Automatic, Manual, and Maintenance views. Maintenance lets the
+  dispatcher close blocks and set switches; leaving it releases every
+  switch command. The mode itself is not sent to the Track Controller:
+  it gets `closed_blocks`, every block closed (or closing) in
+  maintenance mode, and may not override a listed block until the
+  dispatcher reopens it.
 - **Notices** under the header tell the dispatcher about a Track
   Controller update staged while the clock is paused, and about orders
   the CTC cancelled itself (a block closed, closing or failed).
@@ -118,18 +121,20 @@ yet) through `ctc_ui/ctc_host.py`:
   **+** and **−** zoom in steps of 1.25× (up to 4×); zoomed in, drag the
   map to pan. **Fit** shows the whole map again.
 - **Train occupancy** lists every train the Track Controller reports or
-  the dispatcher has ordered, with block, speed (mph), authority,
-  destination and requested arrival. Filter by line, status or train ID;
+  the dispatcher has ordered, with block, speed (mph), authority (blocks
+  ahead, and the block it ends at), destination and requested arrival. Filter by line, status or train ID;
   click a row and **Select train** to load it into Selected train.
   "Keep open at bottom" or the minimize button docks it over the track
   view. Escape, the close button, or clicking the scrim closes it.
 - **Dispatch train** (Manual): pick a line, a train (or a new one) and a
   destination station, with an optional arrival time (`HH:MM`). Picking a
   train that already has an order reroutes it. **Set authority** sends
-  the train straight to a block instead. The readouts show the suggested
-  speed and authority the CTC sends to the Track Controller.
-- **Selected train** shows the train's live readouts; in Manual mode it
-  also reroutes the train or cancels its order.
+  the train straight to a block instead; the CTC turns it into a count
+  of blocks. The readouts show the suggested speed and authority the CTC
+  sends to the Track Controller.
+- **Selected train** shows the train's live readouts, including why its
+  authority ends where it does; in Manual mode it also reroutes the
+  train or cancels its order.
 - **Close block** and **Active closures** (Maintenance only) close a
   block (with a confirmation step, style guide 7) and reopen it. A block
   with a train in it is listed as "Closing — train in block" and closes
@@ -144,6 +149,11 @@ yet) through `ctc_ui/ctc_host.py`:
   block on another line than the one it is on; no switch moved while its
   block is occupied; one train per block. Orders into a block that
   closes, starts closing or fails are cancelled, with a notice.
+- **Authority** is the number of blocks ahead of the train's current
+  block it may still enter (0: stop before leaving it), recomputed every
+  step. It runs toward the destination and stops before the first
+  occupied, closed, closing or failed block, and before any switch the
+  Track Controller has not reported set for the route.
 - **Set switch position** (Maintenance) shows each switch's two
   connections (normal is the first listed in the layout file), the
   position the Track Controller reports and the one the CTC commands, and
@@ -248,14 +258,19 @@ the context-property pattern shared with the Train Model UI.
   `CtcOffice` contract (`step(dt, inputs) -> outputs`, `validate_inputs`,
   dispatcher actions and `load_schedule`). Every block, switch and
   crossing reference carries its line.
-- `ctc/model.py` is a stub implementation with no routing logic yet. It
-  checks every reference and value against the track layout files and
-  the boundary types, enforces the safety rules above, accepts switch
-  commands and block closures only in maintenance mode, and gives each
-  dispatched train on the track its destination block as authority and
-  a suggested speed 1 m/s under its current block's speed limit (whole
-  m/s, rounded down). A train not yet on the track (the yard is a black
+- `ctc/model.py` is a stub implementation with no scheduling logic yet.
+  It checks every reference and value against the track layout files
+  and the boundary types, enforces the safety rules above, accepts
+  switch commands and block closures only in maintenance mode, and gives
+  each dispatched train on the track an authority counted in blocks
+  (above) and a suggested speed 1 m/s under its current block's speed
+  limit (whole m/s, rounded down). A train not yet on the track (the yard is a black
   box) gets neither until it is reported.
+- `ctc/routing.py` reads how blocks connect from the layout files
+  (neighbouring blocks, and each switch's normal and reverse
+  connections; the yard is left out) and counts authority along the
+  shortest route a train can run. Direction of travel is not modeled
+  yet.
 - `ctc/actions.py` runs dispatcher actions sent by name over a link,
   with strict argument types, and applies a test UI Send all or nothing
   (tried on a copy of the module first).

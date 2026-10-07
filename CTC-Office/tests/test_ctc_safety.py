@@ -166,14 +166,33 @@ class ClosureTest(unittest.TestCase):
         self.assertEqual(snap.cancelled_orders, (CancelledOrder(
             "T1", "Green", "65", "block closed"),))
 
+    def test_listed_until_reopened_even_out_of_maintenance(self) -> None:
+        # The list is what locks the Track Controller out of a block:
+        # leaving maintenance mode keeps it, reopening clears it.
+        ctc = _maintenance()
+        ctc.set_block_closed("Green", "5", True)
+        ctc.set_block_closed("Red", "2", True)
+        ctc.set_maintenance_mode(False)
+        out = ctc.step(DT_S, CtcInputs())
+        self.assertEqual(out.track_controller.closed_blocks,
+                         (BlockRef("Green", "5"), BlockRef("Red", "2")))
+        ctc.set_maintenance_mode(True)
+        ctc.set_block_closed("Green", "5", False)
+        out = ctc.step(DT_S, CtcInputs())
+        self.assertEqual(out.track_controller.closed_blocks,
+                         (BlockRef("Red", "2"),))
+
     def test_occupied_block_closes_once_the_train_leaves(self) -> None:
         ctc = _maintenance()
         ctc.step(DT_S, _report(TrainReport("T1", "Green", "65", 0, 0)))
         ctc.dispatch("T2", "Green", "65")
         ctc.set_block_closed("Green", "65", True)
         snap = ctc.snapshot()
-        # Pending: not closed yet, orders into it cancelled at once.
-        self.assertEqual(snap.outputs.track_controller.closed_blocks, ())
+        # Pending: not closed yet, orders into it cancelled at once, and
+        # already listed for the Track Controller, which may not
+        # override it from now on.
+        self.assertEqual(snap.outputs.track_controller.closed_blocks,
+                         (BlockRef("Green", "65"),))
         self.assertEqual(snap.pending_closures, (BlockRef("Green", "65"),))
         self.assertEqual(snap.cancelled_orders[0].reason, "block closing")
         with self.assertRaisesRegex(UnsafeActionError, "closing"):
@@ -287,7 +306,7 @@ class StrictActionTest(unittest.TestCase):
                 apply_action(ctc, op, args)
         snap = ctc.snapshot()
         self.assertEqual(snap.outputs.track_controller.closed_blocks, ())
-        self.assertTrue(snap.outputs.track_controller.maintenance_mode)
+        self.assertTrue(snap.maintenance_mode)
 
     def test_wrongly_shaped_inputs_are_a_clear_error(self) -> None:
         for bad in ([], {"track_controller": []},
