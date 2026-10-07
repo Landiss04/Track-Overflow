@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Track Model</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------------------------------------------------------------------------
+   FALLBACK ONLY. Tokens/classes from CTC-UI-SPEC.md, inlined so this file
+   stands alone. ctc-ui.css is linked AFTER this block and overrides it.
+
+   UNITS: model is metric, display is imperial. 1 m = 3.28084 ft; 1000 ft and
+   over renders as decimal miles. Temperatures °F.
+
+   DEVIATION FROM SPEC: signal aspects are rendered in colour (red / yellow /
+   green / light green for super green), which rule 5 otherwise reserves for
+   line identity. Requested by the operator. --sig-* tokens below.
+   --------------------------------------------------------------------------- */
+:root{
+  --bg-page:#f4f4f4; --bg-topbar:#e8e8e8; --bg-nav:#ededed;
+  --bg-panel:#ffffff; --bg-panel-hdr:#f0f0f0; --bg-banner:#e4e4e4;
+  --bg-field:#fbfbfb; --bg-subtle:#fafafa; --bg-selected:#efefef;
+  --line-strong:#b9b9b9; --line-panel:#c2c2c2; --line-hdr:#d4d4d4;
+  --line-section:#d8d8d8; --line-row:#ececec; --line-tile:#dcdcdc;
+  --line-control:#a8a8a8;
+  --ink:#2e2e2e; --ink-body:#3a3a3a; --ink-2:#5a5a5a; --ink-3:#6a6a6a;
+  --ink-muted:#7c7c7c; --ink-faint:#8a8a8a; --ink-placeholder:#9a9a9a;
+  --action:#4a4a4a; --action-ink:#ffffff; --btn-light:#ededed;
+  --green-line:#2f7d4f; --red-line:#b03a3a;
+  --bar:#cfcfcf; --bar-mid:#9a9a9a; --bar-peak:#5a5a5a;
+  --sig-red:#b03a3a; --sig-yellow:#b58a1b; --sig-green:#2f7d4f; --sig-super:#5fa37d;
+  --sig-off:#e4e4e4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#ddd;font-family:"IBM Plex Sans",system-ui,sans-serif;color:var(--ink-body);
+  display:flex;align-items:flex-start;justify-content:center}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.line-g{color:var(--green-line)}
+.line-r{color:var(--red-line)}
+.is-disabled{opacity:.38;pointer-events:none}
+.is-hidden{display:none !important}
+
+/* shell ------------------------------------------------------------------ */
+.app{position:relative;width:1440px;height:900px;overflow:hidden;background:var(--bg-page)}
+.topbar{height:56px;background:var(--bg-topbar);border-bottom:1px solid var(--line-strong);
+  display:flex;align-items:center;gap:12px;padding:0 12px}
+.topbar__title{font-size:14px;font-weight:600;letter-spacing:.06em;color:var(--ink)}
+.topbar__sub{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint)}
+.topbar__spacer{flex:1}
+.topbar__clock{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:600;color:var(--ink)}
+.shell{display:flex;height:844px}
+.content{flex:1;padding:12px;display:flex;gap:12px;min-width:0}
+.col-left{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
+.col-right{width:424px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.view{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px}
+
+/* panels ----------------------------------------------------------------- */
+.panel{background:var(--bg-panel);border:1px solid var(--line-panel);display:flex;flex-direction:column;min-height:0}
+.panel__hdr{height:30px;flex:0 0 30px;background:var(--bg-panel-hdr);border-bottom:1px solid var(--line-hdr);
+  display:flex;align-items:center;justify-content:space-between;padding:0 10px}
+.panel__title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.panel__meta{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-muted)}
+.panel__body{flex:1;min-height:0;padding:10px;display:flex;flex-direction:column;gap:10px}
+.banner{background:var(--bg-banner);border:1px solid var(--line-strong);padding:10px}
+.banner__name{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.banner__text{font-size:10px;color:var(--ink-faint);margin-top:4px;line-height:1.45}
+.empty{font-size:10px;color:var(--ink-faint);line-height:1.45}
+
+/* controls --------------------------------------------------------------- */
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field__label{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted)}
+.input,.select{height:30px;border:1px solid var(--line-control);background:var(--bg-field);
+  padding:0 8px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink);width:100%}
+.input::placeholder{color:var(--ink-placeholder)}
+.select{font-family:"IBM Plex Sans",sans-serif;font-weight:500;border-radius:0}
+.microlabel{font-size:9px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-muted)}
+.seg{display:flex;height:30px;border:1px solid var(--line-control);background:var(--bg-field)}
+.seg--compact{height:28px}
+.seg__opt{flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;
+  border-right:1px solid var(--line-control);color:var(--ink-3);padding:0 8px;white-space:nowrap}
+.seg__opt:last-child{border-right:0}
+.seg__opt.is-on{background:var(--action);color:var(--action-ink)}
+.btn{height:30px;border:1px solid var(--line-control);background:var(--btn-light);color:var(--ink);
+  font-family:"IBM Plex Sans",sans-serif;font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:0 10px;
+  display:flex;align-items:center;justify-content:center}
+.btn--compact{height:28px}
+.btn--primary{height:36px;background:var(--action);border-color:var(--action);color:var(--action-ink)}
+
+/* metric tiles ----------------------------------------------------------- */
+.tiles{display:flex;gap:10px}
+.tile{flex:1;border:1px solid var(--line-tile);background:var(--bg-subtle);padding:10px}
+.tile__label{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted)}
+.tile__value{font-family:"IBM Plex Mono",monospace;font-size:18px;font-weight:600;color:var(--ink);margin-top:4px}
+
+/* table ------------------------------------------------------------------ */
+.tbl{display:flex;flex-direction:column;min-height:0;flex:1}
+.tbl__head,.tbl__row{display:grid;align-items:center;padding:0 8px;column-gap:8px}
+.tbl__head{height:24px;flex:0 0 24px;background:var(--bg-subtle);border-bottom:1px solid var(--line-section);
+  font-size:9px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-muted)}
+.tbl__scroll{flex:1;min-height:0;overflow-y:auto}
+.tbl__row{position:relative;height:26px;border-bottom:1px solid var(--line-row);font-size:11px;color:var(--ink-body)}
+.tbl__row.is-selected{background:var(--bg-selected)}
+.tbl__row.is-selected::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--action)}
+.num{text-align:right}
+
+/* key/value -------------------------------------------------------------- */
+.kv{display:flex;flex-direction:column}
+.kv__row{display:flex;justify-content:space-between;align-items:center;gap:8px;
+  height:24px;border-bottom:1px solid var(--line-row)}
+.kv__row:last-child{border-bottom:0}
+.kv__k{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted)}
+.kv__v{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink)}
+
+/* occupancy swatches ----------------------------------------------------- */
+.swatch{display:inline-block;width:10px;height:10px;border:1px solid var(--line-strong);
+  vertical-align:-1px;margin-right:6px}
+.swatch--occupied{background:#5a5a5a}
+.swatch--clear{background:#ececec}
+.swatch--closed{background:repeating-linear-gradient(45deg,#ececec 0 3px,#b9b9b9 3px 4px)}
+
+/* signal aspects (colour deviation) -------------------------------------- */
+.lamp{display:inline-block;width:10px;height:10px;border:1px solid var(--line-strong);
+  vertical-align:-1px;margin-right:6px}
+.lamp--red{background:var(--sig-red);border-color:var(--sig-red)}
+.lamp--yellow{background:var(--sig-yellow);border-color:var(--sig-yellow)}
+.lamp--green{background:var(--sig-green);border-color:var(--sig-green)}
+.lamp--super{background:var(--sig-super);border-color:var(--sig-super)}
+.lamp--off{background:var(--sig-off)}
+.lamps{margin-right:6px}
+.lamps .lamp{margin-right:2px}
+.sig--red{color:var(--sig-red)}
+.sig--yellow{color:var(--sig-yellow)}
+.sig--green{color:var(--sig-green)}
+.sig--super{color:var(--sig-super)}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style>
+<link rel="stylesheet" href="ctc-ui.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR — identical on every page; only the title, the page's global
+       control and the active nav item change -->
+  <div class="topbar">
+    <div>
+      <div class="topbar__title">TRACK MODEL</div>
+      <div class="topbar__sub" id="layoutName">Layout green-red-v5.json</div>
+    </div>
+    <div class="topbar__spacer"></div>
+    <div class="btn" style="width:180px" id="loadBtn">LOAD TRACK LAYOUT</div>
+    <input type="file" id="layoutFile" accept=".json,application/json" style="display:none">
+    <div class="seg" style="width:280px" id="tabs">
+      <div class="seg__opt is-on" data-view="blocks">BLOCKS</div>
+      <div class="seg__opt" data-view="switches">SWITCHES &amp; LIGHTS</div>
+    </div>
+    <div class="topbar__clock mono" id="clock">14:06:12</div>
+  </div>
+
+  <div class="shell">
+    <div class="content">
+
+      <!-- LEFT COLUMN ----------------------------------------------------- -->
+      <div class="col-left">
+
+        <!-- VIEW: BLOCKS -->
+        <div class="view" id="viewBlocks">
+          <div class="panel" style="flex:0 0 auto">
+            <div class="panel__hdr"><span class="panel__title">Find Block</span><span class="panel__meta" id="hitBlocks">22 Of 150 Shown</span></div>
+            <div class="panel__body" style="flex-direction:row;align-items:flex-end;gap:8px">
+              <div class="field" style="flex:1">
+                <div class="field__label">Block or section</div>
+                <input class="input" id="q" placeholder="GREEN I · 63 · section H · beacon" autocomplete="off">
+              </div>
+              <div class="field" style="width:186px">
+                <div class="microlabel">Line</div>
+                <div class="seg">
+                  <div class="seg__opt is-on">GREEN</div>
+                  <div class="seg__opt">RED</div>
+                  <div class="seg__opt">ALL</div>
+                </div>
+              </div>
+              <div class="field" style="width:150px">
+                <div class="field__label">State</div>
+                <select class="select">
+                  <option>ALL STATES</option>
+                  <option>OCCUPIED</option>
+                  <option>CLEAR</option>
+                  <option>CLOSED</option>
+                  <option>FAILED</option>
+                </select>
+              </div>
+              <div class="field" style="width:150px">
+                <div class="field__label">Signal aspect</div>
+                <select class="select">
+                  <option>ALL ASPECTS</option>
+                  <option>RED</option>
+                  <option>YELLOW</option>
+                  <option>GREEN</option>
+                  <option>SUPER GREEN</option>
+                </select>
+              </div>
+              <div class="btn" style="align-self:flex-end">CLEAR FILTERS</div>
+            </div>
+          </div>
+
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="panel__hdr"><span class="panel__title">Block Index — Green Line</span><span class="panel__meta">12.8 MI · 63 Waiting</span></div>
+            <div class="panel__body" style="padding:0">
+              <div class="tbl">
+                <div class="tbl__head" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px">
+                  <div>Block</div><div class="num">ID</div><div class="num">Length</div><div class="num">Grade</div>
+                  <div class="num">Limit</div><div class="num">Wait</div><div>Dir</div><div>Signal</div>
+                  <div>Infrastructure</div><div>State</div>
+                </div>
+                <div class="tbl__scroll" id="rowsBlocks">
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN F" data-id="45" data-sec="F" data-len="246 FT" data-grade="+0.5%" data-limit="40 MPH"
+                    data-elev="+246.1 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="—" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:04">
+                    <div class="mono"><span class="line-g">GREEN</span> F</div><div class="mono num">45</div>
+                    <div class="mono num">246 FT</div><div class="mono num">+0.5%</div><div class="mono num">40 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>—</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN F" data-id="46" data-sec="F" data-len="246 FT" data-grade="+0.5%" data-limit="40 MPH"
+                    data-elev="+246.1 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="BEACON" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:04">
+                    <div class="mono"><span class="line-g">GREEN</span> F</div><div class="mono num">46</div>
+                    <div class="mono num">246 FT</div><div class="mono num">+0.5%</div><div class="mono num">40 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>BEACON</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN G" data-id="47" data-sec="G" data-len="197 FT" data-grade="+1.0%" data-limit="30 MPH"
+                    data-elev="+196.9 FT" data-dir="OUTBOUND ONLY" data-aspect="YELLOW" data-infra="SWITCH SW-04" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:02">
+                    <div class="mono"><span class="line-g">GREEN</span> G</div><div class="mono num">47</div>
+                    <div class="mono num">197 FT</div><div class="mono num">+1.0%</div><div class="mono num">30 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div><span class="lamp lamp--yellow"></span><span class="sig--yellow">YELLOW</span></div><div>SWITCH <span class="mono">SW-04</span></div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN G" data-id="48" data-sec="G" data-len="197 FT" data-grade="+1.0%" data-limit="30 MPH"
+                    data-elev="+196.9 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="—" data-wait="—" data-occ="T-112"
+                    data-auth="→ GREEN K · 0.31 MI" data-fail="" data-rep="14:06:09">
+                    <div class="mono"><span class="line-g">GREEN</span> G</div><div class="mono num">48</div>
+                    <div class="mono num">197 FT</div><div class="mono num">+1.0%</div><div class="mono num">30 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>—</div><div><span class="swatch swatch--occupied"></span>OCCUPIED <span class="mono">T-112</span></div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN H" data-id="49" data-sec="H" data-len="394 FT" data-grade="+0.8%" data-limit="30 MPH"
+                    data-elev="+393.7 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="STATION EDGEBROOK" data-wait="14" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:07">
+                    <div class="mono"><span class="line-g">GREEN</span> H</div><div class="mono num">49</div>
+                    <div class="mono num">394 FT</div><div class="mono num">+0.8%</div><div class="mono num">30 MPH</div>
+                    <div class="mono num">14</div><div>OUT</div><div>&mdash;</div><div>STATION EDGEBROOK</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN H" data-id="50" data-sec="H" data-len="394 FT" data-grade="+0.8%" data-limit="30 MPH"
+                    data-elev="+393.7 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="RAILWAY CROSSING" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:07">
+                    <div class="mono"><span class="line-g">GREEN</span> H</div><div class="mono num">50</div>
+                    <div class="mono num">394 FT</div><div class="mono num">+0.8%</div><div class="mono num">30 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>RAILWAY CROSSING</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row is-selected" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN I" data-id="63" data-sec="I" data-len="984 FT" data-grade="-1.2%" data-limit="25 MPH"
+                    data-elev="+984.3 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="STATION WHITED · UNDERGROUND" data-wait="9" data-occ="TRACK CIRCUIT FAILURE"
+                    data-auth="SUSPENDED" data-fail="CIRCUIT" data-rep="14:02:41">
+                    <div class="mono"><span class="line-g">GREEN</span> I</div><div class="mono num">63</div>
+                    <div class="mono num">984 FT</div><div class="mono num">-1.2%</div><div class="mono num">25 MPH</div>
+                    <div class="mono num">9</div><div>OUT</div><div>&mdash;</div><div>STATION WHITED · UNDERGROUND</div><div><span class="swatch swatch--closed"></span>FAILED</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN I" data-id="64" data-sec="I" data-len="984 FT" data-grade="-1.2%" data-limit="25 MPH"
+                    data-elev="+984.3 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="UNDERGROUND" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:10">
+                    <div class="mono"><span class="line-g">GREEN</span> I</div><div class="mono num">64</div>
+                    <div class="mono num">984 FT</div><div class="mono num">-1.2%</div><div class="mono num">25 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>UNDERGROUND</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN I" data-id="65" data-sec="I" data-len="984 FT" data-grade="-1.2%" data-limit="25 MPH"
+                    data-elev="+984.3 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="UNDERGROUND · BEACON" data-wait="—" data-occ="T-104"
+                    data-auth="→ GREEN M · 0.42 MI" data-fail="" data-rep="14:06:11">
+                    <div class="mono"><span class="line-g">GREEN</span> I</div><div class="mono num">65</div>
+                    <div class="mono num">984 FT</div><div class="mono num">-1.2%</div><div class="mono num">25 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>UNDERGROUND · BEACON</div><div><span class="swatch swatch--occupied"></span>OCCUPIED <span class="mono">T-104</span></div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN J" data-id="66" data-sec="J" data-len="295 FT" data-grade="-0.4%" data-limit="35 MPH"
+                    data-elev="+295.3 FT" data-dir="BIDIRECTIONAL" data-aspect="" data-infra="UNDERGROUND" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:11">
+                    <div class="mono"><span class="line-g">GREEN</span> J</div><div class="mono num">66</div>
+                    <div class="mono num">295 FT</div><div class="mono num">-0.4%</div><div class="mono num">35 MPH</div>
+                    <div class="mono num">—</div><div>BIDIR</div><div>&mdash;</div><div>UNDERGROUND</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN J" data-id="67" data-sec="J" data-len="295 FT" data-grade="-0.4%" data-limit="35 MPH"
+                    data-elev="+295.3 FT" data-dir="BIDIRECTIONAL" data-aspect="" data-infra="—" data-wait="—" data-occ="CLOSED"
+                    data-auth="EXCLUDED" data-fail="" data-rep="13:58:20">
+                    <div class="mono"><span class="line-g">GREEN</span> J</div><div class="mono num">67</div>
+                    <div class="mono num">295 FT</div><div class="mono num">-0.4%</div><div class="mono num">35 MPH</div>
+                    <div class="mono num">—</div><div>BIDIR</div><div>&mdash;</div><div>—</div><div><span class="swatch swatch--closed"></span>CLOSED</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN K" data-id="68" data-sec="K" data-len="492 FT" data-grade="0.0%" data-limit="45 MPH"
+                    data-elev="+492.1 FT" data-dir="BIDIRECTIONAL" data-aspect="YELLOW" data-infra="SWITCH SW-07" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:05">
+                    <div class="mono"><span class="line-g">GREEN</span> K</div><div class="mono num">68</div>
+                    <div class="mono num">492 FT</div><div class="mono num">0.0%</div><div class="mono num">45 MPH</div>
+                    <div class="mono num">—</div><div>BIDIR</div><div><span class="lamp lamp--yellow"></span><span class="sig--yellow">YELLOW</span></div><div>SWITCH <span class="mono">SW-07</span></div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN K" data-id="69" data-sec="K" data-len="492 FT" data-grade="0.0%" data-limit="45 MPH"
+                    data-elev="+492.1 FT" data-dir="BIDIRECTIONAL" data-aspect="" data-infra="—" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:05">
+                    <div class="mono"><span class="line-g">GREEN</span> K</div><div class="mono num">69</div>
+                    <div class="mono num">492 FT</div><div class="mono num">0.0%</div><div class="mono num">45 MPH</div>
+                    <div class="mono num">—</div><div>BIDIR</div><div>&mdash;</div><div>—</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN L" data-id="70" data-sec="L" data-len="361 FT" data-grade="+2.1%" data-limit="25 MPH"
+                    data-elev="+360.9 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="STATION SOUTH BANK" data-wait="23" data-occ="T-098"
+                    data-auth="DWELL 00:14" data-fail="" data-rep="14:06:12">
+                    <div class="mono"><span class="line-g">GREEN</span> L</div><div class="mono num">70</div>
+                    <div class="mono num">361 FT</div><div class="mono num">+2.1%</div><div class="mono num">25 MPH</div>
+                    <div class="mono num">23</div><div>OUT</div><div>&mdash;</div><div>STATION SOUTH BANK</div><div><span class="swatch swatch--occupied"></span>OCCUPIED <span class="mono">T-098</span></div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN L" data-id="71" data-sec="L" data-len="361 FT" data-grade="+2.1%" data-limit="25 MPH"
+                    data-elev="+360.9 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="—" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:12">
+                    <div class="mono"><span class="line-g">GREEN</span> L</div><div class="mono num">71</div>
+                    <div class="mono num">361 FT</div><div class="mono num">+2.1%</div><div class="mono num">25 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>—</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN M" data-id="72" data-sec="M" data-len="656 FT" data-grade="+1.4%" data-limit="35 MPH"
+                    data-elev="+656.2 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="BEACON" data-wait="—" data-occ="CLEAR"
+                    data-auth="T-104 HOLDS" data-fail="" data-rep="14:06:08">
+                    <div class="mono"><span class="line-g">GREEN</span> M</div><div class="mono num">72</div>
+                    <div class="mono num">656 FT</div><div class="mono num">+1.4%</div><div class="mono num">35 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>BEACON</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN M" data-id="73" data-sec="M" data-len="656 FT" data-grade="+1.4%" data-limit="35 MPH"
+                    data-elev="+656.2 FT" data-dir="OUTBOUND ONLY" data-aspect="GREEN" data-infra="SWITCH SW-09" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:08">
+                    <div class="mono"><span class="line-g">GREEN</span> M</div><div class="mono num">73</div>
+                    <div class="mono num">656 FT</div><div class="mono num">+1.4%</div><div class="mono num">35 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div><span class="lamp lamp--green"></span><span class="sig--green">GREEN</span></div><div>SWITCH <span class="mono">SW-09</span></div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN N" data-id="74" data-sec="N" data-len="0.28 MI" data-grade="-0.9%" data-limit="40 MPH"
+                    data-elev="+1476.4 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="STATION CENTRAL" data-wait="11" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:06">
+                    <div class="mono"><span class="line-g">GREEN</span> N</div><div class="mono num">74</div>
+                    <div class="mono num">0.28 MI</div><div class="mono num">-0.9%</div><div class="mono num">40 MPH</div>
+                    <div class="mono num">11</div><div>OUT</div><div>&mdash;</div><div>STATION CENTRAL</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN N" data-id="75" data-sec="N" data-len="0.28 MI" data-grade="-0.9%" data-limit="40 MPH"
+                    data-elev="+1476.4 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="TRACK HEATER ZONE 4" data-wait="—" data-occ="RESTRICTED"
+                    data-auth="25 MPH MAX" data-fail="" data-rep="14:04:55">
+                    <div class="mono"><span class="line-g">GREEN</span> N</div><div class="mono num">75</div>
+                    <div class="mono num">0.28 MI</div><div class="mono num">-0.9%</div><div class="mono num">40 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>TRACK HEATER ZONE <span class="mono">4</span></div><div><span class="swatch swatch--clear"></span>RESTRICTED</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN O" data-id="76" data-sec="O" data-len="459 FT" data-grade="0.0%" data-limit="45 MPH"
+                    data-elev="+459.3 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="TRACK HEATER ZONE 4" data-wait="—" data-occ="POWER FAILURE"
+                    data-auth="SUSPENDED" data-fail="POWER" data-rep="14:05:12">
+                    <div class="mono"><span class="line-g">GREEN</span> O</div><div class="mono num">76</div>
+                    <div class="mono num">459 FT</div><div class="mono num">0.0%</div><div class="mono num">45 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div>&mdash;</div><div>TRACK HEATER ZONE <span class="mono">4</span></div><div><span class="swatch swatch--closed"></span>FAILED</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN O" data-id="77" data-sec="O" data-len="459 FT" data-grade="0.0%" data-limit="45 MPH"
+                    data-elev="+459.3 FT" data-dir="OUTBOUND ONLY" data-aspect="YELLOW" data-infra="SWITCH SW-11" data-wait="—" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:03">
+                    <div class="mono"><span class="line-g">GREEN</span> O</div><div class="mono num">77</div>
+                    <div class="mono num">459 FT</div><div class="mono num">0.0%</div><div class="mono num">45 MPH</div>
+                    <div class="mono num">—</div><div>OUT</div><div><span class="lamp lamp--yellow"></span><span class="sig--yellow">YELLOW</span></div><div>SWITCH <span class="mono">SW-11</span></div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:78px 32px 66px 50px 60px 34px 74px 104px 1fr 120px"
+                    data-ref="GREEN P" data-id="78" data-sec="P" data-len="312 FT" data-grade="-1.8%" data-limit="30 MPH"
+                    data-elev="+311.7 FT" data-dir="OUTBOUND ONLY" data-aspect="" data-infra="STATION INGLEWOOD · UNDERGROUND" data-wait="6" data-occ="CLEAR"
+                    data-auth="—" data-fail="" data-rep="14:06:01">
+                    <div class="mono"><span class="line-g">GREEN</span> P</div><div class="mono num">78</div>
+                    <div class="mono num">312 FT</div><div class="mono num">-1.8%</div><div class="mono num">30 MPH</div>
+                    <div class="mono num">6</div><div>OUT</div><div>&mdash;</div><div>STATION INGLEWOOD · UNDERGROUND</div><div><span class="swatch swatch--clear"></span>CLEAR</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: SWITCHES & LIGHTS -->
+        <div class="view is-hidden" id="viewSwitches">
+          <div class="panel" style="flex:0 0 auto">
+            <div class="panel__hdr"><span class="panel__title">Find Switch</span><span class="panel__meta" id="hitSwitches">9 Of 31 Shown</span></div>
+            <div class="panel__body" style="flex-direction:row;align-items:flex-end;gap:8px">
+              <div class="field" style="flex:1">
+                <div class="field__label">Switch, block or signal</div>
+                <input class="input" id="qs" placeholder="SW-07 · SIG-07 · GREEN K 68" autocomplete="off">
+              </div>
+              <div class="field" style="width:186px">
+                <div class="microlabel">Line</div>
+                <div class="seg">
+                  <div class="seg__opt is-on">GREEN</div>
+                  <div class="seg__opt">RED</div>
+                  <div class="seg__opt">ALL</div>
+                </div>
+              </div>
+              <div class="field" style="width:150px">
+                <div class="field__label">Position</div>
+                <select class="select">
+                  <option>ALL POSITIONS</option>
+                  <option>NORMAL</option>
+                  <option>REVERSE</option>
+                </select>
+              </div>
+              <div class="field" style="width:150px">
+                <div class="field__label">Signal aspect</div>
+                <select class="select">
+                  <option>ALL ASPECTS</option>
+                  <option>RED</option>
+                  <option>YELLOW</option>
+                  <option>GREEN</option>
+                  <option>SUPER GREEN</option>
+                </select>
+              </div>
+              <div class="btn" style="align-self:flex-end">CLEAR FILTERS</div>
+            </div>
+          </div>
+
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="panel__hdr"><span class="panel__title">Switches &amp; Lights</span><span class="panel__meta">31 Switches · 2 At Red</span></div>
+            <div class="panel__body" style="padding:0">
+              <div class="tbl">
+                <div class="tbl__head" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px">
+                  <div>Switch</div><div>Block</div><div>Position</div><div>Route — Normal / Reverse</div>
+                  <div>Signal</div><div>Aspect</div><div class="num">Changed</div>
+                </div>
+                <div class="tbl__scroll" id="rowsSwitches">
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-03" data-blk="GRN F 46" data-pos="NORMAL" data-sig="SIG-03" data-aspect="GREEN"
+                    data-chg="13:52:10" data-by="AUTO" data-route="→ GREEN F 47 / → GREEN G 51">
+                    <div class="mono">SW-03</div><div class="mono"><span class="line-g">GRN</span> F 46</div>
+                    <div>NORMAL</div><div class="mono">→ GREEN F 47 / → GREEN G 51</div><div class="mono">SIG-03</div><div><span class="lamps"><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--green"></span><span class="lamp lamp--off"></span></span><span class="sig--green">GREEN</span></div><div class="mono num">13:52</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-04" data-blk="GRN G 47" data-pos="REVERSE" data-sig="SIG-04" data-aspect="YELLOW"
+                    data-chg="14:01:38" data-by="[DISPATCHER NAME]" data-route="→ GREEN G 48 / → GREEN H 49">
+                    <div class="mono">SW-04</div><div class="mono"><span class="line-g">GRN</span> G 47</div>
+                    <div>REVERSE</div><div class="mono">→ GREEN G 48 / → GREEN H 49</div><div class="mono">SIG-04</div><div><span class="lamps"><span class="lamp lamp--off"></span><span class="lamp lamp--yellow"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span></span><span class="sig--yellow">YELLOW</span></div><div class="mono num">14:01</div>
+                  </div>
+                  <div class="tbl__row is-selected" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-07" data-blk="GRN K 68" data-pos="NORMAL" data-sig="SIG-07" data-aspect="SUPER GREEN"
+                    data-chg="13:47:02" data-by="AUTO" data-route="→ GREEN K 69 / → GREEN M 72">
+                    <div class="mono">SW-07</div><div class="mono"><span class="line-g">GRN</span> K 68</div>
+                    <div>NORMAL</div><div class="mono">→ GREEN K 69 / → GREEN M 72</div><div class="mono">SIG-07</div><div><span class="lamps"><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--super"></span></span><span class="sig--super">SUPER GREEN</span></div><div class="mono num">13:47</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-09" data-blk="GRN M 73" data-pos="NORMAL" data-sig="SIG-09" data-aspect="GREEN"
+                    data-chg="12:20:44" data-by="AUTO" data-route="→ GREEN N 74 / → YARD LEAD">
+                    <div class="mono">SW-09</div><div class="mono"><span class="line-g">GRN</span> M 73</div>
+                    <div>NORMAL</div><div class="mono">→ GREEN N 74 / → YARD LEAD</div><div class="mono">SIG-09</div><div><span class="lamps"><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--green"></span><span class="lamp lamp--off"></span></span><span class="sig--green">GREEN</span></div><div class="mono num">12:20</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-11" data-blk="GRN O 77" data-pos="NORMAL" data-sig="SIG-11" data-aspect="YELLOW"
+                    data-chg="14:03:15" data-by="AUTO" data-route="→ GREEN P 78 / → GREEN Q 85">
+                    <div class="mono">SW-11</div><div class="mono"><span class="line-g">GRN</span> O 77</div>
+                    <div>NORMAL</div><div class="mono">→ GREEN P 78 / → GREEN Q 85</div><div class="mono">SIG-11</div><div><span class="lamps"><span class="lamp lamp--off"></span><span class="lamp lamp--yellow"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span></span><span class="sig--yellow">YELLOW</span></div><div class="mono num">14:03</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-14" data-blk="GRN P 78" data-pos="REVERSE" data-sig="SIG-14" data-aspect="RED"
+                    data-chg="14:05:50" data-by="[DISPATCHER NAME]" data-route="→ GREEN P 79 / → GREEN V 101">
+                    <div class="mono">SW-14</div><div class="mono"><span class="line-g">GRN</span> P 78</div>
+                    <div>REVERSE</div><div class="mono">→ GREEN P 79 / → GREEN V 101</div><div class="mono">SIG-14</div><div><span class="lamps"><span class="lamp lamp--red"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span></span><span class="sig--red">RED</span></div><div class="mono num">14:05</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-16" data-blk="GRN Q 85" data-pos="NORMAL" data-sig="SIG-16" data-aspect="SUPER GREEN"
+                    data-chg="11:58:09" data-by="AUTO" data-route="→ GREEN Q 86 / → GREEN U 100">
+                    <div class="mono">SW-16</div><div class="mono"><span class="line-g">GRN</span> Q 85</div>
+                    <div>NORMAL</div><div class="mono">→ GREEN Q 86 / → GREEN U 100</div><div class="mono">SIG-16</div><div><span class="lamps"><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--super"></span></span><span class="sig--super">SUPER GREEN</span></div><div class="mono num">11:58</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-19" data-blk="RED P 112" data-pos="REVERSE" data-sig="SIG-19" data-aspect="RED"
+                    data-chg="13:47:00" data-by="[DISPATCHER NAME]" data-route="→ RED P 113 / → RED R 120">
+                    <div class="mono">SW-19</div><div class="mono"><span class="line-r">RED</span> P 112</div>
+                    <div>REVERSE</div><div class="mono">→ RED P 113 / → RED R 120</div><div class="mono">SIG-19</div><div><span class="lamps"><span class="lamp lamp--red"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span></span><span class="sig--red">RED</span></div><div class="mono num">13:47</div>
+                  </div>
+                  <div class="tbl__row" style="grid-template-columns:70px 100px 92px 1fr 70px 170px 64px"
+                    data-sw="SW-22" data-blk="RED T 128" data-pos="NORMAL" data-sig="SIG-22" data-aspect="YELLOW"
+                    data-chg="14:00:27" data-by="AUTO" data-route="→ RED T 129 / → RED X 140">
+                    <div class="mono">SW-22</div><div class="mono"><span class="line-r">RED</span> T 128</div>
+                    <div>NORMAL</div><div class="mono">→ RED T 129 / → RED X 140</div><div class="mono">SIG-22</div><div><span class="lamps"><span class="lamp lamp--off"></span><span class="lamp lamp--yellow"></span><span class="lamp lamp--off"></span><span class="lamp lamp--off"></span></span><span class="sig--yellow">YELLOW</span></div><div class="mono num">14:00</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BOTTOM ROW — persists across both views -->
+        <div style="display:flex;gap:12px;flex:0 0 auto">
+        <div class="panel" style="flex:1;min-width:0">
+          <div class="panel__hdr"><span class="panel__title">Conditions</span><span class="panel__meta">Air 31 °F · Updated 14:06</span></div>
+          <div class="panel__body">
+            <div class="tiles">
+              <div class="tile"><div class="tile__label">Rail temperature</div><div class="tile__value">34 °F</div></div>
+              <div class="tile"><div class="tile__label">Track heaters</div><div class="tile__value">ON · 6 ZONES</div></div>
+              <div class="tile"><div class="tile__label">Waiting at stations</div><div class="tile__value">63</div></div>
+            </div>
+            <div class="empty">Heaters engage below 36 °F and place no speed restriction on the blocks they cover.</div>
+          </div>
+        </div>
+
+        <div class="panel" style="flex:0 0 380px">
+          <div class="panel__hdr"><span class="panel__title">At a Station</span><span class="panel__meta">Green L 70</span></div>
+          <div class="panel__body">
+            <div class="kv">
+              <div class="kv__row"><span class="kv__k">Station</span><span class="kv__v" style="font-size:11px">SOUTH BANK</span></div>
+              <div class="kv__row"><span class="kv__k">Train</span><span class="kv__v">T-098</span></div>
+              <div class="kv__row"><span class="kv__k">Boarding / alighting</span><span class="kv__v">18 ON · 7 OFF</span></div>
+              <div class="kv__row"><span class="kv__k">Dwell remaining</span><span class="kv__v">00:14</span></div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN ---------------------------------------------------- -->
+      <div class="col-right">
+
+        <div class="banner">
+          <div class="banner__name">Track Model — Degraded</div>
+          <div class="banner__text">Two blocks report a failure and are excluded from every authority the CTC
+            issues until the failure is cleared.</div>
+        </div>
+
+        <div class="panel" style="flex:0 0 auto">
+          <div class="panel__hdr"><span class="panel__title">In Focus — Failures</span><span class="panel__meta">2 Blocks</span></div>
+          <div class="panel__body" style="padding:0">
+            <div class="tbl__head" style="grid-template-columns:76px 1fr 54px">
+              <div>Block</div><div>Fault</div><div class="num">Since</div>
+            </div>
+            <div class="tbl__row" style="grid-template-columns:76px 1fr 54px">
+              <div class="mono"><span class="line-g">GREEN</span> I</div><div>TRACK CIRCUIT — NO OCCUPANCY REPORT</div><div class="mono num">14:02</div>
+            </div>
+            <div class="tbl__row" style="grid-template-columns:76px 1fr 54px;border-bottom:0">
+              <div class="mono"><span class="line-g">GREEN</span> O</div><div>POWER — NO SUPPLY TO BLOCK</div><div class="mono num">14:05</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="flex:0 0 auto">
+          <div class="panel__hdr"><span class="panel__title">In Focus — Occupied</span><span class="panel__meta">4 Trains</span></div>
+          <div class="panel__body" style="padding:0">
+            <div class="tbl__head" style="grid-template-columns:70px 48px 58px 1fr">
+              <div>Block</div><div>Train</div><div class="num">Speed</div><div>Authority</div>
+            </div>
+            <div class="tbl__row" style="grid-template-columns:70px 48px 58px 1fr">
+              <div class="mono"><span class="line-g">GREEN</span> I</div><div class="mono">T-104</div><div class="mono num">22 MPH</div><div class="mono">→ GREEN M · 0.42 MI</div>
+            </div>
+            <div class="tbl__row" style="grid-template-columns:70px 48px 58px 1fr">
+              <div class="mono"><span class="line-g">GREEN</span> G</div><div class="mono">T-112</div><div class="mono num">28 MPH</div><div class="mono">→ GREEN K · 0.31 MI</div>
+            </div>
+            <div class="tbl__row" style="grid-template-columns:70px 48px 58px 1fr">
+              <div class="mono"><span class="line-g">GREEN</span> L</div><div class="mono">T-098</div><div class="mono num">00 MPH</div><div class="mono">DWELL 00:14</div>
+            </div>
+            <div class="tbl__row" style="grid-template-columns:70px 48px 58px 1fr;border-bottom:0">
+              <div class="mono"><span class="line-r">RED</span> D</div><div class="mono">R-021</div><div class="mono num">31 MPH</div><div class="mono">→ RED H · 0.58 MI</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="panel__hdr">
+            <span class="panel__title" id="selTitle">Selected Block — Green I 63</span>
+            <span class="panel__meta" id="selRep">Track Circuit Failure · 14:02:41</span>
+          </div>
+          <div class="panel__body">
+
+            <div class="kv" id="kvBlock">
+              <div class="kv__row"><span class="kv__k">Length</span><span class="kv__v" id="kvLen">984 FT</span></div>
+              <div class="kv__row"><span class="kv__k">Grade</span><span class="kv__v" id="kvGrade">-1.2%</span></div>
+              <div class="kv__row"><span class="kv__k">Speed limit</span><span class="kv__v" id="kvLimit">25 MPH</span></div>
+              <div class="kv__row"><span class="kv__k">Rise over block</span><span class="kv__v" id="kvElev">-11.8 FT</span></div>
+              <div class="kv__row"><span class="kv__k">Direction of travel</span><span class="kv__v" id="kvDir" style="font-size:11px">OUTBOUND ONLY</span></div>
+              <div class="kv__row"><span class="kv__k">Signal aspect</span><span class="kv__v" id="kvAspect" style="font-size:10.5px;color:var(--ink-faint)">— not a switch block</span></div>
+              <div class="kv__row"><span class="kv__k">Infrastructure</span><span class="kv__v" id="kvInfra" style="font-size:11px">STATION WHITED · UNDERGROUND</span></div>
+              <div class="kv__row"><span class="kv__k">Waiting at station</span><span class="kv__v" id="kvWait">9</span></div>
+              <div class="kv__row"><span class="kv__k">Occupancy</span><span class="kv__v" id="kvOcc" style="font-size:11px">TRACK CIRCUIT FAILURE</span></div>
+              <div class="kv__row"><span class="kv__k">Authority</span><span class="kv__v" id="kvAuth" style="font-size:11px">SUSPENDED</span></div>
+            </div>
+
+            <div class="kv is-hidden" id="kvSwitch">
+              <div class="kv__row"><span class="kv__k">Block</span><span class="kv__v" id="swBlk">GRN K 68</span></div>
+              <div class="kv__row"><span class="kv__k">Position</span><span class="kv__v" id="swPos" style="font-size:11px">NORMAL</span></div>
+              <div class="kv__row"><span class="kv__k">Route</span><span class="kv__v" id="swRoute" style="font-size:11px">→ GREEN K 69</span></div>
+              <div class="kv__row"><span class="kv__k">Governing signal</span><span class="kv__v" id="swSig">SIG-07</span></div>
+              <div class="kv__row"><span class="kv__k">Signal aspect</span><span class="kv__v" id="swAspect" style="font-size:11px">SUPER GREEN</span></div>
+              <div class="kv__row"><span class="kv__k">Last change</span><span class="kv__v" id="swChg">13:47:02</span></div>
+              <div class="kv__row"><span class="kv__k">Commanded by</span><span class="kv__v" id="swBy" style="font-size:11px">AUTO</span></div>
+            </div>
+
+            <div class="empty" id="failHelp">Failure state and switch position are read-only here. Use the Track Model test harness to insert or clear a block failure, or to command a switch throw directly.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* clock ---------------------------------------------------------------- */
+  function tick(){
+    var d = new Date(), p = function(n){ return String(n).padStart(2,'0'); };
+    $('clock').textContent = p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+
+  /* track layout loader — names the file, parsing is not wired up -------- */
+  $('loadBtn').addEventListener('click', function(){ $('layoutFile').click(); });
+  $('layoutFile').addEventListener('change', function(){
+    var f = this.files && this.files[0];
+    if (f) { $('layoutName').textContent = 'Layout ' + f.name; }
+  });
+
+  /* display-unit helpers — model is metric, operator reads imperial ------- */
+  function distance(metres){
+    var feet = metres * 3.28084;
+    return feet < 1000 ? Math.round(feet) + ' FT' : (metres / 1609.344).toFixed(2) + ' MI';
+  }
+  function elevation(metres){
+    var feet = metres * 3.28084;
+    return (feet >= 0 ? '+' : '') + feet.toFixed(1) + ' FT';
+  }
+  function temperature(celsius){ return Math.round(celsius * 9/5 + 32) + ' °F'; }
+  window.CTC_UNITS = { distance: distance, elevation: elevation, temperature: temperature };
+
+  var SIG_CLASS = { 'RED':'red', 'YELLOW':'yellow', 'GREEN':'green', 'SUPER GREEN':'super' };
+  function paintAspect(el, aspect){
+    if (!aspect) {
+      el.className = 'kv__v';
+      el.style.fontSize = '10.5px';
+      el.style.color = 'var(--ink-faint)';
+      el.textContent = '— not a switch block';
+      return;
+    }
+    el.style.color = '';
+    el.className = 'kv__v sig--' + SIG_CLASS[aspect];
+    el.style.fontSize = '11px';
+    el.textContent = aspect;
+  }
+
+  var blockRows  = [].slice.call(document.querySelectorAll('#rowsBlocks .tbl__row'));
+  var switchRows = [].slice.call(document.querySelectorAll('#rowsSwitches .tbl__row'));
+
+  /* failure state — read-only here; inserted/cleared from the test harness */
+  var FAIL_LABEL = { POWER:'POWER FAILURE', CIRCUIT:'TRACK CIRCUIT FAILURE', RAIL:'BROKEN RAIL' };
+
+  /* selection ------------------------------------------------------------ */
+  function selectBlock(row){
+    blockRows.forEach(function(r){ r.classList.remove('is-selected'); });
+    row.classList.add('is-selected');
+    var d = row.dataset;
+    $('selTitle').textContent = 'Selected Block — ' + d.ref + ' ' + d.id;
+    $('selRep').textContent   = d.fail ? FAIL_LABEL[d.fail] + ' · ' + d.rep : 'Reported ' + d.rep;
+    $('kvLen').textContent    = d.len;
+    $('kvGrade').textContent  = d.grade;
+    $('kvLimit').textContent  = d.limit;
+    $('kvElev').textContent   = d.elev;
+    $('kvDir').textContent    = d.dir;
+    $('kvInfra').textContent  = d.infra;
+    $('kvWait').textContent   = d.wait;
+    $('kvOcc').textContent    = d.occ;
+    $('kvAuth').textContent   = d.auth;
+    paintAspect($('kvAspect'), d.aspect);
+  }
+  function selectSwitch(row){
+    switchRows.forEach(function(r){ r.classList.remove('is-selected'); });
+    row.classList.add('is-selected');
+    var d = row.dataset;
+    $('selTitle').textContent = 'Selected Switch — ' + d.sw;
+    $('selRep').textContent   = 'Changed ' + d.chg;
+    $('swBlk').textContent    = d.blk;
+    $('swPos').textContent    = d.pos;
+    $('swRoute').textContent  = d.route;
+    $('swSig').textContent    = d.sig;
+    $('swChg').textContent    = d.chg;
+    $('swBy').textContent     = d.by;
+    paintAspect($('swAspect'), d.aspect);
+  }
+  blockRows.forEach(function(r){ r.addEventListener('click', function(){ selectBlock(r); }); });
+  switchRows.forEach(function(r){ r.addEventListener('click', function(){ selectSwitch(r); }); });
+
+  /* view switch — the page's global control in the top bar --------------- */
+  [].slice.call(document.querySelectorAll('#tabs .seg__opt')).forEach(function(opt){
+    opt.addEventListener('click', function(){
+      var blocks = opt.dataset.view === 'blocks';
+      [].slice.call(document.querySelectorAll('#tabs .seg__opt')).forEach(function(o){ o.classList.remove('is-on'); });
+      opt.classList.add('is-on');
+      $('viewBlocks').classList.toggle('is-hidden', !blocks);
+      $('viewSwitches').classList.toggle('is-hidden', blocks);
+      $('kvBlock').classList.toggle('is-hidden', !blocks);
+      $('kvSwitch').classList.toggle('is-hidden', blocks);
+      var sel = (blocks ? blockRows : switchRows).filter(function(r){ return r.classList.contains('is-selected'); })[0];
+      if (sel) { blocks ? selectBlock(sel) : selectSwitch(sel); }
+    });
+  });
+
+  /* search --------------------------------------------------------------- */
+  function wire(input, rows, counter, total, hay){
+    input.addEventListener('input', function(){
+      var v = input.value.trim().toUpperCase(), shown = 0;
+      rows.forEach(function(r){
+        var on = !v || hay(r.dataset).toUpperCase().indexOf(v) !== -1;
+        r.style.display = on ? '' : 'none';
+        if (on) shown++;
+      });
+      counter.textContent = shown + ' of ' + total + ' shown';
+    });
+  }
+  wire($('q'), blockRows, $('hitBlocks'), 150, function(d){
+    return d.ref+' '+d.id+' SECTION '+d.sec+' '+d.infra+' '+d.aspect;
+  });
+  wire($('qs'), switchRows, $('hitSwitches'), 31, function(d){
+    return d.sw+' '+d.blk+' '+d.pos+' '+d.sig+' '+d.aspect;
+  });
+})();
+</script>
+</body>
+</html>
