@@ -1,98 +1,22 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 import "components"
 import "../../ui" as Shared
 
-// Track Controller — page 4. Layout and information architecture are a direct
-// port of TrackCtrlHw/ui/html/track-controller.html; styling comes from the
+// Track Controller window. Every value comes from the module through the
+// `trackController` context property (track_ctrl_hw.state); nothing here is
+// sample data. Layout follows TrackCtrlHw/ui/html/; styling comes from the
 // shared ui/ kit and its theme tokens.
 Item {
     id: page
 
-    property int simSeconds: 14 * 3600 + 32 * 60 + 7
-    property int modeIndex: 0
-    property int zoomPercent: 100
+    readonly property var tc: trackController
+    readonly property bool loaded: tc.selectedWayside !== ""
+    readonly property string waysideName: loaded ? qsTr("Wayside %1").arg(tc.selectedWayside) : ""
 
-    readonly property bool maintenanceMode: modeIndex === 1
-
-    readonly property string clockText: pad2(Math.floor(simSeconds / 3600) % 24) + ":" + pad2(Math.floor(simSeconds / 60) % 60) + ":" + pad2(simSeconds % 60)
-
-    function pad2(n) {
-        return n < 10 ? "0" + n : "" + n;
-    }
-
-    Timer {
-        interval: 1000
-        running: true
-        repeat: true
-        onTriggered: page.simSeconds += 1
-    }
-
-    // ---- data ------------------------------------------------------------
-    readonly property var occupancyColumns: [
-        { title: "Section", width: 100 },
-        { title: "Block", width: 70 },
-        { title: "Length", width: 96, align: "right" },
-        { title: "Speed limit", width: 110, align: "right" },
-        { title: "Occupancy", fill: true }
-    ]
-
-    readonly property var occupancyRows: [
-        [{ text: "GREEN D", mono: true }, { text: "11", mono: true }, { text: "984 ft", mono: true }, { text: "25 mph", mono: true }, { badge: "ok", badgeText: "Clear" }],
-        [{ text: "GREEN D", mono: true }, { text: "12", mono: true }, { text: "984 ft", mono: true }, { text: "25 mph", mono: true }, { badge: "ok", badgeText: "Clear" }],
-        [{ text: "GREEN D", mono: true }, { text: "13", mono: true }, { text: "820 ft", mono: true }, { text: "25 mph", mono: true }, { badge: "ok", badgeText: "Clear" }],
-        [{ text: "GREEN D", mono: true }, { text: "14", mono: true }, { text: "820 ft", mono: true }, { text: "25 mph", mono: true }, { badge: "ok", badgeText: "Clear" }],
-        [{ text: "GREEN E", mono: true }, { text: "15", mono: true }, { text: "656 ft", mono: true }, { text: "15 mph", mono: true }, { badge: "info", badgeText: "Occupied", text: "T-104 \u2192", mono: true }],
-        [{ text: "GREEN E", mono: true }, { text: "16", mono: true }, { text: "820 ft", mono: true }, { text: "25 mph", mono: true }, { badge: "ok", badgeText: "Clear" }],
-        [{ text: "GREEN E", mono: true }, { text: "17", mono: true }, { text: "984 ft", mono: true }, { text: "25 mph", mono: true }, { badge: "info", badgeText: "Occupied", text: "T-117 \u2192", mono: true }],
-        [{ text: "GREEN F", mono: true }, { text: "18", mono: true }, { text: "492 ft", mono: true }, { text: "10 mph", mono: true }, { badge: "ok", badgeText: "Clear", text: "Siding" }],
-        [{ text: "GREEN F", mono: true }, { text: "19", mono: true }, { text: "492 ft", mono: true }, { text: "10 mph", mono: true }, { badge: "warning", badgeText: "Closed", text: "By dispatcher" }]
-    ]
-
-    readonly property var officeColumns: [
-        { title: "Train", width: 90 },
-        { title: "Block", width: 140 },
-        { title: "Suggested speed", width: 150, align: "right" },
-        { title: "Authority", fill: true }
-    ]
-
-    readonly property var officeRows: [
-        [{ text: "T-104", mono: true }, { text: "GREEN E-15", mono: true }, { text: "15 mph", mono: true }, { text: "\u2192 GREEN E-16", mono: true }],
-        [{ text: "T-117", mono: true }, { text: "GREEN E-17", mono: true }, { text: "25 mph", mono: true }, { text: "\u2192 GREEN G-21", mono: true }]
-    ]
-
-    readonly property var switchColumns: [
-        { title: "Switch", width: 90 },
-        { title: "Commanded", width: 100 },
-        { title: "Reported", width: 100 },
-        { title: "Set by", fill: true },
-        { title: "", width: 130 }
-    ]
-
-    readonly property var switchRows: [
-        [{ text: "SW-1", mono: true }, { text: "Normal" }, { text: "Normal" }, { text: "PLC \u00B7 14 / 18", mono: true, tone: "secondary" }, { button: "Set reverse", enabled: page.maintenanceMode }],
-        [{ text: "SW-2", mono: true }, { text: "Normal" }, { text: "Normal" }, { text: "PLC \u00B7 17 / yard", mono: true, tone: "secondary" }, { button: "Set reverse", enabled: page.maintenanceMode }]
-    ]
-
-    readonly property var signalColumns: [
-        { title: "Device", width: 90 },
-        { title: "Location", width: 112 },
-        { title: "State 1", fill: true },
-        { title: "State 2", fill: true },
-        { title: "Set by", width: 52 }
-    ]
-
-    readonly property var signalRows: [
-        [{ text: "SIG-11/12", mono: true }, { text: "GREEN D 11/12", mono: true }, { text: "11\u219212: SUPER GREEN", mono: true }, { text: "12\u219211: SUPER GREEN", mono: true }, { text: "PLC", tone: "secondary" }],
-        [{ text: "SIG-12/13", mono: true }, { text: "GREEN D 12/13", mono: true }, { text: "12\u219213: GREEN", mono: true }, { text: "13\u219212: SUPER GREEN", mono: true }, { text: "PLC", tone: "secondary" }],
-        [{ text: "SIG-14/15", mono: true }, { text: "GREEN D/E 14/15", mono: true }, { text: "14\u219215: RED", mono: true }, { text: "15\u219214: SUPER GREEN", mono: true }, { text: "PLC", tone: "secondary" }],
-        [{ text: "SIG-15/16", mono: true }, { text: "GREEN E 15/16", mono: true }, { text: "15\u219216: YELLOW", mono: true }, { text: "16\u219215: RED", mono: true }, { text: "PLC", tone: "secondary" }],
-        [{ text: "XING-15", mono: true }, { text: "GREEN E 15", mono: true }, { text: "Lights, gates down" }, { text: "" }, { text: "PLC", tone: "secondary" }]
-    ]
-
-    // ---- shell -----------------------------------------------------------
     Rectangle {
         anchors.fill: parent
         color: theme.bg_app
@@ -104,29 +28,29 @@ Item {
 
         TrackCtrlHeader {
             Layout.fillWidth: true
-            moduleName: "Track Controller"
-            instance: "Green Line \u00B7 Wayside 1"
-            mode: page.maintenanceMode ? "Maintenance" : "Automatic"
-            modeKind: page.maintenanceMode ? "warning" : "info"
-            clock: page.clockText
+            moduleName: qsTr("Track Controller")
+            instance: page.loaded ? tc.line + qsTr(" Line \u00b7 ") + page.waysideName : ""
+            mode: tc.maintenance ? qsTr("Maintenance") : qsTr("Automatic")
+            modeKind: tc.maintenance ? "warning" : "info"
+            faultText: tc.vitalFault !== "" ? qsTr("Vital fault") : ""
+            source: tc.sourceText
+            clock: tc.clockText
 
             controls: [
                 Shared.SelectField {
-                    label: "Wayside"
-                    model: ["1", "2", "3"]
+                    label: qsTr("Wayside")
+                    model: tc.waysides
+                    currentIndex: tc.waysides.indexOf(tc.selectedWayside)
+                    enabled: tc.waysides.length > 0
                     // A ColumnLayout fills by default; this field is fixed width.
                     Layout.fillWidth: false
                     Layout.preferredWidth: 96
+                    onCommitted: function (value) { tc.selectWayside(value); }
                 },
                 Shared.AppButton {
-                    text: "Load database"
-                    Layout.alignment: Qt.AlignVCenter
-                },
-                Shared.SegmentedToggle {
-                    options: ["Automatic", "Maintenance"]
-                    currentIndex: page.modeIndex
-                    Layout.alignment: Qt.AlignVCenter
-                    onActivated: index => page.modeIndex = index
+                    text: qsTr("Load database")
+                    Layout.alignment: Qt.AlignBottom
+                    onClicked: databaseDialog.open()
                 }
             ]
         }
@@ -137,21 +61,23 @@ Item {
             Layout.margins: theme.space_5
             spacing: theme.space_4
 
-            // ---- dominant visual + the occupancy it comes from ----------
+            // ---- territory and the blocks it is made of ----------------
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: theme.space_4
+                spacing: theme.space_3
 
                 Shared.Panel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    title: "Wayside territory"
+                    Layout.preferredHeight: 340
+                    title: qsTr("Wayside territory")
                     bodyPadding: theme.space_3
 
                     headerItems: [
                         Text {
-                            text: "Sections D\u2013F \u00B7 Blocks 11\u201319"
+                            text: tc.territorySummary
+                            textFormat: Text.PlainText
                             color: theme.text_muted
                             font.family: theme.ui_family
                             font.pixelSize: theme.size_small
@@ -159,39 +85,71 @@ Item {
                         IconButton {
                             size: "sm"
                             glyph: "\u2212"
-                            tip: "Zoom out"
-                            onClicked: page.zoomPercent = Math.max(50, page.zoomPercent - 25)
+                            tip: qsTr("Zoom out")
+                            enabled: page.loaded && diagram.zoom > 1
+                            onClicked: diagram.zoomOut()
                         },
                         Text {
-                            text: page.zoomPercent + "%"
+                            text: Math.round(diagram.zoom * 100) + "%"
+                            textFormat: Text.PlainText
                             color: theme.text_muted
                             font.family: theme.mono_family
                             font.pixelSize: theme.size_small
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.preferredWidth: 44
                         },
                         IconButton {
                             size: "sm"
                             glyph: "+"
-                            tip: "Zoom in"
-                            onClicked: page.zoomPercent = Math.min(200, page.zoomPercent + 25)
+                            tip: qsTr("Zoom in")
+                            enabled: page.loaded && diagram.zoom < diagram.maxZoom
+                            onClicked: diagram.zoomIn()
+                        },
+                        Shared.AppButton {
+                            size: "small"
+                            text: qsTr("Fit")
+                            tooltip: qsTr("Show the whole territory (double-click the drawing)")
+                            enabled: page.loaded && diagram.zoom > 1
+                            onClicked: diagram.fit()
                         }
                     ]
 
-                    TerritoryDiagram {
+                    Item {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        zoom: page.zoomPercent / 100
+
+                        TerritoryDiagram {
+                            id: diagram
+                            objectName: "territoryDiagram"
+                            anchors.fill: parent
+                            diagram: tc.diagram
+                            visible: page.loaded
+                        }
+
+                        Shared.EmptyState {
+                            anchors.centerIn: parent
+                            visible: !page.loaded
+                            heading: qsTr("No wayside loaded")
+                            body: qsTr("Load a wayside database to see its territory.")
+                        }
+                    }
+
+                    DiagramLegend {
+                        Layout.fillWidth: true
+                        visible: page.loaded
                     }
                 }
 
                 Shared.Panel {
                     Layout.fillWidth: true
-                    // Panel header 48 + table header 32 + 4 whole rows.
-                    Layout.preferredHeight: 224
-                    title: "Block occupancy"
+                    Layout.preferredHeight: 420
+                    title: qsTr("Block occupancy")
                     bodyPadding: 0
 
                     headerItems: Text {
-                        text: "From track model \u00B7 14:32:05"
+                        text: tc.receivedText === "" ? qsTr("From Track Model")
+                            : qsTr("From Track Model \u00b7 ") + tc.receivedText
+                        textFormat: Text.PlainText
                         color: theme.text_muted
                         font.family: theme.ui_family
                         font.pixelSize: theme.size_small
@@ -200,138 +158,96 @@ Item {
                     DataTable {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        columns: page.occupancyColumns
-                        rows: page.occupancyRows
+                        model: tc.blocks
+                        emptyText: qsTr("Load a wayside database to list its blocks.")
+                        columns: [
+                            { title: qsTr("Section"), role: "section", width: 72, mono: true },
+                            { title: qsTr("Block"), role: "block", width: 56, mono: true },
+                            { title: qsTr("Length"), role: "length", width: 80, mono: true, align: "right" },
+                            { title: qsTr("Speed limit"), role: "limit", width: 96, mono: true, align: "right" },
+                            { title: qsTr("Occupancy"), role: "stateText", badgeRole: "badge", width: 148 },
+                            { title: qsTr("Track circuit"), role: "circuit", fill: true, mono: true }
+                        ]
                     }
                 }
             }
 
-            // ---- control / readout column -------------------------------
-            // Heights are fixed to the 1440 x 900 canvas, so nothing here
-            // reacts to the window. A table taller than its panel scrolls
-            // inside the panel rather than the column scrolling as a whole.
-            // Pinned: the banner's wrapped text reports its unwrapped width as
-            // implicit width and would otherwise crowd out the territory view.
+            // ---- control and readout column ------------------------------
+            // Pinned width: wrapped text would otherwise report its unwrapped
+            // width and crowd out the territory view.
             ColumnLayout {
                 Layout.fillWidth: false
                 Layout.preferredWidth: 616
                 Layout.minimumWidth: 616
                 Layout.maximumWidth: 616
                 Layout.fillHeight: true
-                spacing: theme.space_4
+                spacing: theme.space_3
 
                 Banner {
                     Layout.fillWidth: true
-                    kind: page.maintenanceMode ? "warning" : "info"
-                    heading: page.maintenanceMode ? "Maintenance mode" : "Automatic mode"
-                    body: page.maintenanceMode ? "Manual switch commands are unlocked. The PLC program no longer has sole authority over switches, signals and the crossing." : "The loaded PLC program is setting switches, signals and the crossing, so manual switch commands unlock only in Maintenance mode."
+                    compact: true
+                    kind: tc.maintenance ? "warning" : "info"
+                    heading: tc.maintenance ? qsTr("MAINTENANCE") : qsTr("AUTOMATIC")
+                    body: tc.maintenance
+                        ? qsTr("The CTC Office sets the switches. The PLC still sets signals and crossings.")
+                        : qsTr("The PLC program sets switches, signals and crossings.")
                 }
 
-                Shared.Panel {
+                RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 152
-                    title: "Wayside PLC"
+                    spacing: theme.space_3
 
-                    RowLayout {
+                    StatusStrip {
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        spacing: theme.space_3
+                        Layout.preferredWidth: 3
+                        label: qsTr("Wayside PLC")
+                        value: tc.program.loaded ? tc.program.file : qsTr("No program loaded")
+                        detail: tc.program.loaded ? qsTr("Loaded ") + tc.program.loadedAt : ""
 
-                        Readout {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.minimumWidth: 150
-                            label: "Program running"
-                            value: "wayside-1-v7.plc"
-                            compact: true
+                        Shared.AppButton {
+                            size: "small"
+                            variant: "primary"
+                            text: qsTr("New PLC")
+                            enabled: page.loaded
+                            tooltip: page.loaded ? "" : qsTr("Load a database first")
+                            onClicked: programDialog.open()
                         }
 
-                        Readout {
-                            Layout.fillHeight: true
-                            Layout.minimumWidth: 90
-                            label: "Uploaded"
-                            value: "14:02"
-                            compact: true
-                        }
-
-                        Readout {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.minimumWidth: 140
-                            label: "CTC uplink"
-                            value: "sent 14:32:06"
-                            compact: true
-                        }
-
-                        ColumnLayout {
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.preferredWidth: 150
-                            spacing: theme.space_2
-
-                            Shared.AppButton {
-                                Layout.fillWidth: true
-                                variant: "primary"
-                                text: "Load PLC file"
-                            }
-
-                            Shared.AppButton {
-                                Layout.fillWidth: true
-                                size: "small"
-                                text: "Last report"
-                            }
+                        IconButton {
+                            size: "sm"
+                            glyph: "i"
+                            tip: qsTr("PLC program details")
+                            enabled: page.loaded
+                            onClicked: plcDetails.open()
                         }
                     }
-                }
 
-                Shared.Panel {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 152
-                    title: "From the office"
-                    bodyPadding: 0
-
-                    headerItems: Text {
-                        text: "Received 14:31:58"
-                        color: theme.text_muted
-                        font.family: theme.ui_family
-                        font.pixelSize: theme.size_small
-                    }
-
-                    DataTable {
+                    StatusStrip {
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        columns: page.officeColumns
-                        rows: page.officeRows
-                    }
-                }
+                        Layout.preferredWidth: 2
+                        label: qsTr("CTC uplink")
+                        value: page.loaded ? tc.uplinkText : "\u2014"
 
-                Shared.Panel {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 152
-                    title: "Switches"
-                    bodyPadding: 0
-
-                    headerItems: Shared.StatusBadge {
-                        variant: "ok"
-                        label: "2 of 2 agreeing"
-                    }
-
-                    DataTable {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        columns: page.switchColumns
-                        rows: page.switchRows
+                        Shared.AppButton {
+                            size: "small"
+                            text: qsTr("View")
+                            tooltip: qsTr("Last report sent to the CTC Office")
+                            enabled: page.loaded
+                            onClicked: lastReport.open()
+                        }
                     }
                 }
 
                 Shared.Panel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: 152
-                    title: "Signals & crossings"
+                    Layout.preferredHeight: 150
+                    title: qsTr("From the office")
                     bodyPadding: 0
 
                     headerItems: Text {
-                        text: "Set by PLC \u00B7 14:32:06"
+                        text: tc.receivedText === "" ? "" : qsTr("Received ") + tc.receivedText
+                        textFormat: Text.PlainText
                         color: theme.text_muted
                         font.family: theme.ui_family
                         font.pixelSize: theme.size_small
@@ -340,11 +256,157 @@ Item {
                     DataTable {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        columns: page.signalColumns
-                        rows: page.signalRows
+                        model: tc.office
+                        emptyText: qsTr("No speed or authority suggested for this wayside's blocks.")
+                        columns: [
+                            { title: qsTr("Block"), role: "block", width: 96, mono: true },
+                            { title: qsTr("Suggested speed"), role: "speed", fill: true, mono: true, align: "right" },
+                            { title: qsTr("Authority"), role: "authority", fill: true, mono: true, align: "right" }
+                        ]
+                    }
+                }
+
+                Shared.Panel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: 150
+                    title: qsTr("Switches")
+                    bodyPadding: 0
+
+                    headerItems: Shared.StatusBadge {
+                        visible: tc.switchCount > 0
+                        variant: tc.switchesAgreeing === tc.switchCount ? "ok" : "fault"
+                        label: qsTr("%1 of %2 agreeing").arg(tc.switchesAgreeing).arg(tc.switchCount)
+                    }
+
+                    DataTable {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: tc.switches
+                        emptyText: page.loaded ? qsTr("This wayside has no switches.") : ""
+                        columns: [
+                            { title: qsTr("Switch"), role: "name", width: 72, mono: true },
+                            { title: qsTr("Commanded"), role: "commanded", fill: true, mono: true },
+                            { title: qsTr("Reported"), role: "reported", width: 80 },
+                            { title: qsTr("Set by"), role: "setBy", width: 96, tone: "secondary" },
+                            { title: qsTr("Agreement"), role: "agreeText", badgeRole: "agreeBadge", width: 144 }
+                        ]
+                    }
+                }
+
+                Shared.Panel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: 190
+                    title: qsTr("Signals & crossings")
+                    bodyPadding: 0
+
+                    headerItems: Text {
+                        text: tc.program.lastScan !== undefined && tc.program.lastScan !== "--:--:--"
+                            ? qsTr("Last scan ") + tc.program.lastScan : ""
+                        textFormat: Text.PlainText
+                        color: theme.text_muted
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
+                    }
+
+                    DataTable {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: tc.devices
+                        emptyText: page.loaded ? qsTr("This wayside has no signals or crossings.") : ""
+                        columns: [
+                            { title: qsTr("Device"), role: "name", width: 80, mono: true },
+                            { title: qsTr("Block"), role: "location", width: 56, mono: true },
+                            { title: qsTr("Commanded"), role: "commanded", fill: true },
+                            { title: qsTr("Reported"), role: "reported", fill: true },
+                            { title: qsTr("Set by"), role: "setBy", width: 56, tone: "secondary" }
+                        ]
                     }
                 }
             }
         }
+    }
+
+    PlcDetailsDialog {
+        id: plcDetails
+        objectName: "plcDetails"
+        anchors.fill: parent
+        program: tc.program
+        meta: page.waysideName
+        onLoadRequested: programDialog.open()
+    }
+
+    LastReportDialog {
+        id: lastReport
+        objectName: "lastReport"
+        anchors.fill: parent
+        model: tc.report
+        waysideName: page.waysideName
+        sentText: tc.uplinkText
+    }
+
+    ModalDialog {
+        id: messageDialog
+        anchors.fill: parent
+        dialogWidth: 560
+        property string message: ""
+        property var details: []
+
+        footer: Shared.AppButton {
+            text: qsTr("Close")
+            variant: "primary"
+            onClicked: messageDialog.close()
+        }
+
+        Shared.HelperText {
+            Layout.fillWidth: true
+            text: messageDialog.message
+            color: theme.text_primary
+        }
+
+        Repeater {
+            model: messageDialog.details
+
+            delegate: Shared.MonoText {
+                required property string modelData
+                Layout.fillWidth: true
+                text: modelData
+                color: theme.danger
+                wrapMode: Text.WordWrap
+            }
+        }
+    }
+
+    Connections {
+        target: trackController
+        function onProblem(title, message, details) {
+            messageDialog.title = title;
+            messageDialog.message = message;
+            messageDialog.details = details;
+            messageDialog.open();
+        }
+        function onNotice(title, message) {
+            messageDialog.title = title;
+            messageDialog.message = message;
+            messageDialog.details = [];
+            messageDialog.open();
+        }
+    }
+
+    FileDialog {
+        id: databaseDialog
+        title: qsTr("Load a wayside database")
+        nameFilters: [qsTr("Wayside database (*.json)"), qsTr("All files (*)")]
+        currentFolder: databaseFolder
+        onAccepted: tc.loadDatabase(String(selectedFile))
+    }
+
+    FileDialog {
+        id: programDialog
+        title: qsTr("Load a PLC program into %1").arg(page.waysideName)
+        nameFilters: [qsTr("PLC program (*.plc)"), qsTr("All files (*)")]
+        currentFolder: programFolder
+        onAccepted: tc.loadProgram(String(selectedFile))
     }
 }
