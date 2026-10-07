@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D013-authority-block-count.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** team decision including Kevin, asserted by Landis 2026-10-06
-
----
-
 # D013-authority-block-count
 
 **Status:** current

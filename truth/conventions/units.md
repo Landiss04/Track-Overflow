@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** asserted by Kevin 2026-09-25; quantity list migrated from `common/Units.md` as it stood before `35e6c77`; cross-checked against `common/interfaces.py` unit suffixes and `documents/srs-filled.md`; authority, gradient, temperature and display-unit conflicts resolved by Kevin 2026-09-30
+**Provenance:** asserted by Kevin 2026-09-25; quantity list migrated from `common/Units.md` as it stood before `35e6c77`; cross-checked against `common/interfaces.py` unit suffixes and `documents/srs-filled.md`; gradient, temperature and display-unit conflicts resolved by Kevin 2026-09-30; authority as a count of blocks per D013 (team decision including Kevin, asserted by Landis 2026-10-06)
 **Aliases:** units, unit conventions, measurement units
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-06
 
 Two unit systems exist and they are not interchangeable. Everything that is stored,
 computed, or passed across a module boundary is metric SI, with no exception.
@@ -28,7 +28,7 @@ Canonical units for state, computation, and all cross-module signals.
 | Gradient        | degrees         | deg    | Positive = uphill in direction of travel           |
 | Elevation       | meters          | m      | Above datum                                        |
 | Temperature     | Celsius         | °C     | Ambient and cabin temperature                      |
-| Authority       | block ID        | —      | Destination block up to which the train may travel. An identifier, not a measurement; see [identifiers.md](identifiers.md) |
+| Authority       | integer         | blocks | Blocks ahead of the current block the train may still enter; 0 = stop before leaving the current block. See D013 |
 | Acceleration    | meters/second²  | m/s^2  |                                                    |
 | Force           | Newtons         | N      |                                                    |
 | Mass            | kilograms       | kg     |                                                    |
@@ -48,7 +48,7 @@ What every UI renders. Converted from the backend unit at the display layer.
 | Gradient        | degrees         | deg    | No imperial equivalent; unchanged                    |
 | Elevation       | feet            | ft     |                                                      |
 | Temperature     | Fahrenheit      | °F     |                                                      |
-| Authority       | block ID        | —      | Not a measurement; shown as the ID, unconverted      |
+| Authority       | integer         | blocks | A count, not a measurement; unchanged                |
 | Acceleration    | feet/second²    | ft/s^2 |                                                      |
 | Force           | pound-force     | lbf    |                                                      |
 | Mass            | short tons      | ton    |                                                      |
@@ -92,10 +92,12 @@ arctangent and not a factor.
 
 ## Resolved
 
-**Authority — block ID.** Kevin 2026-09-30. Authority is the destination block up to
-which the train may travel, as `common/Units.md` on development (`35e6c77`) states. This
-overrides the distance reading in `srs-filled.md` §1.3, `requirements-matrix.md` §2 and
-the `authority_m: float` fields in `common/interfaces.py`.
+**Authority — count of blocks.** D013, team decision including Kevin, 2026-10-06.
+Authority is the number of blocks ahead of the train's current block that it may still
+enter before it must stop, as a non-negative integer. It overrides the distance reading
+in `srs-filled.md` §1.3, `requirements-matrix.md` §2 and the `authority_m: float` fields
+in `common/interfaces.py`, and the block-ID reading in `common/Units.md` on development
+(`35e6c77`).
 
 **Gradient — degrees.** Kevin 2026-09-30. The backend stores degrees, as
 `common/interfaces.py` `BlockState.grade_deg` carries. Layout files give grade in percent
@@ -128,5 +130,5 @@ name — and do not assert which unit a quantity carries.
 
 - Backend temperature: previously Fahrenheit, the single exception to metric (D002);
   now Celsius (Kevin 2026-09-30).
-- Authority: previously a distance in meters, displayed in feet; now a block ID
-  (Kevin 2026-09-30).
+- Authority: previously a block ID naming the destination block (Kevin 2026-09-30); now
+  a count of blocks, per D013 (2026-10-06).

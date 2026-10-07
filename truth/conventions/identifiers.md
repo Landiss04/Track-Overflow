@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `truth/ui/style-guide.md` §3, §6.7; authority as a block ID and the design token mapping asserted by Kevin 2026-09-30
+**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `truth/ui/style-guide.md` §3, §6.7; the design token mapping asserted by Kevin 2026-09-30; block references by line and block number, and switch IDs, asserted by Landis 2026-10-03; authority is not an identifier per D013 (2026-10-06)
 **Aliases:** IDs, ID formats, key formats
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-06
 
 ## ID values
 
@@ -12,9 +12,16 @@
   to train IDs, block IDs, and station codes. The rule exists to make arithmetic on
   an identifier a type error rather than a silent bug.
 - Track layout files carry a Block Number column. The value is read as a string.
-- **Authority is a block ID.** It names the destination block up to which the train may
-  travel, so it is a string like every other block ID and is never converted for
-  display. See [units.md](units.md) `## Resolved`.
+- **A block is identified by its line and its block number together.** Block numbers
+  repeat across lines (Green 12 and Red 12 are different blocks), so a block ID alone
+  does not name a block. Every block reference that crosses a module boundary carries
+  two strings: `line` (the line name, e.g. `"Green"`) and `block_id` (the block
+  number, e.g. `"12"`), as the track layout files and the schedule do.
+- **A switch is identified by its line and the block it is listed on** in the track
+  layout file. Green block 12 lists the switch `12-13; 1-13`, so its ID is line
+  `"Green"`, switch ID `"12"`.
+- **Authority is not an identifier.** It is a count of blocks, an integer; see
+  [units.md](units.md) and D013.
 - How IDs and timestamps render in a UI is set by `truth/ui/style-guide.md` §3.
 
 ## Requirement IDs
@@ -59,5 +66,5 @@ with no enforced shape.
 
 ## Supersedes
 
-- Authority: previously a distance transported as `authority_m: float`; now a block ID
-  (Kevin 2026-09-30).
+- Authority: previously listed here as a block ID string (Kevin 2026-09-30); now a
+  count of blocks and no longer an identifier, per D013 (2026-10-06).
