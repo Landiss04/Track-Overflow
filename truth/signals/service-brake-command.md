@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Train Controller
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.9 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30
+**Provenance:** `Train_Model_Backend_Design.pdf` §5.9 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; brake failure blocking only the service brake clarified by the course instructor and relayed by Kevin Schillinger 2026-10-02
 **Aliases:** Service Brake Command, service brake
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-07
 
 ## Definition
 
@@ -15,8 +15,15 @@ brake and false releases it.
 
 - While engaged, the Train Model applies the service brake force. That force is derived
   from the 2/3-load reference mass.
-- Brake failure disables the service brake, as it does the emergency brake. See
-  `signals/failure-status.md`.
+- Brake failure blocks the service brake only. While the brakes have failed, this
+  command applies no force and Brake State reports the service brake as not engaged.
+  The emergency brake still works. See `modules/train-model.md` `## Failure modes`.
 - The source leaves open whether deceleration scales with train mass.
 - The source is the Train Model design. The Train Controller owners have not confirmed
   it.
+
+## Supersedes
+
+- Brake failure: previously disabled the service brake and the emergency brake alike;
+  now it blocks the service brake only (instructor, relayed by Kevin Schillinger
+  2026-10-02).

@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Train Controller
-**Provenance:** asserted by Kevin Schillinger 2026-10-02
+**Provenance:** asserted by Kevin Schillinger 2026-10-02; the door interlock no longer the Train Model's, asserted by Kevin Schillinger 2026-10-06, pending the course instructor
 **Aliases:** traction interlock, propulsion cut on brake, power cut while braking, brake-traction interlock
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-06
 
 ## Definition
 
@@ -17,5 +17,11 @@ on its own, for a service brake, an emergency brake, or a passenger pull.
 
 - A passenger pull originates in the Train Model. The Train Controller learns of it
   through Brake State and is responsible for removing power in response.
-- Unlike the door interlock (`signals/door-command.md`), this is control logic, not a
-  vehicle interlock enforced by the Train Model.
+- This is control logic, not a vehicle interlock. The Train Model enforces no door
+  interlock either (`signals/door-command.md`, pending the course instructor).
+
+## Supersedes
+
+- Note on the door interlock: previously the contrast, a vehicle interlock enforced by
+  the Train Model; the Train Model no longer enforces it (Kevin Schillinger
+  2026-10-06).

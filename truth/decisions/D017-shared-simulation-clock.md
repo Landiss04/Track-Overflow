@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D017-shared-simulation-clock.md
-**Action:** create
-**Proposed by:** Claude (Claude Code) on train-model-clock-update
-**Provenance:** the clock util on development (`utils/system_clock.py`, commit `4d83118`) is the clock every module uses once the system is integrated, asserted by Kevin Schillinger 2026-10-02 in this chat; the CTC Office speed command as the promoted `signals/clock-speedup.md`; every other fact from the generic-clock-config proposal `20261001-1658-shared-simulation-clock.md`, asserted by Landis 2026-10-01. That proposal targets D009, which truth has since assigned to D009-train-model-control-boundary, so this entry carries the same decision under a new number. First numbered D012 (D004 is claimed by the pending shared-window-scaling proposal); renumbered at Kevin Schillinger's request 2026-10-07 ("renumber our D012 to D014"), because `Train-Ctrl_SW` claims D012 for `D012-automatic-station-stop`. D014 was already claimed, as were D013, D015 and D016, by pending proposals on other branches (`ctc-interfacing` D013, `feature/TrackCtrl-Module-Implementation` D014 to D016), so it takes D017, the next free number. Only the number, the aliases and the date change.
-
----
-
 # D017-shared-simulation-clock
 
 **Status:** current

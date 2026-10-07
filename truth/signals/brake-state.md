@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Train Model
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.8 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; `bool[2]` shape and state-not-command semantics asserted by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30
+**Provenance:** `Train_Model_Backend_Design.pdf` §5.8 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; `bool[2]` shape and state-not-command semantics asserted by Kevin Schillinger 2026-09-30; brake failure blocking only the service brake clarified by the course instructor and relayed by Kevin Schillinger 2026-10-02
 **Aliases:** Brake State, Emergency Brake State, e-brake state, emergency brake active, service brake state
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-06
 
 ## Definition
 
@@ -17,8 +17,15 @@ is actually engaged. It does not echo the brake command.
 - The emergency brake element is true whether the brake was engaged by the Train
   Controller's Emergency Brake Command or by a passenger pull in the Train Model UI. For
   who owns the passenger pull, see `arbitration/passenger-emergency-brake.md`.
-- Brake failure disables both brakes, so while the brakes have failed both elements
-  are false even when a brake is commanded or a passenger has pulled the emergency
-  brake. See `signals/failure-status.md`.
+- Brake failure blocks the service brake only. While the brakes have failed, the
+  service element is false even when the service brake is commanded. The emergency
+  element still reports a commanded or passenger-pulled emergency brake. See
+  `modules/train-model.md` `## Failure modes`.
 - The source does not say whether the service element is true while the emergency
   brake is also engaged.
+
+## Supersedes
+
+- Brake failure: previously both elements were false while the brakes had failed;
+  now only the service element is held false (instructor, relayed by Kevin
+  Schillinger 2026-10-02).

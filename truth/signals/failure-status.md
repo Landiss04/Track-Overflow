@@ -1,22 +1,21 @@
 # failure-status
 
-**Status:** current
+**Status:** superseded
 **Owner:** Train Model
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.95 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; element order and brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30
+**Provenance:** `Train_Model_Backend_Design.pdf` §5.95 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; withdrawn by Kevin Schillinger 2026-10-05
 **Aliases:** Failure Status, train failures, Train Model failures
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-05
 
 ## Definition
 
-Three independent booleans, `bool[3]`, reported by the Train Model to the Train
-Controller. Element 0 is engine failure, element 1 is signal pickup failure, and element
-2 is brake failure.
+Withdrawn. The Train Model no longer sends failure status to the Train Controller.
 
 ## Notes
 
-- Failures are injected by Murphy from the Train Model UI. They are not a cross-module
-  input.
-- The three failures compose. Any combination is valid, including all three at once.
-- Engine failure zeroes traction. Signal pickup failure affects the Track Signal only.
-- Brake failure disables both the service brake and the emergency brake, including a
-  passenger pull.
+- The failures themselves are unchanged. Murphy still injects them, and their effects
+  are recorded in `modules/train-model.md` under `## Failure modes`.
+
+## Supersedes
+
+- Previously three booleans, `bool[3]` (engine, signal pickup, brake), sent by the
+  Train Model to the Train Controller; now not sent (Kevin Schillinger 2026-10-05).

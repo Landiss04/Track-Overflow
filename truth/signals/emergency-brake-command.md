@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Train Controller
-**Provenance:** `Train_Model_Backend_Design.pdf` Interfaces table; split between the controller path and the passenger path asserted by Kevin Schillinger 2026-09-30; brake failure disabling both brakes asserted by Kevin Schillinger 2026-09-30
+**Provenance:** `Train_Model_Backend_Design.pdf` Interfaces table; split between the controller path and the passenger path asserted by Kevin Schillinger 2026-09-30; brake failure blocking only the service brake clarified by the course instructor and relayed by Kevin Schillinger 2026-10-02
 **Aliases:** Emergency Brake Command, e-brake command, controller emergency brake
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-07
 
 ## Definition
 
@@ -17,11 +17,16 @@ brake from the controller side.
   from the Train Model UI, and that pull never passes through this signal. See
   `arbitration/passenger-emergency-brake.md`.
 - The Train Model reports the combined state back to the Train Controller as Emergency
-  Brake State. That state is active when either path is active, unless the brakes have
-  failed.
+  Brake State. That state is active when either path is active.
+- Brake failure blocks the service brake only. While the brakes have failed, this
+  command still engages the emergency brake. See `modules/train-model.md`
+  `## Failure modes`.
 
 ## Supersedes
 
 - Description: previously "triggered by controller or passenger pull" in the design's
   Interfaces table. Passenger pulls originate in the Train Model UI, not in this signal
   (Kevin 2026-09-30).
+- Brake failure: previously disabled the emergency brake, so Emergency Brake State was
+  inactive while the brakes had failed; now the emergency brake still works
+  (instructor, relayed by Kevin Schillinger 2026-10-02).
