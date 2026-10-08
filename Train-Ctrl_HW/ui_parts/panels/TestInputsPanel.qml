@@ -43,7 +43,6 @@ Panel {
         "cabin_temperature": Math.round(s.cabin_temp_f),
         "signal_light_ahead": s.next_signal,
         "brake_state_emergency": s.fb_emergency_brake,
-        "brake_state_service": s.fb_service_brake,
         "door_state_left": s.fb_doors_left,
         "door_state_right": s.fb_doors_right,
         "light_state_interior": s.fb_interior_lights,
@@ -322,22 +321,6 @@ Panel {
                     && root.pending("brake_state_emergency")
                 onEdited: function (v) {
                     root.stage("brake_state_emergency", v);
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                name: "brake_state_service"
-                kind: "bool"
-                value: root.draft.brake_state_service
-                pending: root.touched["brake_state_service"] === true
-                    && root.pending("brake_state_service")
-                onEdited: function (v) {
-                    root.stage("brake_state_service", v);
                 }
             }
             SignalEditRow {

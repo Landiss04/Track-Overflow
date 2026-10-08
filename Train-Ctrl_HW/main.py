@@ -201,8 +201,13 @@ SIM_RATES = (1, 10)
 
 # Tokens this console needs that the style guide does not define yet.
 # Per guide section 1 a missing token is added to the guide first,
-# then used; this one is proposed in truth/_inbox/Train-Ctrl_HW/.
+# then used; both are proposed in truth/_inbox/Train-Ctrl_HW/.
 #
+#   size_hero  section 6.5 fixes telemetry at 28 px, which is right
+#              for a dense readout but unreadable from a driving
+#              position. The approved wireframe uses a much larger
+#              figure for the four primary readouts. Contrast is
+#              unchanged: the same --text-primary on --bg-sunken.
 #   brake_*   section 4.4 --danger is a deep signal red, right for
 #             the emergency brake. The service brake is a routine
 #             stop that only the Train Controller applies, and must
@@ -210,6 +215,7 @@ SIM_RATES = (1, 10)
 #             brake handle uses. Contrast: text-primary on
 #             brake_service is 11.2:1 (AAA).
 PENDING_TOKENS: dict[str, Any] = {
+    "size_hero": 72,
     "brake_service": "#F2C037",
     "brake_service_active": "#D9A520",
 }
@@ -1208,8 +1214,8 @@ class ConsoleBackend(QObject):
              ("failure_engine", "failure_signal_pickup", "failure_brake"),
              [s.failures[name] for name in FAILURES]),
             ("brake_state",
-             ("brake_state_emergency", "brake_state_service"),
-             [s.fb_emergency_brake, s.fb_service_brake]),
+             ("brake_state_emergency",),
+             [s.fb_emergency_brake]),
             ("door_state",
              ("door_state_left", "door_state_right"),
              [s.fb_doors_left, s.fb_doors_right]),
@@ -1221,6 +1227,10 @@ class ConsoleBackend(QObject):
             if any(row in values for row in rows):
                 si[signal] = [bool(values.get(row, now))
                               for row, now in zip(rows, current)]
+        if "brake_state" in si:
+            # The bench stands in for a passenger pull only; the
+            # service element is what the controller itself commanded.
+            si["brake_state"].append(s.fb_service_brake)
         commission = ("kp" in values or "ki" in values
                       ) and not self.core.armed
         if commission:

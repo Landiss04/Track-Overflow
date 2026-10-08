@@ -41,7 +41,7 @@ Rectangle {
             text: root.value
             color: root.valueColor
             font.family: theme.mono_family
-            font.pixelSize: theme.size_display
+            font.pixelSize: theme.size_hero
             font.weight: theme.weight_bold
             horizontalAlignment: Text.AlignHCenter
         }

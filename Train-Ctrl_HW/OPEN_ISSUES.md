@@ -63,8 +63,15 @@ Ivan's sizing and the failure banners that squeezed it were removed
   commanded speed and authority); a proposal exists on `Train-Ctrl_SW` only.
 - **Authority as a block count** is pending the conflict proposals in
   `truth/_inbox/Train-Ctrl_HW/` (Kevin to resolve).
-- **Service-brake amber** (`brake_service` tokens in `main.py`) is pending the
-  style-guide proposal in the same inbox.
+- **Service-brake amber and the 72 px hero readouts** (`brake_service` and
+  `size_hero` in `main.py` `PENDING_TOKENS`) are pending the style-guide
+  proposals in the same inbox.
+- **Other sizes kept to Ivan's design but outside the style guide** (restored
+  2026-10-07 at Jonathan's request): the speed and temperature dial figures are
+  computed from the dial radius (`Math.max(32, r * 0.6)` and
+  `Math.max(30, r * 0.66)`) rather than a token, and the door and light tiles
+  are 52 px tall (the guide's control heights are 28 / 36 / 44) with
+  Label-token text instead of the button type scale.
 - **Local near-duplicates of shared components** — `ConsoleHeader`
   (ModuleHeader plus `alerts`), `HeroReadout`, `BrakeButton`, `SignalEditRow`,
   and the new `TrainPicker` — each needs a change to the shared `ui/` folder to

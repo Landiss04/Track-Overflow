@@ -53,7 +53,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "power_commanded"
             kind: "float"
             unit: "kW"
@@ -65,7 +65,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "service_brake_command"
             kind: "bool"
             value: root.s.service_brake
@@ -76,7 +76,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "emergency_brake_command"
             kind: "bool"
             value: root.s.emergency_brake
@@ -87,7 +87,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "door_command_left"
             kind: "bool"
             value: root.s.doors_left
@@ -98,7 +98,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "door_command_right"
             kind: "bool"
             value: root.s.doors_right
@@ -109,7 +109,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "interior_lights_command"
             kind: "bool"
             value: root.s.interior_lights
@@ -120,7 +120,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "exterior_lights_command"
             kind: "bool"
             value: root.s.exterior_lights
@@ -131,7 +131,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             name: "temperature_setpoint"
             kind: "int"
             unit: "\u00b0F"
@@ -143,7 +143,7 @@ Panel {
             showKind: false
             valueWidth: 150
             inlineUnit: true
-            valueSize: theme.size_small
+            valueSize: theme.size_h3
             rule: false
             name: "announcement"
             kind: "string"

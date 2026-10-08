@@ -137,7 +137,7 @@ Item {
             text: Math.round(root.target)
             color: theme.text_primary
             font.family: theme.mono_family
-            font.pixelSize: theme.size_display
+            font.pixelSize: Math.max(30, root.radius * 0.66)
             font.weight: theme.weight_bold
         }
 
