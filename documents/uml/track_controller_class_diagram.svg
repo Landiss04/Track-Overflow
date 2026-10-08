@@ -1,0 +1,310 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1428" viewBox="0 0 2200 1428" font-family="Arial, Helvetica, sans-serif" font-size="13">
+<rect width="2200" height="1428" fill="#ffffff"/>
+<line x1="230.0" y1="400.6" x2="330.0" y2="376.6" stroke="#000" stroke-width="1"/>
+<line x1="330.0" y1="376.6" x2="317.2" y2="374.5" stroke="#000" stroke-width="1"/>
+<line x1="330.0" y1="376.6" x2="319.5" y2="384.2" stroke="#000" stroke-width="1"/>
+<text x="257.6" y="408.2" text-anchor="start">1</text>
+<text x="295.4" y="376.9" text-anchor="start">1</text>
+<rect x="253.5" y="381.6" width="53.0" height="15" fill="#ffffff"/>
+<text x="256.5" y="393.6" font-size="12" font-style="italic">wayside</text>
+<line x1="230.0" y1="629.7" x2="330.0" y2="659.8" stroke="#000" stroke-width="1"/>
+<line x1="330.0" y1="659.8" x2="320.0" y2="651.6" stroke="#000" stroke-width="1"/>
+<line x1="330.0" y1="659.8" x2="317.1" y2="661.1" stroke="#000" stroke-width="1"/>
+<text x="245.0" y="650.8" text-anchor="start">1</text>
+<text x="308.0" y="646.7" text-anchor="start">1</text>
+<rect x="253.5" y="637.8" width="53.0" height="15" fill="#ffffff"/>
+<text x="256.5" y="649.8" font-size="12" font-style="italic">wayside</text>
+<line x1="567.9" y1="406.0" x2="790.0" y2="385.8" stroke="#000" stroke-width="1"/>
+<polygon points="550.0,407.6 559.4,411.8 567.9,406.0 558.5,401.8" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="576.8" y="419.2" text-anchor="start">1</text>
+<text x="756.2" y="382.2" text-anchor="start">1</text>
+<line x1="920.0" y1="330.0" x2="889.0" y2="227.4" stroke="#000" stroke-width="1" stroke-dasharray="6 4"/>
+<polygon points="885.0,214.0 882.3,229.4 895.7,225.4" fill="#ffffff" stroke="#000" stroke-width="1"/>
+<line x1="821.2" y1="330.0" x2="394.0" y2="180.0" stroke="#000" stroke-width="1" stroke-dasharray="6 4"/>
+<line x1="394.0" y1="180.0" x2="403.7" y2="188.7" stroke="#000" stroke-width="1"/>
+<line x1="394.0" y1="180.0" x2="407.0" y2="179.3" stroke="#000" stroke-width="1"/>
+<rect x="512.1" y="248.0" width="191.0" height="15" fill="#ffffff"/>
+<text x="515.1" y="260.0" font-size="12" font-style="italic">reports occupancy, switch state</text>
+<line x1="1024.0" y1="330.0" x2="1371.0" y2="197.0" stroke="#000" stroke-width="1" stroke-dasharray="6 4"/>
+<line x1="1371.0" y1="197.0" x2="1358.0" y2="196.6" stroke="#000" stroke-width="1"/>
+<line x1="1371.0" y1="197.0" x2="1361.6" y2="206.0" stroke="#000" stroke-width="1"/>
+<rect x="1065.0" y="256.5" width="265.0" height="15" fill="#ffffff"/>
+<text x="1068.0" y="268.5" font-size="12" font-style="italic">commands speed, authority, switches, lights</text>
+<line x1="1068.0" y1="386.6" x2="1290.0" y2="396.0" stroke="#000" stroke-width="1"/>
+<polygon points="1050.0,385.8 1058.8,391.2 1068.0,386.6 1059.2,381.2" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="1068.6" y="400.9" text-anchor="start">1</text>
+<text x="1264.4" y="388.9" text-anchor="start">1..*</text>
+<rect x="1137.0" y="383.9" width="66.0" height="15" fill="#ffffff"/>
+<text x="1140.0" y="395.9" font-size="12" font-style="italic">controllers</text>
+<line x1="832.6" y1="531.4" x2="766.5" y2="640.0" stroke="#000" stroke-width="1"/>
+<polygon points="842.0,516.0 833.0,521.1 832.6,531.4 841.6,526.3" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="812.9" y="537.0" text-anchor="start">1</text>
+<text x="788.6" y="627.0" text-anchor="start">1..*</text>
+<rect x="787.8" y="571.0" width="33.0" height="15" fill="#ffffff"/>
+<text x="790.8" y="583.0" font-size="12" font-style="italic">lines</text>
+<line x1="1348.8" y1="566.5" x2="1316.5" y2="640.0" stroke="#000" stroke-width="1"/>
+<polygon points="1356.0,550.0 1347.8,556.2 1348.8,566.5 1357.0,560.3" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="1329.4" y="573.8" text-anchor="start">1</text>
+<text x="1336.1" y="624.2" text-anchor="start">1</text>
+<line x1="1558.6" y1="567.4" x2="1578.0" y2="640.0" stroke="#000" stroke-width="1"/>
+<polygon points="1554.0,550.0 1551.5,560.0 1558.6,567.4 1561.2,557.4" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="1544.0" y="581.7" text-anchor="start">1</text>
+<text x="1581.0" y="616.3" text-anchor="start">1</text>
+<line x1="1620.0" y1="396.0" x2="1780.0" y2="370.5" stroke="#000" stroke-width="1"/>
+<line x1="1780.0" y1="370.5" x2="1767.4" y2="367.5" stroke="#000" stroke-width="1"/>
+<line x1="1780.0" y1="370.5" x2="1768.9" y2="377.3" stroke="#000" stroke-width="1"/>
+<text x="1647.2" y="405.8" text-anchor="start">1</text>
+<text x="1730.8" y="368.7" text-anchor="start">0..1</text>
+<rect x="1684.5" y="376.2" width="31.0" height="15" fill="#ffffff"/>
+<text x="1687.5" y="388.2" font-size="12" font-style="italic">runs</text>
+<line x1="1620.0" y1="506.0" x2="1780.0" y2="629.6" stroke="#000" stroke-width="1" stroke-dasharray="6 4"/>
+<line x1="1780.0" y1="629.6" x2="1773.6" y2="618.3" stroke="#000" stroke-width="1"/>
+<line x1="1780.0" y1="629.6" x2="1767.4" y2="626.2" stroke="#000" stroke-width="1"/>
+<rect x="1632.5" y="560.8" width="135.0" height="15" fill="#ffffff"/>
+<text x="1635.5" y="572.8" font-size="12" font-style="italic">clamps output through</text>
+<line x1="1780.0" y1="674.1" x2="1710.0" y2="685.6" stroke="#000" stroke-width="1" stroke-dasharray="6 4"/>
+<line x1="1710.0" y1="685.6" x2="1722.6" y2="688.6" stroke="#000" stroke-width="1"/>
+<line x1="1710.0" y1="685.6" x2="1721.0" y2="678.7" stroke="#000" stroke-width="1"/>
+<rect x="1720.5" y="672.9" width="49.0" height="15" fill="#ffffff"/>
+<text x="1723.5" y="684.9" font-size="12" font-style="italic">creates</text>
+<line x1="1448.4" y1="550.0" x2="1450.0" y2="960.0" stroke="#000" stroke-width="1"/>
+<line x1="1450.0" y1="960.0" x2="1455.0" y2="948.0" stroke="#000" stroke-width="1"/>
+<line x1="1450.0" y1="960.0" x2="1445.0" y2="948.0" stroke="#000" stroke-width="1"/>
+<text x="1431.5" y="580.0" text-anchor="start">1</text>
+<text x="1459.9" y="938.0" text-anchor="start">1</text>
+<rect x="1428.7" y="748.0" width="41.0" height="15" fill="#ffffff"/>
+<text x="1431.7" y="760.0" font-size="12" font-style="italic">config</text>
+<line x1="751.4" y1="809.6" x2="725.0" y2="940.0" stroke="#000" stroke-width="1"/>
+<polygon points="755.0,792.0 748.3,799.8 751.4,809.6 758.1,801.8" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="733.0" y="819.5" text-anchor="start">1</text>
+<text x="740.0" y="920.5" text-anchor="start">1..*</text>
+<line x1="886.5" y1="776.3" x2="1360.0" y2="980.3" stroke="#000" stroke-width="1"/>
+<polygon points="870.0,769.2 876.3,777.4 886.5,776.3 880.2,768.2" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="882.9" y="792.7" text-anchor="start">1</text>
+<text x="1340.1" y="964.8" text-anchor="start">1..*</text>
+<line x1="1360.0" y1="1091.8" x2="810.0" y2="1033.0" stroke="#000" stroke-width="1"/>
+<line x1="810.0" y1="1033.0" x2="821.4" y2="1039.2" stroke="#000" stroke-width="1"/>
+<line x1="810.0" y1="1033.0" x2="822.5" y2="1029.3" stroke="#000" stroke-width="1"/>
+<text x="1335.2" y="1083.1" text-anchor="start">1</text>
+<text x="814.8" y="1049.7" text-anchor="start">1..*</text>
+<rect x="1067.0" y="1055.4" width="36.0" height="15" fill="#ffffff"/>
+<text x="1070.0" y="1067.4" font-size="12" font-style="italic">owns</text>
+<line x1="1373.7" y1="1141.1" x2="1232.0" y2="1270.0" stroke="#000" stroke-width="1"/>
+<polygon points="1387.0,1129.0 1377.0,1131.4 1373.7,1141.1 1383.7,1138.8" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="1354.0" y="1143.1" text-anchor="start">1</text>
+<text x="1258.0" y="1263.9" text-anchor="start">0..*</text>
+<line x1="1451.3" y1="1147.0" x2="1460.0" y2="1270.0" stroke="#000" stroke-width="1"/>
+<polygon points="1450.0,1129.0 1445.6,1138.3 1451.3,1147.0 1455.6,1137.6" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="1434.9" y="1159.6" text-anchor="start">1</text>
+<text x="1468.1" y="1247.4" text-anchor="start">0..*</text>
+<line x1="1527.3" y1="1140.0" x2="1696.0" y2="1270.0" stroke="#000" stroke-width="1"/>
+<polygon points="1513.0,1129.0 1517.1,1138.5 1527.3,1140.0 1523.2,1130.5" fill="#000000" stroke="#000" stroke-width="1"/>
+<text x="1520.5" y="1156.8" text-anchor="start">1</text>
+<text x="1681.5" y="1250.2" text-anchor="start">0..*</text>
+<rect x="253.0" y="33.0" width="240" height="150" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="250.0" y="30.0" width="240" height="150" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="250.0" y1="75.0" x2="490.0" y2="75.0" stroke="#000" stroke-width="1"/>
+<line x1="250.0" y1="85.0" x2="490.0" y2="85.0" stroke="#000" stroke-width="1"/>
+<text x="370.0" y="47.0" text-anchor="middle">«interface»</text>
+<text x="370.0" y="65.0" text-anchor="middle" font-weight="bold">ICtcOffice</text>
+<text x="259.0" y="102.0" text-anchor="start">+receiveBlockStates(BlockState[*])</text>
+<text x="259.0" y="119.0" text-anchor="start">+receiveSwitchStates(SwitchState[*])</text>
+<text x="259.0" y="136.0" text-anchor="start">+getSuggestion(String): Tuple</text>
+<text x="259.0" y="153.0" text-anchor="start">+closeBlock(String)</text>
+<text x="259.0" y="170.0" text-anchor="start">+openBlock(String)</text>
+<rect x="763.0" y="33.0" width="250" height="184" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="760.0" y="30.0" width="250" height="184" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="760.0" y1="75.0" x2="1010.0" y2="75.0" stroke="#000" stroke-width="1"/>
+<line x1="760.0" y1="85.0" x2="1010.0" y2="85.0" stroke="#000" stroke-width="1"/>
+<text x="885.0" y="47.0" text-anchor="middle">«interface»</text>
+<text x="885.0" y="65.0" text-anchor="middle" font-weight="bold">ISwTrackController</text>
+<text x="769.0" y="102.0" text-anchor="start">+update(Float)</text>
+<text x="769.0" y="119.0" text-anchor="start">+receiveSuggestion(String, Float, Float)</text>
+<text x="769.0" y="136.0" text-anchor="start">+receiveBlockStates(BlockState[*])</text>
+<text x="769.0" y="153.0" text-anchor="start">+receiveSwitchStates(SwitchState[*])</text>
+<text x="769.0" y="170.0" text-anchor="start">+getCommandedSignal(String): Tuple</text>
+<text x="769.0" y="187.0" text-anchor="start">+getSwitchCommands(): SwitchState[*]</text>
+<text x="769.0" y="204.0" text-anchor="start">+getSignalLightCommands(): Map</text>
+<rect x="1293.0" y="33.0" width="270" height="167" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1290.0" y="30.0" width="270" height="167" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1290.0" y1="75.0" x2="1560.0" y2="75.0" stroke="#000" stroke-width="1"/>
+<line x1="1290.0" y1="85.0" x2="1560.0" y2="85.0" stroke="#000" stroke-width="1"/>
+<text x="1425.0" y="47.0" text-anchor="middle">«interface»</text>
+<text x="1425.0" y="65.0" text-anchor="middle" font-weight="bold">ITrackModel</text>
+<text x="1299.0" y="102.0" text-anchor="start">+setCommandedSignal(String, Float, Float)</text>
+<text x="1299.0" y="119.0" text-anchor="start">+setSwitchPosition(String, SwitchPosition)</text>
+<text x="1299.0" y="136.0" text-anchor="start">+setSignalLight(String, String)</text>
+<text x="1299.0" y="153.0" text-anchor="start">+getBlockStates(): BlockState[*]</text>
+<text x="1299.0" y="170.0" text-anchor="start">+getSwitchStates(): SwitchState[*]</text>
+<text x="1299.0" y="187.0" text-anchor="start">+getCrossingStates(): CrossingState[*]</text>
+<rect x="33.0" y="363.0" width="200" height="116" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="30.0" y="360.0" width="200" height="116" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="30.0" y1="405.0" x2="230.0" y2="405.0" stroke="#000" stroke-width="1"/>
+<line x1="30.0" y1="449.0" x2="230.0" y2="449.0" stroke="#000" stroke-width="1"/>
+<text x="130.0" y="377.0" text-anchor="middle">«QML view»</text>
+<text x="130.0" y="395.0" text-anchor="middle" font-weight="bold">ProgramView</text>
+<text x="39.0" y="422.0" text-anchor="start">+errorLines: Integer[*]</text>
+<text x="39.0" y="439.0" text-anchor="start">+sandbox: Map</text>
+<text x="39.0" y="466.0" text-anchor="start">+openViewTab()</text>
+<rect x="33.0" y="603.0" width="200" height="99" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="30.0" y="600.0" width="200" height="99" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="30.0" y1="645.0" x2="230.0" y2="645.0" stroke="#000" stroke-width="1"/>
+<line x1="30.0" y1="672.0" x2="230.0" y2="672.0" stroke="#000" stroke-width="1"/>
+<text x="130.0" y="617.0" text-anchor="middle">«QML view»</text>
+<text x="130.0" y="635.0" text-anchor="middle" font-weight="bold">StatusView</text>
+<text x="39.0" y="662.0" text-anchor="start">+controller: Map</text>
+<text x="39.0" y="689.0" text-anchor="start">+openProgramTab()</text>
+<rect x="333.0" y="333.0" width="220" height="388" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="330.0" y="330.0" width="220" height="388" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="330.0" y1="375.0" x2="550.0" y2="375.0" stroke="#000" stroke-width="1"/>
+<line x1="330.0" y1="504.0" x2="550.0" y2="504.0" stroke="#000" stroke-width="1"/>
+<text x="440.0" y="347.0" text-anchor="middle">«QObject»</text>
+<text x="440.0" y="365.0" text-anchor="middle" font-weight="bold">TrackControllerState</text>
+<text x="339.0" y="392.0" text-anchor="start">+clock: String</text>
+<text x="339.0" y="409.0" text-anchor="start">+selectedLine: String</text>
+<text x="339.0" y="426.0" text-anchor="start">+selectedController: String</text>
+<text x="339.0" y="443.0" text-anchor="start">+buffer: String</text>
+<text x="339.0" y="460.0" text-anchor="start">+bufferFile: String</text>
+<text x="339.0" y="477.0" text-anchor="start">+canCommit: Boolean</text>
+<text x="339.0" y="494.0" text-anchor="start">+maintenance: Boolean</text>
+<text x="339.0" y="521.0" text-anchor="start">+selectLine(String)</text>
+<text x="339.0" y="538.0" text-anchor="start">+selectController(String)</text>
+<text x="339.0" y="555.0" text-anchor="start">+setBuffer(String)</text>
+<text x="339.0" y="572.0" text-anchor="start">+run()</text>
+<text x="339.0" y="589.0" text-anchor="start">+commit()</text>
+<text x="339.0" y="606.0" text-anchor="start">+loadProgramFromUrl(Url)</text>
+<text x="339.0" y="623.0" text-anchor="start">+newFile()</text>
+<text x="339.0" y="640.0" text-anchor="start">+openFile(Integer)</text>
+<text x="339.0" y="657.0" text-anchor="start">+setMaintenance(Boolean)</text>
+<text x="339.0" y="674.0" text-anchor="start">+setSwitch(String, Boolean)</text>
+<text x="339.0" y="691.0" text-anchor="start">+releaseSwitch(String)</text>
+<text x="339.0" y="708.0" text-anchor="start">+setBlockClosed(String, Boolean)</text>
+<rect x="793.0" y="333.0" width="260" height="186" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="790.0" y="330.0" width="260" height="186" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="790.0" y1="360.0" x2="1050.0" y2="360.0" stroke="#000" stroke-width="1"/>
+<line x1="790.0" y1="438.0" x2="1050.0" y2="438.0" stroke="#000" stroke-width="1"/>
+<text x="920.0" y="350.0" text-anchor="middle" font-weight="bold">TrackControllerSystem</text>
+<text x="799.0" y="377.0" text-anchor="start">+lines: LineLayout[*]</text>
+<text x="799.0" y="394.0" text-anchor="start">+controllers: Map</text>
+<text x="799.0" y="411.0" text-anchor="start">+trains: Train[*]</text>
+<text x="799.0" y="428.0" text-anchor="start">+tickCount: Integer</text>
+<text x="799.0" y="455.0" text-anchor="start">+tick(): Map</text>
+<text x="799.0" y="472.0" text-anchor="start">+controllersFor(String): TrackController[*]</text>
+<text x="799.0" y="489.0" text-anchor="start">+occupancyFor(LineLayout): Map</text>
+<text x="799.0" y="506.0" text-anchor="start">+setBlockClosed(String, Boolean)</text>
+<rect x="1293.0" y="333.0" width="330" height="220" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1290.0" y="330.0" width="330" height="220" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1290.0" y1="360.0" x2="1620.0" y2="360.0" stroke="#000" stroke-width="1"/>
+<line x1="1290.0" y1="489.0" x2="1620.0" y2="489.0" stroke="#000" stroke-width="1"/>
+<text x="1455.0" y="350.0" text-anchor="middle" font-weight="bold">TrackController</text>
+<text x="1299.0" y="377.0" text-anchor="start">+config: ControllerConfig</text>
+<text x="1299.0" y="394.0" text-anchor="start">+blocks: Block[*]</text>
+<text x="1299.0" y="411.0" text-anchor="start">+inputs: ControllerInputs</text>
+<text x="1299.0" y="428.0" text-anchor="start">+outputs: ControllerOutputs</text>
+<text x="1299.0" y="445.0" text-anchor="start">+maintenance: Boolean</text>
+<text x="1299.0" y="462.0" text-anchor="start">+manualSwitches: Map</text>
+<text x="1299.0" y="479.0" text-anchor="start">+history: Iteration[0..5]</text>
+<text x="1299.0" y="506.0" text-anchor="start">+commit(String, String): Iteration</text>
+<text x="1299.0" y="523.0" text-anchor="start">+scan(): ScanReport</text>
+<text x="1299.0" y="540.0" text-anchor="start">+runProgram(Program, ControllerInputs): ScanReport</text>
+<rect x="1783.0" y="333.0" width="180" height="135" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1780.0" y="330.0" width="180" height="135" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1780.0" y1="360.0" x2="1960.0" y2="360.0" stroke="#000" stroke-width="1"/>
+<line x1="1780.0" y1="438.0" x2="1960.0" y2="438.0" stroke="#000" stroke-width="1"/>
+<text x="1870.0" y="350.0" text-anchor="middle" font-weight="bold">Program</text>
+<text x="1789.0" y="377.0" text-anchor="start">+source: String</text>
+<text x="1789.0" y="394.0" text-anchor="start">+inputs: String[*]</text>
+<text x="1789.0" y="411.0" text-anchor="start">+outputs: String[*]</text>
+<text x="1789.0" y="428.0" text-anchor="start">+diagnostics: Diagnostic[*]</text>
+<text x="1789.0" y="455.0" text-anchor="start">+scan(Map): ScanResult</text>
+<rect x="1783.0" y="593.0" width="380" height="99" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1780.0" y="590.0" width="380" height="99" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1780.0" y1="635.0" x2="2160.0" y2="635.0" stroke="#000" stroke-width="1"/>
+<line x1="1780.0" y1="645.0" x2="2160.0" y2="645.0" stroke="#000" stroke-width="1"/>
+<text x="1970.0" y="607.0" text-anchor="middle">«utility»</text>
+<text x="1970.0" y="625.0" text-anchor="middle" font-weight="bold">VitalSupervisor</text>
+<text x="1789.0" y="662.0" text-anchor="start">+supervise(): ControllerOutputs</text>
+<text x="1789.0" y="679.0" text-anchor="start">+restrictiveOutputs(ControllerConfig, String): ControllerOutputs</text>
+<rect x="1193.0" y="643.0" width="230" height="152" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1190.0" y="640.0" width="230" height="152" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1190.0" y1="670.0" x2="1420.0" y2="670.0" stroke="#000" stroke-width="1"/>
+<line x1="1190.0" y1="765.0" x2="1420.0" y2="765.0" stroke="#000" stroke-width="1"/>
+<text x="1305.0" y="660.0" text-anchor="middle" font-weight="bold">ControllerInputs</text>
+<text x="1199.0" y="687.0" text-anchor="start">+occupancy: Map</text>
+<text x="1199.0" y="704.0" text-anchor="start">+closed: Map</text>
+<text x="1199.0" y="721.0" text-anchor="start">+suggestedSpeedMph: Float</text>
+<text x="1199.0" y="738.0" text-anchor="start">+suggestedAuthorityBlocks: Integer</text>
+<text x="1199.0" y="755.0" text-anchor="start">+trains: Map</text>
+<text x="1199.0" y="782.0" text-anchor="start">+copy(): ControllerInputs</text>
+<rect x="1473.0" y="643.0" width="240" height="152" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1470.0" y="640.0" width="240" height="152" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1470.0" y1="670.0" x2="1710.0" y2="670.0" stroke="#000" stroke-width="1"/>
+<line x1="1470.0" y1="782.0" x2="1710.0" y2="782.0" stroke="#000" stroke-width="1"/>
+<text x="1590.0" y="660.0" text-anchor="middle" font-weight="bold">ControllerOutputs</text>
+<text x="1479.0" y="687.0" text-anchor="start">+commandedSpeedMph: Float</text>
+<text x="1479.0" y="704.0" text-anchor="start">+commandedAuthorityBlocks: Integer</text>
+<text x="1479.0" y="721.0" text-anchor="start">+switches: Map</text>
+<text x="1479.0" y="738.0" text-anchor="start">+aspects: Map</text>
+<text x="1479.0" y="755.0" text-anchor="start">+crossings: Map</text>
+<text x="1479.0" y="772.0" text-anchor="start">+overrides: VitalOverride[*]</text>
+<rect x="643.0" y="643.0" width="230" height="152" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="640.0" y="640.0" width="230" height="152" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="640.0" y1="670.0" x2="870.0" y2="670.0" stroke="#000" stroke-width="1"/>
+<line x1="640.0" y1="748.0" x2="870.0" y2="748.0" stroke="#000" stroke-width="1"/>
+<text x="755.0" y="660.0" text-anchor="middle" font-weight="bold">LineLayout</text>
+<text x="649.0" y="687.0" text-anchor="start">+name: String</text>
+<text x="649.0" y="704.0" text-anchor="start">+color: String</text>
+<text x="649.0" y="721.0" text-anchor="start">+blocks: Block[*]</text>
+<text x="649.0" y="738.0" text-anchor="start">+controllers: ControllerConfig[*]</text>
+<text x="649.0" y="765.0" text-anchor="start">+block(String): Block</text>
+<text x="649.0" y="782.0" text-anchor="start">+controller(String): ControllerConfig</text>
+<rect x="643.0" y="943.0" width="170" height="169" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="640.0" y="940.0" width="170" height="169" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="640.0" y1="970.0" x2="810.0" y2="970.0" stroke="#000" stroke-width="1"/>
+<line x1="640.0" y1="1099.0" x2="810.0" y2="1099.0" stroke="#000" stroke-width="1"/>
+<text x="725.0" y="960.0" text-anchor="middle" font-weight="bold">Block</text>
+<text x="649.0" y="987.0" text-anchor="start">+blockId: String</text>
+<text x="649.0" y="1004.0" text-anchor="start">+index: Integer</text>
+<text x="649.0" y="1021.0" text-anchor="start">+section: String</text>
+<text x="649.0" y="1038.0" text-anchor="start">+lengthM: Float</text>
+<text x="649.0" y="1055.0" text-anchor="start">+gradePercent: Float</text>
+<text x="649.0" y="1072.0" text-anchor="start">+speedLimitMph: Integer</text>
+<text x="649.0" y="1089.0" text-anchor="start">+station: String</text>
+<rect x="1363.0" y="963.0" width="180" height="169" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1360.0" y="960.0" width="180" height="169" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1360.0" y1="990.0" x2="1540.0" y2="990.0" stroke="#000" stroke-width="1"/>
+<line x1="1360.0" y1="1102.0" x2="1540.0" y2="1102.0" stroke="#000" stroke-width="1"/>
+<text x="1450.0" y="980.0" text-anchor="middle" font-weight="bold">ControllerConfig</text>
+<text x="1369.0" y="1007.0" text-anchor="start">+controllerId: String</text>
+<text x="1369.0" y="1024.0" text-anchor="start">+lineName: String</text>
+<text x="1369.0" y="1041.0" text-anchor="start">+blockIds: String[*]</text>
+<text x="1369.0" y="1058.0" text-anchor="start">+switches: Switch[*]</text>
+<text x="1369.0" y="1075.0" text-anchor="start">+signals: WaysideSignal[*]</text>
+<text x="1369.0" y="1092.0" text-anchor="start">+crossings: Crossing[*]</text>
+<text x="1369.0" y="1119.0" text-anchor="start">+owns(String): Boolean</text>
+<rect x="1133.0" y="1273.0" width="170" height="118" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1130.0" y="1270.0" width="170" height="118" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1130.0" y1="1300.0" x2="1300.0" y2="1300.0" stroke="#000" stroke-width="1"/>
+<line x1="1130.0" y1="1378.0" x2="1300.0" y2="1378.0" stroke="#000" stroke-width="1"/>
+<text x="1215.0" y="1290.0" text-anchor="middle" font-weight="bold">Switch</text>
+<text x="1139.0" y="1317.0" text-anchor="start">+switchId: String</text>
+<text x="1139.0" y="1334.0" text-anchor="start">+blockId: String</text>
+<text x="1139.0" y="1351.0" text-anchor="start">+normalTo: String</text>
+<text x="1139.0" y="1368.0" text-anchor="start">+reverseTo: String</text>
+<rect x="1373.0" y="1273.0" width="180" height="101" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1370.0" y="1270.0" width="180" height="101" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1370.0" y1="1300.0" x2="1550.0" y2="1300.0" stroke="#000" stroke-width="1"/>
+<line x1="1370.0" y1="1344.0" x2="1550.0" y2="1344.0" stroke="#000" stroke-width="1"/>
+<text x="1460.0" y="1290.0" text-anchor="middle" font-weight="bold">WaysideSignal</text>
+<text x="1379.0" y="1317.0" text-anchor="start">+signalId: String</text>
+<text x="1379.0" y="1334.0" text-anchor="start">+blockId: String</text>
+<text x="1379.0" y="1361.0" text-anchor="start">+aspectSignals(): String[4]</text>
+<rect x="1623.0" y="1273.0" width="190" height="101" fill="#e4e4e4" stroke="#e4e4e4" stroke-width="0"/>
+<rect x="1620.0" y="1270.0" width="190" height="101" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<line x1="1620.0" y1="1300.0" x2="1810.0" y2="1300.0" stroke="#000" stroke-width="1"/>
+<line x1="1620.0" y1="1361.0" x2="1810.0" y2="1361.0" stroke="#000" stroke-width="1"/>
+<text x="1715.0" y="1290.0" text-anchor="middle" font-weight="bold">Crossing</text>
+<text x="1629.0" y="1317.0" text-anchor="start">+crossingId: String</text>
+<text x="1629.0" y="1334.0" text-anchor="start">+blockId: String</text>
+<text x="1629.0" y="1351.0" text-anchor="start">+approachBlockIds: String[*]</text>
+</svg>

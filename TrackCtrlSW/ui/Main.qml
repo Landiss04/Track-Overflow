@@ -48,7 +48,7 @@ ApplicationWindow {
                         required property int index
                         required property string modelData
 
-                        readonly property bool selected: index === views.currentIndex
+                        readonly property bool selected: index === wayside.activeTab
 
                         implicitWidth: tabLabel.implicitWidth + 2 * theme.space_4
                         implicitHeight: theme.control_h_md - theme.space_1
@@ -71,7 +71,7 @@ ApplicationWindow {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: views.currentIndex = index
+                            onClicked: wayside.setActiveTab(index)
                         }
                     }
                 }
@@ -119,7 +119,7 @@ ApplicationWindow {
 
                     Text {
                         Layout.fillWidth: true
-                        text: views.currentIndex === 0
+                        text: wayside.activeTab === 0
                             ? qsTr("PLC program — wayside authoring")
                             : qsTr("View — wayside state")
                         color: theme.text_muted
@@ -187,6 +187,15 @@ ApplicationWindow {
                     }
                 }
 
+                // A test UI owns the physical inputs while it is
+                // connected, so say so: the programmer must not mistake
+                // stimulated occupancy for the stand-in simulation.
+                StatusBadge {
+                    label: qsTr("Test link")
+                    variant: "info"
+                    visible: wayside.externalControl
+                }
+
                 StatusBadge {
                     label: qsTr("Maintenance")
                     variant: "warning"
@@ -207,10 +216,10 @@ ApplicationWindow {
             objectName: "views"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: 0
+            currentIndex: wayside.activeTab
 
-            ProgramView { onOpenViewTab: views.currentIndex = 1 }
-            StatusView { onOpenProgramTab: views.currentIndex = 0 }
+            ProgramView { onOpenViewTab: wayside.setActiveTab(1) }
+            StatusView { onOpenProgramTab: wayside.setActiveTab(0) }
         }
     }
 }

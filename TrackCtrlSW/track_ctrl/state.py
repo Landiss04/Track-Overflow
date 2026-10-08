@@ -22,6 +22,7 @@ from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
 from track_ctrl.controller import TrackController, default_program_source
 from track_ctrl.plc import SEVERITY_ERROR, compile_program, has_errors
+from track_ctrl.stimulus import output_rows
 from track_ctrl.system import TrackControllerSystem
 
 #: Simulation tick, in milliseconds.
@@ -40,6 +41,8 @@ class TrackControllerState(QObject):
     terminalChanged = Signal()
     controllerChanged = Signal()
     maintenanceChanged = Signal()
+    tabChanged = Signal()
+    externalChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -61,6 +64,9 @@ class TrackControllerState(QObject):
         #: other number is that committed iteration, shown read-only.
         self._open_iteration = 0
         self._clock = datetime.now().strftime("%H:%M:%S")
+        #: 0 is the Program tab, 1 is the View tab. Held here rather than
+        #: in QML so a remote stimulus can drive it like a click does.
+        self._active_tab = 0
 
         self._load_buffer_from_controller()
 
@@ -120,7 +126,12 @@ class TrackControllerState(QObject):
         """Every line, with the totals the View tab's first column shows."""
         summary: list[dict[str, Any]] = []
         for line in self._system.lines:
-            placed = self._system.occupancy_for(line)
+            occupied = sum(
+                1
+                for controller in self._system.controllers_for(line.name)
+                for flag in controller.inputs.occupancy.values()
+                if flag
+            )
             closed = sum(
                 1
                 for controller in self._system.controllers_for(line.name)
@@ -133,9 +144,9 @@ class TrackControllerState(QObject):
                     "color": line.color,
                     "controllers": len(line.controllers),
                     "blocks": len(line.blocks),
-                    "occupied": len(placed),
+                    "occupied": occupied,
                     "closed": closed,
-                    "trains": len(placed),
+                    "trains": occupied,
                     "selected": line.name == self._line_name,
                 }
             )
@@ -282,50 +293,7 @@ class TrackControllerState(QObject):
     @Property("QVariantList", notify=controllerChanged)
     def outputs(self) -> list[dict[str, Any]]:
         """Commanded outputs, as the View tab and watch pane list them."""
-        controller = self._controller
-        outputs = controller.outputs
-        rows: list[dict[str, Any]] = [
-            {
-                "name": "CMD_SPEED",
-                "label": "Commanded speed",
-                "value": f"{outputs.commanded_speed_mph:.0f} MPH",
-                "kind": "scalar",
-            },
-            {
-                "name": "CMD_AUTH",
-                "label": "Commanded authority",
-                "value": f"{outputs.commanded_authority_blocks} blocks",
-                "kind": "scalar",
-            },
-        ]
-        for name, state in outputs.switches.items():
-            rows.append(
-                {
-                    "name": f"SW_{name}",
-                    "label": f"Switch {name}",
-                    "value": "REVERSE" if state else "NORMAL",
-                    "kind": "switch",
-                }
-            )
-        for name, aspect in outputs.aspects.items():
-            rows.append(
-                {
-                    "name": f"LT_{name}",
-                    "label": f"Signal {name}",
-                    "value": aspect,
-                    "kind": "aspect",
-                }
-            )
-        for name, state in outputs.crossings.items():
-            rows.append(
-                {
-                    "name": f"XING_{name}",
-                    "label": f"Crossing {name}",
-                    "value": "ACTIVE" if state else "CLEAR",
-                    "kind": "crossing",
-                }
-            )
-        return rows
+        return output_rows(self._controller)
 
     @Property("QVariantList", notify=controllerChanged)
     def inputSignals(self) -> list[dict[str, Any]]:
@@ -484,13 +452,18 @@ class TrackControllerState(QObject):
 
     @Slot(QUrl)
     def loadProgramFromUrl(self, url: QUrl) -> None:
-        """Read a .plc file chosen in the file dialog into the buffer.
+        """Read a .plc file chosen in the file dialog into the buffer."""
+        self.loadProgramFromPath(url.toLocalFile())
+
+    @Slot(str)
+    def loadProgramFromPath(self, file_path: str) -> None:
+        """Read a .plc file from disk into the buffer.
 
         File I/O stays on the Python side: QML owns visuals and this
         class owns state, so a read failure is reported into the same
         terminal as everything else rather than raising inside a view.
         """
-        path = Path(url.toLocalFile())
+        path = Path(file_path)
         try:
             with path.open(encoding="utf-8") as handle:
                 source = handle.read()
@@ -742,3 +715,55 @@ class TrackControllerState(QObject):
         self.controllerChanged.emit()
         self.selectionChanged.emit()
         self.terminalChanged.emit()
+
+    # --- tabs, test link and remote stimulus ---------------------------
+
+    @property
+    def system(self) -> TrackControllerSystem:
+        """The wayside network, for the stimulus layer (not QML)."""
+        return self._system
+
+    @Property(int, notify=tabChanged)
+    def activeTab(self) -> int:
+        """Which tab is showing: 0 Program, 1 View."""
+        return self._active_tab
+
+    @Slot(int)
+    def setActiveTab(self, index: int) -> None:
+        """Show the Program (0) or View (1) tab."""
+        if index not in (0, 1):
+            raise ValueError(f"no such tab: {index}")
+        if index == self._active_tab:
+            return
+        self._active_tab = index
+        self.tabChanged.emit()
+
+    @Property(bool, notify=externalChanged)
+    def externalControl(self) -> bool:
+        """Whether a test UI currently owns the physical inputs."""
+        return self._system.external_control
+
+    def set_external_control(self, active: bool) -> None:
+        """Hand the physical inputs to a test UI, or take them back.
+
+        While a test UI is connected the stand-in trains and CTC stop,
+        so the only source of input is the one the tester is driving.
+        """
+        if self._system.external_control == active:
+            return
+        self._system.external_control = active
+        if active:
+            note = "test UI connected: it now drives the physical inputs"
+        else:
+            note = "test UI disconnected: the stand-in simulation resumes"
+        self._log(f"[{self._stamp()}] {note}")
+        self.externalChanged.emit()
+        self.terminalChanged.emit()
+
+    def notify_external_change(self, log_line: str | None = None) -> None:
+        """Tell the views that inputs changed from outside the UI."""
+        if log_line is not None:
+            self._log(f"[{self._stamp()}] {log_line}")
+            self.terminalChanged.emit()
+        self.controllerChanged.emit()
+        self.selectionChanged.emit()

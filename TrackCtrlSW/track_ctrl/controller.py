@@ -16,6 +16,7 @@ train short.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Mapping
@@ -35,6 +36,21 @@ SPEED_STEP_MPH = 5.0
 
 #: How many committed programs stay readable in the history pane.
 HISTORY_DEPTH = 5
+
+#: Train id shown on a block whose occupancy was set from outside the
+#: module rather than by a train the stand-in world is moving.
+EXTERNAL_TRAIN_ID = "TEST"
+
+
+def _non_negative(value: float, what: str) -> float:
+    """Return ``value`` as a float, rejecting NaN, infinity and negatives."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{what} must be a number") from None
+    if not math.isfinite(number) or number < 0.0:
+        raise ValueError(f"{what} must be zero or more")
+    return number
 
 
 def encode_speed_mph(speed_mph: float) -> dict[str, bool]:
@@ -102,6 +118,12 @@ class ControllerInputs:
     suggested_authority_blocks: int = 0
     #: Block id -> train id, for display only. Not visible to the PLC.
     trains: dict[str, str] = field(default_factory=dict)
+    #: Switch id -> physical fault / mid-throw flags from the Track Model.
+    switch_fault: dict[str, bool] = field(default_factory=dict)
+    switch_moving: dict[str, bool] = field(default_factory=dict)
+    #: Posted-limit override from configuration. ``None`` keeps the
+    #: per-block limits from the track layout.
+    speed_limit_override_mph: float | None = None
 
     def copy(self) -> "ControllerInputs":
         """Return an independent copy, for sandbox execution."""
@@ -111,6 +133,9 @@ class ControllerInputs:
             suggested_speed_mph=self.suggested_speed_mph,
             suggested_authority_blocks=self.suggested_authority_blocks,
             trains=dict(self.trains),
+            switch_fault=dict(self.switch_fault),
+            switch_moving=dict(self.switch_moving),
+            speed_limit_override_mph=self.speed_limit_override_mph,
         )
 
 
@@ -216,6 +241,13 @@ class TrackController:
             image[f"CLOSED_{block.index}"] = inputs.closed.get(
                 block.block_id, False
             )
+        for switch in self.config.switches:
+            image[f"FAULT_{switch.switch_id}"] = inputs.switch_fault.get(
+                switch.switch_id, False
+            )
+            image[f"MOVING_{switch.switch_id}"] = inputs.switch_moving.get(
+                switch.switch_id, False
+            )
         image.update(encode_speed_mph(inputs.suggested_speed_mph))
         image.update(
             encode_authority_blocks(inputs.suggested_authority_blocks)
@@ -249,6 +281,9 @@ class TrackController:
             manual_switches=self.manual_switches,
             maintenance=self.maintenance,
             current_switches=self.outputs.switches,
+            faulted_switches=inputs.switch_fault,
+            moving_switches=inputs.switch_moving,
+            speed_limit_override_mph=inputs.speed_limit_override_mph,
         )
         return ScanReport(
             outputs=outputs,
@@ -274,6 +309,78 @@ class TrackController:
         report = self.run_program(self._program, self.inputs)
         self.outputs = report.outputs
         return report
+
+    # --- physical inputs --------------------------------------------
+    #
+    # These are the writes the Track Model and the CTC make onto the
+    # input card. They validate here, at the module boundary, so a bad
+    # value from outside is rejected before it can reach a scan.
+
+    def _require_block(self, block_id: str) -> None:
+        if not self.config.owns(block_id):
+            raise KeyError(
+                f"{self.config.controller_id} does not own block {block_id}"
+            )
+
+    def _require_switch(self, switch_id: str) -> None:
+        if switch_id not in {s.switch_id for s in self.config.switches}:
+            raise KeyError(
+                f"{self.config.controller_id} has no switch {switch_id}"
+            )
+
+    def set_occupancy(self, block_id: str, occupied: bool) -> None:
+        """Set train presence on one owned block, from the Track Model."""
+        self._require_block(block_id)
+        self.inputs.occupancy[block_id] = occupied
+        if occupied:
+            self.inputs.trains.setdefault(block_id, EXTERNAL_TRAIN_ID)
+        else:
+            self.inputs.trains.pop(block_id, None)
+
+    def set_closed(self, block_id: str, closed: bool) -> None:
+        """Open or close one owned block, from the CTC."""
+        self._require_block(block_id)
+        self.inputs.closed[block_id] = closed
+
+    def set_switch_fault(self, switch_id: str, faulted: bool) -> None:
+        """Flag a switch machine as faulted, from the Track Model."""
+        self._require_switch(switch_id)
+        self.inputs.switch_fault[switch_id] = faulted
+
+    def set_switch_moving(self, switch_id: str, moving: bool) -> None:
+        """Flag a switch machine as mid-throw, from the Track Model."""
+        self._require_switch(switch_id)
+        self.inputs.switch_moving[switch_id] = moving
+
+    def set_suggestion(
+        self,
+        speed_mph: float | None = None,
+        authority_blocks: float | None = None,
+    ) -> None:
+        """Set the CTC's suggested speed and/or authority."""
+        if speed_mph is not None:
+            self.inputs.suggested_speed_mph = _non_negative(
+                speed_mph, "suggested speed"
+            )
+        if authority_blocks is not None:
+            self.inputs.suggested_authority_blocks = int(
+                _non_negative(authority_blocks, "suggested authority")
+            )
+
+    def set_speed_limit_override(self, limit_mph: float | None) -> None:
+        """Override the posted limit for this controller, or clear it."""
+        if limit_mph is None:
+            self.inputs.speed_limit_override_mph = None
+            return
+        value = _non_negative(limit_mph, "speed limit")
+        if value == 0.0:
+            raise ValueError("speed limit must be above zero")
+        self.inputs.speed_limit_override_mph = value
+
+    def clear_occupancy(self) -> None:
+        """Mark every owned block clear."""
+        for block in self.blocks:
+            self.set_occupancy(block.block_id, False)
 
     def _format_log(
         self,
@@ -383,6 +490,7 @@ def default_program_source(controller: TrackController) -> str:
 VAR_IN   OCC_{first} .. OCC_{last}
 VAR_IN   SUG_SPEED_0..3
 VAR_IN   SUG_AUTH_0..3
+VAR_IN   FAULT_{switch.switch_id} MOVING_{switch.switch_id}
 VAR_OUT  {switch.output_signal}
 VAR_OUT  {red} {orange} {green} {super_green}
 VAR_OUT  {crossing.output_signal}
@@ -396,9 +504,9 @@ AND NOT MAINT_HOLD
 
 // Signal {signal.signal_id} at block {signal_block.index} reads ahead.
 BUSY_AHEAD := {occupied_ahead}
-{green}    := NOT BUSY_AHEAD
-{orange}   := BUSY_AHEAD
-{red}      := 0
+{green}    := NOT BUSY_AHEAD AND NOT FAULT_{switch.switch_id}
+{orange}   := BUSY_AHEAD AND NOT FAULT_{switch.switch_id}
+{red}      := FAULT_{switch.switch_id}
 {super_green} := 0
 
 // Crossing {crossing.crossing_id}: arm on the approach, hold until clear.
@@ -406,13 +514,14 @@ BUSY_AHEAD := {occupied_ahead}
 
 // Pass the CTC's suggestion through, suppressed behind occupancy.
 AUTH_OK      := NOT BUSY_AHEAD
+SPEED_OK     := NOT MOVING_{switch.switch_id}
 CMD_AUTH_0   := SUG_AUTH_0 AND AUTH_OK
 CMD_AUTH_1   := SUG_AUTH_1 AND AUTH_OK
 CMD_AUTH_2   := SUG_AUTH_2 AND AUTH_OK
 CMD_AUTH_3   := SUG_AUTH_3 AND AUTH_OK
 
-CMD_SPEED_0  := SUG_SPEED_0 AND AUTH_OK
-CMD_SPEED_1  := SUG_SPEED_1 AND AUTH_OK
-CMD_SPEED_2  := SUG_SPEED_2 AND AUTH_OK
-CMD_SPEED_3  := SUG_SPEED_3 AND AUTH_OK
+CMD_SPEED_0  := SUG_SPEED_0 AND AUTH_OK AND SPEED_OK
+CMD_SPEED_1  := SUG_SPEED_1 AND AUTH_OK AND SPEED_OK
+CMD_SPEED_2  := SUG_SPEED_2 AND AUTH_OK AND SPEED_OK
+CMD_SPEED_3  := SUG_SPEED_3 AND AUTH_OK AND SPEED_OK
 """

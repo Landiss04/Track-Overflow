@@ -57,6 +57,10 @@ class TrackControllerSystem:
         self.controllers: dict[str, TrackController] = {}
         self.trains: list[Train] = []
         self.tick_count = 0
+        #: While true, something outside this module (the test UI) owns
+        #: the physical inputs, so the stand-in trains and CTC stop
+        #: moving and stop overwriting what it has set.
+        self.external_control = False
 
         for line in self.lines:
             by_id = {block.block_id: block for block in line.blocks}
@@ -98,6 +102,13 @@ class TrackControllerSystem:
                 return candidate
         raise KeyError(f"unknown line: {name}")
 
+    def controller(self, controller_id: str) -> TrackController:
+        """Return one controller by id."""
+        try:
+            return self.controllers[controller_id]
+        except KeyError:
+            raise KeyError(f"unknown controller: {controller_id}") from None
+
     def controllers_for(self, line_name: str) -> list[TrackController]:
         """Return the controllers on one line, in configuration order."""
         return [
@@ -126,16 +137,18 @@ class TrackControllerSystem:
         """Advance the stand-in world and scan every controller."""
         self.tick_count += 1
 
-        for line in self.lines:
-            for train in self.trains:
-                if train.line_name == line.name:
-                    train.advance(len(line.blocks))
+        if not self.external_control:
+            for line in self.lines:
+                for train in self.trains:
+                    if train.line_name == line.name:
+                        train.advance(len(line.blocks))
 
         reports: dict[str, ScanReport] = {}
         for line in self.lines:
             placed = self.occupancy_for(line)
             for controller in self.controllers_for(line.name):
-                self._refresh_inputs(controller, placed)
+                if not self.external_control:
+                    self._refresh_inputs(controller, placed)
                 reports[controller.config.controller_id] = controller.scan()
         return reports
 

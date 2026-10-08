@@ -112,16 +112,33 @@ def supervise(
     manual_switches: Mapping[str, bool],
     maintenance: bool,
     current_switches: Mapping[str, bool],
+    faulted_switches: Mapping[str, bool] | None = None,
+    moving_switches: Mapping[str, bool] | None = None,
+    speed_limit_override_mph: float | None = None,
 ) -> ControllerOutputs:
     """Clamp one scan's raw outputs down to something safe to drive.
 
     ``commanded_speed_mph`` and ``commanded_authority_blocks`` are what
     the program asked for, already decoded from its output bits.
     ``current_switches`` is where the switches are standing now, which
-    a switch locked under a train is held at.
+    a switch locked under a train is held at. ``faulted_switches`` and
+    ``moving_switches`` are the Track Model's physical switch flags, and
+    ``speed_limit_override_mph`` replaces the per-block posted limits
+    when the configuration supplies one.
     """
     overrides: list[VitalOverride] = []
     by_id = {block.block_id: block for block in blocks}
+    faulted = faulted_switches or {}
+    moving = moving_switches or {}
+
+    # A switch machine that reports a fault cannot be trusted to be in
+    # the position it was commanded to, so the block it sits on is
+    # treated like an occupied one for signals and authority.
+    fault_blocks = {
+        switch.block_id
+        for switch in config.switches
+        if faulted.get(switch.switch_id, False)
+    }
 
     # --- switches ----------------------------------------------------
     switches: dict[str, bool] = {}
@@ -172,14 +189,15 @@ def supervise(
         if block is not None and (
             occupancy.get(signal.block_id, False)
             or closed.get(signal.block_id, False)
+            or signal.block_id in fault_blocks
         ):
             if aspect != "RED":
                 overrides.append(
                     VitalOverride(
                         "signal_protects_block",
                         signal.signal_id,
-                        f"block {signal.block_id} is occupied or closed; "
-                        f"{aspect} dropped to RED",
+                        f"block {signal.block_id} is occupied, closed or "
+                        f"holds a faulted switch; {aspect} dropped to RED",
                     )
                 )
             aspect = "RED"
@@ -211,7 +229,11 @@ def supervise(
     # count is truncated at the first one ahead.
     blocked_at: str | None = None
     for offset, block_id in enumerate(ordered[:authority]):
-        if occupancy.get(block_id, False) or closed.get(block_id, False):
+        if (
+            occupancy.get(block_id, False)
+            or closed.get(block_id, False)
+            or block_id in fault_blocks
+        ):
             blocked_at = block_id
             authority = offset
             break
@@ -253,7 +275,11 @@ def supervise(
     # ceiling; with no authority there is nothing to move over.
     covered = ordered[:authority] if authority else []
     if covered:
-        limit = min(by_id[block_id].speed_limit_mph for block_id in covered)
+        limit = (
+            speed_limit_override_mph
+            if speed_limit_override_mph is not None
+            else min(by_id[block_id].speed_limit_mph for block_id in covered)
+        )
         if speed > limit:
             overrides.append(
                 VitalOverride(
@@ -264,6 +290,19 @@ def supervise(
                 )
             )
             speed = float(limit)
+
+    # A switch that is mid-throw is not locked in either position, so
+    # nothing may be commanded to run over it until it settles.
+    if speed > 0.0 and any(moving.get(sw.switch_id, False)
+                           for sw in config.switches):
+        overrides.append(
+            VitalOverride(
+                "switch_moving",
+                "CMD_SPEED",
+                "a switch is mid-throw; commanded speed zeroed",
+            )
+        )
+        speed = 0.0
 
     # The most restrictive aspect the train will pass caps it further.
     if aspects and authority:
