@@ -68,6 +68,7 @@ Button {
     contentItem: Text {
         id: label
         text: control.text
+        textFormat: Text.PlainText
         color: control.labelColor
         font.family: theme.ui_family
         font.pixelSize: control.labelSize

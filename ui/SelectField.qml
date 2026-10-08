@@ -13,6 +13,9 @@ ColumnLayout {
     id: root
 
     property string label: ""
+    // Clear where the surrounding row already names the field; the label
+    // is still used as the accessible name.
+    property bool labelVisible: true
     property alias model: control.model
     property alias textRole: control.textRole
     property alias valueRole: control.valueRole
@@ -26,6 +29,7 @@ ColumnLayout {
     FieldLabel {
         Layout.fillWidth: true
         text: root.label.toUpperCase()
+        visible: root.labelVisible && root.label !== ""
         // Unlabeled in tables, where a header row names the column.
         visible: root.label !== ""
     }
@@ -53,6 +57,7 @@ ColumnLayout {
         contentItem: Text {
             id: shown
             text: control.displayText
+            textFormat: Text.PlainText
             color: theme.text_primary
             font: control.font
             verticalAlignment: Text.AlignVCenter
@@ -137,6 +142,7 @@ ColumnLayout {
             contentItem: Text {
                 text: control.textRole
                     ? option.model[control.textRole] : option.model.modelData
+                textFormat: Text.PlainText
                 color: option.selected ? theme.on_accent : theme.text_primary
                 font: control.font
                 verticalAlignment: Text.AlignVCenter

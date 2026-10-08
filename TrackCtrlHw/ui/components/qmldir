@@ -1,0 +1,14 @@
+# Track Controller specific components.
+# Shared, standardized controls and design tokens live in the repository-root
+# `ui/` kit (imported as `Shared`); only components with no equivalent there are
+# defined here. Normative source: truth/ui/style-guide.md.
+# No `module` line: a QML module URI must start with an uppercase letter, so
+# this directory is consumed with `import "components"`.
+
+Banner 1.0 Banner.qml
+DataTable 1.0 DataTable.qml
+IconButton 1.0 IconButton.qml
+ModalDialog 1.0 ModalDialog.qml
+Readout 1.0 Readout.qml
+StatusStrip 1.0 StatusStrip.qml
+TrackCtrlHeader 1.0 TrackCtrlHeader.qml

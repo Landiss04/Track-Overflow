@@ -85,12 +85,14 @@ path (PyInstaller `--add-data "utils/Track_Overlow_Logo.png:utils"`).
 | Component | Host-facing action / data |
 | --- | --- |
 | `AppButton` | Native `clicked()`; primary, secondary, ghost, danger, success |
-| `ValueField` | `label`, `kind`, `text`; `committed(value)` sends a number for int/float, a string otherwise; invalid numbers never commit |
-| `SelectField` | `model`, `textRole`, `valueRole`, `currentIndex`; `committed(value)` sends the selected model value |
+| `IntField`, `FloatField` | `label`, `labelVisible`, `text`; `committed(value)` sends a number; invalid numbers never commit. A `ValueField` with `kind` fixed to `int` or `float`: use these for numeric entry. A refused keystroke or paste is named in the error line, never dropped silently |
+| `PositiveIntField` | An `IntField` that accepts 0 and up; a typed minus sign is refused with a message. Use it for counts such as passengers |
+| `ValueField` | `label`, `kind`, `text`; `committed(value)` sends a number for int/float, a string otherwise; invalid numbers never commit. `labelVisible: false` hides the label where a surrounding row already names the field, keeping it as the accessible name. Bind `modelValue` instead of `text` when the host can change the value while the user types: a new host value never overwrites an unsent edit, and Escape reverts the edit to the host value. Use it for text, or when the kind comes from data, as in `SignalRow` |
+| `SelectField` | `model`, `textRole`, `valueRole`, `currentIndex`, `labelVisible`; `committed(value)` sends the selected model value |
 | `SegmentedToggle`, `NavRail` | `activated(index)`; bind `currentIndex` to host state |
 | `ModuleHeader` | `navigationActivated(index)`; bind navigation index, mode, clock and fault state |
-| `SafetyButton` | `confirmed()` after confirmation; bind `applied` to acknowledged state; `confirmationRequired: false` is reserved for the Train Controller emergency brake |
-| `SignalRow` | `edited(value)` forwards typed edits; bind `value` to host state |
+| `SafetyButton` | `confirmed()` after confirmation; bind `applied` to acknowledged state; moving focus off the confirmation prompt cancels it; `confirmationRequired: false` is reserved for the Train Controller emergency brake |
+| `SignalRow` | `edited(value)` forwards typed edits; bind `value` to host state. `kind` is `bool`, `int`, `uint`, `float`, `string` or `enum`; a `uint` row is a count edited with `PositiveIntField`, and an `enum` row takes its allowed values from `options`. A host value change never overwrites the user's unsent typing |
 | `DataTable` | `columns` (`key`, `label`, optional `numeric`, `mono`, `width`) and `rows`; `rowActivated(index, row)`; bind `currentIndex` to host state |
 | `TrackBlock` | Read-only `blockId` and `occupancy` (`free`, `occupied`, `closed`, `failure`, `maintenance`) |
 | `StatusBadge`, `TelemetryReadout`, `UsageBar` | Read-only presentation properties |

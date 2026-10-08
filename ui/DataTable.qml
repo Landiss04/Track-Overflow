@@ -25,7 +25,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredWidth: modelData.width || 100
                 padding: theme.space_3
-                text: modelData.label.toUpperCase()
+                text: (modelData.label || "").toUpperCase()
                 horizontalAlignment: modelData.numeric ? Text.AlignRight : Text.AlignLeft
             }
         }
@@ -44,6 +44,7 @@ ColumnLayout {
             Layout.fillWidth: true
             implicitHeight: cells.implicitHeight
             padding: 0
+            horizontalPadding: 0 // Basic binds it to padding + 2, offsetting cells from the header
             hoverEnabled: true
             focusPolicy: Qt.StrongFocus
             Accessible.name: JSON.stringify(modelData)

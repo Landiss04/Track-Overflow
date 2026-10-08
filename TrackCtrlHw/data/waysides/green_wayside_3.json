@@ -1,0 +1,170 @@
+{
+  "line": "Green",
+  "wayside": "3",
+  "blocks": [
+    {
+      "block_number": 74,
+      "section": "M",
+      "length_m": 100,
+      "grade_percent": 0,
+      "speed_limit_kmh": 40,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 9
+    },
+    {
+      "block_number": 75,
+      "section": "M",
+      "length_m": 100,
+      "grade_percent": 0,
+      "speed_limit_kmh": 40,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 9
+    },
+    {
+      "block_number": 76,
+      "section": "M",
+      "length_m": 100,
+      "grade_percent": 0,
+      "speed_limit_kmh": 40,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "switch": "76-77;77-101"
+      },
+      "seconds_to_traverse": 9
+    },
+    {
+      "block_number": 77,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "station": "MT LEBANON"
+      },
+      "station_side": "Left/Right",
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 78,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 79,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 80,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 81,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 82,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 83,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 84,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 85,
+      "section": "N",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "switch": "85-86; 100-85"
+      },
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 86,
+      "section": "O",
+      "length_m": 100,
+      "grade_percent": 0,
+      "speed_limit_kmh": 25,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 14.4
+    },
+    {
+      "block_number": 87,
+      "section": "O",
+      "length_m": 86.6,
+      "grade_percent": 0,
+      "speed_limit_kmh": 25,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 12.4704
+    },
+    {
+      "block_number": 88,
+      "section": "O",
+      "length_m": 100,
+      "grade_percent": 0,
+      "speed_limit_kmh": 25,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "station": "POPLAR"
+      },
+      "station_side": "Left",
+      "seconds_to_traverse": 14.4
+    }
+  ]
+}

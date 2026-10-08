@@ -1,0 +1,167 @@
+{
+  "line": "Green",
+  "wayside": "2",
+  "blocks": [
+    {
+      "block_number": 21,
+      "section": "F",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 22,
+      "section": "F",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "station": "WHITED"
+      },
+      "station_side": "Left/Right",
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 23,
+      "section": "F",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 24,
+      "section": "F",
+      "length_m": 300,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 15.4286
+    },
+    {
+      "block_number": 25,
+      "section": "F",
+      "length_m": 200,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 10.2857
+    },
+    {
+      "block_number": 26,
+      "section": "F",
+      "length_m": 100,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 5.1429
+    },
+    {
+      "block_number": 27,
+      "section": "F",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 28,
+      "section": "F",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "switch": "28-29; 150-28"
+      },
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 29,
+      "section": "G",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 30,
+      "section": "G",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 31,
+      "section": "G",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "station": "SOUTH BANK"
+      },
+      "station_side": "Left",
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 32,
+      "section": "G",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 33,
+      "section": "H",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 34,
+      "section": "H",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 6
+    },
+    {
+      "block_number": 35,
+      "section": "H",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 30,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 6
+    }
+  ]
+}

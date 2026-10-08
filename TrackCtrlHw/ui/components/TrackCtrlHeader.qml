@@ -1,0 +1,89 @@
+import QtQuick
+import QtQuick.Layouts
+
+import "../../../ui" as Shared
+
+// Style Guide §6.7. Module name and instance at H3, the mode badge, and the
+// simulation clock in mono 13 px --text-muted.
+//
+// Module-local rather than the shared ui/ModuleHeader because this header
+// carries module-specific controls (wayside select, Load database, the
+// Automatic/Maintenance toggle), which the shared header has no slot for, and
+// because the mode badge must change semantic colour in Maintenance. Same
+// reason CTC Office keeps CtcHeader. Height matches ui/ModuleHeader exactly.
+Rectangle {
+    id: root
+
+    property string moduleName: ""
+    property string instance: ""
+    property string mode: ""
+    property string modeKind: "info"
+    property string faultText: ""
+    property string source: ""
+    property string clock: "--:--:--"
+    property alias controls: controlRow.data
+
+    implicitHeight: theme.control_h_md + 2 * theme.space_4
+    color: theme.bg_raised
+
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: theme.space_5
+        anchors.rightMargin: theme.space_5
+        spacing: theme.space_4
+
+        Text {
+            text: root.instance === "" ? root.moduleName : root.moduleName + " \u2014 " + root.instance
+            color: theme.text_primary
+            font.family: theme.ui_family
+            font.pixelSize: theme.size_h3
+            font.bold: true
+        }
+
+        Shared.StatusBadge {
+            variant: root.modeKind
+            label: root.mode
+            visible: root.mode !== ""
+        }
+
+        Shared.StatusBadge {
+            variant: "fault"
+            label: root.faultText
+            visible: root.faultText !== ""
+        }
+
+        Item {
+            Layout.fillWidth: true
+        }
+
+        RowLayout {
+            id: controlRow
+            spacing: theme.space_4
+        }
+
+        Text {
+            visible: root.source !== ""
+            text: root.source
+            textFormat: Text.PlainText
+            color: theme.text_muted
+            font.family: theme.ui_family
+            font.pixelSize: theme.size_small
+        }
+
+        Text {
+            text: root.clock
+            color: theme.text_muted
+            font.family: theme.mono_family
+            font.pixelSize: theme.size_small
+            font.bold: true
+        }
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        color: theme.border
+    }
+}
