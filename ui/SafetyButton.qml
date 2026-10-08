@@ -23,11 +23,33 @@ Item {
     onAppliedChanged: armed = false
     onEnabledChanged: if (!enabled) armed = false
     onVisibleChanged: if (!visible) armed = false
+    // Disarm when focus leaves the prompt, so a later stray click cannot
+    // confirm a prompt nobody is looking at.
+    readonly property bool promptFocused: confirmButton.activeFocus
+        || cancelButton.activeFocus
+    onPromptFocusedChanged: if (!promptFocused) armed = false
 
     implicitHeight: theme.safety_min_height
-    implicitWidth: Math.max(theme.safety_min_width, row.implicitWidth)
+    // Fit the longer of the apply and release labels, so the control does
+    // not change width when it is applied or released.
+    implicitWidth: Math.max(theme.safety_min_width, row.implicitWidth,
+        Math.ceil(Math.max(applyMetrics.advanceWidth, releaseMetrics.advanceWidth))
+            + 2 * applyButton.hPadding)
+
+    TextMetrics {
+        id: applyMetrics
+        font: (applyButton.contentItem as Text).font
+        text: root.label.toUpperCase()
+    }
+
+    TextMetrics {
+        id: releaseMetrics
+        font: (applyButton.contentItem as Text).font
+        text: root.releaseLabel.toUpperCase()
+    }
 
     AppButton {
+        id: applyButton
         anchors.fill: parent
         visible: !root.armed
         variant: "danger"
@@ -67,6 +89,7 @@ Item {
         }
 
         AppButton {
+            id: cancelButton
             Layout.fillHeight: true
             variant: "ghost"
             size: "large"

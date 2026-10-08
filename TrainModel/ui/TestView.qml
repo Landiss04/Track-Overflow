@@ -40,17 +40,20 @@ ScrollView {
                 Repeater {
                     model: harness.inputs
 
+                    // Read roles through model: redeclaring name, kind, value or
+                    // unit here would shadow SignalRow's own properties, and
+                    // SignalRow would pick its editor for the default kind.
                     delegate: SignalRow {
-                        required property var modelData
+                        required property var model
 
                         Layout.fillWidth: true
-                        name: modelData.name
-                        kind: modelData.kind
-                        value: modelData.value
-                        unit: modelData.unit
+                        name: model.name
+                        kind: model.kind
+                        value: model.value
+                        unit: model.unit
                         editable: true
                         onEdited: function (newValue) {
-                            harness.setInput(modelData.name, newValue);
+                            harness.setInput(name, newValue);
                         }
                     }
                 }
