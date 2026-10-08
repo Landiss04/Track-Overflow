@@ -150,6 +150,11 @@ EBRAKE_DECEL_MPS2 = 2.73
 # With no resistance in the model the brake is the only thing that
 # can slow the train, so this is the band it is allowed to hold.
 SERVICE_BAND_MPS = 0.5
+# Rolling resistance, from truth modules/train-model.md. Applied only
+# under a brake failure for now; see _plant().
+ROLLING_RESISTANCE_COEFF = 0.002
+GRAVITY_MPS2 = 9.81
+ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
 # Below this the emergency brake may be released: the train is at a
 # stand (D011: the Train Controller releases the emergency brake).
 STANDSTILL_MPS = 0.1
@@ -457,17 +462,24 @@ class ControllerCore:
         self._plant()
 
     def respond_to_failures(self) -> None:
-        """Bring the train to a stand while any failure is reported.
+        """Stop the train while any failure is reported.
 
         REQ-FUNC-037.2: the controller stops the train when a failure
-        is detected. Each failure ends the same way, with no target,
-        no power and the service brake, but for different reasons:
+        is detected. Every failure removes the target and the power;
+        how the train then stops depends on what failed:
 
-            engine         no traction is left to drive with
-            signal pickup  commanded speed and authority cannot be
-                           trusted, so they fail safe to zero
-            brake          the brakes do not answer; cutting power
-                           is all that is left, and the train coasts
+            engine         the emergency brake is applied and latched;
+                           no traction is left to drive with
+            signal pickup  the emergency brake is applied and latched;
+                           commanded speed and authority cannot be
+                           read from the track circuit, so they fail
+                           safe to zero (the signal lights still read)
+            brake          neither brake answers, so no brake is
+                           commanded; with power cut, rolling
+                           resistance coasts the train down
+
+        The emergency brake cannot be released until the failure
+        clears (release_emergency refuses while any is active).
         """
         if not self.failed:
             return
@@ -475,8 +487,10 @@ class ControllerCore:
         s.target_mps = 0.0
         s.power_w = 0.0
         self.integral = 0.0
-        if s.actual_mps > 0.0:
-            s.service_brake = True
+        if ((s.failures["engine"] or s.failures["signal_pickup"])
+                and not s.emergency_brake):
+            self.engage_emergency()
+        s.service_brake = False
 
     def enforce_safety(self) -> None:
         """Override the PI law with the safety rules.
@@ -573,12 +587,15 @@ class ControllerCore:
         #
         #     F = P / v     a = F / M     v = v + a dt
         #
-        # No resistance term: the model is the block diagram and
-        # nothing else. A train with no power applied coasts forever,
-        # so the only ways down are the two brakes, and the speed law
-        # holds its target from below rather than settling onto it
-        # from both sides. The failures act here the way truth
-        # failure-status.md says the Train Model applies them.
+        # No resistance term in normal running: the model is the block
+        # diagram and nothing else. A train with no power applied
+        # coasts forever, so the only ways down are the two brakes,
+        # and the speed law holds its target from below rather than
+        # settling onto it from both sides. The failures act here the
+        # way truth failure-status.md says the Train Model applies
+        # them. Under a brake failure, and only then for now, rolling
+        # resistance (truth modules/train-model.md) is what slows the
+        # train, so it coasts down to a stand instead of for ever.
         s = self.state
         brakes_work = not s.failures["brake"]
         power = 0.0 if s.failures["engine"] else s.power_w
@@ -593,9 +610,14 @@ class ControllerCore:
         if decel:
             # A brake opposes the motion and never reverses it.
             a = -math.copysign(decel, v) if v else 0.0
+        elif not brakes_work:
+            # Resistance opposes the motion, holds the train at rest,
+            # and never reverses it.
+            a = (a - math.copysign(ROLLING_DECEL_MPS2, v) if v
+                 else max(0.0, a - ROLLING_DECEL_MPS2))
         new_v = v + a * self.dt
-        if decel and v * new_v < 0.0:
-            new_v = 0.0
+        if v * new_v < 0.0:
+            new_v = 0.0             # stopped, never reversed
         s.accel_mps2 = a
         s.actual_mps = new_v
         if abs(s.actual_mps) < SETTLE_MPS and s.target_mps < SETTLE_MPS:

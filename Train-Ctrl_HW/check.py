@@ -445,17 +445,27 @@ def run_check(
         expect(backend.core.state.power_w == 0.0,
                f"power stayed on after a {name} failure")
         if name == "brake":
+            # Neither brake answers: no brake is commanded, both
+            # report off, and rolling resistance alone slows it.
             speed = backend.core.state.actual_mps
             _settle(app, 300)
-            expect(speed > 0.0
-                   and abs(backend.core.state.actual_mps - speed) < 0.01,
-                   "a brake failure did not leave the train coasting")
-            expect(not backend.core.state.fb_service_brake,
+            expect(0.0 < backend.core.state.actual_mps < speed
+                   and abs(backend.core.state.accel_mps2
+                           + mod.ROLLING_DECEL_MPS2) < 1e-6,
+                   "a brake failure did not coast down on rolling "
+                   "resistance")
+            expect(not backend.core.state.fb_service_brake
+                   and not backend.core.state.fb_emergency_brake,
                    "a failed brake reported itself engaged")
+            expect(not backend.core.state.emergency_brake,
+                   "a brake failure applied the emergency brake")
             if shots:
                 window.grabWindow().save(str(shots / "06-failure.png"))
                 bench.grabWindow().save(str(shots / "07-test.png"))
         else:
+            # Engine and pickup failures apply the emergency brake.
+            expect(backend.core.state.emergency_brake,
+                   f"a {name} failure did not apply the emergency brake")
             stopped = _until(
                 app, lambda: backend.core.state.actual_mps == 0.0, 20)
             expect(stopped, f"a {name} failure did not stop the train")

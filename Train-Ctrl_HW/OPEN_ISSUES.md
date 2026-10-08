@@ -37,19 +37,23 @@ picked up later. Last reviewed 2026-10-07 (code review of `Train-Ctrl_HW`).
     rewrites. Merging the branch whole would apply all of that; take the module
     folder only (the merge guide's "rescue a folder" route) instead.
 
-Items 5–9 from the same review are fixed (bench sends only edited rows;
+Items 5–8 from the same review are fixed (bench sends only edited rows;
 inputs validated before any is applied; door and light tiles re-send; roster
-signals only on change; signal head lamps never grow as space shrinks).
+signals only on change). Item 9 no longer applies: the signal head is back to
+Ivan's sizing and the failure banners that squeezed it were removed
+(2026-10-07).
 
 ## Carried over
 
-- **Slow-downs settle about 1.1 mph over target, and a brake failure coasts at
-  constant speed.** The toy plant has no rolling resistance and the service band
-  is 0.5 m/s; the fix (`278c158`) was reverted in `c06ba6c` by request.
+- **Slow-downs settle about 1.1 mph over target.** The service band is
+  0.5 m/s and, outside a brake failure, the toy plant has no rolling
+  resistance; the fix (`278c158`) was reverted in `c06ba6c` by request. Rolling
+  resistance (C_rr 0.002) now applies under a brake failure only, as a trial;
+  extending it to normal running is open.
 - **Toy plant parameters differ from truth's Train Model**
   (`truth/modules/train-model.md`): 120 kW vs 480 kW, 51,433 kg vs about
-  52,312 kg reference mass, Euler vs trapezoidal integration, no rolling
-  resistance (C_rr 0.002).
+  52,312 kg reference mass, Euler vs trapezoidal integration, rolling
+  resistance only under a brake failure (C_rr 0.002).
 - **The controller simulates the train itself** (truth D009 gives physics to the
   Train Model). `ControllerCore._plant()` is the stand-in until the Train Model
   is connected.

@@ -26,17 +26,6 @@ Panel {
         }
     ]
 
-    // Brake failure: neither brake answers, so cutting power is all
-    // the controller can do and the train coasts.
-    Callout {
-        Layout.fillWidth: true
-        visible: root.s.fault_brake
-        variant: "warning"
-        heading: qsTr("Brake failure")
-        body: qsTr("Brakes unavailable. Power is cut and the train "
-                   + "coasts.")
-    }
-
     // Live for any signed-in operator, in either mode. It engages the
     // moment it is pressed; releasing is a second press, and the core
     // refuses that until the train is stopped.

@@ -17,17 +17,6 @@ Panel {
         }
     ]
 
-    // Engine failure: no traction left, so the controller stops the
-    // train on the service brake (REQ-FUNC-037.2).
-    Callout {
-        Layout.fillWidth: true
-        visible: root.s.fault_engine
-        variant: "warning"
-        heading: qsTr("Engine failure")
-        body: qsTr("No traction. The train is being stopped on the "
-                   + "service brake.")
-    }
-
     TelemetryReadout {
         Layout.fillWidth: true
         label: qsTr("Commanded speed")
