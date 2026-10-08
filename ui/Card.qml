@@ -15,6 +15,9 @@ Rectangle {
     // group or a safety control. Most sections use the flat treatment so the
     // workspace does not turn into a grid of identical cards.
     property bool framed: true
+    // Opt in to hand the body any height the card has beyond its header,
+    // for a card that fills a column and lays out a view inside.
+    property bool fillBody: false
     default property alias content: body.data
 
     color: framed ? theme.bg_surface : "transparent"
@@ -61,6 +64,7 @@ Rectangle {
         ColumnLayout {
             id: body
             Layout.fillWidth: true
+            Layout.fillHeight: root.fillBody
             spacing: theme.space_3
         }
     }
