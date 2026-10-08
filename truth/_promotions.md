@@ -72,3 +72,27 @@ One line per promoted or denied proposal, appended at promotion time. See
 | 2026-10-07 | Train-Ctrl_HW | 20261006-2108-units-authority-conflict.md | conventions/units.md | denied — conflict resolved by D013 |
 | 2026-10-07 | Train-Ctrl_HW | 20261006-2108-identifiers-authority-conflict.md | conventions/identifiers.md | denied — conflict resolved by D013 |
 | 2026-10-07 | Train-Ctrl_HW | 20261006-2108-track-signal-authority-conflict.md | signals/track-signal.md | denied — conflict resolved by D013 |
+| 2026-10-08 | ctc-interfacing | 20261002-1129-block-occupancy.md | signals/block-occupancy.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261002-1148-d007-dwell-conflict.md | decisions/D007-station-dwell.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261003-1059-switch-command.md | signals/switch-command.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261003-1644-ticket-sales.md | signals/ticket-sales.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261004-1852-suggested-speed-integer.md | signals/suggested-speed.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261004-2300-one-train-per-block.md | arbitration/one-train-per-block.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261005-1459-authority-on-own-line.md | arbitration/authority-on-own-line.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261005-1459-block-closure.md | arbitration/block-closure.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261005-1459-no-authority-into-unusable-block.md | arbitration/no-authority-into-unusable-block.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261005-1459-no-switch-under-train.md | arbitration/no-switch-under-train.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-1130-suggested-speed-under-block-limit.md | arbitration/suggested-speed-under-block-limit.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2125-closed-blocks-maintenance-lock.md | signals/closed-blocks.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2125-maintenance-closure-lock.md | arbitration/maintenance-closure-lock.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2125-maintenance-mode-superseded.md | signals/maintenance-mode.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2250-authority-stops-before-obstruction-direction.md | arbitration/authority-stops-before-obstruction.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2250-exclusive-authority.md | arbitration/exclusive-authority.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2250-suggested-speed-stops-within-authority.md | arbitration/suggested-speed-stops-within-authority.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2331-no-automatic-reversal.md | arbitration/no-automatic-reversal.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261006-2331-reroute-around-blockage.md | arbitration/reroute-around-blockage.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261007-1249-layout-next-blocks.md | conventions/files-and-paths.md | promoted |
+| 2026-10-08 | ctc-interfacing | 20261002-1129-closed-blocks.md | signals/closed-blocks.md | denied — superseded by 20261006-2125-closed-blocks-maintenance-lock.md |
+| 2026-10-08 | ctc-interfacing | 20261006-1702-authority-stops-before-obstruction.md | arbitration/authority-stops-before-obstruction.md | denied — superseded by 20261006-2250-authority-stops-before-obstruction-direction.md |
+| 2026-10-08 | ctc-interfacing | 20261006-2250-layout-direction-of-travel.md | conventions/files-and-paths.md | denied — superseded by 20261007-1249-layout-next-blocks.md (next_blocks replaces the direction field) |
+| 2026-10-08 | ctc-interfacing | 20261006-2331-layout-direction-red-a-g-two-way.md | conventions/files-and-paths.md | denied — superseded by 20261007-1249-layout-next-blocks.md |
