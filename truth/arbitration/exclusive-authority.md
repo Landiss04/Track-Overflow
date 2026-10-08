@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/exclusive-authority.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-06 (trains must not collide; a contested block goes to the train most behind schedule; a granted block is kept until the train has passed through it)
-
----
-
 # exclusive-authority
 
 **Status:** current

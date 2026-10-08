@@ -4,7 +4,7 @@
 **Owner:** Kevin
 **Provenance:** `Train_Model_Backend_Design.pdf` §5.2 (Locked), supplied by Kevin Schillinger 2026-09-30
 **Aliases:** dwell time, station dwell, 45 second dwell
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-02
 
 ## Context
 
@@ -19,3 +19,13 @@ Station dwell time is 45 s, fixed.
 
 - The dwell does not vary by station or passenger count.
 - The source does not say which module enforces the dwell.
+
+## Conflict
+
+- 45 s at every station: `Train_Model_Backend_Design.pdf` §5.2 (Locked), supplied by Kevin
+  Schillinger 2026-09-30 (the decision above).
+- 60 s at every Green Line station: `documents/Project_Information/Schedule v4.xlsx`, Green
+  Line Schedule sheet, "dwell time (sec)" column. The Red Line sheet gives no dwell.
+
+**Resolution owner:** Kevin
+

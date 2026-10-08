@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3 (REQ-INTF-012), §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `.gitattributes`; delivery as a prebuilt binary asserted by Kevin 2026-09-29; branch model per D003
+**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3 (REQ-INTF-012), §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `.gitattributes`; delivery as a prebuilt binary asserted by Kevin 2026-09-29; branch model per D003; `next_blocks` from `20572b1` (SeeingEyeTree, PR #24), adopted as the direction-of-travel format by Landis 2026-10-07
 **Aliases:** File and path conventions, file layout, paths, repo layout, project structure
-**Last updated:** 2026-09-29
+**Last updated:** 2026-10-07
 
 ## Paths
 
@@ -21,7 +21,11 @@
 - Track layout data is loaded from the course-provided JSON files at startup. Each
   file lists a line name and an array of blocks; each block carries block number,
   section letter, length (m), grade (%), speed limit (km/h), elevation and cumulative
-  elevation (m), and an optional `infrastructure` object.
+  elevation (m), an optional `infrastructure` object, and an optional `next_blocks`.
+- `next_blocks` is the block's direction of travel: the block numbers a train in the
+  block may move on to, and `"yard"` where it may run into the yard. Each listed block
+  must be one the layout joins to it, next to it in the file or through a switch. A
+  line whose file has no `next_blocks` (the Red line, for now) is run both ways.
 
 ## Entry point and dependencies
 
@@ -88,3 +92,5 @@ of 88 conflicts with the standard above.
 - Entry point: previously `python main.py` after `pip install -r requirements.txt`, from
   `srs-filled.md` §3.5.1 before v1.0 (`b14ae73`); the system is turned in as a prebuilt
   binary (REQ-DSN-001, REQ-DSN-002; Kevin 2026-09-29).
+- Direction of travel: previously not in the layout files, so every block ran both
+  ways; now `next_blocks` per block, on the Green line (PR #24, Landis 2026-10-07).

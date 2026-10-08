@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/suggested-speed-stops-within-authority.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-06 (issue a safe suggested speed so trains do not run up on each other); service deceleration 1.2 m/s² from `modules/train-model.md` (Datasheet)
-
----
-
 # suggested-speed-stops-within-authority
 
 **Status:** current

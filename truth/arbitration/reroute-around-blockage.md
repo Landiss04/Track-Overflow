@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/reroute-around-blockage.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-06 (a train whose route is blocked should be rerouted); which trains count as not moving, and the twice-as-long limit, proposed by Claude on ctc-interfacing 2026-10-06, confirmed by Landis 2026-10-08
-
----
-
 # reroute-around-blockage
 
 **Status:** current

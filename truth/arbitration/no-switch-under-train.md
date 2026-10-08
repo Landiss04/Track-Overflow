@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/no-switch-under-train.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-05 (safety rules for the CTC Office, answered during the CTC bug review)
-
----
-
 # no-switch-under-train
 
 **Status:** current

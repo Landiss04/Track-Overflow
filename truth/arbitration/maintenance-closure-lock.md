@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/maintenance-closure-lock.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-06 (blocks closed in maintenance mode must not be overridden by the Track Controller; it queries the list, and regains control once a block is reopened)
-
----
-
 # maintenance-closure-lock
 
 **Status:** current

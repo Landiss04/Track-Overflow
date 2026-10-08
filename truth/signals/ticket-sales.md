@@ -1,10 +1,3 @@
-**Target:** truth/signals/ticket-sales.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** `documents/srs-filled.md` REQ-FUNC-014, REQ-FUNC-017.1; per-line form `<int, string>` asserted by Landis 2026-10-03
-
----
-
 # ticket-sales
 
 **Status:** current

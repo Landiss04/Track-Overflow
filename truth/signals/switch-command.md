@@ -1,10 +1,3 @@
-**Target:** truth/signals/switch-command.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** `documents/srs-filled.md` REQ-FUNC-012; output added and normal position defined, asserted by Landis 2026-10-03
-
----
-
 # switch-command
 
 **Status:** current

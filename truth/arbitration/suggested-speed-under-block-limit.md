@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/suggested-speed-under-block-limit.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-06 (suggested speed a little under the speed limit, 1 m/s below; the yard is a black box); `documents/srs-filled.md` REQ-FUNC-005.1 (speed limit within safety limits)
-
----
-
 # suggested-speed-under-block-limit
 
 **Status:** current

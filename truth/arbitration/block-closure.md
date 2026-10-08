@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/block-closure.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-05 (the dispatcher closes blocks only in maintenance mode; an occupied block closes once the train has left it)
-
----
-
 # block-closure
 
 **Status:** current

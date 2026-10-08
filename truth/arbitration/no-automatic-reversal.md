@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/no-automatic-reversal.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-06 (reversing is not supported yet; flag it to the dispatcher with a popup when a train would need to)
-
----
-
 # no-automatic-reversal
 
 **Status:** current

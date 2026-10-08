@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/no-authority-into-unusable-block.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-05 (safety rules for the CTC Office, answered during the CTC bug review)
-
----
-
 # no-authority-into-unusable-block
 
 **Status:** current

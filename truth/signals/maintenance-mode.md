@@ -1,15 +1,25 @@
 # maintenance-mode
 
-**Status:** current
+**Status:** superseded
 **Owner:** CTC Office
-**Provenance:** asserted by Landis 2026-10-02 (CTC architecture diagram, `ctc-architecture.html`); types per `conventions/identifiers.md` and `conventions/units.md`, chosen by Landis 2026-10-02 over the diagram's int types
+**Provenance:** asserted by Landis 2026-10-02 (CTC architecture diagram, `ctc-architecture.html`); withdrawn from the interface in favor of the closed-blocks list, asserted by Landis 2026-10-06
 **Aliases:** Maintenance Mode, maintenance
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-06
 
 ## Definition
 
-A boolean sent from the CTC Office to the Track Controller: true while the dispatcher has the system in maintenance mode.
+No longer sent. The CTC Office does not tell the Track Controller whether the
+dispatcher is in maintenance mode. It sends the list of blocks closed in maintenance
+mode instead: [closed-blocks](closed-blocks.md).
 
 ## Notes
 
-- The Track Controller owner has not confirmed what it does in maintenance mode.
+- Maintenance mode still exists inside the CTC Office as the dispatcher's mode for
+  closing blocks and setting switches. It is not a signal.
+
+## Supersedes
+
+- Previously a boolean sent from the CTC Office to the Track Controller, true while the
+  dispatcher had the system in maintenance mode (Landis 2026-10-02). Withdrawn because
+  the Track Controller needs to know which blocks it may not override, not the mode
+  (Landis 2026-10-06).

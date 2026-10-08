@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/authority-stops-before-obstruction.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-06 (as in pending proposal `20261006-1702-authority-stops-before-obstruction.md`, which this one replaces); route follows the direction of travel in the layout files, supplied by Landis 2026-10-06; other trains' authority as an obstruction per `exclusive-authority`
-
----
-
 # authority-stops-before-obstruction
 
 **Status:** current

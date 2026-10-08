@@ -1,10 +1,3 @@
-**Target:** truth/signals/closed-blocks.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-02 (CTC architecture diagram, `ctc-architecture.html`); sent as the full list, which the Track Controller queries and may not override, a closing block listed as soon as its closure is requested, asserted by Landis 2026-10-06. Supersedes the pending proposal `20261002-1129-closed-blocks.md`
-
----
-
 # closed-blocks
 
 **Status:** current

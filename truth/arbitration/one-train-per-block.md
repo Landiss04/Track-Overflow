@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/one-train-per-block.md
-**Action:** create
-**Proposed by:** Claude on ctc-interfacing
-**Provenance:** asserted by Landis 2026-10-04 (a safety requirement, so that trains cannot collide; enforced by the CTC Office by rejecting the input)
-
----
-
 # one-train-per-block
 
 **Status:** current
