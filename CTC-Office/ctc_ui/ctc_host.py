@@ -730,8 +730,24 @@ class CtcHost(QObject):
 
     @Slot(str, str, result=str)
     def closeBlock(self, line: str, block_id: str) -> str:  # noqa: N802
+        """Close a block; says so instead if it already is (or is
+        closing), which the module would otherwise do silently."""
+        state = self.closureState(line, block_id)
+        if state:
+            return f"{line} {block_id} is already {state}."
         return self._act(self._module.set_block_closed, line, block_id,
                          True)
+
+    @Slot(str, str, result=str)
+    def closureState(self, line: str, block_id: str) -> str:  # noqa: N802
+        """``closed``, ``closing`` (a train is still in it), or ""."""
+        snap = self._module.snapshot()
+        block = BlockRef(line, block_id)
+        if block in snap.pending_closures:
+            return "closing"
+        if block in snap.outputs.track_controller.closed_blocks:
+            return "closed"
+        return ""
 
     @Slot(str, str, result=str)
     def reopenBlock(self, line: str, block_id: str) -> str:  # noqa: N802

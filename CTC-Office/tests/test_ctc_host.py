@@ -270,6 +270,24 @@ class PanelDataTest(unittest.TestCase):
         clock.clock.tick()
         self.assertIn("T4", [a["train"] for a in host.reversalAlerts])
 
+    def test_closing_a_closed_block_says_so(self) -> None:
+        host, module, clock = _host()
+        module.set_maintenance_mode(True)
+        self.assertEqual(host.closureState("Green", "5"), "")
+        self.assertEqual(host.closeBlock("Green", "5"), "")
+        self.assertEqual(host.closureState("Green", "5"), "closed")
+        self.assertEqual(host.closeBlock("Green", "5"),
+                         "Green 5 is already closed.")
+        # A block with a train in it is closing until the train leaves.
+        host._receive_inputs(CtcInputs(
+            track_controller=TrackControllerInputs(
+                trains=(TrainReport("T1", "Green", "9", 0.0, 0.0),))))
+        clock.clock.tick()
+        self.assertEqual(host.closeBlock("Green", "9"), "")
+        self.assertEqual(host.closureState("Green", "9"), "closing")
+        self.assertEqual(host.closeBlock("Green", "9"),
+                         "Green 9 is already closing.")
+
     def test_authority_limit_at_the_destination(self) -> None:
         host, _, clock = _host()
         host._receive_inputs(CtcInputs(
