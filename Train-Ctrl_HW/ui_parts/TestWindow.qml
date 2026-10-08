@@ -31,6 +31,7 @@ ScaledWindow {
             instance: window.s.has_train ? window.s.train_id : ""
             mode: window.s.has_train ? window.s.mode_label : ""
             clock: window.s.clock
+            underground: window.s.beacon_underground
             faulted: window.s.emergency_brake
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",

@@ -326,6 +326,17 @@ def run_check(
     expect(not backend.snapshot["fb_interior_lights"],
            "the plant wrote over a light state the bench published")
 
+    # Only the platform side opens (truth beacon.md). The beacon above
+    # put the platform on the right, so the left doors stay shut, and
+    # platforms on both sides open either.
+    backend.set_door("left", True)
+    expect(not backend.snapshot["doors_left"],
+           "the left doors opened with the platform on the right")
+    backend.apply_bench_inputs({"beacon_side": "LR"})
+    expect(backend.snapshot["platform_left"]
+           and backend.snapshot["platform_right"],
+           "platforms on both sides did not allow both doors")
+
     # The door interlock: a door commanded open while moving stays
     # shut (truth door-command.md).
     backend.apply_bench_inputs({"door_state_left": False})
@@ -341,7 +352,11 @@ def run_check(
     _settle(app, 300)
     expect(backend.snapshot["fb_doors_left"],
            "re-pressing 'Open left' at a stand did not open the door")
+    # Moved off the platform side, an open door still closes.
+    backend.apply_bench_inputs({"beacon_side": "R"})
     backend.set_door("left", False)
+    expect(not backend.snapshot["doors_left"],
+           "an open door off the platform side could not be closed")
     backend.toggle_emergency_brake()
 
     # Another train, running its own plant, with its own gains.

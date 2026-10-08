@@ -29,7 +29,10 @@ Panel {
     readonly property var s: controller.snapshot
     readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
     readonly property var roles: ["Signed out", "Driver", "Engineer"]
-    readonly property var beaconSides: ["L", "R"]
+    // Shown in words, sent as the beacon encodes them (truth
+    // beacon.md), index for index.
+    readonly property var sideLabels: ["Left", "Right", "Both"]
+    readonly property var sideCodes: ["L", "R", "LR"]
 
     // What the controller is holding right now.
     readonly property var live: ({
@@ -248,7 +251,7 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "beacon_station"
+                name: "station"
                 kind: "string"
                 value: root.draft.beacon_station
                 pending: root.touched["beacon_station"] === true
@@ -264,14 +267,16 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "beacon_side"
+                name: "platform_side"
                 kind: "enum"
-                options: root.beaconSides
-                value: root.draft.beacon_side
+                options: root.sideLabels
+                value: root.sideLabels[
+                    root.sideCodes.indexOf(root.draft.beacon_side)]
                 pending: root.touched["beacon_side"] === true
                     && root.pending("beacon_side")
                 onEdited: function (v) {
-                    root.stage("beacon_side", v);
+                    root.stage("beacon_side",
+                               root.sideCodes[root.sideLabels.indexOf(v)]);
                 }
             }
             SignalEditRow {
@@ -281,7 +286,7 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "beacon_underground"
+                name: "underground_state"
                 kind: "bool"
                 value: root.draft.beacon_underground
                 pending: root.touched["beacon_underground"] === true
@@ -556,7 +561,9 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
+                // Off the platform side a door may only be closed.
                 enabled: root.s.can_drive
+                    && (root.s.platform_left || root.s.doors_left)
                 name: "door_command_left"
                 kind: "bool"
                 trueLabel: qsTr("On")
@@ -572,6 +579,7 @@ Panel {
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
+                    && (root.s.platform_right || root.s.doors_right)
                 name: "door_command_right"
                 kind: "bool"
                 trueLabel: qsTr("On")

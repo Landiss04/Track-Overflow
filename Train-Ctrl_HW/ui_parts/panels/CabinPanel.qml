@@ -23,6 +23,8 @@ Panel {
         }
     ]
 
+    // Only the platform side opens; an open door can always be closed,
+    // so a door left open when the platform side changes is not stuck.
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
@@ -30,6 +32,7 @@ Panel {
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
+                && (root.s.platform_left || root.s.fb_doors_left)
             on: root.s.fb_doors_left
             tone: "info"
             text: root.s.fb_doors_left ? qsTr("Close left") : qsTr("Open left")
@@ -39,6 +42,7 @@ Panel {
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
+                && (root.s.platform_right || root.s.fb_doors_right)
             on: root.s.fb_doors_right
             tone: "info"
             text: root.s.fb_doors_right ? qsTr("Close right") : qsTr("Open right")

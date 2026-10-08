@@ -192,8 +192,9 @@ FAILURE_TEXT = {
     "brake": "brake failure",
 }
 
-#: Beacon platform sides (truth signals/beacon.md).
-BEACON_SIDES = ("L", "R")
+#: Beacon platform sides (truth signals/beacon.md): left, right, or
+#: platforms on both sides.
+BEACON_SIDES = ("L", "R", "LR")
 
 #: Lines a train can be spawned on, and the id prefix each one uses.
 LINES = {"GREEN LINE": "T", "RED LINE": "R"}
@@ -564,8 +565,16 @@ class ControllerCore:
         if s.manual and self.authority_blocks > 0 and not self.failed:
             s.target_mps = max(0.0, min(mps, s.speed_limit_mps))
 
+    def platform_on(self, side: str) -> bool:
+        """Whether the last beacon put a platform on this side."""
+        return ("L" if side == "left" else "R") in self.state.beacon_side
+
     def command_door(self, side: str, open_: bool) -> None:
         """Command one side's doors, and have the plant answer it.
+
+        Only the platform side opens. Closing is always allowed, so
+        a door left open when the platform side changes is never
+        stuck open.
 
         The plant answers a command on its edge. Pressing a tile
         again with the same command, because the reported state still
@@ -573,6 +582,8 @@ class ControllerCore:
         answered too, or the tile could never change anything.
         """
         s = self.state
+        if open_ and not self.platform_on(side):
+            return
         if side == "left":
             s.doors_left = open_
         else:
@@ -888,6 +899,8 @@ class ConsoleBackend(QObject):
             "beacon_station": s.beacon_station,
             "beacon_side": s.beacon_side,
             "beacon_underground": s.beacon_underground,
+            "platform_left": self.core.platform_on("left"),
+            "platform_right": self.core.platform_on("right"),
             "announcement": s.announcement,
 
             # Identifiers and counts, so they are shown as they are.
