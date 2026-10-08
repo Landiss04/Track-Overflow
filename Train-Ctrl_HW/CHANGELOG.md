@@ -1,8 +1,8 @@
 # Train-Ctrl_HW — changes for review
 
 Everything changed in the HW Train Controller module since Ivan's last commit
-(`493f16e`, "update compiled Python bytecode for check.py"), up to `700d83d`
-(2026-10-07). Work by Jonathan Tsang, with Claude. Open, unfixed items are in
+(`493f16e`, "update compiled Python bytecode for check.py"), up to the
+brake-lockout commit (2026-10-07). Work by Jonathan Tsang, with Claude. Open, unfixed items are in
 [`OPEN_ISSUES.md`](OPEN_ISSUES.md).
 
 Base for every check below: `python main.py --check` (run with the module's
@@ -18,11 +18,11 @@ venv) — 0 QML warnings, 0 behaviour problems at `700d83d`.
 |---|---|
 | Traction under braking | Power is 0 W whenever the service brake is applied, and the PI integrator holds (truth `arbitration/traction-cut-under-braking`). Before: up to 120 kW against the brake. |
 | Stopping on a zero target | A target of 0 brakes the train to a stand instead of leaving it creeping inside the service band. |
-| Service band | 0.5 m/s (Ivan's value; a 0.1 m/s version was reverted). Slow-downs settle about 1.1 mph over target — see OPEN_ISSUES. |
+| Service band | 0.05 m/s. Ivan's 0.5 m/s left slow-downs about 1.1 mph over target, since nothing slows the train once the brake lets go; 35 → 30 mph now settles at 30.02 mph, with no brake chatter. |
 | Authority | A count of blocks remaining, as sent. The controller no longer counts blocks down itself (the fixed 500 m countdown, `enter_block()` and `current_block` are gone); it stops when the count reaches 0. |
 | Engine failure | Emergency brake applied and latched, power 0, target 0. Cannot be released until the failure clears. |
 | Signal pickup failure | Same as engine; commanded speed and authority are treated as 0 (the track circuit cannot be read). The signal lights are unaffected. |
-| Brake failure | Both brakes disabled, power cut, no brake commanded. Rolling resistance (truth C_rr 0.002 × g 9.81 = 0.0196 m/s²) coasts the train to a stand — about 7 min from 19 mph at 1×. Resistance applies only under a brake failure, as a trial. |
+| Brake failure | Both brakes disabled, power cut, no brake commanded, in Manual and Automatic: the driver's e-brake and service-brake presses, a passenger pull and the no-authority rule all set nothing ("Brakes unavailable: brake failure."); both Stop-panel buttons and the bench cab brake rows are greyed out. Rolling resistance (truth C_rr 0.002 × g 9.81 = 0.0196 m/s²) coasts the train to a stand — about 7 min from 19 mph at 1×. Resistance applies only under a brake failure, as a trial. |
 | Emergency brake release | Only by the driver, only at a stand, and never while any failure is active. A Train Model report of "off" never releases it (D011). |
 | Reported state | The toy plant reports Brake State `[emergency, service]` (false when brakes have failed), Door State with the door interlock (opens only at a stand), and Light State. Door and light commands are answered when pressed, including a repeat press after the interlock held a door shut. |
 | Outputs to the Train Model | `ControllerCore.commands()` returns `TrainModelCommands` in SI, one field per truth signal (power, service/emergency brake, door bool[2], light bool[2] interior/exterior, temperature setpoint °C, announcement); `commands_changed` emits on change for the central harness (D005). |
@@ -105,6 +105,7 @@ stopwatch (it failed 4 of 4 runs on Windows before).
 | `a69495c` | 10-07 | Failure responses reworked (e-brake on engine/pickup, resistance only on brake failure); failure banners removed; Ivan's traffic-light sizing; pickup no longer hides the aspect; bench bar regrouped, Remove always red. |
 | `2fa4b6d` | 10-07 | Bench service-brake input removed; Ivan's sizes restored (72 px readouts, dial figures, tiles, output rows). |
 | `700d83d` | 10-07 | Truth proposal: `--size-hero` token. |
+| (next) | 10-07 | Brakes locked out during a brake failure in both modes; service band 0.05 m/s; slow-down check added. |
 
 ---
 

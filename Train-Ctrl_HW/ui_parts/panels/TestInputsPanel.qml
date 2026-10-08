@@ -620,7 +620,7 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                enabled: root.s.signed_in
+                enabled: root.s.signed_in && !root.s.fault_brake
                 name: "emergency_brake"
                 kind: "bool"
                 value: root.s.emergency_brake
@@ -637,7 +637,7 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                enabled: root.s.can_drive
+                enabled: root.s.can_drive && !root.s.fault_brake
                 name: "service_brake"
                 kind: "bool"
                 value: root.s.service_request

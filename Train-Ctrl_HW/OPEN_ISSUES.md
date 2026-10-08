@@ -45,11 +45,10 @@ Ivan's sizing and the failure banners that squeezed it were removed
 
 ## Carried over
 
-- **Slow-downs settle about 1.1 mph over target.** The service band is
-  0.5 m/s and, outside a brake failure, the toy plant has no rolling
-  resistance; the fix (`278c158`) was reverted in `c06ba6c` by request. Rolling
-  resistance (C_rr 0.002) now applies under a brake failure only, as a trial;
-  extending it to normal running is open.
+- **Rolling resistance outside a brake failure** is open. It (C_rr 0.002)
+  applies under a brake failure only, as a trial. The slow-down overshoot it
+  once fixed is now fixed by the 0.05 m/s service band instead (35 → 30 mph
+  settles at 30.02 mph).
 - **Toy plant parameters differ from truth's Train Model**
   (`truth/modules/train-model.md`): 120 kW vs 480 kW, 51,433 kg vs about
   52,312 kg reference mass, Euler vs trapezoidal integration, rolling

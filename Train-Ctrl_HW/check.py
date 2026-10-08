@@ -243,6 +243,18 @@ def run_check(
            "the service brake is fighting the speed law at target")
     backend.set_manual(True)
 
+    # Slowing to a lower target ends on it, not a mile an hour above
+    # it: the brake lets go within the narrow band.
+    backend.set_sim_rate(mod.SIM_RATES.index(10))
+    backend.set_target_mph(35)
+    _until(app, lambda: backend.snapshot["actual_mph"] > 34.8, 60)
+    backend.set_target_mph(30)
+    slowed = _until(app, lambda: (
+        abs(backend.snapshot["actual_mph"] - 30.0) < 0.25
+        and not backend.core.state.service_brake), 60)
+    backend.set_sim_rate(mod.SIM_RATES.index(1))
+    expect(slowed, "slowing to a lower target did not settle on it")
+
     # The numbers drawer renders and closes again.
     drawer = window.findChild(QObject, "numbersDrawer")
     expect(drawer is not None, "numbers drawer missing")
@@ -469,10 +481,23 @@ def run_check(
             stopped = _until(
                 app, lambda: backend.core.state.actual_mps == 0.0, 20)
             expect(stopped, f"a {name} failure did not stop the train")
-        backend.toggle_emergency_brake()
-        backend.toggle_emergency_brake()
-        expect(backend.core.state.emergency_brake,
-               f"the emergency brake released during a {name} failure")
+        if name == "brake":
+            # A brake failure disables both brakes: nothing engages
+            # them, not the driver, a passenger pull, or the law.
+            backend.toggle_emergency_brake()
+            backend.toggle_service_brake()
+            backend.apply_inputs({"brake_state": [True, False]})
+            _settle(app, 100)
+            expect(not backend.core.state.emergency_brake
+                   and not backend.core.state.service_request
+                   and not backend.core.state.service_brake,
+                   "a brake could be set during a brake failure")
+        else:
+            backend.toggle_emergency_brake()
+            backend.toggle_emergency_brake()
+            expect(backend.core.state.emergency_brake,
+                   f"the emergency brake released during a {name} "
+                   "failure")
         backend.set_target_mph(30)
         expect(backend.core.state.target_mps == 0.0,
                f"the driver set a target during a {name} failure")
@@ -480,7 +505,11 @@ def run_check(
         stopped = _until(
             app, lambda: backend.core.state.actual_mps == 0.0, 20)
         expect(stopped, f"the train did not stop after the {name} test")
-        backend.toggle_emergency_brake()
+        # Engine and pickup failures left the emergency brake latched;
+        # a brake failure never let one engage, so there is nothing to
+        # release after it.
+        if backend.core.state.emergency_brake:
+            backend.toggle_emergency_brake()
         expect(not backend.core.state.emergency_brake,
                f"the brake would not release once the {name} failure "
                "cleared")

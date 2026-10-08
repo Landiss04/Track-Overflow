@@ -34,6 +34,8 @@ Panel {
         Layout.fillHeight: true
         Layout.preferredHeight: 170
         tone: "emergency"
+        // A brake failure disables both brakes, in either mode.
+        enabled: !root.s.fault_brake
         applied: root.s.emergency_brake
         text: root.s.emergency_brake ? qsTr("Release emergency brake")
                                      : qsTr("Emergency brake")
@@ -52,7 +54,7 @@ Panel {
         Layout.fillHeight: true
         Layout.preferredHeight: 100
         tone: "service"
-        enabled: root.s.can_drive
+        enabled: root.s.can_drive && !root.s.fault_brake
         applied: root.s.service_request
         text: root.s.service_request ? qsTr("Release service brake")
                                      : qsTr("Service brake")

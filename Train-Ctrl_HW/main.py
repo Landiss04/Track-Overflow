@@ -147,9 +147,11 @@ V_FLOOR_MPS = 1.0               # below which F = P / v is capped
 SERVICE_DECEL_MPS2 = 1.2
 EBRAKE_DECEL_MPS2 = 2.73
 # How far over target the train may drift before the brake helps.
-# With no resistance in the model the brake is the only thing that
-# can slow the train, so this is the band it is allowed to hold.
-SERVICE_BAND_MPS = 0.5
+# With no resistance in normal running the brake is the only thing
+# that can slow the train, and wherever it lets go is where the train
+# then holds, so the band is kept to about a tenth of a mile an hour:
+# a slow-down settles on its target (35 -> 30 mph ends at 30.02).
+SERVICE_BAND_MPS = 0.05
 # Rolling resistance, from truth modules/train-model.md. Applied only
 # under a brake failure for now; see _plant().
 ROLLING_RESISTANCE_COEFF = 0.002
@@ -516,20 +518,29 @@ class ControllerCore:
             if s.actual_mps > 0.0:
                 s.service_brake = True
 
-        # The emergency brake has two sources and no others: the
-        # driver pulls it, or the Train Model reports it pulled.
-        # Nothing in here pulls it on their behalf.
+        # The emergency brake comes from the driver, from a Train
+        # Model report of a passenger pull, or from an engine or
+        # signal pickup failure (respond_to_failures).
         if s.emergency_brake:
             s.power_w = 0.0
             self.integral = 0.0
+
+        # A brake failure disables both brakes (truth
+        # failure-status.md), so nothing here or upstream may command
+        # the service brake while it lasts, in either mode.
+        if s.failures["brake"]:
+            s.service_brake = False
 
     def engage_emergency(self) -> None:
         """Engage now, without waiting for the next control tick.
 
         Guide section 7 calls the emergency brake immediate, so the
         safety path runs on the press rather than up to one control
-        period later.
+        period later. A brake failure disables it, so then nothing
+        engages: not the driver, a passenger pull, or another failure.
         """
+        if self.state.failures["brake"]:
+            return
         self.state.emergency_brake = True
         self.enforce_safety()
 
@@ -1020,7 +1031,9 @@ class ConsoleBackend(QObject):
         if not self.has_train or not self.signed_in:
             return
         s = self.core.state
-        if not s.emergency_brake:
+        if not s.emergency_brake and s.failures["brake"]:
+            self.brake_note = "Brakes unavailable: brake failure."
+        elif not s.emergency_brake:
             self.core.engage_emergency()
             self.brake_note = (
                 "Emergency brake engaged. "
@@ -1037,8 +1050,11 @@ class ConsoleBackend(QObject):
 
     @Slot()
     def toggle_service_brake(self) -> None:
-        """Apply or release the driver's service brake request."""
-        if not self.can_drive:
+        """Apply or release the driver's service brake request.
+
+        Refused during a brake failure, which disables the brake.
+        """
+        if not self.can_drive or self.core.state.failures["brake"]:
             return
         s = self.core.state
         s.service_request = not s.service_request
