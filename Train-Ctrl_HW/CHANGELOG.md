@@ -19,7 +19,7 @@ venv) — 0 QML warnings, 0 behaviour problems at `700d83d`.
 | Traction under braking | Power is 0 W whenever the service brake is applied, and the PI integrator holds (truth `arbitration/traction-cut-under-braking`). Before: up to 120 kW against the brake. |
 | Stopping on a zero target | A target of 0 brakes the train to a stand instead of leaving it creeping inside the service band. |
 | Service band | 0.05 m/s. Ivan's 0.5 m/s left slow-downs about 1.1 mph over target, since nothing slows the train once the brake lets go; 35 → 30 mph now settles at 30.02 mph, with no brake chatter. |
-| Authority | A count of blocks remaining, as sent. The controller no longer counts blocks down itself (the fixed 500 m countdown, `enter_block()` and `current_block` are gone); it stops when the count reaches 0. |
+| Authority | A count of blocks remaining, as sent; the control law stops the train when it reaches 0. Until the Track Model sends the count, the toy plant spends one block per 100 m travelled (`BLOCK_LENGTH_M`, an arbitrary stand-in; real block lengths are unknown, `OPEN_ISSUES.md` item 11), so the console shows the train making progress. The aspect is not stepped and `current_block` is not restored. |
 | Engine failure | Emergency brake applied and latched, power 0, target 0. Cannot be released until the failure clears. |
 | Signal pickup failure | Same as engine; commanded speed and authority are treated as 0 (the track circuit cannot be read). The signal lights are unaffected. |
 | Brake failure | Both brakes disabled, power cut, no brake commanded, in Manual and Automatic: the driver's e-brake and service-brake presses, a passenger pull and the no-authority rule all set nothing ("Brakes unavailable: brake failure."); both Stop-panel buttons and the bench cab brake rows are greyed out. Rolling resistance (truth C_rr 0.002 × g 9.81 = 0.0196 m/s²) coasts the train to a stand — about 7 min from 19 mph at 1×. Resistance applies only under a brake failure, as a trial. |
@@ -106,6 +106,7 @@ stopwatch (it failed 4 of 4 runs on Windows before).
 | `2fa4b6d` | 10-07 | Bench service-brake input removed; Ivan's sizes restored (72 px readouts, dial figures, tiles, output rows). |
 | `700d83d` | 10-07 | Truth proposal: `--size-hero` token. |
 | (next) | 10-07 | Brakes locked out during a brake failure in both modes; service band 0.05 m/s; slow-down check added. |
+| (this one) | 10-08 | Authority countdown back in the toy plant as a stand-in for the Track Model: one block per 100 m, part-blocks carried. `check.py` gives the drives 200 blocks and checks 2.5 blocks of travel spends 2. Open issue 11 (block lengths unknown; overrun above 34.6 mph). |
 
 ---
 
@@ -123,6 +124,9 @@ Kept here so a reviewer reading old commits is not misled.
   in `a69495c`; pickup affects speed and authority only.
 - **Failures stopping the train on the service brake** (`98eccfd`) — replaced
   in `a69495c` by the emergency brake for engine and pickup failures.
+- **Authority countdown removed** (`4bdb3b7`) — a countdown is back as of
+  2026-10-08, in the toy plant only and at 100 m per block instead of 500 m;
+  it no longer steps the signal aspect.
 - **Style-guide sizes** (36 px readouts, 36 px dial figures, 44 px tiles,
   13 px bench outputs, from `4bdb3b7`) — reverted to Ivan's sizes in
   `2fa4b6d`.

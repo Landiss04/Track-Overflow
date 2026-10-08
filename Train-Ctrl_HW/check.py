@@ -122,6 +122,10 @@ def run_check(
     expect(backend.snapshot["train_id"] == "T-114",
            "the spawned train did not take the number asked for")
     expect(not backend.core.armed, "controller armed before commissioning")
+    # The toy plant spends a block of authority every 100 m, and the
+    # drives below cover kilometres, so give them room; the countdown
+    # has its own check further on.
+    backend.apply_bench_inputs({"authority_blocks": 200})
     if shots:
         window.grabWindow().save(str(shots / "01-signed-out.png"))
 
@@ -530,12 +534,20 @@ def run_check(
                "cleared")
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
-    # Authority is the count the Track Model sends; the controller
-    # does not track blocks itself, so moving does not spend it.
-    before_blocks = backend.core.state.authority_blocks
-    _settle(app, 300)
-    expect(backend.core.state.authority_blocks == before_blocks,
-           "the controller spent authority on its own")
+    # Until the Track Model sends the count, the toy plant spends one
+    # block of authority per BLOCK_LENGTH_M travelled, part-blocks
+    # carried over.
+    # carried over. A fresh core coasting at a steady 10 m/s, with no
+    # power and no brake, covers exactly two and a half blocks.
+    plant = mod.ControllerCore()
+    plant.state.actual_mps = plant.state.target_mps = 10.0
+    plant.state.authority_blocks = 3
+    for _ in range(round(2.5 * mod.BLOCK_LENGTH_M / 10.0 / plant.dt)):
+        plant._plant()
+    expect(plant.state.authority_blocks == 1
+           and abs(plant.state.block_progress_m
+                   - 0.5 * mod.BLOCK_LENGTH_M) < 1e-6,
+           "two and a half blocks of travel did not spend two blocks")
     backend.apply_inputs({"authority_blocks": 0})
     backend.core.enforce_safety()
     expect(not backend.core.state.emergency_brake,

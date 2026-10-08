@@ -43,6 +43,34 @@ signals only on change). Item 9 no longer applies: the signal head is back to
 Ivan's sizing and the failure banners that squeezed it were removed
 (2026-10-07).
 
+## Added 2026-10-08
+
+11. **Block lengths are unknown, so how fast the train moves through each
+    block is unknown.**
+    `main.py` — until the Track Model sends the authority count, the toy plant
+    spends one block per `BLOCK_LENGTH_M` travelled, so the console shows the
+    train making progress. Every block is taken as 100 m, an arbitrary stand-in:
+    the real lengths vary block by block and are not known to this module. The
+    "Stop in N blocks" readout therefore counts down at the wrong rate wherever
+    a real block is longer or shorter than 100 m.
+
+    The controller only brakes once the count reaches 0, so a block must be
+    at least as long as the service-brake stopping distance, v² / (2 × 1.2 m/s²),
+    or the train runs past its authority. At 100 m that holds only up to
+    15.5 m/s (34.6 mph):
+
+    | Speed when the count reaches 0 | Stopping distance | Past the authority |
+    |---|---|---|
+    | 30 mph | 75 m | none (25 m short) |
+    | 34 mph | 96 m | none (4 m short) |
+    | 43 mph | 154 m | 54 m |
+    | 70 km/h (43.5 mph) | 158 m | 58 m |
+
+    The 30, 34 and 43 mph rows are measured on the toy plant over 20 blocks,
+    Manual; 70 km/h is computed. Resolved when the Track Model sends real
+    counts (delete the countdown from `_plant()` then), or when the block
+    lengths are known.
+
 ## Carried over
 
 - **Rolling resistance outside a brake failure** is open. It (C_rr 0.002)

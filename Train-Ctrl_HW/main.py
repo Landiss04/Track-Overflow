@@ -162,6 +162,10 @@ STANDSTILL_MPS = 0.1
 # Below this, with nothing asked of it, the toy plant settles to an
 # exact stand instead of creeping.
 SETTLE_MPS = 0.12
+# Stand-in block length for the toy plant's authority countdown. The
+# real lengths vary block by block and are not known here yet; see
+# OPEN_ISSUES.md.
+BLOCK_LENGTH_M = 100.0
 
 # Defaults that pull the full 0.5 m/s^2 from a stand, reach 70 km/h
 # in about three quarters of a minute, and then sit within a tenth of
@@ -319,10 +323,13 @@ class State:
     # Authority: how many blocks the train may still enter before it
     # has to stop, as the Track Model reports it, and the block it
     # stops at. A count and an ID, not a measurement, so neither is
-    # ever converted. The controller does not track blocks itself:
-    # the count it is sent is how far it may go.
+    # ever converted. The control law does not track blocks: the
+    # count it is sent is how far it may go. Until the Track Model
+    # sends that count, the toy plant spends it, one block per
+    # BLOCK_LENGTH_M travelled, carrying the part-block here.
     authority_blocks: int = 4
     authority_target: str = "GREEN K"
+    block_progress_m: float = 0.0
 
     power_w: float = 0.0
     service_brake: bool = False
@@ -649,6 +656,15 @@ class ControllerCore:
         s.actual_mps = new_v
         if abs(s.actual_mps) < SETTLE_MPS and s.target_mps < SETTLE_MPS:
             s.actual_mps = 0.0          # settle cleanly at a stand
+
+        # Standing in for the Track Model's block count, so the
+        # console shows the train making progress: each fixed-length
+        # block travelled spends one block of authority. Delete this
+        # with the plant once the Track Model sends real counts.
+        s.block_progress_m += abs(s.actual_mps) * self.dt
+        while s.block_progress_m >= BLOCK_LENGTH_M:
+            s.block_progress_m -= BLOCK_LENGTH_M
+            s.authority_blocks = max(0, s.authority_blocks - 1)
 
         # Brake State reports what is actually engaged, so a failed
         # brake reads false whatever was commanded (truth
