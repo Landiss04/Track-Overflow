@@ -372,3 +372,73 @@ class ICtcOffice(ABC):
     @abstractmethod
     def get_suggestion(self, block_id: str) -> tuple[float, str]:
         """Return (suggested_speed_mps, authority_block_id) for a block."""
+
+
+# ---------------------------------------------------------------------------
+# Track Model edge types
+#
+# Catalog types for the Track Model's edges, mapped by
+# common/harness/track_model_edges.py (D005, D008). Backend units; IDs are
+# strings. Per-block maps are keyed by block ID, per-train maps by train ID.
+# ---------------------------------------------------------------------------
+
+class SignalAspect(Enum):
+    RED = auto()
+    YELLOW = auto()
+    GREEN = auto()
+    SUPER_GREEN = auto()
+
+
+@dataclass
+class TrackInfo:
+    """Terrain of the block a train occupies (signals/track-info)."""
+    block_id: str
+    grade_deg: float            # positive uphill
+    elevation_m: float
+    speed_limit_mps: float
+    polarity: bool              # reverses at every block change
+
+
+@dataclass
+class TrainTrackReport:
+    """Train Model -> Track Model, per train, every tick."""
+    position: TrainPosition     # block and offset into it
+    actual_speed_mps: float     # signed; negative on rollback
+    block_changed: bool
+    passenger_capacity: int
+
+
+@dataclass
+class WaysideCommands:
+    """Track Controller -> Track Model, every tick. Speed and authority
+    are per block: the track circuit signal covers the whole block."""
+    commanded_speed_mps: dict[str, int] = field(default_factory=dict)
+    authority_block_id: dict[str, str] = field(default_factory=dict)
+    switch_positions: dict[str, SwitchPosition] = field(default_factory=dict)
+    crossing_gates_closed: dict[str, bool] = field(default_factory=dict)
+    signal_aspects: dict[str, SignalAspect] = field(default_factory=dict)
+    heaters_on: dict[str, bool] = field(default_factory=dict)  # by section
+
+
+@dataclass
+class TrackReadback:
+    """Track Model -> Track Controller, every tick. The CTC Office reads
+    these through the Track Controller, never from the Track Model."""
+    block_occupancy: dict[str, bool]
+    switch_positions: dict[str, SwitchPosition]
+    crossing_gates_closed: dict[str, bool]
+    signal_aspects: dict[str, SignalAspect]
+    failures: dict[str, FailureMode]
+    heaters_on: dict[str, bool]     # by section, actually running
+    ticket_sales: dict[str, int]    # by station, this tick
+    track_temp_c: dict[str, float] = field(default_factory=dict)  # section
+
+
+@dataclass
+class TrainTrackFeed:
+    """Track Model -> Train Model, per train, every tick."""
+    track_info: TrackInfo
+    commanded_speed_mps: int        # whole m/s, of the occupied block
+    authority_block_id: Optional[str]
+    beacon: Optional[Beacon]
+    passengers_boarded: int
