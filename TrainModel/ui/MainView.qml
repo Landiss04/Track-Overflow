@@ -37,29 +37,62 @@ ScrollView {
             Layout.rightMargin: 0
             spacing: theme.space_5
 
-            RowLayout {
+            // A Card frame on one row, with no header rule, so it costs the
+            // left column little height: Cabin & Load is sized to end level
+            // with Failure Modes and clips whatever does not fit.
+            Rectangle {
                 Layout.fillWidth: true
-                spacing: theme.space_3
+                implicitHeight: lightsRow.implicitHeight + 2 * theme.space_4
+                color: theme.bg_surface
+                border.color: theme.border
+                border.width: 1
+                radius: theme.radius_lg
 
-                Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Lights")
-                    color: theme.text_primary
-                    font.family: theme.ui_family
-                    font.pixelSize: theme.size_h3
-                    font.weight: theme.weight_bold
-                }
+                RowLayout {
+                    id: lightsRow
+                    anchors.fill: parent
+                    anchors.leftMargin: theme.space_5
+                    anchors.rightMargin: theme.space_5
+                    anchors.topMargin: theme.space_4
+                    anchors.bottomMargin: theme.space_4
+                    spacing: theme.space_3
 
-                StatusBadge {
-                    label: root.s.interior_light
-                        ? qsTr("Interior on") : qsTr("Interior off")
-                    variant: root.s.interior_light ? "ok" : "idle"
-                }
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("Lights")
+                        color: theme.text_primary
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_h3
+                        font.weight: theme.weight_bold
+                    }
 
-                StatusBadge {
-                    label: root.s.exterior_light
-                        ? qsTr("Exterior on") : qsTr("Exterior off")
-                    variant: root.s.exterior_light ? "ok" : "idle"
+                    Text {
+                        text: qsTr("Interior")
+                        color: theme.text_secondary
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
+                        font.weight: theme.weight_regular
+                    }
+
+                    StatusBadge {
+                        label: root.s.interior_light ? qsTr("On") : qsTr("Off")
+                        variant: root.s.interior_light ? "ok" : "idle"
+                    }
+
+                    Item { implicitWidth: theme.space_3 }
+
+                    Text {
+                        text: qsTr("Exterior")
+                        color: theme.text_secondary
+                        font.family: theme.ui_family
+                        font.pixelSize: theme.size_small
+                        font.weight: theme.weight_regular
+                    }
+
+                    StatusBadge {
+                        label: root.s.exterior_light ? qsTr("On") : qsTr("Off")
+                        variant: root.s.exterior_light ? "ok" : "idle"
+                    }
                 }
             }
 
