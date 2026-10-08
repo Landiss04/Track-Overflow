@@ -20,8 +20,10 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Collection, Mapping, get_args
 
 from ctc.interface import (
+    BlockOccupancy,
     BlockRef,
     CancelledOrder,
+    CrossingReport,
     CrossingState,
     CtcInputs,
     CtcOutputs,
@@ -30,9 +32,14 @@ from ctc.interface import (
     QueuedTrain,
     SwitchCommand,
     SwitchPosition,
+    SwitchReport,
     TicketSales,
+    TrackControllerInputs,
     TrackFailureKind,
+    TrackFailureReport,
+    TrackModelInputs,
     TrainAuthority,
+    TrainReport,
     TrainSuggestion,
     TrackControllerOutputs,
 )
@@ -65,6 +72,12 @@ SUGGESTED_SPEED_MARGIN_MPS = 1
 
 _KMH_PER_MPS = 3.6
 
+#: Longest train ID accepted, in characters.
+MAX_TRAIN_ID_LENGTH = 32
+
+#: Most tickets one report may carry: QML integers are 32-bit.
+MAX_TICKETS = 2**31 - 1
+
 _DAY_S = 24 * 60 * 60
 
 
@@ -94,11 +107,79 @@ def _require_id(value: str, what: str) -> None:
         raise InvalidInputError(f"{what} must be a non-empty string ID")
 
 
+def _is_finite_number(value: object) -> bool:
+    """A real int or float, finite. An int too big for a float (10**400)
+    is not: ``math.isfinite`` would raise ``OverflowError`` on it."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def _require_finite(value: float, what: str) -> None:
-    if (isinstance(value, bool) or not isinstance(value, (int, float))
-            or not math.isfinite(value)):
+    if not _is_finite_number(value):
         raise InvalidInputError(
-            f"{what} must be a finite number, got {value!r}")
+            f"{what} must be a finite number, got {_short(value)}")
+
+
+def _short(value: object) -> str:
+    """``repr`` cut down, so a huge value does not flood a message."""
+    text = repr(value)
+    return text if len(text) <= 40 else text[:37] + "..."
+
+
+def _require_train_id(value: str, what: str = "train_id") -> None:
+    """A train ID: a non-empty string, no control characters (no
+    newlines or NULs), at most ``MAX_TRAIN_ID_LENGTH`` characters once
+    trimmed."""
+    _require_id(value, what)
+    text = value.strip()
+    if len(text) > MAX_TRAIN_ID_LENGTH:
+        raise InvalidInputError(
+            f"{what} must be at most {MAX_TRAIN_ID_LENGTH} characters, "
+            f"got {len(text)}")
+    if not text.isprintable():
+        raise InvalidInputError(
+            f"{what} must not contain control characters, got "
+            f"{_short(text)}")
+
+
+#: The list fields of the inputs, and what each holds.
+_INPUT_LISTS = (
+    ("track_controller", "occupancy", BlockOccupancy),
+    ("track_controller", "trains", TrainReport),
+    ("track_controller", "switches", SwitchReport),
+    ("track_controller", "crossings", CrossingReport),
+    ("track_controller", "failures", TrackFailureReport),
+    ("track_model", "ticket_sales", TicketSales),
+)
+
+
+def _require_shape(inputs: object) -> None:
+    """The inputs are the boundary types, each list a list or tuple of
+    the right entries: anything else is rejected before it is read."""
+    if not isinstance(inputs, CtcInputs):
+        raise InvalidInputError(
+            f"inputs must be CtcInputs, got {type(inputs).__name__}")
+    for name, kind in (("track_controller", TrackControllerInputs),
+                       ("track_model", TrackModelInputs)):
+        part = getattr(inputs, name)
+        if not isinstance(part, kind):
+            raise InvalidInputError(
+                f"{name} must be {kind.__name__}, got "
+                f"{type(part).__name__}")
+    for part, field, kind in _INPUT_LISTS:
+        items = getattr(getattr(inputs, part), field)
+        if not isinstance(items, (tuple, list)):
+            raise InvalidInputError(
+                f"{field} must be a list, got {type(items).__name__}")
+        for item in items:
+            if not isinstance(item, kind):
+                raise InvalidInputError(
+                    f"every entry of {field} must be a {kind.__name__}, "
+                    f"got {type(item).__name__}")
 
 
 class _Layout:
@@ -171,7 +252,7 @@ class _Layout:
         # trains reported in one block is rejected, never applied.
         in_block: dict[tuple[str, str], str] = {}
         for train in track_controller.trains:
-            _require_id(train.train_id, "train_id")
+            _require_train_id(train.train_id)
             what = f"train {train.train_id}"
             self.block(train.line, train.block_id, what)
             _require_finite(train.offset_m, f"offset_m of {what}")
@@ -196,6 +277,13 @@ class _Layout:
                     f"trains {other} and {train.train_id} are both in "
                     f"{train.line} block {train.block_id}; two trains "
                     "cannot occupy one block")
+        # A block reported empty with a train reported in it is a
+        # contradiction, like a switch reported both ways.
+        for (line, block_id), occupied_now in occupied.items():
+            if not occupied_now and (line, block_id) in in_block:
+                raise InvalidInputError(
+                    f"{line} block {block_id} is reported unoccupied, but "
+                    f"train {in_block[(line, block_id)]} is reported in it")
         positions: dict[tuple[str, str], str] = {}
         for switch in track_controller.switches:
             self.switch(switch.line, switch.switch_id, "switch state")
@@ -234,10 +322,10 @@ class _Layout:
             lines_sold.add(sale.line)
             if (isinstance(sale.tickets, bool)
                     or not isinstance(sale.tickets, int)
-                    or sale.tickets < 0):
+                    or not 0 <= sale.tickets <= MAX_TICKETS):
                 raise InvalidInputError(
                     f"ticket sales on {sale.line} must be a whole number "
-                    f">= 0, got {sale.tickets!r}")
+                    f"from 0 to {MAX_TICKETS}, got {_short(sale.tickets)}")
 
 
 def _require_choice(value: object, choices: object, what: str) -> None:
@@ -256,7 +344,15 @@ def _no_conflict(seen: dict[Any, Any], key: Any, value: Any,
 
 
 def _normalize(inputs: CtcInputs) -> CtcInputs:
-    """Train IDs with stray spaces are the same train: trim them."""
+    """Check the inputs' shape, make every list a tuple, and trim train
+    IDs: stray spaces do not make another train."""
+    _require_shape(inputs)
+    for part, field, _ in _INPUT_LISTS:
+        owner = getattr(inputs, part)
+        items = getattr(owner, field)
+        if isinstance(items, list):
+            inputs = replace(inputs, **{part: replace(
+                owner, **{field: tuple(items)})})
     trains = inputs.track_controller.trains
     if all(not isinstance(t.train_id, str)
            or t.train_id == t.train_id.strip() for t in trains):
@@ -269,7 +365,7 @@ def _normalize(inputs: CtcInputs) -> CtcInputs:
 
 
 def _trim(train_id: str) -> str:
-    _require_id(train_id, "train_id")
+    _require_train_id(train_id)
     return train_id.strip()
 
 
@@ -318,10 +414,13 @@ class StubCtcOffice:
 
     def step(self, dt: float, inputs: CtcInputs) -> CtcOutputs:
         """Advance one tick; see ``CtcOffice.step``."""
-        if (isinstance(dt, bool) or not isinstance(dt, (int, float))
-                or not math.isfinite(dt) or dt <= 0):
+        if not _is_finite_number(dt) or dt <= 0:
             raise InvalidTimeStepError(
-                f"dt must be finite and positive, got {dt!r}")
+                f"dt must be finite and positive, got {_short(dt)}")
+        if not math.isfinite(self._elapsed_s + dt):
+            raise InvalidTimeStepError(
+                f"dt {dt:g} s would take the elapsed time past what can "
+                "be counted")
         inputs = _normalize(inputs)
         self._layout.validate_inputs(inputs)
 
@@ -488,7 +587,14 @@ class StubCtcOffice:
         """Replace the schedule. Every stop must be a block of the
         track layout. With no scheduling algorithm yet, every run stays
         queued."""
+        runs = set()
         for train in schedule.trains:
+            what = f"schedule {train.line} train {train.train_id}"
+            if not train.stops:
+                raise InvalidInputError(f"{what}: no stops")
+            if (train.line, train.train_id) in runs:
+                raise InvalidInputError(f"{what} is listed twice")
+            runs.add((train.line, train.train_id))
             for stop in train.stops:
                 self._layout.block(train.line, stop.block_id,
                                    f"schedule {train.line} train "

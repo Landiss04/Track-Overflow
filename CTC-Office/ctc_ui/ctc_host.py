@@ -36,7 +36,7 @@ from ctc.interface import (
     TrainSuggestion,
 )
 from ctc.model import CtcError, StubCtcOffice
-from ctc.schedule import ScheduleError, load_schedule
+from ctc.schedule import load_schedule
 from ctc.socket_link import CtcLinkServer
 from ctc.track_layout import Line, load_layout
 from ctc_ui.display import (
@@ -815,10 +815,11 @@ class CtcHost(QObject):
         path = Path(url.toLocalFile())
         try:
             schedule = load_schedule(path)
-        except ScheduleError as error:
+            # The module checks it against the track too.
+            self._module.load_schedule(schedule)
+        except CtcError as error:
             self._schedule_error = str(error)
         else:
-            self._module.load_schedule(schedule)
             self._schedule_file = path.name
             self._schedule_error = ""
             self._refresh()

@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import traceback
 from typing import Any, Callable, Mapping, Sequence
 
 import shiboken6
@@ -84,7 +86,8 @@ class _LineReader:
             if line.strip():
                 try:
                     messages.append(json.loads(line))
-                except ValueError as error:
+                # RecursionError: JSON nested too deep to read.
+                except (ValueError, RecursionError) as error:
                     messages.append(_BadLine(str(error)))
         return messages
 
@@ -223,7 +226,7 @@ class CtcLinkServer(QObject):
                 dt = args["dt"]
                 if isinstance(dt, bool) or not isinstance(dt, (int, float)):
                     raise WireFormatError(f"dt must be a number, got {dt!r}")
-                self._module.step(float(dt), inputs_from_wire(args["inputs"]))
+                self._module.step(dt, inputs_from_wire(args["inputs"]))
             elif op == "set_inputs":
                 self._take_inputs(self._module,
                                   inputs_from_wire(args["inputs"]), False)
@@ -243,8 +246,16 @@ class CtcLinkServer(QObject):
                     self._take_inputs)
             elif op != "snapshot":
                 apply_action(self._module, str(op), args)
-        except (CtcError, KeyError, TypeError, ValueError) as error:
+        except (CtcError, KeyError, TypeError, ValueError, OverflowError,
+                RecursionError) as error:
             return {"op": "error", "message": str(error)}
+        except Exception as error:  # pylint: disable=broad-except
+            # A module bug. Still answer, so the client is not left
+            # waiting and later requests on the connection keep their
+            # replies; report it where the developer will see it.
+            traceback.print_exc(file=sys.stderr)
+            return {"op": "error",
+                    "message": f"CTC Office internal error: {error!r}"}
         return self._snapshot_message()
 
 

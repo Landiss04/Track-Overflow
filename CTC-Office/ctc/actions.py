@@ -44,7 +44,11 @@ def _arrival(args: Mapping[str, Any]) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise InvalidInputError(
             f"arrival_s must be a number of seconds, got {value!r}")
-    return float(value)
+    try:
+        return float(value)
+    except OverflowError:
+        raise InvalidInputError(
+            "arrival_s is too large to be a time of day") from None
 
 
 def apply_action(module: CtcOffice, op: str,
