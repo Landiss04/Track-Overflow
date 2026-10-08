@@ -94,7 +94,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 rule: false
                 label: qsTr("Acceleration")
-                value: Number(root.s.accel_ftps2).toFixed(2) + " ft/s^2"
+                value: Number(root.s.accel_mps2).toFixed(2) + " m/s^2"
             }
             }
         }

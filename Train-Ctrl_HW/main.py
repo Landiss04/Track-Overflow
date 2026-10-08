@@ -97,7 +97,6 @@ GAINS_HANDOVER_MS = 1500
 # program happens once, in the snapshot it hands to QML, and the
 # views only round and format.
 MPS_TO_MPH = 2.236936
-M_TO_FT = 3.280840
 W_TO_KW = 0.001
 KMH_PER_MPS = 3.6
 
@@ -874,7 +873,9 @@ class ConsoleBackend(QObject):
             "commanded_mph": s.commanded_mps * MPS_TO_MPH,
             "target_mph": s.target_mps * MPS_TO_MPH,
             "limit_mph": s.speed_limit_mps * MPS_TO_MPH,
-            "accel_ftps2": s.accel_mps2 * M_TO_FT,
+            # Shown in SI by the team's choice for this module, a
+            # deliberate departure from units.md's ft/s^2.
+            "accel_mps2": s.accel_mps2,
             "dial_hint": self._dial_hint(),
             # Automatic is the console locked: the CTC owns the
             # speed and the dial does nothing.
