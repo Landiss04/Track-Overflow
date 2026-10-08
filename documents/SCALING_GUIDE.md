@@ -95,6 +95,9 @@ and forth, or snaps back to the previous size.
 
 ## Common scaling failures
 
+If a Windows machine letterboxes during a drag and the cause is not below,
+run the diagnostic in [SCALING_DIAGNOSTIC.md](SCALING_DIAGNOSTIC.md).
+
 ### Jitter or snapping back while resizing
 
 **Cause:** Code changes native window dimensions while the window manager is
