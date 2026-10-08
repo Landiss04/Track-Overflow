@@ -65,9 +65,11 @@ def inputs(
     maintenance: bool = False,
     switch_commands: dict[str, str] | None = None,
     reported: dict[str, str] | None = None,
+    lit: dict[str, str] | None = None,
 ) -> TrackControllerInputs:
     """Inputs by block number. Every switch reports its commanded
-    position unless ``reported`` says otherwise."""
+    position unless ``reported`` says otherwise; ``lit`` gives the
+    aspects the Track Model reports."""
     by_number = keys(controller)
     snapshot = controller.snapshot()
     commanded = {
@@ -99,5 +101,9 @@ def inputs(
                 for n, kind in (failures or {}).items()
             },
             switch_positions=positions,
+            signal_aspects={
+                by_number[n]: aspect  # type: ignore[misc]
+                for n, aspect in (lit or {}).items()
+            },
         ),
     )

@@ -4,9 +4,10 @@ The two run as separate processes (decision D010 sets the pattern). The
 Track Controller window hosts the module and a ``TestLinkServer``. The
 test UI stands in for the CTC Office, the Track Model and the clock,
 and drives the module through ``TestLinkClient`` using only the module
-boundary: ``step(dt, inputs)`` returning the outputs. At integration
-the central harness calls ``TrackController.step`` directly, and the
-test UI and this file are removed with no change to the module.
+boundary: ``step(dt, inputs)`` returning the outputs. Integrated, the
+central harness calls ``TrackController.step`` directly instead; the
+test UI and this file stay, so the module can still be demonstrated on
+its own, and the module never depends on them.
 
 Wire format: one JSON object per line over a Qt local socket, a named
 pipe on Windows and a socket file elsewhere, never a network

@@ -546,6 +546,10 @@ class TestHarness(QObject):
                 None if entry is None
                 else _label(GATES, entry.crossing_active) or None,
                 has_crossing),
+            row("signal_state", "enum",
+                None if entry is None
+                else _label(ASPECTS, entry.signal_aspect) or None,
+                has_switch),
             row("track_failure", "enum",
                 None if entry is None else _label(FAILURES, entry.failure)),
         ])

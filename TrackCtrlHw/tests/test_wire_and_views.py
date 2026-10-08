@@ -18,7 +18,7 @@ from track_ctrl_hw.wire import (
     territory_to_wire,
 )
 
-from tests.support import inputs, loaded, territory
+from tests.support import inputs, keys, loaded, territory
 
 
 class Wire(unittest.TestCase):
@@ -28,10 +28,15 @@ class Wire(unittest.TestCase):
             controller, occupied=["4", "19"], closed=["30"],
             failures={"80": "power"}, suggestions={"4": (12, 3)},
             maintenance=True, switch_commands={"12": "reverse"},
+            lit={"12": "green", "85": "super_green"},
         )
         wire = json.loads(json.dumps(inputs_to_wire(sent)))
         self.assertEqual(inputs_from_wire(wire), sent)
         out = controller.step(0.1, sent)
+        self.assertEqual(
+            out.ctc_reports[2].blocks[keys(controller)["85"]].signal_aspect,
+            "super_green",
+        )
         wire = json.loads(json.dumps(outputs_to_wire(out)))
         self.assertEqual(outputs_from_wire(wire), out)
         for number in (1, 2, 3):
@@ -132,6 +137,7 @@ class Views(unittest.TestCase):
         controller.step(0.1, inputs(
             controller, occupied=["4"], closed=["7"],
             failures={"9": "broken_rail"}, suggestions={"4": (12, 3)},
+            lit={"12": "green"},
         ))
         wayside = controller.snapshot().waysides[0]
         rows = {row["block"]: row for row in views.block_rows(wayside)}
@@ -150,6 +156,8 @@ class Views(unittest.TestCase):
         report = views.report_rows(wayside)
         self.assertEqual(len(report), 20)
         self.assertEqual(report[0]["key"], "Green \u00b7 A \u00b7 1")
+        self.assertEqual(report[0]["signal"], display.EM_DASH)
+        self.assertEqual(report[11]["signal"], "Green")
 
     def test_summary(self) -> None:
         wayside = loaded(3, programs=False).snapshot().waysides[0]

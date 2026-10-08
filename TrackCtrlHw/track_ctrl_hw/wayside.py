@@ -288,6 +288,11 @@ class Wayside:
                         if key in territory.crossings
                         else None
                     ),
+                    signal_aspect=(
+                        track_model.signal_aspects.get(key)
+                        if key in self._switch_by_key
+                        else None
+                    ),
                 )
                 for key in keys
             },

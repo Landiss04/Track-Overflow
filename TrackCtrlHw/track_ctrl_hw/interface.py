@@ -208,6 +208,9 @@ class BlockReport:
     switch_position: SwitchPosition | None = None
     # None where the block has no crossing, or none was reported.
     crossing_active: bool | None = None
+    # Aspect the Track Model reports lit. None where the block has no
+    # signal, or none was reported.
+    signal_aspect: SignalAspect | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -366,7 +369,7 @@ class TrackController(Protocol):
         """
         ...
 
-    # Test UI only. Never used at integration.
+    # Test UI only. The central harness never calls it.
 
     def reset(self) -> None:
         """Return every wayside to its state just after loading."""

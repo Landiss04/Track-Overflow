@@ -191,6 +191,7 @@ def report_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
     report = snapshot.report
     if report is None:
         return []
+    switch_keys = {s.switch.key for s in snapshot.switches}
     rows = []
     for key, entry in report.blocks.items():
         rows.append({
@@ -199,8 +200,13 @@ def report_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
             "occupied": "Occupied" if entry.occupied else "Clear",
             "switch": (
                 display.EM_DASH
-                if key not in {s.switch.key for s in snapshot.switches}
+                if key not in switch_keys
                 else display.position_name(entry.switch_position)
+            ),
+            "signal": (
+                display.EM_DASH
+                if key not in switch_keys
+                else display.aspect_name(entry.signal_aspect)
             ),
             "crossing": (
                 display.EM_DASH

@@ -204,6 +204,7 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
                         "failure": b.failure,
                         "switch_position": b.switch_position,
                         "crossing_active": b.crossing_active,
+                        "signal_aspect": b.signal_aspect,
                     },
                 ),
             }
@@ -234,6 +235,9 @@ def outputs_from_wire(data: Any) -> TrackControllerOutputs:
                         r, "switch_position", SWITCH_POSITIONS
                     ),
                     crossing_active=_optional_flag(r, "crossing_active"),
+                    signal_aspect=_optional_choice(
+                        r, "signal_aspect", SIGNAL_ASPECTS
+                    ),
                 ),
             ),
         ))

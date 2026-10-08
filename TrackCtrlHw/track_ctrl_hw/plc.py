@@ -23,9 +23,8 @@ names are not. A declaration may give a range, ``OCC_1 .. OCC_20`` or
 ``AUTH_1..20``, over a trailing number or letter.
 
 A scan runs the assignments top to bottom, once. A name that is neither
-an input nor assigned earlier in the scan reads as 0: an undefined read
-can never produce a permissive output. The compiler warns about every
-such read in advance.
+an input nor assigned earlier in the scan reads as 0. ``NOT`` of such a
+name is 1, so the compiler warns about every such read in advance.
 
 Each statement is compiled twice, by different algorithms. Channel A
 parses by recursive descent and walks the tree. Channel B parses with
@@ -333,7 +332,7 @@ class _Scope:
         self.values: dict[str, bool] = dict(inputs)
 
     def read(self, name: str) -> bool:
-        # An undefined read is 0, never permissive.
+        # An undefined read is 0; the compiler has warned about it.
         return self.values.get(name, False)
 
 

@@ -309,7 +309,8 @@ class Report(unittest.TestCase):
         controller = loaded(1, 2, 3)
         k = keys(controller)
         out, _ = circuits(controller, time_s=3600.0, occupied=["4"],
-                          failures={"22": "broken_rail"})
+                          failures={"22": "broken_rail"},
+                          lit={"12": "yellow"})
         self.assertEqual([r.wayside_id for r in out.ctc_reports],
                          ["1", "2", "3"])
         first = out.ctc_reports[0]
@@ -319,6 +320,12 @@ class Report(unittest.TestCase):
         self.assertEqual(first.blocks[k["12"]].switch_position, "normal")
         self.assertIsNone(first.blocks[k["13"]].switch_position)
         self.assertIsNone(first.blocks[k["19"]].crossing_active)
+        # The aspect the Track Model reports lit, only where a signal is.
+        self.assertEqual(first.blocks[k["12"]].signal_aspect, "yellow")
+        self.assertIsNone(first.blocks[k["13"]].signal_aspect)
+        self.assertIsNone(
+            out.ctc_reports[1].blocks[k["28"]].signal_aspect
+        )
         self.assertEqual(out.ctc_reports[1].blocks[k["22"]].failure,
                          "broken_rail")
 

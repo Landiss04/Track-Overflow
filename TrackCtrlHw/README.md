@@ -11,7 +11,7 @@ Two windows, each its own process:
 | Window | Entry point | What it does |
 | --- | --- | --- |
 | Track Controller | `ui/main.py` | Hosts the module. Loads databases and PLC programs. Shows the territory, blocks, switches, signals, crossings and the reports to the CTC Office. |
-| Test UI | `test_ui/main.py` | Stands in for the CTC Office, the Track Model and the clock. Drives the module over a local socket and reads back its outputs. Removed at integration. |
+| Test UI | `test_ui/main.py` | Stands in for the CTC Office, the Track Model and the clock. Drives the module over a local socket and reads back its outputs. Kept working for the whole project, final demonstration included. |
 
 ## Run
 
@@ -87,7 +87,7 @@ outputs = controller.step(dt, TrackControllerInputs(time_s=..., ctc=..., track_m
 | `snapshot()` | For display | No side effects. |
 | `load_territory(t)` | Track Controller UI | Adds a wayside, or replaces the one with the same ID. Refuses another line, or a block another wayside owns. |
 | `load_program(id, source, file)` | Track Controller UI | Compiles and checks the program against that wayside's I/O. `PlcError.diagnostics` lists every problem. Takes effect at the next scan. |
-| `reset()` | Test UI only | Never used at integration. |
+| `reset()` | Test UI only | Never called by the central harness. |
 
 All errors derive from `TrackControllerError`.
 
@@ -123,8 +123,9 @@ wayside governs are ignored, so the harness can send the whole line.
 
 A `CtcReport` is `wayside_id`, `sent_at_s`, and `blocks: dict[BlockKey,
 BlockReport]` — the block key mapped to that block's `occupied`, `failure`,
-`switch_position` and `crossing_active`. Switch and crossing fields are `None`
-where the block has none. A failed track circuit reports occupied.
+`switch_position`, `signal_aspect` and `crossing_active`. Switch, signal and
+crossing fields are `None` where the block has none, and are the state the
+Track Model reports, not the command. A failed track circuit reports occupied.
 
 ### Edge mappings the harness will need, and where they do not line up yet
 
@@ -133,23 +134,30 @@ decided.
 
 1. **CTC suggestions are per train; this module is per block.** The CTC
    Office's `TrainSuggestion` (on `ctc-interfacing`) carries `train_id` and no
-   block. The harness must know which block each train occupies to map it.
+   block, and `signals/suggested-speed.md` and `suggested-authority.md` on
+   `truth` key each value by train ID. The harness must know which block each
+   train occupies to map it.
 2. **The CTC Office expects train reports** (`TrainReport`: train ID, block,
    offset, speed). This module knows no trains and sends none. Train location and
    speed must come from elsewhere.
-3. **Authority.** This module treats it as a count of blocks (D013, pending on
-   `ctc-interfacing`). The CTC's current `TrainSuggestion` still carries
-   `authority_block_id`.
+3. **Authority.** A count of blocks (D013, on `truth`). The CTC's current
+   `TrainSuggestion` still carries `authority_block_id`.
 4. **Signal aspects.** The software Track Controller uses ORANGE where this
    module uses YELLOW; REQ-INTF-009 requires the two to match.
 
-### What goes away at integration
+### The test UI stays
 
-`test_ui/`, `track_ctrl_hw/link.py`, `track_ctrl_hw/wire.py` and
-`track_ctrl_hw/harness.py` are test scaffolding (the D010 pattern). The harness
-calls `HwTrackController.step` directly, and hands the window the same instance
-with `TrackControllerState(controller=...)` so the window shows what the
-harness drives.
+The test UI is supported for the whole project, final demonstration included:
+if integration is incomplete, the module is demonstrated through it. It drives
+the module only through `step`, so the module never depends on it. `test_ui/`,
+`track_ctrl_hw/link.py`, `track_ctrl_hw/wire.py` and
+`track_ctrl_hw/harness.py` are its scaffolding; every interface change updates
+them in the same commit.
+
+One driver steps the module at a time. Integrated, the central harness calls
+`HwTrackController.step` directly and hands the window the same instance with
+`TrackControllerState(controller=...)`, so the window shows what the harness
+drives. Standalone, `launch.py` runs the window and the test UI.
 
 ## Wayside database
 

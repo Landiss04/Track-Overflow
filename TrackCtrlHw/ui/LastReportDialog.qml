@@ -16,7 +16,7 @@ ModalDialog {
 
     title: qsTr("Last report to CTC Office")
     meta: root.waysideName === "" ? "" : root.waysideName + " \u00b7 " + root.sentText
-    dialogWidth: 760
+    dialogWidth: 840
 
     footer: Shared.AppButton {
         text: qsTr("Close")
@@ -27,9 +27,10 @@ ModalDialog {
     Shared.HelperText {
         Layout.fillWidth: true
         text: qsTr("Sent every scan. Each block key maps to that block's "
-            + "occupancy, switch position, crossing state and failure. A "
-            + "failed track circuit reports occupied. Switch and crossing "
-            + "state are as the Track Model reports them.")
+            + "occupancy, switch position, signal aspect, crossing state "
+            + "and failure. A failed track circuit reports occupied. "
+            + "Switch, signal and crossing state are as the Track Model "
+            + "reports them.")
     }
 
     DataTable {
@@ -43,6 +44,7 @@ ModalDialog {
             { title: qsTr("Block key"), role: "key", width: 168, mono: true },
             { title: qsTr("Occupancy"), role: "occupied", width: 96 },
             { title: qsTr("Switch"), role: "switch", width: 80 },
+            { title: qsTr("Signal"), role: "signal", width: 104 },
             { title: qsTr("Crossing"), role: "crossing", fill: true },
             { title: qsTr("Failure"), role: "failure", width: 112 }
         ]
