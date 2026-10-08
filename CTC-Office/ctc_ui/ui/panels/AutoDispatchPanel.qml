@@ -1,5 +1,6 @@
 // Automatic dispatch: schedule file and upcoming departures.
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../../../../ui"
@@ -10,6 +11,8 @@ Panel {
     property string scheduleFile: ""
     property bool running: false
     property var departures: []
+    // Why the last schedule file was rejected; empty when it loaded.
+    property string scheduleError: ""
     readonly property bool scheduleLoaded: scheduleFile !== ""
 
     // The backend reads and parses the file; the panel only picks it.
@@ -44,18 +47,26 @@ Panel {
         }
     }
 
+    // Nothing sets `running` until the scheduling algorithm exists, so
+    // say why Pause dispatch is unavailable.
+    HelperText {
+        Layout.fillWidth: true
+        visible: !root.running
+        color: theme.text_muted
+        text: qsTr("Automatic dispatch arrives with the scheduling "
+            + "algorithm; until then no run is dispatched, and Pause "
+            + "dispatch stays unavailable.")
+    }
+
     FileDialog {
         id: scheduleDialog
 
         title: qsTr("Load schedule")
         fileMode: FileDialog.OpenFile
-        // No schedule file format is decided yet, so accept any file.
-        nameFilters: [qsTr("All files (*)")]
-        onAccepted: {
-            const path = decodeURIComponent(selectedFile.toString());
-            root.scheduleFile = path.substring(path.lastIndexOf("/") + 1);
-            root.scheduleFileSelected(selectedFile);
-        }
+        nameFilters: [qsTr("Schedule files (*.json)"),
+            qsTr("All files (*)")]
+        // The CTC loads it and reports back scheduleFile or scheduleError.
+        onAccepted: root.scheduleFileSelected(selectedFile)
     }
 
     Rectangle {
@@ -88,25 +99,55 @@ Panel {
         }
     }
 
-    FieldLabel { text: qsTr("NEXT DEPARTURES") }
-
-    DataTable {
+    HelperText {
         Layout.fillWidth: true
-        columns: [
-            { label: qsTr("Time"), key: "time", width: 64, mono: true },
-            { label: qsTr("Train"), key: "train", width: 72, mono: true },
-            { label: qsTr("Status"), key: "status" }
-        ]
-        rows: root.departures
+        visible: root.scheduleError !== ""
+        text: qsTr("Schedule not loaded: %1").arg(root.scheduleError)
+        color: theme.danger
     }
+
+    FieldLabel { text: qsTr("NEXT DEPARTURES") }
 
     HelperText {
         Layout.fillWidth: true
-        Layout.topMargin: theme.space_2
-        visible: root.departures.length === 0
-        horizontalAlignment: Text.AlignHCenter
-        text: qsTr("No departures scheduled")
+        visible: root.departures.length > 0
+        text: qsTr("Due times count from the schedule start. Trains stay "
+            + "queued until the scheduling algorithm dispatches them.")
+        color: theme.text_muted
     }
 
-    Item { Layout.fillHeight: true }
+    // A full schedule is taller than the panel, so the list scrolls.
+    ScrollView {
+        id: departuresScroll
+
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        clip: true
+        contentWidth: availableWidth
+
+        ColumnLayout {
+            width: departuresScroll.availableWidth
+            spacing: 0
+
+            DataTable {
+                Layout.fillWidth: true
+                columns: [
+                    { label: qsTr("Due"), key: "time", width: 64,
+                      mono: true },
+                    { label: qsTr("Train"), key: "train", width: 72,
+                      mono: true },
+                    { label: qsTr("Status"), key: "status" }
+                ]
+                rows: root.departures
+            }
+
+            HelperText {
+                Layout.fillWidth: true
+                Layout.topMargin: theme.space_2
+                visible: root.departures.length === 0
+                horizontalAlignment: Text.AlignHCenter
+                text: qsTr("No departures scheduled")
+            }
+        }
+    }
 }

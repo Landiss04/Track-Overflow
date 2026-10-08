@@ -1,6 +1,7 @@
 // Module window header, style guide 6.7. Module name at H3, the current
 // mode badge, the Train Occupancy window launcher, the operating-mode
-// toggle, and the simulation clock in mono at 13 px muted.
+// toggle, and the simulation clock in mono at 13 px muted with its
+// Run / Pause and 1× / 10× speed controls.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -13,13 +14,18 @@ Rectangle {
     property var modes: []
     property int modeIndex: 0
     property string clock: "--:--:--"
-    // Simulation speed badge text, e.g. "10× speed"; hidden if empty.
-    property string speedLabel: ""
-    property bool speedElevated: false
+    // Simulation clock state. The shared clock starts paused at 1×.
+    property bool paused: true
+    property int speed: 1
     property bool occupancyOpen: false
 
     signal modeActivated(int index)
     signal occupancyClicked()
+    // Requests for the shared simulation clock's pause() / resume() /
+    // setSpeed().
+    signal pauseRequested()
+    signal resumeRequested()
+    signal speedRequested(int speed)
 
     readonly property string modeName: modes.length > modeIndex
         ? modes[modeIndex] : ""
@@ -110,26 +116,13 @@ Rectangle {
             color: theme.border
         }
 
-        ColumnLayout {
-            spacing: theme.space_1
-
-            FieldLabel { text: qsTr("SIMULATION CLOCK") }
-
-            RowLayout {
-                Layout.preferredHeight: theme.control_h_md
-                spacing: theme.space_2
-
-                StatusBadge {
-                    label: root.speedLabel
-                    variant: root.speedElevated ? "warning" : "idle"
-                    visible: root.speedLabel !== ""
-                }
-
-                MonoText {
-                    text: root.clock
-                    color: theme.text_muted
-                }
-            }
+        ClockControls {
+            time: root.clock
+            paused: root.paused
+            speed: root.speed
+            onPauseRequested: root.pauseRequested()
+            onResumeRequested: root.resumeRequested()
+            onSpeedRequested: function (speed) { root.speedRequested(speed); }
         }
     }
 }
