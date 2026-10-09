@@ -145,12 +145,6 @@ ScrollView {
                     Layout.fillWidth: true
                     label: qsTr("Grade")
                     value: root.fixed(root.s.grade, 1) + " deg"
-                }
-
-                KeyValueRow {
-                    Layout.fillWidth: true
-                    label: qsTr("Elevation")
-                    value: root.fixed(root.ft(root.s.elevation), 1) + " ft"
                     rule: false
                 }
             }

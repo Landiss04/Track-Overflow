@@ -339,6 +339,7 @@ Controller command from the test UI, or a pull) and while a pull is latched.
 - The test UI shows no onboard passenger count: it is not a cross-module
   output. The Train Model window shows it; the test UI shows the remaining
   `passenger_capacity`.
-- Both pages display speed in mph, distance/elevation in feet, temperature
-  in Fahrenheit, and power in kW. Grade remains in degrees. Test editors
+- Both pages display speed in mph, distance in feet, temperature in
+  Fahrenheit, and power in kW. Grade remains in degrees. Elevation is not
+  shown in the Train Model window; the test UI's elevation input is in feet. Test editors
   convert back to backend units before staging commands; model state remains SI.
