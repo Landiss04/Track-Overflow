@@ -67,9 +67,15 @@ class TrainModelState(QObject):
         self,
         config: TrainConfig | None = None,
         parent: QObject | None = None,
+        *,
+        train_id: str = "",
+        line: str = "",
     ) -> None:
         super().__init__(parent)
         self._config = config if config is not None else TrainConfig()
+        # Identity is metadata for the views; the model never reads it.
+        self._train_id = train_id
+        self._line = line
         self._model = TrainModel(self._config)
         self._failures: dict[str, bool] = dict.fromkeys(FAILURE_MODES, False)
         # The last beacon's station and platform side, kept until the
@@ -84,8 +90,8 @@ class TrainModelState(QObject):
         # Unknown metadata and config; live values come from _refresh.
         cfg = self._config
         return {
-            "train_id": _NONE_SHOWN,
-            "line": _NONE_SHOWN,
+            "train_id": self._train_id or _NONE_SHOWN,
+            "line": self._line or _NONE_SHOWN,
             "clock": "00:00:00",
             "arrival": _NONE_SHOWN,
             "grade": 0.0,
@@ -122,6 +128,20 @@ class TrainModelState(QObject):
         self._refresh()
         self._mark_running()
         return outputs
+
+    def validate_inputs(self, dt: float, inputs: TrainModelInputs) -> None:
+        """Raise as :meth:`step` would, without changing the train."""
+        self._model.validate_inputs(dt, inputs)
+
+    @property
+    def train_id(self) -> str:
+        """The train's ID, or ``""`` when it has none."""
+        return self._train_id
+
+    @property
+    def line(self) -> str:
+        """The line the train runs on, or ``""`` when unknown."""
+        return self._line
 
     def outputs(self) -> TrainModelOutputs:
         """The module's current cross-module outputs."""

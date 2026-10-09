@@ -8,7 +8,9 @@ import "../../ui"
 ScrollView {
     id: root
 
-    readonly property var s: trainModel.snapshot
+    // The train shown, set by the window from the fleet's selection.
+    property var trainModel
+    readonly property var s: root.trainModel.snapshot
 
     function fixed(value, digits) {
         const text = Number(value).toFixed(digits);
@@ -256,7 +258,7 @@ ScrollView {
                     // tooltip: qsTr("Stops the train at the full braking rate and "
                         // + "reports the stop to the track controller and the "
                         // + "CTC. Confirmation is required.")
-                    onConfirmed: trainModel.applyEmergencyBrake()
+                    onConfirmed: root.trainModel.applyEmergencyBrake()
                 }
 
                 RowLayout {
@@ -345,13 +347,13 @@ ScrollView {
                 id: failureModesCard
                 Layout.fillWidth: true
                 title: qsTr("Failure Modes")
-                statusLabel: trainModel.activeFailureCount > 0
-                    ? trainModel.activeFailureCount + qsTr(" active")
+                statusLabel: root.trainModel.activeFailureCount > 0
+                    ? root.trainModel.activeFailureCount + qsTr(" active")
                     : qsTr("Clear")
-                statusVariant: trainModel.activeFailureCount > 0 ? "fault" : "ok"
+                statusVariant: root.trainModel.activeFailureCount > 0 ? "fault" : "ok"
 
                 Repeater {
-                    model: trainModel.failures
+                    model: root.trainModel.failures
 
                     delegate: AppButton {
                         required property var modelData
@@ -367,7 +369,7 @@ ScrollView {
                         // tooltip: qsTr("A failure stays set until it is cleared here. "
                             // + "With signal pickup failed, no new commanded speed "
                             // + "or authority reaches this train.")
-                        onClicked: trainModel.setFailure(
+                        onClicked: root.trainModel.setFailure(
                             modelData.name, !modelData.active)
                     }
                 }
