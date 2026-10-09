@@ -8,7 +8,9 @@ from pathlib import Path
 import sys
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QUrl
-from PySide6.QtGui import QGuiApplication, QWheelEvent
+from PySide6.QtGui import (
+    QGuiApplication, QInputDevice, QPointingDevice, QWheelEvent,
+)
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow  # noqa: F401: register Qt wrappers
 from PySide6.QtTest import QTest
@@ -42,6 +44,29 @@ def wheel(window, item, notches):
         Qt.NoScrollPhase, False,
     )
     QGuiApplication.sendEvent(window, event)
+    QTest.qWait(200)
+
+
+def touchpad_swipe(window, item, pixels):
+    """Send a two-finger swipe of ``pixels`` pixels over ``item``."""
+    pad = QPointingDevice(
+        "touchpad", 1, QInputDevice.DeviceType.TouchPad,
+        QPointingDevice.PointerType.Finger,
+        QInputDevice.Capability.Position | QInputDevice.Capability.Scroll
+        | QInputDevice.Capability.PixelScroll, 2, 3,
+    )
+    centre = item.mapToScene(item.boundingRect().center())
+    steps = 10
+    for phase, delta in ([(Qt.ScrollBegin, 0)]
+                         + [(Qt.ScrollUpdate, pixels // steps)] * steps
+                         + [(Qt.ScrollEnd, 0)]):
+        event = QWheelEvent(
+            QPointF(centre), QPointF(window.mapToGlobal(centre.toPoint())),
+            QPoint(0, delta), QPoint(0, 2 * delta), Qt.NoButton,
+            Qt.NoModifier, phase, False, Qt.MouseEventNotSynthesized, pad,
+        )
+        QGuiApplication.sendEvent(window, event)
+        QTest.qWait(10)
     QTest.qWait(200)
 
 
@@ -146,6 +171,12 @@ def main():
     wheel(window, inputs, 1)
     assert inputs.property("currentIndex") == count - 1
     wheel(window, inputs, -1)
+    assert inputs.property("currentIndex") == 0
+    # A touchpad scrolls it too, one row per row height of travel.
+    slot = inputs.property("slot")
+    touchpad_swipe(window, inputs, -round(2.5 * slot))
+    assert inputs.property("currentIndex") == 2
+    touchpad_swipe(window, inputs, round(2.5 * slot))
     assert inputs.property("currentIndex") == 0
     for _ in range(count):
         inputs.incrementCurrentIndex()

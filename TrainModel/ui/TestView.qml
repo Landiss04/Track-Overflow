@@ -63,7 +63,8 @@ Item {
 
                     readonly property real slot: rowProbe.implicitHeight
                         + theme.space_3
-                    // Wheel travel not yet turned into a whole row.
+                    // Scroll travel not yet turned into a whole row, in
+                    // rows.
                     property real wheelRemainder: 0
 
                     // The control in a row that last held keyboard focus.
@@ -172,16 +173,25 @@ Item {
                     }
 
                     WheelHandler {
+                        // A wheel handler takes only mouse wheels unless
+                        // told otherwise; touchpads scroll this list too.
+                        acceptedDevices: PointerDevice.Mouse
+                            | PointerDevice.TouchPad
                         onWheel: function (event) {
-                            // One row per wheel notch; trackpads send
-                            // smaller steps, so they add up first.
-                            inputList.wheelRemainder += event.angleDelta.y;
-                            while (inputList.wheelRemainder <= -120) {
-                                inputList.wheelRemainder += 120;
+                            // One row per wheel notch, or per row height
+                            // of touchpad travel. Smaller steps add up
+                            // first.
+                            const pad = event.device.type
+                                === PointerDevice.TouchPad;
+                            inputList.wheelRemainder += pad && event.pixelDelta.y
+                                ? event.pixelDelta.y / inputList.slot
+                                : event.angleDelta.y / 120;
+                            while (inputList.wheelRemainder <= -1) {
+                                inputList.wheelRemainder += 1;
                                 inputList.incrementCurrentIndex();
                             }
-                            while (inputList.wheelRemainder >= 120) {
-                                inputList.wheelRemainder -= 120;
+                            while (inputList.wheelRemainder >= 1) {
+                                inputList.wheelRemainder -= 1;
                                 inputList.decrementCurrentIndex();
                             }
                         }
