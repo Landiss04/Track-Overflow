@@ -403,11 +403,15 @@ class TestLinkServer(QObject):
             self._receive(socket)
 
     def _push(self) -> None:
-        # The requester gets these outputs in its reply instead.
+        # The requester gets these outputs in its reply instead. Every
+        # train changes during a step, so build the message only when
+        # someone else will read it: building it per train is quadratic.
+        others = [s for s in self._clients if s is not self._requester]
+        if not others:
+            return
         message = self._outputs_message()
-        for socket in self._clients:
-            if socket is not self._requester:
-                _write(socket, message)
+        for socket in others:
+            _write(socket, message)
 
     def _receive(self, socket: QLocalSocket) -> None:
         # Answer each line on its own, in order: a malformed line gets
