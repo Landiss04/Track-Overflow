@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QObject, QUrl
-from PySide6.QtGui import QFont, QGuiApplication
+from PySide6.QtGui import QFont, QGuiApplication, QWindow
 from PySide6.QtQml import QQmlApplicationEngine
 
 # The design tokens are shared by every module's UI, so they live in the
@@ -58,6 +58,9 @@ def run_window(
         return 1
 
     window = engine.rootObjects()[0]
+    if not isinstance(window, QWindow):
+        print("QML root object is not a window.", file=sys.stderr)
+        return 1
     aspect_lock = install_window_scaling(window)  # noqa: F841  keep alive
 
     exit_code = app.exec()
