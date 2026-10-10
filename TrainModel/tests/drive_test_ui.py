@@ -85,7 +85,7 @@ def main():
     ready = []
 
     def poll():
-        if not ready and harness.connected and link.outputs is not None:
+        if not ready and harness.connected and link.trains is not None:
             ready.append(True)
             reply({"ready": True})
         while not commands.empty():

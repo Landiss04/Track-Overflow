@@ -8,26 +8,33 @@ harness calls that same :meth:`TrainModelState.step` in place of this
 link, and the test UI and this file are removed with no change to the
 module.
 
+The server serves a :class:`TrainModelFleet`. The test UI drives every
+train in it: each ``step`` carries one set of inputs per train and steps
+them all, or none if any train would reject its inputs. The test UI can
+also add a train, which takes the next ID in the series ``T-1``,
+``T-2``, ..., and remove one, never the last (Kevin).
+
 One test UI at a time drives the Train Model: a second would step it
 too, so the server refuses it with ``{"op": "busy"}`` until the first
-leaves (Kevin). A test UI that takes over a train another one drove
-gets it reset, to match its own fresh stand-ins (Kevin).
+leaves (Kevin). A test UI that takes over trains another one drove gets
+them reset, to match its own fresh stand-ins (Kevin).
 
-Two test-only commands ride alongside ``step``; integration never uses
-them: clear the passenger brake latch (folded into a step so an invalid
-step leaves the latch alone), and reset the module. Failures are set
-only in the Train Model UI; the test UI sees their effect in the
-outputs.
+Test-only commands ride alongside ``step``; integration never uses
+them: clear a train's passenger brake latch (folded into a step so an
+invalid step leaves the latch alone), reset every train, and add or
+remove a train. Failures are set only in the Train Model UI; the test
+UI sees their effect in the outputs.
 
 Wire format: newline-delimited JSON over a local socket (a named pipe on
 Windows, a socket file elsewhere). Every request carries an ``id`` and
-gets one reply with that ``id``: ``{"op": "outputs", "outputs":
-...}`` or ``{"op": "error", ...}``. The server also pushes ``{"op":
-"outputs"}`` with no ``id`` on connect and whenever a Train Model UI
-action, a passenger pull or a failure, changes the outputs between
-steps. Each line is handled on its own: one that is not a JSON object,
-or a request with no integer ``id``, gets an error reply and is not
-acted on, and the lines after it are still served.
+gets one reply with that ``id``: ``{"op": "outputs", "trains": {id:
+outputs, ...}}``, every train's outputs in roster order, or ``{"op":
+"error", ...}``. The server also pushes ``{"op": "outputs"}`` with no
+``id`` on connect, whenever a Train Model UI action, a passenger pull
+or a failure, changes the outputs between steps, and whenever the
+roster changes. Each line is handled on its own: one that is not a JSON
+object, or a request with no integer ``id``, gets an error reply and is
+not acted on, and the lines after it are still served.
 """
 
 from __future__ import annotations
@@ -35,7 +42,8 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
-from typing import Any, Mapping
+import re
+from typing import Any, Collection, Mapping
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
@@ -51,6 +59,7 @@ from train_model.interface import (
     TrainModelInputs,
     TrainModelOutputs,
 )
+from train_model.fleet import TrainModelFleet, TrainModelFleetError
 from train_model.model import InvalidInputError, InvalidTimeStepError
 from train_model.state import TrainModelState
 
@@ -63,6 +72,12 @@ _REPLY_TIMEOUT_MS = 2000
 
 #: Why the server refused a second test UI.
 BUSY_MESSAGE = "Another test UI is connected to this Train Model"
+
+#: The train a lone Train Model starts with, and the first in the series
+#: of test train IDs.
+FIRST_TRAIN_ID = "T-1"
+
+_TRAIN_ID = re.compile(r"T-([1-9][0-9]*)")
 
 
 class LinkError(Exception):
@@ -149,6 +164,66 @@ def _lines(socket: QLocalSocket) -> list[bytes]:
 
 
 # ---------------------------------------------------------------------- #
+# The roster
+# ---------------------------------------------------------------------- #
+
+def next_train_id(ids: Collection[str]) -> str:
+    """The ID a new test train takes: one past the highest ``T-n``."""
+    numbers = [int(m.group(1)) for m in map(_TRAIN_ID.fullmatch, ids) if m]
+    return f"T-{max(numbers, default=0) + 1}"
+
+
+def as_fleet(target: TrainModelFleet | TrainModelState) -> TrainModelFleet:
+    """The fleet to serve: ``target``, or a fleet of that one train."""
+    if isinstance(target, TrainModelFleet):
+        return target
+    fleet = TrainModelFleet()
+    fleet.add(target.train_id or FIRST_TRAIN_ID, state=target)
+    return fleet
+
+
+def _add_train(fleet: TrainModelFleet) -> str:
+    train_id = next_train_id(fleet.ids())
+    fleet.add(train_id)
+    return train_id
+
+
+def _remove_train(fleet: TrainModelFleet, train_id: str) -> None:
+    fleet.get(train_id)
+    if len(fleet) == 1:
+        # The test UI always has a train to show and drive.
+        raise LinkError("the last train cannot be removed")
+    fleet.remove(train_id)
+
+
+class _FleetWatcher(QObject):
+    """Calls back whenever any train's outputs or the roster change."""
+
+    changed = Signal()
+
+    def __init__(self, fleet: TrainModelFleet, parent: QObject) -> None:
+        super().__init__(parent)
+        self._fleet = fleet
+        self._watched: list[TrainModelState] = []
+        fleet.rosterChanged.connect(self._on_roster_changed)
+        self._watch()
+
+    def _watch(self) -> None:
+        trains = list(self._fleet)
+        for state in trains:
+            if state not in self._watched:
+                state.snapshotChanged.connect(self.changed)
+                state.failuresChanged.connect(self.changed)
+        # A removed train's connections go with it.
+        self._watched = trains
+
+    @Slot()
+    def _on_roster_changed(self) -> None:
+        self._watch()
+        self.changed.emit()
+
+
+# ---------------------------------------------------------------------- #
 # Test UI side
 # ---------------------------------------------------------------------- #
 
@@ -159,12 +234,13 @@ class LocalLink(QObject):
     connectedChanged = Signal()
 
     def __init__(
-        self, state: TrainModelState, parent: QObject | None = None
+        self,
+        target: TrainModelFleet | TrainModelState,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self._state = state
-        state.snapshotChanged.connect(self.outputsChanged)
-        state.failuresChanged.connect(self.outputsChanged)
+        self._fleet = as_fleet(target)
+        _FleetWatcher(self._fleet, self).changed.connect(self.outputsChanged)
 
     @property
     def connected(self) -> bool:
@@ -172,22 +248,34 @@ class LocalLink(QObject):
         return True
 
     @property
-    def outputs(self) -> TrainModelOutputs | None:
-        """The module's current outputs."""
-        return self._state.outputs()
+    def trains(self) -> dict[str, TrainModelOutputs] | None:
+        """Every train's current outputs, in roster order."""
+        return {
+            train_id: self._fleet.get(train_id).outputs()
+            for train_id in self._fleet.ids()
+        }
 
     def step(
-        self, dt: float, inputs: TrainModelInputs, *,
-        clear_passenger_brake: bool = False,
-    ) -> TrainModelOutputs:
-        """Advance the module one tick."""
-        return self._state.step(
-            dt, inputs, override_passenger_brake=clear_passenger_brake
+        self, dt: float, inputs: Mapping[str, TrainModelInputs], *,
+        clear_passenger_brake: Collection[str] = (),
+    ) -> dict[str, TrainModelOutputs]:
+        """Advance every train one tick."""
+        return self._fleet.step_all(
+            dt, inputs, override_passenger_brake=clear_passenger_brake,
         )
 
+    def add_train(self) -> str:
+        """Test only: put a new train in service; return its ID."""
+        return _add_train(self._fleet)
+
+    def remove_train(self, train_id: str) -> None:
+        """Test only: take a train out of service; never the last."""
+        _remove_train(self._fleet, train_id)
+
     def reset(self) -> None:
-        """Test only: replace the module with a fresh one."""
-        self._state.reset()
+        """Test only: replace every train with a fresh one."""
+        for state in self._fleet:
+            state.reset()
 
 
 class SocketLink(QObject):
@@ -206,7 +294,7 @@ class SocketLink(QObject):
     ) -> None:
         super().__init__(parent)
         self._name = name
-        self._outputs: TrainModelOutputs | None = None
+        self._trains: dict[str, TrainModelOutputs] | None = None
         self._refusal = ""
         self._replies: dict[int, dict[str, Any]] = {}
         self._next_id = 0
@@ -227,7 +315,7 @@ class SocketLink(QObject):
         A connection counts once the Train Model has sent its outputs,
         so one it refuses never shows as connected.
         """
-        return self._outputs is not None and (
+        return self._trains is not None and (
             self._socket.state()
             == QLocalSocket.LocalSocketState.ConnectedState
         )
@@ -238,26 +326,38 @@ class SocketLink(QObject):
         return self._refusal
 
     @property
-    def outputs(self) -> TrainModelOutputs | None:
-        """The last outputs received; None while disconnected."""
-        return self._outputs
+    def trains(self) -> dict[str, TrainModelOutputs] | None:
+        """Every train's last outputs, in roster order; None while
+        disconnected."""
+        return self._trains
 
     def step(
-        self, dt: float, inputs: TrainModelInputs, *,
-        clear_passenger_brake: bool = False,
-    ) -> TrainModelOutputs:
-        """Advance the module one tick and return its outputs."""
+        self, dt: float, inputs: Mapping[str, TrainModelInputs], *,
+        clear_passenger_brake: Collection[str] = (),
+    ) -> dict[str, TrainModelOutputs]:
+        """Advance every train one tick and return their outputs."""
         self._call({
             "op": "step",
             "dt": dt,
-            "inputs": inputs_to_wire(inputs),
-            "clear_passenger_brake": clear_passenger_brake,
+            "inputs": {
+                train_id: inputs_to_wire(train_inputs)
+                for train_id, train_inputs in inputs.items()
+            },
+            "clear_passenger_brake": sorted(clear_passenger_brake),
         })
-        assert self._outputs is not None
-        return self._outputs
+        assert self._trains is not None
+        return self._trains
+
+    def add_train(self) -> str:
+        """Test only: put a new train in service; return its ID."""
+        return str(self._call({"op": "add"})["train"])
+
+    def remove_train(self, train_id: str) -> None:
+        """Test only: take a train out of service; never the last."""
+        self._call({"op": "remove", "train": train_id})
 
     def reset(self) -> None:
-        """Test only: replace the module with a fresh one."""
+        """Test only: replace every train with a fresh one."""
         self._call({"op": "reset"})
 
     def _connect(self) -> None:
@@ -267,13 +367,13 @@ class SocketLink(QObject):
 
     def _on_disconnected(self) -> None:
         # A refused or dropped-before-served link was never connected.
-        if self._outputs is None:
+        if self._trains is None:
             return
-        self._outputs = None
+        self._trains = None
         self.connectedChanged.emit()
         self.outputsChanged.emit()
 
-    def _call(self, request: dict[str, Any]) -> None:
+    def _call(self, request: dict[str, Any]) -> dict[str, Any]:
         if not self.connected:
             raise LinkError(self._refusal or "Train Model is not running")
         self._next_id += 1
@@ -290,6 +390,7 @@ class SocketLink(QObject):
         reply = self._replies.pop(request_id)
         if reply["op"] == "error":
             raise _error_from_wire(reply)
+        return reply
 
     def _drain(self) -> None:
         for line in _lines(self._socket):
@@ -302,8 +403,11 @@ class SocketLink(QObject):
                 self._refusal = message["message"]
                 self.connectedChanged.emit()
             if message.get("op") == "outputs":
-                served = self._outputs is None
-                self._outputs = outputs_from_wire(message["outputs"])
+                served = self._trains is None
+                self._trains = {
+                    train_id: outputs_from_wire(outputs)
+                    for train_id, outputs in message["trains"].items()
+                }
                 if served:
                     self._refusal = ""
                     self.connectedChanged.emit()
@@ -326,28 +430,27 @@ def _error_from_wire(reply: Mapping[str, Any]) -> Exception:
 # ---------------------------------------------------------------------- #
 
 class TestLinkServer(QObject):
-    """Serves the Train Model to test UIs over a local socket."""
+    """Serves the Train Model's trains to test UIs over a local socket."""
 
     __test__ = False  # not a pytest test class
 
     def __init__(
         self,
-        state: TrainModelState,
+        target: TrainModelFleet | TrainModelState,
         name: str = SERVER_NAME,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self._state = state
+        self._fleet = as_fleet(target)
         self._name = name
         self._clients: list[QLocalSocket] = []
         self._requester: QLocalSocket | None = None
-        # Whether a test UI has stepped the train since it was last
-        # reset; the next test UI to take over then starts it fresh.
-        self._driven = False
+        # The trains a test UI has stepped since they were last reset;
+        # the next test UI to take over then starts them fresh.
+        self._driven: set[str] = set()
         self._server = QLocalServer(self)
         self._server.newConnection.connect(self._accept)
-        state.snapshotChanged.connect(self._push)
-        state.failuresChanged.connect(self._push)
+        _FleetWatcher(self._fleet, self).changed.connect(self._push)
 
     def listen(self) -> bool:
         """Listen, unless another Train Model already serves the name."""
@@ -363,7 +466,10 @@ class TestLinkServer(QObject):
     def _outputs_message(self) -> dict[str, Any]:
         return {
             "op": "outputs",
-            "outputs": outputs_to_wire(self._state.outputs()),
+            "trains": {
+                train_id: outputs_to_wire(self._fleet.get(train_id).outputs())
+                for train_id in self._fleet.ids()
+            },
         }
 
     def _accept(self) -> None:
@@ -376,12 +482,11 @@ class TestLinkServer(QObject):
                 socket.disconnectFromServer()
                 socket.disconnected.connect(socket.deleteLater)
                 continue
-            if self._driven:
-                # A new test UI takes over a train another one drove.
-                # Its stand-ins start fresh, so the train does too
-                # (Kevin).
-                self._state.reset()
-                self._driven = False
+            # A new test UI takes over trains another one drove. Its
+            # stand-ins start fresh, so the trains do too (Kevin).
+            for train_id in self._driven & set(self._fleet.ids()):
+                self._fleet.get(train_id).reset()
+            self._driven.clear()
             self._clients.append(socket)
             # Bound slots, not lambdas: Qt drops these connections when
             # the server is destroyed, before its sockets die with it.
@@ -402,6 +507,7 @@ class TestLinkServer(QObject):
         if isinstance(socket, QLocalSocket):
             self._receive(socket)
 
+    @Slot()
     def _push(self) -> None:
         # The requester gets these outputs in its reply instead. Every
         # train changes during a step, so build the message only when
@@ -437,29 +543,45 @@ class TestLinkServer(QObject):
 
     def _handle(self, request: Mapping[str, Any]) -> dict[str, Any]:
         op = request.get("op")
+        extra: dict[str, Any] = {}
         try:
             if op == "step":
-                # A truthy string must not clear the passenger latch.
-                if not isinstance(request["clear_passenger_brake"], bool):
+                inputs = request["inputs"]
+                if not isinstance(inputs, dict):
+                    raise LinkError("inputs must map train IDs to inputs")
+                # A truthy string must not clear a passenger latch.
+                clear = request["clear_passenger_brake"]
+                if not (isinstance(clear, list)
+                        and all(isinstance(i, str) for i in clear)):
                     raise LinkError(
-                        "clear_passenger_brake must be true or false")
-                self._state.step(
+                        "clear_passenger_brake must list train IDs")
+                self._fleet.step_all(
                     request["dt"],
-                    inputs_from_wire(request["inputs"]),
-                    override_passenger_brake=request[
-                        "clear_passenger_brake"
-                    ],
+                    {train_id: inputs_from_wire(train_inputs)
+                     for train_id, train_inputs in inputs.items()},
+                    override_passenger_brake=set(clear),
                 )
-                self._driven = True
+                self._driven |= set(inputs)
+            elif op == "add":
+                extra["train"] = _add_train(self._fleet)
+            elif op == "remove":
+                train_id = request["train"]
+                if not isinstance(train_id, str):
+                    raise LinkError("train must be a train ID")
+                _remove_train(self._fleet, train_id)
+                self._driven.discard(train_id)
             elif op == "reset":
-                self._state.reset()
-                self._driven = False
+                for state in self._fleet:
+                    state.reset()
+                self._driven.clear()
             else:
                 raise LinkError(f"unknown request: {op!r}")
         except InvalidTimeStepError as exc:
             return {"op": "error", "kind": "time_step", "message": str(exc)}
+        except TrainModelFleetError as exc:
+            return {"op": "error", "kind": "request", "message": str(exc)}
         except (InvalidInputError, ValueError) as exc:
             return {"op": "error", "kind": "input", "message": str(exc)}
-        except (KeyError, TypeError, LinkError) as exc:
+        except (KeyError, TypeError, AttributeError, LinkError) as exc:
             return {"op": "error", "kind": "request", "message": str(exc)}
-        return self._outputs_message()
+        return self._outputs_message() | extra

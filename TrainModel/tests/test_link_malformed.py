@@ -58,8 +58,8 @@ def send(socket, payload: bytes, want=1):
 
 
 GOOD_STEP = json.dumps({"op": "step", "dt": 0.1, "id": 50,
-                        "inputs": inputs_to_wire(make_inputs()),
-                        "clear_passenger_brake": False}).encode() + b"\n"
+                        "inputs": {"T-1": inputs_to_wire(make_inputs())},
+                        "clear_passenger_brake": []}).encode() + b"\n"
 
 
 @pytest.mark.parametrize(("payload", "has_id"), [
@@ -129,7 +129,7 @@ def test_a_string_for_an_on_off_input_is_refused(served):
     """A string "false" is truthy; it used to engage the brake."""
     state, socket, _ = served
     request = json.loads(GOOD_STEP)
-    request["inputs"]["controller"]["service_brake"] = "false"
+    request["inputs"]["T-1"]["controller"]["service_brake"] = "false"
     reply = send(socket, json.dumps(request).encode() + b"\n")
     assert reply[0]["op"] == "error" and reply[0]["kind"] == "input"
     assert "service_brake" in reply[0]["message"]
@@ -158,11 +158,36 @@ def test_a_string_for_the_latch_override_is_refused(served):
     assert state.snapshot["passenger_ebrake_pulled"]
 
 
+@pytest.mark.parametrize("clear", [["T-1", 1], [True], {"T-1": True}])
+def test_a_latch_override_that_is_not_a_list_of_ids_is_refused(
+        served, clear):
+    state, socket, _ = served
+    state.applyEmergencyBrake()
+    read(socket, timeout=0.2)  # the pull's own push
+    request = json.loads(GOOD_STEP)
+    request["clear_passenger_brake"] = clear
+    reply = send(socket, json.dumps(request).encode() + b"\n")
+    assert reply[0]["op"] == "error" and reply[0]["kind"] == "request"
+    assert state.snapshot["passenger_ebrake_pulled"]
+
+
+@pytest.mark.parametrize("inputs", [
+    [1], "T-1", {"T-1": [1]}, {"T-1": None}, {"T-9": {}},
+])
+def test_inputs_not_keyed_by_a_known_train_are_refused(served, inputs):
+    _, socket, escaped = served
+    request = json.loads(GOOD_STEP)
+    request["inputs"] = inputs
+    reply = send(socket, json.dumps(request).encode() + b"\n")
+    assert reply[0]["op"] == "error" and reply[0]["kind"] == "request"
+    assert not escaped, escaped
+
+
 def test_an_integer_too_large_for_a_float_gets_a_reply(served):
     """It used to raise OverflowError, leaving the request unanswered."""
     _, socket, escaped = served
     request = json.loads(GOOD_STEP)
-    request["inputs"]["controller"]["power_cmd_w"] = 10**400
+    request["inputs"]["T-1"]["controller"]["power_cmd_w"] = 10**400
     reply = send(socket, json.dumps(request).encode() + b"\n")
     assert reply and reply[0]["op"] == "error"
     assert reply[0]["kind"] == "input"

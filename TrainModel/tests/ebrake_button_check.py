@@ -37,7 +37,7 @@ def main():
     name = f"ebrake-check-{uuid.uuid4().hex}"
     fleet = TrainModelFleet()
     state = fleet.add("T-1", "Blue")
-    server = TestLinkServer(state, name)
+    server = TestLinkServer(fleet, name)
     assert server.listen()
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("theme", build_theme())

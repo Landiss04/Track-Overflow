@@ -12,7 +12,7 @@ Train IDs are opaque strings (``conventions/identifiers.md``).
 from __future__ import annotations
 
 import zlib
-from typing import Any, Iterator, Mapping
+from typing import Any, Collection, Iterator, Mapping
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
@@ -61,19 +61,24 @@ class TrainModelFleet(QObject):
         train_id: str,
         line: str = "",
         config: TrainConfig | None = None,
+        *,
+        state: TrainModelState | None = None,
     ) -> TrainModelState:
         """Put a new train in service and return its Train Model.
 
         Without ``config`` the seed is derived from the train ID, so
         each train draws its own disembark counts and a run repeats.
+        ``state`` puts an existing Train Model in service instead of a
+        new one; ``line`` and ``config`` are then not used.
         """
         if train_id in self._trains:
             raise DuplicateTrainError(f"train {train_id!r} already exists")
-        if config is None:
-            config = TrainConfig(seed=zlib.crc32(train_id.encode()))
-        state = TrainModelState(
-            config, parent=self, train_id=train_id, line=line,
-        )
+        if state is None:
+            if config is None:
+                config = TrainConfig(seed=zlib.crc32(train_id.encode()))
+            state = TrainModelState(
+                config, parent=self, train_id=train_id, line=line,
+            )
         self._trains[train_id] = state
         if not self._selected:
             self._selected = train_id
@@ -118,23 +123,33 @@ class TrainModelFleet(QObject):
 
     def step_all(
         self, dt: float, inputs_by_id: Mapping[str, TrainModelInputs],
+        *, override_passenger_brake: Collection[str] = (),
     ) -> dict[str, TrainModelOutputs]:
         """Step every train one tick, or none of them.
 
         Every train's inputs are validated before any train steps, so
         input one train would reject leaves the whole fleet unchanged.
-        ``inputs_by_id`` must hold exactly one entry per train.
+        ``inputs_by_id`` must hold exactly one entry per train. Test
+        only: the trains named in ``override_passenger_brake`` have
+        their passenger brake latch cleared by the step.
         """
         unknown = sorted(set(inputs_by_id) - set(self._trains))
         if unknown:
             raise UnknownTrainError(f"inputs for unknown trains: {unknown}")
+        unknown = sorted(set(override_passenger_brake) - set(self._trains))
+        if unknown:
+            raise UnknownTrainError(f"override for unknown trains: {unknown}")
         missing = [i for i in self._trains if i not in inputs_by_id]
         if missing:
             raise TrainModelFleetError(f"no inputs for trains: {missing}")
         for train_id, state in self._trains.items():
             state.validate_inputs(dt, inputs_by_id[train_id])
         return {
-            train_id: state.step(dt, inputs_by_id[train_id])
+            train_id: state.step(
+                dt, inputs_by_id[train_id],
+                override_passenger_brake=(
+                    train_id in override_passenger_brake),
+            )
             for train_id, state in self._trains.items()
         }
 

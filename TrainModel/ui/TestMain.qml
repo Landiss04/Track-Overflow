@@ -25,6 +25,39 @@ ScaledWindow {
                 : harness.running ? qsTr("Running") : qsTr("Paused")
             clock: harness.elapsed
             faulted: !harness.connected || harness.emergencyBrakeActive
+
+            // Which train the page shows and edits, right after the
+            // badges, as in the Train Model window. Every train is
+            // stepped each tick, whichever is shown.
+            statusExtras: [
+                SelectField {
+                    objectName: "trainSelector"
+                    Layout.preferredWidth: 140
+                    Layout.fillWidth: false
+                    label: qsTr("Train")
+                    labelVisible: false
+                    model: harness.trainIds
+                    currentIndex: harness.selectedIndex
+                    onCommitted: function (value) {
+                        harness.selectTrain(value);
+                    }
+                },
+                AppButton {
+                    objectName: "addTrain"
+                    size: "small"
+                    text: qsTr("Add train")
+                    enabled: harness.connected
+                    onClicked: harness.addTrain()
+                },
+                AppButton {
+                    objectName: "removeTrain"
+                    size: "small"
+                    variant: "ghost"
+                    text: qsTr("Remove train")
+                    enabled: harness.connected && harness.canRemoveTrain
+                    onClicked: harness.removeTrain()
+                }
+            ]
         }
 
         TestView {
