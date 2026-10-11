@@ -104,19 +104,20 @@ These stay and need no change, because they use only the module:
 
 ### 2.3 Unhook the link from `main.py`
 
-`main.py` starts a `TestLinkServer`. Remove the import and the three lines
-that create and start it, so it only builds the window:
+`main.py` starts a `TestLinkServer` for its one test train. Remove the
+import and the lines that create and start it, so it only builds the
+window around a fleet:
 
 ```python
 from train_model.app import run_window
-from train_model.state import TrainModelState
+from train_model.fleet import TrainModelFleet
 
 
 def main() -> int:
     """Run the Train Model window on its own."""
     return run_window(
         "Train Model", "Main.qml",
-        lambda: {"trainModel": TrainModelState()},
+        lambda: {"fleet": TrainModelFleet()},
     )
 ```
 
@@ -158,24 +159,39 @@ test UI rows of the layout table, and the "Passenger brake override" section.
 
 ## 3. What the system must do for each Train Model
 
-For every train, the central harness (D005):
+Every train runs in the system process, as one `TrainModelState` in one
+`TrainModelFleet` (`train_model/fleet.py`). There is no process per train
+and no IPC. The central harness (D005) holds the fleet and:
 
-1. **Creates** one `TrainModelState(TrainConfig(seed=...))` when the train is
-   dispatched, and drops it when the train leaves service. Use a distinct
-   seed per train if their disembark counts should differ.
-2. **Steps** it once per shared-clock tick with `dt = clock.tick_s`. Never
-   vary dt; speed and pause change only how often ticks come (D006).
-3. **Builds inputs** each tick, from the latest Train Controller commands and
-   Track Model data, through the edge mappings (section 4).
-4. **Routes outputs** each tick: `outputs.controller` to that train's Train
-   Controller, `outputs.track` to the Track Model.
-5. **Handles rejection.** `step` raises `InvalidTimeStepError` or
-   `InvalidInputError` without changing the train. Decide what that means
-   system-wide; the test UI's choice is to check the step first with
-   `TrainModel.validate_inputs` and hold the clock rather than advance it with
-   a train left behind.
-6. **Runs on the Qt thread.** `TrainModelState` is a `QObject` whose signals
-   drive the window; call it from the thread that owns it.
+1. **Adds** a train with `fleet.add(train_id, line)` when it is dispatched,
+   and calls `fleet.remove(train_id)` when it leaves service. Train IDs are
+   opaque strings. Each train gets its own seed, derived from its ID, so
+   trains draw different disembark counts and a run repeats; pass a
+   `TrainConfig` to choose the seed instead. Adding an ID twice raises
+   `DuplicateTrainError`, and an unknown ID raises `UnknownTrainError`.
+2. **Steps** the fleet once per shared-clock tick with
+   `fleet.step_all(clock.tick_s, inputs_by_id)`. Never vary dt; speed and
+   pause change only how often ticks come (D006).
+3. **Builds inputs** each tick, one `TrainModelInputs` per train, keyed by
+   train ID, from the latest Train Controller commands and Track Model data,
+   through the edge mappings (section 4). `step_all` needs exactly one entry
+   per train in the fleet.
+4. **Routes outputs** each tick: `step_all` returns each train's outputs by
+   ID. Send `outputs.controller` to that train's Train Controller and
+   `outputs.track` to the Track Model.
+5. **Handles rejection.** `step_all` validates every train's inputs before
+   any train steps, so `InvalidTimeStepError` or `InvalidInputError` leaves
+   the whole fleet unchanged, the test UI's "hold the clock" choice applied
+   to every train. Decide what that means system-wide. A harness that wants a
+   different policy can step trains one at a time with
+   `fleet.get(train_id).step(...)`, checking first with
+   `validate_inputs`.
+6. **Runs on the Qt thread.** The fleet and every `TrainModelState` are
+   `QObject`s whose signals drive the window; call them from the thread
+   that owns them.
+
+A 20-train `step_all` takes about 1.5 ms on a development laptop, well
+inside the 10 ms between ticks at 10x (`tests/test_fleet.py`).
 
 The Train Model never reads another module, never reads the clock, and never
 calls the harness. Everything arrives through `step`.
@@ -232,32 +248,41 @@ not implement or import it; if the harness wants that shape, it wraps
 Illustrative only; names on the harness side are placeholders.
 
 ```python
-from train_model.interface import TrainConfig, TrainModelInputs
+from train_model.fleet import TrainModelFleet
+from train_model.interface import TrainModelInputs
 from train_model.model import TrainModelError
-from train_model.state import TrainModelState
 
 
 class TrainModelEdge:
-    """Harness-side owner of one train's Train Model."""
+    """Harness-side owner of every train's Train Model."""
 
-    def __init__(self, train_id: str, seed: int) -> None:
-        self.train_id = train_id
-        self.module = TrainModelState(TrainConfig(seed=seed))
+    def __init__(self) -> None:
+        self.fleet = TrainModelFleet()
+
+    def on_dispatch(self, train_id: str, line: str) -> None:
+        self.fleet.add(train_id, line)
+
+    def on_retire(self, train_id: str) -> None:
+        self.fleet.remove(train_id)
 
     def on_tick(self, _sim_time_s: float, tick_s: float) -> None:
-        inputs = TrainModelInputs(
-            controller=map_controller_to_train_model(
-                controller_outputs(self.train_id)),
-            track=map_track_to_train_model(track_outputs(self.train_id)),
-        )
+        inputs = {
+            train_id: TrainModelInputs(
+                controller=map_controller_to_train_model(
+                    controller_outputs(train_id)),
+                track=map_track_to_train_model(track_outputs(train_id)),
+            )
+            for train_id in self.fleet.ids()
+        }
         try:
-            outputs = self.module.step(tick_s, inputs)
+            outputs = self.fleet.step_all(tick_s, inputs)
         except TrainModelError as exc:
-            report_rejection(self.train_id, exc)   # system policy, step 5
+            report_rejection(exc)   # system policy, step 5
             return
-        deliver_to_controller(self.train_id,
-                              map_to_controller(outputs.controller))
-        deliver_to_track_model(self.train_id, map_to_track(outputs.track))
+        for train_id, out in outputs.items():
+            deliver_to_controller(train_id,
+                                  map_to_controller(out.controller))
+            deliver_to_track_model(train_id, map_to_track(out.track))
 
 
 # clock = SystemClock(); clock.add_tick_listener(edge.on_tick)
@@ -273,17 +298,22 @@ tick behind. Pick one order and keep it fixed.
 the event loop, so it suits a standalone process only. Inside the system's
 own application, load the window with the system's engine instead:
 
-1. Expose `theme` (from `ui/theme.py`, `build_theme()`) and `trainModel` (the
-   train's `TrainModelState`) as context properties.
+1. Expose `theme` (from `ui/theme.py`, `build_theme()`) and `fleet` (the
+   harness's `TrainModelFleet`) as context properties.
 2. Load `TrainModel/ui/Main.qml`.
 3. Optionally apply `ui.aspect_lock.install_window_scaling` to the window.
 
-`Main.qml` and `MainView.qml` read only `trainModel` and `theme`, and contain
-no reference to the test UI. The header shows *Running* while steps arrive
-and *Paused* when they stop, whoever sends them. Failure injection and the
-passenger emergency brake button call `TrainModelState` directly, so they
-keep working with no test UI. For several trains, give each window its own
-`TrainModelState`, or switch one window's `trainModel` between trains.
+`Main.qml` and `MainView.qml` read only `fleet` and `theme`, and contain no
+reference to the test UI. One window shows every train: a train selector
+right after the header's status badges lists the fleet, and the window
+binds to `fleet.current`, the selected train. The first train added is
+selected; when the selected train is removed, the next one in the roster
+takes over. With no trains, the selector reads "No trains" and the window
+shows an idle train that is never stepped. The header shows *Running* while
+steps arrive for the selected train and *Paused* when they stop, whoever
+sends them. Failure injection and the passenger emergency brake button call
+the selected `TrainModelState` directly, so they act on that train only and
+keep working with no test UI.
 
 ## 6. Checks after removal
 

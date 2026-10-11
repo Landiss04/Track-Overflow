@@ -8,6 +8,12 @@ link (``train_model/link.py``): it sends ``TrainModelInputs`` each tick
 and reads back only ``TrainModelOutputs``. Failures are set only in the
 Train Model window; the test UI sees their effect in the outputs.
 
+The harness drives every train in the Train Model: each tick steps all
+of them, each with its own rows and its own stand-ins. The page shows
+and edits the selected train. Trains are added and removed over the
+link; a new one takes the next ID in the series ``T-1``, ``T-2``, ...,
+and the last one cannot be removed.
+
 Rows are built from the interface dictionary (v0.2). Array-valued
 signals are presented as one row per element: ``Light Command``
 (``bool[2]``) becomes the interior and exterior rows, ``Door command``
@@ -15,7 +21,7 @@ signals are presented as one row per element: ``Light Command``
 flattened into its fields.
 
 Controls read back live state from the outputs, with staged edits marked
-pending. Sending applies those edits and advances one tick. Later ticks
+pending. Sending applies every train's edits and advances one tick. Later ticks
 reuse the last accepted inputs. A boarding count is consumed by the
 step that boards it, at rest with a door open; sent before then, it
 waits in its row. A later boarding event needs a new count.
@@ -68,7 +74,7 @@ from train_model.interface import (
     TrainModelInputs,
     TrainModelOutputs,
 )
-from train_model.link import LinkError, LocalLink, SocketLink
+from train_model.link import FIRST_TRAIN_ID, LinkError, LocalLink, SocketLink
 from train_model.model import MAX_COUNT, InvalidTimeStepError, TrainModel
 from train_model.speed_limiter import SpeedLimiter
 from train_model.track_stub import TrackStub, load_blue_line
@@ -241,6 +247,59 @@ def _live_values(outputs: TrainModelOutputs) -> dict[str, Any]:
 _PRE_START_LIVE = ("emergency_brake_command",)
 
 
+class _Train:
+    """One train's stand-in producers and the test UI's rows for it."""
+
+    def __init__(self, track: TrackStub | None) -> None:
+        self.track = track
+        # The stand-in Train Controller's speed limiter.
+        self.limiter = SpeedLimiter()
+        self.limiting = False
+        # The station dwell still to run, and whether this stop has had
+        # one; the next stop begins once the train moves.
+        self.dwell_left_s = 0.0
+        self.dwell_served = False
+        # Accepted steps since the train was added or last reset.
+        self.steps = 0
+        # The commands the module last accepted from these producers.
+        self.accepted: dict[str, Any] = self.initial_commands()
+        self.pending: dict[str, Any] = {}
+        # The rows' live values, as of the last sync.
+        self.live: dict[str, Any] = dict(self.accepted)
+        self.emergency_override_pending = False
+
+    def initial_commands(self) -> dict[str, Any]:
+        # The loaded track supplies the track rows for its first block
+        # and the track signal the route starts with.
+        values = dict(_INITIAL_COMMANDS)
+        if self.track is not None:
+            values |= self.track.inputs() | self.track.start_signal()
+        return values
+
+    def restart(self) -> None:
+        """Every stand-in back to its start, for a fresh train."""
+        if self.track is not None:
+            self.track.reset()
+        self.limiter.reset()
+        self.limiting = False
+        self.dwell_left_s = 0.0
+        self.dwell_served = False
+        self.accepted = self.initial_commands()
+        self.emergency_override_pending = False
+        self.steps = 0
+
+    def carries_drafts(self, send: bool) -> bool:
+        # A send, and the train's first tick while edits are pending,
+        # submit the drafts. Later ticks reuse only the accepted inputs.
+        return send or (self.steps == 0 and bool(self.pending))
+
+    def next_values(self, send: bool) -> dict[str, Any]:
+        # The inputs the next tick will submit.
+        if self.carries_drafts(send):
+            return self.accepted | self.pending
+        return self.accepted
+
+
 class TestHarnessState(QObject):
     """Stand-in producers and clock for the Train Model (page 3b)."""
 
@@ -250,6 +309,7 @@ class TestHarnessState(QObject):
     inputErrorChanged = Signal()
     connectedChanged = Signal()
     driftChanged = Signal()
+    rosterChanged = Signal()
 
     def __init__(
         self,
@@ -258,13 +318,13 @@ class TestHarnessState(QObject):
         *,
         track: TrackStub | None | Literal["blue_line"] = "blue_line",
     ) -> None:
-        """Stand in for the producers and the clock of one Train Model.
+        """Stand in for the producers and the clock of every train.
 
         Args:
             link: The link to the Train Model.
             parent: The Qt parent.
-            track: The track to follow: the Blue Line by default, or
-                None to enter every track row by hand.
+            track: The track each train follows: the Blue Line by
+                default, or None to enter every track row by hand.
         """
         super().__init__(parent)
         self._link = link
@@ -273,21 +333,18 @@ class TestHarnessState(QObject):
         self._track = load_blue_line() if track == "blue_line" else track
         # The stand-in Train Controller's speed cap: the vehicle's
         # maximum speed, or the speed limit where that is lower.
-        self._limiter = SpeedLimiter()
         self._v_max_mps = TrainConfig().v_max_mps
-        self._limiting = False
-        # The station dwell still to run, and whether this stop has had
-        # one; the next stop begins once the train moves.
-        self._dwell_left_s = 0.0
-        self._dwell_served = False
-        # Accepted steps since the last reset. Steps are checked before
-        # their tick, so a clock tick without one is drift.
+        # One set of stand-ins per train, in roster order. Until the
+        # Train Model is first reached, the train it starts with.
+        self._trains: dict[str, _Train] = {
+            FIRST_TRAIN_ID: _Train(self._track),
+        }
+        # The train whose rows the page shows and edits.
+        self._selected = FIRST_TRAIN_ID
+        # Accepted steps since the last reset; every step moves every
+        # train. Steps are checked before their tick, so a clock tick
+        # without one is drift.
         self._tick = 0
-        # The commands the module last accepted from these producers.
-        self._accepted: dict[str, Any] = self._initial_commands()
-        self._pending_inputs: dict[str, Any] = {}
-        self._live_inputs = self._live_input_values()
-        self._emergency_override_pending = False
         # Clock ticks the module did not take, as of the last check.
         self._drift_ticks = 0
         # Set while a send ticks the clock, so that tick carries the
@@ -300,9 +357,126 @@ class TestHarnessState(QObject):
         # The driver idles while the clock is held.
         self._driver = ClockDriver(self._clock, parent=self)
         self._driver.start()
-        link.outputsChanged.connect(self.outputsChanged)
-        link.outputsChanged.connect(self._sync_inputs)
+        self._sync_roster()
+        self._sync_inputs()
+        link.outputsChanged.connect(self._on_outputs_changed)
         link.connectedChanged.connect(self._on_connected_changed)
+
+    # ------------------------------------------------------------------ #
+    # The roster
+    # ------------------------------------------------------------------ #
+
+    @property
+    def _train(self) -> _Train:
+        # The selected train's stand-ins.
+        return self._trains[self._selected]
+
+    def _outputs(self, train_id: str) -> TrainModelOutputs | None:
+        # One train's last outputs; None while disconnected.
+        trains = self._link.trains
+        return trains.get(train_id) if trains is not None else None
+
+    def _new_track(self) -> TrackStub | None:
+        # Each train follows the line on its own.
+        if self._track is None:
+            return None
+        if all(train.track is not self._track
+               for train in self._trains.values()):
+            return self._track
+        return TrackStub(self._track.name, self._track.route)
+
+    def _sync_roster(self) -> None:
+        # Match the stand-ins to the Train Model's trains. While it is
+        # down the stand-ins are kept, drafts and all.
+        trains = self._link.trains
+        if not trains or list(trains) == list(self._trains):
+            return
+        ids = list(self._trains)
+        kept = {train_id: self._trains[train_id]
+                for train_id in trains if train_id in self._trains}
+        for train_id in trains:
+            if train_id not in kept:
+                kept[train_id] = _Train(self._new_track())
+        self._trains = {train_id: kept[train_id] for train_id in trains}
+        if self._selected not in self._trains:
+            # The next train in the roster, else the one before it.
+            index = ids.index(self._selected)
+            following = [i for i in ids[index + 1:] if i in self._trains]
+            before = [i for i in ids[:index] if i in self._trains]
+            self._selected = (
+                following[0] if following
+                else before[-1] if before
+                else next(iter(trains))
+            )
+            self._emit_train_changed()
+        self.rosterChanged.emit()
+
+    def _emit_train_changed(self) -> None:
+        # Everything the page shows is the selected train's.
+        self.inputsChanged.emit()
+        self.outputsChanged.emit()
+        self.runControlChanged.emit()
+
+    @Property("QVariantList", notify=rosterChanged)  # type: ignore[arg-type]
+    def trainIds(self) -> list[str]:
+        """Every train's ID, in roster order."""
+        return list(self._trains)
+
+    @Property(str, notify=rosterChanged)
+    def selectedTrain(self) -> str:
+        """The train whose rows the page shows and edits."""
+        return self._selected
+
+    @Property(int, notify=rosterChanged)
+    def selectedIndex(self) -> int:
+        """The selected train's place in the roster."""
+        return list(self._trains).index(self._selected)
+
+    @Property(bool, notify=rosterChanged)
+    def canRemoveTrain(self) -> bool:
+        """Whether a train can be removed: never the last one."""
+        return len(self._trains) > 1
+
+    @Slot(str)
+    def selectTrain(self, train_id: str) -> None:
+        """Show and edit one train's rows; an unknown ID is ignored."""
+        if train_id not in self._trains or train_id == self._selected:
+            return
+        self._selected = train_id
+        self.rosterChanged.emit()
+        self._emit_train_changed()
+
+    @Slot(result=bool)
+    def addTrain(self) -> bool:
+        """Put a new train in service and select it."""
+        try:
+            train_id = self._link.add_train()
+        except LinkError as exc:
+            self._set_input_error(str(exc), link=not self._link.connected)
+            return False
+        self._sync_roster()
+        self.selectTrain(train_id)
+        return True
+
+    @Slot(result=bool)
+    def removeTrain(self) -> bool:
+        """Take the selected train out of service; never the last."""
+        try:
+            self._link.remove_train(self._selected)
+        except LinkError as exc:
+            self._set_input_error(str(exc), link=not self._link.connected)
+            return False
+        self._sync_roster()
+        return True
+
+    # ------------------------------------------------------------------ #
+    # The link
+    # ------------------------------------------------------------------ #
+
+    def _on_outputs_changed(self) -> None:
+        self._sync_roster()
+        self.outputsChanged.emit()
+        self._sync_inputs()
 
     def _on_connected_changed(self) -> None:
         if not self._link.connected:
@@ -314,8 +488,9 @@ class TestHarnessState(QObject):
         else:
             if self._link_error:
                 self._set_input_error("")
+            self._sync_roster()
             if self._tick:
-                # A test UI that reconnects drives a fresh train: a
+                # A test UI that reconnects drives fresh trains: a
                 # restarted Train Model, or one reset as this test UI
                 # took it over again. Its stand-ins start fresh too, so
                 # their clock, track and dwell match it. Drafts are kept.
@@ -329,14 +504,15 @@ class TestHarnessState(QObject):
         # Why a step cannot reach the module.
         return getattr(self._link, "refusal", "") or _NOT_CONNECTED
 
-    def _live_input_values(self) -> dict[str, Any]:
+    def _live_input_values(self, train_id: str) -> dict[str, Any]:
         # Live controls reflect actual state, not hidden stored commands.
-        values = dict(self._accepted)
-        outputs = self._link.outputs
+        train = self._trains[train_id]
+        values = dict(train.accepted)
+        outputs = self._outputs(train_id)
         if outputs is None:
             return values
         live = _live_values(outputs)
-        if self._tick == 0:
+        if train.steps == 0:
             # Before the first step the module has been told nothing, so
             # the rows show the starting values the first tick sends.
             # Only a passenger can change it before then.
@@ -344,9 +520,13 @@ class TestHarnessState(QObject):
         return values | live
 
     def _sync_inputs(self) -> None:
-        live = self._live_input_values()
-        if live != self._live_inputs:
-            self._live_inputs = live
+        changed = False
+        for train_id, train in self._trains.items():
+            live = self._live_input_values(train_id)
+            if live != train.live:
+                train.live = live
+                changed = changed or train_id == self._selected
+        if changed:
             self.inputsChanged.emit()
 
     @Property(bool, notify=connectedChanged)
@@ -360,6 +540,10 @@ class TestHarnessState(QObject):
         return _REFUSED if getattr(self._link, "refusal", "") else (
             "Not connected")
 
+    # ------------------------------------------------------------------ #
+    # The selected train's rows
+    # ------------------------------------------------------------------ #
+
     @Property("QVariantList", constant=True)  # type: ignore[arg-type]
     def inputDefinitions(self) -> list[dict[str, Any]]:
         """Stable row identities: ticks must not recreate focused editors."""
@@ -371,7 +555,7 @@ class TestHarnessState(QObject):
     @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
     def inputValues(self) -> dict[str, Any]:
         """Backend values for Python callers; QML uses displayInputValues."""
-        return self._live_inputs | self._pending_inputs
+        return self._train.live | self._train.pending
 
     @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
     def displayInputValues(self) -> dict[str, Any]:
@@ -379,7 +563,7 @@ class TestHarnessState(QObject):
         return self._display_values()
 
     def _display_values(self) -> dict[str, Any]:
-        values = self._live_inputs | self._pending_inputs
+        values = self._train.live | self._train.pending
         return {
             row["name"]: self._format(
                 row["kind"], self._to_display(row["unit"], values[row["name"]]),
@@ -404,7 +588,7 @@ class TestHarnessState(QObject):
     @Property("QVariantMap", notify=inputsChanged)  # type: ignore[arg-type]
     def pendingInputs(self) -> dict[str, Any]:
         """Which displayed values have not yet been sent."""
-        return {name: True for name in self._pending_inputs}
+        return {name: True for name in self._train.pending}
 
     @Property("QVariantList", notify=inputsChanged)  # type: ignore[arg-type]
     def inputs(self) -> list[dict[str, Any]]:
@@ -431,7 +615,7 @@ class TestHarnessState(QObject):
         return self._output_rows()
 
     def _output_rows(self) -> list[dict[str, Any]]:
-        outputs = self._link.outputs
+        outputs = self._outputs(self._selected)
         values = _output_values(outputs) if outputs is not None else {}
         return [
             {
@@ -448,9 +632,13 @@ class TestHarnessState(QObject):
 
     @Property(bool, notify=outputsChanged)
     def emergencyBrakeActive(self) -> bool:
-        """Whether the module reports its emergency brake engaged."""
-        outputs = self._link.outputs
+        """Whether the selected train reports its emergency brake engaged."""
+        outputs = self._outputs(self._selected)
         return bool(outputs and outputs.controller.emergency_brake_active)
+
+    # ------------------------------------------------------------------ #
+    # Run control
+    # ------------------------------------------------------------------ #
 
     @Property(bool, notify=runControlChanged)
     def running(self) -> bool:
@@ -499,19 +687,20 @@ class TestHarnessState(QObject):
 
     @Property(float, notify=runControlChanged)
     def speedCap(self) -> float:
-        """The speed limiter's cap for the accepted inputs, in mph."""
-        cap_mps = self._speed_cap_mps(self._accepted["speed_limit"])
+        """The selected train's speed cap for its accepted inputs, in mph."""
+        cap_mps = self._speed_cap_mps(self._train.accepted["speed_limit"])
         return cast(float, self._to_display("mph", cap_mps))
 
     @Property(bool, notify=runControlChanged)
     def limiting(self) -> bool:
-        """Whether the last step's power or brake was limited."""
-        return self._limiting
+        """Whether the selected train's last power or brake was limited."""
+        return self._train.limiting
 
     @Property(float, notify=runControlChanged)
     def dwellLeft(self) -> float:
-        """Seconds of station dwell left; 0 when not dwelling."""
-        return self._dwell_left_s
+        """Seconds of the selected train's station dwell left; 0 when not
+        dwelling."""
+        return self._train.dwell_left_s
 
     @Slot(str, "QVariant")
     def setDisplayInput(self, name: str, value: Any) -> None:
@@ -525,7 +714,9 @@ class TestHarnessState(QObject):
         raise KeyError(f"unknown input: {name}")
 
     def setInput(self, name: str, value: Any) -> None:
-        """Stage a backend-unit value from Python (not a QML entry point)."""
+        """Stage a backend-unit value for the selected train from Python
+        (not a QML entry point)."""
+        train = self._train
         for row in INPUT_SPEC:
             if row["name"] != name:
                 continue
@@ -533,19 +724,22 @@ class TestHarnessState(QObject):
             if name == "emergency_brake_command":
                 # Clicking False must work even if the input is already
                 # False but the separate passenger latch is active.
-                self._emergency_override_pending = True
-            if (name in self._pending_inputs
-                    and self._pending_inputs[name] == coerced):
+                train.emergency_override_pending = True
+            if (name in train.pending
+                    and train.pending[name] == coerced):
                 return
-            self._pending_inputs[name] = coerced
+            train.pending[name] = coerced
             self.inputsChanged.emit()
             return
         raise KeyError(f"unknown input: {name}")
 
     @Slot(result=bool)
     def sendInputs(self) -> bool:
-        """Submit a valid tick, or retain state and drafts with an error."""
-        if not self._can_step(self._next_values(send=True)):
+        """Submit a valid tick, or retain state and drafts with an error.
+
+        The tick carries every train's staged edits.
+        """
+        if not self._can_step(send=True):
             return False
         # Tick the clock by hand; that tick carries the staged edits.
         self._send_requested = True
@@ -561,7 +755,7 @@ class TestHarnessState(QObject):
         """Run or hold the simulation clock."""
         if not running:
             self._clock.pause()
-        elif self._can_step(self._next_values(send=False)):
+        elif self._can_step(send=False):
             self._clock.resume()
 
     @Slot(int)
@@ -571,15 +765,16 @@ class TestHarnessState(QObject):
 
     @Slot()
     def advanceTick(self) -> None:
-        """Advance the Train Model one tick on the last sent inputs."""
-        if self._can_step(self._next_values(send=False)):
+        """Advance every train one tick on its last sent inputs."""
+        if self._can_step(send=False):
             self._clock.tick()
 
     @Slot()
     def resetModule(self) -> None:
-        """Restore a fresh module, the initial commands and zero counters."""
+        """Restore fresh trains, the initial commands and zero counters."""
         self._set_input_error("")
-        self._pending_inputs.clear()
+        for train in self._trains.values():
+            train.pending.clear()
         self._restart_stand_ins()
         try:
             self._link.reset()
@@ -590,65 +785,59 @@ class TestHarnessState(QObject):
         self.runControlChanged.emit()
 
     def _restart_stand_ins(self) -> None:
-        # The clock and every stand-in back to their start, for a fresh
-        # module. Resetting also holds the clock; the speed is kept.
+        # The clock and every stand-in back to their start, for fresh
+        # trains. Resetting also holds the clock; the speed is kept.
         self._clock.reset()
         if self._drift_ticks:
             self._drift_ticks = 0
             self.driftChanged.emit()
-        if self._track is not None:
-            self._track.reset()
-        self._limiter.reset()
-        self._limiting = False
-        self._dwell_left_s = 0.0
-        self._dwell_served = False
-        self._accepted = self._initial_commands()
-        self._emergency_override_pending = False
+        for train in self._trains.values():
+            train.restart()
         self._tick = 0
 
     def _on_clock_tick(self, _sim_time_s: float, tick_s: float) -> None:
         # Every module step happens on a clock tick.
-        send = self._carries_drafts(self._send_requested)
+        send = self._send_requested
         # Consume the request first: a rejection holds the clock, and
         # the driver may run ticks already due before it stops.
         self._send_requested = False
         if send:
-            self._send_accepted = self._send(tick_s)
-        elif self._submit(tick_s, self._accepted) and not self._pending_inputs:
+            self._send_accepted = self._submit(tick_s, send=True)
+        elif (self._submit(tick_s, send=False)
+              and not any(t.pending for t in self._trains.values())):
             # A pending draft keeps the error that explains why it was
             # not sent; otherwise a good tick clears a stale one.
             self._set_input_error("")
         if self._clock.tick_count % DRIFT_CHECK_TICKS == 0:
             self._check_drift()
 
-    def _carries_drafts(self, send: bool) -> bool:
-        # A send, and the first tick while edits are pending, submit the
-        # drafts. Later ticks reuse only the accepted inputs.
-        return send or (self._tick == 0 and bool(self._pending_inputs))
+    def _labelled(self, train_id: str, message: str) -> str:
+        # Name the train an error is about once there is more than one.
+        return f"{train_id}: {message}" if len(self._trains) > 1 else message
 
-    def _next_values(self, send: bool) -> dict[str, Any]:
-        # The inputs the next tick will submit.
-        if self._carries_drafts(send):
-            return self._accepted | self._pending_inputs
-        return self._accepted
-
-    def _can_step(self, values: dict[str, Any]) -> bool:
-        """Check a step on ``values`` before its tick; report a rejection.
+    def _can_step(self, send: bool) -> bool:
+        """Check the next step before its tick; report a rejection.
 
         Uses the module's own input rules, which need no module state;
-        nothing is sent. Input the module would reject, or a module
-        that cannot be reached, holds the clock instead of ticking it.
+        nothing is sent. Input any train would reject, or a module that
+        cannot be reached, holds the clock instead of ticking it.
         """
+        train_id = ""
         try:
             if not self._link.connected:
                 raise LinkError(self._not_connected())
-            TrainModel.validate_inputs(
-                self._clock.tick_s, self._build_inputs(values)
-            )
-        except (ValueError, InvalidTimeStepError, LinkError) as exc:
+            for train_id, train in self._trains.items():
+                TrainModel.validate_inputs(
+                    self._clock.tick_s,
+                    self._build_inputs(train.next_values(send)),
+                )
+        except LinkError as exc:
             self.setRunning(False)
-            self._set_input_error(
-                str(exc), link=isinstance(exc, LinkError))
+            self._set_input_error(str(exc), link=True)
+            return False
+        except (ValueError, InvalidTimeStepError) as exc:
+            self.setRunning(False)
+            self._set_input_error(self._labelled(train_id, str(exc)))
             return False
         return True
 
@@ -662,70 +851,85 @@ class TestHarnessState(QObject):
             self._drift_ticks = drift_ticks
             self.driftChanged.emit()
 
-    def _send(self, dt: float) -> bool:
-        # Step on the accepted inputs with the staged edits applied.
-        values = self._accepted | self._pending_inputs
-        if not self._submit(dt, values, self._emergency_override_pending):
-            return False
-        self._emergency_override_pending = False
-        self._pending_inputs.clear()
-        self._set_input_error("")
-        self.inputsChanged.emit()
-        return True
+    def _submit(self, dt: float, send: bool) -> bool:
+        """Step every train once; report a rejection.
 
-    def _submit(
-        self, dt: float, values: dict[str, Any],
-        clear_passenger_brake: bool = False,
-    ) -> bool:
-        """Step the module once on ``values``; report a rejection."""
+        ``send`` applies every train's staged edits. A train's first
+        tick applies its edits too.
+        """
+        trains = self._trains
+        values = {i: t.next_values(send) for i, t in trains.items()}
+        drafts = {i for i, t in trains.items() if t.carries_drafts(send)}
         # Whether this step boards, judged as the module does: at rest
         # before the step, a door open.
-        before = self._link.outputs
-        # A rejected step leaves the limiter and the dwell as they were.
-        limiter_state, limiting = self._limiter.state, self._limiting
-        dwell = self._dwell_left_s, self._dwell_served
+        before = {i: self._outputs(i) for i in trains}
+        # A rejected step leaves the limiters and the dwells as they were.
+        saved = {i: (t.limiter.state, t.limiting, t.dwell_left_s,
+                     t.dwell_served) for i, t in trains.items()}
+        train_id = ""
         try:
-            inputs = self._build_inputs(values)
-            # The entered values must be valid before the limiter sees them.
-            TrainModel.validate_inputs(dt, inputs)
+            entered = {}
+            for train_id in trains:
+                entered[train_id] = self._build_inputs(values[train_id])
+                # The entered values must be valid before the limiter
+                # sees them.
+                TrainModel.validate_inputs(dt, entered[train_id])
+            train_id = ""
+            inputs = {
+                i: self._dwell(i, dt, self._limit(i, dt, entered[i]))
+                for i in trains
+            }
             outputs = self._link.step(
-                dt, self._dwell(dt, self._limit(dt, inputs)),
-                clear_passenger_brake=clear_passenger_brake,
+                dt, inputs, clear_passenger_brake={
+                    i for i in drafts
+                    if trains[i].emergency_override_pending
+                },
             )
         except (ValueError, InvalidTimeStepError, LinkError) as exc:
-            self._limiter.state, self._limiting = limiter_state, limiting
-            self._dwell_left_s, self._dwell_served = dwell
+            for i, t in trains.items():
+                (t.limiter.state, t.limiting, t.dwell_left_s,
+                 t.dwell_served) = saved[i]
             self.setRunning(False)
-            self._set_input_error(
-                str(exc), link=isinstance(exc, LinkError))
+            link = isinstance(exc, LinkError)
+            message = str(exc)
+            if train_id and not link:
+                message = self._labelled(train_id, message)
+            self._set_input_error(message, link=link)
             return False
+        for i, train in trains.items():
+            self._accept(train, values[i], before[i], outputs[i])
+            if i in drafts:
+                train.emergency_override_pending = False
+                train.pending.clear()
+        self._tick += 1
+        if drafts:
+            self._set_input_error("")
+            self.inputsChanged.emit()
+        self._sync_inputs()
+        self.runControlChanged.emit()
+        return True
+
+    def _accept(
+        self, train: _Train, values: dict[str, Any],
+        before: TrainModelOutputs | None, outputs: TrainModelOutputs,
+    ) -> None:
+        # Record the inputs a train's step was accepted on.
         # A boarding count is consumed by the step that boards it. Sent
         # while the train cannot board, it waits in its row until it can.
         boards = (before is not None
                   and before.controller.actual_speed_mps == 0.0
                   and (values["left_door_command"]
                        or values["right_door_command"]))
-        self._accepted = dict(values, passengers_boarded=(
+        train.accepted = dict(values, passengers_boarded=(
             0 if boards else values["passengers_boarded"]))
-        if self._track is not None and self._track.follow(
+        if train.track is not None and train.track.follow(
                 outputs.track.offset_m):
             # The model sees a block change as a polarity flip, so flip
             # the polarity sent, which the tester may have typed.
-            self._accepted |= self._track.inputs() | {
+            train.accepted |= train.track.inputs() | {
                 "polarity": not values["polarity"],
             }
-        self._tick += 1
-        self._sync_inputs()
-        self.runControlChanged.emit()
-        return True
-
-    def _initial_commands(self) -> dict[str, Any]:
-        # The loaded track supplies the track rows for its first block
-        # and the track signal the route starts with.
-        values = dict(_INITIAL_COMMANDS)
-        if self._track is not None:
-            values |= self._track.inputs() | self._track.start_signal()
-        return values
+        train.steps += 1
 
     def _speed_cap_mps(self, speed_limit_mps: float) -> float:
         # A speed limit of 0 means none has been entered.
@@ -733,52 +937,56 @@ class TestHarnessState(QObject):
             return min(self._v_max_mps, speed_limit_mps)
         return self._v_max_mps
 
-    def _limit(self, dt: float, inputs: TrainModelInputs) -> TrainModelInputs:
+    def _limit(
+        self, train_id: str, dt: float, inputs: TrainModelInputs,
+    ) -> TrainModelInputs:
         # Stand in for the Train Controller's speed regulation: lower the
         # entered power, and brake if needed, to hold the speed cap.
-        outputs = self._link.outputs
+        train = self._trains[train_id]
+        outputs = self._outputs(train_id)
         speed = outputs.controller.actual_speed_mps if outputs else 0.0
         cmd = inputs.controller
-        limited = self._limiter.apply(
+        limited = train.limiter.apply(
             dt,
             self._speed_cap_mps(inputs.track.track_info.speed_limit_mps),
             speed,
             cmd.power_cmd_w,
             cmd.service_brake,
         )
-        self._limiting = limited.limiting
+        train.limiting = limited.limiting
         return dataclasses.replace(inputs, controller=dataclasses.replace(
             cmd, power_cmd_w=limited.power_w,
             service_brake=limited.service_brake,
         ))
 
     def _dwell(
-        self, dt: float, inputs: TrainModelInputs,
+        self, train_id: str, dt: float, inputs: TrainModelInputs,
     ) -> TrainModelInputs:
         # Stand in for the Train Controller's station dwell (D007):
         # once a door opens with the train at rest at a station, hold
         # it there, doors open, for DWELL_S. Once per stop.
-        outputs = self._link.outputs
+        train = self._trains[train_id]
+        outputs = self._outputs(train_id)
         if outputs is None:
             return inputs
         ctl = outputs.controller
         cmd = inputs.controller
         if ctl.actual_speed_mps != 0.0:
-            self._dwell_served = False
+            train.dwell_served = False
         # A door this tick opens counts too: sent with power, it would
         # otherwise let the train leave before the dwell began.
         doors_open = (ctl.door_left_open or ctl.door_right_open
                       or cmd.door_left_open or cmd.door_right_open)
         at_station = bool(inputs.track.track_info.station_name)
-        if (self._dwell_left_s == 0.0 and not self._dwell_served
+        if (train.dwell_left_s == 0.0 and not train.dwell_served
                 and ctl.actual_speed_mps == 0.0 and doors_open
                 and at_station):
-            self._dwell_left_s = DWELL_S
-        if self._dwell_left_s == 0.0:
+            train.dwell_left_s = DWELL_S
+        if train.dwell_left_s == 0.0:
             return inputs
         # Whole ticks, so the dwell ends exactly on a tick.
-        self._dwell_left_s = max(0.0, round(self._dwell_left_s - dt, 9))
-        self._dwell_served = self._dwell_left_s == 0.0
+        train.dwell_left_s = max(0.0, round(train.dwell_left_s - dt, 9))
+        train.dwell_served = train.dwell_left_s == 0.0
         return dataclasses.replace(inputs, controller=dataclasses.replace(
             cmd, power_cmd_w=0.0, service_brake=True,
             door_left_open=cmd.door_left_open or ctl.door_left_open,
