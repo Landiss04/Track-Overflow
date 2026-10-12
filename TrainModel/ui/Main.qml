@@ -1,5 +1,6 @@
 // Train Model application window.
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 import "../../ui"
@@ -23,30 +24,118 @@ ScaledWindow {
             Layout.fillWidth: true
             moduleName: qsTr("Train Model")
             instance: window.snapshot.train_id
-            mode: window.snapshot.mode
+            // Running while steps arrive, from the test UI or, once
+            // integrated, the central harness.
+            mode: trainModel.running ? qsTr("Running") : qsTr("Paused")
             line: window.snapshot.line
             clock: window.snapshot.clock
             faulted: window.snapshot.emergency_brake
-            navigationEntries: [qsTr("Overview"), qsTr("Test harness")]
-            currentNavigationIndex: views.currentIndex
-            onNavigationActivated: function (index) { views.currentIndex = index; }
         }
 
         // This fills the fixed reference canvas; the canvas transform
-        // scales the complete design uniformly with the window.
-        RowLayout {
+        // scales the complete design uniformly with the window. The
+        // test UI is a separate window in its own process (test_ui.py).
+        MainView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
+        }
+    }
 
-            StackLayout {
-                id: views
+    // The Train Controller's announcement, shown to passengers as a
+    // popup each time a new one arrives. It is not modal, so the
+    // passenger emergency brake stays in reach; an empty announcement
+    // closes it. A panel in the design canvas rather than a Popup: a
+    // Popup draws in the window overlay, which the canvas scale does
+    // not reach, so in a small window it outgrew the rest of the UI.
+    Rectangle {
+        id: announcementPopup
+
+        readonly property string message: window.snapshot.announcement
+        property bool opened: false
+
+        function open() { opened = true; }
+        function close() { opened = false; }
+
+        objectName: "announcementPopup"
+        visible: opened
+        z: 1
+        // Over the left column, clear of the emergency brake button.
+        x: (window.canvas.width / 2 - width) / 2
+        y: theme.control_h_lg * 3
+        width: 560
+        // Never taller than the canvas: a long announcement scrolls,
+        // and Dismiss stays in sight.
+        height: Math.min(announcementContent.implicitHeight
+                + 2 * theme.space_5,
+            window.canvas.height - y - theme.space_5)
+        color: theme.bg_surface
+        border.color: theme.border_strong
+        border.width: 1
+        radius: theme.radius_lg
+
+        onMessageChanged: {
+            if (message !== "")
+                open();
+            else
+                close();
+        }
+
+        // Clicks on the panel stay on it, off the card underneath.
+        MouseArea {
+            anchors.fill: parent
+        }
+
+        Shortcut {
+            sequence: "Esc"
+            enabled: announcementPopup.visible
+            onActivated: announcementPopup.close()
+        }
+
+        ColumnLayout {
+            id: announcementContent
+
+            anchors.fill: parent
+            anchors.margins: theme.space_5
+            spacing: theme.space_4
+
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("Announcement")
+                color: theme.text_primary
+                font.family: theme.ui_family
+                font.pixelSize: theme.size_h3
+                font.weight: theme.weight_bold
+            }
+
+            ScrollView {
+                id: announcementScroll
+
+                objectName: "announcementScroll"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                currentIndex: 0
+                Layout.preferredHeight: announcementText.implicitHeight
+                clip: true
+                contentWidth: availableWidth
 
-                MainView {}
-                TestView {}
+                Text {
+                    id: announcementText
+
+                    objectName: "announcementText"
+                    width: announcementScroll.availableWidth
+                    text: announcementPopup.message
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    color: theme.text_primary
+                    font.family: theme.ui_family
+                    font.pixelSize: theme.size_body
+                }
+            }
+
+            AppButton {
+                Layout.alignment: Qt.AlignRight
+                variant: "ghost"
+                text: qsTr("Dismiss")
+                onClicked: announcementPopup.close()
             }
         }
     }
