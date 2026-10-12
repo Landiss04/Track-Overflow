@@ -1,20 +1,37 @@
-// Manual dispatch: pick a train and destination (or a block directly);
-// CTC computes the suggested speed and authority sent to the wayside.
+// Manual dispatch: pick a line, a train and a destination station (or a
+// block directly); CTC computes the suggested speed and authority sent
+// to the wayside. Picking a train that already has an order reroutes
+// it.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
+import "../components"
 
 Panel {
     id: root
 
-    property var trainOptions: []
-    property var destinationOptions: []
-    property var lineOptions: []
-    property var blockOptions: []
+    // The CtcHost from __main__.py.
+    property var host: null
 
-    signal dispatchRequested(string trainId, string destination,
-                             string arrivalTime)
-    signal setAuthorityRequested(string line, string block)
+    // What the dispatcher picked; '' until they pick (PickField).
+    readonly property string line: lineSelect.value
+    readonly property string trainId: trainSelect.value
+    // The selected train's current row; re-read whenever the module
+    // changes.
+    readonly property var train: {
+        if (!root.host || root.trainId === "")
+            return ({});
+        root.host.revision;
+        return root.host.trainDetail(root.trainId);
+    }
+    // Result of the last action: an error, or a confirmation.
+    property string message: ""
+    property bool messageIsError: false
+
+    function report(error, done) {
+        root.messageIsError = error !== "";
+        root.message = error !== "" ? error : done;
+    }
 
     title: qsTr("Dispatch train")
 
@@ -29,26 +46,43 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        SelectField {
-            id: trainSelect
-            Layout.preferredWidth: 160
-            label: qsTr("Train")
-            model: root.trainOptions
+        PickField {
+            id: lineSelect
+            Layout.preferredWidth: 110
+            label: qsTr("Line")
+            model: root.host ? root.host.lineNames : []
             currentIndex: -1
         }
 
-        SelectField {
+        PickField {
+            id: trainSelect
+            Layout.preferredWidth: 170
+            label: qsTr("Train")
+            textRole: "text"
+            valueRole: "value"
+            model: {
+                if (!root.host || root.line === "")
+                    return [];
+                root.host.revision;
+                return root.host.trainOptions(root.line);
+            }
+        }
+
+        PickField {
             id: destinationSelect
             Layout.fillWidth: true
             label: qsTr("Destination station")
-            model: root.destinationOptions
+            textRole: "text"
+            valueRole: "value"
+            model: root.host && root.line !== ""
+                ? root.host.stationOptions(root.line) : []
             currentIndex: -1
         }
 
         ValueField {
             id: arrivalField
             Layout.preferredWidth: 120
-            label: qsTr("Arrival time")
+            label: qsTr("Arrival (HH:MM)")
         }
     }
 
@@ -62,19 +96,24 @@ Panel {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
             label: qsTr("Suggested speed limit")
-            unit: "m/s"
+            value: root.train.speedLimit || "—"
+            unit: "mph"
         }
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            label: qsTr("Authority → block")
+            label: qsTr("Authority")
+            value: root.train.authorityBlocks || "—"
+            unit: "blocks"
         }
     }
 
     HelperText {
         Layout.fillWidth: true
-        text: qsTr("Select a train and destination to compute speed and "
-            + "authority.")
+        color: root.messageIsError ? theme.danger : theme.text_secondary
+        text: root.message !== "" ? root.message
+            : qsTr("Select a line, train and destination to compute "
+                + "speed and authority.")
     }
 
     LabeledDivider {
@@ -86,19 +125,12 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        SelectField {
-            id: lineSelect
-            Layout.preferredWidth: 160
-            label: qsTr("Line")
-            model: root.lineOptions
-            currentIndex: -1
-        }
-
-        SelectField {
+        PickField {
             id: blockSelect
             Layout.fillWidth: true
-            label: qsTr("Block")
-            model: root.blockOptions
+            label: qsTr("Block on the selected line")
+            model: root.host && root.line !== ""
+                ? root.host.blockOptions(root.line) : []
             currentIndex: -1
         }
 
@@ -106,10 +138,13 @@ Panel {
             Layout.alignment: Qt.AlignBottom
             variant: "secondary"
             text: qsTr("Set authority")
-            enabled: lineSelect.currentIndex >= 0
-                && blockSelect.currentIndex >= 0
-            onClicked: root.setAuthorityRequested(
-                lineSelect.currentValue, blockSelect.currentValue)
+            enabled: root.trainId !== "" && blockSelect.value !== ""
+            onClicked: root.report(
+                root.host.setAuthority(root.trainId, root.line,
+                    blockSelect.value),
+                qsTr("%1 given authority toward %2 block %3.")
+                    .arg(root.trainId).arg(root.line)
+                    .arg(blockSelect.value))
         }
     }
 
@@ -117,10 +152,14 @@ Panel {
         Layout.fillWidth: true
         variant: "primary"
         size: "large"
-        text: qsTr("Dispatch train")
-        enabled: trainSelect.currentIndex >= 0
-            && destinationSelect.currentIndex >= 0
-        onClicked: root.dispatchRequested(trainSelect.currentValue,
-            destinationSelect.currentValue, arrivalField.text)
+        text: root.train.destinationBlock
+            ? qsTr("Reroute train") : qsTr("Dispatch train")
+        enabled: root.trainId !== "" && destinationSelect.value !== ""
+        onClicked: root.report(
+            root.host.dispatchTrain(root.trainId, root.line,
+                destinationSelect.value, arrivalField.text),
+            qsTr("%1 dispatched to %2.").arg(root.trainId)
+                .arg(destinationSelect.model[
+                    destinationSelect.currentIndex].text))
     }
 }

@@ -8,9 +8,29 @@ import "../../../../ui"
 Rectangle {
     id: root
 
+    // Every known train, from CtcHost.trains.
     property var trains: []
     property int lineFilterIndex: 0
     property int statusFilterIndex: 0
+    property string search: ""
+    // The trains the filters let through.
+    readonly property var shownTrains: trains.filter(function (train) {
+        const line = ["", "Green", "Red"][root.lineFilterIndex];
+        return (line === "" || train.line === line)
+            && (root.statusFilterIndex === 0
+                || train.status === "En route")
+            && (root.search === ""
+                || train.train.toLowerCase().indexOf(
+                    root.search.toLowerCase()) >= 0);
+    })
+    property string pickedTrain: ""
+    readonly property int pickedIndex: {
+        for (let i = 0; i < shownTrains.length; ++i) {
+            if (shownTrains[i].train === root.pickedTrain)
+                return i;
+        }
+        return -1;
+    }
 
     signal minimizeRequested()
     signal closeRequested()
@@ -47,7 +67,7 @@ Rectangle {
             }
 
             HelperText {
-                text: qsTr("%n active", "", root.trains.length)
+                text: qsTr("%n known", "", root.trains.length)
                 color: theme.text_muted
             }
 
@@ -84,7 +104,8 @@ Rectangle {
 
             ValueField {
                 Layout.preferredWidth: 240
-                label: qsTr("Search")
+                label: qsTr("Search train")
+                onCommitted: function (value) { root.search = value; }
             }
 
             FormField {
@@ -129,23 +150,30 @@ Rectangle {
                 { label: qsTr("Line"), key: "line", width: 72 },
                 { label: qsTr("Block"), key: "block", width: 64,
                   mono: true },
-                { label: qsTr("Speed (m/s)"), key: "speed", width: 96,
+                { label: qsTr("Speed (mph)"), key: "speed", width: 96,
                   numeric: true },
-                { label: qsTr("Authority"), key: "authority", width: 88,
+                { label: qsTr("Authority"), key: "authority", width: 104,
                   mono: true },
                 { label: qsTr("Destination"), key: "destination" },
-                { label: qsTr("ETA"), key: "eta", width: 64, mono: true },
+                { label: qsTr("Arrive"), key: "eta", width: 64,
+                  mono: true },
                 { label: qsTr("Status"), key: "status", width: 110 }
             ]
-            rows: root.trains
+            rows: root.shownTrains
+            currentIndex: root.pickedIndex
+            onRowActivated: function (index, row) {
+                root.pickedTrain = row.train;
+            }
         }
 
         HelperText {
             Layout.fillWidth: true
             Layout.topMargin: theme.space_2
-            visible: root.trains.length === 0
+            visible: root.shownTrains.length === 0
             horizontalAlignment: Text.AlignHCenter
-            text: qsTr("No trains on the network")
+            text: root.trains.length === 0
+                ? qsTr("No trains on the network")
+                : qsTr("No trains match the filters")
         }
 
         Item { Layout.fillHeight: true }
@@ -180,8 +208,8 @@ Rectangle {
             AppButton {
                 variant: "primary"
                 text: qsTr("Select train")
-                // Enabled once row selection exists in the table.
-                enabled: false
+                enabled: root.pickedIndex >= 0
+                onClicked: root.trainSelected(root.pickedTrain)
             }
         }
     }
