@@ -125,8 +125,7 @@ class TrackModel:
     _authority: dict[str, int]
     _trains: dict[str, _Train]
     _waiting: dict[str, int]
-    _station_line: dict[str, str]                # station name -> line
-    _last_sales: dict[str, int]                  # this tick, by line
+    _last_sales: dict[str, int]                  # this tick, by station
     _rng: random.Random
     _ambient_temp_c: float
     _ambient_override_c: float | None   # set in the Track Model UI
@@ -426,13 +425,12 @@ class TrackModel:
 
     def _sell_tickets(self) -> dict[str, int]:
         # Each station rolls for one new ticket per tick. Returns the
-        # tickets sold this tick by line. No running total is kept.
-        sales = dict.fromkeys((b.line for b in self._blocks.values()), 0)
+        # tickets sold this tick by station. No running total is kept.
+        sales: dict[str, int] = {}
         for station in self._waiting:
             sold = int(self._rng.random() < self.config.ticket_probability)
             self._waiting[station] += sold
-            line = self._station_line[station]
-            sales[line] += sold
+            sales[station] = sold
         return sales
 
     def _board(self, block: Block, report: TrainReport) -> int:
@@ -607,14 +605,7 @@ class TrackModel:
             b.station_name: 0
             for b in self._blocks.values() if b.station_name is not None
         }
-        # Stations are pooled by name; each sells on the line of its block.
-        self._station_line = {
-            b.station_name: b.line
-            for b in self._blocks.values() if b.station_name is not None
-        }
-        self._last_sales = dict.fromkeys(
-            (b.line for b in self._blocks.values()), 0
-        )
+        self._last_sales = dict.fromkeys(self._waiting, 0)
         self._rng = random.Random(self.config.seed)
         self._ambient_temp_c = 0.0
         self._ambient_override_c = None

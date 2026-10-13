@@ -76,7 +76,7 @@ mapping through the catalog types in `common/interfaces.py` (D008):
 | Track Model → Train Controller | `track_model_to_train_controller` |
 | Track Model → CTC Office | `track_model_to_ctc_office` |
 
-Ticket sales go to the CTC Office directly, as `(count, line)` pairs: the
+Ticket sales go to the CTC Office directly, as `(count, station)` pairs: the
 tickets sold this tick. The Track Model keeps no running total and
 sends none. The CTC Office reads everything else (occupancy, device state)
 through the Track Controller.

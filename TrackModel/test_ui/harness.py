@@ -500,7 +500,7 @@ class TrackModelTestHarness(QObject):
         if self._outputs is None:
             return []
         ctc = self._outputs.ctc
-        sold = [f"{line} +{n}" for line, n in ctc.tickets_sold_now.items()
+        sold = [f"{station} +{n}" for station, n in ctc.tickets_sold_now.items()
                 if n]
         rows = [_row("sold now", "string", ", ".join(sold) or "none",
                      row_id="tickets_sold_now")]

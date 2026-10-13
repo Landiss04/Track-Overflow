@@ -254,11 +254,11 @@ class TrackControllerOutputs:
 class CtcOutputs:
     """To the CTC Office directly, not through the Track Controller.
 
-    Tickets sold, by line (for example ``"GREEN"``). The Track Model
-    does not keep a running total; each sale is an event.
+    Tickets sold, by station name. The Track Model does not keep a
+    running total; each sale is an event.
     """
 
-    tickets_sold_now: Mapping[str, int]          # this tick
+    tickets_sold_now: Mapping[str, int]          # this tick, by station
 
 
 @dataclass(frozen=True, slots=True)

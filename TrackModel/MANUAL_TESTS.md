@@ -51,7 +51,7 @@ Section and **Blocks, e.g. 5-20** narrow the block pickers further.
 | Block panel | `speed`, `authority` | commanded speed (m/s) and authority (blocks) for the block |
 | Gates, heaters panel | `E-19`, `heat B` | a crossing gate (true = closed); section B's heaters |
 | Outputs — to Track Controller | `occupied`, `failures`, `heaters on` | read-back; occupancy, failures and heaters cover the chosen line |
-| Outputs — to CTC Office | `sold now` | tickets sold this tick, by line; no running total is kept |
+| Outputs — to CTC Office | `sold now` | tickets sold this tick, by station; no running total is kept |
 | | `trk temp` | track temperature (°C) of the selected block's section |
 | | `sw …`, `sig …`, `gate …` | switch, signal light, crossing gate |
 | Outputs — to Train Model | `block` … `station` | Track Info |

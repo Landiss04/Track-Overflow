@@ -442,8 +442,8 @@ class TrackReadback:
 @dataclass
 class TicketSales:
     """Track Model -> CTC Office, every tick, direct (truth
-    ``signals/ticket-sales``). Pairs of (count, line), for example
-    ``(3, "GREEN")``. ``sold_now`` is this tick. The Track Model keeps no
+    ``signals/ticket-sales``). Pairs of (count, station), for example
+    ``(3, "SHADYSIDE")``. ``sold_now`` is this tick. The Track Model keeps no
     running total and sends none."""
     sold_now: list[tuple[int, str]]
 

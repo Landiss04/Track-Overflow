@@ -79,15 +79,15 @@ def test_round_trip_through_every_edge() -> None:
         SignalAspect.SUPER_GREEN)
 
 
-def test_ticket_sales_reach_the_ctc_office_as_line_pairs() -> None:
-    """Check the CTC edge carries (count, line) pairs and no total."""
+def test_ticket_sales_reach_the_ctc_office_as_station_pairs() -> None:
+    """Check the CTC edge carries (count, station) pairs and no total."""
     model = make_model(ticket_probability=1.0)
     for _ in range(2):
         out = model.step(DT_S, build_track_model_inputs(
             WaysideCommands(), {}, ambient_temp_c=0.0))
     sales = track_model_to_ctc_office(out)
-    now = dict((line, n) for n, line in sales.sold_now)
-    assert now["GREEN"] > 0
+    now = dict((station, n) for n, station in sales.sold_now)
+    assert now and all(n > 0 for n in now.values())
     assert not hasattr(sales, "sold_total")
     assert not hasattr(track_model_to_track_controller(out), "ticket_sales")
 

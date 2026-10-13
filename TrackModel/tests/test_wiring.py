@@ -344,28 +344,26 @@ def test_no_signal_seen_in_a_block_without_a_light() -> None:
 # Tickets and boarding
 # --------------------------------------------------------------------------- #
 
-def _stations_by_line(model: TrackModel) -> dict[str, int]:
-    # How many stations (pooled by name) each line has.
-    stations: dict[str, set[str]] = {}
-    for block in model.snapshot().blocks:
-        stations.setdefault(block.line, set())
-        if block.station_name is not None:
-            stations[block.line].add(block.station_name)
-    return {line: len(names) for line, names in stations.items()}
+def _one_each(model: TrackModel) -> dict[str, int]:
+    # One ticket for every station, pooled by name.
+    return {
+        b.station_name: 1
+        for b in model.snapshot().blocks if b.station_name is not None
+    }
 
 
 def test_ticket_sales_go_to_the_ctc_office() -> None:
-    """Check one sale per station per tick, by line, at probability 1."""
+    """Check one sale per station per tick, by station, at probability 1."""
     model = make_model(ticket_probability=1.0)
     out = model.step(DT_S, make_inputs())
-    assert dict(out.ctc.tickets_sold_now) == _stations_by_line(model)
+    assert dict(out.ctc.tickets_sold_now) == _one_each(model)
     assert not hasattr(out.controller, "ticket_sales")
 
 
 def test_ticket_sales_are_events_with_no_running_total() -> None:
     """Check each tick reports only its own sales and no total."""
     model = make_model(ticket_probability=1.0)
-    per_tick = _stations_by_line(model)
+    per_tick = _one_each(model)
     for _ in range(3):
         out = model.step(DT_S, make_inputs())
         assert dict(out.ctc.tickets_sold_now) == per_tick
@@ -373,7 +371,7 @@ def test_ticket_sales_are_events_with_no_running_total() -> None:
 
 
 def test_reset_clears_this_ticks_sales() -> None:
-    """Check that a reset leaves every line at zero sold now."""
+    """Check that a reset leaves every station at zero sold now."""
     model = make_model(ticket_probability=1.0)
     model.step(DT_S, make_inputs())
     model.reset()

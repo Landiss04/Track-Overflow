@@ -137,7 +137,7 @@ Defined in `track_model/interface.py`. Every value is in backend units
   occupancy, switch / gate / light / heater **actual** states, failures
   and track temperature per section.
 - `ctc` (`CtcOutputs`), for the CTC Office, direct: tickets sold per
-  line, this tick only. The Track Model keeps no running total.
+  station, this tick only. The Track Model keeps no running total.
 - `train_feeds`: for each train, a `TrainFeed` with Track Info, the
   track circuit (speed and authority), beacon and passengers boarded.
 - `signal_seen`: for each train, the light colour on the tick it
