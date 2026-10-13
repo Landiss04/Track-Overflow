@@ -132,12 +132,13 @@ def test_every_block_reachable_from_the_yard(green: Layout) -> None:
     assert None in seen
 
 
-def test_red_and_blue_are_not_annotated() -> None:
-    """Check the other lines still use the inferred track."""
+def test_red_and_blue_are_annotated_two_way() -> None:
+    """Check every Red and Blue block has exits and runs both ways."""
     model = make_model()
     blocks = model.snapshot().blocks
-    assert all(b.next_block_ids == () for b in blocks
-               if b.line in ("RED", "BLUE"))
+    others = [b for b in blocks if b.line in ("RED", "BLUE")]
+    assert others
+    assert all(b.next_block_ids and b.bidirectional for b in others)
 
 
 # --------------------------------------------------------------------------- #
