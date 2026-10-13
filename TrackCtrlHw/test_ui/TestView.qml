@@ -60,38 +60,23 @@ Item {
                         Layout.fillWidth: true
                         title: qsTr("Addressing")
 
-                        RowLayout {
+                        SelectField {
                             Layout.fillWidth: true
-                            spacing: theme.space_4
-
-                            SelectField {
-                                Layout.fillWidth: true
-                                label: qsTr("Train")
-                                model: harness.trains
-                                currentIndex: harness.trains.indexOf(
-                                    harness.selectedTrain)
-                                onCommitted: function (value) {
-                                    harness.setSelectedTrain(value);
-                                }
-                            }
-
-                            SelectField {
-                                Layout.fillWidth: true
-                                label: qsTr("Block")
-                                model: harness.blocks
-                                currentIndex: harness.blocks.indexOf(
-                                    harness.selectedBlock)
-                                onCommitted: function (value) {
-                                    harness.setSelectedBlock(value);
-                                }
+                            label: qsTr("Block")
+                            model: harness.blocks
+                            currentIndex: harness.blocks.indexOf(
+                                harness.selectedBlock)
+                            onCommitted: function (value) {
+                                harness.setSelectedBlock(value);
                             }
                         }
 
                         HelperText {
                             Layout.fillWidth: true
-                            text: qsTr("Per-train inputs are sent for the "
-                                + "selected train; per-block inputs and "
-                                + "outputs for the selected block.")
+                            text: qsTr("Every signal on this page is read "
+                                + "and written for the selected block. A "
+                                + "signal the block has no equipment for is "
+                                + "greyed out.")
                         }
                     }
 
@@ -108,13 +93,14 @@ Item {
                                 required property var modelData
 
                                 Layout.fillWidth: true
+                                opacity: modelData.applies ? 1.0 : 0.42
                                 name: modelData.name
                                 kind: modelData.kind
                                 value: modelData.value
                                 unit: modelData.unit
                                 options: modelData.options !== undefined
                                     ? modelData.options : []
-                                editable: true
+                                editable: modelData.applies
                                 onEdited: function (newValue) {
                                     harness.setInput("ctc", modelData.name,
                                         newValue);
@@ -136,13 +122,14 @@ Item {
                                 required property var modelData
 
                                 Layout.fillWidth: true
+                                opacity: modelData.applies ? 1.0 : 0.42
                                 name: modelData.name
                                 kind: modelData.kind
                                 value: modelData.value
                                 unit: modelData.unit
                                 options: modelData.options !== undefined
                                     ? modelData.options : []
-                                editable: true
+                                editable: modelData.applies
                                 onEdited: function (newValue) {
                                     harness.setInput("track_model",
                                         modelData.name, newValue);
@@ -193,6 +180,7 @@ Item {
                                 required property var modelData
 
                                 Layout.fillWidth: true
+                                opacity: modelData.applies ? 1.0 : 0.42
                                 name: modelData.name
                                 kind: modelData.kind
                                 value: modelData.value
@@ -214,6 +202,7 @@ Item {
                                 required property var modelData
 
                                 Layout.fillWidth: true
+                                opacity: modelData.applies ? 1.0 : 0.42
                                 name: modelData.name
                                 kind: modelData.kind
                                 value: modelData.value
@@ -259,15 +248,27 @@ Item {
                             Layout.fillWidth: true
                             spacing: theme.space_3
 
-                            AppButton {
-                                Layout.fillWidth: true
-                                variant: "secondary"
-                                text: qsTr("Advance one tick")
-                                onClicked: harness.advanceTick()
+                            ValueField {
+                                Layout.preferredWidth: 120
+                                label: qsTr("Ticks")
+                                kind: "int"
+                                text: String(harness.tickStep)
+                                onCommitted: function (value) {
+                                    harness.setTickStep(value);
+                                }
                             }
 
                             AppButton {
                                 Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignBottom
+                                variant: "secondary"
+                                text: qsTr("Advance")
+                                onClicked: harness.advanceTicks()
+                            }
+
+                            AppButton {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignBottom
                                 variant: "secondary"
                                 text: qsTr("Reset module")
                                 onClicked: harness.resetModule()
