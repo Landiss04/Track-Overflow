@@ -38,7 +38,7 @@ from ctc.interface import (
 from ctc.model import CtcError, StubCtcOffice
 from ctc.schedule import load_schedule
 from ctc.socket_link import CtcLinkServer
-from ctc.track_layout import Line, load_layout
+from ctc.track_layout import Line, load_layout, station_lines
 from ctc_ui.display import (
     MPS_TO_MPH,
     TimeOfDayError,
@@ -139,6 +139,8 @@ class CtcHost(QObject):
                  parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._layout = dict(load_layout() if layout is None else layout)
+        # Each named station's line, for throughput per line.
+        self._station_lines = station_lines(self._layout)
         self._module = (module if module is not None
                         else StubCtcOffice(layout=self._layout))
         self._server = CtcLinkServer(self._module, parent=self,
@@ -203,10 +205,9 @@ class CtcHost(QObject):
             print(f"CTC step failed: {error}", file=sys.stderr)
             return
         self._current_hour = _hour(sim_time_s)
-        for sale in self._inputs.track_model.ticket_sales:
-            key = (self._current_hour, sale.line)
-            self._hourly_sales[key] = (
-                self._hourly_sales.get(key, 0) + sale.tickets)
+        for station, tickets in self._inputs.track_model.ticket_sales.items():
+            key = (self._current_hour, self._station_lines[station])
+            self._hourly_sales[key] = self._hourly_sales.get(key, 0) + tickets
         # Ticket sales count tickets sold since the previous tick, so a
         # sale is stepped with once.
         if self._inputs.track_model.ticket_sales:
@@ -579,11 +580,12 @@ class CtcHost(QObject):
         keyed by line name; a dash until a simulated minute has passed."""
         snap = self._module.snapshot()
         hours = snap.elapsed_s / 3600
-        return {
-            sale.line: (f"{sale.tickets / hours:.0f}"
-                        if snap.elapsed_s >= 60 else NO_VALUE)
-            for sale in snap.tickets_sold
-        }
+        sold = {line: 0 for line in sorted(self._layout)}
+        for station, tickets in snap.tickets_sold.items():
+            sold[self._station_lines[station]] += tickets
+        return {line: (f"{tickets / hours:.0f}"
+                       if snap.elapsed_s >= 60 else NO_VALUE)
+                for line, tickets in sold.items()}
 
     @Property(dict, notify=clockChanged)
     def throughput(self) -> dict[str, str]:

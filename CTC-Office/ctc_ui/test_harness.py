@@ -33,7 +33,6 @@ from ctc.interface import (
     CtcSnapshot,
     DispatchOrder,
     SwitchReport,
-    TicketSales,
     TrackFailureReport,
     TrackModelInputs,
     TrainReport,
@@ -41,7 +40,7 @@ from ctc.interface import (
 )
 from ctc.link import CtcLink, LocalLink
 from ctc.model import CtcError
-from ctc.track_layout import Line, load_layout
+from ctc.track_layout import Line, load_layout, station_lines
 from ctc_ui.display import (
     M_TO_FT,
     MPS_TO_MPH,
@@ -63,7 +62,7 @@ INPUT_DEFAULTS: dict[str, tuple[str, Any, str]] = {
     "switch_states": ("list", (), ""),
     "crossing_states": ("list", (), ""),
     "track_failures": ("list", (), ""),
-    "ticket_sales": ("int", 0, "tickets"),
+    "ticket_sales": ("list", (), "tickets"),
 }
 
 #: Dispatcher rows: stand-ins for the CTC UI's own actions.
@@ -76,10 +75,8 @@ DISPATCHER_DEFAULTS: dict[str, tuple[str, Any, str]] = {
 }
 
 #: Rows that also pick one of a few choices, shown as a dropdown in the
-#: same row: ticket sales are for one line at a time.
-INPUT_CHOICES: dict[str, tuple[str, ...]] = {
-    "ticket_sales": ("Green", "Red"),
-}
+#: same row. None does at the moment.
+INPUT_CHOICES: dict[str, tuple[str, ...]] = {}
 
 #: Dispatcher rows the CTC UI owns when it is attached.
 _CTC_UI_OWNED = frozenset({"maintenance_mode", "clock_speedup"})
@@ -88,7 +85,7 @@ _CTC_UI_OWNED = frozenset({"maintenance_mode", "clock_speedup"})
 _MIRRORED = ("dispatch_orders", "closed_blocks", "switch_commands")
 
 #: Field types whose options come from the track layout, per line.
-_LAYOUT_TYPES = ("block", "switch", "crossing")
+_LAYOUT_TYPES = ("block", "switch", "crossing", "station")
 
 
 def _field(key: str, label: str, kind: str, width: int,
@@ -129,6 +126,9 @@ LIST_FIELDS: dict[str, tuple[dict[str, Any], ...]] = {
                (("broken_rail", "Broken rail"),
                 ("track_circuit", "Track circuit"),
                 ("power", "Power")))),
+    "ticket_sales": (
+        _LINE, _field("station", "Station", "station", 208),
+        _field("tickets", "Tickets", "number", 80)),
     "dispatch_orders": (
         _TRAIN, _LINE, _BLOCK,
         _field("arrival", "Arrive (HH:MM)", "text", 112)),
@@ -144,7 +144,8 @@ ROW_HINTS: dict[str, str] = {
                      "Normal is the first connection in the layout file.",
     "crossing_states": "Railway crossings and whether they are active.",
     "track_failures": "Failed blocks the Track Controller reports.",
-    "ticket_sales": "Tickets sold on the line picked beside it.",
+    "ticket_sales": "Tickets sold at each station since the last Send, "
+                    "as the Track Model reports them.",
     "dispatch_orders": "Where each train is sent; arrival is optional.",
     "closed_blocks": "Blocks closed for maintenance.",
     "switch_commands": "Switch positions the CTC sets (maintenance mode "
@@ -159,6 +160,7 @@ ROW_NOUNS: dict[str, str] = {
     "switch_states": "switch",
     "crossing_states": "crossing",
     "track_failures": "failure",
+    "ticket_sales": "sale",
     "dispatch_orders": "order",
     "closed_blocks": "block",
     "switch_commands": "command",
@@ -188,6 +190,9 @@ def layout_options(
         options["crossing"][name] = [
             {"value": b.block_id, "text": b.block_id}
             for b in line.blocks if b.railway_crossing]
+        options["station"][name] = [
+            {"value": station, "text": station.title()}
+            for station in line.stations()]
     return options
 
 
@@ -217,12 +222,27 @@ def _train(entry: Entry, where: str) -> str:
     return train_id
 
 
-def build_inputs(lists: Mapping[str, list[Entry]], tickets: Any,
-                 ticket_line: str = "Green") -> CtcInputs:
-    """Turn list-row entries and ticket sales into ``CtcInputs``."""
-    if (isinstance(tickets, bool) or not isinstance(tickets, int)
-            or tickets < 0):
-        raise HarnessInputError("ticket_sales must be a whole number >= 0")
+def _ticket_sales(entries: list[Entry]) -> dict[str, int]:
+    """``{station: tickets}`` from the ticket sales rows."""
+    sales: dict[str, int] = {}
+    for i, e in enumerate(entries):
+        where = _where("ticket_sales", i)
+        station = _text(e, "station")
+        if not station:
+            raise HarnessInputError(f"{where}: pick a station")
+        tickets = _number(e, "tickets", where)
+        if tickets < 0 or tickets != int(tickets):
+            raise HarnessInputError(
+                f"{where}: tickets must be a whole number >= 0")
+        if station in sales:
+            raise HarnessInputError(
+                f"{where}: {station.title()} is listed twice")
+        sales[station] = int(tickets)
+    return sales
+
+
+def build_inputs(lists: Mapping[str, list[Entry]]) -> CtcInputs:
+    """Turn list-row entries into ``CtcInputs``."""
     trains = []
     for i, e in enumerate(lists["train_reports"]):
         where = _where("train_reports", i)
@@ -245,8 +265,8 @@ def build_inputs(lists: Mapping[str, list[Entry]], tickets: Any,
                                               e["kind"])
                            for e in lists["track_failures"]),
         ),
-        track_model=TrackModelInputs(ticket_sales=(
-            (TicketSales(ticket_line, tickets),) if tickets else ())),
+        track_model=TrackModelInputs(
+            ticket_sales=_ticket_sales(lists["ticket_sales"])),
     )
 
 
@@ -295,8 +315,9 @@ def _number_key(block: Any) -> tuple[int, str]:
     return (int(block_id) if block_id.isdigit() else -1, block_id)
 
 
-def output_rows(outputs: CtcOutputs, tickets_sold: tuple[TicketSales, ...],
-                elapsed_s: float) -> list[dict[str, Any]]:
+def output_rows(outputs: CtcOutputs, tickets_sold: Mapping[str, int],
+                elapsed_s: float,
+                lines_of: Mapping[str, str]) -> list[dict[str, Any]]:
     """Rows for the outputs table, in display units."""
     track = outputs.track_controller
     rows: list[dict[str, Any]] = []
@@ -335,9 +356,20 @@ def output_rows(outputs: CtcOutputs, tickets_sold: tuple[TicketSales, ...],
         "value": outputs.clock_speedup,
         "unit": "",
     })
-    for sale in tickets_sold:
-        rows.append({"name": f"tickets_sold[{sale.line}]", "kind": "int",
-                     "value": sale.tickets, "unit": "tickets"})
+    # Tickets sold since the start: per line, then each station that
+    # has sold any.
+    per_line: dict[str, int] = {}
+    for station, tickets in tickets_sold.items():
+        line = lines_of.get(station, "?")
+        per_line[line] = per_line.get(line, 0) + tickets
+    for line in sorted(per_line):
+        rows.append({"name": f"tickets_sold[{line}]", "kind": "int",
+                     "value": per_line[line], "unit": "tickets"})
+    for station, tickets in tickets_sold.items():
+        if tickets:
+            rows.append({"name": f"tickets_sold[{station.title()}]",
+                         "kind": "int", "value": tickets,
+                         "unit": "tickets"})
     rows.append({"name": "elapsed", "kind": "float",
                  "value": round(elapsed_s, 1), "unit": "s"})
     return rows
@@ -381,6 +413,7 @@ class CtcTestHarness(QObject):
         self._link: CtcLink = link if link is not None else LocalLink()
         self._layout = dict(load_layout() if layout is None else layout)
         self._options = layout_options(self._layout)
+        self._station_lines = station_lines(self._layout)
         self._values: dict[str, Any] = {}
         self._choices: dict[str, str] = {}
         self._reset_values()
@@ -533,8 +566,7 @@ class CtcTestHarness(QObject):
     def send(self) -> None:
         """Apply the edited dispatcher rows, then the inputs."""
         try:
-            inputs = build_inputs(self._values, self._values["ticket_sales"],
-                                  self._choices["ticket_sales"])
+            inputs = build_inputs(self._values)
             # All or nothing: if any part is rejected, none is applied.
             self._link.apply_batch(inputs, self._dispatcher_actions())
         except (HarnessInputError, CtcError) as error:
@@ -668,7 +700,7 @@ class CtcTestHarness(QObject):
             self.outputsChanged.emit()
             return
         self._outputs = output_rows(snap.outputs, snap.tickets_sold,
-                                    snap.elapsed_s)
+                                    snap.elapsed_s, self._station_lines)
         self.outputsChanged.emit()
         mirrored = {name: entries for name, entries in _mirror(snap).items()
                     if name not in self._edited}
@@ -695,9 +727,7 @@ class CtcTestHarness(QObject):
         """After the CTC window restarts its module knows nothing of the
         inputs shown here: send them again (not the dispatcher rows)."""
         try:
-            self._link.set_inputs(build_inputs(
-                self._values, self._values["ticket_sales"],
-                self._choices["ticket_sales"]))
+            self._link.set_inputs(build_inputs(self._values))
         except (HarnessInputError, CtcError) as error:
             self._set_status("Reconnected, but your inputs could not be "
                              f"re-sent: {error}", True)

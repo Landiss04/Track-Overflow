@@ -23,7 +23,6 @@ from ctc.interface import (  # noqa: E402
     SwitchReport,
     TrackControllerInputs,
     TrackFailureReport,
-    TicketSales,
     TrackModelInputs,
     TrainReport,
 )
@@ -35,13 +34,13 @@ _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
 
 def _green(tickets: int) -> TrackModelInputs:
-    """Track Model inputs with Green line ticket sales."""
-    return TrackModelInputs((TicketSales("Green", tickets),))
+    """Track Model inputs: tickets sold at Glenbury, a Green station."""
+    return TrackModelInputs({"GLENBURY": tickets})
 
 
-def _sold(snap: CtcSnapshot, line: str = "Green") -> int:
-    """Tickets sold so far on one line."""
-    return {t.line: t.tickets for t in snap.tickets_sold}[line]
+def _sold(snap: CtcSnapshot, station: str = "GLENBURY") -> int:
+    """Tickets sold so far at one station."""
+    return snap.tickets_sold[station]
 
 
 def _host() -> tuple[CtcHost, StubCtcOffice, SimulationClockBridge]:
@@ -303,8 +302,9 @@ class PanelDataTest(unittest.TestCase):
         host, _, clock = _host()
         self.assertEqual(host.throughput, {"Green": "—",
                                            "Red": "—"})
-        host._receive_inputs(CtcInputs(track_model=TrackModelInputs((
-            TicketSales("Green", 30), TicketSales("Red", 6)))))
+        # Per line is the sum over the line's stations.
+        host._receive_inputs(CtcInputs(track_model=TrackModelInputs({
+            "GLENBURY": 20, "DORMONT": 10, "SHADYSIDE": 6})))
         for _ in range(3600):          # six simulated minutes of ticks
             clock.clock.tick()
         # Sales count once, on the first tick: 30 in a tenth of an hour.
@@ -316,15 +316,15 @@ class PanelDataTest(unittest.TestCase):
     def test_history_buckets_sales_by_clock_hour(self) -> None:
         host, _, clock = _host()           # the clock starts at 05:00
 
-        def sell(line: str, tickets: int, at_s: float) -> None:
+        def sell(station: str, tickets: int, at_s: float) -> None:
             clock.clock.reset(at_s)
             host._receive_inputs(CtcInputs(track_model=TrackModelInputs(
-                (TicketSales(line, tickets),))))
+                {station: tickets})))
             clock.clock.tick()
 
-        sell("Green", 10, 5 * 3600)
-        sell("Green", 5, 5 * 3600 + 1800)
-        sell("Red", 4, 7 * 3600)
+        sell("GLENBURY", 10, 5 * 3600)
+        sell("DORMONT", 5, 5 * 3600 + 1800)
+        sell("SHADYSIDE", 4, 7 * 3600)
         history = host.throughputHistory
         # Twelve hours from the start hour, 05:00 to 16:00.
         self.assertEqual(history["hours"][0], "05:00")
@@ -336,7 +336,7 @@ class PanelDataTest(unittest.TestCase):
 
         # Past 12 hours the window follows the current hour, across
         # midnight: 05:00 drops out.
-        sell("Red", 1, 24 * 3600 + 900)          # 00:15 the next day
+        sell("SHADYSIDE", 1, 24 * 3600 + 900)        # 00:15 the next day
         history = host.throughputHistory
         self.assertEqual((history["hours"][0], history["hours"][-1]),
                          ("13:00", "00:00"))

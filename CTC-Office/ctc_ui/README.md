@@ -44,10 +44,11 @@ other:
   already use them. Once applied the CTC window shows them: trains,
   closed and failed blocks and active crossings on the track map, trains
   in the occupancy window, reported switch positions in Maintenance.
-  Ticket sales are per line: enter the count and pick Green or Red in the
-  row's **Line** dropdown. They count tickets sold since the previous
-  tick, so each Send's sales are counted once (a second Send before the
-  next tick replaces the first).
+  Ticket sales are per station, as the Track Model reports them
+  (`{station name: tickets}`): add a row per station that sold tickets.
+  They count tickets sold since the previous tick, so each Send's sales
+  are counted once (a second Send before the next tick replaces the
+  first). Throughput per line is the sum over the line's stations.
 - Send is all or nothing: if any part is rejected (an unknown block, two
   trains in one block, an unsafe order, a switch outside maintenance
   mode), nothing of it is applied and the status line says why. The

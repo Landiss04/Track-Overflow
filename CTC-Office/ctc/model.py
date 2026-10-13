@@ -33,7 +33,6 @@ from ctc.interface import (
     SwitchCommand,
     SwitchPosition,
     SwitchReport,
-    TicketSales,
     TrackControllerInputs,
     TrackFailureKind,
     TrackFailureReport,
@@ -49,7 +48,7 @@ from ctc.routing import (
     first_reversal,
     reversing_route,
 )
-from ctc.track_layout import Line, load_layout
+from ctc.track_layout import Line, load_layout, station_lines
 
 if TYPE_CHECKING:
     from ctc.schedule import Schedule
@@ -153,7 +152,6 @@ _INPUT_LISTS = (
     ("track_controller", "switches", SwitchReport),
     ("track_controller", "crossings", CrossingReport),
     ("track_controller", "failures", TrackFailureReport),
-    ("track_model", "ticket_sales", TicketSales),
 )
 
 
@@ -180,6 +178,11 @@ def _require_shape(inputs: object) -> None:
                 raise InvalidInputError(
                     f"every entry of {field} must be a {kind.__name__}, "
                     f"got {type(item).__name__}")
+    sales = inputs.track_model.ticket_sales
+    if not isinstance(sales, Mapping):
+        raise InvalidInputError(
+            "ticket_sales must map station names to tickets, got "
+            f"{type(sales).__name__}")
 
 
 class _Layout:
@@ -197,6 +200,8 @@ class _Layout:
                          for name, line in lines.items()
                          for b in line.blocks}
         self.lengths_m = self._lengths
+        # Each named station's line, by station name.
+        self.station_lines = station_lines(dict(lines))
         self.speed_limits_kmh = {(name, b.block_id): b.speed_limit_kmh
                                  for name, line in lines.items()
                                  for b in line.blocks}
@@ -313,19 +318,16 @@ class _Layout:
                          failure.kind,
                          f"failure on {failure.line} block "
                          f"{failure.block_id}")
-        lines_sold = set()
-        for sale in inputs.track_model.ticket_sales:
-            self._line(sale.line, "ticket sales")
-            if sale.line in lines_sold:
+        for station, tickets in inputs.track_model.ticket_sales.items():
+            if (not isinstance(station, str)
+                    or station not in self.station_lines):
                 raise InvalidInputError(
-                    f"ticket sales: {sale.line} is listed twice")
-            lines_sold.add(sale.line)
-            if (isinstance(sale.tickets, bool)
-                    or not isinstance(sale.tickets, int)
-                    or not 0 <= sale.tickets <= MAX_TICKETS):
+                    f"ticket sales: no station is named {_short(station)}")
+            if (isinstance(tickets, bool) or not isinstance(tickets, int)
+                    or not 0 <= tickets <= MAX_TICKETS):
                 raise InvalidInputError(
-                    f"ticket sales on {sale.line} must be a whole number "
-                    f"from 0 to {MAX_TICKETS}, got {_short(sale.tickets)}")
+                    f"ticket sales at {station} must be a whole number "
+                    f"from 0 to {MAX_TICKETS}, got {_short(tickets)}")
 
 
 def _require_choice(value: object, choices: object, what: str) -> None:
@@ -347,6 +349,10 @@ def _normalize(inputs: CtcInputs) -> CtcInputs:
     """Check the inputs' shape, make every list a tuple, and trim train
     IDs: stray spaces do not make another train."""
     _require_shape(inputs)
+    # A copy, so a later change to the caller's dict changes nothing here.
+    inputs = replace(inputs, track_model=replace(
+        inputs.track_model,
+        ticket_sales=dict(inputs.track_model.ticket_sales)))
     for part, field, _ in _INPUT_LISTS:
         owner = getattr(inputs, part)
         items = getattr(owner, field)
@@ -407,7 +413,9 @@ class StubCtcOffice:
         # Reports received while no time passes; applied at next step.
         self._staged: CtcInputs | None = None
         self._elapsed_s = 0.0
-        self._tickets: dict[str, int] = {name: 0 for name in self._lines}
+        # Tickets sold at each named station since the start.
+        self._tickets: dict[str, int] = {
+            station: 0 for station in self._layout.station_lines}
         self._schedule: Schedule | None = None
 
     # -- Stepping -----------------------------------------------------
@@ -427,8 +435,8 @@ class StubCtcOffice:
         self._inputs = inputs
         self._staged = None
         self._elapsed_s += dt
-        for sale in inputs.track_model.ticket_sales:
-            self._tickets[sale.line] += sale.tickets
+        for station, tickets in inputs.track_model.ticket_sales.items():
+            self._tickets[station] += tickets
         # A failure now reported cancels orders into that block.
         for failure in inputs.track_controller.failures:
             self._cancel_orders_into(
@@ -461,8 +469,7 @@ class StubCtcOffice:
             outputs=self._outputs(),
             inputs=self._inputs,
             elapsed_s=self._elapsed_s,
-            tickets_sold=tuple(TicketSales(line, tickets)
-                               for line, tickets in self._tickets.items()),
+            tickets_sold=dict(self._tickets),
             queued_trains=self._queued(),
             orders=tuple(self._orders[t] for t in sorted(self._orders)),
             pending_closures=tuple(sorted(self._pending,

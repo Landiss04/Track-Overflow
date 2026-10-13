@@ -26,7 +26,6 @@ from ctc.interface import (  # noqa: E402
     SwitchReport,
     TrackControllerInputs,
     TrackFailureReport,
-    TicketSales,
     TrackModelInputs,
     TrainAuthority,
     TrainReport,
@@ -46,13 +45,13 @@ HOST = Path(__file__).with_name("link_host.py")
 
 
 def _green(tickets: int) -> TrackModelInputs:
-    """Track Model inputs with Green line ticket sales."""
-    return TrackModelInputs((TicketSales("Green", tickets),))
+    """Track Model inputs: tickets sold at Glenbury, a Green station."""
+    return TrackModelInputs({"GLENBURY": tickets})
 
 
-def _sold(snap: CtcSnapshot, line: str = "Green") -> int:
-    """Tickets sold so far on one line."""
-    return {t.line: t.tickets for t in snap.tickets_sold}[line]
+def _sold(snap: CtcSnapshot, station: str = "GLENBURY") -> int:
+    """Tickets sold so far at one station."""
+    return snap.tickets_sold[station]
 
 
 class WireTest(unittest.TestCase):
