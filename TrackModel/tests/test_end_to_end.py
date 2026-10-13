@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from tests.qt_helpers import dispose, qt_app, wait_for
+from tests.qt_helpers import dispose, private_link_name, qt_app, wait_for
 from test_link.link import LinkServer
 from test_ui.harness import TrackModelTestHarness
 from tests.helpers import make_model
@@ -25,9 +25,10 @@ Page = Any
 def harness() -> Iterator[Page]:
     """Return a test UI harness connected to a fresh Track Model."""
     qt_app()
-    server = LinkServer(make_model())
+    name = private_link_name()
+    server = LinkServer(make_model(), name=name)
     assert server.listen()
-    page: Page = TrackModelTestHarness()
+    page: Page = TrackModelTestHarness(link_name=name)
     assert wait_for(lambda: page.connected and bool(page.blocks))
     yield page
     page.close()

@@ -21,8 +21,8 @@ def test_protocol_conformance_static() -> None:
 
 def test_protocol_members_match_signatures() -> None:
     """Check that every protocol method exists with the same parameters."""
-    for name in ("step", "snapshot", "set_block_failure", "edit_block",
-                 "reset"):
+    for name in ("step", "snapshot", "set_block_failure", "set_ambient_temp",
+                 "load_layout_file", "edit_block", "reset"):
         expected = inspect.signature(getattr(interface.TrackModel, name))
         actual = inspect.signature(getattr(TrackModel, name))
         assert list(actual.parameters) == list(expected.parameters), name

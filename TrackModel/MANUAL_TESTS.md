@@ -47,10 +47,11 @@ Section and **Blocks, e.g. 5-20** narrow the block pickers further.
 
 | Panel | Row | Means |
 |---|---|---|
-| Train panel | `block`, `offset`, `speed`, `changed`, `capacity` | the Train Model's report |
-| Block panel | `speed`, `authority` | commanded speed and authority for the block |
+| Train panel | `block`, `offset`, `speed`, `changed`, `capacity`, `doors` | the Train Model's report; `offset` is since entering the block, as the Train Model counts it |
+| Block panel | `speed`, `authority` | commanded speed (m/s) and authority (blocks) for the block |
 | Gates, heaters panel | `E-19`, `heat B` | a crossing gate (true = closed); section B's heaters |
-| Outputs — to Track Controller | `occupied`, `failures`, `heaters on`, `sold now`, `sold total` | read-back; occupancy, failures and heaters cover the chosen line |
+| Outputs — to Track Controller | `occupied`, `failures`, `heaters on` | read-back; occupancy, failures and heaters cover the chosen line |
+| Outputs — to CTC Office | `sold now` | tickets sold this tick, by line; no running total is kept |
 | | `trk temp` | track temperature (°C) of the selected block's section |
 | | `sw …`, `sig …`, `gate …` | switch, signal light, crossing gate |
 | Outputs — to Train Model | `block` … `station` | Track Info |
@@ -144,24 +145,20 @@ Press **Reset module** between cases unless a case says otherwise.
 - [ ] Pass
 
 1. Continue from TC-04. In the block panel, pick `BLUE A-1`. Set
-   `speed` to 10 and `authority` to `BLUE A-5`.
+   `speed` to 10 and `authority` to 4.
 2. Step one tick.
 3. In the block panel, pick `BLUE A-2`. Set its speed to 5 and its
-   authority to `BLUE B-10`.
+   authority to 3.
 4. Move T1 into A-2: offset 49, speed 20, then step.
-5. Still on `BLUE A-2` in the block panel, set authority to `BLUE Z-99`
-   and step.
+5. Try typing `-1` or `2.5` into either field.
 
 **Expected**
 
-- The speed field takes whole numbers only, because commanded speed is
-  an int.
-- After step 2: `cmd speed` = 10 and
-  `authority` = BLUE A-5.
+- After step 2: `cmd speed` = 10 and `authority` = 4 blocks.
 - After step 4: the feed reads BLUE A-2, commanded speed 5 and authority
-  BLUE B-10. Both change with the block the train is in.
-- Step 5: the callout **Rejected by the Track Model** names `BLUE Z-99`,
-  and nothing else changes. Clear the authority field afterwards.
+  3. Both change with the block the train is in.
+- Step 5: the fields refuse it. Commanded speed and authority are whole,
+  non-negative numbers: m/s and a count of blocks.
 
 ### TC-06 Movement, occupancy and polarity
 - [ ] Pass
@@ -216,13 +213,22 @@ Press **Reset module** between cases unless a case says otherwise.
 - [ ] Pass
 
 1. Add T1 at `BLUE A-3`, then move it into A-4 (offset 49, speed 20,
-   step).
-2. Set speed 0 and offset -1, then Step.
+   step). It crosses with 1 m to spare (49 + 2 = 51), so it is 1 m into
+   A-4.
+2. Set speed 0 and offset -2, then Step.
+3. Set offset -5, then Step. Then set offset -10 and Step.
+4. Set offset -50, then Step.
 
 **Expected**
 
-- T1 goes back to **BLUE A-3**, which is the block it came from, and
-  `polarity` flips again.
+- Step 2: T1 goes back to **BLUE A-3**, the block it came from, and
+  `polarity` flips again. It rolled back 1 m past A-4's start, so it is
+  now 49 m into A-3, at its far end.
+- Step 3: T1 stays in **A-3** both times. A train that rolls back into a
+  block arrives at its far end, so a few metres more keeps it there; it
+  does not drop a block every tick. The Track Model window's **Trains on
+  track** shows its offset falling from 44 m to 39 m (shown in ft).
+- Step 4: T1 rolls back into **A-2**.
 
 ### TC-10 Beacons next to stations
 - [ ] Pass
@@ -246,19 +252,23 @@ Press **Reset module** between cases unless a case says otherwise.
 1. Run the clock for about 30 s with no trains, then Hold.
 2. In the Track Model window, choose Line **BLUE** and look at **Waiting
    at stations**.
-3. Add T1 at `BLUE B-10` (station B) with speed 0. Set
+3. Add T1 at `BLUE B-10` (station B) with speed 0 and `doors` false. Set
    `capacity` to 2, then Step.
-4. Set speed 5 and Step.
+4. Set `doors` to true, then Step.
+5. Set speed 5 and Step.
 
 **Expected**
 
-- While running, `sold total` climbs, and `sold now` occasionally shows
-  e.g. `B+1`. These outputs go to the Track Controller only.
+- While running, in **Outputs — to CTC Office** the `sold BLUE` total
+  climbs, and `sold now` occasionally shows e.g. `BLUE +1`. These go to
+  the CTC Office directly, not the Track Controller. **Reset module**
+  returns every total to 0.
 - Waiting at stations shows counts for B and C.
-- Step 3: `boarded` = 2, or fewer if fewer were waiting, and
-  station B's waiting count drops by the same amount.
-- Step 4: `boarded` = 0, because a moving train does not
-  board.
+- Step 3: `boarded` = 0, because the doors are shut. Station B's waiting
+  count does not drop: nobody is lost.
+- Step 4: `boarded` = 2, or fewer if fewer were waiting, and station B's
+  waiting count drops by the same amount.
+- Step 5: `boarded` = 0, because a moving train does not board.
 
 ### TC-12 Murphy failure from the Track Model window reaches the test UI at once
 - [ ] Pass
@@ -274,7 +284,7 @@ Press **Reset module** between cases unless a case says otherwise.
   `A-2 TRACK_CIRCUIT`, and `occupied` shows `A-2`: a failed track
   circuit reads as occupied.
 - The Track Model window header reads `BLUE · 1 FAILED`, and A-2's row
-  shows OCC and TRACK_CIRCUIT.
+  shows TRUE and TRACK_CIRCUIT.
 - Setting None clears all of these.
 
 ### TC-13 Power failure from the test UI
@@ -394,17 +404,20 @@ in the Track Model window for these cases.
 1. Add T1 at `GREEN K-63`, which is where the yard joins the line. Set
    speed 0 and offset -1, then Step.
 2. Set offset 99 and speed 20, then Step.
-3. Set speed 0 and offset -1, then Step. Then set offset -1 again and
-   Step once more.
+3. Set speed 0 and offset -5, then Step. Then set offset -5 again and
+   Step.
+4. Set offset -100, then Step.
 
 **Expected**
 
 - Step 1: T1 stays at K-63. A train that has just come out of the yard
   does not roll back into it.
 - Step 2: T1 moves to **GREEN K-64**, not J-62.
-- Step 3: the first rollback returns T1 to K-63. The second keeps going
-  back, through the switch at 63 as it is set: NORMAL leads to **J-62**.
-  A train keeps rolling back; it does not bounce between two blocks.
+- Step 3: the first rollback returns T1 to K-63, at its far end. The
+  second keeps it in K-63, 5 m further back.
+- Step 4: T1 keeps going back through the switch at 63 as it is set:
+  NORMAL leads to **J-62**. A train keeps rolling back; it does not
+  bounce between two blocks.
 
 ### TC-21 The full course loop
 - [ ] Pass
@@ -460,16 +473,15 @@ in the Track Model window for these cases.
 ### TC-24 Green track circuit, beacons and stations
 - [ ] Pass
 
-1. Pick `GREEN M-76` in the block panel. Set speed 12 and authority
-   `GREEN O-88`.
+1. Pick `GREEN M-76` in the block panel. Set speed 12 and authority 3.
 2. Add T1 at `GREEN M-76` and Step.
 3. Run the clock for about 20 s with no other changes, then Hold. Set
-   T1's `block` to `GREEN P-96`, set speed 0 and capacity 4, then
-   Step.
+   T1's `block` to `GREEN P-96`, speed 0, capacity 4 and `doors` true,
+   then Step.
 
 **Expected**
 
-- At M-76: commanded speed **12**, authority **GREEN O-88**, and beacon
+- At M-76: commanded speed **12**, authority **3** blocks, and beacon
   **MT LEBANON / LR**, because MT LEBANON at N-77 has platforms on both
   sides.
 - At P-96: `station` = CASTLE SHANNON, and
@@ -545,9 +557,44 @@ in the Track Model window for these cases.
 **Expected**
 
 - Step 1: T1's `cmd speed` is 12.
-- Step 2: `cmd speed` is 0 and `authority` is none, because a broken
+- Step 2: `cmd speed` is 0 and `authority` is 0, because a broken
   rail cuts the track circuit. `occupied` lists C-9.
 - Step 3: `cmd speed` is 12 again.
+
+### TC-29 Load a track from JSON
+- [ ] Pass
+
+1. In the Track Model window, press **Load track…** and choose
+   `blue_line.json`.
+2. Press **Load track…** again and choose a file that is not a layout
+   (e.g. `MANUAL_TESTS.md` renamed, or an empty `.json`).
+3. In the test UI, press **Reset module**.
+
+**Expected**
+
+- Step 1: the window shows the BLUE line, with its blocks. The other lines
+  are still loaded. The module restarts: no trains, clock at `00:00:00`.
+- Step 2: a **Track not loaded** callout gives the reason, and the track
+  and trains are unchanged.
+- Step 3: the test UI picks up the loaded line's blocks and devices.
+
+### TC-30 Track circuit shown, and ambient set in the window
+- [ ] Pass
+
+1. With Line GREEN, in the test UI pick `GREEN C-9` in the block panel and
+   set speed 12 and authority 3. Step once.
+2. In the Track Model window, find `GREEN C-9` and click it.
+3. Set a **Circuit** failure on it, then **None**.
+4. In the Conditions panel, type `20` in **Ambient temperature (°F)** and
+   press Enter. Then in the test UI set `ambient` to 50 and Step.
+
+**Expected**
+
+- Step 2: the **Cmd mph** column reads 27 and **Auth** reads 3. The
+  Selected panel shows Commanded speed 27 mph and Authority 3 blocks.
+- Step 3: both read 0 while the failure is set, and 27 and 3 again after.
+- Step 4: Conditions keeps reading 20 °F. The test UI's 50 °F is ignored
+  until **Reset module**.
 
 ---
 

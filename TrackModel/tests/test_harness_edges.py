@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from common.harness.track_model_edges import (
     build_track_model_inputs,
+    track_model_to_ctc_office,
     track_model_to_track_controller,
     track_model_to_train_controller,
     track_model_to_train_model,
@@ -37,7 +38,7 @@ def at(block_id: str, offset_m: float, speed: float = 5.0) -> (
 ):
     """Return a catalog report for train T1."""
     return {"T1": TrainTrackReport(
-        TrainPosition(block_id, offset_m), speed, False, 222)}
+        TrainPosition(block_id, offset_m), speed, False, 222, False)}
 
 
 def test_round_trip_through_every_edge() -> None:
@@ -45,7 +46,7 @@ def test_round_trip_through_every_edge() -> None:
     model = make_model()
     commands = wayside(
         commanded_speed_mps={"BLUE A-4": 11},
-        authority_block_id={"BLUE A-4": "BLUE B-10"},
+        authority_blocks={"BLUE A-4": 4},
         switch_positions={"BLUE A-5": SwitchPosition.REVERSE},
         crossing_gates_closed={"BLUE A-3": True},
         signal_aspects={"BLUE A-4": SignalAspect.SUPER_GREEN},
@@ -72,10 +73,36 @@ def test_round_trip_through_every_edge() -> None:
     assert feed is not None
     assert feed.track_info.block_id == "BLUE A-4"
     assert feed.commanded_speed_mps == 11
-    assert feed.authority_block_id == "BLUE B-10"
+    assert feed.authority_blocks == 4
 
     assert track_model_to_train_controller(out, "T1") is (
         SignalAspect.SUPER_GREEN)
+
+
+def test_ticket_sales_reach_the_ctc_office_as_line_pairs() -> None:
+    """Check the CTC edge carries (count, line) pairs and no total."""
+    model = make_model(ticket_probability=1.0)
+    for _ in range(2):
+        out = model.step(DT_S, build_track_model_inputs(
+            WaysideCommands(), {}, ambient_temp_c=0.0))
+    sales = track_model_to_ctc_office(out)
+    now = dict((line, n) for n, line in sales.sold_now)
+    assert now["GREEN"] > 0
+    assert not hasattr(sales, "sold_total")
+    assert not hasattr(track_model_to_track_controller(out), "ticket_sales")
+
+
+def test_station_name_and_doors_cross_the_edges() -> None:
+    """Check the station reaches the train and doors reach boarding."""
+    model = make_model(ticket_probability=1.0)
+    stopped = {"T1": TrainTrackReport(
+        TrainPosition("GREEN A-2", 1.0), 0.0, False, 222, True)}
+    out = model.step(DT_S, build_track_model_inputs(
+        WaysideCommands(), stopped, ambient_temp_c=0.0))
+    feed = track_model_to_train_model(out, "T1")
+    assert feed is not None
+    assert feed.track_info.station_name == "PIONEER"
+    assert feed.passengers_boarded == 1
 
 
 def test_absent_train_maps_to_none() -> None:

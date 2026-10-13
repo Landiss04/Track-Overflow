@@ -128,11 +128,11 @@ def test_failed_block_carries_no_track_signal(failure: TrackFailure) -> None:
         {"T1": report("GREEN C-9", 1.0)},
         TrackControllerCommands(
             commanded_speed_mps={"GREEN C-9": 12},
-            commanded_authority={"GREEN C-9": "GREEN A-1"}),
+            commanded_authority={"GREEN C-9": 4}),
     ))
     signal = out.train_feeds["T1"].track_signal
-    assert (signal.commanded_speed_mps, signal.authority_block_id) == (
-        0, None)
+    assert (signal.commanded_speed_mps, signal.authority_blocks) == (
+        0, 0)
 
 
 def test_clearing_a_failure_restores_the_block() -> None:

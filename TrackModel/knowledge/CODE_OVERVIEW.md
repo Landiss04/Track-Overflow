@@ -56,7 +56,7 @@ Two programs run side by side and talk over a local connection:
 | `test_link/link.py` | The **local connection**: `LinkServer` (inside the Track Model process) and `LinkClient` (inside the test UI). | the two windows don't talk |
 | `../common/harness/track_model_edges.py` | The **functions other modules call** at integration, one per connection: Track Controller ↔ Track Model, Train Model ↔ Track Model, Track Model → Train Controller. | see what another module receives from you |
 | `../common/interfaces.py` (last section) | The team-wide **catalog types** those functions translate to and from. Kevin owns this file. | check the shared shape of a signal |
-| `green_line.json`, `red_line.json`, `blue_line.json` | The **track layouts**. Green also carries `next_blocks` (direction of travel). | fix layout data |
+| `green_line.json`, `red_line.json`, `blue_line.json` | The **track layouts**. All three carry `next_blocks` (direction of travel). | fix layout data |
 | `tests/` | The automated tests (section 7). `run_tests.py` prints them readably. | check what is covered |
 | `README.md`, `MANUAL_TESTS.md` | How to run things, the behaviour rules, open questions, and the hand-test script. | — |
 
@@ -72,11 +72,11 @@ order. Each step is a small method you can read on its own.
 | 1 | `_validate` | Checks the whole input first: real block, switch, signal, crossing and section IDs; whole non-negative speeds; finite numbers. If anything is wrong it raises, and **nothing changes**. |
 | 2 | `_apply_commands` | Stores the Track Controller's commands: speed and authority per block, switch, light, gate and heater commands. A switch moves to its command unless its block has lost power. |
 | 3 | `_update_track_temps` | Moves each section's track temperature a little toward its target: ambient, or ambient + 10 °C while that section's heaters run. |
-| 4 | `_move_trains` → `_advance` | For each train report: places a new train, ignores a stale report, or moves the train across a block boundary when its `offset_m` passes the block's length (forward) or goes below 0 (rollback). The next block comes from `Layout.next_block`, following the switches as set. |
-| 5 | `_sell_tickets` | Each station rolls for a new ticket. |
+| 4 | `_move_trains` → `_advance` | For each train report: skips a train with no block yet (`""`), places a new train, uses a stale report only to correct the carry, or moves the train across a block boundary when its true offset (reported offset + carry) passes the block's length (forward) or goes below 0 (rollback). The next block comes from `Layout.next_block`, following the switches as set. |
+| 5 | `_sell_tickets` | Each station rolls for a new ticket; sales are reported for this tick only; no total is kept. |
 | 6 | `_feed` (per train) | Builds what each train receives: Track Info for its block, the track circuit (speed and authority of its block, or nothing if the circuit is dead), the beacon if any, and passengers boarded (`_board`). |
 | 7 | `_signal_seen` (per train) | If the train just entered a block with a light, the light's colour; otherwise nothing. |
-| 8 | `_controller_outputs` | Builds what the Track Controller reads back: occupancy, switch, gate, light and heater **actual** states, failures, ticket sales and track temperatures. |
+| 8 | `_controller_outputs` | Builds what the Track Controller reads back: occupancy, switch, gate, light and heater **actual** states, failures and track temperatures. `_ctc_outputs` builds the ticket sales for the CTC Office. |
 
 Between ticks, `set_block_failure` (Murphy) changes a failure and rebuilds
 step 8 straight away, so the Track Controller sees it at once.
@@ -92,6 +92,7 @@ All in `track_model/model.py` unless noted.
 | **Block occupancy** | `_controller_outputs`: a block is occupied if a train is in it **or** its circuit is dead (`_circuit_dead`). |
 | **A train moving to the next block** | `_advance`; the "which block" answer is `Layout.next_block` in `layout.py`. |
 | **Rollback** | `_advance` (the `offset_m < 0` branch) and `_behind`. |
+| **Offset carry** (keeping position exact when the Train Model restarts its offset at 0 in each block) | `_Train.carry_m`, set in `_advance` and corrected by a stale report in `_move_trains`; the arithmetic is `_carry_into`. |
 | **Out of the yard / into the yard** | `_move_trains` (a new train at `Yard-63` is marked as come from the yard); `_advance` deletes a train whose next block is the yard. |
 | **Switch positions** | `_apply_commands` (commanded → actual, unless power is out). Switch legs come from `_read_switches` / `_parse_switch_text` in `layout.py`. |
 | **Signal lights** | `_signal_state` (RED without power); placement in `_signal_blocks` in `layout.py`. |
@@ -103,7 +104,7 @@ All in `track_model/model.py` unless noted.
 | **Commanded speed and authority to a train** | `_feed` (the `TrackSignal` part): per block, or 0/none on a dead circuit. |
 | **Beacons** | Placed by `_beacons` in `layout.py` (on every neighbour of a station block); sent in `_feed`. |
 | **Ticket sales and waiting passengers** | `_sell_tickets`. |
-| **Boarding** | `_board`: only while stopped in a station block. |
+| **Boarding** | `_board`: only while stopped in a station block with a door open (`doors_open` in the train's report). |
 | **Direction of travel** | `next_blocks` in `green_line.json`, read and checked by `_read_next_blocks`, `_resolve_exits` and `_check_directions` in `layout.py`. Used by `Layout.next_block` and `previous_block` when a train's direction is unknown. |
 | **Unit conversion from the layout files** | `_read_block` in `layout.py`. |
 | **Display units (ft, mph, °F)** | `track_model/state.py` (`FT_PER_M`, `MPH_PER_MPS`, `c_to_f`). |
@@ -119,19 +120,24 @@ Defined in `track_model/interface.py`. Every value is in backend units
 **In (`TrackModelInputs`), every tick:**
 
 - `controller` (`TrackControllerCommands`), keyed by block unless noted:
-  - commanded speed (whole m/s) and authority (a block ID), per block;
+  - commanded speed (whole m/s) and authority (a whole count of blocks,
+    0 = stop), per block;
   - switch positions, signal colours and crossing gates, each keyed by
     the block the device is on;
   - heaters on/off, keyed by section (`"GREEN B"`).
-- `trains`: for each train ID, a `TrainReport` with block, offset into
-  the block, speed, a block-changed flag and passenger capacity.
+- `trains`: for each train ID, a `TrainReport` with block, offset since
+  entering the block (the Train Model restarts it at 0 in each block),
+  speed, a block-changed flag, passenger capacity and whether a door is
+  open. Block `""` means the train isn't on the track yet.
 - `ambient_temp_c`.
 
 **Out (`TrackModelOutputs`):**
 
 - `controller` (`TrackControllerOutputs`), for the Track Controller:
-  occupancy, switch / gate / light / heater **actual** states, failures,
-  ticket sales and track temperature per section.
+  occupancy, switch / gate / light / heater **actual** states, failures
+  and track temperature per section.
+- `ctc` (`CtcOutputs`), for the CTC Office, direct: tickets sold per
+  line, this tick only. The Track Model keeps no running total.
 - `train_feeds`: for each train, a `TrainFeed` with Track Info, the
   track circuit (speed and authority), beacon and passengers boarded.
 - `signal_seen`: for each train, the light colour on the tick it
@@ -156,6 +162,7 @@ modules gets one translation function in
 | Track Model → Track Controller | `track_model_to_track_controller` |
 | Track Model → Train Model | `track_model_to_train_model` |
 | Track Model → Train Controller | `track_model_to_train_controller` |
+| Track Model → CTC Office | `track_model_to_ctc_office` |
 
 At integration a central loop will do, each tick: gather the other
 modules' outputs → translate them with these functions → call your

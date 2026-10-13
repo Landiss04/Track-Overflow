@@ -12,9 +12,10 @@ Edges:
 - Track Model      -> Track Controller ``track_model_to_track_controller``
 - Track Model      -> Train Model    ``track_model_to_train_model``
 - Track Model      -> Train Controller ``track_model_to_train_controller``
+- Track Model      -> CTC Office     ``track_model_to_ctc_office``
 
-There is no edge to the CTC Office: it reads Track Model data through
-the Track Controller.
+The CTC Office reads occupancy and device state through the Track
+Controller. Ticket sales go to it directly, by the last edge.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from common.interfaces import (
     SignalAspect as CatalogAspect,
     SwitchPosition as CatalogSwitch,
     TrackInfo as CatalogTrackInfo,
+    TicketSales,
     TrackReadback,
     TrainTrackFeed,
     TrainTrackReport,
@@ -61,7 +63,7 @@ def track_controller_to_track_model(
     """Map the Track Controller's commands to Track Model input."""
     return TrackControllerCommands(
         commanded_speed_mps=dict(commands.commanded_speed_mps),
-        commanded_authority=dict(commands.authority_block_id),
+        commanded_authority=dict(commands.authority_blocks),
         switch_commands={
             k: SwitchPosition[v.name]
             for k, v in commands.switch_positions.items()
@@ -86,6 +88,7 @@ def train_model_to_track_model(
             actual_speed_mps=r.actual_speed_mps,
             block_changed=r.block_changed,
             passenger_capacity=r.passenger_capacity,
+            doors_open=r.doors_open,
         )
         for train_id, r in reports.items()
     }
@@ -124,9 +127,21 @@ def track_model_to_track_controller(
         },
         failures={k: _FAILURES[v] for k, v in out.failure_status.items()},
         heaters_on=dict(out.heater_states),
-        ticket_sales=dict(out.ticket_sales),
         track_temp_c=dict(out.track_temp_c),
     )
+
+
+def track_model_to_ctc_office(outputs: TrackModelOutputs) -> TicketSales:
+    """Map the ticket sales the Track Model sends the CTC Office directly."""
+    ctc = outputs.ctc
+    return TicketSales(
+        sold_now=_pairs(ctc.tickets_sold_now),
+    )
+
+
+def _pairs(by_line: Mapping[str, int]) -> list[tuple[int, str]]:
+    # Truth's ticket-sales form: (count, line) pairs.
+    return [(count, line) for line, count in sorted(by_line.items())]
 
 
 def track_model_to_train_model(
@@ -144,9 +159,10 @@ def track_model_to_train_model(
             elevation_m=info.elevation_m,
             speed_limit_mps=info.speed_limit_mps,
             polarity=info.polarity,
+            station_name=info.station_name,
         ),
         commanded_speed_mps=feed.track_signal.commanded_speed_mps,
-        authority_block_id=feed.track_signal.authority_block_id,
+        authority_blocks=feed.track_signal.authority_blocks,
         beacon=_beacon(feed.beacon),
         passengers_boarded=feed.passengers_boarded,
     )
@@ -166,7 +182,9 @@ def track_model_to_train_controller(
 
 
 def _beacon(beacon: Beacon | None) -> CatalogBeacon | None:
-    # Station fields carry over unchanged; "LR" is a two-sided platform.
+    # Station fields carry over unchanged. "LR" is a two-sided platform;
+    # "" is a station the layout gives no side for (the Blue line).
+    # OPEN: the Train Model accepts only "L" or "R" so far.
     if beacon is None:
         return None
     return CatalogBeacon(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from track_model.interface import (
@@ -14,9 +16,14 @@ from track_model.interface import (
     UnknownIdError,
 )
 from track_model.model import TrackModel
-from tests.helpers import DT_S, make_inputs, make_model, report
-
-FAR_M = 10_000.0     # past the end of any block
+from tests.helpers import (
+    DT_S,
+    OVERSHOOT_M,
+    make_inputs,
+    make_model,
+    past_end,
+    report,
+)
 
 
 def cmd(**kwargs: object) -> TrackControllerCommands:
@@ -25,9 +32,14 @@ def cmd(**kwargs: object) -> TrackControllerCommands:
 
 
 def drive(model: TrackModel, train_id: str, block_id: str,
-          offset_m: float = FAR_M,
+          offset_m: float | None = None,
           controller: TrackControllerCommands | None = None) -> str:
-    """Report ``offset_m`` in ``block_id``; return the train's new block."""
+    """Report ``offset_m`` in ``block_id``; return the train's new block.
+
+    With no offset, report one that just crosses the block's end.
+    """
+    if offset_m is None:
+        offset_m = past_end(model, block_id)
     out = model.step(
         DT_S, make_inputs({train_id: report(block_id, offset_m)}, controller)
     )
@@ -81,14 +93,14 @@ def test_feed_carries_the_block_and_track_circuit() -> None:
     out = model.step(DT_S, make_inputs(
         {"T1": report("GREEN A-3", offset_m=5.0)},
         cmd(commanded_speed_mps={"GREEN A-3": 12},
-            commanded_authority={"GREEN A-3": "GREEN F-28"}),
+            commanded_authority={"GREEN A-3": 5}),
     ))
     feed = out.train_feeds["T1"]
     assert feed.track_info.block_id == "GREEN A-3"
     assert feed.track_info.speed_limit_mps == pytest.approx(45 / 3.6)
     assert feed.track_signal.commanded_speed_mps == 12
     assert isinstance(feed.track_signal.commanded_speed_mps, int)
-    assert feed.track_signal.authority_block_id == "GREEN F-28"
+    assert feed.track_signal.authority_blocks == 5
     assert feed.beacon is not None
     assert feed.beacon.station_name == "PIONEER"
 
@@ -98,17 +110,18 @@ def test_speed_and_authority_come_from_the_occupied_block() -> None:
     model = make_model()
     commands = cmd(
         commanded_speed_mps={"BLUE A-3": 10, "BLUE A-4": 5},
-        commanded_authority={"BLUE A-3": "BLUE A-5", "BLUE A-4": "BLUE B-8"},
+        commanded_authority={"BLUE A-3": 2, "BLUE A-4": 6},
     )
     drive(model, "T1", "BLUE A-3", 1.0, commands)
     out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", 1.0)}))
     signal = out.train_feeds["T1"].track_signal
-    assert (signal.commanded_speed_mps, signal.authority_block_id) == (
-        10, "BLUE A-5")
-    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", FAR_M)}))
+    assert (signal.commanded_speed_mps, signal.authority_blocks) == (
+        10, 2)
+    end = past_end(model, "BLUE A-3")
+    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", end)}))
     signal = out.train_feeds["T1"].track_signal
-    assert (signal.commanded_speed_mps, signal.authority_block_id) == (
-        5, "BLUE B-8")
+    assert (signal.commanded_speed_mps, signal.authority_blocks) == (
+        5, 6)
 
 
 def test_two_trains_in_one_block_get_the_same_signal() -> None:
@@ -116,7 +129,7 @@ def test_two_trains_in_one_block_get_the_same_signal() -> None:
     out = make_model().step(DT_S, make_inputs(
         {"T1": report("GREEN A-3", 1.0), "T2": report("GREEN A-3", 20.0)},
         cmd(commanded_speed_mps={"GREEN A-3": 7},
-            commanded_authority={"GREEN A-3": "GREEN C-9"}),
+            commanded_authority={"GREEN A-3": 3}),
     ))
     assert (out.train_feeds["T1"].track_signal
             == out.train_feeds["T2"].track_signal)
@@ -127,7 +140,7 @@ def test_uncommanded_block_sends_zero_and_no_authority() -> None:
     out = make_model().step(DT_S, make_inputs({"T1": report("BLUE A-2")}))
     signal = out.train_feeds["T1"].track_signal
     assert signal.commanded_speed_mps == 0
-    assert signal.authority_block_id is None
+    assert signal.authority_blocks == 0
 
 
 def test_no_beacon_away_from_stations() -> None:
@@ -154,7 +167,8 @@ def test_offset_past_the_end_advances_and_flips_polarity() -> None:
     """Check that occupancy moves and polarity reverses at a boundary."""
     model = make_model()
     first = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", 1.0)}))
-    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", FAR_M)}))
+    end = past_end(model, "BLUE A-3")
+    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", end)}))
     assert out.train_feeds["T1"].track_info.block_id == "BLUE A-4"
     assert out.controller.block_occupancy["BLUE A-4"]
     assert not out.controller.block_occupancy["BLUE A-3"]
@@ -184,10 +198,40 @@ def test_continued_rollback_keeps_going_back() -> None:
     drive(model, "T1", "BLUE A-2", 1.0)
     assert drive(model, "T1", "BLUE A-2") == "BLUE A-3"
     assert drive(model, "T1", "BLUE A-3") == "BLUE A-4"
-    assert drive(model, "T1", "BLUE A-4", -1.0) == "BLUE A-3"
-    assert drive(model, "T1", "BLUE A-3", -1.0) == "BLUE A-2"
+    # 1.0 m was carried into A-4 (0.5 m overshoot twice), so -2 m is
+    # 1 m back past its start.
+    assert drive(model, "T1", "BLUE A-4", -2.0) == "BLUE A-3"
+    # Back at A-3's far end: rolling its whole 50 m reaches A-2.
+    assert drive(model, "T1", "BLUE A-3", -50.0) == "BLUE A-2"
     # Forward again: still the original direction of travel.
     assert drive(model, "T1", "BLUE A-2") == "BLUE A-3"
+
+
+def test_slow_rollback_stays_in_the_block_it_rolled_into() -> None:
+    """Check a train that rolls back into a block is at its far end.
+
+    The Train Model restarts its offset at 0 in the new block, so its
+    next reports are small negatives. They must move the train back
+    within the block, not one more block every tick.
+    """
+    model = make_model()
+    drive(model, "T1", "BLUE A-3", 1.0)
+    drive(model, "T1", "BLUE A-3")
+    assert drive(model, "T1", "BLUE A-4", -1.0) == "BLUE A-3"
+    for offset in (-1.0, -2.0, -3.0, -10.0):
+        assert drive(model, "T1", "BLUE A-3", offset) == "BLUE A-3"
+    assert model.snapshot().trains[0].offset_m == pytest.approx(
+        50.0 - (1.0 - OVERSHOOT_M) - 10.0)
+
+
+def test_forward_overshoot_is_carried_into_the_next_block() -> None:
+    """Check the distance past a block's end counts in the next block."""
+    model = make_model()
+    drive(model, "T1", "BLUE A-3", 1.0)
+    assert drive(model, "T1", "BLUE A-3", 52.0) == "BLUE A-4"
+    # The Train Model now reports 0 + 47 m: 2 m carried, so 49 m in.
+    assert drive(model, "T1", "BLUE A-4", 47.0) == "BLUE A-4"
+    assert drive(model, "T1", "BLUE A-4", 48.0) == "BLUE A-5"
 
 
 def test_stale_report_after_rollback_is_ignored() -> None:
@@ -208,8 +252,9 @@ def test_rollback_through_a_switch_follows_its_position() -> None:
     drive(model, "T1", "GREEN K-63", 1.0)
     assert drive(model, "T1", "GREEN K-63") == "GREEN K-64"
     assert drive(model, "T1", "GREEN K-64", -1.0) == "GREEN K-63"
-    # Switch 63 is NORMAL (leg 62), so rolling on goes to 62.
-    assert drive(model, "T1", "GREEN K-63", -1.0) == "GREEN J-62"
+    # Switch 63 is NORMAL (leg 62), so rolling on through 63's 100 m
+    # goes to 62.
+    assert drive(model, "T1", "GREEN K-63", -100.0) == "GREEN J-62"
 
 
 @pytest.mark.parametrize("position, expected", [
@@ -252,7 +297,8 @@ def test_train_runs_into_the_yard() -> None:
     to_yard = cmd(switch_commands={"GREEN I-57": SwitchPosition.REVERSE})
     drive(model, "T1", "GREEN I-56", 1.0, to_yard)
     drive(model, "T1", "GREEN I-56")
-    out = model.step(DT_S, make_inputs({"T1": report("GREEN I-57", FAR_M)}))
+    end = past_end(model, "GREEN I-57")
+    out = model.step(DT_S, make_inputs({"T1": report("GREEN I-57", end)}))
     assert "T1" not in out.train_feeds
     assert not out.controller.block_occupancy["GREEN I-57"]
 
@@ -260,10 +306,7 @@ def test_train_runs_into_the_yard() -> None:
 def test_block_changed_is_recorded_not_used() -> None:
     """Check that block_changed alone never moves a train."""
     model = make_model()
-    flagged = report("BLUE A-3", 1.0)
-    flagged = type(flagged)(flagged.block_id, flagged.offset_m,
-                            flagged.actual_speed_mps, True,
-                            flagged.passenger_capacity)
+    flagged = dataclasses.replace(report("BLUE A-3", 1.0), block_changed=True)
     out = model.step(DT_S, make_inputs({"T1": flagged}))
     assert out.train_feeds["T1"].track_info.block_id == "BLUE A-3"
 
@@ -277,7 +320,8 @@ def test_signal_seen_only_on_the_entry_tick() -> None:
     model = make_model()
     yellow = cmd(signal_commands={"BLUE A-4": SignalAspect.YELLOW})
     drive(model, "T1", "BLUE A-3", 1.0, yellow)
-    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", FAR_M)}))
+    end = past_end(model, "BLUE A-3")
+    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", end)}))
     assert out.signal_seen["T1"] is SignalAspect.YELLOW
 
     green = cmd(signal_commands={"BLUE A-4": SignalAspect.GREEN})
@@ -291,7 +335,8 @@ def test_no_signal_seen_in_a_block_without_a_light() -> None:
     """Check entering an ordinary block sends no colour."""
     model = make_model()
     drive(model, "T1", "BLUE A-2", 1.0)
-    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-2", FAR_M)}))
+    end = past_end(model, "BLUE A-2")
+    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-2", end)}))
     assert out.signal_seen["T1"] is None
 
 
@@ -299,11 +344,40 @@ def test_no_signal_seen_in_a_block_without_a_light() -> None:
 # Tickets and boarding
 # --------------------------------------------------------------------------- #
 
-def test_ticket_sales_go_to_the_track_controller() -> None:
-    """Check one sale per station per tick at probability 1."""
-    out = make_model(ticket_probability=1.0).step(DT_S, make_inputs())
-    assert out.controller.ticket_sales["PIONEER"] == 1
-    assert set(out.controller.ticket_sales.values()) == {1}
+def _stations_by_line(model: TrackModel) -> dict[str, int]:
+    # How many stations (pooled by name) each line has.
+    stations: dict[str, set[str]] = {}
+    for block in model.snapshot().blocks:
+        stations.setdefault(block.line, set())
+        if block.station_name is not None:
+            stations[block.line].add(block.station_name)
+    return {line: len(names) for line, names in stations.items()}
+
+
+def test_ticket_sales_go_to_the_ctc_office() -> None:
+    """Check one sale per station per tick, by line, at probability 1."""
+    model = make_model(ticket_probability=1.0)
+    out = model.step(DT_S, make_inputs())
+    assert dict(out.ctc.tickets_sold_now) == _stations_by_line(model)
+    assert not hasattr(out.controller, "ticket_sales")
+
+
+def test_ticket_sales_are_events_with_no_running_total() -> None:
+    """Check each tick reports only its own sales and no total."""
+    model = make_model(ticket_probability=1.0)
+    per_tick = _stations_by_line(model)
+    for _ in range(3):
+        out = model.step(DT_S, make_inputs())
+        assert dict(out.ctc.tickets_sold_now) == per_tick
+        assert not hasattr(out.ctc, "tickets_sold_total")
+
+
+def test_reset_clears_this_ticks_sales() -> None:
+    """Check that a reset leaves every line at zero sold now."""
+    model = make_model(ticket_probability=1.0)
+    model.step(DT_S, make_inputs())
+    model.reset()
+    assert set(model.snapshot().outputs.ctc.tickets_sold_now.values()) == {0}
 
 
 def test_ticket_sales_are_reproducible_with_a_seed() -> None:
@@ -312,7 +386,7 @@ def test_ticket_sales_are_reproducible_with_a_seed() -> None:
     for _ in range(2):
         model = make_model(ticket_probability=0.5, seed=7)
         runs.append([
-            dict(model.step(DT_S, make_inputs()).controller.ticket_sales)
+            dict(model.step(DT_S, make_inputs()).ctc.tickets_sold_now)
             for _ in range(20)
         ])
     assert runs[0] == runs[1]
@@ -324,7 +398,8 @@ def test_stopped_train_boards_up_to_its_capacity() -> None:
     for _ in range(3):
         model.step(DT_S, make_inputs())
     out = model.step(DT_S, make_inputs(
-        {"T1": report("BLUE B-10", 1.0, speed_mps=0.0, capacity=2)}))
+        {"T1": report("BLUE B-10", 1.0, speed_mps=0.0, capacity=2,
+                      doors_open=True)}))
     assert out.train_feeds["T1"].passengers_boarded == 2
     assert model.snapshot().waiting_passengers["B"] == 2
 
@@ -333,8 +408,41 @@ def test_moving_train_does_not_board() -> None:
     """Check that no one boards while the train is moving."""
     model = make_model(ticket_probability=1.0)
     out = model.step(DT_S, make_inputs(
-        {"T1": report("BLUE B-10", 1.0, speed_mps=3.0)}))
+        {"T1": report("BLUE B-10", 1.0, speed_mps=3.0, doors_open=True)}))
     assert out.train_feeds["T1"].passengers_boarded == 0
+
+
+def test_closed_doors_board_nobody_and_keep_the_queue() -> None:
+    """Check a stopped train with doors shut takes no one off the queue."""
+    model = make_model(ticket_probability=1.0)
+    out = model.step(DT_S, make_inputs(
+        {"T1": report("BLUE B-10", 1.0, speed_mps=0.0)}))
+    assert out.train_feeds["T1"].passengers_boarded == 0
+    assert model.snapshot().waiting_passengers["B"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# Integration with the Train Model
+# --------------------------------------------------------------------------- #
+
+def test_report_with_no_block_yet_is_ignored() -> None:
+    """Check a train reporting block "" is skipped, not a rejected tick.
+
+    The Train Model reports no block before its first step.
+    """
+    model = make_model()
+    out = model.step(DT_S, make_inputs({
+        "T1": report("", 0.0), "T2": report("GREEN A-1", 1.0)}))
+    assert "T1" not in out.train_feeds
+    assert out.train_feeds["T2"].track_info.block_id == "GREEN A-1"
+
+
+def test_train_reporting_no_block_leaves_the_track() -> None:
+    """Check a placed train that reports "" is taken off the track."""
+    model = make_model()
+    model.step(DT_S, make_inputs({"T1": report("GREEN A-1", 1.0)}))
+    out = model.step(DT_S, make_inputs({"T1": report("", 0.0)}))
+    assert not out.controller.block_occupancy["GREEN A-1"]
 
 
 # --------------------------------------------------------------------------- #
@@ -395,9 +503,9 @@ def test_reset_clears_trains_and_commands() -> None:
     make_inputs(controller=cmd(commanded_speed_mps={"BLUE A-3": True})),
     make_inputs(controller=cmd(commanded_speed_mps={"NOWHERE 1": 5})),
     make_inputs(controller=cmd(
-        commanded_authority={"BLUE A-3": "NOWHERE 1"})),
+        commanded_authority={"BLUE A-3": -1})),
     make_inputs(controller=cmd(
-        commanded_authority={"NOWHERE 1": "BLUE A-3"})),
+        commanded_authority={"NOWHERE 1": 3})),
     make_inputs({"T1": report("BLUE A-3", float("nan"))}),
     make_inputs(ambient_temp_c=float("inf")),
 ], ids=[
@@ -408,7 +516,7 @@ def test_reset_clears_trains_and_commands() -> None:
     "fractional commanded speed",
     "boolean commanded speed",
     "commanded speed for an unknown block",
-    "authority naming an unknown block",
+    "negative authority",
     "authority for an unknown block",
     "NaN train offset",
     "infinite ambient temperature",

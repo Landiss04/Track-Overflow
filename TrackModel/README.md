@@ -74,9 +74,12 @@ mapping through the catalog types in `common/interfaces.py` (D008):
 | Track Model → Track Controller | `track_model_to_track_controller` |
 | Track Model → Train Model | `track_model_to_train_model` |
 | Track Model → Train Controller | `track_model_to_train_controller` |
+| Track Model → CTC Office | `track_model_to_ctc_office` |
 
-There is no CTC Office edge. The CTC Office reads Track Model data,
-including ticket sales, through the Track Controller.
+Ticket sales go to the CTC Office directly, as `(count, line)` pairs: the
+tickets sold this tick. The Track Model keeps no running total and
+sends none. The CTC Office reads everything else (occupancy, device state)
+through the Track Controller.
 
 ## Behaviour
 
@@ -93,7 +96,22 @@ including ticket sales, through the Track Controller.
 - **Commanded speed and authority are per block**, like the signal on
   the rails: the Track Controller knows which blocks are occupied, not
   which train is in them. A train receives the values of the block it is
-  in. Commanded speed is a whole number of m/s (`int`).
+  in. Commanded speed is a whole number of m/s (`int`). Authority is a
+  count of blocks (`int`, D013, pending in truth): how many blocks past
+  its current one the train may still enter; 0 means stop. A block that
+  was never commanded, or whose circuit is dead, carries 0 and 0.
+- **Offsets restart at 0 in each block.** The Train Model resets its
+  offset when it sees a new block. The Track Model keeps what that reset
+  throws away: the overshoot when a train moves forward, or the new
+  block's length when it rolls back into it (it enters at the far end).
+  Tested against the real Train Model: the two agree on position to the
+  nanometre over a full 19.8 km Green loop and while rolling back.
+- **Boarding needs a door open.** The Train Model reports door state;
+  passengers board only when a train is stopped in a station block with
+  a door open, the same rule the Train Model accepts them by, so none
+  are lost.
+- **A train that reports no block (`""`) is not on the track yet** and is
+  skipped, rather than rejecting the whole tick.
 - **Direction of travel** is in the layout file as `next_blocks` on each
   block: the blocks a train may move on to. One entry is one way; the
   blocks before and after is two-way; at a switch, both exits (`"yard"`
@@ -103,7 +121,8 @@ including ticket sales, through the Track Controller.
   and refuses a partial or inconsistent annotation. Direction decides
   which way a newly placed train goes on a one-way block; it does not
   stop the Track Model following the rails as switched. Red and Blue are
-  not annotated yet.
+  annotated too: the course map draws every section two-way, so every
+  block lists each neighbour.
 - **Out of the yard:** a train placed on a block where the yard joins
   the line (`Yard-63`) counts as having come from the yard, so it heads
   onto the line (63 → 64) and does not roll back into the yard.
@@ -123,6 +142,52 @@ including ticket sales, through the Track Controller.
   value. Devices start safe: switches NORMAL, gates up, lights RED,
   heaters off.
 - **Invalid input is rejected whole**, before any state changes.
+- **The window shows each block's track circuit** (commanded speed in mph
+  and authority in blocks): the **Cmd mph** and **Auth** columns, and the
+  Selected panel. A failed circuit shows 0 and 0, as the train gets.
+- **Ambient temperature is set in the Track Model window** (Conditions,
+  in °F). Once set it replaces the temperature the test UI sends, until
+  the module restarts (Reset module or Load track…). Until then the test
+  UI's `ambient` row applies.
+- **Load track…** (Track Model window) loads a layout JSON. The file
+  replaces the loaded line of the same name, or adds a new line, and the
+  module restarts (no trains, devices at rest). A bad file changes
+  nothing. Press **Reset module** in the test UI afterwards so it learns
+  the new devices.
+
+## Integrating with the Train Model
+
+Checked against Kevin's Train Model on `Train-model-Interface`
+(2026-10-07), running both modules together through the harness edges:
+the full Green course loop, rollback, boarding with doors open and shut,
+and speed/authority pass-through all work. What is still needed:
+
+**On the Train Model side (Kevin):**
+
+1. **Platform side `"LR"`.** The layouts have two-sided stations (8 Red,
+   3 Green, e.g. MT LEBANON), sent as `"LR"`; the Train Model accepts only
+   `"L"` or `"R"` and fails the tick, at GREEN M-76 on the course route.
+   Blue's stations have no side in the layout and are sent as `""`.
+2. **The Train Model's harness edges**: catalog `TrainTrackFeed` → its
+   `TrackInputs`, and its outputs → catalog `TrainTrackReport`, including
+   `doors_open = door_left_open or door_right_open`.
+
+**In the harness (whoever writes the tick loop):**
+
+- Each tick: Track Model steps on last tick's train reports, then each
+  Train Model steps on this tick's feed. Other orders work too: a report
+  still naming the block a train just left is recognised as stale.
+- **Dispatch:** a new train has no block yet, so the harness sends the
+  Track Model the train's first report itself, at its starting block
+  (offset 0), to get the first feed.
+- **Yard:** when a train runs into the yard it gets no feed
+  (`track_model_to_train_model` returns `None`); the harness stops
+  stepping that Train Model.
+
+**In truth (proposals still to write):** D013 (authority as a block
+count) to promote; the Train Model's door state gaining the Track Model
+as a consumer; the offset-restarts-at-0 convention (open question 13
+below); `"LR"` in the beacon entry.
 
 ## Provisional, pending decisions
 
@@ -130,8 +195,8 @@ including ticket sales, through the Track Controller.
 2. Waiting passengers are pooled by station name, so the two DORMONT,
    GLENBURY, OVERBROOK, INGLEWOOD and CENTRAL platforms on the Green line
    share one queue each.
-3. Boarding happens while stopped (speed 0) in a station block; the Track
-   Model never learns door state.
+3. Boarding draws on the passengers waiting when the train stops; if the
+   doors close on the same tick, the Train Model refuses that count.
 4. Beacons sit on every neighbour of a station block.
 5. Polarity reverses per train at each block change, so every boundary
    is detectable even where switches join odd and even numbers.
@@ -147,13 +212,13 @@ including ticket sales, through the Track Controller.
    instead of from N-1.
 9. Red's `"75-yard"` is on block 9's row in the file but is parsed as a
    switch at block 75.
-10. Red and Blue only (no `next_blocks` yet): branch ends not joined by
-    rail (`_SEGMENT_BREAKS` in `layout.py`) are Blue 10|11, Red 66|67
+10. Branch ends not joined by rail on Red and Blue are Blue 10|11, Red 66|67
     and 71|72, read off the track map.
 11. A new train on a two-way block, or on Red or Blue, heads toward the
     next higher block number. On a one-way Green block it follows the
     block's direction.
 12. Platform side `"LR"` (both sides) appears in the files; truth's beacon
     entry names only L and R.
-13. Which point on the train `offset_m` measures, and whether it resets at
-    a block change: needs agreement with the Train Model.
+13. Which point on the train `offset_m` measures (one block is occupied
+    at a time). The offset restarting at 0 in each block follows the
+    Train Model's code; not yet recorded in truth.
