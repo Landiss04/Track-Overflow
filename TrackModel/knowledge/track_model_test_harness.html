@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track Model — Test Harness</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------------------------------------------------------------------------
+   Standalone test harness for the Track Model module. Every control here
+   writes directly to the module's own state — it does not go through
+   Track Controller, Train Model, or CTC Office. Use this to drive the
+   module in isolation before the real upstream modules exist, or to force
+   states (failures, out-of-range temperature) that are hard to trigger by
+   running the whole system end to end.
+
+   Kept visually consistent with the operator UI (ctc-ui.css tokens) but is
+   its own page — an operator never sees this, a developer/tester does.
+   --------------------------------------------------------------------------- */
+:root{
+  --bg-page:#f4f4f4; --bg-topbar:#2e2e2e; --bg-panel:#ffffff; --bg-panel-hdr:#f0f0f0;
+  --bg-field:#fbfbfb; --bg-subtle:#fafafa; --bg-selected:#eef3f0;
+  --line-strong:#b9b9b9; --line-panel:#c2c2c2; --line-hdr:#d4d4d4; --line-row:#ececec;
+  --line-control:#a8a8a8;
+  --ink:#2e2e2e; --ink-body:#3a3a3a; --ink-2:#5a5a5a; --ink-3:#6a6a6a; --ink-muted:#7c7c7c; --ink-faint:#8a8a8a;
+  --action:#2f5d4f; --action-ink:#ffffff; --btn-light:#ededed;
+  --test-accent:#b5651d; /* burnt-orange — marks this page as a test tool, never used in the operator UI */
+  --sig-red:#b03a3a; --sig-yellow:#b58a1b; --sig-green:#2f7d4f; --sig-super:#5fa37d;
+  --ok:#2f7d4f; --warn:#b5651d; --bad:#b03a3a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#ddd;font-family:"IBM Plex Sans",system-ui,sans-serif;color:var(--ink-body);
+  display:flex;align-items:flex-start;justify-content:center}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.app{width:1440px;max-width:100%;background:var(--bg-page)}
+
+.topbar{background:var(--bg-topbar);color:#e8e8e8;padding:14px 20px;display:flex;align-items:baseline;gap:14px}
+.topbar__title{font-size:14px;font-weight:600;letter-spacing:.08em;color:#fff}
+.topbar__tag{font-size:10px;letter-spacing:.08em;color:var(--test-accent);border:1px solid var(--test-accent);padding:2px 6px}
+.topbar__sub{font-size:11px;color:#a8a8a8;margin-left:auto;max-width:520px;text-align:right;line-height:1.5}
+
+.shell{display:flex;gap:12px;padding:12px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.col-a{width:360px;flex:0 0 360px}
+.col-b{width:420px;flex:0 0 420px}
+.col-c{flex:1;min-width:0}
+
+.panel{background:var(--bg-panel);border:1px solid var(--line-panel)}
+.panel__hdr{background:var(--bg-panel-hdr);border-bottom:1px solid var(--line-hdr);padding:8px 12px;
+  display:flex;align-items:center;justify-content:space-between}
+.panel__title{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--ink)}
+.panel__meta{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--ink-muted)}
+.panel__body{padding:12px;display:flex;flex-direction:column;gap:10px}
+
+.field{display:flex;flex-direction:column;gap:4px}
+.field__label{font-size:10px;letter-spacing:.04em;color:var(--ink-muted)}
+.input,.select{height:30px;border:1px solid var(--line-control);background:var(--bg-field);
+  padding:0 8px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink);width:100%}
+.select{font-family:"IBM Plex Sans",sans-serif}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+.seg{display:flex;height:30px;border:1px solid var(--line-control);background:var(--bg-field)}
+.seg__opt{flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink-3);
+  border-right:1px solid var(--line-control);cursor:pointer;user-select:none}
+.seg__opt:last-child{border-right:0}
+.seg__opt.is-on{background:var(--action);color:var(--action-ink)}
+.seg__opt.fail-power.is-on{background:var(--bad)}
+.seg__opt.fail-circuit.is-on{background:var(--bad)}
+.seg__opt.fail-rail.is-on{background:var(--bad)}
+
+.btn{height:30px;border:1px solid var(--line-control);background:var(--btn-light);color:var(--ink);
+  font-size:11px;letter-spacing:.02em;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 10px}
+.btn:hover{background:#e2e2e2}
+.btn--primary{background:var(--action);border-color:var(--action);color:#fff}
+.btn--primary:hover{background:#264b40}
+.btn--danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn--danger:hover{background:#8f2f2f}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+.tbl{display:flex;flex-direction:column}
+.tbl__head,.tbl__row{display:grid;align-items:center;padding:0 10px;column-gap:8px}
+.tbl__head{height:24px;font-size:9px;letter-spacing:.06em;color:var(--ink-muted);background:var(--bg-subtle);
+  border-bottom:1px solid var(--line-row)}
+.tbl__row{height:30px;font-size:11px;border-bottom:1px solid var(--line-row);cursor:pointer}
+.tbl__row:hover{background:#f7f7f7}
+.tbl__row.is-selected{background:var(--bg-selected)}
+.tbl__row.is-selected::before{content:"";position:absolute}
+.tbl__scroll{max-height:260px;overflow-y:auto}
+.num{text-align:right}
+
+.lamp{display:inline-block;width:9px;height:9px;border:1px solid var(--line-strong);margin-right:5px;vertical-align:-1px}
+.lamp--red{background:var(--sig-red);border-color:var(--sig-red)}
+.lamp--yellow{background:var(--sig-yellow);border-color:var(--sig-yellow)}
+.lamp--green{background:var(--sig-green);border-color:var(--sig-green)}
+.lamp--super{background:var(--sig-super);border-color:var(--sig-super)}
+
+.badge{font-size:9px;letter-spacing:.05em;padding:2px 6px;border:1px solid var(--line-strong);display:inline-block}
+.badge--ok{color:var(--ok);border-color:var(--ok)}
+.badge--warn{color:var(--warn);border-color:var(--warn)}
+.badge--bad{color:var(--bad);border-color:var(--bad)}
+
+.kv{display:flex;flex-direction:column}
+.kv__row{display:flex;justify-content:space-between;height:22px;align-items:center;border-bottom:1px solid var(--line-row)}
+.kv__row:last-child{border-bottom:0}
+.kv__k{font-size:10px;color:var(--ink-muted)}
+.kv__v{font-family:"IBM Plex Mono",monospace;font-size:12px}
+
+.empty{font-size:10px;color:var(--ink-faint);line-height:1.5}
+.hint{font-size:10px;color:var(--ink-faint);line-height:1.5;border-top:1px solid var(--line-row);padding-top:8px;margin-top:2px}
+
+.log{font-family:"IBM Plex Mono",monospace;font-size:10.5px;line-height:1.9;max-height:520px;overflow-y:auto;
+  display:flex;flex-direction:column-reverse}
+.log__row{border-bottom:1px solid var(--line-row);padding:5px 0;display:flex;gap:8px}
+.log__time{color:var(--ink-faint);flex:0 0 56px}
+.log__tag{flex:0 0 96px;color:var(--test-accent)}
+.log__msg{color:var(--ink-body)}
+
+.heaterzone{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line-row)}
+.heaterzone:last-child{border-bottom:0}
+.heaterzone__name{font-size:11px}
+.heaterzone__state{font-family:"IBM Plex Mono",monospace;font-size:10.5px;display:flex;align-items:center;gap:8px}
+.toggle{width:34px;height:18px;border:1px solid var(--line-control);background:var(--bg-field);position:relative;cursor:pointer;flex:0 0 34px}
+.toggle::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;background:var(--ink-faint);transition:left .12s}
+.toggle.is-on{background:#e7efe9;border-color:var(--ok)}
+.toggle.is-on::after{left:17px;background:var(--ok)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="topbar__title">TRACK MODEL</div>
+    <div class="topbar__tag">TEST HARNESS</div>
+    <div class="topbar__sub">Writes directly to module state. Track Controller, Train Model, and CTC Office are not involved — use the operator UI (track_model_ui_wireframe.html) to see how these changes read back on the real display.</div>
+  </div>
+
+  <div class="shell">
+
+    <!-- COLUMN A — block / switch pickers ------------------------------- -->
+    <div class="col col-a">
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Blocks</span><span class="panel__meta" id="blockCount">8 loaded</span></div>
+        <div class="panel__body" style="padding:0">
+          <div class="tbl">
+            <div class="tbl__head" style="grid-template-columns:70px 30px 1fr 60px">
+              <div>Block</div><div class="num">ID</div><div>Signal</div><div class="num">Fail</div>
+            </div>
+            <div class="tbl__scroll" id="rowsBlocks"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Switches</span><span class="panel__meta" id="switchCount">5 loaded</span></div>
+        <div class="panel__body" style="padding:0">
+          <div class="tbl">
+            <div class="tbl__head" style="grid-template-columns:64px 1fr 70px">
+              <div>Switch</div><div>Block</div><div>Position</div>
+            </div>
+            <div class="tbl__scroll" id="rowsSwitches"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- COLUMN B — the five injectors ------------------------------------ -->
+    <div class="col col-b">
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Edit Block Stats</span><span class="panel__meta" id="statsTarget">select a block</span></div>
+        <div class="panel__body">
+          <div class="row2">
+            <div class="field"><div class="field__label">Length (ft)</div><input class="input" id="fLen" type="number" step="1"></div>
+            <div class="field"><div class="field__label">Grade (%)</div><input class="input" id="fGrade" type="number" step="0.1"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><div class="field__label">Speed limit (mph)</div><input class="input" id="fLimit" type="number" step="1"></div>
+            <div class="field"><div class="field__label">Elevation (ft)</div><input class="input" id="fElev" type="number" step="0.1"></div>
+          </div>
+          <div class="field">
+            <div class="field__label">Direction of travel</div>
+            <select class="select" id="fDir">
+              <option>OUTBOUND ONLY</option><option>INBOUND ONLY</option><option>BIDIRECTIONAL</option>
+            </select>
+          </div>
+          <div class="btn btn--primary" id="btnSaveStats">SAVE BLOCK STATS</div>
+          <div class="hint">Writes length, grade, elevation, speed limit, and direction on the selected block. These are the same fields Track Model normally loads once from the track-config JSON at startup — editing them here lets you test a track section without re-loading a config file.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Signal State</span><span class="panel__meta" id="signalTarget">select a block</span></div>
+        <div class="panel__body">
+          <div class="field">
+            <div class="field__label">Aspect</div>
+            <div class="seg" id="segAspect">
+              <div class="seg__opt" data-v="RED">RED</div>
+              <div class="seg__opt" data-v="YELLOW">YELLOW</div>
+              <div class="seg__opt" data-v="GREEN">GREEN</div>
+              <div class="seg__opt" data-v="SUPER GREEN">SUPER</div>
+            </div>
+          </div>
+          <div class="hint">Forces the signal aspect Track Model reports for this block, bypassing the logic that would normally derive it from occupancy and authority. Useful for testing how downstream displays react to each aspect without staging real train movement.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Switch Position</span><span class="panel__meta" id="switchTarget">select a switch</span></div>
+        <div class="panel__body">
+          <div class="field">
+            <div class="field__label">Position</div>
+            <div class="seg" id="segPos">
+              <div class="seg__opt" data-v="NORMAL">NORMAL</div>
+              <div class="seg__opt" data-v="REVERSE">REVERSE</div>
+            </div>
+          </div>
+          <div class="hint">In the real system this command comes from Track Controller. Here you can set it directly to check that Switch States reads back correctly without a wayside PLC attached.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Block Failure</span><span class="panel__meta" id="failTarget">select a block</span></div>
+        <div class="panel__body">
+          <div class="field">
+            <div class="field__label">Failure mode</div>
+            <div class="seg" id="segFail">
+              <div class="seg__opt" data-v="">NONE</div>
+              <div class="seg__opt fail-power" data-v="POWER">POWER</div>
+              <div class="seg__opt fail-circuit" data-v="CIRCUIT">CIRCUIT</div>
+              <div class="seg__opt fail-rail" data-v="RAIL">RAIL</div>
+            </div>
+          </div>
+          <div class="hint">Matches the operator UI's failure control: POWER, CIRCUIT, or BROKEN RAIL. Setting NONE clears an existing failure and returns the block to service.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Environmental Conditions</span><span class="panel__meta">applies to all blocks</span></div>
+        <div class="panel__body">
+          <div class="row2">
+            <div class="field">
+              <div class="field__label">Environmental temperature (&deg;F)</div>
+              <input class="input" id="fTemp" type="number" step="1" value="34">
+            </div>
+            <div class="field">
+              <div class="field__label">Heater engage threshold</div>
+              <input class="input" id="fThresh" type="number" step="1" value="36">
+            </div>
+          </div>
+          <div id="heaterZones"></div>
+          <div class="hint">Heater zones default to AUTO — ON whenever temperature is below the threshold. Flip a zone's toggle to override it manually (e.g. force a zone OFF at 20&deg;F to test a heater failure), independent of the automatic rule.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- COLUMN C — live outputs + applied-change log ---------------------- -->
+    <div class="col col-c">
+
+      <div class="panel">
+        <div class="panel__hdr"><span class="panel__title">Selected Block — Live State</span><span class="panel__meta">what Track Model would report right now</span></div>
+        <div class="panel__body">
+          <div class="kv" id="liveBlock"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="flex:1">
+        <div class="panel__hdr"><span class="panel__title">Applied Changes</span><span class="panel__meta" id="logCount">0 events</span></div>
+        <div class="panel__body">
+          <div class="log" id="logList"></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+
+  var blocks = [
+    { ref:"GREEN F", id:45, len:246, grade:0.5, limit:40, elev:246.1, dir:"OUTBOUND ONLY", aspect:"SUPER GREEN", fail:"", heaterZone:null },
+    { ref:"GREEN G", id:47, len:197, grade:1.0, limit:30, elev:196.9, dir:"OUTBOUND ONLY", aspect:"YELLOW",      fail:"", heaterZone:null },
+    { ref:"GREEN G", id:48, len:197, grade:1.0, limit:30, elev:196.9, dir:"OUTBOUND ONLY", aspect:"RED",         fail:"", heaterZone:null },
+    { ref:"GREEN I", id:63, len:984, grade:-1.2, limit:25, elev:984.3, dir:"OUTBOUND ONLY", aspect:"RED",        fail:"CIRCUIT", heaterZone:null },
+    { ref:"GREEN L", id:70, len:361, grade:2.1, limit:25, elev:360.9, dir:"OUTBOUND ONLY", aspect:"RED",         fail:"", heaterZone:null },
+    { ref:"GREEN N", id:75, len:1480, grade:-0.9, limit:40, elev:1476.4, dir:"OUTBOUND ONLY", aspect:"YELLOW",   fail:"", heaterZone:"ZONE 4" },
+    { ref:"GREEN O", id:76, len:459, grade:0.0, limit:45, elev:459.3, dir:"OUTBOUND ONLY", aspect:"RED",         fail:"POWER", heaterZone:"ZONE 4" },
+    { ref:"GREEN P", id:78, len:312, grade:-1.8, limit:30, elev:311.7, dir:"OUTBOUND ONLY", aspect:"GREEN",      fail:"", heaterZone:null }
+  ];
+
+  var switches = [
+    { sw:"SW-03", blk:"GRN F 46", pos:"NORMAL" },
+    { sw:"SW-04", blk:"GRN G 47", pos:"REVERSE" },
+    { sw:"SW-07", blk:"GRN K 68", pos:"NORMAL" },
+    { sw:"SW-09", blk:"GRN M 73", pos:"NORMAL" },
+    { sw:"SW-11", blk:"GRN O 77", pos:"NORMAL" }
+  ];
+
+  var heaterZoneNames = ["ZONE 1","ZONE 2","ZONE 3","ZONE 4","ZONE 5","ZONE 6"];
+  var heaterOverride = {}; // zone -> true(on)/false(off)/undefined(auto)
+
+  var selectedBlock = null;
+  var selectedSwitch = null;
+
+  function log(tag, msg){
+    var d = new Date(), p = function(n){ return String(n).padStart(2,'0'); };
+    var row = document.createElement('div');
+    row.className = 'log__row';
+    row.innerHTML = '<span class="log__time mono">'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'</span>'
+      + '<span class="log__tag">'+tag+'</span><span class="log__msg">'+msg+'</span>';
+    $('logList').appendChild(row);
+    $('logCount').textContent = $('logList').children.length + ' events';
+  }
+
+  function lampClass(aspect){
+    return { RED:'lamp--red', YELLOW:'lamp--yellow', GREEN:'lamp--green', 'SUPER GREEN':'lamp--super' }[aspect] || 'lamp--red';
+  }
+
+  function heaterIsOn(zone, temp, threshold){
+    if (heaterOverride.hasOwnProperty(zone)) return heaterOverride[zone];
+    return temp < threshold;
+  }
+
+  function renderBlocks(){
+    var wrap = $('rowsBlocks');
+    wrap.innerHTML = '';
+    blocks.forEach(function(b, i){
+      var row = document.createElement('div');
+      row.className = 'tbl__row' + (selectedBlock === b ? ' is-selected' : '');
+      row.style.gridTemplateColumns = '70px 30px 1fr 60px';
+      row.innerHTML =
+        '<div class="mono">'+b.ref+'</div>' +
+        '<div class="mono num">'+b.id+'</div>' +
+        '<div><span class="lamp '+lampClass(b.aspect)+'"></span><span class="mono" style="font-size:10.5px">'+b.aspect+'</span></div>' +
+        '<div class="num">'+(b.fail ? '<span class="badge badge--bad">'+b.fail+'</span>' : '<span class="badge badge--ok">OK</span>')+'</div>';
+      row.addEventListener('click', function(){ selectBlock(b); });
+      wrap.appendChild(row);
+    });
+  }
+
+  function renderSwitches(){
+    var wrap = $('rowsSwitches');
+    wrap.innerHTML = '';
+    switches.forEach(function(s){
+      var row = document.createElement('div');
+      row.className = 'tbl__row' + (selectedSwitch === s ? ' is-selected' : '');
+      row.style.gridTemplateColumns = '64px 1fr 70px';
+      row.innerHTML = '<div class="mono">'+s.sw+'</div><div class="mono">'+s.blk+'</div><div class="mono">'+s.pos+'</div>';
+      row.addEventListener('click', function(){ selectSwitch(s); });
+      wrap.appendChild(row);
+    });
+  }
+
+  function paintSeg(segId, value){
+    [].slice.call($(segId).querySelectorAll('.seg__opt')).forEach(function(o){
+      o.classList.toggle('is-on', o.dataset.v === value);
+    });
+  }
+
+  function selectBlock(b){
+    selectedBlock = b;
+    var label = b.ref + ' ' + b.id;
+    $('statsTarget').textContent = label;
+    $('signalTarget').textContent = label;
+    $('failTarget').textContent = label;
+    $('fLen').value = b.len; $('fGrade').value = b.grade; $('fLimit').value = b.limit;
+    $('fElev').value = b.elev; $('fDir').value = b.dir;
+    paintSeg('segAspect', b.aspect);
+    paintSeg('segFail', b.fail);
+    renderBlocks();
+    renderLiveBlock();
+  }
+
+  function selectSwitch(s){
+    selectedSwitch = s;
+    $('switchTarget').textContent = s.sw + ' \u2014 ' + s.blk;
+    paintSeg('segPos', s.pos);
+    renderSwitches();
+  }
+
+  function renderLiveBlock(){
+    var box = $('liveBlock');
+    if (!selectedBlock){ box.innerHTML = '<div class="empty">Select a block on the left to see its current reported state here.</div>'; return; }
+    var b = selectedBlock;
+    var temp = parseFloat($('fTemp').value), thresh = parseFloat($('fThresh').value);
+    var heaterLine = b.heaterZone
+      ? (heaterIsOn(b.heaterZone, temp, thresh) ? 'ON \u00b7 '+b.heaterZone : 'OFF \u00b7 '+b.heaterZone)
+      : '\u2014 (no heater zone on this block)';
+    box.innerHTML =
+      kv('Block', b.ref+' '+b.id) +
+      kv('Length', b.len+' FT') +
+      kv('Grade', b.grade+'%') +
+      kv('Speed limit', b.limit+' MPH') +
+      kv('Elevation', (b.elev>=0?'+':'')+b.elev+' FT') +
+      kv('Direction', b.dir) +
+      kv('Signal aspect', b.aspect) +
+      kv('Failure status', b.fail ? b.fail+' FAILURE' : 'NONE') +
+      kv('Track heater', heaterLine);
+  }
+
+  function kv(k,v){
+    return '<div class="kv__row"><span class="kv__k">'+k+'</span><span class="kv__v">'+v+'</span></div>';
+  }
+
+  function renderHeaterZones(){
+    var temp = parseFloat($('fTemp').value), thresh = parseFloat($('fThresh').value);
+    var wrap = $('heaterZones');
+    wrap.innerHTML = '';
+    heaterZoneNames.forEach(function(z){
+      var on = heaterIsOn(z, temp, thresh);
+      var auto = !heaterOverride.hasOwnProperty(z);
+      var row = document.createElement('div');
+      row.className = 'heaterzone';
+      row.innerHTML =
+        '<span class="heaterzone__name">'+z+'</span>' +
+        '<span class="heaterzone__state">' +
+          '<span class="badge '+(auto ? 'badge--ok' : 'badge--warn')+'">'+(auto ? 'AUTO' : 'MANUAL')+'</span>' +
+          '<span>'+(on ? 'ON' : 'OFF')+'</span>' +
+          '<span class="toggle'+(on?' is-on':'')+'" data-zone="'+z+'"></span>' +
+        '</span>';
+      wrap.appendChild(row);
+    });
+    [].slice.call(wrap.querySelectorAll('.toggle')).forEach(function(t){
+      t.addEventListener('click', function(){
+        var z = t.dataset.zone;
+        var temp = parseFloat($('fTemp').value), thresh = parseFloat($('fThresh').value);
+        var current = heaterIsOn(z, temp, thresh);
+        heaterOverride[z] = !current;
+        log('HEATER', z+' set to '+(!current ? 'ON' : 'OFF')+' (manual override)');
+        renderHeaterZones();
+        renderLiveBlock();
+      });
+    });
+  }
+
+  /* wire up controls ------------------------------------------------------ */
+  $('btnSaveStats').addEventListener('click', function(){
+    if (!selectedBlock) return;
+    var b = selectedBlock;
+    b.len = parseFloat($('fLen').value) || b.len;
+    b.grade = parseFloat($('fGrade').value);
+    b.limit = parseFloat($('fLimit').value) || b.limit;
+    b.elev = parseFloat($('fElev').value);
+    b.dir = $('fDir').value;
+    log('BLOCK STATS', b.ref+' '+b.id+' updated \u2014 '+b.len+' FT, '+b.grade+'%, '+b.limit+' MPH, '+b.dir);
+    renderBlocks();
+    renderLiveBlock();
+  });
+
+  [].slice.call($('segAspect').querySelectorAll('.seg__opt')).forEach(function(o){
+    o.addEventListener('click', function(){
+      if (!selectedBlock) return;
+      selectedBlock.aspect = o.dataset.v;
+      paintSeg('segAspect', o.dataset.v);
+      log('SIGNAL', selectedBlock.ref+' '+selectedBlock.id+' aspect set to '+o.dataset.v);
+      renderBlocks();
+      renderLiveBlock();
+    });
+  });
+
+  [].slice.call($('segFail').querySelectorAll('.seg__opt')).forEach(function(o){
+    o.addEventListener('click', function(){
+      if (!selectedBlock) return;
+      selectedBlock.fail = o.dataset.v;
+      paintSeg('segFail', o.dataset.v);
+      log('FAILURE', selectedBlock.ref+' '+selectedBlock.id+' '+(o.dataset.v ? o.dataset.v+' FAILURE inserted' : 'cleared, returned to service'));
+      renderBlocks();
+      renderLiveBlock();
+    });
+  });
+
+  [].slice.call($('segPos').querySelectorAll('.seg__opt')).forEach(function(o){
+    o.addEventListener('click', function(){
+      if (!selectedSwitch) return;
+      selectedSwitch.pos = o.dataset.v;
+      paintSeg('segPos', o.dataset.v);
+      log('SWITCH', selectedSwitch.sw+' set to '+o.dataset.v);
+      renderSwitches();
+    });
+  });
+
+  ['fTemp','fThresh'].forEach(function(id){
+    $(id).addEventListener('input', function(){
+      renderHeaterZones();
+      renderLiveBlock();
+    });
+  });
+  $('fTemp').addEventListener('change', function(){
+    log('ENVIRONMENT', 'Environmental temperature set to '+$('fTemp').value+'\u00b0F');
+  });
+  $('fThresh').addEventListener('change', function(){
+    log('ENVIRONMENT', 'Heater engage threshold set to '+$('fThresh').value+'\u00b0F');
+  });
+
+  /* init ------------------------------------------------------------------- */
+  $('blockCount').textContent = blocks.length + ' loaded';
+  $('switchCount').textContent = switches.length + ' loaded';
+  renderBlocks();
+  renderSwitches();
+  renderHeaterZones();
+  renderLiveBlock();
+  log('SESSION', 'Test harness ready \u2014 8 blocks, 5 switches loaded');
+})();
+</script>
+</body>
+</html>

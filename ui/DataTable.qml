@@ -11,29 +11,55 @@ ColumnLayout {
     property var columns: []
     property var rows: []
     property int currentIndex: -1
+    // Optional: the Flickable (e.g. ScrollView.contentItem) this table is a
+    // direct child of. When set, the header row stays pinned at the top of
+    // the view while the rows scroll beneath it.
+    property Flickable stickyFlickable: null
     signal rowActivated(int index, var row)
     spacing: 0
     opacity: enabled ? 1.0 : 0.42
 
-    RowLayout {
+    Item {
+        id: headerSlot
         Layout.fillWidth: true
-        spacing: 0
-        Repeater {
-            model: root.columns
-            delegate: FieldLabel {
-                required property var modelData
-                Layout.fillWidth: true
-                Layout.preferredWidth: modelData.width || 100
-                padding: theme.space_3
-                text: (modelData.label || "").toUpperCase()
-                horizontalAlignment: modelData.numeric ? Text.AlignRight : Text.AlignLeft
+        implicitHeight: headerBar.implicitHeight
+        z: 1 // Above the row buttons so the pinned header covers them
+
+        Rectangle {
+            id: headerBar
+            width: parent.width
+            implicitHeight: headerRow.implicitHeight + 1
+            height: implicitHeight
+            color: theme.bg_surface
+            // Slide down with the scroll, but never out of the table.
+            y: root.stickyFlickable === null ? 0
+                : Math.max(0, Math.min(
+                    root.stickyFlickable.contentY - root.y,
+                    root.height - headerSlot.height))
+
+            RowLayout {
+                id: headerRow
+                width: parent.width
+                spacing: 0
+                Repeater {
+                    model: root.columns
+                    delegate: FieldLabel {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: modelData.width || 100
+                        padding: theme.space_3
+                        text: (modelData.label || "").toUpperCase()
+                        horizontalAlignment: modelData.numeric ? Text.AlignRight : Text.AlignLeft
+                    }
+                }
+            }
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: theme.border_strong
             }
         }
-    }
-    Rectangle {
-        Layout.fillWidth: true
-        implicitHeight: 1
-        color: theme.border_strong
     }
     Repeater {
         model: root.rows
