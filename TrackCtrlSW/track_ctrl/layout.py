@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
+from track_ctrl.errors import TrackControllerError
+
 #: Marker in a switch string for the yard, which is not a block.
 YARD = "yard"
 
@@ -51,7 +53,7 @@ _KMH_PER_MPS = 3.6
 _CONNECTION_SPLIT = re.compile(r"\s*(?:-|\bto\b)\s*", re.IGNORECASE)
 
 
-class LayoutError(ValueError):
+class LayoutError(TrackControllerError, ValueError):
     """A track layout file could not be read or is malformed."""
 
 
