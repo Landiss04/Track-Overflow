@@ -93,6 +93,25 @@ class Rig:
         self.world.apply_outputs(outputs)
         return outputs
 
+    def other_switch(self) -> BlockKey:
+        """A Green switch that is not the first wayside's switch 12."""
+        return next(
+            key for key in self.world.switch_blocks
+            if key.line == LINE and key.block_id != "12"
+        )
+
+    def dispatcher_in_maintenance(self, active: bool = True) -> None:
+        """Put the stand-in CTC in, or take it out of, maintenance mode.
+
+        The real CTC sends no mode flag: only switch commands, and only in
+        maintenance. So the mode shows up at the controller only as a
+        command in effect, and this commands a switch other than 12 to
+        keep the first wayside's own switch free for the test.
+        """
+        self.world.set_maintenance(active)
+        if active:
+            self.world.set_switch_command(self.other_switch(), "normal")
+
     def settle(self, ticks: int = 3) -> None:
         """Tick enough for a command to reach the Track Model and back."""
         for _ in range(ticks):

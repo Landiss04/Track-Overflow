@@ -87,12 +87,16 @@ someone else's work says what is left for them.
   (our own proposal `signal-yellow` records the decision). Rename it with A5.
 
 - [x] **B3. Maintenance mode** belongs to the CTC Office; this UI shows it and
-  cannot change it. Still to confirm with the CTC owner:
+  cannot change it. The CTC now sends **no mode flag at all**, only switch
+  commands (line, switch, position), so our `CtcInputs.maintenance_mode` was
+  removed (2026-10-14). The module infers maintenance from a command in effect on
+  a switch it governs. Still to confirm:
+  - a dispatcher in maintenance who has commanded no switch yet looks like
+    automatic mode to us; if that matters, the CTC would have to say so;
   - a hand-set switch yields to the CTC's command for the same switch (our
     choice);
-  - CTC and HW disagree with each other on whether the mode is sent at all (CTC
-    sends the closed-block list and says the mode is not sent; HW expects
-    `ctc.maintenance_mode`). The boundary carries it as a flag, as HW does.
+  - HW still expects `ctc.maintenance_mode` (**code**), so HW disagrees with the
+    CTC and with us; the harness cannot map a flag the CTC no longer has.
 
 - [ ] **B4. Train identity.** **proposed** D015: the Track Controller shows no
   train IDs. The boundary now carries presence only and the stand-in trains live

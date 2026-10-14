@@ -195,7 +195,6 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
     return {
         "time_s": inputs.time_s,
         "ctc": {
-            "maintenance_mode": ctc.maintenance_mode,
             "closed_blocks": _set_to_wire(ctc.closed_blocks),
             "switch_commands": _map_to_wire(ctc.switch_commands, str),
             "suggestions": _map_to_wire(
@@ -216,8 +215,7 @@ def inputs_from_wire(value: Any) -> TrackControllerInputs:
     top = _object(value, "inputs", {"time_s", "ctc", "track_model"})
     ctc = _object(
         top["ctc"], "inputs.ctc",
-        {"maintenance_mode", "closed_blocks", "switch_commands",
-         "suggestions"},
+        {"closed_blocks", "switch_commands", "suggestions"},
     )
     model = _object(
         top["track_model"], "inputs.track_model",
@@ -227,9 +225,6 @@ def inputs_from_wire(value: Any) -> TrackControllerInputs:
     return TrackControllerInputs(
         time_s=_seconds(top["time_s"], "inputs.time_s"),
         ctc=CtcInputs(
-            maintenance_mode=_flag(
-                ctc["maintenance_mode"], "inputs.ctc.maintenance_mode"
-            ),
             closed_blocks=_set_from_wire(
                 ctc["closed_blocks"], "inputs.ctc.closed_blocks"
             ),

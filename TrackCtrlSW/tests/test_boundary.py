@@ -168,24 +168,42 @@ class Stepping(unittest.TestCase):
         )
         self.assertEqual(out.ctc_reports[0].sent_at_s, 1.0)
 
-    def test_ctc_switch_command_only_obeyed_in_maintenance(self) -> None:
+    def test_a_ctc_switch_command_is_obeyed_and_is_maintenance(self) -> None:
+        # The CTC sends no mode flag. A command in effect is obeyed, and
+        # is how the module learns the dispatcher is in maintenance.
         module = _green()
         key = _switch_key(module)
-        normal = _tick(module, track_model=TrackModelInputs()).track_model
+        free = _tick(module, track_model=TrackModelInputs())
+        self.assertFalse(module.snapshot().maintenance_mode)
         want: interface.SwitchPosition = (
-            "reverse" if normal.switch_commands[key] == "normal"
+            "reverse" if free.track_model.switch_commands[key] == "normal"
             else "normal"
         )
-        ignored = _tick(module, ctc=CtcInputs(
-            switch_commands={key: want})).track_model
-        self.assertEqual(
-            ignored.switch_commands[key], normal.switch_commands[key]
-        )
         obeyed = _tick(module, ctc=CtcInputs(
-            maintenance_mode=True, switch_commands={key: want}
-        )).track_model
+            switch_commands={key: want})).track_model
         self.assertEqual(obeyed.switch_commands[key], want)
         self.assertTrue(module.snapshot().maintenance_mode)
+        self.assertTrue(module.maintenance)
+
+    def test_withdrawing_the_command_ends_maintenance(self) -> None:
+        module = _green()
+        key = _switch_key(module)
+        _tick(module, ctc=CtcInputs(switch_commands={key: "reverse"}))
+        self.assertTrue(module.maintenance)
+        _tick(module)
+        self.assertFalse(module.maintenance)
+
+    def test_a_command_for_a_switch_it_does_not_govern_is_not_maintenance(
+        self,
+    ) -> None:
+        module = _green()
+        _tick(module, ctc=CtcInputs(
+            switch_commands={BlockKey("Red", "12"): "reverse"}))
+        self.assertFalse(module.maintenance)
+
+    def test_there_is_no_maintenance_flag_on_the_boundary(self) -> None:
+        names = {field.name for field in dataclasses.fields(CtcInputs)}
+        self.assertNotIn("maintenance_mode", names)
 
     def test_closed_block_holds_its_circuit_at_zero(self) -> None:
         module = _green()
@@ -401,7 +419,6 @@ class Wire(unittest.TestCase):
         return TrackControllerInputs(
             time_s=12.5,
             ctc=CtcInputs(
-                maintenance_mode=True,
                 closed_blocks=frozenset({other}),
                 switch_commands={other: "reverse"},
                 suggestions={key: Suggestion(9, 2)},
@@ -444,7 +461,7 @@ class Wire(unittest.TestCase):
             lambda d: d.update(extra=1),
             lambda d: d.update(time_s="soon"),
             lambda d: d.update(time_s=float("nan")),
-            lambda d: d["ctc"].update(maintenance_mode=1),
+            lambda d: d["ctc"].update(maintenance_mode=True),
             lambda d: d["ctc"]["suggestions"][0]["value"].update(
                 speed_mps=-1),
             lambda d: d["ctc"]["suggestions"][0]["value"].update(

@@ -13,6 +13,10 @@ block numbers and booleans, because the PLC program does. The line is
 what tells two waysides' block ``12`` apart, so it is added on the way
 out and stripped on the way in.
 
+There is no maintenance-mode input: the CTC Office sends none. A CTC switch
+command in effect on a switch this module governs is what maintenance mode
+looks like from here, and drives ``MAINT`` and the UI's maintenance state.
+
 What the Track Model reports back is used two ways. Where a switch's
 actual position differs from the one commanded last scan, the switch is
 mid-throw and the vital layer holds that block's speed at zero. Every
@@ -239,7 +243,7 @@ class SwTrackController:
 
     @property
     def maintenance(self) -> bool:
-        """Whether the CTC Office has the system in maintenance mode."""
+        """Whether a CTC switch command is in effect: maintenance mode."""
         return self._maintenance
 
     @property
@@ -278,7 +282,17 @@ class SwTrackController:
         self._validate(dt, inputs)
         ctc = inputs.ctc
         readback = inputs.track_model
-        self._maintenance = ctc.maintenance_mode
+        # The CTC Office sends no mode flag. It sends switch commands only
+        # in maintenance mode, so a command in effect on a switch this
+        # module governs is what maintenance mode looks like from here.
+        switch_keys = {
+            wayside.key(switch.block_id)
+            for wayside in self._waysides.values()
+            for switch in wayside.controller.config.switches
+        }
+        self._maintenance = any(
+            key in switch_keys for key in ctc.switch_commands
+        )
 
         reasons = self.not_ready_reasons()
         for wayside in self._waysides.values():
@@ -342,8 +356,8 @@ class SwTrackController:
         readback = inputs.track_model
         controller.time_text = clock_text(inputs.time_s)
 
-        if controller.maintenance != ctc.maintenance_mode:
-            controller.set_maintenance(ctc.maintenance_mode)
+        if controller.maintenance != self._maintenance:
+            controller.set_maintenance(self._maintenance)
 
         for block in controller.blocks:
             key = wayside.key(block.block_id)
@@ -366,9 +380,7 @@ class SwTrackController:
             command = ctc.switch_commands.get(key)
             controller.set_ctc_switch_command(
                 switch.switch_id,
-                None
-                if command is None or not ctc.maintenance_mode
-                else command == "reverse",
+                None if command is None else command == "reverse",
             )
             # A switch whose machine is not where the last scan put it
             # is mid-throw. No report means nothing to compare.

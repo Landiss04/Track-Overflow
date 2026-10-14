@@ -148,9 +148,9 @@ knows and does not:
 
 A module-level `ready` flag goes out with the outputs: see **Startup**.
 
-Inputs, every tick (`TrackControllerInputs`): from the CTC Office the maintenance
-flag, the closed blocks, switch commands and a suggested speed and authority
-per block; from the Track Model the occupied blocks and the actual switch,
+Inputs, every tick (`TrackControllerInputs`): from the CTC Office the closed
+blocks, switch commands (line, switch, position) and a suggested speed and
+authority per block; from the Track Model the occupied blocks and the actual switch,
 crossing and signal states. Outputs (`TrackControllerOutputs`): to the Track
 Model a track circuit per block, switch, crossing and signal commands; to the
 CTC Office one `CtcReport` per wayside giving each block's occupancy and the
@@ -177,7 +177,7 @@ their JSON in `track_ctrl/wire.py`, and the design tokens.
 
 | Column | What it is | Effect |
 |---|---|---|
-| **Stimulus inputs** | Separate CTC and Track Model groups. Each group selects one block; Track Model sets occupancy, while CTC sets maintenance mode, switch state where present, block closure, suggested speed and suggested authority. | Change the stand-in world, so they change what the controller is given on the next tick. Maintenance mode is a system-wide CTC signal. |
+| **Stimulus inputs** | Separate CTC and Track Model groups. Each group selects one block; Track Model sets occupancy, while CTC sets maintenance mode (which lets its switch commands through), switch state where present, block closure, suggested speed and suggested authority. | Change the stand-in world, so they change what the controller is given on the next tick. Maintenance mode is a system-wide CTC signal. |
 | **Controller outputs** | Track circuits, switches, signals, crossings, train presence and vital overrides, read back live | Display only. |
 
 Stimuli are addressed to a **target controller** chosen in the test UI's header.
@@ -367,12 +367,17 @@ and **10×** badges, told to it by the sender's `clock` message.
 
 ## Maintenance mode
 
-Maintenance mode belongs to the CTC Office. The Track Controller UI **shows** it
-(a read-only badge in the header, a banner on the View tab) and cannot change it.
-In maintenance a switch follows the CTC Office's command if it has sent one for
-that switch, else the programmer's hand-set position, else the program. The
-programmer's **Set switch manually** dialog is enabled only while the CTC has
-maintenance on. Maintenance changes who drives the switches and nothing else:
+Maintenance mode belongs to the CTC Office, and **the CTC sends no mode flag**:
+it sends a switch command (line, switch, position) only while the dispatcher is
+in maintenance mode, and withdraws it when that ends. So this module treats a
+CTC switch command in effect on a switch it governs as maintenance mode, system
+wide, and no command as automatic. The Track Controller UI **shows** it (a
+read-only badge in the header, a banner on the View tab) and cannot change it.
+A switch with a command follows the CTC Office's command, else the programmer's
+hand-set position, else the program. The programmer's **Set switch manually**
+dialog is enabled only while a CTC command is in effect. One consequence: a
+dispatcher who is in maintenance but has not yet commanded a switch looks like
+automatic mode here. Maintenance changes who drives the switches and nothing else:
 speed and authority are not held. Ending maintenance releases every hand-set
 switch and every CTC switch command.
 
@@ -469,9 +474,11 @@ recorded here.
     `@Property(...)` in `state.py` and `track_ctrl_test/client.py` is reported as
     a bad call. `call-arg` and `arg-type` are disabled for those two modules in
     `mypy.ini`; every other layer stays fully checked.
-13. **Maintenance mode is a CTC input.** The test UI exposes it with the CTC
-    stimuli; the controller feeds it to the PLC as `MAINT`, so it changes the
-    program's behaviour.
+13. **Maintenance mode is inferred, not sent.** The CTC removed the mode flag and
+    sends only switch commands, so the module reads "a command in effect" as
+    maintenance and feeds that to the PLC as `MAINT`. The test UI's CTC section
+    keeps a maintenance switch, but all it does is let its commands through, as
+    the real CTC does.
 14. **A switch that will not follow is "moving".** The Track Model reports each
     switch's actual position; if it is not the one commanded last scan, the
     switch is mid-throw and the PLC reads `MOVING_<switch>`. The vital layer

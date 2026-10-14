@@ -77,12 +77,13 @@ class Suggestion:
 class CtcInputs:
     """From the CTC Office, every tick."""
 
-    # System-wide. The CTC Office owns it; this module only obeys it.
-    maintenance_mode: bool = False
     # Blocks the dispatcher has closed. A block not listed is open.
     closed_blocks: frozenset[BlockKey] = frozenset()
-    # Positions the dispatcher set, by the switch's block. Obeyed only
-    # in maintenance mode.
+    # Positions the dispatcher commanded, by the switch's block: the
+    # line and the switch's block, and the position. The CTC Office sends
+    # them only in maintenance mode and withdraws them when it ends, and
+    # sends no mode flag, so a command in effect is all this module is
+    # told. A listed switch is obeyed.
     switch_commands: Mapping[BlockKey, SwitchPosition] = field(
         default_factory=dict
     )
@@ -245,6 +246,8 @@ class TrackControllerSnapshot:
     """Full observable state of the module, for the UI."""
 
     waysides: tuple[WaysideSnapshot, ...]
+    # True while a CTC switch command is in effect on any switch: the only
+    # sign this module gets that the dispatcher is in maintenance mode.
     maintenance_mode: bool
     # Simulation time of the last tick; None before the first.
     time_s: float | None

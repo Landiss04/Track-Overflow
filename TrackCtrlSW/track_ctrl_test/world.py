@@ -238,9 +238,12 @@ class StandInWorld:
         return TrackControllerInputs(
             time_s=time_s,
             ctc=CtcInputs(
-                maintenance_mode=self.maintenance,
                 closed_blocks=frozenset(self.closed),
-                switch_commands=dict(self.switch_commands),
+                # Only in maintenance mode, as the real CTC does; it
+                # sends no flag, so the commands are the whole signal.
+                switch_commands=(
+                    dict(self.switch_commands) if self.maintenance else {}
+                ),
                 suggestions={
                     key: value for key, value in self.suggestions.items()
                     if value is not None and self.controller_ready

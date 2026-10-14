@@ -221,6 +221,7 @@ class LinkTests(unittest.TestCase):
             for row in client.overrides["rows"])))
         # Maintenance changes who drives the switches, not the circuits.
         client.setMaintenance(True)
+        client.setSwitchCommand("12", "normal")
         self.assertTrue(wait_for(lambda: self.state.maintenance))
         self.assertEqual(
             self.controller().outputs.track_circuits["3"].authority_blocks, 4)
@@ -308,6 +309,7 @@ class LinkTests(unittest.TestCase):
     def test_the_ctcs_maintenance_mode_reaches_every_controller(self) -> None:
         client = self.connect()
         client.setMaintenance(True)
+        client.setSwitchCommand("12", "normal")
         self.assertTrue(wait_for(lambda: self.state.maintenance))
         self.assertTrue(wait_for(lambda: all(
             c.maintenance for c in self.state.system.controllers.values())))

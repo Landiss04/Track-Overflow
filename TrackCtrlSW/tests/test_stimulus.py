@@ -65,7 +65,7 @@ class UserInputTests(unittest.TestCase):
         return apply_user(self.state, {"type": "user", "op": op, **fields})
 
     def ctc_maintenance(self, active: bool) -> None:
-        self.rig.world.set_maintenance(active)
+        self.rig.dispatcher_in_maintenance(active)
         self.rig.tick()
 
     def test_selection_and_tabs(self) -> None:

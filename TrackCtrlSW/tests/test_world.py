@@ -232,18 +232,18 @@ class WorldAndController(unittest.TestCase):
         self.assertEqual(self.circuit("5"), (0, 0))
 
     def test_maintenance_mode_is_system_wide(self) -> None:
-        self.world.set_maintenance(True)
+        self.rig.dispatcher_in_maintenance()
         self.rig.tick()
         self.assertTrue(self.rig.module.maintenance)
         for controller in self.rig.module.controllers.values():
             self.assertTrue(controller.maintenance)
-        self.world.set_maintenance(False)
+        self.rig.dispatcher_in_maintenance(False)
         self.rig.tick()
         self.assertFalse(any(
             c.maintenance for c in self.rig.module.controllers.values()))
 
     def test_maintenance_does_not_hold_speed_or_authority(self) -> None:
-        self.world.set_maintenance(True)
+        self.rig.dispatcher_in_maintenance()
         self.rig.tick()
         self.assertEqual(self.circuit("5"), (12, 4))
         self.assertNotIn("maintenance_hold", self.rules())
@@ -258,7 +258,7 @@ class WorldAndController(unittest.TestCase):
         self.assertIn("ctc_switch_command", self.rules())
 
     def test_the_ctc_command_beats_a_hand_set_switch(self) -> None:
-        self.world.set_maintenance(True)
+        self.rig.dispatcher_in_maintenance()
         self.world.set_switch_command(self.key("12"), "reverse")
         self.controller.manual_switches["12"] = False
         self.rig.tick()
@@ -267,7 +267,7 @@ class WorldAndController(unittest.TestCase):
     def test_a_hand_set_switch_is_obeyed_when_the_ctc_has_not_commanded(
         self,
     ) -> None:
-        self.world.set_maintenance(True)
+        self.rig.dispatcher_in_maintenance()
         self.rig.tick()
         self.controller.manual_switches["12"] = True
         self.rig.tick()
@@ -277,11 +277,11 @@ class WorldAndController(unittest.TestCase):
     def test_ending_maintenance_releases_commands_and_hand_settings(
         self,
     ) -> None:
-        self.world.set_maintenance(True)
+        self.rig.dispatcher_in_maintenance()
         self.world.set_switch_command(self.key("12"), "reverse")
         self.rig.tick()
         self.controller.manual_switches["12"] = True
-        self.world.set_maintenance(False)
+        self.rig.dispatcher_in_maintenance(False)
         self.rig.tick()
         self.assertEqual(self.controller.inputs.ctc_switch_commands, {})
         self.assertEqual(self.controller.manual_switches, {})
