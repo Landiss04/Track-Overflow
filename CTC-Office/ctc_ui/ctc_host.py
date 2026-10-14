@@ -14,6 +14,9 @@ same state:
   ``changed`` signal, and every panel re-reads the module.
 
 Values cross into QML in display units (mph); the module stays in SI.
+The Track Controller reports only occupancy, so trains are where the
+module has followed them to, and a block the module infers has failed
+shows only as occupied.
 """
 
 from __future__ import annotations
@@ -56,19 +59,12 @@ SPEEDUP_FACTOR = 10
 #: Shown for a value that is not known yet.
 NO_VALUE = "—"
 
-_FAILURE_LABELS = {
-    "broken_rail": "Broken rail",
-    "track_circuit": "Circuit failure",
-    "power": "Power failure",
-}
-
 _SWITCH_POSITIONS = ("normal", "reverse")
 
 _BLOCKED_LABELS = {
     "occupied": "occupied",
     "closed": "closed",
     "closing": "closing",
-    "failed": "failed",
 }
 
 
@@ -78,6 +74,18 @@ def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
     pending = set(snap.pending_closures)
     return [b for b in snap.outputs.track_controller.closed_blocks
             if b not in pending]
+
+
+def _status(tracked: bool, order: DispatchOrder | None,
+            lost: bool) -> str:
+    """A train's Status column: where it is, as far as the CTC knows."""
+    if order is None:
+        return "No order" if tracked else NO_VALUE
+    if tracked:
+        return "En route"
+    # Dropped quietly: the order stands, but where the train is is not
+    # known.
+    return "Not located" if lost else "In yard"
 
 
 def _authority_limit(limit: TrainAuthority) -> str:
@@ -312,10 +320,10 @@ class CtcHost(QObject):
                 for s in snap.outputs.track_controller.suggestions}
 
     def _train_lines(self, snap: CtcSnapshot) -> dict[str, str]:
-        """Every known train and its line: reported first, then ordered."""
+        """Every known train and its line: followed, then ordered."""
         lines = {o.train_id: o.line for o in snap.orders}
-        for report in self._applied().track_controller.trains:
-            lines[report.train_id] = report.line
+        for train in snap.trains:
+            lines[train.train_id] = train.line
         return dict(sorted(lines.items()))
 
     def _destination(self, line: str, block_id: str) -> str:
@@ -327,19 +335,20 @@ class CtcHost(QObject):
 
     def _train_row(self, train_id: str, line: str,
                    snap: CtcSnapshot) -> dict[str, Any]:
-        reports = {r.train_id: r
-                   for r in self._applied().track_controller.trains}
-        report = reports.get(train_id)
+        tracked = {t.train_id: t for t in snap.trains}.get(train_id)
         order = self._orders(snap).get(train_id)
         suggestion = self._suggestions(snap).get(train_id)
         limit = {a.train_id: a for a in snap.authorities}.get(train_id)
         return {
             "train": train_id,
             "line": line,
-            "block": report.block_id if report else NO_VALUE,
-            "speed": _mph(report.speed_mps) if report else NO_VALUE,
-            "speedLimit": (_mph(suggestion.suggested_speed_mps)
-                           if suggestion else NO_VALUE),
+            # Both blocks, tail first, while it crosses a boundary.
+            "block": ("\u2192".join(tracked.blocks) if tracked
+                      else NO_VALUE),
+            # Its actual speed is never known: only what the CTC
+            # suggests.
+            "suggestedSpeed": (_mph(suggestion.suggested_speed_mps)
+                               if suggestion else NO_VALUE),
             # The table's compact form; the readouts show the count
             # alone (a telemetry value is a short number and a unit).
             "authority": (f"{limit.blocks} (to {limit.end_block_id})"
@@ -357,9 +366,9 @@ class CtcHost(QObject):
             "eta": (format_time_of_day(order.arrival_s)
                     if order and order.arrival_s is not None
                     else NO_VALUE),
-            "status": ("En route" if order
-                       else "Reported" if report else NO_VALUE),
-            "reported": report is not None,
+            "status": _status(tracked is not None, order,
+                              train_id in snap.lost_trains),
+            "tracked": tracked is not None,
         }
 
     @Property(list, notify=stateChanged)
@@ -411,20 +420,16 @@ class CtcHost(QObject):
                     "summary": ("No route to its destination."
                                 if limit else "")}
         snap = self._module.snapshot()
-        applied = self._applied()
         line = limit.line
-        track = applied.track_controller
-        occupied = ({t.block_id for t in track.trains if t.line == line}
-                    | {o.block_id for o in track.occupancy
-                       if o.occupied and o.line == line})
+        occupied = {o.block_id
+                    for o in self._applied().track_controller.occupancy
+                    if o.occupied and o.line == line}
         closed = {b.block_id
                   for b in snap.outputs.track_controller.closed_blocks
                   if b.line == line}
-        failed = {f.block_id for f in track.failures if f.line == line}
 
         def occupancy(block_id: str) -> str:
-            return ("failure" if block_id in failed
-                    else "closed" if block_id in closed
+            return ("closed" if block_id in closed
                     else "occupied" if block_id in occupied else "free")
 
         ahead = limit.route[1:limit.blocks + 1]
@@ -472,41 +477,32 @@ class CtcHost(QObject):
 
     @Property(dict, notify=stateChanged)
     def blockStates(self) -> dict[str, str]:  # noqa: N802
-        """``Line:block`` -> closed | failure, for the map.
+        """``Line:block`` -> closed, for the map.
 
-        Failure outranks closed, so the most urgent state shows (style
-        guide 6.4). Occupancy is drawn as trains instead; see
-        ``mapTrains``.
+        Occupancy is drawn as trains instead; see ``mapTrains``. A
+        block the module infers has failed is drawn only as occupied.
         """
         snap = self._module.snapshot()
-        states: dict[str, str] = {}
-        for block in _closed_only(snap):
-            states[block_key(block.line, block.block_id)] = "closed"
-        for failure in self._applied().track_controller.failures:
-            states[block_key(failure.line, failure.block_id)] = "failure"
-        return states
+        return {block_key(block.line, block.block_id): "closed"
+                for block in _closed_only(snap)}
 
     @Property(list, notify=stateChanged)
     def mapTrains(self) -> list[dict[str, Any]]:  # noqa: N802
         """Trains to draw on the map: ``{train, line, block, fraction}``.
 
-        A reported train sits at its offset into its block. A block
-        reported occupied with no train reported on it gets an
+        A train the module is following sits at the middle of its head
+        block (where in the block is not known); the block behind it,
+        while it crosses a boundary, is part of it. Any other occupied
+        block (a train not followed, or an inferred failure) gets an
         unnamed train at its middle, so occupancy always shows.
         """
         track = self._applied().track_controller
         trains = []
         placed: set[tuple[str, str]] = set()
-        for report in track.trains:
-            layout_line = self._layout.get(report.line)
-            block = (layout_line.block(report.block_id)
-                     if layout_line else None)
-            length = block.length_m if block else 0.0
-            trains.append({
-                "train": report.train_id, "line": report.line,
-                "block": report.block_id,
-                "fraction": report.offset_m / length if length else 0.5})
-            placed.add((report.line, report.block_id))
+        for train in self._module.snapshot().trains:
+            trains.append({"train": train.train_id, "line": train.line,
+                           "block": train.blocks[-1], "fraction": 0.5})
+            placed.update((train.line, b) for b in train.blocks)
         for occupancy in track.occupancy:
             key = (occupancy.line, occupancy.block_id)
             if occupancy.occupied and key not in placed:
@@ -524,7 +520,7 @@ class CtcHost(QObject):
 
     @Property(list, notify=stateChanged)
     def closures(self) -> list[dict[str, Any]]:
-        """Closed, closing and failed blocks, for Active closures."""
+        """Closed and closing blocks, for Active closures."""
         snap = self._module.snapshot()
         rows: list[dict[str, Any]] = []
         for block in _closed_only(snap):
@@ -537,12 +533,6 @@ class CtcHost(QObject):
                          "state": "Closing \u2014 train in block",
                          "line": block.line, "blockId": block.block_id,
                          "reopenable": True, "pending": True})
-        for failure in self._applied().track_controller.failures:
-            rows.append({
-                "block": f"{failure.line} {failure.block_id}",
-                "state": _FAILURE_LABELS.get(failure.kind, failure.kind),
-                "line": failure.line, "blockId": failure.block_id,
-                "reopenable": False, "pending": False})
         rows.sort(key=lambda r: (r["line"], _block_number(r["blockId"])))
         return rows
 
@@ -648,17 +638,15 @@ class CtcHost(QObject):
 
     def _blocked_by(self, limit: TrainAuthority) -> str:
         """What stops a held train, as a clause: "T5 is standing in
-        block 28", "block 29 has failed"."""
+        block 28", "block 29 is closed"."""
         if limit.reason == "occupied":
-            standing = [t.train_id
-                        for t in self._applied().track_controller.trains
-                        if (t.line, t.block_id) == (limit.line, limit.at)]
+            standing = [t.train_id for t in self._module.snapshot().trains
+                        if t.line == limit.line and limit.at in t.blocks]
             if standing:
                 return (f"{standing[0]} is standing in block {limit.at} "
                         "and is not moving")
             return f"block {limit.at} is occupied"
         return {
-            "failed": f"block {limit.at} has failed",
             "closed": f"block {limit.at} is closed",
             "closing": f"block {limit.at} is closing",
             "reserved": f"block {limit.at} is held by {limit.held_by}",

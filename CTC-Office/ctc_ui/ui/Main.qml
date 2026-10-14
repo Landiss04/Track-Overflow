@@ -32,7 +32,7 @@ ScaledWindow {
 
     title: qsTr("CTC Office")
 
-    // A selected train that is no longer known (not reported, no order)
+    // A selected train that is no longer known (not followed, no order)
     // clears the selection.
     Connections {
         target: ctc

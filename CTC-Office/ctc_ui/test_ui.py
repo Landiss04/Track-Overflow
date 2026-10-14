@@ -7,8 +7,9 @@ Start it from the ``CTC-Office`` directory with either::
     python -m ctc_ui.test_ui
 
 It is for testing the CTC Office on its own: it stands in for the
-Track Controller and the Track Model, the two modules the CTC talks
-to, plus the dispatcher actions of the CTC UI. Once the modules are
+Track Controller, forcing only what the Track Controller sends the CTC
+(occupied blocks, switch states, crossing states). Dispatcher actions
+are taken in the CTC Office window itself. Once the modules are
 integrated, the central harness connects them to the CTC through the
 same boundary (``ctc/interface.py``) and this test UI is not used.
 

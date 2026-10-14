@@ -169,10 +169,6 @@ Panel {
             LineSwatch { tone: theme.warning; heavy: true }
         }
         LegendItem {
-            text: qsTr("Failure")
-            LineSwatch { tone: theme.danger; heavy: true }
-        }
-        LegendItem {
             text: qsTr("Station")
             Rectangle {
                 anchors.centerIn: parent

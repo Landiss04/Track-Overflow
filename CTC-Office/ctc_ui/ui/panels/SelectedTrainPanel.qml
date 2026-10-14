@@ -101,14 +101,11 @@ Panel {
                 }
                 TelemetryReadout {
                     Layout.fillWidth: true
-                    label: qsTr("Speed")
-                    value: root.show("speed")
-                    unit: "mph"
-                }
-                TelemetryReadout {
-                    Layout.fillWidth: true
-                    label: qsTr("Speed limit")
-                    value: root.show("speedLimit")
+                    // The speed the CTC suggests; its actual speed is
+                    // never known. "Suggested speed" is cut off when
+                    // the readouts run two to a row.
+                    label: qsTr("Suggested")
+                    value: root.show("suggestedSpeed")
                     unit: "mph"
                 }
                 TelemetryReadout {

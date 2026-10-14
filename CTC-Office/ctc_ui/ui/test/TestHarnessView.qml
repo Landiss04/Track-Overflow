@@ -1,6 +1,7 @@
-// Test harness view. Forces every CTC input and reads back every output
-// so the module can be exercised on its own, following the Train Model
-// test harness template. It fills the separate test UI process's window
+// Test harness view. Forces what the Track Controller sends the CTC and
+// reads back every output, so the module can be exercised on its own,
+// following the Train Model test harness template. Dispatcher actions
+// are taken in the CTC window itself. It fills the separate test UI process's window
 // (test/TestMain.qml); the CTC Office window does not open it.
 //
 // Rows come from ctc_ui/test_harness.py, bound in TestMain.qml. A scalar
@@ -19,10 +20,8 @@ import "../../../../ui"
 Rectangle {
     id: root
 
-    // Rows from the neighboring modules (Track Controller, Track Model).
+    // Rows from the Track Controller.
     property var inputs: []
-    // Rows standing in for the CTC UI's own dispatcher actions.
-    property var dispatcherInputs: []
     property var outputs: []
     // True once this process is linked to a CTC Office.
     property bool connected: false
@@ -43,7 +42,7 @@ Rectangle {
     property var layoutOptions: ({})
 
     signal inputEdited(string name, var value)
-    // A row with `choices` (ticket sales: Green or Red) picked one.
+    // A row with `choices` picked one (none has any at the moment).
     signal inputChoiceEdited(string name, string choice)
     // List rows: add, remove, or change one field of one entry.
     signal entryAddRequested(string name)
@@ -259,12 +258,11 @@ Rectangle {
                     Layout.leftMargin: theme.space_4
                     Layout.rightMargin: theme.space_4
                     heading: qsTr("Force inputs, read outputs")
-                    body: qsTr("Inputs stand in for the Track Controller and "
-                        + "the Track Model; dispatcher actions stand in for "
-                        + "the CTC UI. Send applies them; the CTC window's "
-                        + "clock steps the CTC with the inputs while it "
-                        + "runs. Dispatcher rows follow the CTC window until "
-                        + "you edit them. Outputs come from the module.")
+                    body: qsTr("Inputs stand in for the Track Controller. "
+                        + "Send applies them; the CTC window's clock steps "
+                        + "the CTC with them while it runs. Dispatch, close "
+                        + "blocks and set switches in the CTC window. "
+                        + "Outputs come from the module.")
                 }
 
                 RowLayout {
@@ -291,19 +289,6 @@ Rectangle {
                             ]
 
                             EditableRows { rows: root.inputs }
-                        }
-
-                        Panel {
-                            Layout.fillWidth: true
-                            title: qsTr("Dispatcher actions")
-                            headerItems: [
-                                HelperText {
-                                    text: qsTr("Stand-in for the CTC UI")
-                                    color: theme.text_muted
-                                }
-                            ]
-
-                            EditableRows { rows: root.dispatcherInputs }
                         }
                     }
 
