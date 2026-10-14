@@ -26,6 +26,7 @@ from track_ctrl.state import TrackControllerState
 from track_ctrl.stimulus import (
     SERVER_NAME,
     StimulusError,
+    apply_clock,
     apply_physical,
     apply_user,
     build_snapshot,
@@ -89,6 +90,7 @@ class StimulusServer(QObject):
             state.tabChanged,
             state.maintenanceChanged,
             state.externalChanged,
+            state.clockChanged,
         ):
             signal.connect(self._schedule_push)
 
@@ -189,6 +191,8 @@ class StimulusServer(QObject):
                 self._state.notify_external_change(note)
             elif kind == "user":
                 note = apply_user(self._state, message)
+            elif kind == "clock":
+                note = apply_clock(self._state.simulation_clock, message)
             elif kind == "hello":
                 note = "hello"
             else:

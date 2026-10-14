@@ -202,6 +202,9 @@ class Program:
     outputs: tuple[str, ...]
     assignments: tuple[Assignment, ...]
     diagnostics: tuple[Diagnostic, ...] = ()
+    #: Line each name was declared on, so a check made against a
+    #: controller's I/O can point at the declaration.
+    declared_at: Mapping[str, int] = field(default_factory=dict)
 
     @property
     def boolean_count(self) -> int:
@@ -390,7 +393,11 @@ def compile_program(source: str) -> Program:
     """Compile PLC source, collecting every diagnostic it produces.
 
     Parsing continues past a bad line so the programmer sees all the
-    errors at once. A program with any error-severity diagnostic must
+    errors at once. Reading a name that is neither a declared input nor
+    assigned on an earlier line is reported here, statically, so it is
+    caught whatever the inputs happen to be. A program with any
+    diagnostic, warning or error, must not be committed
+    (``blocks_commit``); a program with any error-severity diagnostic must
     not be committed; ``has_errors`` reports that.
     """
     inputs: list[str] = []
@@ -398,6 +405,8 @@ def compile_program(source: str) -> Program:
     assignments: list[Assignment] = []
     diagnostics: list[Diagnostic] = []
     assigned: set[str] = set()
+    read_unknown: set[str] = set()
+    declared_at: dict[str, int] = {}
 
     for number, raw_line in enumerate(source.splitlines(), start=1):
         text = raw_line.split("//", 1)[0].strip()
@@ -424,6 +433,7 @@ def compile_program(source: str) -> Program:
                         )
                         continue
                     target.append(name)
+                    declared_at[name] = number
                 continue
 
             target_name, separator, expression_text = text.partition(":=")
@@ -454,6 +464,18 @@ def compile_program(source: str) -> Program:
                 raise PlcSyntaxError(number, "assignment has no expression")
 
             expression = _ExpressionParser(expression_text, number).parse()
+            for name in sorted(expression.names()):
+                if name in inputs or name in assigned or name in read_unknown:
+                    continue
+                read_unknown.add(name)
+                diagnostics.append(
+                    Diagnostic(
+                        SEVERITY_WARNING,
+                        number,
+                        f"{name} is read before it is assigned and is not "
+                        "a VAR_IN; it reads as 0",
+                    )
+                )
             assignments.append(Assignment(target_name, expression, number))
             assigned.add(target_name)
 
@@ -462,16 +484,31 @@ def compile_program(source: str) -> Program:
                 Diagnostic(SEVERITY_ERROR, error.line, error.message)
             )
 
-    for name in outputs:
-        if name not in assigned:
-            diagnostics.append(
-                Diagnostic(
-                    SEVERITY_WARNING,
-                    0,
-                    f"output {name} is declared but never assigned; "
-                    "it will hold at 0",
-                )
+    # One message however many, so a program that forgets a whole range
+    # of outputs gets one line in the parser pane, not one per name.
+    unassigned = [name for name in outputs if name not in assigned]
+    if len(unassigned) == 1:
+        diagnostics.append(
+            Diagnostic(
+                SEVERITY_WARNING,
+                declared_at.get(unassigned[0], 0),
+                f"output {unassigned[0]} is declared but never assigned; "
+                "it will hold at 0",
             )
+        )
+    elif unassigned:
+        shown = ", ".join(unassigned[:6])
+        more = len(unassigned) - 6
+        diagnostics.append(
+            Diagnostic(
+                SEVERITY_WARNING,
+                declared_at.get(unassigned[0], 0),
+                f"{len(unassigned)} outputs are declared but never "
+                f"assigned ({shown}"
+                + (f" and {more} more" if more > 0 else "")
+                + "); they will hold at 0",
+            )
+        )
 
     return Program(
         source=source,
@@ -479,7 +516,19 @@ def compile_program(source: str) -> Program:
         outputs=tuple(outputs),
         assignments=tuple(assignments),
         diagnostics=tuple(diagnostics),
+        declared_at=declared_at,
     )
+
+
+def blocks_commit(diagnostics: tuple[Diagnostic, ...]) -> bool:
+    """Return whether any diagnostic, warning or error, blocks a commit.
+
+    Every warning here describes a program that does something other
+    than what it says: an output stuck at 0, an input read as 0, an
+    assignment silently overridden. On a vital controller that is not
+    a style issue, so none of them may reach the track.
+    """
+    return bool(diagnostics)
 
 
 def has_errors(diagnostics: tuple[Diagnostic, ...]) -> bool:

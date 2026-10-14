@@ -45,9 +45,10 @@ cd TrackCtrlSW
 QT_QPA_PLATFORM=offscreen .venv/Scripts/python -m unittest discover -s tests -v
 ```
 
-41 tests: the physical and user stimuli against the real PLC and safety layer,
-refusal of bad input, and the link between the two processes over a real named
-pipe (ownership of the inputs, refusals, malformed input).
+The suites in `tests/`: the physical and user stimuli against the real PLC and safety layer,
+refusal of bad input, the commit gate, the shared clock, and the link between
+the two processes over a real named pipe (ownership of the inputs, refusals,
+malformed input).
 
 ## Type-check
 
@@ -99,28 +100,29 @@ are tested headlessly.
 
 ## Test UI
 
-A second program that plays the CTC, the Track Model and the programmer against
-a running controller, so the controller's own UI can be watched reacting. It
+A second program that plays the CTC and the Track Model against a running
+controller, so the controller's own UI can be watched reacting. Its inputs are
+split by source and block, with live controller outputs beside them. It
 shares no memory with the controller: the only things in common are the wire
 protocol in `track_ctrl/stimulus.py` and the design tokens.
 
-Its three columns separate what each actor can do:
+Its two panels keep the physical sources distinct from the controller's response:
 
 | Column | What it is | Effect |
 |---|---|---|
-| **Physical inputs** | The world the controller reacts to. Block occupancy, switch fault and moving flags (Track Model); block open/close, suggested speed, suggested authority, speed limit (CTC) | Written onto the target controller's input card. The PLC program sees them, so its outputs move. |
-| **Controller outputs** | What the controller is driving, read back live | Display only. |
-| **User inputs** | The programmer's hands. Select line or controller, Program/View tab, maintenance mode, the manual switch dialog, Edit / Run / Commit / New, open an iteration, load a `.plc` file | Press the same controls the programmer does in the controller UI, including being refused. They never touch the physical inputs. |
+| **Stimulus inputs** | Separate CTC and Track Model groups. Each group selects one block; Track Model sets occupancy, while CTC sets maintenance mode, switch state where present, block closure, suggested speed and suggested authority. | Written onto the target controller's input card. The PLC program sees them, so its outputs move. Maintenance mode is a system-wide CTC signal. |
+| **Controller outputs** | Track circuits, switches, signals, crossings, train presence and vital overrides, read back live | Display only. |
 
-Physical inputs are addressed to a **target controller** chosen in the test UI's
-header. That is independent of which controller the programmer has open, because
-the world does not depend on what the programmer is looking at: you can stimulate
-`GTC-05` while the programmer watches `GTC-01`.
+Stimuli are addressed to a **target controller** chosen in the test UI's header.
+Each source has its own block selector, and changing a control affects only that
+selected block (maintenance mode remains system-wide).
 
-While a test UI is connected, the controller's built-in stand-in trains and CTC
-stop, so the test UI is the only source of physical input. The controller's
-header shows a **Test link** badge so stimulated occupancy cannot be mistaken for
-the stand-in simulation. When the last test UI disconnects, the stand-in resumes.
+While a test UI is connected, stand-in trains continue moving with the shared
+clock. Only blocks whose occupancy is explicitly edited are overridden; other
+blocks keep updating. Both occupied and clear overrides persist until the last
+test UI disconnects. The test UI controls CTC suggestions while connected, so
+ticks do not overwrite those values. Pause stops simulated movement, and Run
+resumes it. The **Test link** badge identifies the active test connection.
 
 ### The link
 
@@ -129,21 +131,26 @@ line. It is not a network socket, so it stays inside REQ-DSN-003. Every request
 gets an `ack` or an `error`, and a full `snapshot` is pushed after any change.
 
 ```
--> {"id":7,"type":"physical","op":"set_occupancy","controller":"GTC-01","block":"G013","value":true}
-<- {"type":"ack","id":7,"note":"TEST GTC-01 occupancy G013 = 1"}
+-> {"id":7,"type":"physical","op":"set_occupancy","controller":"GTC-01","block":"12","value":true}
+<- {"type":"ack","id":7,"note":"TEST GTC-01 occupancy 12 = 1"}
 <- {"type":"snapshot", ...}
 
 -> {"id":8,"type":"user","op":"set_tab","index":1}
--> {"id":9,"type":"physical","op":"set_suggested_speed","controller":"GTC-01","value":-5}
+-> {"id":9,"type":"physical","op":"set_suggestion","controller":"GTC-01","block":"5","speed_mps":-5}
 <- {"type":"error","id":9,"message":"suggested speed must be zero or more"}
 ```
 
+Speeds on the wire are whole m/s and authorities whole blocks. The test UI takes
+mph, as every screen does, and sends the whole m/s below it.
+
 Physical ops: `set_occupancy`, `clear_occupancy`, `set_block_closed`,
-`set_switch_fault`, `set_switch_moving`, `set_suggested_speed`,
-`set_suggested_authority`, `set_speed_limit`. User ops: `select_line`,
-`select_controller`, `set_tab`, `set_maintenance`, `set_switch`,
-`release_switch`, `run`, `commit`, `new_file`, `open_file`, `append_buffer`,
-`load_program`.
+`set_switch_fault`, `set_switch_moving` (the Track Model) and `set_suggestion`,
+`set_all_suggestions`, `clear_suggestion`, `set_speed_limit`, `set_maintenance`,
+`set_switch_command` (the CTC Office; the last two need no block, and
+maintenance needs no controller). User ops: `select_line`, `select_controller`,
+`set_tab`, `set_switch`, `release_switch`, `run`, `commit`, `new_file`,
+`open_file`, `append_buffer`, `load_program`. There is deliberately no user op
+for maintenance mode: it is not the programmer's.
 
 Bad input is rejected at the controller's boundary and changes nothing
 (REQ-NFR-003, REQ-NFR-004): unknown ids, a block owned by another controller,
@@ -160,26 +167,50 @@ state carried between scans except what the program writes to its own outputs.
 ```
 // comment
 VAR_IN   OCC_12 .. OCC_38        // range shorthand, letters or digits
-VAR_IN   SUG_SPEED_0..3
-VAR_OUT  SW_SW03 LT_LT03_R LT_LT03_G XING_XG03
+VAR_OUT  AUTH_12..38 SW_12 XING_19
 
-BUSY     := OCC_20 OR OCC_21
-LT_LT03_G := NOT BUSY
-CMD_AUTH_0 := SUG_AUTH_0 AND NOT BUSY
+AHEAD    := OCC_13 OR OCC_14
+SIG_12_R := FAULT_12 OR OCC_12
+AUTH_20  := NOT (OCC_19 OR OCC_21)
 ```
+
+A program can only name what its own controller has. The inputs are `OCC_n` and
+`CLOSED_n` for each block it owns, `MAINT`, and `FAULT_s` / `MOVING_s` for each
+switch. The outputs are `AUTH_n` for each block, `SW_s` for each switch,
+`SIG_s_R` / `_O` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
+each crossing. Block numbers are the track layout's own, and a switch, its signal
+and a crossing are named by the block they are listed on. A starter program for
+every wayside is generated from its territory, including waysides that own no
+switch or crossing at all.
+
+Every output a controller owns has to be driven, and every `VAR_IN` has to be
+something the controller provides. `RUN` checks the program against the selected
+controller, not just the language: a program written for another wayside, or for
+the hardware variant, compiles and is then flagged line by line for the names
+this controller does not have.
 
 Operators are `AND`, `OR`, `XOR`, `NOT` and parentheses. A scan evaluates
 assignments top to bottom exactly once, like a real scan cycle. Reading a name
 that was never declared yields `0` and raises a warning — an undefined read must
 never be able to produce a permissive output.
 
-### Numbers across a boolean boundary
+### Speed and authority are per block, in whole m/s
 
-The CTC sends suggested speed as a float and authority as a block count, but the
-program only sees bits. The input card encodes both into 4-bit vectors and the
-output card decodes them back (`controller.py`). This is the "decoded by OS" box
-on the architecture diagram. **Both conversions round down**, so a rounding error
-can only ever stop a train short.
+The CTC Office suggests a speed and an authority for each **block**, not for a
+train: the blocks are fixed by the track layout, while which trains are on them
+changes. Speeds are whole m/s and authorities are block counts, the system's
+backend units (D013, `truth/conventions/units.md`). Nothing inside the module is
+in mph.
+
+Numbers never enter the PLC program. It answers with one bit per block,
+`AUTH_n`: pass block *n*'s suggestion down its track circuit (1), or send speed 0
+and authority 0 (0). The controller sends a track circuit only for blocks the CTC
+suggested something for.
+
+Only the screen shows mph. `display.py` converts at the display layer with the
+factor from `units.md` (1 m/s = 2.236936 mph) and nowhere else. A speed typed in
+the test UI in mph becomes a whole m/s **rounded down**, so a typed speed can only
+become slower, never faster.
 
 ### The vital supervisor
 
@@ -191,15 +222,29 @@ a wrong program produce a stopped railway rather than a collision:
 | Rule | Effect |
 |---|---|
 | `signal_aspect` | A signal showing zero or several aspects falls back to RED |
-| `signal_protects_block` | A signal over an occupied or closed block is RED |
+| `signal_protects_block` | A signal on an occupied, closed or faulted block is RED |
 | `switch_locked_under_train` | A switch on an occupied block will not move |
 | `crossing_armed` | Occupancy on the approach forces the gates down |
-| `authority_truncated` | Authority is cut at the first occupied or closed block |
-| `speed_limit` | Commanded speed is clamped to the posted limit |
-| `aspect_speed_cap` | An ORANGE aspect halves the commanded speed |
-| `maintenance_hold` / `manual_switch_hold` | Authority held at 0 |
-| `no_authority` | Zero authority zeroes the commanded speed |
+| `closed_block` | A block the CTC closed gets speed 0 and authority 0 |
+| `switch_fault` | A faulted switch's block gets speed 0 and authority 0 |
+| `switch_moving` | A mid-throw switch's block gets speed 0 |
+| `speed_limit` | Each block's speed is clamped to its own posted limit |
+| `authority_truncated` | Count clear blocks ahead, excluding the first occupied, closed or unusable block; stop at an unverified route or territory boundary |
+| `aspect_speed_cap` | Yellow halves the speed after the posted-limit clamp, rounded down to whole m/s |
+| `maintenance_hold` | Maintenance mode holds authority at zero, regardless of the PLC |
+| `no_authority` | Zero authority zeroes the speed |
+| `ctc_switch_command` | In maintenance, a switch follows the CTC's command |
+| `manual_switch` | In maintenance, a hand-set switch is held (the CTC wins) |
 | `fail_safe` | No program, or a failed scan: stop, all red, all gates down |
+
+Overrides that apply to many blocks are reported once, naming the blocks.
+
+Authority lookahead currently follows the standalone simulator's increasing
+block order. It excludes the current block and checks switch connections using
+the final positions after occupancy locking. It never crosses a missing block,
+an inactive switch connection, or the end of the controller's known territory.
+Directional routes and authority across controller boundaries require route and
+neighbour-state inputs from the harness; they are not assumed clear.
 
 Every override is reported to the UI with the rule that fired and why, so the
 programmer can see exactly where the track disagrees with the code on screen
@@ -213,13 +258,84 @@ candidate cannot reach the track. `COMMIT` promotes it and logs it as a
 read-only iteration.
 
 `COMMIT` is refused until the buffer that was run is still the buffer on screen
-(`canCommit`). Editing after a run invalidates the verification. Committing
-something that has not just been watched execute is the one thing the workflow
-exists to prevent, so the rule is enforced in `state.py` rather than left to the
-button's enabled state.
+**and that run produced no diagnostic at all** (`canCommit`). A warning blocks a
+commit exactly as an error does: each warning means an output or input does
+something other than the code says (an output stuck at 0, a name read as 0, an
+assignment overridden), which on a vital controller is not cosmetic. Editing
+after a run invalidates the verification. The rule is enforced in `state.py`,
+and `TrackController.commit` refuses such a program as well, rather than being
+left to the button's enabled state.
+
+Reading a name that is neither a `VAR_IN` nor assigned on an earlier line is
+caught by the compiler, statically, so it is reported whatever the inputs
+happen to be; the scan's own undefined-read check remains as a backstop.
 
 The five most recent committed iterations stay readable in the explorer. Opening
 one shows it read-only, with `RUN` disabled.
+
+## Shared simulation clock
+
+The module runs on the system's one clock, `utils.system_clock.SystemClock`
+(D017): fixed 0.1 s ticks, starting 05:00:00, 24-hour display, 1× or 10×. Each
+tick scans every controller once; the stand-in trains move by simulated time,
+so 10× runs them ten times as fast. Terminal timestamps and commit times are
+simulated time too.
+
+- **Integrated**, the central harness owns the clock and passes it in:
+  `TrackControllerState(clock=harness_clock)`. The module only listens.
+- **Standalone** (`python main.py`), nothing else runs a clock, so the module
+  creates one and drives it with `utils.clock_driver.ClockDriver`.
+
+The CTC Office sets the speed and pauses the clock (D017), so the Track
+Controller UI has no clock controls: its header shows the time, and **Paused**
+and **10×** badges. Standing alone, the test UI plays the CTC's part and has
+Run / Pause and 1× / 10×.
+
+Ticks happen up to 100 times a real second at 10×. The views are refreshed at
+5 Hz instead of on every tick, so QML is not rebuilt that often.
+
+## Maintenance mode
+
+Maintenance mode belongs to the CTC Office. The Track Controller UI **shows** it
+(a read-only badge in the header, a banner on the View tab) and cannot change it.
+In maintenance a switch follows the CTC Office's command if it has sent one for
+that switch, else the programmer's hand-set position, else the program. The
+programmer's **Set switch manually** dialog is enabled only while the CTC has
+maintenance on. Maintenance holds every commanded authority at zero; the
+zero-authority rule also holds commanded speed at zero. Ending maintenance releases
+every hand-set switch and every CTC switch command.
+
+## Track configuration
+
+**Load track...** in the header reads a track layout file (`TrackModel/*.json`),
+divides its blocks among the number of wayside controllers you choose, and
+installs it. The dialog first reports the line, its blocks, switches and
+crossings, and what loading would replace.
+
+- A wayside owns a contiguous run of block numbers. That run need not match a
+  section boundary, and a switch belongs to the wayside that owns the block it is
+  listed on even when its legs lead into a neighbouring territory.
+- The count is configurable, from 2 (D014) up to one wayside per block. The
+  system starts with Green on 6 and Red on 5.
+- A line of the same name is **replaced**, with its controllers and every program
+  and committed iteration they hold, because the territories they governed no
+  longer exist. The dialog says so before it loads. A line with a new name is
+  added.
+- A wayside database (the HW format, one wayside's blocks) is refused with a
+  message, and so is a file that is not valid JSON, has a bad block or switch
+  entry, or names a count outside what the line allows. Nothing changes when a
+  file is refused.
+
+Block ids are the layout's block numbers (`"12"`), so Green 12 and Red 12 are told
+apart by their line. Controller ids are `GTC-01`, `RTC-01` and so on.
+
+## View tab outputs
+
+Speed and authority are per block, and a controller may own many blocks, so
+nothing is listed one row per block or per device. Track circuits, switches,
+signals and crossings, and the CTC's suggestions, each sit behind a drop-down
+showing how many there are and the value of the one selected. The block grid
+scrolls when a controller owns more blocks than fit.
 
 ## Design decisions and discrepancies
 
@@ -232,35 +348,38 @@ recorded here.
    both are modelled: tiles read `F51` (section + number) and PLC signals use the
    number (`OCC_51`). Numbering the signals is also what lets a declaration span
    a run of blocks across a section boundary.
-2. **Four aspects, four outputs.** The brief calls for red, orange, green and
-   super green; the wireframe draws only `LT_E_R` / `LT_E_G`. Each aspect is its
+2. **Four aspects, four outputs.** Signals report Red, Yellow, Green and
+   Super Green. The legacy PLC suffix `_O` selects Yellow, preserving saved
+   programs; `_SG` selects Super Green. The starter program uses Red, Yellow
+   and Green and holds `_SG` at zero; a custom PLC can request Super Green.
+   The wireframe draws only `LT_E_R` / `LT_E_G`. Each aspect is its
    own boolean so no single stuck bit can upgrade one aspect into a more
    permissive one, and `vital` enforces that exactly one is lit.
 3. **The vital layer is an addition.** The wireframes show raw PLC outputs going
    to track. Producing outputs "in a vital manner" is a stated requirement, so
    the supervisor and its override reporting were designed here, not copied.
-4. **Maintenance mode holds authority at zero.** Taking a switch by hand, or
-   entering maintenance at all, drops the controller's commanded authority to 0.
-   This is the conservative reading of a vital architecture; if the team wants
-   maintenance to keep issuing authority, the rule is two branches in
-   `vital.supervise`.
+4. **Maintenance mode is the CTC's and holds authority at zero.** The vital
+   supervisor enforces the hold independently of the PLC, as requested on
+   2026-10-08. Switch control still gives the CTC's command precedence over
+   a programmer's hand-set position, then falls back to the PLC.
 5. **Commit requires a clean run of the same buffer.** The wireframe shows RUN
    and COMMIT as peers. The described workflow is a safe debugger, so the
-   dependency between them is enforced.
+   dependency between them is enforced, and "clean" means no warnings either.
 6. **The starter program is generated per controller.** Every wayside owns
    different blocks and devices, so `default_program_source()` writes a working
    program against that controller's own signal names rather than shipping one
    fixed sample that would not compile elsewhere.
 7. **Trains and the CTC are stand-ins.** `system.py` walks a few trains along
-   each line and issues a constant suggested speed and authority. Replacing it
-   with the real inter-module interface means changing one class.
-8. **Block closure is driven from this UI.** Closing a block is the CTC's job.
-   Until that module exists, clicking a block tile toggles it, so the
-   `authority_truncated` rule can be demonstrated.
-9. **Controller counts are configurable, not fixed.** `build_default_system()`
-   sets Green to 6 waysides and Red to 5 to match the wireframe;
-   `build_line(..., controller_count=N)` takes any number and partitions the
-   line evenly.
+   each line and suggests the same speed and authority for every block. Replacing
+   it with the real inter-module interface means changing one class.
+8. **The Track Controller UI cannot close or open blocks.** That is the CTC
+   Office's permission; block tiles are read-only. Closures arrive as a physical
+   input, from the CTC in the integrated system and from the test UI's CTC
+   section standing alone.
+9. **Controller counts are configurable, and so is the layout.** The system
+   starts from the real Green and Red layouts, divided 6 and 5 ways, and **Load
+   track...** replaces either with another count or another file. The generated
+   synthetic network of the first version is gone.
 10. **Editor highlighting is in the gutter, not the text.** The language is
     small enough that the useful signal is which lines the compiler rejected, so
     failed lines are marked in the gutter and listed in the Parser pane rather
@@ -274,10 +393,9 @@ recorded here.
     `@Property(...)` in `state.py` and `track_ctrl_test/client.py` is reported as
     a bad call. `call-arg` and `arg-type` are disabled for those two modules in
     `mypy.ini`; every other layer stays fully checked.
-13. **Maintenance mode is a user input, not a physical one.** The reference test
-    UI lists `MAINT_HOLD` among the PLC inputs. Here it sits under user inputs,
-    because it is the programmer's top-bar button; the controller still feeds it
-    to the PLC as `MAINT_HOLD`, so it changes the program's behaviour either way.
+13. **Maintenance mode is a CTC input.** The test UI exposes it with the CTC
+    stimuli; the controller feeds it to the PLC as `MAINT`, so it changes the
+    program's behaviour.
 14. **Switch fault and moving are real inputs.** The PLC reads `FAULT_<switch>`
     and `MOVING_<switch>`, and the starter program uses them. The vital layer also
     enforces them independently, so a program that ignores them is still held: a
@@ -305,10 +423,26 @@ recorded here.
   layout, PLC image or outputs, and the module architecture diagram lists none,
   so there is nothing for those controls to act on and they were left out rather
   than shown dead.
-- **Suggested speed and authority are per controller, in MPH and blocks.** The
-  reference gives five segments each, with authority in feet.
+- **Speed limit override is per controller.** The posted limits come from the
+  layout per block; the test UI's override replaces them for one controller.
+- **Track failures and switch position read-back are not inputs yet.** The Track
+  Model reports failures and actual positions; this module has the `FAULT_` and
+  `MOVING_` flags instead. See `INTEGRATION_DISCREPANCIES.md`.
 - Only the light theme of the style guide is implemented.
 - The controller has no hardware variation yet; this is the software one.
 - Committed programs live in memory, so history does not survive a restart.
-- The header's simulation clock is wall-clock time; it is not yet driven by the
-  shared simulation clock of REQ-INTF-010.
+- Integration with the CTC Office, HW Track Controller and Track Model is not
+  done; see `INTEGRATION_DISCREPANCIES.md` for every known mismatch.
+18. **Lists reach QML as `{"rows": [...]}`.** A list property read from QML is a
+    live reference: every `.length` or element access inside `filter` calls the
+    Python getter again, once per element. A view that filtered a 30-row list in
+    eight places made over two hundred getter calls per refresh, about 150 ms of
+    the UI thread, enough to delay the test link by seconds. `list_property` in
+    `models.py` nests the list in a map, which QML copies in one call. A refresh
+    is now about 3 ms. Block tiles use a list model that updates only the rows
+    that changed.
+19. **Programs are checked against the controller, not only the language.** The
+    compiler cannot know which names a wayside has, so `check_program` reports
+    inputs and outputs the controller does not own and outputs it leaves undriven.
+    Together with the warnings-block-commit rule, a program for the wrong wayside
+    cannot be committed.

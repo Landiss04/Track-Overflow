@@ -1,6 +1,7 @@
 // Track Controller application window: tab bar, header, view switcher.
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import "components"
@@ -143,14 +144,14 @@ ApplicationWindow {
                     ComboBox {
                         id: controllerBox
                         implicitWidth: 190
-                        model: wayside.controllers.map(function (item) {
+                        model: wayside.controllers.rows.map(function (item) {
                             return item.id + "  ·  " + item.span;
                         })
-                        currentIndex: wayside.controllers.findIndex(
+                        currentIndex: wayside.controllers.rows.findIndex(
                             function (item) { return item.selected; })
                         onActivated: function (index) {
                             wayside.selectController(
-                                wayside.controllers[index].id);
+                                wayside.controllers.rows[index].id);
                         }
                     }
                 }
@@ -162,28 +163,40 @@ ApplicationWindow {
 
                     ComboBox {
                         implicitWidth: 140
-                        model: wayside.lines.map(function (item) {
+                        model: wayside.lines.rows.map(function (item) {
                             return item.name;
                         })
-                        currentIndex: wayside.lines.findIndex(
+                        currentIndex: wayside.lines.rows.findIndex(
                             function (item) { return item.selected; })
                         onActivated: function (index) {
-                            wayside.selectLine(wayside.lines[index].name);
+                            wayside.selectLine(wayside.lines.rows[index].name);
                         }
                     }
                 }
 
+                // The track configuration is the controller's one piece
+                // of fixed setup, so loading it is a deliberate act that
+                // asks before it replaces anything.
+                AppButton {
+                    text: qsTr("Load track…")
+                    size: "small"
+                    tooltip: qsTr("Load a track layout and divide it among "
+                        + "wayside controllers")
+                    onClicked: trackFile.open()
+                }
+
+                // Maintenance mode belongs to the CTC Office. It is shown
+                // here and cannot be changed from this window.
                 RowLayout {
                     spacing: theme.space_2
 
                     FieldLabel { text: qsTr("Mode") }
 
-                    SegmentedToggle {
-                        options: [qsTr("Automatic"), qsTr("Maintenance")]
-                        currentIndex: wayside.maintenance ? 1 : 0
-                        onActivated: function (index) {
-                            wayside.setMaintenance(index === 1);
-                        }
+                    StatusBadge {
+                        label: wayside.maintenance
+                            ? qsTr("Maintenance · CTC")
+                            : qsTr("Automatic")
+                        variant: wayside.maintenance ? "warning" : "ok"
                     }
                 }
 
@@ -196,10 +209,18 @@ ApplicationWindow {
                     visible: wayside.externalControl
                 }
 
+                // Read-only. The clock is the harness's and the CTC sets
+                // it (D017); this UI only says what state it is in.
                 StatusBadge {
-                    label: qsTr("Maintenance")
+                    label: qsTr("Paused")
                     variant: "warning"
-                    visible: wayside.maintenance
+                    visible: wayside.clockPaused
+                }
+
+                StatusBadge {
+                    label: qsTr("10×")
+                    variant: "info"
+                    visible: wayside.clockSpeed === 10
                 }
 
                 MonoText {
@@ -221,5 +242,19 @@ ApplicationWindow {
             ProgramView { onOpenViewTab: wayside.setActiveTab(1) }
             StatusView { onOpenProgramTab: wayside.setActiveTab(0) }
         }
+    }
+
+    FileDialog {
+        id: trackFile
+        title: qsTr("Load a track layout")
+        nameFilters: [qsTr("Track layouts (*.json)"), qsTr("All files (*)")]
+        currentFolder: wayside.layoutFolder
+        // Python reads and checks the file; the dialog only says which.
+        onAccepted: trackConfig.openFor(selectedFile)
+    }
+
+    TrackConfigDialog {
+        id: trackConfig
+        parent: Overlay.overlay
     }
 }

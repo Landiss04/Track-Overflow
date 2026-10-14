@@ -16,7 +16,7 @@ RowLayout {
 
     readonly property color valueColor: kind !== "aspect" ? theme.text_primary
         : value === "RED" ? theme.aspect_red
-        : value === "ORANGE" ? theme.aspect_orange
+        : value === "YELLOW" ? theme.aspect_yellow
         : value === "SUPER GREEN" ? theme.aspect_super_green
         : theme.aspect_green
 
@@ -42,7 +42,8 @@ RowLayout {
 
     Text {
         text: root.value
-        color: root.valueColor
+        color: root.kind === "aspect" && root.value === "YELLOW"
+            ? theme.aspect_yellow_text : root.valueColor
         font.family: root.mono ? theme.mono_family : theme.ui_family
         font.pixelSize: theme.size_small
         font.weight: theme.weight_bold

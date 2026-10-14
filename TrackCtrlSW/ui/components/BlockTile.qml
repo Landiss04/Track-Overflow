@@ -19,7 +19,6 @@ Rectangle {
     property bool occupied: false
     property bool closed: false
     property bool compact: false
-    signal activated()
 
     readonly property string caption: occupied ? root.train
         : closed ? qsTr("CLOSED")
@@ -33,21 +32,27 @@ Rectangle {
     radius: theme.radius_sm
 
     // Closed blocks are hatched so they read differently from clear
-    // ones without relying on the fill alone.
-    Canvas {
+    // ones without relying on the fill alone. The canvas exists only
+    // while the block is closed: a controller owns dozens of tiles and
+    // nearly all of them are open, and a canvas per tile made every
+    // refresh create and destroy dozens of them.
+    Loader {
         anchors.fill: parent
         anchors.margins: 1
-        visible: root.closed && !root.occupied
-        onPaint: {
-            const context = getContext("2d");
-            context.reset();
-            context.strokeStyle = theme.block_closed;
-            context.lineWidth = 2;
-            for (let offset = -height; offset < width; offset += 7) {
-                context.moveTo(offset, height);
-                context.lineTo(offset + height, 0);
+        active: root.closed && !root.occupied
+
+        sourceComponent: Canvas {
+            onPaint: {
+                const context = getContext("2d");
+                context.reset();
+                context.strokeStyle = theme.block_closed;
+                context.lineWidth = 2;
+                for (let offset = -height; offset < width; offset += 7) {
+                    context.moveTo(offset, height);
+                    context.lineTo(offset + height, 0);
+                }
+                context.stroke();
             }
-            context.stroke();
         }
     }
 
@@ -74,12 +79,8 @@ Rectangle {
         }
     }
 
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        hoverEnabled: true
-        onClicked: root.activated()
-    }
+    // Read-only: closing a block is the CTC Office's permission, not the
+    // Track Controller's, so a tile shows block state and never sets it.
 
     // Hover surfaces the detail a tile is too small to show at rest.
     ToolTip.visible: hoverHandler.hovered
@@ -87,7 +88,6 @@ Rectangle {
         + (root.station !== "" ? " — " + root.station : "")
         + "\n" + root.caption
         + "\n" + root.speedLimit + " mph limit"
-        + "\n" + qsTr("Click to close or reopen")
 
     HoverHandler { id: hoverHandler }
 }

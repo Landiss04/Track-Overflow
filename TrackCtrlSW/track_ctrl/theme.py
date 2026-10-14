@@ -122,10 +122,11 @@ SAFETY_EMPHASIS_HEIGHT = 64
 LINE_GREEN = "#2F7D4F"
 LINE_RED = "#B03A3A"
 
-# Signal aspects as they appear on a wayside light. Orange is the
-# style guide's warning tone; super green is a lighter clear.
+# Signal aspects are independent of warning/diagnostic colours.
+# Super green is a lighter clear; yellow has a separate lamp colour.
 ASPECT_RED = DANGER
-ASPECT_ORANGE = WARNING
+ASPECT_YELLOW = "#FACC15"
+ASPECT_YELLOW_TEXT = "#806600"
 ASPECT_GREEN = SUCCESS
 ASPECT_SUPER_GREEN = "#3FA85F"
 
@@ -224,7 +225,8 @@ def build_theme() -> dict[str, Any]:
         "line_green": LINE_GREEN,
         "line_red": LINE_RED,
         "aspect_red": ASPECT_RED,
-        "aspect_orange": ASPECT_ORANGE,
+        "aspect_yellow": ASPECT_YELLOW,
+        "aspect_yellow_text": ASPECT_YELLOW_TEXT,
         "aspect_green": ASPECT_GREEN,
         "aspect_super_green": ASPECT_SUPER_GREEN,
         "block_occupied": BLOCK_OCCUPIED,

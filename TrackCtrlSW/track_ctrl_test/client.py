@@ -6,16 +6,23 @@ turns each pushed snapshot into the handful of values the views show.
 
 Inputs are split the way the test UI splits them:
 
-physical  ``setOccupancy``, ``setBlockClosed``, ``setSwitchFault``,
-          ``setSwitchMoving``, ``setSuggestedSpeed``,
-          ``setSuggestedAuthority``, ``setSpeedLimit``,
-          ``clearOccupancy``. These write onto the target controller's
-          input card, so they change what its PLC program sees.
+physical  ``setOccupancy``, ``clearOccupancy``, ``setSwitchFault``,
+          ``setSwitchMoving`` (the Track Model) and ``setBlockClosed``,
+          ``setSuggestedSpeed``, ``setSuggestedAuthority``,
+          ``setAllSuggestions``, ``clearSuggestion``, ``setSpeedLimit``,
+          ``setMaintenance``, ``setSwitchCommand`` (the CTC Office).
+          These write onto the controller's input card, so they change
+          what its PLC program sees. Maintenance mode is the CTC
+          Office's, so it is a physical input here and not a user one.
 user      ``selectLine``, ``selectController``, ``setTab``,
-          ``setMaintenance``, ``setSwitchByHand``, ``releaseSwitch``,
-          ``run``, ``commit``, ``newFile``, ``openIteration``,
-          ``editBuffer``, ``loadProgram``. These press the same
-          controls the programmer does in the Track Controller UI.
+          ``setSwitchByHand``, ``releaseSwitch``, ``run``, ``commit``,
+          ``newFile``, ``openIteration``, ``editBuffer``,
+          ``loadProgram``. These press the same controls the programmer
+          does in the Track Controller UI.
+
+Speeds are typed in mph, as on every screen, and sent as whole m/s, the
+system's backend unit. Rounding is down, so a typed speed can only
+become slower.
 
 Lists that feed a ComboBox (block ids, switch ids and so on) change only
 when the topology or the target changes, never on a plain snapshot, so
@@ -30,6 +37,8 @@ from typing import Any
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from PySide6.QtNetwork import QLocalSocket
 
+from track_ctrl.display import mps_to_mph, whole_mps_from_mph
+from track_ctrl.models import list_property
 from track_ctrl.stimulus import SERVER_NAME
 
 #: Milliseconds between reconnection attempts while the controller is
@@ -257,6 +266,16 @@ class TestClientState(QObject):
         return str(self._snapshot.get("clock", "--:--:--"))
 
     @Property(bool, notify=snapshotChanged)
+    def clockPaused(self) -> bool:
+        """Whether the controller's shared clock is held."""
+        return bool(self._snapshot.get("clock_paused", True))
+
+    @Property(int, notify=snapshotChanged)
+    def clockSpeed(self) -> int:
+        """The shared clock's speed, 1 or 10."""
+        return int(self._snapshot.get("clock_speed", 1))
+
+    @Property(bool, notify=snapshotChanged)
     def standin(self) -> bool:
         """Whether the controller's stand-in world is still running."""
         return bool(self._snapshot.get("standin", True))
@@ -337,17 +356,68 @@ class TestClientState(QObject):
             for item in self._controller(self._target).get("switches", [])
         }
 
-    @Property("QVariantMap", notify=snapshotChanged)
-    def inputs(self) -> dict[str, Any]:
-        """The CTC values currently on the target's input card."""
-        return dict(self._controller(self._target).get("inputs", {}))
+    @Property(float, notify=snapshotChanged)
+    def speedLimitMph(self) -> float:
+        """The target's posted-limit override in mph, 0 when there is none."""
+        limit = self._controller(self._target).get("inputs", {}).get(
+            "speed_limit"
+        )
+        return 0.0 if limit is None else round(mps_to_mph(limit), 1)
 
-    @Property("QVariantList", notify=snapshotChanged)
+    @Property("QVariantMap", notify=snapshotChanged)
+    def suggestedMph(self) -> dict[str, Any]:
+        """Block id -> suggested speed in mph, -1 where none is sent."""
+        return {
+            block["id"]: (
+                -1.0 if block["suggested_speed"] is None
+                else round(mps_to_mph(block["suggested_speed"]), 1)
+            )
+            for block in self._controller(self._target).get("blocks", [])
+        }
+
+    @Property("QVariantMap", notify=snapshotChanged)
+    def suggestedBlocks(self) -> dict[str, Any]:
+        """Block id -> suggested authority in blocks, -1 where none."""
+        return {
+            block["id"]: (
+                -1 if block["suggested_authority"] is None
+                else block["suggested_authority"]
+            )
+            for block in self._controller(self._target).get("blocks", [])
+        }
+
+    @Property("QVariantMap", notify=snapshotChanged)
+    def ctcCommand(self) -> dict[str, Any]:
+        """Switch id -> the CTC's command: normal, reverse or none."""
+        return {
+            item["id"]: item.get("ctc_command") or "none"
+            for item in self._controller(self._target).get("switches", [])
+        }
+
+    @Property("QVariantMap", notify=snapshotChanged)
+    def switchForBlock(self) -> dict[str, Any]:
+        """Block id -> the switch on that block, where one exists."""
+        return {
+            item["block_id"]: item["id"]
+            for item in self._controller(self._target).get("switches", [])
+        }
+
+    @Property(bool, notify=snapshotChanged)
+    def maintenance(self) -> bool:
+        """Whether the CTC (this test UI) has maintenance mode on."""
+        return bool(self._snapshot.get("maintenance", False))
+
+    @Slot(float, result=int)
+    def wholeMps(self, mph: float) -> int:
+        """What a typed speed becomes on the wire: whole m/s, rounded down."""
+        return whole_mps_from_mph(mph)
+
+    @list_property(snapshotChanged)
     def outputs(self) -> list[Any]:
         """What the target controller is driving, as display rows."""
         return list(self._controller(self._target).get("outputs", []))
 
-    @Property("QVariantList", notify=snapshotChanged)
+    @list_property(snapshotChanged)
     def overrides(self) -> list[Any]:
         """Vital restrictions applied to the target's outputs."""
         return list(self._controller(self._target).get("overrides", []))
@@ -382,7 +452,7 @@ class TestClientState(QObject):
             for item in self._snapshot.get("ui", {}).get("history", [])
         ]
 
-    @Property("QVariantList", notify=snapshotChanged)
+    @list_property(snapshotChanged)
     def historyNumbers(self) -> list[Any]:
         """Iteration numbers matching :attr:`historyLabels`."""
         return [
@@ -431,20 +501,72 @@ class TestClientState(QObject):
         """Flag a switch machine as mid-throw."""
         self._physical("set_switch_moving", switch=switch_id, value=moving)
 
-    @Slot(float)
-    def setSuggestedSpeed(self, mph: float) -> None:
-        """Send the CTC's suggested speed, in mph."""
-        self._physical("set_suggested_speed", value=mph)
+    @Slot(str, float)
+    def setSuggestedSpeed(self, block_id: str, mph: float) -> None:
+        """Suggest a speed for one block, typed in mph."""
+        self._physical(
+            "set_suggestion", block=block_id,
+            speed_mps=whole_mps_from_mph(mph),
+        )
 
-    @Slot(float)
-    def setSuggestedAuthority(self, blocks: float) -> None:
-        """Send the CTC's suggested authority, in blocks."""
-        self._physical("set_suggested_authority", value=blocks)
+    @Slot(str, float)
+    def setSuggestedAuthority(self, block_id: str, blocks: float) -> None:
+        """Suggest an authority, in blocks, for one block."""
+        self._physical(
+            "set_suggestion", block=block_id, authority_blocks=blocks
+        )
+
+    @Slot(float, float)
+    def setAllSuggestions(self, mph: float, blocks: float) -> None:
+        """Suggest the same speed and authority for every block."""
+        self._physical(
+            "set_all_suggestions",
+            speed_mps=whole_mps_from_mph(mph), authority_blocks=blocks,
+        )
+
+    @Slot(str)
+    def clearSuggestion(self, block_id: str) -> None:
+        """Send nothing for one block."""
+        self._physical("clear_suggestion", block=block_id)
 
     @Slot(float)
     def setSpeedLimit(self, mph: float) -> None:
-        """Override the posted limit; zero or less restores the layout's."""
-        self._physical("set_speed_limit", value=mph if mph > 0 else None)
+        """Override the posted limit, in mph; zero restores the layout's."""
+        self._physical(
+            "set_speed_limit",
+            value=whole_mps_from_mph(mph) if mph > 0 else None,
+        )
+
+    @Slot(bool)
+    def setMaintenance(self, active: bool) -> None:
+        """Turn the CTC Office's maintenance mode on or off, system-wide."""
+        self._send({"type": "physical", "op": "set_maintenance",
+                    "value": active})
+
+    @Slot(str, str)
+    def setSwitchCommand(self, switch_id: str, position: str) -> None:
+        """Command a switch normal or reverse; any other value withdraws."""
+        self._physical(
+            "set_switch_command", switch=switch_id,
+            position=position if position in ("normal", "reverse") else None,
+        )
+
+    # --- the shared clock (the harness's, played by the test UI) ------------
+
+    @Slot()
+    def pauseClock(self) -> None:
+        """Hold the shared simulation clock."""
+        self._send({"type": "clock", "op": "pause"})
+
+    @Slot()
+    def resumeClock(self) -> None:
+        """Run the shared simulation clock."""
+        self._send({"type": "clock", "op": "resume"})
+
+    @Slot(int)
+    def setClockSpeed(self, speed: int) -> None:
+        """Set the clock to 1x or 10x."""
+        self._send({"type": "clock", "op": "set_speed", "speed": speed})
 
     # --- user inputs --------------------------------------------------------
 
@@ -462,11 +584,6 @@ class TestClientState(QObject):
     def setTab(self, index: int) -> None:
         """Show the Program (0) or View (1) tab."""
         self._user("set_tab", index=index)
-
-    @Slot(bool)
-    def setMaintenance(self, active: bool) -> None:
-        """Press the programmer's maintenance-mode button."""
-        self._user("set_maintenance", value=active)
 
     @Slot(str, bool)
     def setSwitchByHand(self, switch_id: str, reverse: bool) -> None:

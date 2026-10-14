@@ -14,6 +14,7 @@ Rectangle {
 
     property alias text: editor.text
     property var errorLines: []
+    property var warningLines: []
     property bool readOnly: false
     signal edited(string text)
 
@@ -51,24 +52,28 @@ Rectangle {
 
                         readonly property bool failed:
                             root.errorLines.indexOf(index + 1) !== -1
+                        readonly property bool warned: !failed
+                            && root.warningLines.indexOf(index + 1) !== -1
 
                         width: gutter.width
                         height: theme.editor_line_height
 
                         Rectangle {
                             anchors.fill: parent
-                            color: theme.danger_bg
-                            visible: parent.failed
+                            color: parent.failed ? theme.danger_bg
+                                : theme.warning_bg
+                            visible: parent.failed || parent.warned
                         }
 
                         Text {
                             anchors.right: parent.right
                             anchors.rightMargin: theme.space_2
                             anchors.verticalCenter: parent.verticalCenter
-                            text: parent.failed
+                            text: parent.failed || parent.warned
                                 ? "▶ " + (index + 1) : index + 1
-                            color: parent.failed
-                                ? theme.danger : theme.text_muted
+                            color: parent.failed ? theme.danger
+                                : parent.warned ? theme.warning
+                                : theme.text_muted
                             font.family: theme.mono_family
                             font.pixelSize: theme.size_label
                         }

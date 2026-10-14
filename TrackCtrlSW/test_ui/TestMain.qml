@@ -1,13 +1,11 @@
 // Track Controller test UI window.
 //
-// A separate process from the Track Controller UI. It plays the CTC,
-// the Track Model and the programmer against a running controller, and
-// its three columns separate what each of them can do:
+// A separate process from the Track Controller UI. It plays the CTC and
+// Track Model against a running controller, with source inputs separated
+// from live controller outputs:
 //
-//   physical inputs   change the world the controller reacts to, so the
-//                     PLC program sees them and its outputs move
-//   outputs           what the controller is driving in response
-//   user inputs       press the programmer's controls in the other UI
+//   CTC and Track Model inputs change one selected block at a time
+//   outputs show what the controller is driving in response
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -19,19 +17,17 @@ ApplicationWindow {
     id: window
 
     readonly property bool live: stimulus.connected
-    readonly property var ui: stimulus.ui
-    readonly property var inputs: stimulus.inputs
-    readonly property string occId: stimulus.blockIds[occPick.index] || ""
-    readonly property string closeId: stimulus.blockIds[closePick.index] || ""
-    readonly property string switchId: stimulus.switchIds[switchPick.index] || ""
-    readonly property string handSwitchId:
-        stimulus.uiSwitchIds[handPick.index] || ""
-    property bool handReverse: false
+    readonly property string ctcBlockId:
+        stimulus.blockIds[ctcBlockPick.index] || ""
+    readonly property string trackBlockId:
+        stimulus.blockIds[trackBlockPick.index] || ""
+    readonly property string ctcSwitchId:
+        stimulus.switchForBlock[window.ctcBlockId] || ""
 
     visible: true
     width: 1440
     height: 900
-    minimumWidth: 1180
+    minimumWidth: 900
     minimumHeight: 720
     title: qsTr("Track Controller — Test UI")
     color: theme.bg_app
@@ -113,6 +109,12 @@ ApplicationWindow {
                 }
 
                 StatusBadge {
+                    visible: window.live && stimulus.maintenance
+                    label: qsTr("CTC maintenance on")
+                    variant: "warning"
+                }
+
+                StatusBadge {
                     visible: window.live
                     label: stimulus.standin
                         ? qsTr("Stand-in running") : qsTr("Test UI drives inputs")
@@ -144,6 +146,28 @@ ApplicationWindow {
                             value: stimulus.controllerIds.indexOf(stimulus.target)
                             when: stimulus.controllerIds.indexOf(stimulus.target) >= 0
                         }
+                    }
+                }
+
+                // The shared clock belongs to the central harness and is
+                // set by the CTC Office (D017). Standing alone, the test
+                // UI plays that part, so the controls live here and the
+                // Track Controller UI only shows the clock.
+                AppButton {
+                    text: stimulus.clockPaused ? qsTr("Run") : qsTr("Pause")
+                    variant: stimulus.clockPaused ? "primary" : "secondary"
+                    size: "small"
+                    enabled: window.live
+                    onClicked: stimulus.clockPaused
+                        ? stimulus.resumeClock() : stimulus.pauseClock()
+                }
+
+                SegmentedToggle {
+                    options: [qsTr("1×"), qsTr("10×")]
+                    currentIndex: stimulus.clockSpeed === 10 ? 1 : 0
+                    enabled: window.live
+                    onActivated: function (index) {
+                        stimulus.setClockSpeed(index === 1 ? 10 : 1);
                     }
                 }
 
@@ -179,20 +203,20 @@ ApplicationWindow {
             }
         }
 
-        // --- the three columns ---------------------------------------------
+        // --- inputs and live outputs ---------------------------------------
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.margins: theme.space_3
             spacing: theme.space_3
 
-            // ==== physical inputs ========================================
+            // ==== source-specific inputs ==================================
             Panel {
                 Layout.preferredWidth: 440
                 Layout.minimumWidth: 440
                 Layout.maximumWidth: 440
                 Layout.fillHeight: true
-                title: qsTr("Physical inputs")
+                title: qsTr("Stimulus inputs")
                 status: stimulus.target
 
                 ScrollView {
@@ -209,134 +233,186 @@ ApplicationWindow {
                         spacing: theme.space_3
 
                         Note {
-                            text: qsTr("These change the world the controller "
-                                + "reacts to. They are written onto its input "
-                                + "card, so its PLC program sees them and its "
-                                + "outputs move.")
+                            text: qsTr("Choose a source and block. Each control "
+                                + "changes only that block, except CTC "
+                                + "maintenance mode, which is system-wide.")
                         }
 
-                        SectionTitle { text: qsTr("TRACK MODEL") }
-
-                        PickerRow {
-                            id: occPick
-                            label: qsTr("Block")
-                            model: stimulus.blockLabels
-                            enabled: window.live
+                        Rectangle {
                             Layout.fillWidth: true
-                        }
+                            implicitHeight: trackModelColumn.implicitHeight
+                                + 2 * theme.space_3
+                            color: theme.bg_surface
+                            border.color: theme.border
+                            border.width: 1
+                            radius: theme.radius_md
 
-                        ToggleRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Train present")
-                            hint: qsTr("Block occupancy on ") + occPick.currentText
-                            checked: !!stimulus.occupied[window.occId]
-                            enabled: window.live && window.occId !== ""
-                            onToggled: function (value) {
-                                stimulus.setOccupancy(window.occId, value);
+                            ColumnLayout {
+                                id: trackModelColumn
+                                anchors.fill: parent
+                                anchors.margins: theme.space_3
+                                spacing: theme.space_3
+
+                                SectionTitle { text: qsTr("TRACK MODEL INPUTS") }
+
+                                PickerRow {
+                                    id: trackBlockPick
+                                    label: qsTr("Block")
+                                    model: stimulus.blockLabels
+                                    enabled: window.live
+                                    Layout.fillWidth: true
+                                }
+
+                                ToggleRow {
+                                    Layout.fillWidth: true
+                                    label: qsTr("Train present")
+                                    hint: qsTr("Occupancy on ")
+                                        + trackBlockPick.currentText
+                                        + qsTr("; held until test UIs disconnect")
+                                    checked: !!stimulus.occupied[window.trackBlockId]
+                                    enabled: window.live
+                                        && window.trackBlockId !== ""
+                                    onToggled: function (value) {
+                                        stimulus.setOccupancy(
+                                            window.trackBlockId, value);
+                                    }
+                                }
                             }
                         }
 
-                        AppButton {
-                            text: qsTr("Clear all occupancy")
-                            size: "small"
-                            enabled: window.live
-                            onClicked: stimulus.clearOccupancy()
-                        }
-
-                        Rule {}
-
-                        PickerRow {
-                            id: switchPick
-                            label: qsTr("Switch")
-                            model: stimulus.switchIds
-                            enabled: window.live && stimulus.switchIds.length > 0
+                        Rectangle {
                             Layout.fillWidth: true
-                        }
+                            implicitHeight: ctcColumn.implicitHeight
+                                + 2 * theme.space_3
+                            color: theme.bg_surface
+                            border.color: theme.border
+                            border.width: 1
+                            radius: theme.radius_md
 
-                        ToggleRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Fault")
-                            hint: qsTr("Machine cannot be trusted to be in position")
-                            checked: !!stimulus.switchFault[window.switchId]
-                            enabled: window.live && window.switchId !== ""
-                            onToggled: function (value) {
-                                stimulus.setSwitchFault(window.switchId, value);
-                            }
-                        }
+                            ColumnLayout {
+                                id: ctcColumn
+                                anchors.fill: parent
+                                anchors.margins: theme.space_3
+                                spacing: theme.space_3
 
-                        ToggleRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Moving")
-                            hint: qsTr("Mid-throw, locked in neither position")
-                            checked: !!stimulus.switchMoving[window.switchId]
-                            enabled: window.live && window.switchId !== ""
-                            onToggled: function (value) {
-                                stimulus.setSwitchMoving(window.switchId, value);
-                            }
-                        }
+                                SectionTitle { text: qsTr("CTC INPUTS") }
 
-                        Rule {}
+                                PickerRow {
+                                    id: ctcBlockPick
+                                    label: qsTr("Block")
+                                    model: stimulus.blockLabels
+                                    enabled: window.live
+                                    Layout.fillWidth: true
+                                }
 
-                        SectionTitle { text: qsTr("CTC OFFICE") }
+                                ToggleRow {
+                                    Layout.fillWidth: true
+                                    label: qsTr("Maintenance mode")
+                                    hint: qsTr("System-wide: speed and authority "
+                                        + "held at zero; switch commands enabled")
+                                    checked: stimulus.maintenance
+                                    enabled: window.live
+                                    onToggled: function (value) {
+                                        stimulus.setMaintenance(value);
+                                    }
+                                }
 
-                        PickerRow {
-                            id: closePick
-                            label: qsTr("Block")
-                            model: stimulus.blockLabels
-                            enabled: window.live
-                            Layout.fillWidth: true
-                        }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: theme.space_3
 
-                        ToggleRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Closed")
-                            hint: qsTr("Closed for maintenance: ") + closePick.currentText
-                            onText: qsTr("CLOSED")
-                            offText: qsTr("OPEN")
-                            checked: !!stimulus.closed[window.closeId]
-                            enabled: window.live && window.closeId !== ""
-                            onToggled: function (value) {
-                                stimulus.setBlockClosed(window.closeId, value);
-                            }
-                        }
+                                    FieldLabel {
+                                        text: qsTr("Switch state")
+                                        Layout.preferredWidth: 120
+                                    }
 
-                        NumberRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Suggested speed")
-                            unit: qsTr("MPH")
-                            reported: window.inputs.suggested_speed === undefined
-                                ? "" : String(window.inputs.suggested_speed)
-                            maximum: 200
-                            enabled: window.live
-                            onCommitted: function (value) {
-                                stimulus.setSuggestedSpeed(value);
-                            }
-                        }
+                                    SegmentedToggle {
+                                        Layout.fillWidth: true
+                                        options: [qsTr("None"), qsTr("Normal"),
+                                            qsTr("Reverse")]
+                                        enabled: window.live
+                                            && window.ctcSwitchId !== ""
+                                        currentIndex: ({ none: 0, normal: 1,
+                                            reverse: 2 })[
+                                            stimulus.ctcCommand[
+                                                window.ctcSwitchId] || "none"]
+                                        onActivated: function (index) {
+                                            stimulus.setSwitchCommand(
+                                                window.ctcSwitchId,
+                                                ["none", "normal", "reverse"][index]);
+                                        }
+                                    }
+                                }
 
-                        NumberRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Suggested authority")
-                            unit: qsTr("BLOCKS")
-                            reported: window.inputs.suggested_authority === undefined
-                                ? "" : String(window.inputs.suggested_authority)
-                            maximum: 999
-                            enabled: window.live
-                            onCommitted: function (value) {
-                                stimulus.setSuggestedAuthority(value);
-                            }
-                        }
+                                Note {
+                                    visible: window.ctcBlockId !== ""
+                                        && window.ctcSwitchId === ""
+                                    text: qsTr("This block has no switch.")
+                                }
 
-                        NumberRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Speed limit")
-                            hint: qsTr("0 keeps each block's posted limit")
-                            unit: qsTr("MPH")
-                            reported: !window.inputs.speed_limit
-                                ? "0" : String(window.inputs.speed_limit)
-                            maximum: 200
-                            enabled: window.live
-                            onCommitted: function (value) {
-                                stimulus.setSpeedLimit(value);
+                                ToggleRow {
+                                    Layout.fillWidth: true
+                                    label: qsTr("Close block")
+                                    hint: qsTr("CTC closure for ")
+                                        + ctcBlockPick.currentText
+                                    onText: qsTr("CLOSED")
+                                    offText: qsTr("OPEN")
+                                    checked: !!stimulus.closed[window.ctcBlockId]
+                                    enabled: window.live
+                                        && window.ctcBlockId !== ""
+                                    onToggled: function (value) {
+                                        stimulus.setBlockClosed(
+                                            window.ctcBlockId, value);
+                                    }
+                                }
+
+                                NumberRow {
+                                    id: sugSpeed
+                                    Layout.fillWidth: true
+                                    label: qsTr("Suggested speed")
+                                    hint: isNaN(parseFloat(sugSpeed.text))
+                                        ? qsTr("Sent as whole m/s, rounded down")
+                                        : qsTr("Sent as ")
+                                            + stimulus.wholeMps(
+                                                parseFloat(sugSpeed.text))
+                                            + qsTr(" m/s")
+                                    unit: qsTr("MPH")
+                                    reported: !stimulus.suggestedMph[
+                                            window.ctcBlockId]
+                                        && stimulus.suggestedMph[
+                                            window.ctcBlockId] !== 0
+                                        ? "" : stimulus.suggestedMph[
+                                            window.ctcBlockId] < 0
+                                            ? "" : String(stimulus.suggestedMph[
+                                                window.ctcBlockId])
+                                    decimals: 1
+                                    maximum: 200
+                                    enabled: window.live
+                                        && window.ctcBlockId !== ""
+                                    onCommitted: function (value) {
+                                        stimulus.setSuggestedSpeed(
+                                            window.ctcBlockId, value);
+                                    }
+                                }
+
+                                NumberRow {
+                                    Layout.fillWidth: true
+                                    label: qsTr("Suggested authority")
+                                    unit: qsTr("BLOCKS")
+                                    reported: stimulus.suggestedBlocks[
+                                            window.ctcBlockId] === undefined
+                                        || stimulus.suggestedBlocks[
+                                            window.ctcBlockId] < 0
+                                        ? "" : String(stimulus.suggestedBlocks[
+                                            window.ctcBlockId])
+                                    maximum: 999
+                                    enabled: window.live
+                                        && window.ctcBlockId !== ""
+                                    onCommitted: function (value) {
+                                        stimulus.setSuggestedAuthority(
+                                            window.ctcBlockId, value);
+                                    }
+                                }
                             }
                         }
 
@@ -345,7 +421,7 @@ ApplicationWindow {
                 }
             }
 
-            // ==== outputs ================================================
+            // ==== controller outputs ====================================
             Panel {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 300
@@ -372,17 +448,36 @@ ApplicationWindow {
                                 + "Controller UI change as you stimulate it.")
                         }
 
-                        Repeater {
-                            model: stimulus.outputs
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Block outputs")
+                            items: stimulus.outputs.rows.filter(function (row) {
+                                return row.kind === "circuit";
+                            })
+                        }
 
-                            delegate: SignalRow {
-                                required property var modelData
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Switches")
+                            items: stimulus.outputs.rows.filter(function (row) {
+                                return row.kind === "switch";
+                            })
+                        }
 
-                                Layout.fillWidth: true
-                                label: modelData.label
-                                value: modelData.value
-                                kind: modelData.kind
-                            }
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Signals")
+                            items: stimulus.outputs.rows.filter(function (row) {
+                                return row.kind === "aspect";
+                            })
+                        }
+
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Crossings")
+                            items: stimulus.outputs.rows.filter(function (row) {
+                                return row.kind === "crossing";
+                            })
                         }
 
                         Rule {}
@@ -426,7 +521,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.preferredHeight: overrideColumn.implicitHeight
                                 + 2 * theme.space_2
-                            visible: stimulus.overrides.length > 0
+                            visible: stimulus.overrides.rows.length > 0
                             color: theme.warning_bg
                             border.color: theme.warning
                             border.width: 1
@@ -442,7 +537,7 @@ ApplicationWindow {
 
                                 Text {
                                     text: qsTr("VITAL OVERRIDES · ")
-                                        + stimulus.overrides.length
+                                        + stimulus.overrides.rows.length
                                     color: theme.warning
                                     font.family: theme.ui_family
                                     font.pixelSize: theme.size_label
@@ -451,7 +546,7 @@ ApplicationWindow {
                                 }
 
                                 Repeater {
-                                    model: stimulus.overrides
+                                    model: stimulus.overrides.rows
 
                                     delegate: Text {
                                         required property var modelData
@@ -473,312 +568,6 @@ ApplicationWindow {
                 }
             }
 
-            // ==== user inputs ============================================
-            Panel {
-                Layout.preferredWidth: 440
-                Layout.minimumWidth: 440
-                Layout.maximumWidth: 440
-                Layout.fillHeight: true
-                title: qsTr("User inputs")
-                status: qsTr("PROGRAMMER UI")
-
-                ScrollView {
-                    id: userScroll
-                    anchors.fill: parent
-                    clip: true
-                    contentWidth: availableWidth
-                    enabled: window.live
-
-                    ColumnLayout {
-                        x: theme.space_3
-                        y: theme.space_3
-                        width: userScroll.availableWidth - 2 * theme.space_3
-                        spacing: theme.space_3
-
-                        Note {
-                            text: qsTr("These press the programmer's own "
-                                + "controls in the Track Controller UI. They "
-                                + "exercise its features and nothing else: "
-                                + "each does what the same click would, "
-                                + "including being refused.")
-                        }
-
-                        SectionTitle { text: qsTr("SELECTION") }
-
-                        PickerRow {
-                            label: qsTr("Line")
-                            model: stimulus.lineNames
-                            mirror: stimulus.lineNames.indexOf(window.ui.line)
-                            enabled: window.live
-                            Layout.fillWidth: true
-                            onPicked: function (index) {
-                                stimulus.selectLine(stimulus.lineNames[index]);
-                            }
-                        }
-
-                        PickerRow {
-                            label: qsTr("Controller")
-                            model: stimulus.controllerLabels
-                            mirror: stimulus.controllerIds.indexOf(
-                                window.ui.controller)
-                            enabled: window.live
-                            Layout.fillWidth: true
-                            onPicked: function (index) {
-                                stimulus.selectController(
-                                    stimulus.controllerIds[index]);
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.space_3
-
-                            FieldLabel {
-                                text: qsTr("Tab")
-                                Layout.preferredWidth: 120
-                            }
-
-                            SegmentedToggle {
-                                Layout.fillWidth: true
-                                options: [qsTr("Program"), qsTr("View")]
-                                currentIndex: window.ui.tab || 0
-                                onActivated: function (index) {
-                                    stimulus.setTab(index);
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.space_3
-
-                            FieldLabel {
-                                text: qsTr("Mode")
-                                Layout.preferredWidth: 120
-                            }
-
-                            SegmentedToggle {
-                                Layout.fillWidth: true
-                                options: [qsTr("Automatic"), qsTr("Maintenance")]
-                                currentIndex: window.ui.maintenance ? 1 : 0
-                                onActivated: function (index) {
-                                    stimulus.setMaintenance(index === 1);
-                                }
-                            }
-                        }
-
-                        Rule {}
-
-                        SectionTitle { text: qsTr("SET SWITCH MANUALLY") }
-
-                        PickerRow {
-                            id: handPick
-                            label: qsTr("Switch")
-                            model: stimulus.uiSwitchIds
-                            enabled: window.live
-                                && stimulus.uiSwitchIds.length > 0
-                            Layout.fillWidth: true
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.space_3
-
-                            FieldLabel {
-                                text: qsTr("Position")
-                                Layout.preferredWidth: 120
-                            }
-
-                            SegmentedToggle {
-                                Layout.fillWidth: true
-                                options: [qsTr("Normal"), qsTr("Reverse")]
-                                currentIndex: window.handReverse ? 1 : 0
-                                onActivated: function (index) {
-                                    window.handReverse = index === 1;
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.space_2
-
-                            AppButton {
-                                text: qsTr("Apply")
-                                variant: "primary"
-                                size: "small"
-                                enabled: window.live
-                                    && window.handSwitchId !== ""
-                                onClicked: stimulus.setSwitchByHand(
-                                    window.handSwitchId, window.handReverse)
-                            }
-
-                            AppButton {
-                                text: qsTr("Release")
-                                size: "small"
-                                enabled: window.live
-                                    && window.handSwitchId !== ""
-                                onClicked: stimulus.releaseSwitch(
-                                    window.handSwitchId)
-                            }
-                        }
-
-                        Note {
-                            text: qsTr("The dialog only works in maintenance "
-                                + "mode; outside it the controller refuses.")
-                        }
-
-                        Rule {}
-
-                        SectionTitle { text: qsTr("EDITOR") }
-
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: theme.space_2
-
-                            AppButton {
-                                text: qsTr("Edit buffer")
-                                size: "small"
-                                enabled: window.live
-                                onClicked: stimulus.editBuffer()
-                            }
-
-                            AppButton {
-                                text: qsTr("Run")
-                                variant: "primary"
-                                size: "small"
-                                enabled: window.live
-                                onClicked: stimulus.run()
-                            }
-
-                            AppButton {
-                                text: qsTr("Commit iteration")
-                                variant: "success"
-                                size: "small"
-                                enabled: window.live
-                                onClicked: stimulus.commit()
-                            }
-
-                            AppButton {
-                                text: qsTr("New")
-                                size: "small"
-                                enabled: window.live
-                                onClicked: stimulus.newFile()
-                            }
-                        }
-
-                        PickerRow {
-                            id: historyPick
-                            label: qsTr("Iteration")
-                            model: stimulus.historyLabels
-                            enabled: window.live
-                                && stimulus.historyLabels.length > 0
-                            Layout.fillWidth: true
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.space_2
-
-                            AppButton {
-                                text: qsTr("Open iteration")
-                                size: "small"
-                                enabled: window.live
-                                    && stimulus.historyNumbers.length > 0
-                                onClicked: stimulus.openIteration(
-                                    stimulus.historyNumbers[historyPick.index])
-                            }
-
-                            AppButton {
-                                text: qsTr("Live buffer")
-                                size: "small"
-                                enabled: window.live
-                                onClicked: stimulus.openIteration(0)
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.space_2
-
-                            TextField {
-                                id: pathField
-                                Layout.fillWidth: true
-                                implicitHeight: theme.control_h_sm
-                                placeholderText: qsTr("path/to/program.plc")
-                                selectByMouse: true
-                                color: theme.text_primary
-                                font.family: theme.mono_family
-                                font.pixelSize: theme.size_label
-                                background: Rectangle {
-                                    radius: theme.radius_md
-                                    color: theme.bg_surface
-                                    border.width: pathField.activeFocus ? 2 : 1
-                                    border.color: pathField.activeFocus
-                                        ? theme.focus_ring : theme.border_strong
-                                }
-                                onAccepted: stimulus.loadProgram(text)
-                            }
-
-                            AppButton {
-                                text: qsTr("Load")
-                                size: "small"
-                                enabled: window.live && pathField.text !== ""
-                                onClicked: stimulus.loadProgram(pathField.text)
-                            }
-                        }
-
-                        Rule {}
-
-                        SectionTitle {
-                            text: qsTr("WHAT THE PROGRAMMER'S UI SHOWS")
-                        }
-
-                        SignalRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Line")
-                            value: window.ui.line || ""
-                        }
-
-                        SignalRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Controller")
-                            value: window.ui.controller || ""
-                        }
-
-                        SignalRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Tab")
-                            value: window.ui.tab === 1
-                                ? qsTr("View") : qsTr("Program")
-                        }
-
-                        SignalRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Buffer")
-                            value: window.ui.buffer_read_only
-                                ? qsTr("History")
-                                : window.ui.buffer_dirty
-                                    ? qsTr("Edited") : qsTr("Committed")
-                        }
-
-                        SignalRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Ready to commit")
-                            value: window.ui.can_commit
-                                ? qsTr("YES") : qsTr("NO")
-                        }
-
-                        SignalRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Compile errors")
-                            value: String(window.ui.errors || 0)
-                        }
-
-                        Item { Layout.preferredHeight: theme.space_3 }
-                    }
-                }
-            }
         }
 
         // --- last reply from the controller ---------------------------------

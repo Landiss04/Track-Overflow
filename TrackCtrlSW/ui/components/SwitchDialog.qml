@@ -131,9 +131,15 @@ Dialog {
                     id: consequence
                     anchors.fill: parent
                     anchors.margins: theme.space_3
-                    text: qsTr("While any switch is held by hand, this "
-                        + "controller commands zero authority. Release it "
-                        + "to give the program its switches back.")
+                    text: root.currentSwitch !== null
+                        && root.currentSwitch.ctc_command !== ""
+                        ? qsTr("The CTC Office has commanded this switch %1. "
+                            + "Its command takes precedence over a hand-set "
+                            + "position.").arg(root.currentSwitch.ctc_command)
+                        : qsTr("Maintenance mode is the CTC Office's. A "
+                            + "hand-set switch stays where you put it until "
+                            + "you release it, or the CTC Office ends "
+                            + "maintenance mode.")
                     color: theme.warning
                     font.family: theme.ui_family
                     font.pixelSize: theme.size_label

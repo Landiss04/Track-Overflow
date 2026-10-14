@@ -14,7 +14,6 @@ anything on the track that they have not just watched execute.
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,11 +21,21 @@ from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
 from track_ctrl.controller import TrackController, default_program_source
 from track_ctrl.plc import SEVERITY_ERROR, compile_program, has_errors
-from track_ctrl.stimulus import output_rows
+from track_ctrl.display import mps_to_mph
+from track_ctrl.models import BlockListModel, list_property
+from track_ctrl.layout import (
+    LayoutError,
+    build_line,
+    default_layout_dir,
+    load_layout_file,
+)
+from track_ctrl.stimulus import output_rows, suggestion_rows
 from track_ctrl.system import TrackControllerSystem
+from utils.clock_driver import ClockDriver
+from utils.system_clock import SystemClock
 
-#: Simulation tick, in milliseconds.
-TICK_INTERVAL_MS = 1000
+#: How often the views are refreshed while the clock runs, in ms.
+UI_REFRESH_MS = 200
 
 #: Lines kept in the terminal scrollback.
 TERMINAL_DEPTH = 200
@@ -44,9 +53,34 @@ class TrackControllerState(QObject):
     tabChanged = Signal()
     externalChanged = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        clock: SystemClock | None = None,
+    ) -> None:
+        """Build the module's UI state.
+
+        ``clock`` is the system's shared ``SystemClock``. Integrated,
+        the central harness owns it and passes it in (D017); this
+        object only listens to its ticks. Run standalone with no clock,
+        it creates one and drives it in real time itself, because
+        nothing else would.
+        """
         super().__init__(parent)
-        self._system = TrackControllerSystem()
+        # The clock comes first so the starter programs committed while
+        # the system is built are stamped in simulated time.
+        self._sim_clock = clock if clock is not None else SystemClock()
+        self._system = TrackControllerSystem(
+            time_text=self._sim_clock.format_time_of_day()
+        )
+
+        self._driver: ClockDriver | None = None
+        self._sim_clock.add_tick_listener(self._on_tick)
+        self._sim_clock.add_state_listener(self.clockChanged.emit)
+        if clock is None:
+            self._driver = ClockDriver(self._sim_clock, self)
+            self._driver.start()
+            self._sim_clock.resume()
 
         first_line = self._system.lines[0]
         self._line_name = first_line.name
@@ -63,17 +97,29 @@ class TrackControllerState(QObject):
         #: Which explorer entry is open: 0 is the live buffer, any
         #: other number is that committed iteration, shown read-only.
         self._open_iteration = 0
-        self._clock = datetime.now().strftime("%H:%M:%S")
+        #: Set by a tick, cleared when the views are told; see _flush.
+        self._dirty = False
         #: 0 is the Program tab, 1 is the View tab. Held here rather than
         #: in QML so a remote stimulus can drive it like a click does.
         self._active_tab = 0
 
+        self._block_model = BlockListModel(self)
+        # Kept in step with the selected controller on every change, so
+        # the tile grids update the rows that changed and nothing else.
+        self.controllerChanged.connect(self._sync_blocks)
+        self.selectionChanged.connect(self._sync_blocks)
+        self._sync_blocks()
+
         self._load_buffer_from_controller()
 
-        self._timer = QTimer(self)
-        self._timer.setInterval(TICK_INTERVAL_MS)
-        self._timer.timeout.connect(self._on_tick)
-        self._timer.start()
+        # The clock ticks every 0.1 simulated seconds, 100 times a real
+        # second at 10x. Telling QML on every tick would rebuild every
+        # list that often, so ticks only mark the state dirty and the
+        # views are refreshed at a steady, readable rate.
+        self._refresh = QTimer(self)
+        self._refresh.setInterval(UI_REFRESH_MS)
+        self._refresh.timeout.connect(self._flush)
+        self._refresh.start()
 
     # --- helpers -----------------------------------------------------
 
@@ -86,7 +132,8 @@ class TrackControllerState(QObject):
         del self._terminal[:-TERMINAL_DEPTH]
 
     def _stamp(self) -> str:
-        return datetime.now().strftime("%H:%M:%S")
+        # Simulated time, so the terminal agrees with the header clock.
+        return self._sim_clock.format_time_of_day()
 
     def _load_buffer_from_controller(self) -> None:
         """Open the committed program of the selected controller."""
@@ -108,20 +155,42 @@ class TrackControllerState(QObject):
             f"(iteration #{controller.iteration})"
         )
 
-    def _on_tick(self) -> None:
-        self._clock = datetime.now().strftime("%H:%M:%S")
-        self._system.tick()
+    def _on_tick(self, sim_time_s: float, tick_s: float) -> None:
+        # One tick of the shared clock: scan every controller once.
+        self._system.time_text = self._sim_clock.format_time_of_day()
+        self._system.tick(tick_s)
+        self._dirty = True
+
+    def _flush(self) -> None:
+        if not self._dirty:
+            return
+        self._dirty = False
         self.clockChanged.emit()
         self.controllerChanged.emit()
 
     # --- clock and selection -----------------------------------------
 
+    @property
+    def simulation_clock(self) -> SystemClock:
+        """The shared clock this module runs on (not QML)."""
+        return self._sim_clock
+
     @Property(str, notify=clockChanged)
     def clock(self) -> str:
-        """Simulation wall clock, shown in the header."""
-        return self._clock
+        """Simulated time of day, 24-hour ``HH:MM:SS`` (D017)."""
+        return self._sim_clock.format_time_of_day()
 
-    @Property("QVariantList", notify=selectionChanged)
+    @Property(bool, notify=clockChanged)
+    def clockPaused(self) -> bool:
+        """Whether the shared clock is held."""
+        return self._sim_clock.is_paused
+
+    @Property(int, notify=clockChanged)
+    def clockSpeed(self) -> int:
+        """The shared clock's speed: 1 or 10."""
+        return self._sim_clock.speed
+
+    @list_property(selectionChanged)
     def lines(self) -> list[dict[str, Any]]:
         """Every line, with the totals the View tab's first column shows."""
         summary: list[dict[str, Any]] = []
@@ -152,7 +221,7 @@ class TrackControllerState(QObject):
             )
         return summary
 
-    @Property("QVariantList", notify=selectionChanged)
+    @list_property(selectionChanged)
     def controllers(self) -> list[dict[str, Any]]:
         """The controllers on the selected line."""
         rows: list[dict[str, Any]] = []
@@ -193,6 +262,11 @@ class TrackControllerState(QObject):
         """Identity colour of the selected line."""
         return self._system.line(self._line_name).color
 
+    @Property(QUrl, constant=True)
+    def layoutFolder(self) -> QUrl:
+        """Where the track layout files live, to open the file dialog in."""
+        return QUrl.fromLocalFile(str(default_layout_dir()))
+
     @Slot(str)
     def selectLine(self, name: str) -> None:
         """Select a line and its first controller."""
@@ -231,33 +305,38 @@ class TrackControllerState(QObject):
         """Header and summary values for the selected controller."""
         controller = self._controller
         outputs = controller.outputs
+        carrying = sum(
+            1 for circuit in outputs.track_circuits.values()
+            if circuit.speed_mps > 0
+        )
         return {
             "id": controller.config.controller_id,
             "line": controller.config.line_name,
             "file": controller.file_name,
             "iteration": controller.iteration,
             "maintenance": controller.maintenance,
-            "mode": "Maintenance" if controller.maintenance else "Automatic",
+            "mode": (
+                "Maintenance (CTC)" if controller.maintenance
+                else "Automatic"
+            ),
             "block_count": len(controller.blocks),
             "span": (
                 f"{controller.blocks[0].label} – "
                 f"{controller.blocks[-1].label}"
             ),
-            "commanded_speed": outputs.commanded_speed_mph,
-            "commanded_authority": outputs.commanded_authority_blocks,
-            "suggested_speed": controller.inputs.suggested_speed_mph,
-            "suggested_authority": controller.inputs.suggested_authority_blocks,
+            "circuits": len(outputs.track_circuits),
+            "carrying": carrying,
+            "suggested_blocks": len(controller.inputs.suggestions),
             "committed_at": (
                 controller.history[0].committed_at if controller.history else ""
             ),
             "override_count": len(outputs.overrides),
         }
 
-    @Property("QVariantList", notify=controllerChanged)
-    def blocks(self) -> list[dict[str, Any]]:
-        """Every block the selected controller owns, for the tile grid."""
+    def _block_rows(self) -> list[dict[str, Any]]:
+        """One row per block the selected controller owns."""
         controller = self._controller
-        tiles: list[dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
         for block in controller.blocks:
             occupied = controller.inputs.occupancy.get(block.block_id, False)
             closed = controller.inputs.closed.get(block.block_id, False)
@@ -274,9 +353,9 @@ class TrackControllerState(QObject):
             if block.station is not None:
                 feature = "STATION"
 
-            tiles.append(
+            rows.append(
                 {
-                    "id": block.block_id,
+                    "blockId": block.block_id,
                     "label": block.label,
                     "section": block.section,
                     "number": block.index,
@@ -284,37 +363,45 @@ class TrackControllerState(QObject):
                     "closed": closed,
                     "train": controller.inputs.trains.get(block.block_id, ""),
                     "feature": feature,
-                    "speed_limit": block.speed_limit_mph,
+                    "speedLimit": round(mps_to_mph(block.speed_limit_mps)),
                     "station": block.station or "",
                 }
             )
-        return tiles
+        return rows
 
-    @Property("QVariantList", notify=controllerChanged)
+    def _sync_blocks(self) -> None:
+        self._block_model.update(self._block_rows())
+
+    @Property(QObject, constant=True)
+    def blockModel(self) -> QObject:
+        """The selected controller's blocks, updated in place."""
+        return self._block_model
+
+    @Property("QVariantMap", notify=controllerChanged)
+    def blockCounts(self) -> dict[str, Any]:
+        """How many blocks the selected controller owns, and their state."""
+        controller = self._controller
+        return {
+            "total": len(controller.blocks),
+            "occupied": sum(
+                1 for flag in controller.inputs.occupancy.values() if flag
+            ),
+            "closed": sum(
+                1 for flag in controller.inputs.closed.values() if flag
+            ),
+        }
+
+    @list_property(controllerChanged)
     def outputs(self) -> list[dict[str, Any]]:
         """Commanded outputs, as the View tab and watch pane list them."""
         return output_rows(self._controller)
 
-    @Property("QVariantList", notify=controllerChanged)
-    def inputSignals(self) -> list[dict[str, Any]]:
-        """The scalar inputs the watch pane shows beside the block grid."""
-        controller = self._controller
-        return [
-            {
-                "name": "SUG_SPEED",
-                "label": "Suggested speed",
-                "value": f"{controller.inputs.suggested_speed_mph:.0f} MPH",
-            },
-            {
-                "name": "SUG_AUTH",
-                "label": "Suggested authority",
-                "value": (
-                    f"{controller.inputs.suggested_authority_blocks} blocks"
-                ),
-            },
-        ]
+    @list_property(controllerChanged)
+    def suggestionRows(self) -> list[dict[str, Any]]:
+        """The CTC Office's suggestion for each block, as display rows."""
+        return suggestion_rows(self._controller)
 
-    @Property("QVariantList", notify=controllerChanged)
+    @list_property(controllerChanged)
     def overrides(self) -> list[dict[str, Any]]:
         """Vital restrictions currently applied to the program's output."""
         return [
@@ -363,7 +450,7 @@ class TrackControllerState(QObject):
             and self._verified_source == self._buffer
         )
 
-    @Property("QVariantList", notify=bufferChanged)
+    @list_property(bufferChanged)
     def files(self) -> list[dict[str, Any]]:
         """Explorer entries: the live file plus the committed history."""
         controller = self._controller
@@ -400,7 +487,7 @@ class TrackControllerState(QObject):
         """
         return self._open_iteration != 0
 
-    @Property("QVariantList", notify=bufferChanged)
+    @list_property(bufferChanged)
     def diagnostics(self) -> list[dict[str, Any]]:
         """Compiler messages from the last RUN, for the parser pane."""
         return list(self._diagnostics)
@@ -410,7 +497,7 @@ class TrackControllerState(QObject):
         """Outputs the last RUN produced on the duplicate state."""
         return dict(self._sandbox)
 
-    @Property("QVariantList", notify=terminalChanged)
+    @list_property(terminalChanged)
     def terminal(self) -> list[str]:
         """Terminal scrollback for the docked output pane."""
         return list(self._terminal)
@@ -521,6 +608,9 @@ class TrackControllerState(QObject):
         controller = self._controller
         stamp = self._stamp()
         program = compile_program(self._buffer)
+        # The compiler's own diagnostics, plus how the program fits this
+        # controller: names it does not have, outputs it leaves undriven.
+        found = controller.diagnose(program)
 
         self._diagnostics = [
             {
@@ -528,13 +618,13 @@ class TrackControllerState(QObject):
                 "line": item.line,
                 "message": item.message,
             }
-            for item in program.diagnostics
+            for item in found
         ]
 
-        if has_errors(program.diagnostics):
+        if has_errors(found):
             errors = sum(
                 1
-                for item in program.diagnostics
+                for item in found
                 if item.severity == SEVERITY_ERROR
             )
             self._verified_source = None
@@ -543,7 +633,7 @@ class TrackControllerState(QObject):
                 f"[{stamp}] compile failed — {errors} error(s); "
                 "nothing was sent to the wayside"
             )
-            for item in program.diagnostics:
+            for item in found:
                 self._log(f"[{stamp}] {item.format()}")
             self.bufferChanged.emit()
             self.terminalChanged.emit()
@@ -551,12 +641,32 @@ class TrackControllerState(QObject):
 
         report = controller.run_program(program, controller.inputs.copy())
 
-        self._verified_source = self._buffer
+        # Warnings found while scanning are added to the compiler's, so
+        # the parser pane and the commit gate see one list. The static
+        # check already catches most of them; only new ones are added.
+        # A line the compiler already flagged is not reported twice: the
+        # scan's undefined-read warning is the same problem seen later.
+        seen = {item.line for item in found if item.line > 0}
+        for warning in report.warnings:
+            if warning.line not in seen:
+                seen.add(warning.line)
+                self._diagnostics.append(
+                    {
+                        "severity": warning.severity,
+                        "line": warning.line,
+                        "message": warning.message,
+                    }
+                )
+
+        # Only a buffer that ran with no diagnostic at all is verified.
+        # A warning on a vital program is not cosmetic: each one means
+        # an output or input does something other than the code says.
+        clean = not self._diagnostics
+        self._verified_source = self._buffer if clean else None
+        circuits = report.outputs.track_circuits
         self._sandbox = {
-            "speed": report.outputs.commanded_speed_mph,
-            "authority": report.outputs.commanded_authority_blocks,
-            "raw_speed": report.raw_speed_mph,
-            "raw_authority": report.raw_authority_blocks,
+            "circuits": len(circuits),
+            "carrying": sum(1 for c in circuits.values() if c.speed_mps > 0),
             "booleans": program.boolean_count,
             "lines": program.line_count,
             "overrides": len(report.outputs.overrides),
@@ -571,12 +681,21 @@ class TrackControllerState(QObject):
                   "outputs untouched")
         for line in report.log:
             self._log(line)
-        for warning in report.warnings:
-            self._log(f"[{stamp}] {warning.format()}")
-        self._log(
-            f"[{stamp}] run complete — COMMIT will put this on "
-            f"{controller.config.controller_id}"
-        )
+        for entry in self._diagnostics:
+            self._log(
+                f"[{stamp}] {entry['severity'].upper():<7} line "
+                f"{entry['line']:>3}  {entry['message']}"
+            )
+        if clean:
+            self._log(
+                f"[{stamp}] run complete — COMMIT will put this on "
+                f"{controller.config.controller_id}"
+            )
+        else:
+            self._log(
+                f"[{stamp}] run complete with {len(self._diagnostics)} "
+                "warning(s) — COMMIT is blocked until they are resolved"
+            )
 
         self.bufferChanged.emit()
         self.terminalChanged.emit()
@@ -585,10 +704,14 @@ class TrackControllerState(QObject):
     def commit(self) -> None:
         """Promote the verified buffer to the live controller."""
         if not self.canCommit:
-            self._log(
-                f"[{self._stamp()}] commit refused — run this exact "
-                "buffer first"
-            )
+            if self._diagnostics and self._verified_source is None:
+                reason = (
+                    f"resolve the {len(self._diagnostics)} "
+                    "warning(s) or error(s) first"
+                )
+            else:
+                reason = "run this exact buffer first"
+            self._log(f"[{self._stamp()}] commit refused — {reason}")
             self.terminalChanged.emit()
             return
 
@@ -609,16 +732,20 @@ class TrackControllerState(QObject):
         self.controllerChanged.emit()
         self.selectionChanged.emit()
 
-    # --- maintenance mode --------------------------------------------
+    # --- maintenance mode (the CTC Office's) ------------------------------
 
     @Property(bool, notify=maintenanceChanged)
     def maintenance(self) -> bool:
-        """Whether the selected controller is in maintenance mode."""
+        """Whether the CTC Office has the system in maintenance mode.
+
+        Shown, never set, from this UI: the CTC Office owns maintenance
+        mode and this module obeys it.
+        """
         return self._controller.maintenance
 
-    @Property("QVariantList", notify=maintenanceChanged)
+    @list_property(maintenanceChanged)
     def switches(self) -> list[dict[str, Any]]:
-        """Switches the maintenance dialog can set."""
+        """Switches the manual-switch dialog can set."""
         controller = self._controller
         rows: list[dict[str, Any]] = []
         for switch in controller.config.switches:
@@ -626,6 +753,9 @@ class TrackControllerState(QObject):
                 block
                 for block in controller.blocks
                 if block.block_id == switch.block_id
+            )
+            command = controller.inputs.ctc_switch_commands.get(
+                switch.switch_id
             )
             rows.append(
                 {
@@ -635,42 +765,24 @@ class TrackControllerState(QObject):
                         switch.switch_id, False
                     ),
                     "manual": switch.switch_id in controller.manual_switches,
-                    "normal_to": switch.normal_to,
-                    "reverse_to": switch.reverse_to,
+                    "ctc_command": (
+                        "" if command is None
+                        else "REVERSE" if command else "NORMAL"
+                    ),
+                    "normal_to": switch.normal_end,
+                    "reverse_to": switch.reverse_end,
                 }
             )
         return rows
 
-    @Slot(bool)
-    def setMaintenance(self, active: bool) -> None:
-        """Enter or leave maintenance mode on the selected controller.
-
-        Leaving clears every manual override, so the program takes the
-        switches back rather than inheriting a hand-set position.
-        """
-        controller = self._controller
-        if controller.maintenance == active:
-            return
-        controller.maintenance = active
-        if not active:
-            controller.manual_switches.clear()
-        controller.scan()
-        self._log(
-            f"[{self._stamp()}] {controller.config.controller_id} "
-            f"{'entered' if active else 'left'} maintenance mode"
-        )
-        self.maintenanceChanged.emit()
-        self.controllerChanged.emit()
-        self.selectionChanged.emit()
-        self.terminalChanged.emit()
-
     @Slot(str, bool)
     def setSwitch(self, switch_id: str, reverse: bool) -> None:
-        """Hand-set one switch. Maintenance mode only."""
+        """Hand-set one switch. Only while the CTC has maintenance on."""
         controller = self._controller
         if not controller.maintenance:
             raise RuntimeError(
-                "switches can only be set by hand in maintenance mode"
+                "switches can only be set by hand while the CTC Office has "
+                "the system in maintenance mode"
             )
         known = {switch.switch_id for switch in controller.config.switches}
         if switch_id not in known:
@@ -678,10 +790,12 @@ class TrackControllerState(QObject):
 
         controller.manual_switches[switch_id] = reverse
         controller.scan()
+        note = ""
+        if switch_id in controller.inputs.ctc_switch_commands:
+            note = "; the CTC Office's command for it takes precedence"
         self._log(
             f"[{self._stamp()}] {switch_id} set to "
-            f"{'REVERSE' if reverse else 'NORMAL'} by hand; authority on "
-            f"{controller.config.controller_id} held at 0"
+            f"{'REVERSE' if reverse else 'NORMAL'} by hand{note}"
         )
         self.maintenanceChanged.emit()
         self.controllerChanged.emit()
@@ -699,21 +813,6 @@ class TrackControllerState(QObject):
         )
         self.maintenanceChanged.emit()
         self.controllerChanged.emit()
-        self.terminalChanged.emit()
-
-    # --- block closure (stands in for the CTC) ------------------------
-
-    @Slot(str, bool)
-    def setBlockClosed(self, block_id: str, closed: bool) -> None:
-        """Close or reopen a block, as the CTC would."""
-        self._system.set_block_closed(block_id, closed)
-        self._controller.scan()
-        self._log(
-            f"[{self._stamp()}] block {block_id} "
-            f"{'closed for maintenance' if closed else 'reopened'}"
-        )
-        self.controllerChanged.emit()
-        self.selectionChanged.emit()
         self.terminalChanged.emit()
 
     # --- tabs, test link and remote stimulus ---------------------------
@@ -740,25 +839,31 @@ class TrackControllerState(QObject):
 
     @Property(bool, notify=externalChanged)
     def externalControl(self) -> bool:
-        """Whether a test UI currently owns the physical inputs."""
+        """Whether a test UI controls CTC inputs and occupancy overrides."""
         return self._system.external_control
 
     def set_external_control(self, active: bool) -> None:
         """Hand the physical inputs to a test UI, or take them back.
 
-        While a test UI is connected the stand-in trains and CTC stop,
-        so the only source of input is the one the tester is driving.
+        Stand-in trains keep moving. Only explicitly edited occupancy
+        and CTC suggestions are protected from the stand-in updates.
         """
         if self._system.external_control == active:
             return
         self._system.external_control = active
         if active:
-            note = "test UI connected: it now drives the physical inputs"
+            note = "test UI connected: simulation continues with test inputs"
         else:
-            note = "test UI disconnected: the stand-in simulation resumes"
+            # Return CTC suggestions and edited occupancy to the stand-in,
+            # including while paused; simulated time does not advance.
+            self._system.set_maintenance(False)
+            self._system.tick(0.0)
+            note = "test UI disconnected: occupancy overrides released"
         self._log(f"[{self._stamp()}] {note}")
         self.externalChanged.emit()
+        self.maintenanceChanged.emit()
         self.terminalChanged.emit()
+        self.controllerChanged.emit()
 
     def notify_external_change(self, log_line: str | None = None) -> None:
         """Tell the views that inputs changed from outside the UI."""
@@ -767,3 +872,85 @@ class TrackControllerState(QObject):
             self.terminalChanged.emit()
         self.controllerChanged.emit()
         self.selectionChanged.emit()
+        self.maintenanceChanged.emit()
+
+    # --- track configuration -------------------------------------------
+
+    def inspect_track_config(self, file_path: str) -> dict[str, Any]:
+        """Read a layout file and report what loading it would do.
+
+        Nothing is changed. The dialog uses this to show the user which
+        line the file is, how big it is and what it would replace
+        before they commit to it.
+        """
+        try:
+            parsed = load_layout_file(file_path)
+        except LayoutError as error:
+            return {"ok": False, "error": str(error)}
+        existing = self._system.controllers_for(parsed.name)
+        return {
+            "ok": True,
+            "error": "",
+            "file": Path(file_path).name,
+            "line": parsed.name,
+            "blocks": len(parsed.blocks),
+            "switches": len(parsed.switches),
+            "crossings": len(parsed.crossing_blocks),
+            "min": parsed.min_controllers,
+            "max": parsed.max_controllers,
+            "default": (
+                len(existing) if existing else parsed.default_controllers
+            ),
+            "replaces": len(existing),
+        }
+
+    def load_track_config(self, file_path: str, controllers: int) -> str:
+        """Load a track layout and divide it among ``controllers`` waysides.
+
+        Replaces the line of the same name if there is one, and with it
+        every controller on that line and the programs they hold: the
+        territories they governed no longer exist. Returns an empty
+        string on success, otherwise a message saying why nothing was
+        changed.
+        """
+        try:
+            parsed = load_layout_file(file_path)
+            line = build_line(parsed, controllers)
+        except LayoutError as error:
+            self._log(f"[{self._stamp()}] track configuration refused: {error}")
+            self.terminalChanged.emit()
+            return str(error)
+
+        replacing = self._system.controllers_for(line.name)
+        removed = self._system.load_line(line)
+        # The programmer is looking at what they just loaded.
+        self._line_name = line.name
+        self._controller_id = line.controllers[0].controller_id
+        self._load_buffer_from_controller()
+
+        self._log(
+            f"[{self._stamp()}] loaded {Path(file_path).name}: {line.name}, "
+            f"{len(line.blocks)} blocks, {line.switch_count} switches, "
+            f"{line.crossing_count} crossings, divided among "
+            f"{len(line.controllers)} controllers"
+            + (
+                f"; replaced {len(replacing)} controller(s) and their "
+                "programs" if removed else ""
+            )
+        )
+        self.selectionChanged.emit()
+        self.bufferChanged.emit()
+        self.terminalChanged.emit()
+        self.controllerChanged.emit()
+        self.maintenanceChanged.emit()
+        return ""
+
+    @Slot(QUrl, result="QVariantMap")
+    def inspectTrackConfig(self, url: QUrl) -> dict[str, Any]:
+        """Preview a layout file chosen in the file dialog."""
+        return self.inspect_track_config(url.toLocalFile())
+
+    @Slot(QUrl, int, result=str)
+    def loadTrackConfig(self, url: QUrl, controllers: int) -> str:
+        """Load a layout file chosen in the file dialog."""
+        return self.load_track_config(url.toLocalFile(), controllers)

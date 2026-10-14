@@ -16,6 +16,9 @@ RowLayout {
     property string hint: ""
     // What the controller currently reports, as text.
     property string reported: ""
+    // What is typed in the field right now, for callers that send several
+    // fields together.
+    property alias text: field.text
     property real minimum: 0
     property real maximum: 9999
     property int decimals: 0

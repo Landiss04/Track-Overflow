@@ -17,12 +17,19 @@ Item {
     signal openViewTab()
 
     readonly property var sandbox: wayside.sandbox
-    readonly property var errorLines: wayside.diagnostics
+    readonly property var errorLines: wayside.diagnostics.rows
         .filter(function (item) { return item.severity === "error"; })
         .map(function (item) { return item.line; })
-    readonly property int errorCount: wayside.diagnostics
+    readonly property int errorCount: wayside.diagnostics.rows
         .filter(function (item) { return item.severity === "error"; }).length
-    readonly property int warningCount: wayside.diagnostics
+    readonly property var warningLines: wayside.diagnostics.rows
+        .filter(function (item) { return item.severity === "warning"; })
+        .map(function (item) { return item.line; })
+    // A run that produced any diagnostic leaves the buffer unverified:
+    // warnings block a commit exactly as errors do.
+    readonly property bool blocked: !wayside.canCommit
+        && wayside.diagnostics.rows.length > 0
+    readonly property int warningCount: wayside.diagnostics.rows
         .filter(function (item) { return item.severity === "warning"; }).length
 
     RowLayout {
@@ -40,7 +47,7 @@ Item {
             Layout.maximumWidth: 248
             Layout.fillHeight: true
             title: qsTr("File explorer")
-            status: wayside.files.length + qsTr(" FILES")
+            status: wayside.files.rows.length + qsTr(" FILES")
 
             ColumnLayout {
                 anchors.fill: parent
@@ -63,7 +70,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: wayside.files
+                    model: wayside.files.rows
                     boundsBehavior: Flickable.StopAtBounds
 
                     delegate: Rectangle {
@@ -217,7 +224,10 @@ Item {
                                 tooltip: wayside.canCommit
                                     ? qsTr("Replace the program executing on "
                                         + wayside.selectedController)
-                                    : qsTr("Run this exact buffer first")
+                                    : root.blocked
+                                        ? qsTr("Resolve every warning and error, "
+                                            + "then run again")
+                                        : qsTr("Run this exact buffer first")
                                 onClicked: wayside.commit()
                             }
 
@@ -255,8 +265,8 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: theme.control_h_md
-                        color: wayside.canCommit
-                            ? theme.success_bg : theme.bg_sunken
+                        color: wayside.canCommit ? theme.success_bg
+                            : root.blocked ? theme.warning_bg : theme.bg_sunken
 
                         Rectangle {
                             anchors.left: parent.left
@@ -275,11 +285,18 @@ Item {
                                 ? qsTr("This buffer ran clean on duplicate "
                                     + "state. COMMIT will put it on "
                                     + wayside.selectedController + ".")
-                                : qsTr("RUN executes on a duplicate of the "
-                                    + "wayside's state and changes nothing on "
-                                    + "the track. Only COMMIT does.")
-                            color: wayside.canCommit
-                                ? theme.success : theme.text_secondary
+                                : root.blocked
+                                    ? qsTr("COMMIT is blocked: ")
+                                        + root.errorCount + qsTr(" error(s), ")
+                                        + root.warningCount
+                                        + qsTr(" warning(s). See the Parser "
+                                            + "tab; fix them and run again.")
+                                    : qsTr("RUN executes on a duplicate of the "
+                                        + "wayside's state and changes nothing "
+                                        + "on the track. Only COMMIT does.")
+                            color: wayside.canCommit ? theme.success
+                                : root.blocked ? theme.warning
+                                : theme.text_secondary
                             font.family: theme.ui_family
                             font.pixelSize: theme.size_label
                             elide: Text.ElideRight
@@ -292,6 +309,7 @@ Item {
                         text: wayside.buffer
                         readOnly: wayside.bufferReadOnly
                         errorLines: root.errorLines
+                        warningLines: root.warningLines
                         onEdited: function (value) { wayside.setBuffer(value); }
                     }
                 }
@@ -366,7 +384,7 @@ Item {
                         // Output log: every scan line, newest at the end.
                         ListView {
                             clip: true
-                            model: wayside.terminal
+                            model: wayside.terminal.rows
                             boundsBehavior: Flickable.StopAtBounds
                             // Follow the tail the way a console does.
                             onCountChanged: positionViewAtEnd()
@@ -389,7 +407,7 @@ Item {
                         // Parser: the compiler's own messages.
                         ListView {
                             clip: true
-                            model: wayside.diagnostics
+                            model: wayside.diagnostics.rows
                             boundsBehavior: Flickable.StopAtBounds
 
                             delegate: RowLayout {
@@ -425,7 +443,7 @@ Item {
                             // An empty parser pane is a result, not a blank.
                             Text {
                                 anchors.centerIn: parent
-                                visible: wayside.diagnostics.length === 0
+                                visible: wayside.diagnostics.rows.length === 0
                                 text: qsTr("No compiler messages. Run the "
                                     + "buffer to check it.")
                                 color: theme.text_muted
@@ -473,46 +491,54 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 title: qsTr("Watch — inputs")
-                status: wayside.blocks.filter(function (block) {
-                    return block.occupied; }).length + qsTr(" OCCUPIED")
+                status: wayside.blockCounts.occupied + qsTr(" OCCUPIED")
 
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: theme.space_3
                     spacing: theme.space_3
 
-                    GridLayout {
+                    // A controller may own many blocks, so the grid
+                    // scrolls rather than pushing everything below it
+                    // out of the pane.
+                    ScrollView {
+                        id: tileScroll
                         Layout.fillWidth: true
-                        columns: 6
-                        columnSpacing: theme.space_1
-                        rowSpacing: theme.space_1
+                        Layout.preferredHeight: Math.min(tiles.implicitHeight, 172)
+                        clip: true
+                        contentWidth: availableWidth
 
-                        Repeater {
-                            model: wayside.blocks
+                        GridLayout {
+                            id: tiles
+                            width: tileScroll.availableWidth
+                            columns: 6
+                            columnSpacing: theme.space_1
+                            rowSpacing: theme.space_1
 
-                            delegate: BlockTile {
-                                required property var modelData
+                            Repeater {
+                                model: wayside.blockModel
 
-                                Layout.fillWidth: true
-                                compact: true
-                                label: modelData.label
-                                feature: modelData.feature
-                                train: modelData.train
-                                occupied: modelData.occupied
-                                closed: modelData.closed
-                                station: modelData.station
-                                speedLimit: modelData.speed_limit
-                                onActivated: wayside.setBlockClosed(
-                                    modelData.id, !modelData.closed)
+                                delegate: BlockTile {
+                                    required property var model
+
+                                    Layout.fillWidth: true
+                                    compact: true
+                                    label: model.label
+                                    feature: model.feature
+                                    train: model.train
+                                    occupied: model.occupied
+                                    closed: model.closed
+                                    station: model.station
+                                    speedLimit: model.speedLimit
+                                }
                             }
                         }
                     }
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("Filled = occupied, hatched = closed, from "
-                            + "the Track Model. Click a block to close or "
-                            + "reopen it.")
+                        text: qsTr("Filled = occupied, from the Track Model. "
+                            + "Hatched = closed by the CTC Office.")
                         color: theme.text_muted
                         font.family: theme.ui_family
                         font.pixelSize: theme.size_label
@@ -525,16 +551,18 @@ Item {
                         color: theme.border
                     }
 
-                    Repeater {
-                        model: wayside.inputSignals
+                    // One suggestion per block, from the CTC Office.
+                    OutputPicker {
+                        Layout.fillWidth: true
+                        compact: true
+                        title: qsTr("CTC suggestion")
+                        items: wayside.suggestionRows.rows
+                    }
 
-                        delegate: SignalRow {
-                            required property var modelData
-
-                            Layout.fillWidth: true
-                            label: modelData.label
-                            value: modelData.value
-                        }
+                    SignalRow {
+                        Layout.fillWidth: true
+                        label: qsTr("Maintenance (CTC)")
+                        value: wayside.maintenance ? qsTr("ON") : qsTr("OFF")
                     }
 
                     Rectangle {
@@ -553,17 +581,42 @@ Item {
                         font.letterSpacing: theme.label_letter_spacing
                     }
 
-                    Repeater {
-                        model: wayside.outputs
+                    // Devices scale with the territory, so each kind sits
+                    // behind a drop-down rather than a row per device.
+                    OutputPicker {
+                        Layout.fillWidth: true
+                        compact: true
+                        title: qsTr("Track circuits")
+                        items: wayside.outputs.rows.filter(function (row) {
+                            return row.kind === "circuit";
+                        })
+                    }
 
-                        delegate: SignalRow {
-                            required property var modelData
+                    OutputPicker {
+                        Layout.fillWidth: true
+                        compact: true
+                        title: qsTr("Switches")
+                        items: wayside.outputs.rows.filter(function (row) {
+                            return row.kind === "switch";
+                        })
+                    }
 
-                            Layout.fillWidth: true
-                            label: modelData.label
-                            value: modelData.value
-                            kind: modelData.kind
-                        }
+                    OutputPicker {
+                        Layout.fillWidth: true
+                        compact: true
+                        title: qsTr("Signals")
+                        items: wayside.outputs.rows.filter(function (row) {
+                            return row.kind === "aspect";
+                        })
+                    }
+
+                    OutputPicker {
+                        Layout.fillWidth: true
+                        compact: true
+                        title: qsTr("Crossings")
+                        items: wayside.outputs.rows.filter(function (row) {
+                            return row.kind === "crossing";
+                        })
                     }
 
                     // Vital overrides are the difference between what the
@@ -573,7 +626,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.preferredHeight: overrideColumn.implicitHeight
                             + 2 * theme.space_2
-                        visible: wayside.overrides.length > 0
+                        visible: wayside.overrides.rows.length > 0
                         color: theme.warning_bg
                         border.color: theme.warning
                         border.width: 1
@@ -589,7 +642,7 @@ Item {
 
                             Text {
                                 text: qsTr("VITAL OVERRIDES · ")
-                                    + wayside.overrides.length
+                                    + wayside.overrides.rows.length
                                 color: theme.warning
                                 font.family: theme.ui_family
                                 font.pixelSize: theme.size_label
@@ -598,7 +651,7 @@ Item {
                             }
 
                             Repeater {
-                                model: wayside.overrides
+                                model: wayside.overrides.rows
 
                                 delegate: Text {
                                     required property var modelData
@@ -623,14 +676,16 @@ Item {
                         enabled: wayside.maintenance
                         tooltip: wayside.maintenance
                             ? qsTr("Hand-set a switch on this controller")
-                            : qsTr("Available in maintenance mode only")
+                            : qsTr("Available while the CTC Office has "
+                                + "maintenance mode on")
                         onClicked: switchDialog.open()
                     }
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("Manual override is available in "
-                            + "maintenance mode only.")
+                        text: qsTr("Maintenance mode is the CTC Office's. "
+                            + "Manual switch control is available only "
+                            + "while it is on.")
                         color: theme.text_muted
                         font.family: theme.ui_family
                         font.pixelSize: theme.size_label
@@ -644,7 +699,7 @@ Item {
     SwitchDialog {
         id: switchDialog
         parent: Overlay.overlay
-        switches: wayside.switches
+        switches: wayside.switches.rows
         onApplied: function (switchId, reverse) {
             wayside.setSwitch(switchId, reverse);
         }

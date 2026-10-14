@@ -36,7 +36,7 @@ Item {
                 spacing: 0
 
                 Repeater {
-                    model: wayside.lines
+                    model: wayside.lines.rows
 
                     delegate: Rectangle {
                         required property var modelData
@@ -115,7 +115,7 @@ Item {
 
                     Repeater {
                         model: {
-                            const line = wayside.lines.find(function (item) {
+                            const line = wayside.lines.rows.find(function (item) {
                                 return item.selected; });
                             if (line === undefined) return [];
                             return [
@@ -149,7 +149,7 @@ Item {
             Layout.maximumWidth: 276
             Layout.fillHeight: true
             title: qsTr("Track controllers")
-            status: wayside.controllers.length + qsTr(" ON LINE")
+            status: wayside.controllers.rows.length + qsTr(" ON LINE")
 
             ColumnLayout {
                 anchors.fill: parent
@@ -192,7 +192,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: wayside.controllers
+                    model: wayside.controllers.rows
                     boundsBehavior: Flickable.StopAtBounds
 
                     delegate: Rectangle {
@@ -231,12 +231,6 @@ Item {
                                 color: theme.text_secondary
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
-                            }
-
-                            StatusBadge {
-                                label: qsTr("MAINT")
-                                variant: "warning"
-                                visible: parent.parent.modelData.maintenance
                             }
 
                             MonoText {
@@ -312,12 +306,13 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: wayside.maintenance
-                            ? qsTr("Manual switch control is enabled and this "
-                                + "controller is commanding zero authority.")
+                            ? qsTr("The CTC Office has the system in "
+                                + "maintenance mode: switches follow its "
+                                + "commands, and may be hand-set here.")
                             : qsTr("Outputs below are produced by the "
-                                + "committed program. Manual control is "
-                                + "disabled until the controller is put in "
-                                + "maintenance mode.")
+                                + "committed program. Maintenance mode is "
+                                + "the CTC Office's; manual switch control "
+                                + "is available only while it is on.")
                         color: wayside.maintenance
                             ? theme.warning : theme.text_secondary
                         font.family: theme.ui_family
@@ -330,40 +325,49 @@ Item {
             // --- block occupancy ---------------------------------------
             Panel {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 190
+                // Grows with the number of block rows, up to a limit, so a
+                // controller that owns many blocks is not squeezed into
+                // two rows. Beyond the limit the grid scrolls.
+                Layout.preferredHeight: Math.min(
+                    400, 120 + Math.ceil(wayside.blockCounts.total / 13) * 56)
                 title: qsTr("Block occupancy — train presence from the "
                     + "Track Model")
                 status: root.controller.block_count + qsTr(" BLOCKS · ")
-                    + wayside.blocks.filter(function (block) {
-                        return block.occupied; }).length + qsTr(" OCCUPIED")
+                    + wayside.blockCounts.occupied + qsTr(" OCCUPIED")
 
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: theme.space_3
                     spacing: theme.space_2
 
-                    GridLayout {
+                    ScrollView {
+                        id: viewTileScroll
                         Layout.fillWidth: true
-                        columns: 13
-                        columnSpacing: theme.space_1
-                        rowSpacing: theme.space_1
+                        Layout.fillHeight: true
+                        clip: true
+                        contentWidth: availableWidth
 
-                        Repeater {
-                            model: wayside.blocks
+                        GridLayout {
+                            width: viewTileScroll.availableWidth
+                            columns: 13
+                            columnSpacing: theme.space_1
+                            rowSpacing: theme.space_1
 
-                            delegate: BlockTile {
-                                required property var modelData
+                            Repeater {
+                                model: wayside.blockModel
 
-                                Layout.fillWidth: true
-                                label: modelData.label
-                                feature: modelData.feature
-                                train: modelData.train
-                                occupied: modelData.occupied
-                                closed: modelData.closed
-                                station: modelData.station
-                                speedLimit: modelData.speed_limit
-                                onActivated: wayside.setBlockClosed(
-                                    modelData.id, !modelData.closed)
+                                delegate: BlockTile {
+                                    required property var model
+
+                                    Layout.fillWidth: true
+                                    label: model.label
+                                    feature: model.feature
+                                    train: model.train
+                                    occupied: model.occupied
+                                    closed: model.closed
+                                    station: model.station
+                                    speedLimit: model.speedLimit
+                                }
                             }
                         }
                     }
@@ -379,8 +383,6 @@ Item {
                         font.pixelSize: theme.size_label
                         wrapMode: Text.WordWrap
                     }
-
-                    Item { Layout.fillHeight: true }
                 }
             }
 
@@ -401,17 +403,40 @@ Item {
                         anchors.margins: theme.space_3
                         spacing: theme.space_3
 
-                        Repeater {
-                            model: wayside.outputs
+                        // Speed and authority are per block, and devices
+                        // scale with the controller's territory, so each
+                        // kind sits behind a drop-down instead of a row
+                        // per block or device.
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Track circuits")
+                            items: wayside.outputs.rows.filter(function (row) {
+                                return row.kind === "circuit";
+                            })
+                        }
 
-                            delegate: SignalRow {
-                                required property var modelData
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Switches")
+                            items: wayside.outputs.rows.filter(function (row) {
+                                return row.kind === "switch";
+                            })
+                        }
 
-                                Layout.fillWidth: true
-                                label: modelData.label
-                                value: modelData.value
-                                kind: modelData.kind
-                            }
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Signals")
+                            items: wayside.outputs.rows.filter(function (row) {
+                                return row.kind === "aspect";
+                            })
+                        }
+
+                        OutputPicker {
+                            Layout.fillWidth: true
+                            title: qsTr("Crossings")
+                            items: wayside.outputs.rows.filter(function (row) {
+                                return row.kind === "crossing";
+                            })
                         }
 
                         Rectangle {
@@ -422,25 +447,17 @@ Item {
 
                         // What the CTC asked for, beside what the wayside
                         // actually issued: the gap is the whole job.
-                        SignalRow {
+                        OutputPicker {
                             Layout.fillWidth: true
-                            label: qsTr("CTC suggested speed")
-                            value: root.controller.suggested_speed.toFixed(0)
-                                + qsTr(" MPH")
-                        }
-
-                        SignalRow {
-                            Layout.fillWidth: true
-                            label: qsTr("CTC suggested authority")
-                            value: root.controller.suggested_authority
-                                + qsTr(" blocks")
+                            title: qsTr("CTC suggestion")
+                            items: wayside.suggestionRows.rows
                         }
 
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: overrideList.implicitHeight
                                 + 2 * theme.space_2
-                            visible: wayside.overrides.length > 0
+                            visible: wayside.overrides.rows.length > 0
                             color: theme.warning_bg
                             border.color: theme.warning
                             border.width: 1
@@ -456,7 +473,7 @@ Item {
 
                                 Text {
                                     text: qsTr("VITAL OVERRIDES · ")
-                                        + wayside.overrides.length
+                                        + wayside.overrides.rows.length
                                     color: theme.warning
                                     font.family: theme.ui_family
                                     font.pixelSize: theme.size_label
@@ -465,7 +482,7 @@ Item {
                                 }
 
                                 Repeater {
-                                    model: wayside.overrides
+                                    model: wayside.overrides.rows
 
                                     delegate: Text {
                                         required property var modelData
@@ -535,7 +552,7 @@ Item {
                             Layout.fillWidth: true
                             text: wayside.maintenance
                                 ? qsTr("Set switch manually")
-                                : qsTr("Enter maintenance to set switches")
+                                : qsTr("Set switch manually (CTC maintenance only)")
                             enabled: wayside.maintenance
                             onClicked: viewSwitchDialog.open()
                         }
@@ -550,7 +567,7 @@ Item {
     SwitchDialog {
         id: viewSwitchDialog
         parent: Overlay.overlay
-        switches: wayside.switches
+        switches: wayside.switches.rows
         onApplied: function (switchId, reverse) {
             wayside.setSwitch(switchId, reverse);
         }
