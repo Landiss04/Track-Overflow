@@ -13,7 +13,7 @@ The CTC exchanges data with two modules:
   crossing states and track failures in; receives suggested speed and
   authority per train, the blocks closed in maintenance mode (which it
   may not override) and switch commands out.
-- Track Model: sends ticket sales per line in.
+- Track Model: sends ticket sales per station in.
 
 It also sends the clock speedup command to the central harness.
 
@@ -29,8 +29,8 @@ listed on in the track layout file.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal, Mapping, Protocol
 
 if TYPE_CHECKING:
     from ctc.schedule import Schedule
@@ -97,19 +97,14 @@ class TrackControllerInputs:
 
 
 @dataclass(frozen=True, slots=True)
-class TicketSales:
-    """Tickets sold on one line."""
-
-    line: str
-    tickets: int
-
-
-@dataclass(frozen=True, slots=True)
 class TrackModelInputs:
     """From the Track Model, every tick."""
 
-    # Tickets sold since the previous tick, at most one entry per line.
-    ticket_sales: tuple[TicketSales, ...] = ()
+    # Tickets sold at each station since the previous tick, by station
+    # name as in the layout files: {"DORMONT": 12, "GLENBURY": 4}. A
+    # station that sold none may be left out
+    # (truth/signals/ticket-sales.md).
+    ticket_sales: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,8 +246,9 @@ class CtcSnapshot:
     outputs: CtcOutputs
     inputs: CtcInputs | None = None
     elapsed_s: float = 0.0
-    # Tickets sold since the simulation started, one entry per line.
-    tickets_sold: tuple[TicketSales, ...] = ()
+    # Tickets sold at each named station since the simulation started,
+    # by station name.
+    tickets_sold: Mapping[str, int] = field(default_factory=dict)
     # Runs from the loaded schedule still waiting, by departure time.
     queued_trains: tuple[QueuedTrain, ...] = ()
     # Dispatcher orders, by train ID.

@@ -18,7 +18,6 @@ from ctc.actions import apply_action  # noqa: E402
 from ctc.interface import (  # noqa: E402
     BlockOccupancy,
     CtcInputs,
-    TicketSales,
     TrackControllerInputs,
     TrackModelInputs,
     TrainReport,
@@ -75,9 +74,9 @@ class NumberTest(unittest.TestCase):
             with self.subTest(tickets=tickets), \
                     self.assertRaises(InvalidInputError):
                 ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(
-                    (TicketSales("Green", tickets),))))
+                    {"GLENBURY": tickets})))
         ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(
-            (TicketSales("Green", MAX_TICKETS),))))
+            {"GLENBURY": MAX_TICKETS})))
 
 
 class ShapeTest(unittest.TestCase):

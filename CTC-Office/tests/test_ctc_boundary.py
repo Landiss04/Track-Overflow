@@ -24,7 +24,6 @@ from ctc.interface import (  # noqa: E402
     DispatchOrder,
     SwitchCommand,
     SwitchReport,
-    TicketSales,
     TrackModelInputs,
     TrainReport,
     TrackControllerInputs,
@@ -51,13 +50,13 @@ from ctc_ui.test_harness import (  # noqa: E402
 
 
 def _green(tickets: int) -> TrackModelInputs:
-    """Track Model inputs with Green line ticket sales."""
-    return TrackModelInputs((TicketSales("Green", tickets),))
+    """Track Model inputs: tickets sold at Glenbury, a Green station."""
+    return TrackModelInputs({"GLENBURY": tickets})
 
 
-def _sold(snap: CtcSnapshot, line: str = "Green") -> int:
-    """Tickets sold so far on one line."""
-    return {t.line: t.tickets for t in snap.tickets_sold}[line]
+def _sold(snap: CtcSnapshot, station: str = "GLENBURY") -> int:
+    """Tickets sold so far at one station."""
+    return snap.tickets_sold[station]
 
 
 _LAYOUT = load_layout()
@@ -74,7 +73,7 @@ def _suggested(line: str, block_id: str) -> int:
 def _values(**overrides: object) -> dict[str, object]:
     values: dict[str, object] = {
         "occupied_blocks": "", "train_reports": "", "switch_states": "",
-        "crossing_states": "", "track_failures": "", "ticket_sales": 0,
+        "crossing_states": "", "track_failures": "", "ticket_sales": "",
     }
     values.update(overrides)
     return values
@@ -239,25 +238,43 @@ class StubModuleTest(unittest.TestCase):
         self.assertEqual(_sold(snap), 5)
         self.assertAlmostEqual(snap.elapsed_s, 2 * DT_S)
 
-    def test_ticket_sales_total_per_line(self) -> None:
+    def test_ticket_sales_total_per_station(self) -> None:
+        # Each station reports its own sales since the last report; a
+        # station that sold none is left out.
         ctc = StubCtcOffice()
-        ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs((
-            TicketSales("Green", 3), TicketSales("Red", 1)))))
-        ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs((
-            TicketSales("Red", 5),))))
-        self.assertEqual(ctc.snapshot().tickets_sold, (
-            TicketSales("Green", 3), TicketSales("Red", 6)))
+        ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(
+            {"DORMONT": 3, "SHADYSIDE": 1})))
+        ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(
+            {"SHADYSIDE": 5})))
+        sold = ctc.snapshot().tickets_sold
+        self.assertEqual((sold["DORMONT"], sold["SHADYSIDE"]), (3, 6))
+        # Every named station has a total, zero until it sells.
+        self.assertEqual(sold["GLENBURY"], 0)
+        self.assertEqual(len(sold), 20)
 
     def test_bad_ticket_sales_rejected(self) -> None:
         ctc = StubCtcOffice()
-        for sales in ((TicketSales("Blue", 1),),
-                      (TicketSales("Red", -1),),
-                      (TicketSales("Red", 1.5),),         # type: ignore
-                      (TicketSales("Red", 1), TicketSales("Red", 2))):
+        for sales in ({"NOWHERE": 1},       # no such station
+                      {"dormont": 1},       # names are exact
+                      {"DORMONT": -1},
+                      {"DORMONT": 1.5},
+                      {"DORMONT": True},
+                      {7: 1},
+                      [("DORMONT", 1)]):    # not a map
             with self.subTest(sales=sales):
                 with self.assertRaises(InvalidInputError):
                     ctc.step(DT_S, CtcInputs(
-                        track_model=TrackModelInputs(sales)))
+                        track_model=TrackModelInputs(sales)))  # type: ignore
+
+    def test_ticket_sales_are_copied(self) -> None:
+        # A later change to the caller's dict changes nothing.
+        ctc = StubCtcOffice()
+        sales = {"DORMONT": 2}
+        ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(sales)))
+        sales["DORMONT"] = 99
+        inputs = ctc.snapshot().inputs
+        assert inputs is not None
+        self.assertEqual(inputs.track_model.ticket_sales, {"DORMONT": 2})
 
     def test_bad_arrival_rejected(self) -> None:
         ctc = StubCtcOffice()
@@ -312,7 +329,11 @@ class HarnessEntryTest(unittest.TestCase):
                          ["train", "line", "block", "offset_ft",
                           "speed_mph"])
         self.assertEqual(rows["occupied_blocks"]["noun"], "block")
-        self.assertEqual(rows["ticket_sales"]["kind"], "int")
+        self.assertEqual(rows["ticket_sales"]["kind"], "list")
+        self.assertEqual([f["key"] for f in rows["ticket_sales"]["fields"]],
+                         ["line", "station", "tickets"])
+        self.assertIn({"value": "DORMONT", "text": "Dormont"},
+                      harness.layoutOptions["station"]["Green"])
         greens = harness.layoutOptions["block"]["Green"]
         self.assertIn({"value": "2", "text": "2 · Pioneer"}, greens)
         self.assertEqual(harness.layoutOptions["switch"]["Green"][0],
@@ -425,8 +446,8 @@ class HarnessSendTest(unittest.TestCase):
         harness.setInput("maintenance_mode", True)
         _add(harness, "switch_commands", position="reverse")
         harness.setInput("clock_speedup", True)
-        harness.setInput("ticket_sales", 7)
-        harness.setInputChoice("ticket_sales", "Red")
+        _add(harness, "ticket_sales", line="Red", station="SHADYSIDE",
+             tickets=7)
         harness.send()
         self.assertFalse(harness.statusIsError, harness.status)
         rows = _outputs(harness)
@@ -443,6 +464,7 @@ class HarnessSendTest(unittest.TestCase):
         self.assertTrue(rows["clock_speedup"])
         self.assertEqual(rows["tickets_sold[Red]"], 7)
         self.assertEqual(rows["tickets_sold[Green]"], 0)
+        self.assertEqual(rows["tickets_sold[Shadyside]"], 7)
 
         # Removing an order on the next Send cancels it.
         harness.removeEntry("dispatch_orders", 0)
@@ -501,8 +523,7 @@ class HarnessSendTest(unittest.TestCase):
         self.assertNotIn("authority[T1]", names)
 
     def test_numbers_from_qml_are_accepted(self) -> None:
-        # QML has one number type: an int row's 10 arrives as 10.0. It
-        # used to fail "ticket_sales must be a whole number >= 0".
+        # QML has one number type: a ticket count of 10 arrives as 10.0.
         QCoreApplication.instance() or QCoreApplication([])
         harness = CtcTestHarness(LocalLink())
         engine = QQmlEngine()
@@ -510,8 +531,10 @@ class HarnessSendTest(unittest.TestCase):
         component = QQmlComponent(engine)
         component.setData(b'''import QtQml
 QtObject { Component.onCompleted: {
-    harness.setInput("ticket_sales",
-                     Number.fromLocaleString(Qt.locale("C"), "10"));
+    harness.addEntry("ticket_sales");
+    harness.setEntryField("ticket_sales", 0, "station", "GLENBURY");
+    harness.setEntryField("ticket_sales", 0, "tickets",
+                          Number.fromLocaleString(Qt.locale("C"), "10"));
     harness.addEntry("train_reports");
     harness.setEntryField("train_reports", 0, "speed_mph",
                           Number.fromLocaleString(Qt.locale("C"), "25"));
@@ -520,10 +543,15 @@ QtObject { Component.onCompleted: {
         self.assertIsNotNone(component.create(), component.errorString())
         self.assertFalse(harness.statusIsError, harness.status)
         self.assertEqual(_outputs(harness)["tickets_sold[Green]"], 10)
-        # A fraction is still rejected.
-        harness.setInput("ticket_sales", 2.5)
+        # A fraction is still rejected, and so is a station twice.
+        harness.setEntryField("ticket_sales", 0, "tickets", 2.5)
         harness.send()
         self.assertIn("whole number", harness.status)
+        harness.setEntryField("ticket_sales", 0, "tickets", 3)
+        harness.addEntry("ticket_sales")
+        harness.setEntryField("ticket_sales", 1, "station", "GLENBURY")
+        harness.send()
+        self.assertIn("listed twice", harness.status)
 
     def test_two_trains_in_one_block_is_refused(self) -> None:
         link = LocalLink()
