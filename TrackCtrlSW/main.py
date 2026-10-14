@@ -35,6 +35,12 @@ def main() -> int:
         action="store_true",
         help="do not listen for the separate test UI",
     )
+    parser.add_argument(
+        "--load-starters",
+        action="store_true",
+        help="commit a starter program to every wayside at launch, "
+        "instead of loading each by hand",
+    )
     options, qt_arguments = parser.parse_known_args()
 
     app = QGuiApplication([sys.argv[0], *qt_arguments])
@@ -49,6 +55,8 @@ def main() -> int:
     # Keep Python-side references so the objects are not garbage
     # collected while QML holds only C++ pointers to them.
     state = TrackControllerState()
+    if options.load_starters:
+        state.loadStarterPrograms()
 
     link: StimulusServer | None = None
     if not options.no_test_link:

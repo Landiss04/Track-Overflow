@@ -109,16 +109,17 @@ ApplicationWindow {
                 }
 
                 StatusBadge {
-                    visible: window.live && stimulus.maintenance
-                    label: qsTr("CTC maintenance on")
-                    variant: "warning"
+                    visible: window.live
+                    label: stimulus.controllerReady
+                        ? qsTr("Controller ready")
+                        : qsTr("Controller not ready: CTC holding")
+                    variant: stimulus.controllerReady ? "ok" : "warning"
                 }
 
                 StatusBadge {
-                    visible: window.live
-                    label: stimulus.standin
-                        ? qsTr("Stand-in running") : qsTr("Test UI drives inputs")
-                    variant: stimulus.standin ? "idle" : "info"
+                    visible: window.live && stimulus.maintenance
+                    label: qsTr("CTC maintenance on")
+                    variant: "warning"
                 }
 
                 Item { Layout.fillWidth: true }

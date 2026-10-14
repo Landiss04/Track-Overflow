@@ -275,45 +275,13 @@ def supervise(
             )
 
     # --- track circuits, one per block that has a suggestion -----------
-    # The standalone simulator travels in increasing block order. Only
-    # authorize the locally known part of that path. A different route or
-    # travel direction requires an explicit route from the harness.
-    ordered = sorted(blocks, key=lambda block: block.index)
-    next_block = {
-        first.block_id: second.block_id
-        for first, second in zip(ordered, ordered[1:])
-        if second.index == first.index + 1
-    }
-    disconnected = {
-        frozenset((switch.point, switch.normal_end if switches[switch.switch_id]
-                   else switch.reverse_end))
-        for switch in config.switches
-    }
-
-    def clear_blocks_ahead(start: str, requested: int) -> int:
-        """Count clear blocks before a hazard or the end of verified track."""
-        current = start
-        count = 0
-        while count < requested:
-            ahead = next_block.get(current)
-            if ahead is None or frozenset((current, ahead)) in disconnected:
-                break
-            if (occupancy.get(ahead, False) or closed.get(ahead, False)
-                    or ahead in fault_blocks or ahead in moving_blocks):
-                break
-            count += 1
-            current = ahead
-        return count
-
     circuits: dict[str, TrackCircuit] = {}
     closed_hit: list[str] = []
     fault_hit: list[str] = []
     limit_hit: list[str] = []
     moving_hit: list[str] = []
     no_authority_hit: list[str] = []
-    maintenance_hit: list[str] = []
     yellow_hit: list[str] = []
-    authority_hit: list[str] = []
     yellow_blocks = {
         signal.block_id for signal in config.signals
         if aspects[signal.signal_id] == "YELLOW"
@@ -355,15 +323,6 @@ def supervise(
             yellow_hit.append(block_id)
             speed //= 2
 
-        if maintenance and authority > 0:
-            maintenance_hit.append(block_id)
-            authority = 0
-        else:
-            clear = clear_blocks_ahead(block_id, authority)
-            if clear < authority:
-                authority_hit.append(block_id)
-                authority = clear
-
         if block_id in moving_blocks and speed > 0:
             moving_hit.append(block_id)
             speed = 0
@@ -375,19 +334,6 @@ def supervise(
 
         circuits[block_id] = TrackCircuit(speed, authority)
 
-    if maintenance_hit:
-        overrides.append(VitalOverride(
-            "maintenance_hold", "TRACK_CIRCUIT",
-            f"maintenance mode; authority zeroed for block(s) "
-            f"{_blocks_text(maintenance_hit)}",
-        ))
-    if authority_hit:
-        overrides.append(VitalOverride(
-            "authority_truncated", "TRACK_CIRCUIT",
-            f"authority restricted before an occupied/closed or unusable block, "
-            f"disconnected switch, or end of verified track for block(s) "
-            f"{_blocks_text(authority_hit)}",
-        ))
     if yellow_hit:
         overrides.append(VitalOverride(
             "aspect_speed_cap", "TRACK_CIRCUIT",

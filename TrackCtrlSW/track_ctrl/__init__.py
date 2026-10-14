@@ -6,7 +6,10 @@ The package is layered so the safety logic can be tested without Qt:
 ``plc``         the boolean-only PLC language: parse, compile, scan
 ``vital``       the fail-safe supervisor applied to every PLC result
 ``controller``  one wayside controller: I/O decode, scan, commit history
-``system``      every line and controller, plus the simulation tick
+``interface``   the boundary contract the central harness maps to
+``module``      SwTrackController: every wayside, stepped from outside
+``wire``        strict JSON forms of the boundary types
+``errors``      TrackControllerError and its subclasses
 ``state``       the QObject bridge the QML views bind to
 ``theme``       design tokens from the UI Style Guide
 

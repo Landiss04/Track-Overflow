@@ -33,6 +33,7 @@ from track_ctrl.interface import (  # noqa: E402
     TrackControllerInputs,
     TrackModelInputs,
 )
+from track_ctrl.controller import default_program_source  # noqa: E402
 from track_ctrl.layout import LayoutError, build_default_system  # noqa: E402
 from track_ctrl.module import SwTrackController  # noqa: E402
 from track_ctrl import wire  # noqa: E402
@@ -45,6 +46,7 @@ def _green() -> SwTrackController:
     for line in build_default_system():
         if line.key == "Green":
             module.load_track(line)
+    module.load_starter_programs()
     return module
 
 
@@ -215,6 +217,126 @@ class Stepping(unittest.TestCase):
         self.assertTrue(all(each.program for each in snap.waysides))
         module.reset()
         self.assertEqual(module.snapshot().ticks, 0)
+
+
+class Startup(unittest.TestCase):
+    """A vital controller stalls until a line and every program are loaded."""
+
+    @staticmethod
+    def bare() -> SwTrackController:
+        module = SwTrackController()
+        for line in build_default_system():
+            if line.key == "Green":
+                module.load_track(line)
+        return module
+
+    def hold_is_total(self, out: interface.TrackControllerOutputs) -> None:
+        self.assertFalse(out.ready)
+        for circuit in out.track_model.track_circuits.values():
+            self.assertEqual(
+                (circuit.speed_mps, circuit.authority_blocks), (0, 0))
+        self.assertTrue(
+            all(each == "red" for each in out.track_model.signal_commands.values()))
+        self.assertTrue(all(out.track_model.crossing_commands.values()))
+
+    def suggest_all(self) -> CtcInputs:
+        return CtcInputs(suggestions={
+            BlockKey("Green", str(block)): Suggestion(10, 3)
+            for block in range(1, 30)
+        })
+
+    def test_a_new_module_is_not_ready_and_says_why(self) -> None:
+        module = SwTrackController()
+        self.assertFalse(module.ready)
+        self.assertEqual(module.not_ready_reasons(), ("no track is loaded",))
+        out = _tick(module, ctc=self.suggest_all())
+        self.assertFalse(out.ready)
+        self.assertEqual(out.track_model.track_circuits, {})
+        snap = module.snapshot()
+        self.assertFalse(snap.ready)
+        self.assertEqual(snap.not_ready, ("no track is loaded",))
+
+    def test_a_loaded_line_without_programs_stalls(self) -> None:
+        module = self.bare()
+        self.assertEqual(
+            len(module.not_ready_reasons()), len(module.wayside_ids))
+        self.hold_is_total(_tick(module, ctc=self.suggest_all()))
+
+    def test_one_missing_program_stalls_every_wayside(self) -> None:
+        module = self.bare()
+        ids = module.wayside_ids
+        # Everything but the last wayside is programmed.
+        for wayside_id in ids[:-1]:
+            controller = module.controller(wayside_id)
+            module.load_program(
+                wayside_id, default_program_source(controller), "a.plc")
+        self.assertEqual(
+            module.not_ready_reasons(), (f"{ids[-1]} has no PLC program",))
+        out = self._stalled_with_programs(module)
+        self.assertFalse(out.ready)
+        # The programmed waysides are held too: nothing runs.
+        self.assertFalse(any(
+            circuit.speed_mps for circuit in out.track_model.track_circuits.values()))
+
+    def _stalled_with_programs(
+        self, module: SwTrackController
+    ) -> interface.TrackControllerOutputs:
+        out = _tick(module, ctc=self.suggest_all())
+        self.hold_is_total(out)
+        return out
+
+    def test_the_last_program_starts_the_module(self) -> None:
+        module = self.bare()
+        module.load_starter_programs()
+        self.assertTrue(module.ready)
+        out = _tick(module, ctc=self.suggest_all())
+        self.assertTrue(out.ready)
+        self.assertTrue(any(
+            circuit.speed_mps for circuit in out.track_model.track_circuits.values()))
+        self.assertEqual(module.not_ready_reasons(), ())
+
+    def test_loading_the_last_program_by_hand_makes_it_ready(self) -> None:
+        module = self.bare()
+        for wayside_id in module.wayside_ids:
+            self.assertFalse(module.ready)
+            module.load_program(
+                wayside_id,
+                default_program_source(module.controller(wayside_id)),
+                "a.plc",
+            )
+        self.assertTrue(module.ready)
+
+    def test_a_new_line_or_a_reset_stalls_a_ready_module_again(self) -> None:
+        module = self.bare()
+        module.load_starter_programs()
+        self.assertTrue(module.ready)
+        for line in build_default_system():
+            if line.key == "Red":
+                module.load_track(line)
+        self.assertFalse(module.ready)
+        module.load_starter_programs()
+        self.assertTrue(module.ready)
+        module.reset()
+        self.assertFalse(module.ready)
+
+    def test_a_program_that_is_refused_does_not_start_the_module(self) -> None:
+        module = self.bare()
+        with self.assertRaises(InvalidProgramError):
+            module.load_program(module.wayside_ids[0], "VAR_IN NOPE\n", "x.plc")
+        self.assertFalse(module.ready)
+
+    def test_ready_crosses_the_wire(self) -> None:
+        for ready in (False, True):
+            out = interface.TrackControllerOutputs(ready=ready)
+            text = json.dumps(wire.outputs_to_wire(out))
+            self.assertEqual(wire.outputs_from_wire(json.loads(text)), out)
+        bad = wire.outputs_to_wire(interface.TrackControllerOutputs())
+        bad["ready"] = "yes"
+        with self.assertRaises(WireFormatError):
+            wire.outputs_from_wire(bad)
+        del bad["ready"]
+        with self.assertRaises(WireFormatError):
+            wire.outputs_from_wire(bad)
 
 
 class Rejection(unittest.TestCase):

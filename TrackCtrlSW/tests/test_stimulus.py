@@ -33,381 +33,17 @@ from track_ctrl.controller import (  # noqa: E402
     TrackController,
     default_program_source,
 )
+from track_ctrl.interface import TrackControllerInputs  # noqa: E402
 from track_ctrl.plc import compile_program  # noqa: E402
 from track_ctrl.state import TrackControllerState  # noqa: E402
 from track_ctrl.stimulus import (  # noqa: E402
     StimulusError,
-    apply_clock,
-    apply_physical,
     apply_user,
     build_snapshot,
 )
-from track_ctrl.system import TrackControllerSystem  # noqa: E402
-from utils.system_clock import SystemClock  # noqa: E402
 
-CONTROLLER = "GTC-01"
-
-
-def physical(op: str, **fields: object) -> dict[str, object]:
-    return {"type": "physical", "op": op, "controller": CONTROLLER, **fields}
-
-
-def bare_program(controller: TrackController, gate: bool = True) -> str:
-    """A program that drives every output and reads no input.
-
-    It passes every suggestion (``gate``), lights every signal GREEN and
-    never throws a switch or arms a crossing, so it is a program that
-    ignores the world. Only the vital layer can react to anything.
-    """
-    lines = []
-    for name in controller.output_names():
-        if name.startswith("AUTH_"):
-            value = "1" if gate else "0"
-        elif name.endswith("_G"):
-            value = "1"
-        else:
-            value = "0"
-        lines.append(f"VAR_OUT {name}")
-        lines.append(f"{name} := {value}")
-    return chr(10).join(lines) + chr(10)
-
-
-class PhysicalInputTests(unittest.TestCase):
-    """What the CTC and Track Model can do to a controller."""
-
-    def setUp(self) -> None:
-        self.system = TrackControllerSystem()
-        self.system.external_control = True
-        self.controller = self.system.controller(CONTROLLER)
-        self.controller.clear_occupancy()
-        self.controller.scan()
-
-    def circuit(self, block: str) -> tuple[int, int]:
-        found = self.controller.outputs.track_circuits[block]
-        return found.speed_mps, found.authority_blocks
-
-    def aspect(self) -> str:
-        return self.controller.outputs.aspects["12"]
-
-    def apply(self, op: str, **fields: object) -> str:
-        return apply_physical(self.system, physical(op, **fields))
-
-    # --- the Track Model ---
-
-    def test_occupancy_reaches_the_input_card(self) -> None:
-        self.apply("set_occupancy", block="3", value=True)
-        self.assertTrue(self.controller.inputs.occupancy["3"])
-        self.assertEqual(self.controller.inputs.trains["3"], "TEST")
-
-        self.apply("set_occupancy", block="3", value=False)
-        self.assertFalse(self.controller.inputs.occupancy["3"])
-        self.assertNotIn("3", self.controller.inputs.trains)
-
-    def test_occupancy_on_the_signal_block_turns_it_red(self) -> None:
-        self.assertEqual(self.aspect(), "GREEN")
-        self.apply("set_occupancy", block="12", value=True)
-        self.assertEqual(self.aspect(), "RED")
-
-    def test_occupancy_ahead_makes_the_program_show_yellow(self) -> None:
-        self.apply("set_occupancy", block="13", value=True)
-        self.assertEqual(self.aspect(), "YELLOW")
-
-    def test_the_crossing_arms_when_a_train_is_beside_it(self) -> None:
-        self.assertFalse(self.controller.outputs.crossings["19"])
-        self.apply("set_occupancy", block="18", value=True)
-        self.assertTrue(self.controller.outputs.crossings["19"])
-
-    def test_a_train_holds_the_blocks_beside_it(self) -> None:
-        self.assertEqual(self.circuit("5"), (12, 4))
-        self.apply("set_occupancy", block="6", value=True)
-        self.assertEqual(self.circuit("5"), (0, 0))
-        self.assertEqual(self.circuit("7"), (0, 0))
-        # Blocks 4 and 5 remain reachable; occupied block 6 is excluded.
-        self.assertEqual(self.circuit("3"), (12, 2))
-
-    def test_clear_occupancy(self) -> None:
-        for block in ("3", "9", "20"):
-            self.apply("set_occupancy", block=block, value=True)
-        self.apply("clear_occupancy")
-        self.assertFalse(any(self.controller.inputs.occupancy.values()))
-
-    def test_a_moving_switch_stops_its_block_even_if_the_plc_forgets(self) -> None:
-        self.controller.commit(bare_program(self.controller), "bare.plc")
-        self.controller.scan()
-        self.assertEqual(self.circuit("12"), (12, 4))
-        self.apply("set_switch_moving", switch="12", value=True)
-        self.assertEqual(self.circuit("12"), (0, 4))
-        self.assertIn("switch_moving", [
-            o.rule for o in self.controller.outputs.overrides])
-        # Approaching trains must stop before entering the unusable block.
-        self.assertEqual(self.circuit("11"), (0, 0))
-
-    def test_a_faulted_switch_is_held_by_vital_without_the_plc(self) -> None:
-        self.controller.commit(bare_program(self.controller), "bare.plc")
-        self.apply("set_switch_fault", switch="12", value=True)
-        self.assertEqual(self.circuit("12"), (0, 0))
-        self.assertEqual(self.aspect(), "RED")
-        rules = [o.rule for o in self.controller.outputs.overrides]
-        self.assertIn("switch_fault", rules)
-        self.assertIn("signal_protects_block", rules)
-
-    def test_a_faulted_switch_is_noticed_by_the_starter_program_too(self) -> None:
-        self.apply("set_switch_fault", switch="12", value=True)
-        self.assertEqual(self.aspect(), "RED")
-        self.assertEqual(self.circuit("12"), (0, 0))
-
-    # --- the CTC Office ---
-
-    def test_closing_a_block_zeroes_that_blocks_circuit_only(self) -> None:
-        self.apply("set_block_closed", block="7", value=True)
-        self.assertEqual(self.circuit("7"), (0, 0))
-        self.assertEqual(self.circuit("9"), (12, 4))
-        self.apply("set_block_closed", block="7", value=False)
-        self.assertEqual(self.circuit("7"), (12, 4))
-
-    def test_suggestions_are_per_block(self) -> None:
-        self.apply("set_suggestion", block="3", speed_mps=9,
-                   authority_blocks=2)
-        self.assertEqual(self.circuit("3"), (9, 2))
-        self.assertEqual(self.circuit("4"), (12, 4))      # untouched
-
-    def test_one_part_of_a_suggestion_can_change_alone(self) -> None:
-        self.apply("set_suggestion", block="3", speed_mps=8)
-        self.assertEqual(self.circuit("3"), (8, 4))
-        self.apply("set_suggestion", block="3", authority_blocks=1)
-        self.assertEqual(self.circuit("3"), (8, 1))
-
-    def test_suggestions_above_the_posted_limit_are_clamped(self) -> None:
-        self.apply("set_suggestion", block="3", speed_mps=15)
-        self.assertEqual(self.circuit("3"), (12, 4))      # limit is 12
-        self.apply("set_suggestion", block="14", speed_mps=15)
-        self.assertEqual(self.circuit("14"), (15, 4))     # limit is 19
-        self.assertIn("speed_limit", [
-            o.rule for o in self.controller.outputs.overrides])
-
-    def test_a_suggestion_can_be_set_on_every_block_at_once(self) -> None:
-        self.apply("set_all_suggestions", speed_mps=5, authority_blocks=3)
-        self.assertEqual(
-            {(s.speed_mps, s.authority_blocks)
-             for s in self.controller.inputs.suggestions.values()},
-            {(5, 3)},
-        )
-        self.assertEqual(self.circuit("3"), (5, 3))
-        self.assertEqual(self.circuit("24"), (5, 1))
-        self.assertEqual(self.circuit("25"), (0, 0))
-
-    def test_a_block_with_no_suggestion_gets_no_track_circuit(self) -> None:
-        self.apply("clear_suggestion", block="3")
-        self.assertNotIn("3", self.controller.outputs.track_circuits)
-        self.assertIn("4", self.controller.outputs.track_circuits)
-
-    def test_zero_authority_means_zero_speed(self) -> None:
-        self.apply("set_suggestion", block="3", speed_mps=9,
-                   authority_blocks=0)
-        self.assertEqual(self.circuit("3"), (0, 0))
-        self.assertIn("no_authority", [
-            o.rule for o in self.controller.outputs.overrides])
-
-    def test_a_program_that_withholds_a_block_sends_it_nothing(self) -> None:
-        self.controller.commit(bare_program(self.controller, gate=False),
-                               "none.plc")
-        self.controller.scan()
-        self.assertEqual(self.circuit("5"), (0, 0))
-
-    def test_speed_limit_override_replaces_the_posted_limit_and_clears(self) -> None:
-        self.apply("set_speed_limit", value=5)
-        self.assertEqual(self.circuit("14"), (5, 4))
-        self.apply("set_speed_limit", value=None)
-        self.assertIsNone(self.controller.inputs.speed_limit_override_mps)
-        self.assertEqual(self.circuit("14"), (15, 4))
-
-    def test_maintenance_mode_is_system_wide(self) -> None:
-        message = {"type": "physical", "op": "set_maintenance", "value": True}
-        apply_physical(self.system, message)
-        self.assertTrue(self.system.maintenance)
-        for controller in self.system.controllers.values():
-            self.assertTrue(controller.maintenance, controller.config.controller_id)
-        apply_physical(self.system, {**message, "value": False})
-        self.assertFalse(any(
-            c.maintenance for c in self.system.controllers.values()))
-
-    def test_maintenance_holds_speed_and_authority(self) -> None:
-        apply_physical(self.system, {"type": "physical",
-                                     "op": "set_maintenance", "value": True})
-        self.assertEqual(self.circuit("5"), (0, 0))
-        self.assertIn("maintenance_hold", [o.rule for o in self.controller.outputs.overrides])
-
-    def test_a_ctc_switch_command_is_obeyed_only_in_maintenance(self) -> None:
-        self.apply("set_switch_command", switch="12", position="reverse")
-        self.assertFalse(self.controller.outputs.switches["12"])
-        apply_physical(self.system, {"type": "physical",
-                                     "op": "set_maintenance", "value": True})
-        self.assertTrue(self.controller.outputs.switches["12"])
-        self.assertIn("ctc_switch_command", [
-            o.rule for o in self.controller.outputs.overrides])
-
-    def test_the_ctc_command_beats_a_hand_set_switch(self) -> None:
-        apply_physical(self.system, {"type": "physical",
-                                     "op": "set_maintenance", "value": True})
-        self.apply("set_switch_command", switch="12", position="reverse")
-        self.controller.manual_switches["12"] = False
-        self.controller.scan()
-        self.assertTrue(self.controller.outputs.switches["12"])
-
-    def test_a_hand_set_switch_is_obeyed_when_the_ctc_has_not_commanded(self) -> None:
-        apply_physical(self.system, {"type": "physical",
-                                     "op": "set_maintenance", "value": True})
-        self.controller.manual_switches["12"] = True
-        self.controller.scan()
-        self.assertTrue(self.controller.outputs.switches["12"])
-        self.assertIn("manual_switch", [
-            o.rule for o in self.controller.outputs.overrides])
-
-    def test_ending_maintenance_releases_commands_and_hand_settings(self) -> None:
-        apply_physical(self.system, {"type": "physical",
-                                     "op": "set_maintenance", "value": True})
-        self.apply("set_switch_command", switch="12", position="reverse")
-        self.controller.manual_switches["12"] = True
-        apply_physical(self.system, {"type": "physical",
-                                     "op": "set_maintenance", "value": False})
-        self.assertEqual(self.controller.inputs.ctc_switch_commands, {})
-        self.assertEqual(self.controller.manual_switches, {})
-        self.assertFalse(self.controller.outputs.switches["12"])
-
-    def test_a_switch_under_a_train_does_not_move(self) -> None:
-        self.apply("set_occupancy", block="12", value=True)
-        apply_physical(self.system, {"type": "physical",
-                                     "op": "set_maintenance", "value": True})
-        self.apply("set_switch_command", switch="12", position="reverse")
-        self.assertFalse(self.controller.outputs.switches["12"])
-        self.assertIn("switch_locked_under_train", [
-            o.rule for o in self.controller.outputs.overrides])
-
-    # --- the stand-in world ---
-
-    def test_external_control_preserves_only_explicit_occupancy(self) -> None:
-        self.apply("set_occupancy", block="5", value=True)
-        before = [t.block_index for t in self.system.trains]
-        for _ in range(80):
-            self.system.tick(0.1)
-        self.assertNotEqual(before, [t.block_index for t in self.system.trains])
-        self.assertTrue(self.controller.inputs.occupancy["5"])
-        self.assertEqual(self.controller.inputs.trains["5"], "TEST")
-        for line in self.system.lines:
-            for block_id, train_id in self.system.occupancy_for(line).items():
-                controller = next(c for c in self.system.controllers_for(line.name)
-                                  if c.config.owns(block_id))
-                self.assertTrue(controller.inputs.occupancy[block_id])
-                self.assertEqual(controller.inputs.trains[block_id], train_id)
-
-    def test_manual_clear_masks_only_its_block_until_disconnect(self) -> None:
-        train = self.system.trains[0]
-        line = self.system.line(train.line_name)
-        block_id = line.blocks[train.block_index - 1].block_id
-        controller = next(c for c in self.system.controllers_for(line.name)
-                          if c.config.owns(block_id))
-        apply_physical(self.system, {
-            "op": "set_occupancy", "controller": controller.config.controller_id,
-            "block": block_id, "value": False,
-        })
-        self.system.tick(0.1)
-        self.assertFalse(controller.inputs.occupancy[block_id])
-        self.assertNotIn(block_id, controller.inputs.trains)
-        self.system.external_control = False
-        self.system.tick(0.0)
-        self.assertTrue(controller.inputs.occupancy[block_id])
-        self.system.external_control = True
-        self.system.tick(0.0)
-        self.assertTrue(controller.inputs.occupancy[block_id])
-
-    def test_ticks_preserve_test_ctc_suggestions_while_trains_move(self) -> None:
-        self.apply("set_suggestion", block="5", speed_mps=3, authority_blocks=2)
-        self.apply("clear_suggestion", block="6")
-        self.system.tick(3.0)
-        suggestion = self.controller.inputs.suggestions["5"]
-        self.assertEqual((suggestion.speed_mps, suggestion.authority_blocks), (3, 2))
-        self.assertNotIn("6", self.controller.inputs.suggestions)
-
-    def test_the_stand_in_resumes_when_control_is_returned(self) -> None:
-        self.apply("set_occupancy", block="5", value=True)
-        self.system.external_control = False
-        self.system.tick(0.1)
-        self.assertNotEqual(self.controller.inputs.trains.get("5"), "TEST")
-
-    def test_the_stand_in_suggests_for_every_block(self) -> None:
-        self.system.external_control = False
-        self.system.tick(0.1)
-        self.assertEqual(
-            len(self.controller.inputs.suggestions), len(self.controller.blocks))
-
-
-class RejectionTests(unittest.TestCase):
-    """Bad input is refused and changes nothing (REQ-NFR-004)."""
-
-    def setUp(self) -> None:
-        self.system = TrackControllerSystem()
-        self.system.external_control = True
-        self.controller = self.system.controller(CONTROLLER)
-
-    def snapshot(self) -> object:
-        inputs = self.controller.inputs
-        return (
-            dict(inputs.occupancy), dict(inputs.suggestions),
-            inputs.speed_limit_override_mps, dict(inputs.ctc_switch_commands),
-            self.system.maintenance,
-        )
-
-    def refuses(self, **message: object) -> None:
-        before = self.snapshot()
-        with self.assertRaises(StimulusError):
-            apply_physical(self.system, physical(**message))
-        self.assertEqual(before, self.snapshot())
-
-    def test_unknown_op(self) -> None:
-        self.refuses(op="melt_the_rails")
-
-    def test_block_owned_by_another_controller(self) -> None:
-        other = self.system.controller("GTC-02").blocks[0].block_id
-        self.refuses(op="set_occupancy", block=other, value=True)
-        self.refuses(op="set_suggestion", block=other, speed_mps=5)
-
-    def test_unknown_block_switch_and_controller(self) -> None:
-        self.refuses(op="set_occupancy", block="NOPE", value=True)
-        self.refuses(op="set_switch_fault", switch="99", value=True)
-        self.refuses(op="set_switch_command", switch="99", position="normal")
-        with self.assertRaises(StimulusError):
-            apply_physical(self.system, {
-                "op": "clear_occupancy", "controller": "XTC-99"})
-
-    def test_flags_must_be_real_booleans(self) -> None:
-        self.refuses(op="set_occupancy", block="3", value="yes")
-        self.refuses(op="set_occupancy", block="3", value=1)
-
-    def test_speeds_and_authorities_are_whole_non_negative_numbers(self) -> None:
-        for bad in (-1, 12.5, float("inf"), float("nan"), "fast", True):
-            self.refuses(op="set_suggestion", block="3", speed_mps=bad)
-        for bad in (-1, 1.5, float("nan"), True):
-            self.refuses(op="set_suggestion", block="3", authority_blocks=bad)
-
-    def test_a_suggestion_must_say_what_it_suggests(self) -> None:
-        self.refuses(op="set_suggestion", block="3")
-        self.refuses(op="set_all_suggestions")
-
-    def test_a_bad_value_leaves_every_block_as_it_was(self) -> None:
-        self.refuses(op="set_all_suggestions", speed_mps=5,
-                     authority_blocks=-1)
-
-    def test_the_speed_limit_cannot_be_zero(self) -> None:
-        self.refuses(op="set_speed_limit", value=0)
-        self.refuses(op="set_speed_limit", value=-3)
-
-    def test_maintenance_and_switch_positions_are_validated(self) -> None:
-        self.refuses(op="set_switch_command", switch="12", position="sideways")
-        with self.assertRaises(StimulusError):
-            apply_physical(self.system, {"type": "physical",
-                                         "op": "set_maintenance",
-                                         "value": "on"})
-        self.assertFalse(self.system.maintenance)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from rig import CONTROLLER, Rig  # noqa: E402
 
 
 class UserInputTests(unittest.TestCase):
@@ -420,15 +56,17 @@ class UserInputTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.state = TrackControllerState()
-        self.state.simulation_clock.pause()
+        self.state.loadStarterPrograms()
+        # The CTC and Track Model, standing in; its steps drive the UI.
+        self.rig = Rig(self.state.system, stepper=self.state.step)
+        self.rig.settle()
 
     def user(self, op: str, **fields: object) -> str:
         return apply_user(self.state, {"type": "user", "op": op, **fields})
 
     def ctc_maintenance(self, active: bool) -> None:
-        apply_physical(self.state.system, {
-            "type": "physical", "op": "set_maintenance", "value": active})
-        self.state.notify_external_change()
+        self.rig.world.set_maintenance(active)
+        self.rig.tick()
 
     def test_selection_and_tabs(self) -> None:
         self.user("select_line", name="Red Line")
@@ -491,8 +129,8 @@ class UserInputTests(unittest.TestCase):
 
     def test_the_switch_dialog_reports_the_ctc_command(self) -> None:
         self.ctc_maintenance(True)
-        apply_physical(self.state.system, physical(
-            "set_switch_command", switch="12", position="reverse"))
+        self.rig.world.set_switch_command(self.rig.key("12"), "reverse")
+        self.rig.tick()
         row = self.state.switches["rows"][0]
         self.assertEqual(row["id"], "12")
         self.assertEqual(row["ctc_command"], "REVERSE")
@@ -520,6 +158,7 @@ class UserInputTests(unittest.TestCase):
             self.user("append_buffer", text="x" * 5000)
 
     def test_the_views_show_speeds_in_mph(self) -> None:
+        self.rig.settle()
         rows = {row["name"]: row["value"] for row in self.state.outputs["rows"]}
         # 12 m/s is the posted limit of block 1 and 4 blocks of authority.
         self.assertEqual(rows["TC_1"], "26.8 MPH · 4 BLK")
@@ -537,7 +176,6 @@ class CommitGateTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.state = TrackControllerState()
-        self.state.simulation_clock.pause()
 
     def user(self, op: str, **fields: object) -> str:
         return apply_user(self.state, {"type": "user", "op": op, **fields})
@@ -632,7 +270,6 @@ class TrackConfigTests(unittest.TestCase):
 
         self.folder = default_layout_dir()
         self.state = TrackControllerState()
-        self.state.simulation_clock.pause()
 
     def test_inspecting_a_file_reports_what_loading_would_do(self) -> None:
         info = self.state.inspect_track_config(str(self.folder / "green_line.json"))
@@ -663,27 +300,34 @@ class TrackConfigTests(unittest.TestCase):
             len(self.state.system.controllers_for("Red Line")), 5)
         self.assertEqual(len(self.state.system.controllers), 8)
 
-    def test_the_new_waysides_start_with_working_programs(self) -> None:
+    def test_the_new_waysides_start_without_programs_and_not_ready(self) -> None:
         self.state.load_track_config(str(self.folder / "green_line.json"), 2)
         for controller in self.state.system.controllers_for("Green Line"):
-            self.assertEqual(controller.iteration, 1)
-            self.assertIsNotNone(controller.program)
-            self.assertIn(
-                "AUTH_" + controller.blocks[0].block_id,
-                controller.program.source)               # type: ignore[union-attr]
-            self.assertEqual(len(controller.outputs.track_circuits),
-                             len(controller.blocks) if controller.inputs.suggestions
-                             else 0)
+            self.assertEqual(controller.iteration, 0)
+            self.assertIsNone(controller.program)
+        self.assertFalse(self.state.ready)
+        self.assertIn("GTC-01", self.state.notReadyReason)
+        # The editor offers the generated program, uncommitted.
+        self.assertIn("AUTH_1", self.state.buffer)
+
+    def test_loading_a_line_makes_a_ready_module_not_ready_again(self) -> None:
+        self.state.loadStarterPrograms()
+        self.assertTrue(self.state.ready)
+        self.state.load_track_config(str(self.folder / "green_line.json"), 3)
+        self.assertFalse(self.state.ready)
+        # The other line keeps its programs.
+        self.assertEqual(
+            self.state.system.controller("RTC-01").iteration, 1)
 
     def test_loading_replaces_programs_the_old_waysides_held(self) -> None:
+        self.state.loadStarterPrograms()
         controller = self.state.system.controller(CONTROLLER)
-        self.state.user_edit = None                      # no-op marker
         controller.commit(
             default_program_source(controller) + "// edited\n", "mine.plc")
         self.assertEqual(controller.iteration, 2)
         self.state.load_track_config(str(self.folder / "green_line.json"), 6)
         self.assertEqual(
-            self.state.system.controller(CONTROLLER).iteration, 1)
+            self.state.system.controller(CONTROLLER).iteration, 0)
 
     def test_the_programmer_is_taken_to_what_was_loaded(self) -> None:
         self.state.selectLine("Red Line")
@@ -753,11 +397,12 @@ class TrackConfigTests(unittest.TestCase):
             path = Path(folder) / "purple.json"
             path.write_text(json.dumps(layout), encoding="utf-8")
             self.state.load_track_config(str(path), 2)
+        self.state.loadStarterPrograms()
         controller = self.state.system.controller("PTC-01")
         self.assertEqual(controller.config.switches, ())
         self.assertEqual(controller.diagnose(
             compile_program(default_program_source(controller))), ())
-        self.state.system.tick(0.1)           # scans without error
+        self.state.step(0.1, TrackControllerInputs(time_s=1.0))
 
     def test_the_test_ui_sees_the_new_topology(self) -> None:
         self.state.load_track_config(str(self.folder / "green_line.json"), 3)
@@ -775,13 +420,12 @@ class SnapshotTests(unittest.TestCase):
 
     def test_snapshot_is_json_and_reflects_a_stimulus(self) -> None:
         state = TrackControllerState()
-        state.simulation_clock.pause()
-        state.system.external_control = True
-        apply_physical(state.system, physical(
-            "set_occupancy", block="3", value=True))
+        state.loadStarterPrograms()
+        rig = Rig(state.system, stepper=state.step)
+        rig.world.set_occupancy(rig.key("3"), True)
         # Block 8 is nowhere near the train on 3, so it is not held.
-        apply_physical(state.system, physical(
-            "set_suggestion", block="8", speed_mps=7, authority_blocks=2))
+        rig.world.set_suggestion(rig.key("8"), 7, 2)
+        rig.settle()
 
         snapshot = json.loads(json.dumps(build_snapshot(state)))
         entry = next(c for c in snapshot["controllers"]
@@ -794,17 +438,28 @@ class SnapshotTests(unittest.TestCase):
              eight["commanded_speed"], eight["commanded_authority"]),
             (7, 2, 7, 2),
         )
-        self.assertTrue(snapshot["standin"])
         self.assertFalse(snapshot["maintenance"])
         self.assertEqual(len(snapshot["controllers"]), 11)
         self.assertIn("ui", snapshot)
+        self.assertNotIn("standin", snapshot)
+
+    def test_snapshot_describes_the_track_for_the_world(self) -> None:
+        state = TrackControllerState()
+        snapshot = build_snapshot(state)
+        entry = next(c for c in snapshot["controllers"]
+                     if c["id"] == CONTROLLER)
+        self.assertEqual(entry["line_key"], "Green")
+        self.assertEqual(entry["crossings"], ["19"])
+        self.assertEqual(entry["signals"], ["12"])
+        self.assertEqual(entry["switches"][0]["block_id"], "12")
 
     def test_snapshot_carries_switch_commands_and_maintenance(self) -> None:
         state = TrackControllerState()
-        state.simulation_clock.pause()
-        apply_physical(state.system, {"op": "set_maintenance", "value": True})
-        apply_physical(state.system, physical(
-            "set_switch_command", switch="12", position="reverse"))
+        state.loadStarterPrograms()
+        rig = Rig(state.system, stepper=state.step)
+        rig.world.set_maintenance(True)
+        rig.world.set_switch_command(rig.key("12"), "reverse")
+        rig.settle()
         snapshot = build_snapshot(state)
         self.assertTrue(snapshot["maintenance"])
         entry = next(c for c in snapshot["controllers"]
@@ -813,59 +468,35 @@ class SnapshotTests(unittest.TestCase):
 
 
 class ClockTests(unittest.TestCase):
-    """The module runs on the shared simulation clock (D017)."""
+    """The module has no clock; it shows the time it is stepped at."""
 
     @classmethod
     def setUpClass(cls) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         cls.app = QCoreApplication.instance() or QCoreApplication([])
 
-    def test_standalone_creates_and_runs_its_own_clock(self) -> None:
+    def test_before_the_first_tick_there_is_no_time(self) -> None:
         state = TrackControllerState()
-        self.assertFalse(state.clockPaused)
-        self.assertEqual(state.clock, "05:00:00")
-        state.simulation_clock.pause()
+        self.assertEqual(state.clock, "--:--:--")
+        self.assertTrue(state.clockPaused)
+        self.assertEqual(state.clockSpeed, 1)
 
-    def test_an_injected_clock_is_used_and_not_driven(self) -> None:
-        clock = SystemClock()
-        state = TrackControllerState(clock=clock)
-        self.assertIs(state.simulation_clock, clock)
-        # The harness owns pause and resume; the module leaves it held.
-        self.assertTrue(clock.is_paused)
-
-    def test_each_clock_tick_scans_and_stamps_simulated_time(self) -> None:
-        clock = SystemClock()
-        state = TrackControllerState(clock=clock)
-        before = state.system.tick_count
+    def test_each_step_shows_and_stamps_the_time_it_carries(self) -> None:
+        state = TrackControllerState()
+        rig = Rig(state.system, stepper=state.step)
+        rig.time_s = 5 * 3600.0 + 0.5
         for _ in range(10):
-            clock.tick()
-        self.assertEqual(state.system.tick_count, before + 10)
+            rig.tick()
         self.assertEqual(state.clock, "05:00:01")
+        self.assertEqual(state.system.snapshot().ticks, 10)
         controller = state.system.controller(CONTROLLER)
         self.assertEqual(controller.now_text(), "05:00:01")
 
-    def test_stand_in_trains_move_by_simulated_time(self) -> None:
-        system = TrackControllerSystem()
-        train = system.trains[0]
-        start = train.block_index
-        system.tick(train.seconds_per_block - 0.01)
-        self.assertEqual(train.block_index, start)
-        system.tick(0.02)
-        self.assertEqual(train.block_index, start + 1)
-
-    def test_clock_messages_pause_resume_and_respeed(self) -> None:
-        clock = SystemClock()
-        apply_clock(clock, {"op": "resume"})
-        self.assertFalse(clock.is_paused)
-        apply_clock(clock, {"op": "set_speed", "speed": 10})
-        self.assertEqual(clock.speed, 10)
-        apply_clock(clock, {"op": "pause"})
-        self.assertTrue(clock.is_paused)
-        for bad in (3, "10", True):
-            with self.assertRaises(StimulusError):
-                apply_clock(clock, {"op": "set_speed", "speed": bad})
-        with self.assertRaises(StimulusError):
-            apply_clock(clock, {"op": "rewind"})
+    def test_the_senders_clock_state_is_only_shown(self) -> None:
+        state = TrackControllerState()
+        state.set_clock_status(False, 10)
+        self.assertFalse(state.clockPaused)
+        self.assertEqual(state.clockSpeed, 10)
 
 
 if __name__ == "__main__":

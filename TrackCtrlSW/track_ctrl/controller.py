@@ -356,16 +356,24 @@ class TrackController:
             log=tuple(self._format_log(inputs, outputs, result.values)),
         )
 
+    def hold(self, reason: str) -> ScanReport:
+        """Drive the fail-safe outputs without running the program.
+
+        Stop everywhere, every signal red, every crossing armed. Switches
+        stay where they stand: throwing one is not a safe way to fail.
+        """
+        self.outputs = vital.restrictive_outputs(
+            self.config,
+            reason,
+            suggestions=self.inputs.suggestions,
+            held_switches=self.outputs.switches,
+        )
+        return ScanReport(outputs=self.outputs)
+
     def scan(self) -> ScanReport:
         """Run the committed program and drive the result to the track."""
         if self._program is None:
-            self.outputs = vital.restrictive_outputs(
-                self.config,
-                "no program is loaded on this controller",
-                suggestions=self.inputs.suggestions,
-                held_switches=self.outputs.switches,
-            )
-            return ScanReport(outputs=self.outputs)
+            return self.hold("no program is loaded on this controller")
 
         report = self.run_program(self._program, self.inputs)
         self.outputs = report.outputs

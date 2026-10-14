@@ -58,7 +58,7 @@ from track_ctrl.layout import LineLayout
 _SECONDS_PER_DAY = 86_400
 
 
-def _clock_text(seconds: float) -> str:
+def clock_text(seconds: float) -> str:
     """Render simulated seconds since midnight as ``HH:MM:SS``."""
     whole = int(seconds) % _SECONDS_PER_DAY
     return f"{whole // 3600:02d}:{whole % 3600 // 60:02d}:{whole % 60:02d}"
@@ -118,35 +118,53 @@ class SwTrackController:
 
         Returns the IDs of the waysides that were replaced. Their
         programs go with them: the territories they governed no longer
-        exist.
+        exist. Every other line keeps its waysides and programs.
         """
         removed = [
             wayside_id for wayside_id, wayside in self._waysides.items()
             if wayside.line == line.key
         ]
-        self._lines = [each for each in self._lines if each.key != line.key]
-        self._lines.append(line)
-        self._rebuild()
+        for wayside_id in removed:
+            del self._waysides[wayside_id]
+            self._reports.pop(wayside_id, None)
+        self._owner = {
+            key: owner for key, owner in self._owner.items()
+            if owner not in removed
+        }
+        for position, each in enumerate(self._lines):
+            if each.key == line.key:
+                self._lines[position] = line
+                break
+        else:
+            self._lines.append(line)
+        self._install(line)
+        # Put the waysides back in line order, so every list built from
+        # them keeps the order the lines have.
+        ordered: dict[str, _Wayside] = {}
+        for each in self._lines:
+            for wayside_id, wayside in self._waysides.items():
+                if wayside.line == each.key:
+                    ordered[wayside_id] = wayside
+        self._waysides = ordered
         return removed
 
-    def _rebuild(self) -> None:
-        """Create a fresh controller for every wayside of every line."""
-        self._waysides = {}
-        self._owner = {}
-        self._reports = {}
-        for line in self._lines:
-            by_id = {block.block_id: block for block in line.blocks}
-            for config in line.controllers:
-                blocks = tuple(by_id[each] for each in config.block_ids)
-                controller = TrackController(config, blocks)
-                controller.time_text = _clock_text(self._time_s or 0.0)
-                controller.commit(
-                    default_program_source(controller), controller.file_name
-                )
-                wayside = _Wayside(controller, line.key)
-                self._waysides[config.controller_id] = wayside
-                for block_id in config.block_ids:
-                    self._owner[wayside.key(block_id)] = config.controller_id
+    def _install(self, line: LineLayout) -> None:
+        """Create a controller, with a working program, for each wayside."""
+        by_id = {block.block_id: block for block in line.blocks}
+        for config in line.controllers:
+            blocks = tuple(by_id[each] for each in config.block_ids)
+            controller = TrackController(config, blocks)
+            controller.time_text = (
+                "" if self._time_s is None else clock_text(self._time_s)
+            )
+            # No program yet: startup is the programmer's. Until a
+            # program is committed the wayside holds its fail-safe
+            # outputs, and so does the whole module (see ``ready``).
+            controller.scan()
+            wayside = _Wayside(controller, line.key)
+            self._waysides[config.controller_id] = wayside
+            for block_id in config.block_ids:
+                self._owner[wayside.key(block_id)] = config.controller_id
 
     def reset(self) -> None:
         """Return every wayside to its state just after loading."""
@@ -154,12 +172,102 @@ class SwTrackController:
         self._maintenance = False
         self._time_s = None
         self._ticks = 0
-        self._rebuild()
+        self._waysides = {}
+        self._owner = {}
+        self._reports = {}
+        for line in self._lines:
+            self._install(line)
+
+    # --- startup -----------------------------------------------------------
+
+    def not_ready_reasons(self) -> tuple[str, ...]:
+        """What startup still needs, or an empty tuple when it is done."""
+        if not self._waysides:
+            return ("no track is loaded",)
+        return tuple(
+            f"{wayside_id} has no PLC program"
+            for wayside_id, wayside in self._waysides.items()
+            if wayside.controller.program is None
+        )
+
+    @property
+    def ready(self) -> bool:
+        """Whether a line is loaded and every wayside has a program.
+
+        The module is vital, so it stalls until this holds: while it does
+        not, no wayside runs its program and all of them drive their
+        fail-safe outputs.
+        """
+        return not self.not_ready_reasons()
+
+    def load_starter_programs(self) -> list[str]:
+        """Commit a generated starter program to every wayside without one.
+
+        A convenience for the demo and the tests, in place of committing
+        each wayside by hand. Returns the IDs that were loaded.
+        """
+        loaded: list[str] = []
+        for wayside_id, wayside in self._waysides.items():
+            controller = wayside.controller
+            if controller.program is None:
+                controller.commit(
+                    default_program_source(controller),
+                    controller.file_name,
+                )
+                loaded.append(wayside_id)
+        return loaded
 
     @property
     def wayside_ids(self) -> tuple[str, ...]:
         """The IDs of every wayside, in the order they were loaded."""
         return tuple(self._waysides)
+
+    # --- lookup, for the UI ------------------------------------------------
+
+    @property
+    def lines(self) -> tuple[LineLayout, ...]:
+        """Every loaded line, in the order they were loaded."""
+        return tuple(self._lines)
+
+    @property
+    def controllers(self) -> dict[str, TrackController]:
+        """Every wayside's controller by ID, in line order."""
+        return {
+            wayside_id: wayside.controller
+            for wayside_id, wayside in self._waysides.items()
+        }
+
+    @property
+    def maintenance(self) -> bool:
+        """Whether the CTC Office has the system in maintenance mode."""
+        return self._maintenance
+
+    @property
+    def time_s(self) -> float | None:
+        """Simulation time of the last tick; None before the first."""
+        return self._time_s
+
+    def line(self, name: str) -> LineLayout:
+        """Return one line by its display name, ``Green Line``."""
+        for candidate in self._lines:
+            if candidate.name == name:
+                return candidate
+        raise UnknownIdError(f"unknown line: {name}")
+
+    def controller(self, controller_id: str) -> TrackController:
+        """Return one controller by ID."""
+        return self._wayside(controller_id).controller
+
+    def controllers_for(self, line_name: str) -> list[TrackController]:
+        """Return the controllers on one line, in configuration order."""
+        return [
+            wayside.controller for wayside in self._waysides.values()
+            if wayside.controller.config.line_name == line_name
+        ]
+
+    def line_key(self, controller_id: str) -> str:
+        """The boundary's name for a wayside's line, ``Green``."""
+        return self._wayside(controller_id).line
 
     # --- the tick --------------------------------------------------------
 
@@ -172,9 +280,15 @@ class SwTrackController:
         readback = inputs.track_model
         self._maintenance = ctc.maintenance_mode
 
+        reasons = self.not_ready_reasons()
         for wayside in self._waysides.values():
             self._apply(wayside, inputs)
-            wayside.controller.scan()
+            if reasons:
+                wayside.controller.hold(
+                    f"the module is not ready: {reasons[0]}"
+                )
+            else:
+                wayside.controller.scan()
 
         self._readback = readback
         self._time_s = inputs.time_s
@@ -226,7 +340,7 @@ class SwTrackController:
         controller = wayside.controller
         ctc = inputs.ctc
         readback = inputs.track_model
-        controller.time_text = _clock_text(inputs.time_s)
+        controller.time_text = clock_text(inputs.time_s)
 
         if controller.maintenance != ctc.maintenance_mode:
             controller.set_maintenance(ctc.maintenance_mode)
@@ -301,6 +415,7 @@ class SwTrackController:
             reports.append(report)
 
         return TrackControllerOutputs(
+            ready=self.ready,
             track_model=TrackModelOutputs(
                 track_circuits=circuits,
                 switch_commands=switches,
@@ -477,4 +592,6 @@ class SwTrackController:
             maintenance_mode=self._maintenance,
             time_s=self._time_s,
             ticks=self._ticks,
+            ready=self.ready,
+            not_ready=self.not_ready_reasons(),
         )

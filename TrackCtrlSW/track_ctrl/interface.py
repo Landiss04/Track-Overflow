@@ -175,6 +175,11 @@ class CtcReport:
 class TrackControllerOutputs:
     """Everything one tick produces."""
 
+    # The module has been started up: a line is loaded and every wayside
+    # has a PLC program. Until then the module drives only its fail-safe
+    # outputs, so the CTC Office must not dispatch a train or send a
+    # speed or authority. It is the whole module's, not a wayside's.
+    ready: bool = False
     track_model: TrackModelOutputs = field(default_factory=TrackModelOutputs)
     # One report per wayside, in the order the waysides were loaded.
     ctc_reports: tuple[CtcReport, ...] = ()
@@ -244,6 +249,9 @@ class TrackControllerSnapshot:
     # Simulation time of the last tick; None before the first.
     time_s: float | None
     ticks: int
+    # Whether the module has been started up, and if not, what is missing.
+    ready: bool
+    not_ready: tuple[str, ...]
 
 
 # ------------------------------------------------------------------ #
@@ -253,8 +261,11 @@ class TrackControllerSnapshot:
 class TrackController(Protocol):
     """The wayside controllers of one line, stepped by the harness.
 
-    Constructed with no arguments; track is added by loading it from
-    the Track Controller UI.
+    Constructed with no arguments, and not ready. Startup is done from
+    the Track Controller UI: a line is loaded, then a PLC program is
+    committed to every wayside. The module is ``ready`` only when both
+    are done, and until then every wayside drives its fail-safe outputs
+    whatever the inputs say.
     """
 
     def step(

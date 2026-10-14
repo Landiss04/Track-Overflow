@@ -14,6 +14,7 @@ anything on the track that they have not just watched execute.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,16 +24,19 @@ from track_ctrl.controller import TrackController, default_program_source
 from track_ctrl.plc import SEVERITY_ERROR, compile_program, has_errors
 from track_ctrl.display import mps_to_mph
 from track_ctrl.models import BlockListModel, list_property
+from track_ctrl.interface import (
+    TrackControllerInputs,
+    TrackControllerOutputs,
+)
 from track_ctrl.layout import (
     LayoutError,
+    build_default_system,
     build_line,
     default_layout_dir,
     load_layout_file,
 )
+from track_ctrl.module import SwTrackController, clock_text
 from track_ctrl.stimulus import output_rows, suggestion_rows
-from track_ctrl.system import TrackControllerSystem
-from utils.clock_driver import ClockDriver
-from utils.system_clock import SystemClock
 
 #: How often the views are refreshed while the clock runs, in ms.
 UI_REFRESH_MS = 200
@@ -53,34 +57,25 @@ class TrackControllerState(QObject):
     tabChanged = Signal()
     externalChanged = Signal()
 
-    def __init__(
-        self,
-        parent: QObject | None = None,
-        clock: SystemClock | None = None,
-    ) -> None:
+    def __init__(self, parent: QObject | None = None) -> None:
         """Build the module's UI state.
 
-        ``clock`` is the system's shared ``SystemClock``. Integrated,
-        the central harness owns it and passes it in (D017); this
-        object only listens to its ticks. Run standalone with no clock,
-        it creates one and drives it in real time itself, because
-        nothing else would.
+        The module has no clock and no world of its own. Whatever drives
+        it, the central harness or the test UI, calls :meth:`step` once
+        per tick of the shared clock (D017), with the tick's inputs.
+        Until the first tick every wayside idles at its starter program.
         """
         super().__init__(parent)
-        # The clock comes first so the starter programs committed while
-        # the system is built are stamped in simulated time.
-        self._sim_clock = clock if clock is not None else SystemClock()
-        self._system = TrackControllerSystem(
-            time_text=self._sim_clock.format_time_of_day()
-        )
+        self._system = SwTrackController()
+        for line in build_default_system():
+            self._system.load_track(line)
 
-        self._driver: ClockDriver | None = None
-        self._sim_clock.add_tick_listener(self._on_tick)
-        self._sim_clock.add_state_listener(self.clockChanged.emit)
-        if clock is None:
-            self._driver = ClockDriver(self._sim_clock, self)
-            self._driver.start()
-            self._sim_clock.resume()
+        #: Only for the header badges: whether the sender's clock is held
+        #: and how fast it runs. The clock is not this module's.
+        self._clock_paused = True
+        self._clock_speed = 1
+        #: Whether a test UI or harness is connected to drive the module.
+        self._driven = False
 
         first_line = self._system.lines[0]
         self._line_name = first_line.name
@@ -133,7 +128,11 @@ class TrackControllerState(QObject):
 
     def _stamp(self) -> str:
         # Simulated time, so the terminal agrees with the header clock.
-        return self._sim_clock.format_time_of_day()
+        # Before the first tick there is none, so wall time stands in.
+        time_s = self._system.time_s
+        if time_s is None:
+            return datetime.now().strftime("%H:%M:%S")
+        return clock_text(time_s)
 
     def _load_buffer_from_controller(self) -> None:
         """Open the committed program of the selected controller."""
@@ -155,11 +154,61 @@ class TrackControllerState(QObject):
             f"(iteration #{controller.iteration})"
         )
 
-    def _on_tick(self, sim_time_s: float, tick_s: float) -> None:
-        # One tick of the shared clock: scan every controller once.
-        self._system.time_text = self._sim_clock.format_time_of_day()
-        self._system.tick(tick_s)
+    def step(
+        self, dt: float, inputs: TrackControllerInputs
+    ) -> TrackControllerOutputs:
+        """Run one tick of the module, and mark the views for a refresh.
+
+        This is the call the central harness makes. The views are
+        refreshed at a steady rate rather than on every tick; see
+        ``_flush``.
+        """
+        outputs = self._system.step(dt, inputs)
         self._dirty = True
+        return outputs
+
+    # --- startup ------------------------------------------------------
+
+    @Property(bool, notify=controllerChanged)
+    def ready(self) -> bool:
+        """Whether startup is done: a line is loaded, every wayside programmed.
+
+        Until it is, the whole module drives its fail-safe outputs and
+        tells the CTC Office it is not ready.
+        """
+        return self._system.ready
+
+    @Property(str, notify=controllerChanged)
+    def notReadyReason(self) -> str:
+        """What startup still needs, for the header; empty when ready."""
+        reasons = self._system.not_ready_reasons()
+        if not reasons:
+            return ""
+        more = len(reasons) - 1
+        return reasons[0] + (f" (and {more} more)" if more else "")
+
+    @Slot()
+    def loadStarterPrograms(self) -> None:
+        """Commit a generated starter program to every wayside without one."""
+        loaded = self._system.load_starter_programs()
+        if not loaded:
+            return
+        self._log(
+            f"[{self._stamp()}] starter programs loaded on "
+            f"{len(loaded)} wayside(s)"
+        )
+        if self._controller_id in loaded:
+            self._load_buffer_from_controller()
+            self.bufferChanged.emit()
+        self.terminalChanged.emit()
+        self.selectionChanged.emit()
+        self.controllerChanged.emit()
+
+    def set_clock_status(self, paused: bool, speed: int) -> None:
+        """Note the sender's clock state, for the header badges."""
+        self._clock_paused = paused
+        self._clock_speed = speed
+        self.clockChanged.emit()
 
     def _flush(self) -> None:
         if not self._dirty:
@@ -170,25 +219,21 @@ class TrackControllerState(QObject):
 
     # --- clock and selection -----------------------------------------
 
-    @property
-    def simulation_clock(self) -> SystemClock:
-        """The shared clock this module runs on (not QML)."""
-        return self._sim_clock
-
     @Property(str, notify=clockChanged)
     def clock(self) -> str:
-        """Simulated time of day, 24-hour ``HH:MM:SS`` (D017)."""
-        return self._sim_clock.format_time_of_day()
+        """Simulated time of day of the last tick, ``HH:MM:SS`` (D017)."""
+        time_s = self._system.time_s
+        return "--:--:--" if time_s is None else clock_text(time_s)
 
     @Property(bool, notify=clockChanged)
     def clockPaused(self) -> bool:
         """Whether the shared clock is held."""
-        return self._sim_clock.is_paused
+        return self._clock_paused
 
     @Property(int, notify=clockChanged)
     def clockSpeed(self) -> int:
         """The shared clock's speed: 1 or 10."""
-        return self._sim_clock.speed
+        return self._clock_speed
 
     @list_property(selectionChanged)
     def lines(self) -> list[dict[str, Any]]:
@@ -818,7 +863,7 @@ class TrackControllerState(QObject):
     # --- tabs, test link and remote stimulus ---------------------------
 
     @property
-    def system(self) -> TrackControllerSystem:
+    def system(self) -> SwTrackController:
         """The wayside network, for the stimulus layer (not QML)."""
         return self._system
 
@@ -839,31 +884,21 @@ class TrackControllerState(QObject):
 
     @Property(bool, notify=externalChanged)
     def externalControl(self) -> bool:
-        """Whether a test UI controls CTC inputs and occupancy overrides."""
-        return self._system.external_control
+        """Whether a test UI or harness is connected and driving ticks."""
+        return self._driven
 
     def set_external_control(self, active: bool) -> None:
-        """Hand the physical inputs to a test UI, or take them back.
-
-        Stand-in trains keep moving. Only explicitly edited occupancy
-        and CTC suggestions are protected from the stand-in updates.
-        """
-        if self._system.external_control == active:
+        """Note that a test UI has connected or left."""
+        if self._driven == active:
             return
-        self._system.external_control = active
-        if active:
-            note = "test UI connected: simulation continues with test inputs"
-        else:
-            # Return CTC suggestions and edited occupancy to the stand-in,
-            # including while paused; simulated time does not advance.
-            self._system.set_maintenance(False)
-            self._system.tick(0.0)
-            note = "test UI disconnected: occupancy overrides released"
+        self._driven = active
+        note = (
+            "test UI connected: it supplies the clock and the world"
+            if active else "test UI disconnected: the controller idles"
+        )
         self._log(f"[{self._stamp()}] {note}")
         self.externalChanged.emit()
-        self.maintenanceChanged.emit()
         self.terminalChanged.emit()
-        self.controllerChanged.emit()
 
     def notify_external_change(self, log_line: str | None = None) -> None:
         """Tell the views that inputs changed from outside the UI."""
@@ -922,7 +957,7 @@ class TrackControllerState(QObject):
             return str(error)
 
         replacing = self._system.controllers_for(line.name)
-        removed = self._system.load_line(line)
+        removed = self._system.load_track(line)
         # The programmer is looking at what they just loaded.
         self._line_name = line.name
         self._controller_id = line.controllers[0].controller_id

@@ -321,6 +321,7 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
     """One tick of outputs as JSON-ready data."""
     model = outputs.track_model
     return {
+        "ready": outputs.ready,
         "track_model": {
             "track_circuits": _map_to_wire(
                 model.track_circuits, _circuit_to_wire
@@ -335,13 +336,14 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
 
 def outputs_from_wire(value: Any) -> TrackControllerOutputs:
     """Read one tick of outputs, rejecting anything not exactly right."""
-    top = _object(value, "outputs", {"track_model", "ctc_reports"})
+    top = _object(value, "outputs", {"ready", "track_model", "ctc_reports"})
     model = _object(
         top["track_model"], "outputs.track_model",
         {"track_circuits", "switch_commands", "crossing_commands",
          "signal_commands"},
     )
     return TrackControllerOutputs(
+        ready=_flag(top["ready"], "outputs.ready"),
         track_model=TrackModelOutputs(
             track_circuits=_map_from_wire(
                 model["track_circuits"],
@@ -379,6 +381,8 @@ def snapshot_to_wire(snapshot: TrackControllerSnapshot) -> dict[str, Any]:
         "maintenance_mode": snapshot.maintenance_mode,
         "time_s": snapshot.time_s,
         "ticks": snapshot.ticks,
+        "ready": snapshot.ready,
+        "not_ready": list(snapshot.not_ready),
         "waysides": [
             {
                 "wayside_id": each.wayside_id,

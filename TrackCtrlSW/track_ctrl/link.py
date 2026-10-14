@@ -1,16 +1,22 @@
-"""Local server that lets a separate test UI stimulate this controller.
+"""Local server that lets a separate test UI drive this controller.
 
 The Track Controller UI listens on a named pipe; the test UI connects to
 it as its own process. Nothing here is a network socket: a named pipe is
 reachable only from the same machine and the same user, which keeps the
 module inside REQ-DSN-003 (no network connections required).
 
-Framing is one JSON object per line. Every request is answered with an
-``ack`` or an ``error``, and a full ``snapshot`` is pushed to every
-client whenever anything the test UI displays has changed.
+Framing is one JSON object per line. A ``step`` is answered with the
+module's ``outputs`` and every other request with an ``ack``; anything
+refused gets an ``error``. A full ``snapshot`` is pushed whenever
+anything the test UI displays has changed.
 
-The vocabulary itself lives in :mod:`track_ctrl.stimulus`; this module
-only moves bytes and keeps the "who owns the inputs" flag honest.
+One test UI at a time: it plays the whole world, so a second would step
+the module with a different one. A second connection is told ``busy``
+and closed.
+
+The programmer-side vocabulary lives in :mod:`track_ctrl.stimulus` and
+the boundary's JSON in :mod:`track_ctrl.wire`; this module only moves
+bytes.
 """
 
 from __future__ import annotations
@@ -22,12 +28,12 @@ import shiboken6
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
+from track_ctrl import wire
+from track_ctrl.errors import TrackControllerError
 from track_ctrl.state import TrackControllerState
 from track_ctrl.stimulus import (
     SERVER_NAME,
     StimulusError,
-    apply_clock,
-    apply_physical,
     apply_user,
     build_snapshot,
 )
@@ -60,6 +66,13 @@ class _PipeServer(QLocalServer):
             self.clientConnected.emit(socket)
         else:
             socket.deleteLater()
+
+
+def _number(message: dict[str, Any], key: str) -> float:
+    value = message.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise StimulusError(f"'{key}' must be a number")
+    return float(value)
 
 
 class StimulusServer(QObject):
@@ -137,6 +150,11 @@ class StimulusServer(QObject):
     # --- connections --------------------------------------------------
 
     def _accept(self, socket: QLocalSocket) -> None:
+        if self._buffers:
+            self._send(socket, {"type": "busy"})
+            socket.disconnectFromServer()
+            socket.deleteLater()
+            return
         self._buffers[socket] = bytearray()
         socket.readyRead.connect(lambda s=socket: self._on_ready(s))
         socket.disconnected.connect(lambda s=socket: self._on_gone(s))
@@ -151,7 +169,6 @@ class StimulusServer(QObject):
         self._buffers.pop(socket, None)
         if shiboken6.isValid(socket):
             socket.deleteLater()
-        # The last test UI leaving hands the inputs back to the stand-in.
         self._state.set_external_control(bool(self._buffers))
 
     def _on_ready(self, socket: QLocalSocket) -> None:
@@ -186,18 +203,34 @@ class StimulusServer(QObject):
             request_id = message.get("id")
             kind = message.get("type")
 
-            if kind == "physical":
-                note = apply_physical(self._state.system, message)
-                self._state.notify_external_change(note)
-            elif kind == "user":
+            if kind == "step":
+                outputs = self._state.step(
+                    _number(message, "dt"),
+                    wire.inputs_from_wire(message.get("inputs")),
+                )
+                self._send(socket, {
+                    "type": "outputs",
+                    "id": request_id,
+                    "outputs": wire.outputs_to_wire(outputs),
+                })
+                self._schedule_push()
+                return
+            if kind == "user":
                 note = apply_user(self._state, message)
             elif kind == "clock":
-                note = apply_clock(self._state.simulation_clock, message)
+                paused = message.get("paused")
+                speed = message.get("speed")
+                if not isinstance(paused, bool) or speed not in (1, 10):
+                    raise StimulusError(
+                        "'paused' must be true or false and 'speed' 1 or 10"
+                    )
+                self._state.set_clock_status(paused, speed)
+                note = ""
             elif kind == "hello":
                 note = "hello"
             else:
                 raise StimulusError(f"unknown message type: {kind!r}")
-        except (StimulusError, ValueError) as error:
+        except (StimulusError, TrackControllerError, ValueError) as error:
             self._send(
                 socket,
                 {"type": "error", "id": request_id, "message": str(error)},
