@@ -14,6 +14,9 @@ Rectangle {
     property bool faulted: false
     property var navigationEntries: []
     property int currentNavigationIndex: -1
+    // Module-specific controls placed right after the status badges,
+    // such as the Train Model's train selector. Empty for most modules.
+    property alias statusExtras: statusExtrasRow.data
     signal navigationActivated(int index)
 
     implicitHeight: theme.control_h_lg + 2 * theme.space_3
@@ -59,6 +62,16 @@ Rectangle {
             label: "E-brake"
             variant: "fault"
             visible: root.faulted
+        }
+
+        RowLayout {
+            id: statusExtrasRow
+
+            Layout.alignment: Qt.AlignVCenter
+            // Never grows into the open middle of the header.
+            Layout.fillWidth: false
+            spacing: theme.space_2
+            visible: children.length > 0
         }
 
         RowLayout {

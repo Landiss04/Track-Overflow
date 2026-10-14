@@ -18,9 +18,9 @@ from PySide6.QtTest import QTest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / "TrainModel")]
 
+from train_model.fleet import TrainModelFleet  # noqa: E402
 from train_model.harness import TestHarnessState  # noqa: E402
 from train_model.link import LocalLink  # noqa: E402
-from train_model.state import TrainModelState  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
 # A minus sign on a number that is all zeros: "-0", "-0.0", "-0.00 ft".
@@ -35,10 +35,11 @@ def walk(item):
 
 def main():
     app = QGuiApplication([])
-    state = TrainModelState()
+    fleet = TrainModelFleet()
+    state = fleet.add("T-1", "Blue")
     harness = TestHarnessState(LocalLink(state))
     engine = QQmlApplicationEngine()
-    for name, value in [("theme", build_theme()), ("trainModel", state)]:
+    for name, value in [("theme", build_theme()), ("fleet", fleet)]:
         engine.rootContext().setContextProperty(name, value)
     engine.load(QUrl.fromLocalFile(str(ROOT / "TrainModel/ui/Main.qml")))
     window = engine.rootObjects()[0]
