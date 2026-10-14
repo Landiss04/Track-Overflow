@@ -8,7 +8,9 @@ import "../../ui"
 ScaledWindow {
     id: window
 
-    readonly property var snapshot: trainModel.snapshot
+    // The selected train; an idle stand-in while the fleet is empty.
+    readonly property var trainModel: fleet.current
+    readonly property var snapshot: window.trainModel.snapshot
 
     title: qsTr("Train Model")
 
@@ -26,10 +28,30 @@ ScaledWindow {
             instance: window.snapshot.train_id
             // Running while steps arrive, from the test UI or, once
             // integrated, the central harness.
-            mode: trainModel.running ? qsTr("Running") : qsTr("Paused")
+            mode: window.trainModel.running ? qsTr("Running") : qsTr("Paused")
             line: window.snapshot.line
             clock: window.snapshot.clock
             faulted: window.snapshot.emergency_brake
+
+            // Which train the window shows, right after the badges. The
+            // header's open middle is reserved for advertisements.
+            statusExtras: SelectField {
+                objectName: "trainSelector"
+                Layout.preferredWidth: 240
+                Layout.fillWidth: false
+                label: qsTr("Train")
+                labelVisible: false
+                enabled: fleet.count > 0
+                model: fleet.count > 0
+                    ? fleet.trains
+                    : [{"id": "", "label": qsTr("No trains")}]
+                textRole: "label"
+                valueRole: "id"
+                currentIndex: Math.max(fleet.selectedIndex, 0)
+                onCommitted: function (value) {
+                    fleet.selectTrain(value);
+                }
+            }
         }
 
         // This fills the fixed reference canvas; the canvas transform
@@ -37,6 +59,7 @@ ScaledWindow {
         // test UI is a separate window in its own process (test_ui.py).
         MainView {
             Layout.fillWidth: true
+            trainModel: window.trainModel
             Layout.fillHeight: true
         }
     }

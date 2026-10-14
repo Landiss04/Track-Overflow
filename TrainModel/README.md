@@ -112,8 +112,10 @@ so it starts its clock, track, limiter and dwell fresh as well, keeping any
 edits not yet sent.
 
 QML owns all visuals; Python owns state. The two talk through QML context
-properties: `theme` and `trainModel` in the Train Model window, `theme` and
-`harness` in the test UI.
+properties: `theme` and `fleet` in the Train Model window, `theme` and
+`harness` in the test UI. The fleet holds one `TrainModelState` per train;
+the window shows the train picked in its header selector. Standalone,
+`main.py` runs a one-train fleet (`T-1`) for the test UI to drive.
 
 See [open issues](docs/open-issues.md) for speed-control ownership and
 vehicle calibration.
@@ -227,15 +229,16 @@ PySide6 ships its own type stubs, so no local stubs are needed.
 ## Layout
 
 ```
-main.py                 Train Model process: state, link server, Main.qml
+main.py                 Train Model process: one-train fleet, link server, Main.qml
 test_ui.py              test UI process: link client, harness, TestMain.qml
 train_model/app.py      shared bootstrap: theme, font, QML engine, scaling
 train_model/link.py     test UI link: wire format, server, socket client
 train_model/state.py    TrainModelState — page 3a bindable values + slots
+train_model/fleet.py    TrainModelFleet — one TrainModelState per train, by ID
 train_model/harness.py  TestHarnessState — page 3b inputs/outputs/run control
 train_model/track_stub.py  test UI stand-in Track Model (Blue Line)
 train_model/speed_limiter.py  test UI stand-in Train Controller speed limiter
-ui/Main.qml             Train Model window shell around page 3a
+ui/Main.qml             Train Model window shell, train selector, page 3a
 ui/TestMain.qml         test UI window shell around page 3b
 ui/MainView.qml         page 3a
 ui/TestView.qml         page 3b
@@ -336,6 +339,7 @@ Controller command from the test UI, or a pull) and while a pull is latched.
 - The test UI shows no onboard passenger count: it is not a cross-module
   output. The Train Model window shows it; the test UI shows the remaining
   `passenger_capacity`.
-- Both pages display speed in mph, distance/elevation in feet, temperature
-  in Fahrenheit, and power in kW. Grade remains in degrees. Test editors
+- Both pages display speed in mph, distance in feet, temperature in
+  Fahrenheit, and power in kW. Grade remains in degrees. Elevation is not
+  shown in the Train Model window; the test UI's elevation input is in feet. Test editors
   convert back to backend units before staging commands; model state remains SI.
