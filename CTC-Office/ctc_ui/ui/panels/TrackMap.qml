@@ -27,7 +27,7 @@ Item {
     property var blockStates: ({})
     // Trains placed by TrackMapModel.placeTrains:
     // [{ train, line, x, y, angle }]. An empty ID is an occupied block
-    // with no train reported on it.
+    // with no train followed in it (another train, or a failure).
     property var trains: []
     // "Line:crossing" -> inactive | active, as reported.
     property var crossingStates: ({})

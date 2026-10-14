@@ -95,8 +95,8 @@ Panel {
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            label: qsTr("Suggested speed limit")
-            value: root.train.speedLimit || "—"
+            label: qsTr("Suggested speed")
+            value: root.train.suggestedSpeed || "—"
             unit: "mph"
         }
         TelemetryReadout {

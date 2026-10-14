@@ -1,7 +1,7 @@
-// Blocks closed by the dispatcher, blocks waiting to close until the
-// train in them leaves, and blocks the Track Controller reports failed.
-// A closed block can be reopened and a pending closure cancelled here; a
-// failure clears only when the Track Controller stops reporting it.
+// Blocks closed by the dispatcher, and blocks waiting to close until the
+// train in them leaves. A closed block can be reopened and a pending
+// closure cancelled here. (Failures are not listed: the CTC sees one only
+// as an occupied block.)
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -64,9 +64,6 @@ Panel {
             Layout.fillWidth: true
             color: root.message !== "" ? theme.danger : theme.text_muted
             text: root.message !== "" ? root.message
-                : root.selectedRow && !root.selectedRow.reopenable
-                ? qsTr("Failures clear when the Track Controller stops "
-                    + "reporting them.")
                 : root.selectedRow && root.selectedRow.pending
                 ? qsTr("Closes by itself once the train has left the "
                     + "block.")

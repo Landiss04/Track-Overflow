@@ -20,7 +20,6 @@ from ctc.interface import (  # noqa: E402
     CtcInputs,
     TrackControllerInputs,
     TrackModelInputs,
-    TrainReport,
 )
 from ctc.model import (  # noqa: E402
     MAX_TICKETS,
@@ -40,9 +39,9 @@ DT_S = 0.1
 HUGE = 10**400       # an int too big for a float
 
 
-def _trains(*trains: Any) -> CtcInputs:
+def _occupancy(*blocks: Any) -> CtcInputs:
     return CtcInputs(track_controller=TrackControllerInputs(
-        trains=trains))  # type: ignore[arg-type]
+        occupancy=blocks))  # type: ignore[arg-type]
 
 
 class NumberTest(unittest.TestCase):
@@ -51,11 +50,6 @@ class NumberTest(unittest.TestCase):
         ctc = StubCtcOffice()
         with self.assertRaises(InvalidTimeStepError):
             ctc.step(HUGE, CtcInputs())
-        for offset, speed in ((HUGE, 0.0), (0.0, HUGE)):
-            with self.subTest(offset=offset, speed=speed), \
-                    self.assertRaises(InvalidInputError):
-                ctc.step(DT_S, _trains(
-                    TrainReport("T1", "Green", "5", offset, speed)))
         with self.assertRaises(InvalidInputError):
             apply_action(ctc, "dispatch", {
                 "train_id": "T1", "line": "Green",
@@ -86,11 +80,11 @@ class ShapeTest(unittest.TestCase):
     def test_wrong_types_are_rejected(self) -> None:
         ctc = StubCtcOffice()
         before = ctc.snapshot()
-        for bad in (None, {}, _trains(None), _trains("abc"),
+        for bad in (None, {}, _occupancy(None), _occupancy("abc"),
                     CtcInputs(track_controller=TrackControllerInputs(
-                        trains="abc")),  # type: ignore[arg-type]
+                        occupancy="abc")),  # type: ignore[arg-type]
                     CtcInputs(track_controller=TrackControllerInputs(
-                        trains=(t for t in ())))):  # type: ignore
+                        occupancy=(b for b in ())))):  # type: ignore
             with self.subTest(inputs=bad):
                 for call in (ctc.validate_inputs, ctc.stage_inputs,
                              lambda i: ctc.step(DT_S, i)):
@@ -100,22 +94,15 @@ class ShapeTest(unittest.TestCase):
 
     def test_lists_are_taken_as_tuples(self) -> None:
         ctc = StubCtcOffice()
-        listed = [TrainReport("T1", "Green", "5", 0.0, 0.0)]
+        listed = [BlockOccupancy("Green", "5", True)]
         ctc.step(DT_S, CtcInputs(track_controller=TrackControllerInputs(
-            trains=listed)))  # type: ignore[arg-type]
+            occupancy=listed)))  # type: ignore[arg-type]
         inputs = ctc.snapshot().inputs
         assert inputs is not None
-        self.assertIsInstance(inputs.track_controller.trains, tuple)
+        self.assertIsInstance(inputs.track_controller.occupancy, tuple)
 
 
 class ReportTest(unittest.TestCase):
-
-    def test_an_empty_block_with_a_train_in_it_is_rejected(self) -> None:
-        ctc = StubCtcOffice()
-        with self.assertRaisesRegex(InvalidInputError, "unoccupied"):
-            ctc.step(DT_S, CtcInputs(track_controller=TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "5", 0.0, 0.0),),
-                occupancy=(BlockOccupancy("Green", "5", False),))))
 
     def test_train_ids(self) -> None:
         ctc = StubCtcOffice()
@@ -124,8 +111,7 @@ class ReportTest(unittest.TestCase):
                 with self.assertRaises(InvalidInputError):
                     ctc.dispatch(bad, "Green", "5")
                 with self.assertRaises(InvalidInputError):
-                    ctc.step(DT_S, _trains(
-                        TrainReport(bad, "Green", "5", 0.0, 0.0)))
+                    ctc.place_train(bad, "Green", "5")
         # Printable text of any script is fine.
         ctc.dispatch("T" * MAX_TRAIN_ID_LENGTH, "Green", "5")
         ctc.dispatch("Tram 🚆", "Green", "6")

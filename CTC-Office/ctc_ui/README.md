@@ -20,10 +20,13 @@ python -m ctc_ui
 ### Test UI
 
 The test harness is a separate process with its own window. It stands
-in for the Track Controller and the Track Model (the two modules the CTC
-exchanges data with) and for dispatcher actions the CTC UI does not have
-yet. Start the CTC Office first, then from a second terminal, also in
-`CTC-Office`:
+in for the Track Controller: its only inputs are what the Track
+Controller sends the CTC (occupied blocks, switch states, crossing
+states). Everything the CTC itself decides (dispatching, closing blocks,
+setting switches, the operating mode and the clock speed) is done in the
+CTC window, as a dispatcher would. Ticket sales come from the Track
+Model, so the test UI does not force them either. Start the CTC Office
+first, then from a second terminal, also in `CTC-Office`:
 
 ```bash
 python ctc_ui/test_ui.py        # or: python -m ctc_ui.test_ui
@@ -36,49 +39,53 @@ Office answers). Only one CTC Office runs at a time: a second one prints
 "A CTC Office is already running" and exits. The two windows drive each
 other:
 
-- **Send** replaces the Track Controller and Track Model inputs. The CTC
+- **Send** replaces the Track Controller inputs. The CTC
   window's simulation clock steps the module with them on every tick
   while it runs (Run / Pause, 1× / 10×). While the clock is paused they
   are staged: nothing changes until it runs, the CTC window keeps showing
   the last applied reports with a "staged" notice, but the safety checks
-  already use them. Once applied the CTC window shows them: trains,
-  closed and failed blocks and active crossings on the track map, trains
-  in the occupancy window, reported switch positions in Maintenance.
-  Ticket sales are per station, as the Track Model reports them
-  (`{station name: tickets}`): add a row per station that sold tickets.
-  They count tickets sold since the previous tick, so each Send's sales
-  are counted once (a second Send before the next tick replaces the
-  first). Throughput per line is the sum over the line's stations.
-- Send is all or nothing: if any part is rejected (an unknown block, two
-  trains in one block, an unsafe order, a switch outside maintenance
-  mode), nothing of it is applied and the status line says why. The
-  inputs are applied before the dispatcher rows, so an order into a
-  block failed in the same Send is refused.
-- The **dispatcher rows** (orders, closed blocks, switch commands)
-  follow what the CTC window does until you edit one; Send then makes
-  the module match every edited row, so either window can override the
-  other.
+  already use them. Once applied the CTC window shows them: occupied
+  blocks, closed blocks and active crossings on the track map, trains in
+  the occupancy window, reported switch positions in Maintenance.
+- The Track Controller reports only which blocks are occupied: no train
+  IDs or speeds, and a failed block looks like any other occupied block.
+  The CTC follows its own trains from that (`ctc/tracking.py`). A train
+  dispatched on a line leaves the yard when the line's yard exit block
+  (Green 63, Red 9) becomes occupied, the one most behind schedule
+  first. It moves on when the next block of its route becomes occupied,
+  if its authority lets it in and it could have got there at the speeds
+  suggested to it, and holds both blocks until the one behind clears. A
+  block occupied too soon, or that no train explains, is taken for a
+  failure: trains are kept out of it, but it is shown only as occupied.
+  A train whose blocks all clear, outside the yard, is dropped quietly
+  ("Not located"); its order stays. So to move a train, run the CTC
+  window's clock, add its next block and Send, then remove the block
+  behind it and Send. Standalone, each Send is only 0.1 s, too soon for
+  any train to move.
+- Send is all or nothing: if the inputs are rejected (an unknown block,
+  a switch reported in two positions), none of them is applied and the
+  status line says why.
 - If the CTC window restarts, the test UI reconnects by itself and sends
-  its inputs again (not the dispatcher rows).
-- **Outputs** update live from the module, in display units (mph, ft).
-  Maintenance mode and clock speedup are owned by the CTC window (its
-  operating mode and clock speed), so the test UI shows them in Outputs
-  only; with `--standalone` both are dispatcher rows and Send steps one
-  0.1 s tick.
+  its inputs again.
+- **Outputs** update live from the module, in display units (mph): what
+  the CTC sends the Track Controller (suggested speed and authority per
+  train, closed blocks, switch commands) and the central harness (clock
+  speedup), so the effect of each action taken in the CTC window shows
+  here.
 - Errors (an unknown block, a switch outside maintenance mode) show in
   the status line of the window where the action was taken.
 
-List rows (occupied blocks, train reports, switch and crossing states,
-failures, dispatch orders, closed blocks, switch commands) are small
+List rows (occupied blocks, switch states, crossing states) are small
 tables: **+ Add** an entry, edit it in place, × to remove it. Each entry
 picks its line first, then a block, switch or crossing on that line from
 the track layout, so there are no IDs to type; block numbers repeat
 across lines, and a switch or crossing is named by the block the layout
-file lists it on. Positions, states and failure kinds are dropdowns; only
-train IDs, offsets, speeds and arrival times are typed.
+file lists it on. Positions and states are dropdowns too: nothing is
+typed.
 
-To test the CTC module without the window, run the test UI with its own
-in-process module instead:
+To check the CTC module's input handling without the window, run the
+test UI with its own in-process module instead (with no window there is
+no dispatcher, so no train is ever dispatched):
 
 ```bash
 python ctc_ui/test_ui.py --standalone
@@ -111,19 +118,23 @@ yet) through `ctc_ui/ctc_host.py`:
   dispatcher reopens it.
 - **Notices** under the header tell the dispatcher about a Track
   Controller update staged while the clock is paused, and about orders
-  the CTC cancelled itself (a block closed, closing or failed).
+  the CTC cancelled itself (a block closed or closing).
   **Dismiss** clears the cancellations.
 - The **Track view** colors each line (`--line-green`, `--line-red`) and
-  draws each train as a small `--info` car on the track at its reported
-  position, turned to follow the track and tagged with its ID; a block
-  reported occupied with no train on it gets an untagged car. Closed
-  (`--warning`) and failed (`--danger`) blocks are drawn heavy, with a
-  halo (style guide 4.6, 6.4). An active crossing fills `--warning`.
+  draws each train the CTC is following as a small `--info` car in the
+  middle of its head block (where in the block is not known), turned to
+  follow the track and tagged with its ID; any other occupied block (an
+  inferred failure among them) gets an untagged car. Closed
+  (`--warning`) blocks are drawn heavy, with a halo (style guide 4.6,
+  6.4). An active crossing fills `--warning`.
   **+** and **−** zoom in steps of 1.25× (up to 4×); zoomed in, drag the
   map to pan. **Fit** shows the whole map again.
-- **Train occupancy** lists every train the Track Controller reports or
-  the dispatcher has ordered, with block, speed (mph), authority (blocks
-  ahead, and the block it ends at), destination and requested arrival. Filter by line, status or train ID;
+- **Train occupancy** lists every train the CTC is following or the
+  dispatcher has ordered, with block (both, while it crosses into the
+  next), suggested speed (mph; its actual speed is never known),
+  authority (blocks ahead, and the block it ends at), destination,
+  requested arrival and status (En route, In yard, Not located, No
+  order). Filter by line, status or train ID;
   click a row and **Select train** to load it into Selected train.
   "Keep open at bottom" or the minimize button docks it over the track
   view. Escape, the close button, or clicking the scrim closes it.
@@ -140,21 +151,23 @@ yet) through `ctc_ui/ctc_host.py`:
   block (with a confirmation step, style guide 7) and reopen it. A block
   with a train in it is listed as "Closing — train in block" and closes
   by itself once the train has left; **Cancel closing** withdraws it.
-  Failed blocks are listed too; they clear when the Track Controller
-  stops reporting them.
 - Dropdowns show only what the dispatcher picked: choosing a line never
   pre-selects a block, station or switch, so no action is enabled with a
   value nobody chose.
 - **Safety rules** the CTC enforces (refused with a message): no
   authority into a closed, closing or failed block; no train sent to a
   block on another line than the one it is on; no switch moved while its
-  block is occupied; one train per block. Orders into a block that
-  closes, starts closing or fails are cancelled, with a notice.
+  block is occupied. Orders into a block that closes or starts closing
+  are cancelled, with a notice. An order into a block the CTC takes for
+  a failure is kept, since it never shows one: the train waits short of
+  it until it clears.
 - **Authority** is the number of blocks ahead of the train's current
   block it may still enter (0: stop before leaving it), recomputed every
   step. It runs toward the destination and stops before the first
-  occupied, closed, closing or failed block, and before any switch the
-  Track Controller has not reported set for the route.
+  occupied (failed ones included), closed or closing block, and before
+  any switch the Track Controller has not reported set for the route.
+  Routes go round failed and closed blocks where the detour is short
+  enough.
 - **Set switch position** (Maintenance) shows each switch's two
   connections (normal is the first listed in the layout file), the
   position the Track Controller reports and the one the CTC commands, and
@@ -263,10 +276,13 @@ the context-property pattern shared with the Train Model UI.
   It checks every reference and value against the track layout files
   and the boundary types, enforces the safety rules above, accepts
   switch commands and block closures only in maintenance mode, and gives
-  each dispatched train on the track an authority counted in blocks
-  (above) and a suggested speed 1 m/s under its current block's speed
-  limit (whole m/s, rounded down). A train not yet on the track (the yard is a black
-  box) gets neither until it is reported.
+  each dispatched train it is following an authority counted in blocks
+  (above) and a suggested speed 1 m/s under its head block's speed limit
+  (whole m/s, rounded down), lower if it needs to stop within its
+  authority. A train still in the yard (a black box) gets neither until
+  it leaves.
+- `ctc/tracking.py` follows the trains from block occupancy, and infers
+  which occupied blocks have failed (above).
 - `ctc/routing.py` reads how blocks connect from the layout files
   (neighbouring blocks, and each switch's normal and reverse
   connections; the yard is left out) and counts authority along the
@@ -277,8 +293,8 @@ the context-property pattern shared with the Train Model UI.
   reasonable detour exists; when only reversing would get round, the
   train waits and the dispatcher gets a reversal alert.
 - `ctc/actions.py` runs dispatcher actions sent by name over a link,
-  with strict argument types, and applies a test UI Send all or nothing
-  (tried on a copy of the module first).
+  with strict argument types, and can apply inputs and actions as one
+  batch, all or nothing (tried on a copy of the module first).
 - The CTC window hosts the module (`ctc_ui/ctc_host.py`) and serves it
   over `ctc/socket_link.py`: a Qt local socket (a named pipe on Windows,
   never a network connection) carrying one JSON message per line. The

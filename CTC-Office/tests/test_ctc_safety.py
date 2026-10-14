@@ -21,10 +21,7 @@ from ctc.interface import (  # noqa: E402
     CtcInputs,
     SwitchReport,
     TrackControllerInputs,
-    TrackFailureReport,
-    TrainReport,
 )
-from ctc.link import LocalLink  # noqa: E402
 from ctc.model import (  # noqa: E402
     InvalidInputError,
     InvalidTimeStepError,
@@ -35,15 +32,9 @@ from ctc.model import (  # noqa: E402
 from ctc.schedule import parse_schedule  # noqa: E402
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc.wire import WireFormatError, inputs_from_wire  # noqa: E402
-from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
+from tests.occupancy import DT_S, at, step_at  # noqa: E402
 
-DT_S = 0.1
 _GREEN = load_layout()["Green"]
-
-
-def _report(*trains: TrainReport, occupancy=(), failures=()) -> CtcInputs:
-    return CtcInputs(track_controller=TrackControllerInputs(
-        trains=trains, occupancy=occupancy, failures=failures))
 
 
 def _maintenance() -> StubCtcOffice:
@@ -54,7 +45,9 @@ def _maintenance() -> StubCtcOffice:
 
 class AuthoritySafetyTest(unittest.TestCase):
     """No authority into a closed, closing or failed block, or onto
-    another line than the train's own."""
+    another line than the train's own. A failed block is one the CTC
+    infers from occupancy, and the UIs never show it as one: an order
+    into it is taken and kept, and the train waits short of it."""
 
     def test_no_authority_into_a_closed_block(self) -> None:
         ctc = _maintenance()
@@ -63,39 +56,29 @@ class AuthoritySafetyTest(unittest.TestCase):
             ctc.dispatch("T1", "Green", "65")
         self.assertEqual(ctc.snapshot().orders, ())
 
-    def test_no_authority_into_a_failed_block(self) -> None:
+    def test_an_order_into_an_inferred_failure_is_kept(self) -> None:
+        # Green 73 occupied with no train in it: a failure.
         ctc = StubCtcOffice()
-        ctc.step(DT_S, _report(failures=(
-            TrackFailureReport("Green", "73", "broken_rail"),)))
-        with self.assertRaisesRegex(UnsafeActionError, "broken rail"):
-            ctc.dispatch("T1", "Green", "73")
-
-    def test_staged_failure_blocks_dispatch_but_cancels_nothing_yet(
-            self) -> None:
-        ctc = StubCtcOffice()
+        step_at(ctc, occupied=[("Green", "73")])
         ctc.dispatch("T1", "Green", "73")
-        ctc.stage_inputs(_report(failures=(
-            TrackFailureReport("Green", "73", "power"),)))
-        # Safety checks use the staged report at once...
-        with self.assertRaises(UnsafeActionError):
-            ctc.dispatch("T2", "Green", "73")
-        # ...but nothing propagates until the next step.
-        self.assertEqual([o.train_id for o in ctc.snapshot().orders],
-                         ["T1"])
-        ctc.step(DT_S, _report(failures=(
-            TrackFailureReport("Green", "73", "power"),)))
+        step_at(ctc, at("T1", "70"), occupied=[("Green", "73")])
         snap = ctc.snapshot()
-        self.assertEqual(snap.orders, ())
-        self.assertEqual(snap.cancelled_orders, (CancelledOrder(
-            "T1", "Green", "73", "track failure: power"),))
+        self.assertEqual([o.train_id for o in snap.orders], ["T1"])
+        self.assertEqual(snap.cancelled_orders, ())
+        (limit,) = snap.authorities
+        self.assertEqual((limit.blocks, limit.reason, limit.at),
+                         (2, "occupied", "73"))
+        # It clears: the train may go on in.
+        step_at(ctc, at("T1", "70"))
+        self.assertEqual(ctc.snapshot().authorities[0].blocks, 3)
 
     def test_no_authority_onto_another_line(self) -> None:
         ctc = StubCtcOffice()
-        ctc.step(DT_S, _report(TrainReport("T5", "Green", "62", 0, 0)))
+        step_at(ctc, at("T5", "62"))
         with self.assertRaisesRegex(UnsafeActionError, "Green line"):
             ctc.dispatch("T5", "Red", "7")
         ctc.dispatch("T5", "Green", "65")
-        # A train not reported anywhere yet may go to either line.
+        # A train not on the track yet may go to either line.
         ctc.dispatch("T9", "Red", "7")
 
 
@@ -106,8 +89,7 @@ class SuggestedSpeedTest(unittest.TestCase):
         ctc = StubCtcOffice()
         ctc.dispatch("T1", "Green", "65")
         # Green 117 is limited to 15 km/h (4.2 m/s): suggest 3 m/s.
-        out = ctc.step(DT_S, _report(TrainReport("T1", "Green", "117", 0,
-                                                 0)))
+        out = step_at(ctc, at("T1", "117"))
         self.assertEqual(out.track_controller.suggestions[0]
                          .suggested_speed_mps, 3)
 
@@ -115,8 +97,7 @@ class SuggestedSpeedTest(unittest.TestCase):
         ctc = StubCtcOffice()
         ctc.dispatch("T1", "Green", "65")
         for block in range(1, 151):
-            report = _report(TrainReport("T1", "Green", str(block), 0, 0))
-            out = ctc.step(DT_S, report)
+            out = step_at(ctc, at("T1", str(block)))
             (suggestion,) = out.track_controller.suggestions
             limit_mps = [b.speed_limit_kmh for b in
                          _GREEN.blocks if b.block_id == str(block)][0] / 3.6
@@ -135,12 +116,12 @@ class SuggestedSpeedTest(unittest.TestCase):
 class SwitchSafetyTest(unittest.TestCase):
 
     def test_no_switch_under_a_train(self) -> None:
-        for occupied in (
-                _report(TrainReport("T1", "Green", "12", 0, 0)),
-                _report(occupancy=(BlockOccupancy("Green", "12", True),))):
-            with self.subTest(occupied=occupied):
+        # A train the CTC follows, or occupancy it cannot explain.
+        for trains, occupied in (((at("T1", "12"),), ()),
+                                 ((), (("Green", "12"),))):
+            with self.subTest(trains=trains):
                 ctc = _maintenance()
-                ctc.step(DT_S, occupied)
+                step_at(ctc, *trains, occupied=occupied)
                 with self.assertRaisesRegex(UnsafeActionError, "occupied"):
                     ctc.set_switch("Green", "12", "reverse")
                 ctc.step(DT_S, CtcInputs())          # the train left
@@ -184,7 +165,7 @@ class ClosureTest(unittest.TestCase):
 
     def test_occupied_block_closes_once_the_train_leaves(self) -> None:
         ctc = _maintenance()
-        ctc.step(DT_S, _report(TrainReport("T1", "Green", "65", 0, 0)))
+        step_at(ctc, at("T1", "65"))
         ctc.dispatch("T2", "Green", "65")
         ctc.set_block_closed("Green", "65", True)
         snap = ctc.snapshot()
@@ -199,10 +180,10 @@ class ClosureTest(unittest.TestCase):
             ctc.dispatch("T3", "Green", "65")
         # Leaving maintenance keeps the pending closure.
         ctc.set_maintenance_mode(False)
-        ctc.step(DT_S, _report(TrainReport("T1", "Green", "65", 50, 0)))
+        step_at(ctc, at("T1", "65"))
         self.assertEqual(ctc.snapshot().pending_closures,
                          (BlockRef("Green", "65"),))
-        ctc.step(DT_S, _report(TrainReport("T1", "Green", "66", 0, 0)))
+        step_at(ctc, at("T1", "66"))
         snap = ctc.snapshot()
         self.assertEqual(snap.pending_closures, ())
         self.assertEqual(snap.outputs.track_controller.closed_blocks,
@@ -210,7 +191,7 @@ class ClosureTest(unittest.TestCase):
 
     def test_reopen_cancels_a_pending_closure(self) -> None:
         ctc = _maintenance()
-        ctc.step(DT_S, _report(TrainReport("T1", "Green", "65", 0, 0)))
+        step_at(ctc, at("T1", "65"))
         ctc.set_block_closed("Green", "65", True)
         ctc.set_block_closed("Green", "65", False)
         ctc.step(DT_S, CtcInputs())
@@ -228,16 +209,8 @@ class InputCheckTest(unittest.TestCase):
                 switches=(SwitchReport("Green", "12", "sideways"),)),
             "crossing state": TrackControllerInputs(
                 crossings=(CrossingReport("Green", "19", "blinking"),)),
-            "failure kind": TrackControllerInputs(
-                failures=(TrackFailureReport("Green", "5", "gremlins"),)),
             "occupancy flag": TrackControllerInputs(
                 occupancy=(BlockOccupancy("Green", "5", "no"),)),
-            "negative offset": TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "3", -1.0, 0),)),
-            "offset past the block": TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "3", 100.5, 0),)),
-            "negative speed": TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "3", 0, -2.2),)),
             "contradictory switch": TrackControllerInputs(switches=(
                 SwitchReport("Green", "12", "normal"),
                 SwitchReport("Green", "12", "reverse"))),
@@ -258,20 +231,14 @@ class InputCheckTest(unittest.TestCase):
                 occupancy=(BlockOccupancy("Green", "5", True),
                            BlockOccupancy("Green", "5", True)))))
 
-    def test_offset_at_the_block_end_is_fine(self) -> None:
-        # Green 3 is 100 m long.
-        StubCtcOffice().step(DT_S, _report(
-            TrainReport("T1", "Green", "3", 100.0, 0)))
-
     def test_train_ids_are_trimmed(self) -> None:
         ctc = StubCtcOffice()
         ctc.dispatch(" T1 ", "Green", "65")
         ctc.dispatch("T1", "Green", "73")
         self.assertEqual([(o.train_id, o.destination_block_id)
                           for o in ctc.snapshot().orders], [("T1", "73")])
-        ctc.step(DT_S, _report(TrainReport(" T2", "Green", "62", 0, 0)))
-        self.assertEqual(
-            ctc.snapshot().inputs.track_controller.trains[0].train_id, "T2")
+        ctc.place_train(" T2", "Green", "62")
+        self.assertEqual(ctc.snapshot().trains[0].train_id, "T2")
         ctc.cancel_dispatch(" T1")
         self.assertEqual(ctc.snapshot().orders, ())
 
@@ -310,53 +277,10 @@ class StrictActionTest(unittest.TestCase):
 
     def test_wrongly_shaped_inputs_are_a_clear_error(self) -> None:
         for bad in ([], {"track_controller": []},
-                    {"track_controller": {"trains": {"x": 1}}},
-                    {"track_controller": {"trains": [5]}}):
+                    {"track_controller": {"occupancy": {"x": 1}}},
+                    {"track_controller": {"occupancy": [5]}}):
             with self.subTest(bad=bad), self.assertRaises(WireFormatError):
                 inputs_from_wire(bad)  # type: ignore[arg-type]
-
-
-class AtomicSendTest(unittest.TestCase):
-    """A test UI Send is applied all or nothing."""
-
-    @staticmethod
-    def _add(harness: CtcTestHarness, row: str, **fields: object) -> None:
-        harness.addEntry(row)
-        (index,) = [len(r["entries"]) - 1
-                    for r in harness.inputs + harness.dispatcherInputs
-                    if r["name"] == row]
-        for key, value in fields.items():
-            harness.setEntryField(row, index, key, value)
-
-    def test_rejected_part_rejects_the_whole_send(self) -> None:
-        cases = {
-            "two trains in one block": lambda h: (
-                self._add(h, "train_reports", block="12"),
-                self._add(h, "train_reports", block="12")),
-            "switch outside maintenance": lambda h: self._add(
-                h, "switch_commands", position="reverse"),
-        }
-        for label, make_bad in cases.items():
-            with self.subTest(label):
-                link = LocalLink()
-                harness = CtcTestHarness(link)
-                self._add(harness, "dispatch_orders", block="65")
-                make_bad(harness)
-                before = link.snapshot()
-                harness.send()
-                self.assertTrue(harness.statusIsError)
-                self.assertEqual(link.snapshot(), before)
-
-    def test_inputs_apply_before_actions(self) -> None:
-        # A failure reported in the same Send already blocks an order
-        # into that block.
-        link = LocalLink()
-        harness = CtcTestHarness(link)
-        self._add(harness, "track_failures", block="65")
-        self._add(harness, "dispatch_orders", block="65")
-        harness.send()
-        self.assertIn("track failure", harness.status)
-        self.assertEqual(link.snapshot().orders, ())
 
 
 if __name__ == "__main__":

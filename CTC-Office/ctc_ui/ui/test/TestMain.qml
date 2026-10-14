@@ -13,7 +13,6 @@ ScaledWindow {
     TestHarnessView {
         anchors.fill: parent
         inputs: harness.inputs
-        dispatcherInputs: harness.dispatcherInputs
         outputs: harness.outputs
         connected: harness.connected
         status: harness.status
