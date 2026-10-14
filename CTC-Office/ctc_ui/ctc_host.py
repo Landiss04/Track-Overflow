@@ -72,8 +72,7 @@ def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
     """Closed blocks, without the ones still closing: ``closed_blocks``
     lists both, since the Track Controller is locked out of either."""
     pending = set(snap.pending_closures)
-    return [b for b in snap.outputs.track_controller.closed_blocks
-            if b not in pending]
+    return [b for b in snap.closed_blocks if b not in pending]
 
 
 def _status(tracked: bool, order: DispatchOrder | None,
@@ -99,6 +98,8 @@ def _authority_limit(limit: TrainAuthority) -> str:
         return f"Block {limit.at} {_BLOCKED_LABELS[limit.reason]}"
     if limit.reason == "reserved":
         return f"Block {limit.at} held by {limit.held_by}"
+    if limit.reason == "not ready":
+        return "Track Controller not ready"
     return "No route"
 
 
@@ -425,7 +426,7 @@ class CtcHost(QObject):
                     for o in self._applied().track_controller.occupancy
                     if o.occupied and o.line == line}
         closed = {b.block_id
-                  for b in snap.outputs.track_controller.closed_blocks
+                  for b in snap.closed_blocks
                   if b.line == line}
 
         def occupancy(block_id: str) -> str:
@@ -549,8 +550,7 @@ class CtcHost(QObject):
                     for s in self._applied().track_controller.switches}
         commanded = {
             (c.line, c.switch_id): c.position
-            for c in self._module.snapshot()
-            .outputs.track_controller.switch_commands}
+            for c in self._module.snapshot().switch_commands}
         return {
             "normal": connections[0],
             "reverse": connections[1] if len(connections) > 1 else NO_VALUE,
@@ -560,8 +560,7 @@ class CtcHost(QObject):
 
     @Property(int, notify=stateChanged)
     def switchCommandCount(self) -> int:  # noqa: N802
-        return len(self._module.snapshot()
-                   .outputs.track_controller.switch_commands)
+        return len(self._module.snapshot().switch_commands)
 
     # -- Throughput ---------------------------------------------------
 
@@ -620,6 +619,10 @@ class CtcHost(QObject):
         """Messages for the dispatcher, newest last."""
         snap = self._module.snapshot()
         found = []
+        if not self._applied().track_controller.ready:
+            found.append("Track Controller not ready \u2014 nothing is "
+                         "sent to it until a PLC program is loaded on "
+                         "every wayside.")
         if snap.inputs_staged and self._clock is not None \
                 and self._clock.paused:
             found.append("Track Controller update staged \u2014 it "
@@ -735,7 +738,7 @@ class CtcHost(QObject):
         block = BlockRef(line, block_id)
         if block in snap.pending_closures:
             return "closing"
-        if block in snap.outputs.track_controller.closed_blocks:
+        if block in snap.closed_blocks:
             return "closed"
         return ""
 

@@ -21,8 +21,8 @@ python -m ctc_ui
 
 The test harness is a separate process with its own window. It stands
 in for the Track Controller: its only inputs are what the Track
-Controller sends the CTC (occupied blocks, switch states, crossing
-states). Everything the CTC itself decides (dispatching, closing blocks,
+Controller sends the CTC (whether it is ready, occupied blocks, switch
+states, crossing states). Everything the CTC itself decides (dispatching, closing blocks,
 setting switches, the operating mode and the clock speed) is done in the
 CTC window, as a dispatcher would. Ticket sales come from the Track
 Model, so the test UI does not force them either. Start the CTC Office
@@ -62,16 +62,22 @@ other:
   window's clock, add its next block and Send, then remove the block
   behind it and Send. Standalone, each Send is only 0.1 s, too soon for
   any train to move.
+- **ready** is off at first, as when the Track Controller starts up
+  with no PLC program. Its waysides are vital, so until it is on the
+  CTC sends the Track Controller nothing: no speed or authority, no
+  closed blocks, no switch commands. Orders, closures and switch
+  commands made in the CTC window are kept and go out once it is on;
+  the CTC window says the Track Controller is not ready.
 - Send is all or nothing: if the inputs are rejected (an unknown block,
   a switch reported in two positions), none of them is applied and the
   status line says why.
 - If the CTC window restarts, the test UI reconnects by itself and sends
   its inputs again.
 - **Outputs** update live from the module, in display units (mph): what
-  the CTC sends the Track Controller (suggested speed and authority per
-  train, closed blocks, switch commands) and the central harness (clock
-  speedup), so the effect of each action taken in the CTC window shows
-  here.
+  the CTC sends the Track Controller (per train, the block its head is
+  in with its suggested speed and authority; closed blocks; switch
+  commands) and the central harness (clock speedup), so the effect of
+  each action taken in the CTC window shows here.
 - Errors (an unknown block, a switch outside maintenance mode) show in
   the status line of the window where the action was taken.
 
@@ -276,10 +282,14 @@ the context-property pattern shared with the Train Model UI.
   It checks every reference and value against the track layout files
   and the boundary types, enforces the safety rules above, accepts
   switch commands and block closures only in maintenance mode, and gives
-  each dispatched train it is following an authority counted in blocks
+  each dispatched train it is following (once the Track Controller
+  reports ready; until then it sends the Track Controller nothing) an
+  authority counted in blocks
   (above) and a suggested speed 1 m/s under its head block's speed limit
   (whole m/s, rounded down), lower if it needs to stop within its
-  authority. A train still in the yard (a black box) gets neither until
+  authority. Each suggestion carries the block the train's head is in:
+  the Track Controller sees only occupancy, so that block says which
+  track circuit the speed and authority go down. A train still in the yard (a black box) gets neither until
   it leaves.
 - `ctc/tracking.py` follows the trains from block occupancy, and infers
   which occupied blocks have failed (above).

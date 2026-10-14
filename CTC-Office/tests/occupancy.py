@@ -41,14 +41,17 @@ def at(train_id: str, block_id: str, line: str = "Green") -> At:
 
 def reports(*trains: At, occupied: Iterable[tuple[str, str]] = (),
             switches: Iterable[SwitchReport] = (),
-            crossings: Iterable[CrossingReport] = ()) -> CtcInputs:
+            crossings: Iterable[CrossingReport] = (),
+            ready: bool = True) -> CtcInputs:
     """The Track Controller's report with ``trains`` in their blocks and
-    ``occupied`` ``(line, block)`` pairs occupied too."""
+    ``occupied`` ``(line, block)`` pairs occupied too. Ready unless
+    told otherwise: until it is, the CTC sends it nothing."""
     blocks = {(t.line, t.block_id) for t in trains} | set(occupied)
     return CtcInputs(track_controller=TrackControllerInputs(
         occupancy=tuple(BlockOccupancy(line, block_id, True)
                         for line, block_id in sorted(blocks)),
-        switches=tuple(switches), crossings=tuple(crossings)))
+        switches=tuple(switches), crossings=tuple(crossings),
+        ready=ready))
 
 
 def place(ctc: StubCtcOffice, *trains: At) -> None:

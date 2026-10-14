@@ -82,10 +82,12 @@ class StubModuleTest(unittest.TestCase):
         # Green 63, the yard exit, becomes occupied: T1 has left the yard.
         out = ctc.step(DT_S, reports(occupied=[("Green", "63")]))
         (suggestion,) = out.track_controller.suggestions
-        # Two blocks ahead of 63 to the destination: 64 and 65.
+        # Two blocks ahead of 63 to the destination: 64 and 65. The
+        # suggestion says where T1 is, for the Track Controller, which
+        # sees only occupancy.
         self.assertEqual(
-            (suggestion.train_id, suggestion.line,
-             suggestion.authority_blocks), ("T1", "Green", 2))
+            (suggestion.train_id, suggestion.line, suggestion.block_id,
+             suggestion.authority_blocks), ("T1", "Green", "63", 2))
         self.assertIs(type(suggestion.authority_blocks), int)
         # A little under Green 63's limit: whole m/s, less the margin.
         self.assertEqual(suggestion.suggested_speed_mps,
@@ -117,6 +119,7 @@ class StubModuleTest(unittest.TestCase):
 
     def test_closed_blocks_carry_their_line(self) -> None:
         ctc = StubCtcOffice()
+        ctc.step(DT_S, reports())                  # a ready Track Controller
         ctc.set_maintenance_mode(True)
         ctc.set_block_closed("Red", "12", True)
         ctc.set_block_closed("Green", "12", True)
@@ -133,7 +136,7 @@ class StubModuleTest(unittest.TestCase):
         ctc.set_maintenance_mode(True)
         ctc.set_switch("Green", "12", "reverse")
         ctc.set_switch("Red", "9", "normal")
-        track = ctc.step(DT_S, CtcInputs()).track_controller
+        track = ctc.step(DT_S, reports()).track_controller
         self.assertTrue(ctc.snapshot().maintenance_mode)
         # The mode itself is not sent to the Track Controller.
         self.assertFalse(hasattr(track, "maintenance_mode"))
@@ -288,9 +291,12 @@ class HarnessEntryTest(unittest.TestCase):
         # sales come from the Track Model: neither is forced here.
         harness = CtcTestHarness(LocalLink())
         rows = {r["name"]: r for r in harness.inputs}
-        self.assertEqual(list(rows), ["occupied_blocks", "switch_states",
-                                      "crossing_states"])
+        self.assertEqual(list(rows), ["ready", "occupied_blocks",
+                                      "switch_states", "crossing_states"])
         self.assertFalse(hasattr(harness, "dispatcherInputs"))
+        # Not ready at first, as when the Track Controller starts up.
+        self.assertEqual((rows["ready"]["kind"], rows["ready"]["value"]),
+                         ("bool", False))
         self.assertEqual(rows["occupied_blocks"]["kind"], "list")
         self.assertEqual(
             [f["key"] for f in rows["occupied_blocks"]["fields"]],
@@ -341,11 +347,14 @@ class HarnessEntryTest(unittest.TestCase):
 
     def test_reset_clears_every_row(self) -> None:
         harness = CtcTestHarness(LocalLink())
+        harness.setInput("ready", True)
         _add(harness, "occupied_blocks")
         _add(harness, "crossing_states")
         harness.resetInputs()
-        self.assertEqual([r["entries"] for r in harness.inputs],
-                         [[], [], []])
+        self.assertEqual({r["name"]: r.get("entries", r.get("value"))
+                          for r in harness.inputs},
+                         {"ready": False, "occupied_blocks": [],
+                          "switch_states": [], "crossing_states": []})
 
 
 class HarnessSendTest(unittest.TestCase):
@@ -373,6 +382,13 @@ class HarnessSendTest(unittest.TestCase):
         link.set_switch("Green", "12", "reverse")
         link.set_clock_speedup(True)
         harness = CtcTestHarness(link)
+        # The Track Controller is not ready: nothing is sent to it.
+        rows = _outputs(harness)
+        self.assertEqual((rows["closed_blocks"], rows["switch_commands"]),
+                         ("", ""))
+        harness.setInput("ready", True)
+        harness.send()
+        self.assertTrue(link.snapshot().inputs.track_controller.ready)
         rows = _outputs(harness)
         # Still in the yard: no speed or authority yet.
         self.assertNotIn("authority[T1]", rows)
@@ -386,6 +402,7 @@ class HarnessSendTest(unittest.TestCase):
         _add(harness, "occupied_blocks", block="63")
         harness.send()
         rows = _outputs(harness)
+        self.assertEqual(rows["block[T1]"], "Green:63")
         self.assertEqual(rows["authority[T1]"], 2)
         self.assertAlmostEqual(rows["suggested_speed[T1]"],
                                round(_suggested("Green", "63")

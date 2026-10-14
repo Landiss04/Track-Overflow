@@ -75,6 +75,8 @@ def inputs_from_wire(data: Mapping[str, Any]) -> CtcInputs:
                            for s in _items(track, "switches")),
             crossings=tuple(CrossingReport(**c)
                             for c in _items(track, "crossings")),
+            # As sent: anything but a real boolean is rejected later.
+            ready=track.get("ready", False),
         ),
         track_model=TrackModelInputs(
             ticket_sales=_sales(track_model.get("ticket_sales", {}))),
@@ -109,6 +111,10 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         orders=tuple(DispatchOrder(**o) for o in data.get("orders", ())),
         pending_closures=tuple(BlockRef(**b) for b in
                                data.get("pending_closures", ())),
+        closed_blocks=tuple(BlockRef(**b) for b in
+                            data.get("closed_blocks", ())),
+        switch_commands=tuple(SwitchCommand(**c) for c in
+                              data.get("switch_commands", ())),
         cancelled_orders=tuple(CancelledOrder(**c) for c in
                                data.get("cancelled_orders", ())),
         authorities=tuple(

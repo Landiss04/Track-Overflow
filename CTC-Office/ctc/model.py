@@ -10,7 +10,9 @@ that stops short of any occupied, closed, closing or failed block and of
 any switch not reported set for its route (``ctc.routing``), recomputed
 every step.
 The blocks closed in maintenance mode (closing ones included) and
-switch commands pass through. Track
+switch commands pass through. Nothing at all is sent to the Track
+Controller until it reports ready (a PLC program on every wayside): its
+waysides are vital. Track
 Controller and Track Model inputs are validated against the track
 layout and recorded. Real logic replaces this class behind the same
 ``CtcOffice`` contract.
@@ -243,6 +245,10 @@ class _Layout:
         rejected.
         """
         track_controller = inputs.track_controller
+        if not isinstance(track_controller.ready, bool):
+            raise InvalidInputError(
+                "ready must be true or false, got "
+                f"{_short(track_controller.ready)}")
         occupied: dict[tuple[str, str], bool] = {}
         for block in track_controller.occupancy:
             self.block(block.line, block.block_id, "occupancy")
@@ -333,7 +339,9 @@ class StubCtcOffice:
     of switches not set for the route; no switch thrown under a train.
     Block closures are maintenance-mode only and wait for an occupied
     block to clear. Failed blocks are inferred from occupancy
-    (``ctc.tracking``) and shown to the UIs only as occupied.
+    (``ctc.tracking``) and shown to the UIs only as occupied. Nothing is
+    sent to the Track Controller until it reports ready: dispatcher
+    actions are kept and go out once it is.
     """
 
     def __init__(self, layout: Mapping[str, Line] | None = None) -> None:
@@ -397,9 +405,11 @@ class StubCtcOffice:
             if (block.line, block.block_id) not in occupied:
                 self._pending.discard(block)
                 self._closed.add(block)
-        # Commit this step's grants; later steps keep them.
-        self._granted = {a.train_id: a.route[1:a.blocks + 1]
-                         for a in self._authorities()}
+        # Commit this step's grants; later steps keep them. Nothing is
+        # granted to a Track Controller that is not ready.
+        self._granted = ({a.train_id: a.route[1:a.blocks + 1]
+                          for a in self._authorities()}
+                         if self._ready() else {})
         self._plans = self._make_plans()
         return self._outputs()
 
@@ -424,6 +434,8 @@ class StubCtcOffice:
             orders=tuple(self._orders[t] for t in sorted(self._orders)),
             pending_closures=tuple(sorted(self._pending,
                                           key=_block_order)),
+            closed_blocks=self._closed_blocks(),
+            switch_commands=self._switch_commands(),
             cancelled_orders=tuple(self._cancelled),
             authorities=self._authorities(),
             inputs_staged=self._staged is not None,
@@ -577,6 +589,11 @@ class StubCtcOffice:
             return self._staged
         return self._inputs if self._inputs is not None else CtcInputs()
 
+    def _ready(self) -> bool:
+        """Whether the Track Controller last reported ready."""
+        return (self._inputs is not None
+                and self._inputs.track_controller.ready)
+
     @staticmethod
     def _occupied(inputs: CtcInputs) -> set[tuple[str, str]]:
         return {(o.line, o.block_id)
@@ -700,8 +717,9 @@ class StubCtcOffice:
         """Authority of every ordered train on the track, by train ID.
 
         The yard is a black box: a train gets authority once it is
-        reported on the track. Recomputed from the applied reports every
-        time (``ctc.routing``), with no block in two trains' authorities
+        reported on the track. None while the Track Controller is not
+        ready (reason "not ready"). Recomputed from the applied reports
+        every time (``ctc.routing``), with no block in two trains' authorities
         (exclusive-authority): first every train keeps what it was
         granted at the last step and has not passed yet, then, most
         urgent first, each extends toward its destination through blocks
@@ -775,6 +793,13 @@ class StubCtcOffice:
         applied = self._inputs if self._inputs is not None else CtcInputs()
         positions = {train_id: (t.line, t.head)
                      for train_id, t in self._tracker.trains.items()}
+        if not self._ready():
+            # Vital waysides with no PLC program: no train may move.
+            return tuple(
+                TrainAuthority(train_id, positions[train_id][0], 0,
+                               positions[train_id][1], "not ready")
+                for train_id in sorted(self._orders)
+                if train_id in positions)
         found: dict[str, TrainAuthority] = {}
         obstructions = {line: self._obstructions(applied, line)
                         for line in self._lines}
@@ -838,12 +863,17 @@ class StubCtcOffice:
         return tuple(found[t] for t in sorted(found))
 
     def _outputs(self) -> CtcOutputs:
+        if not self._ready():
+            # The waysides are vital: nothing goes to them until the
+            # Track Controller reports ready. Orders, closures and
+            # switch commands are kept and sent once it does.
+            return CtcOutputs(clock_speedup=self._clock_speedup)
         # The yard is a black box: a train gets speed and authority once
         # it has left the yard, from the block its head is in.
         positions = {train_id: (t.line, t.head)
                      for train_id, t in self._tracker.trains.items()}
         suggestions = tuple(
-            TrainSuggestion(limit.train_id, limit.line,
+            TrainSuggestion(limit.train_id, *positions[limit.train_id],
                             self._suggested_speed_mps(
                                 *positions[limit.train_id], limit),
                             limit.blocks)
@@ -852,18 +882,24 @@ class StubCtcOffice:
         return CtcOutputs(
             track_controller=TrackControllerOutputs(
                 suggestions=suggestions,
-                # Closing blocks too: locked from the moment the
-                # closure is requested.
-                closed_blocks=tuple(sorted(
-                    self._closed | self._pending, key=_block_order)),
-                switch_commands=tuple(
-                    SwitchCommand(line, switch_id, position)
-                    for (line, switch_id), position in sorted(
-                        self._switches.items(),
-                        key=lambda item: _id_order(*item[0]))),
+                closed_blocks=self._closed_blocks(),
+                switch_commands=self._switch_commands(),
             ),
             clock_speedup=self._clock_speedup,
         )
+
+    def _closed_blocks(self) -> tuple[BlockRef, ...]:
+        # Closing blocks too: locked from the moment the closure is
+        # requested.
+        return tuple(sorted(self._closed | self._pending,
+                            key=_block_order))
+
+    def _switch_commands(self) -> tuple[SwitchCommand, ...]:
+        return tuple(
+            SwitchCommand(line, switch_id, position)
+            for (line, switch_id), position in sorted(
+                self._switches.items(),
+                key=lambda item: _id_order(*item[0])))
 
 
 def _id_order(line: str, block_id: str) -> tuple[str, int, str]:

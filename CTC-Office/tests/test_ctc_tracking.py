@@ -111,8 +111,12 @@ class MovingTest(unittest.TestCase):
         _occupied(ctc, "63", steps=10)
         _occupied(ctc, "63", "64")
         self.assertEqual(_where(ctc), {"T1": ("63", "64")})
-        # Authority is counted from its head.
+        # Authority is counted from its head, and the Track Controller
+        # is told to send it down the head's block.
         self.assertEqual(_authority(ctc).route[0], "64")
+        (suggestion,) = ctc.snapshot().outputs.track_controller.suggestions
+        self.assertEqual((suggestion.line, suggestion.block_id),
+                         ("Green", "64"))
         _occupied(ctc, "64")
         self.assertEqual(_where(ctc), {"T1": ("64",)})
 

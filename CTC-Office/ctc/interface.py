@@ -78,6 +78,11 @@ class TrackControllerInputs:
     occupancy: tuple[BlockOccupancy, ...] = ()
     switches: tuple[SwitchReport, ...] = ()
     crossings: tuple[CrossingReport, ...] = ()
+    # True once the Track Controller is started up: a PLC program
+    # loaded on every wayside (``track-controller-ready``, proposed on
+    # ``Track-Ctrl-SW``). The waysides are vital: until it is true the
+    # CTC sends them nothing at all. False until reported.
+    ready: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,10 +108,18 @@ class CtcInputs:
 
 @dataclass(frozen=True, slots=True)
 class TrainSuggestion:
-    """Suggested speed and authority for one train."""
+    """Suggested speed and authority for one train, and the block it is
+    in. The Track Controller sees only which blocks are occupied, so the
+    block says which track circuit to send this speed and authority
+    down (``suggested-speed``, ``suggested-authority``, proposed on
+    ``ctc-deployment``)."""
 
     train_id: str
     line: str
+    # The block the train's head is in, as the CTC has followed it from
+    # occupancy (``ctc.tracking``): while it crosses into the next block,
+    # the one it is entering. Authority is counted from this block.
+    block_id: str
     # Whole m/s: a target for safe spacing, not the train's own speed;
     # never above the speed limit of the block the train is in.
     suggested_speed_mps: int
@@ -251,6 +264,11 @@ class CtcSnapshot:
     # Closures waiting for a train to leave the block; they close by
     # themselves once it is clear. Already in ``closed_blocks``.
     pending_closures: tuple[BlockRef, ...] = ()
+    # The dispatcher's closed blocks (closing ones too) and switch
+    # commands. The same as in ``outputs`` while the Track Controller is
+    # ready; kept here while it is not, when nothing is sent to it.
+    closed_blocks: tuple[BlockRef, ...] = ()
+    switch_commands: tuple[SwitchCommand, ...] = ()
     # Orders the CTC cancelled itself, oldest first (the last few).
     cancelled_orders: tuple[CancelledOrder, ...] = ()
     # Authority of every train that has one, by train ID.
