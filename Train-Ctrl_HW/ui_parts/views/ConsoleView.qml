@@ -44,8 +44,8 @@ Item {
 
                 HeroReadout {
                     Layout.fillWidth: true
-                    label: qsTr("Speed limit")
-                    value: Math.round(root.s.limit_mph)
+                    label: qsTr("Commanded speed")
+                    value: Math.round(root.s.commanded_mph)
                     unit: "mph"
                 }
 
