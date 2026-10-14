@@ -220,8 +220,14 @@ class SocketLinkTest(unittest.TestCase):
                 b'{"id": 1, "op": "step", "args": {"dt": 0.1, '
                 b'"inputs": []}}\n',
                 b'{"id": 2, "op": "set_maintenance_mode", '
-                b'"args": {"active": "false"}}\n'):
-            with self.subTest(payload=payload):
+                b'"args": {"active": "false"}}\n',
+                # An int too big for a float, and JSON nested too deep
+                # to read: each still gets its error reply, and the
+                # snapshot request sent after it still gets its answer.
+                b'{"id": 3, "op": "step", "args": {"dt": 1'
+                + b"0" * 400 + b', "inputs": {}}}\n',
+                b"[" * 100_000 + b"]" * 100_000 + b"\n"):
+            with self.subTest(payload=payload[:60]):
                 errors = self._raw(payload)
                 self.assertEqual(len(errors), 1, errors)
         # "false" did not turn maintenance mode on.

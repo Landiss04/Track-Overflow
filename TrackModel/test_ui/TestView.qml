@@ -473,6 +473,19 @@ Item {
 
                     Panel {
                         Layout.fillWidth: true
+                        title: qsTr("Outputs — to CTC Office")
+                        TableHeader { Layout.fillWidth: true }
+                        OutputRows { model: harness.ctcRows }
+                        HelperText {
+                            Layout.fillWidth: true
+                            text: qsTr("Ticket sales go straight to the CTC "
+                                + "Office, per line. The Track Model keeps "
+                                + "each line's total.")
+                        }
+                    }
+
+                    Panel {
+                        Layout.fillWidth: true
                         title: harness.selectedTrain === ""
                             ? qsTr("Outputs — to Train Model")
                             : qsTr("Outputs — to Train Model, %1").arg(

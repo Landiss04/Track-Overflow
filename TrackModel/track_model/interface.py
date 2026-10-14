@@ -7,7 +7,9 @@ do not appear here.
 
 Every value is in its backend unit, per ``truth/conventions/units.md``:
 m/s, m, deg, degrees Celsius. Every ID is a string, per
-``truth/conventions/identifiers.md``; authority is a block ID.
+``truth/conventions/identifiers.md``. Authority is a count of blocks
+(D013, pending in truth): how many blocks past its current one a train
+may still enter; 0 means stop before leaving it.
 
 Per-train data is keyed by train ID. Per-block data is keyed by block ID,
 for example ``"GREEN D-13"``. A switch is keyed by the block ID of its
@@ -168,7 +170,7 @@ class TrackSignal:
     authority only."""
 
     commanded_speed_mps: int        # whole m/s
-    authority_block_id: str | None  # None = no authority commanded
+    authority_blocks: int           # blocks it may still enter; 0 = stop
 
 
 # --------------------------------------------------------------------------- #
@@ -187,8 +189,8 @@ class TrackControllerCommands:
 
     # Block ID -> whole m/s.
     commanded_speed_mps: Mapping[str, int] = field(default_factory=dict)
-    # Block ID -> block ID up to which a train in that block may travel.
-    commanded_authority: Mapping[str, str] = field(default_factory=dict)
+    # Block ID -> how many more blocks a train in that block may enter.
+    commanded_authority: Mapping[str, int] = field(default_factory=dict)
     switch_commands: Mapping[str, SwitchPosition] = field(
         default_factory=dict
     )
@@ -200,13 +202,21 @@ class TrackControllerCommands:
 
 @dataclass(frozen=True, slots=True)
 class TrainReport:
-    """From the Train Model, every tick, for one train."""
+    """From the Train Model, every tick, for one train.
+
+    ``offset_m`` restarts from 0 each time the Train Model sees a new
+    block (it resets on the polarity change), so it runs negative while
+    rolling back. The Track Model keeps the distance that reset throws
+    away. An empty ``block_id`` means the train has no block yet; the
+    Track Model ignores that report.
+    """
 
     block_id: str
-    offset_m: float                 # into the block; negative on rollback
+    offset_m: float                 # since entering the block
     actual_speed_mps: float         # signed
     block_changed: bool             # recorded only
     passenger_capacity: int
+    doors_open: bool                # left or right; boarding needs one
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,10 +245,20 @@ class TrackControllerOutputs:
     signal_states: Mapping[str, SignalAspect]    # every light, every tick
     failure_status: Mapping[str, TrackFailure]
     heater_states: Mapping[str, bool]            # by section, actually on
-    ticket_sales: Mapping[str, int]              # by station, this tick
     track_temp_c: Mapping[str, float] = field(   # by section
         default_factory=dict
     )
+
+
+@dataclass(frozen=True, slots=True)
+class CtcOutputs:
+    """To the CTC Office directly, not through the Track Controller.
+
+    Tickets sold, by station name. The Track Model does not keep a
+    running total; each sale is an event.
+    """
+
+    tickets_sold_now: Mapping[str, int]          # this tick, by station
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,6 +274,7 @@ class TrainFeed:
 @dataclass(frozen=True, slots=True)
 class TrackModelOutputs:
     controller: TrackControllerOutputs
+    ctc: CtcOutputs
     train_feeds: Mapping[str, TrainFeed]
     # To the Train Controller: the colour a train sees as it enters a
     # signal block, on that tick only; None on every other tick.
@@ -286,6 +307,7 @@ class TrackModelSnapshot:
     beacons: Mapping[str, Beacon]                # by block ID
     trains: tuple[TrainView, ...]
     waiting_passengers: Mapping[str, int]
+    track_circuit: Mapping[str, TrackSignal]     # by block ID
     ambient_temp_c: float
     elapsed_s: float
     outputs: TrackModelOutputs
@@ -341,6 +363,18 @@ class TrackModel(Protocol):
 
     def set_block_failure(self, block_id: str, failure: TrackFailure) -> None:
         """Inject or clear a failure on one block."""
+        ...
+
+    def set_ambient_temp(self, temp_c: float) -> None:
+        """Set the ambient temperature (°C), replacing the test UI's."""
+        ...
+
+    def load_layout_file(self, path: str) -> str:
+        """Load a layout file, replacing or adding its line; restart.
+
+        Returns the line name. Raises ``TrackModelError`` and changes
+        nothing if the file cannot be loaded.
+        """
         ...
 
     # Test-only commands. Never used at integration.

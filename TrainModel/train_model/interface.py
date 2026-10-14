@@ -6,7 +6,8 @@ modules' types into these and back. Other modules' struct layouts do not
 appear here.
 
 Field names carry their backend units, per ``truth/conventions/units.md``:
-temperature in degrees Celsius, grade in degrees, and authority as a block ID.
+temperature in degrees Celsius, grade in degrees, and authority as a count
+of blocks.
 """
 
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ class TrainConfig:
 
     # Vehicle (datasheet)
     m_empty_kg: float = 40_900.0
+    m_loaded_kg: float = 56_700.0           # at 4 pass./m^2
     length_m: float = 32.2
     width_m: float = 2.65
     height_m: float = 3.42
@@ -55,9 +57,9 @@ class TrainConfig:
 
     @property
     def m_ref_kg(self) -> float:
-        """2/3-load reference mass. Excludes crew: datasheet test condition."""
-        n_ref = round(self.capacity * self.ref_load_fraction)
-        return self.m_empty_kg + n_ref * self.passenger_mass_kg
+        """2/3-load reference mass: 2/3 of the datasheet load, 51,433 kg."""
+        load_kg = self.m_loaded_kg - self.m_empty_kg
+        return self.m_empty_kg + self.ref_load_fraction * load_kg
 
     @property
     def f_max_n(self) -> float:
@@ -76,7 +78,7 @@ class TrainConfig:
 # Shared value types
 # --------------------------------------------------------------------------- #
 
-PlatformSide = Literal["L", "R"]
+PlatformSide = Literal["L", "R", "LR"]  # "LR": platforms on both sides
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,7 +131,7 @@ class TrackInfo:
     elevation_m: float
     speed_limit_mps: float
     polarity: bool
-    # Station in this block; None where there is none. Boarding needs one.
+    # Station in this block; None where there is none.
     station_name: str | None = None
 
 
@@ -138,8 +140,8 @@ class TrackSignal:
     """Track circuit data. Ignored while signal pickup has failed."""
 
     commanded_speed_mps: float
-    # Block the train may travel up to.
-    authority_block_id: str
+    # Blocks the train may travel before it must stop; nonnegative.
+    authority_blocks: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,7 +171,7 @@ class ControllerOutputs:
 
     actual_speed_mps: float
     # Brake State, bool[2]: emergency then service. Engaged, not
-    # commanded: both are false while the brakes have failed.
+    # commanded: a brake failure blocks only the service brake.
     emergency_brake_active: bool    # controller or passenger
     service_brake_active: bool
     door_left_open: bool
@@ -179,11 +181,10 @@ class ControllerOutputs:
     cabin_temp_c: float
     # Passed through; zeros or stale under pickup failure, open.
     commanded_speed_mps: float
-    authority_block_id: str | None  # passed through; None = no authority
+    authority_blocks: int           # passed through; 0 = must stop
     # Passed through from TrackInfo, provisional.
     speed_limit_mps: float
     beacon: Beacon | None           # between-beacon behaviour open
-    failures: FailureState
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +216,8 @@ class TrainModelSnapshot:
     n_crew: int
     n_passengers: int
     passenger_ebrake_pulled: bool
+    # Shown on the Train Model UI only; not sent to the Train Controller.
+    failures: FailureState
     outputs: TrainModelOutputs
     inputs: TrainModelInputs | None = None
     elapsed_s: float = 0.0
@@ -232,8 +235,11 @@ class TrainModel(Protocol):
     def step(self, dt: float, inputs: TrainModelInputs) -> TrainModelOutputs:
         """Advance one tick.
 
-        dt is fixed by the harness and must be finite and positive.
-        Numeric inputs must be finite; power must be nonnegative.
+        dt is fixed by the harness and must be finite, positive and at
+        most 60 s. On/off inputs must be bools.
+        Numeric inputs must be finite; power, the speed limit, the
+        commanded speed, authority and the boarding count must be
+        nonnegative, and the grade strictly between -90 and 90 degrees.
         Invalid inputs are rejected before any state is changed.
         """
         ...

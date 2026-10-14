@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Callable
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -13,6 +14,11 @@ from PySide6.QtCore import (  # noqa: E402
     QEvent,
     QObject,
 )
+
+
+def private_link_name() -> str:
+    """Return a pipe name no running Track Model window will be using."""
+    return f"track-model-test-{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
 
 def qt_app() -> QCoreApplication:

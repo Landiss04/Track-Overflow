@@ -9,7 +9,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from tests.qt_helpers import dispose, qt_app, wait_for
+from tests.qt_helpers import dispose, private_link_name, qt_app, wait_for
 from test_link.link import LinkClient, LinkServer
 from track_model.interface import TrackFailure, TrackModelOutputs
 from tests.helpers import DT_S, make_inputs, make_model, report
@@ -20,9 +20,10 @@ def linked() -> Iterator[tuple[LinkServer, LinkClient, list[object]]]:
     """Return a listening server, a connected client and its inbox."""
     qt_app()
     model = make_model()
-    server = LinkServer(model)
+    name = private_link_name()
+    server = LinkServer(model, name=name)
     assert server.listen()
-    client = LinkClient()
+    client = LinkClient(name=name)
     inbox: list[object] = []
     client.outputsReceived.connect(inbox.append)
     client.errorReceived.connect(inbox.append)

@@ -159,6 +159,16 @@ class Layout:
         return min(real, key=lambda b: self.blocks[b].number)
 
 
+def line_of_file(path: str | Path) -> str:
+    """Return the upper-case line name a layout file describes."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError) as error:
+        raise LayoutError(f"{path}: {error}") from error
+    return _read_line(data, path)[0]
+
+
 def load_layout(paths: Iterable[str | Path]) -> Layout:
     """Load one or more line files into a single ``Layout``."""
     blocks: dict[str, Block] = {}

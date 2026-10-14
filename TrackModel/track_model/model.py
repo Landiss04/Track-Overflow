@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from track_model.interface import (
     Block,
     BlockEdit,
+    CtcOutputs,
     InvalidInputError,
     SignalAspect,
     SwitchPosition,
@@ -53,7 +54,13 @@ from track_model.interface import (
     is_finite,
     is_whole,
 )
-from track_model.layout import YARD, Layout, load_layout
+from track_model.layout import (
+    YARD,
+    Layout,
+    LayoutError,
+    line_of_file,
+    load_layout,
+)
 
 #: Safe state for a light nobody has commanded yet, or with no power.
 DEFAULT_ASPECT = SignalAspect.RED
@@ -87,6 +94,15 @@ class _Train:
     # The block it last moved out of, either way. A report naming it is
     # stale: the Train Model has not yet seen the new Track Info.
     left_block_id: str | None = None
+    # The Train Model restarts its offset at 0 in each new block. The
+    # true distance into the block is its offset plus this carry: the
+    # overshoot after moving forward, or the block's length (less the
+    # overshoot) after rolling back into it.
+    carry_m: float = 0.0
+    # The carry that applied in the left block, and which way the train
+    # left it, so a stale report from that block can correct the carry.
+    left_carry_m: float = 0.0
+    left_backward: bool = False
 
 
 class TrackModel:
@@ -106,24 +122,24 @@ class TrackModel:
     _temps_started: bool
     _failures: dict[str, TrackFailure]
     _commanded_speed: dict[str, int]
-    _authority: dict[str, str]
+    _authority: dict[str, int]
     _trains: dict[str, _Train]
     _waiting: dict[str, int]
-    _last_sales: dict[str, int]
+    _last_sales: dict[str, int]                  # this tick, by station
     _rng: random.Random
     _ambient_temp_c: float
+    _ambient_override_c: float | None   # set in the Track Model UI
     _elapsed_s: float
     _outputs: TrackModelOutputs
 
     def __init__(self, config: TrackConfig) -> None:
         """Load the layout and start with every device at rest."""
         self.config = config
-        self._layout: Layout = load_layout(config.layout_paths)
-        self._sections: dict[str, list[str]] = {}
-        for block in self._layout.blocks.values():
-            self._sections.setdefault(block.section_id, []).append(
-                block.block_id
-            )
+        # The file each line was loaded from, so one can be replaced.
+        self._line_paths: dict[str, str] = {
+            line_of_file(p): p for p in config.layout_paths
+        }
+        self._adopt(load_layout(self._line_paths.values()))
         self._restart()
 
     # ------------------------------------------------------------------ #
@@ -135,7 +151,12 @@ class TrackModel:
         self._validate(dt, inputs)
         self._elapsed_s += dt
         self._apply_commands(inputs.controller)
-        self._ambient_temp_c = inputs.ambient_temp_c
+        # A temperature set in the Track Model window wins over the one
+        # the test UI sends, until the module restarts.
+        self._ambient_temp_c = (
+            inputs.ambient_temp_c if self._ambient_override_c is None
+            else self._ambient_override_c
+        )
         self._update_track_temps(dt)
         self._move_trains(inputs.trains)
         self._last_sales = self._sell_tickets()
@@ -147,6 +168,7 @@ class TrackModel:
         }
         self._outputs = TrackModelOutputs(
             controller=self._controller_outputs(),
+            ctc=self._ctc_outputs(),
             train_feeds=feeds,
             signal_seen={
                 train_id: self._signal_seen(train)
@@ -174,6 +196,10 @@ class TrackModel:
                 for train_id, train in self._trains.items()
             ),
             waiting_passengers=dict(self._waiting),
+            track_circuit={
+                block_id: self._track_signal(block_id)
+                for block_id in self._blocks
+            },
             ambient_temp_c=self._ambient_temp_c,
             elapsed_s=self._elapsed_s,
             outputs=self._outputs,
@@ -191,6 +217,17 @@ class TrackModel:
         self._outputs = dataclasses.replace(
             self._outputs, controller=self._controller_outputs()
         )
+
+    def set_ambient_temp(self, temp_c: float) -> None:
+        """Set the ambient temperature from the Track Model UI.
+
+        It replaces the temperature the test UI sends, from the next
+        step until the module restarts. Track temperature follows it.
+        """
+        if not is_finite(temp_c):
+            raise InvalidInputError("ambient temperature is not finite")
+        self._ambient_override_c = temp_c
+        self._ambient_temp_c = temp_c
 
     def edit_block(self, block_id: str, edit: BlockEdit) -> None:
         """Test only: override a block's loaded stats."""
@@ -211,6 +248,27 @@ class TrackModel:
     def reset(self) -> None:
         """Test only: return to the freshly loaded state."""
         self._restart()
+
+    def load_layout_file(self, path: str) -> str:
+        """Load a layout file; return the line it describes.
+
+        The file replaces the loaded line of the same name, or adds a new
+        line. The module then restarts: no trains, devices at rest. A file
+        that cannot be loaded raises ``LayoutError`` and changes nothing.
+        """
+        line = line_of_file(path)
+        line_paths = {**self._line_paths, line: path}
+        try:
+            layout = load_layout(line_paths.values())
+        except (KeyError, TypeError, ValueError, AttributeError) as error:
+            # A block record with a missing or malformed field.
+            raise LayoutError(
+                f"{path}: bad layout data ({type(error).__name__}: {error})"
+            ) from error
+        self._line_paths = line_paths
+        self._adopt(layout)
+        self._restart()
+        return line
 
     # ------------------------------------------------------------------ #
     # Devices and failures
@@ -275,10 +333,15 @@ class TrackModel:
 
     def _move_trains(self, reports: Mapping[str, TrainReport]) -> None:
         # Place, advance or drop each train from its Train Model report.
+        # A report with no block ("") is a train not on the track yet.
+        on_track = {
+            train_id: report for train_id, report in reports.items()
+            if report.block_id
+        }
         for train_id in list(self._trains):
-            if train_id not in reports:
+            if train_id not in on_track:
                 del self._trains[train_id]
-        for train_id, report in reports.items():
+        for train_id, report in on_track.items():
             train = self._trains.get(train_id)
             if train is None or report.block_id not in (
                 train.block_id, train.left_block_id
@@ -293,26 +356,31 @@ class TrackModel:
                 self._trains[train_id] = train
             else:
                 train.entered_this_tick = False
-            train.offset_m = report.offset_m
             train.actual_speed_mps = report.actual_speed_mps
             if report.block_id != train.block_id:
                 # Stale report from the block this train just left: the
-                # Train Model has not seen the new Track Info yet.
+                # Train Model has not seen the new Track Info yet. It has
+                # moved on in the old block, so the carry grows with it.
+                train.carry_m = self._carry_into(
+                    train, report.offset_m + train.left_carry_m
+                )
                 continue
-            self._advance(train_id, train, report.offset_m)
+            train.offset_m = report.offset_m + train.carry_m
+            self._advance(train_id, train, train.offset_m)
 
     def _advance(self, train_id: str, train: _Train, offset_m: float) -> None:
-        # Move one train across a block boundary if its offset says so.
-        # previous_block_id is the block behind the train in its forward
-        # direction, so it stays correct through a run of rollbacks.
+        # Move one train across a block boundary if its true offset says
+        # so. previous_block_id is the block behind the train in its
+        # forward direction, so it stays correct through rollbacks.
         length = self._blocks[train.block_id].length_m
         old = train.block_id
+        backward = offset_m < 0.0
         if offset_m >= length:
             target = self._layout.next_block(
                 old, train.previous_block_id, self._switches
             )
             behind: str | None = old
-        elif offset_m < 0.0:
+        elif backward:
             target = self._layout.previous_block(old, train.previous_block_id)
             behind = None if target == old else self._behind(target, old)
         else:
@@ -325,9 +393,22 @@ class TrackModel:
             return  # Dead end; the train stays where it is.
         train.previous_block_id = behind
         train.left_block_id = old
+        train.left_carry_m = train.carry_m
+        train.left_backward = backward
         train.block_id = target
+        train.carry_m = self._carry_into(train, offset_m)
+        train.offset_m = train.carry_m
         train.polarity = not train.polarity
         train.entered_this_tick = True
+
+    def _carry_into(self, train: _Train, offset_in_left_m: float) -> float:
+        # Where the train is in its new block, given its true offset in
+        # the block it left: past the end going forward, or back from
+        # the far end of the new block after rolling back into it.
+        if train.left_backward:
+            return self._blocks[train.block_id].length_m + offset_in_left_m
+        assert train.left_block_id is not None
+        return offset_in_left_m - self._blocks[train.left_block_id].length_m
 
     def _behind(self, block_id: str, ahead: str) -> str | None:
         # The block beyond block_id on the side away from ahead, following
@@ -343,7 +424,8 @@ class TrackModel:
     # ------------------------------------------------------------------ #
 
     def _sell_tickets(self) -> dict[str, int]:
-        # Each station rolls for one new ticket per tick.
+        # Each station rolls for one new ticket per tick. Returns the
+        # tickets sold this tick by station. No running total is kept.
         sales: dict[str, int] = {}
         for station in self._waiting:
             sold = int(self._rng.random() < self.config.ticket_probability)
@@ -352,9 +434,11 @@ class TrackModel:
         return sales
 
     def _board(self, block: Block, report: TrainReport) -> int:
-        # PROVISIONAL: board while stopped in a station block.
+        # Board only when the Train Model will accept them: stopped in a
+        # station block with a door open.
         station = block.station_name
-        if station is None or report.actual_speed_mps != STOPPED_SPEED_MPS:
+        if (station is None or not report.doors_open
+                or report.actual_speed_mps != STOPPED_SPEED_MPS):
             return 0
         boarded = min(self._waiting.get(station, 0), report.passenger_capacity)
         self._waiting[station] -= boarded
@@ -364,21 +448,21 @@ class TrackModel:
     # Outputs
     # ------------------------------------------------------------------ #
 
+    def _track_signal(self, block_id: str) -> TrackSignal:
+        # What a block's track circuit carries, per block. A dead circuit
+        # carries no speed and no authority, and so does a block that was
+        # never commanded: stop.
+        if self._circuit_dead(block_id):
+            return TrackSignal(commanded_speed_mps=0, authority_blocks=0)
+        return TrackSignal(
+            commanded_speed_mps=self._commanded_speed.get(block_id, 0),
+            authority_blocks=self._authority.get(block_id, 0),
+        )
+
     def _feed(self, train: _Train, report: TrainReport) -> TrainFeed:
         # Everything one train receives from the track this tick.
         block = self._blocks[train.block_id]
-        if self._circuit_dead(block.block_id):
-            # A dead track circuit carries no speed and no authority.
-            signal = TrackSignal(commanded_speed_mps=0,
-                                 authority_block_id=None)
-        else:
-            # The track circuit of the occupied block: both per block.
-            signal = TrackSignal(
-                commanded_speed_mps=self._commanded_speed.get(
-                    block.block_id, 0
-                ),
-                authority_block_id=self._authority.get(block.block_id),
-            )
+        signal = self._track_signal(block.block_id)
         return TrainFeed(
             track_info=TrackInfo(
                 block_id=block.block_id,
@@ -418,8 +502,13 @@ class TrackModel:
             },
             failure_status=dict(self._failures),
             heater_states={s: self._heater_on(s) for s in self._heater_cmd},
-            ticket_sales=dict(self._last_sales),
             track_temp_c=dict(self._track_temp_c),
+        )
+
+    def _ctc_outputs(self) -> CtcOutputs:
+        # Ticket sales for the CTC Office: this tick only.
+        return CtcOutputs(
+            tickets_sold_now=dict(self._last_sales),
         )
 
     # ------------------------------------------------------------------ #
@@ -442,7 +531,11 @@ class TrackModel:
                 )
         for block_id, authority in cmd.commanded_authority.items():
             self._require_block(block_id)
-            self._require_block(authority)
+            if not is_whole(authority) or authority < 0:
+                raise InvalidInputError(
+                    f"authority for {block_id} must be a whole, "
+                    f"non-negative count of blocks: {authority!r}"
+                )
         self._require_ids(cmd.switch_commands, self._switch_cmd, "switch")
         self._require_ids(cmd.crossing_commands, self._crossing_cmd,
                           "crossing")
@@ -450,7 +543,10 @@ class TrackModel:
         self._require_ids(cmd.heater_commands, self._heater_cmd,
                           "heater section")
         for train_id, report in inputs.trains.items():
-            self._require_block(report.block_id)
+            if report.block_id:     # "" = not on the track yet
+                self._require_block(report.block_id)
+            if not isinstance(report.doors_open, bool):
+                raise InvalidInputError(f"doors_open for {train_id} not bool")
             if not (is_finite(report.offset_m)
                     and is_finite(report.actual_speed_mps)):
                 raise InvalidInputError(f"non-finite report for {train_id}")
@@ -471,6 +567,15 @@ class TrackModel:
         for device_id in given:
             if device_id not in known:
                 raise UnknownIdError(f"unknown {kind} {device_id!r}")
+
+    def _adopt(self, layout: Layout) -> None:
+        # Take a loaded layout and group its blocks by section.
+        self._layout = layout
+        self._sections: dict[str, list[str]] = {}
+        for block in layout.blocks.values():
+            self._sections.setdefault(block.section_id, []).append(
+                block.block_id
+            )
 
     def _restart(self) -> None:
         # Fresh state: every device at its safe default, no trains.
@@ -500,12 +605,14 @@ class TrackModel:
             b.station_name: 0
             for b in self._blocks.values() if b.station_name is not None
         }
-        self._last_sales = {}
+        self._last_sales = dict.fromkeys(self._waiting, 0)
         self._rng = random.Random(self.config.seed)
         self._ambient_temp_c = 0.0
+        self._ambient_override_c = None
         self._elapsed_s = 0.0
         self._outputs = TrackModelOutputs(
             controller=self._controller_outputs(),
+            ctc=self._ctc_outputs(),
             train_feeds={},
             signal_seen={},
         )

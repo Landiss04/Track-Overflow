@@ -13,6 +13,7 @@ from typing import Any, TypeVar
 from track_model.interface import (
     Beacon,
     BlockEdit,
+    CtcOutputs,
     SignalAspect,
     SwitchPosition,
     TrackControllerCommands,
@@ -63,6 +64,7 @@ def encode_inputs(inputs: TrackModelInputs) -> Json:
                 "actual_speed_mps": r.actual_speed_mps,
                 "block_changed": r.block_changed,
                 "passenger_capacity": r.passenger_capacity,
+                "doors_open": r.doors_open,
             }
             for train_id, r in inputs.trains.items()
         },
@@ -78,7 +80,9 @@ def decode_inputs(data: Json) -> TrackModelInputs:
             commanded_speed_mps={
                 k: int(v) for k, v in cmd["commanded_speed_mps"].items()
             },
-            commanded_authority=dict(cmd["commanded_authority"]),
+            commanded_authority={
+                k: int(v) for k, v in cmd["commanded_authority"].items()
+            },
             switch_commands=_enums(SwitchPosition, cmd["switch_commands"]),
             crossing_commands={
                 k: bool(v) for k, v in cmd["crossing_commands"].items()
@@ -95,6 +99,7 @@ def decode_inputs(data: Json) -> TrackModelInputs:
                 actual_speed_mps=float(r["actual_speed_mps"]),
                 block_changed=bool(r["block_changed"]),
                 passenger_capacity=int(r["passenger_capacity"]),
+                doors_open=bool(r["doors_open"]),
             )
             for train_id, r in data["trains"].items()
         },
@@ -117,8 +122,10 @@ def encode_outputs(outputs: TrackModelOutputs) -> Json:
             "signal_states": _names(out.signal_states),
             "failure_status": _names(out.failure_status),
             "heater_states": dict(out.heater_states),
-            "ticket_sales": dict(out.ticket_sales),
             "track_temp_c": dict(out.track_temp_c),
+        },
+        "ctc": {
+            "tickets_sold_now": dict(outputs.ctc.tickets_sold_now),
         },
         "train_feeds": {
             train_id: _encode_feed(feed)
@@ -142,9 +149,13 @@ def decode_outputs(data: Json) -> TrackModelOutputs:
             signal_states=_enums(SignalAspect, out["signal_states"]),
             failure_status=_enums(TrackFailure, out["failure_status"]),
             heater_states=dict(out["heater_states"]),
-            ticket_sales={k: int(v) for k, v in out["ticket_sales"].items()},
             track_temp_c={
                 k: float(v) for k, v in out["track_temp_c"].items()
+            },
+        ),
+        ctc=CtcOutputs(
+            tickets_sold_now={
+                k: int(v) for k, v in data["ctc"]["tickets_sold_now"].items()
             },
         ),
         train_feeds={
@@ -172,7 +183,7 @@ def _encode_feed(feed: TrainFeed) -> Json:
         },
         "track_signal": {
             "commanded_speed_mps": signal.commanded_speed_mps,
-            "authority_block_id": signal.authority_block_id,
+            "authority_blocks": signal.authority_blocks,
         },
         "beacon": None if beacon is None else {
             "station_name": beacon.station_name,
@@ -199,7 +210,7 @@ def _decode_feed(data: Json) -> TrainFeed:
         ),
         track_signal=TrackSignal(
             commanded_speed_mps=int(signal["commanded_speed_mps"]),
-            authority_block_id=signal["authority_block_id"],
+            authority_blocks=int(signal["authority_blocks"]),
         ),
         beacon=None if beacon is None else Beacon(
             station_name=beacon["station_name"],

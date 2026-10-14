@@ -28,15 +28,33 @@ def report(
     offset_m: float = 0.0,
     speed_mps: float = 10.0,
     capacity: int = 222,
+    doors_open: bool = False,
 ) -> TrainReport:
-    """Return one train's Train Model report."""
+    """Return one train's Train Model report.
+
+    ``offset_m`` is the distance since the train entered ``block_id``,
+    as the Train Model reports it (it restarts at 0 in each block).
+    """
     return TrainReport(
         block_id=block_id,
         offset_m=offset_m,
         actual_speed_mps=speed_mps,
         block_changed=False,
         passenger_capacity=capacity,
+        doors_open=doors_open,
     )
+
+
+#: How far past a block's end a test pushes a train, like one tick of
+#: motion would. Small, so the carried overshoot stays realistic.
+OVERSHOOT_M = 0.5
+
+
+def past_end(model: TrackModel, block_id: str) -> float:
+    """Return an offset that just crosses the end of ``block_id``."""
+    length = next(b.length_m for b in model.snapshot().blocks
+                  if b.block_id == block_id)
+    return length + OVERSHOOT_M
 
 
 def make_inputs(

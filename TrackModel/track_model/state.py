@@ -1,9 +1,9 @@
 """Track Model UI state: the snapshot, in display units, for QML.
 
 Reads ``TrackModel.snapshot()`` and converts to imperial at this layer
-only (``truth/conventions/units.md``). Murphy's failure injection is the
-one action; it calls the module, then ``on_ui_action`` so the host can
-tell the test UI at once.
+only (``truth/conventions/units.md``). Murphy's failure injection and
+loading a track from a JSON file are the actions; each calls the module,
+then ``on_ui_action`` so the host can tell the test UI at once.
 """
 
 from __future__ import annotations
@@ -11,12 +11,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
 from track_model.interface import (
     Block,
     TrackFailure,
     TrackModel,
+    TrackModelError,
     TrackModelSnapshot,
 )
 
@@ -47,6 +48,8 @@ class TrackModelState(QObject):
     changed = Signal()
     runningChanged = Signal()
     viewChanged = Signal()
+    linesChanged = Signal()
+    loadMessageChanged = Signal()
 
     def __init__(
         self,
@@ -62,6 +65,7 @@ class TrackModelState(QObject):
         self._line = "GREEN" if "GREEN" in self._lines else self._lines[0]
         self._filter = ""
         self._selected = ""
+        self._load_message = ""
         self._running = False
         self._pause_timer = QTimer(self)
         self._pause_timer.setSingleShot(True)
@@ -99,12 +103,61 @@ class TrackModelState(QObject):
         """Ambient temperature for display."""
         return f"{c_to_f(self._snap.ambient_temp_c):.0f} °F"
 
+    @Property(float, notify=changed)
+    def ambientF(self) -> float:
+        """Ambient temperature in °F, to edit."""
+        return round(c_to_f(self._snap.ambient_temp_c), 1)
+
+    @Slot(float)
+    def setAmbientF(self, temp_f: float) -> None:
+        """Set the ambient temperature, entered in °F."""
+        try:
+            self._model.set_ambient_temp((temp_f - 32.0) * 5.0 / 9.0)
+        except TrackModelError:
+            return
+        self._on_ui_action()
+        self.refresh()
+
     # -- line and filter ---------------------------------------------------
 
-    @Property(list, constant=True)
+    @Property(list, notify=linesChanged)
     def lines(self) -> list[str]:
         """Every loaded line."""
         return list(self._lines)
+
+    @Property(str, notify=loadMessageChanged)
+    def loadMessage(self) -> str:
+        """Why the last track load failed, or empty."""
+        return self._load_message
+
+    @Slot(str)
+    def loadLayout(self, url: str) -> None:
+        """Load a track from a JSON file chosen in the file dialog.
+
+        ``url`` is the dialog's file URL. The file replaces its line, or
+        adds one, and the module restarts. A bad file changes nothing.
+        """
+        path = QUrl(url).toLocalFile() or url
+        try:
+            line = self._model.load_layout_file(path)
+        except TrackModelError as error:
+            self._set_load_message(str(error))
+            return
+        self._set_load_message("")
+        self._snap = self._model.snapshot()
+        self._lines = sorted({b.line for b in self._snap.blocks})
+        self._line = line
+        self._selected = ""
+        self._filter = ""
+        self.linesChanged.emit()
+        self.viewChanged.emit()
+        self._on_ui_action()
+        self.changed.emit()
+
+    @Slot()
+    def clearLoadMessage(self) -> None:
+        """Dismiss the load error."""
+        self._set_load_message("")
 
     @Property(str, notify=viewChanged)
     def line(self) -> str:
@@ -132,6 +185,7 @@ class TrackModelState(QObject):
     def blockRows(self) -> list[dict[str, Any]]:
         """Blocks on the current line, after the filter."""
         out = self._snap.outputs.controller
+        circuit = self._snap.track_circuit
         needle = self._filter.strip().upper()
         rows = []
         for b in self._snap.blocks:
@@ -143,14 +197,18 @@ class TrackModelState(QObject):
             failure = out.failure_status[b.block_id]
             rows.append({
                 "id": b.block_id,
+                # The line is already in the title, so the table drops it.
+                "name": f"{b.section}-{b.number}",
                 "direction": self._direction_short(b),
                 "length": f"{b.length_m * FT_PER_M:.0f}",
                 "grade": f"{b.grade_deg:.2f}",
                 "limit": f"{b.speed_limit_mps * MPH_PER_MPS:.0f}",
+                "cmdSpeed": self._cmd_speed(b.block_id),
+                "authority": str(circuit[b.block_id].authority_blocks),
                 "station": station,
                 "beacon": self._beacon_short(b.block_id),
                 "heat": "ON" if out.heater_states.get(b.section_id) else "",
-                "occupied": "OCC" if out.block_occupancy[b.block_id] else "",
+                "occupied": "TRUE" if out.block_occupancy[b.block_id] else "",
                 "signal": self._aspect(b.block_id),
                 "failure": "" if failure is TrackFailure.NONE
                 else failure.name,
@@ -247,6 +305,11 @@ class TrackModelState(QObject):
             self.viewChanged.emit()
             self.changed.emit()
 
+    @Property(str, notify=changed)
+    def selectedSignal(self) -> str:
+        """Signal colour on the block in focus, or empty with no light."""
+        return self._aspect(self._selected)
+
     @Property(list, notify=changed)
     def selectedDetails(self) -> list[dict[str, str]]:
         """Key/value rows describing the block in focus."""
@@ -263,6 +326,9 @@ class TrackModelState(QObject):
             ("Speed limit",
              f"{block.speed_limit_mps * MPH_PER_MPS:.0f} mph"),
             ("Elevation", f"{block.elevation_m * FT_PER_M:.1f} ft"),
+            ("Commanded speed",
+             f"{self._cmd_speed(block.block_id)} mph"),
+            ("Authority", self._authority(block.block_id)),
             ("Station", block.station_name or "—"),
             ("Platform", block.platform_side or "—"),
             ("Direction", self._direction_long(block)),
@@ -275,6 +341,7 @@ class TrackModelState(QObject):
             ("Underground", "Yes" if block.underground else "No"),
             ("Crossing", self._crossing(block.block_id)),
             ("Signal", self._aspect(block.block_id) or "—"),
+            ("Switch", self._switch_position(block.block_id)),
             ("Occupied",
              "Yes" if out.block_occupancy[block.block_id] else "No"),
         ]
@@ -302,6 +369,16 @@ class TrackModelState(QObject):
         self.refresh()
 
     # -- internals ---------------------------------------------------------
+
+    def _cmd_speed(self, block_id: str) -> str:
+        # Track circuit speed for a block in mph; 0 on a dead circuit.
+        signal = self._snap.track_circuit[block_id]
+        return f"{signal.commanded_speed_mps * MPH_PER_MPS:.0f}"
+
+    def _authority(self, block_id: str) -> str:
+        # Track circuit authority: how many blocks it may still enter.
+        blocks = self._snap.track_circuit[block_id].authority_blocks
+        return f"{blocks} block" + ("" if blocks == 1 else "s")
 
     def _beacon_short(self, block_id: str) -> str:
         # Table cell: the beacon's station, or empty.
@@ -351,12 +428,23 @@ class TrackModelState(QObject):
         aspect = self._snap.outputs.controller.signal_states.get(block_id)
         return "" if aspect is None else aspect.name
 
+    def _switch_position(self, block_id: str) -> str:
+        # Normal or reverse where the block holds a switch, else a dash.
+        state = self._snap.outputs.controller.switch_states.get(block_id)
+        return "—" if state is None else state.name
+
     def _crossing(self, block_id: str) -> str:
         # Gate state on a block, or a dash where there is no crossing.
         closed = self._snap.outputs.controller.crossing_states.get(block_id)
         if closed is None:
             return "—"
         return "Gates down" if closed else "Gates up"
+
+    def _set_load_message(self, message: str) -> None:
+        # Emit only on change.
+        if message != self._load_message:
+            self._load_message = message
+            self.loadMessageChanged.emit()
 
     def _set_running(self, running: bool) -> None:
         # Emit only on change.

@@ -321,14 +321,13 @@ def test_per_block_speed_and_authority_round_the_loop(green: Layout) -> None:
     """Command every Green block differently; check what the train gets.
 
     Each block's commanded speed is its speed limit in whole m/s, and its
-    authority is the block five numbers on.
+    authority is a count that differs from block to block.
     """
     speeds: Mapping[str, int] = {
         b.block_id: int(b.speed_limit_mps) for b in green.blocks.values()
     }
     authority = {
-        b.block_id: gid(green, (b.number + 4) % 150 + 1)
-        for b in green.blocks.values()
+        b.block_id: b.number % 7 for b in green.blocks.values()
     }
     model = make_model()
     path, history = run_route(model, "GREEN K-63", TrackControllerCommands(
@@ -340,7 +339,7 @@ def test_per_block_speed_and_authority_round_the_loop(green: Layout) -> None:
         signal = out.train_feeds["T1"].track_signal
         assert signal.commanded_speed_mps == speeds[block]
         assert isinstance(signal.commanded_speed_mps, int)
-        assert signal.authority_block_id == authority[block]
+        assert signal.authority_blocks == authority[block]
 
 
 def test_signals_seen_once_on_entry_round_the_loop(green: Layout) -> None:
@@ -375,7 +374,8 @@ def test_boarding_at_green_stations(block_id: str, station: str) -> None:
     for _ in range(5):
         model.step(DT_S, make_inputs())
     out = model.step(DT_S, make_inputs(
-        {"T1": report(block_id, 1.0, speed_mps=0.0, capacity=3)}))
+        {"T1": report(block_id, 1.0, speed_mps=0.0, capacity=3,
+                      doors_open=True)}))
     assert out.train_feeds["T1"].passengers_boarded == 3
     assert out.train_feeds["T1"].track_info.station_name == station
 
@@ -386,14 +386,11 @@ def test_two_trains_on_green_get_their_own_blocks_signal() -> None:
         {"T1": report("GREEN K-65", 1.0), "T2": report("GREEN O-88", 1.0)},
         TrackControllerCommands(
             commanded_speed_mps={"GREEN K-65": 12, "GREEN O-88": 6},
-            commanded_authority={"GREEN K-65": "GREEN L-73",
-                                 "GREEN O-88": "GREEN P-96"}),
+            commanded_authority={"GREEN K-65": 8, "GREEN O-88": 2}),
     ))
     t1 = out.train_feeds["T1"].track_signal
     t2 = out.train_feeds["T2"].track_signal
-    assert (t1.commanded_speed_mps, t1.authority_block_id) == (
-        12, "GREEN L-73")
-    assert (t2.commanded_speed_mps, t2.authority_block_id) == (
-        6, "GREEN P-96")
+    assert (t1.commanded_speed_mps, t1.authority_blocks) == (12, 8)
+    assert (t2.commanded_speed_mps, t2.authority_blocks) == (6, 2)
     occupied = {b for b, o in out.controller.block_occupancy.items() if o}
     assert occupied == {"GREEN K-65", "GREEN O-88"}

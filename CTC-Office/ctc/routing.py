@@ -71,7 +71,10 @@ class AuthorityLimit:
     # The last block it may enter: its own block when ``blocks`` is 0.
     end_block_id: str
     # Why the count ends there: "destination", "occupied", "closed",
-    # "closing", "failed", "reserved", "switch" or "no route".
+    # "closing", "failed", "reserved", "switch" or "no route". With
+    # ``keep``, also "granted": the end of the part of an earlier grant
+    # the train still has. The CTC uses that one internally only; it
+    # never reaches a TrainAuthority.
     reason: str
     # The block or switch the reason names; "" for "destination" and
     # "no route".

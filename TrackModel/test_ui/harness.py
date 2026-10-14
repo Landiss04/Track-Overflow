@@ -21,7 +21,7 @@ from typing import Any
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
-from test_link.link import LinkClient
+from test_link.link import SERVER_NAME, LinkClient
 from test_ui.block_filter import (
     filter_blocks,
     lines_of,
@@ -74,6 +74,7 @@ class _FakeTrain:
     speed_mps: float = 0.0
     block_changed: bool = False
     capacity: int = 222
+    doors_open: bool = False
 
 
 class TrackModelTestHarness(QObject):
@@ -85,14 +86,16 @@ class TrackModelTestHarness(QObject):
     runControlChanged = Signal()
     filterChanged = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None,
+                 link_name: str = SERVER_NAME) -> None:
         super().__init__(parent)
+        self._link_name = link_name
         # Block filter: which line's blocks and devices the page shows.
         self._line = ""
         self._section = ""
         self._range_text = ""
         self._range: tuple[int, int] | None = None
-        self._client = LinkClient(self)
+        self._client = LinkClient(self, name=self._link_name)
         self._client.outputsReceived.connect(self._on_outputs)
         self._client.errorReceived.connect(self._on_error)
         self._client.connectionChanged.connect(
@@ -108,7 +111,6 @@ class TrackModelTestHarness(QObject):
         self._act_as_train_model = True
         self._awaiting_reply = False
         self._last_seen: dict[str, str] = {}
-        self._sales_total: dict[str, int] = {}
         self._clear_inputs()
         self._client.connect_to_server()
 
@@ -213,7 +215,6 @@ class TrackModelTestHarness(QObject):
         self._clear_inputs()
         self._tick = 0
         self._last_seen.clear()
-        self._sales_total.clear()
         self._client.reset()
         self.inputsChanged.emit()
         self.runControlChanged.emit()
@@ -395,6 +396,7 @@ class TrackModelTestHarness(QObject):
                  row_id="block_changed"),
             _row("capacity", "uint", train.capacity,
                  row_id="passenger_capacity"),
+            _row("doors", "bool", train.doors_open, row_id="doors_open"),
         ]
 
     @Property(list, notify=inputsChanged)
@@ -405,9 +407,9 @@ class TrackModelTestHarness(QObject):
         return [
             _row("speed", "uint", self._speed.get(self._selected_block, 0),
                  "m/s", row_id="commanded_speed_mps"),
-            _row("authority", "string",
-                 self._authority.get(self._selected_block, ""),
-                 row_id="authority_block_id"),
+            _row("authority", "uint",
+                 self._authority.get(self._selected_block, 0), "blocks",
+                 row_id="authority_blocks"),
         ]
 
     @Property(list, notify=inputsChanged)
@@ -471,10 +473,8 @@ class TrackModelTestHarness(QObject):
         failed = [f"{short_name(b)} {f.name}"
                   for b, f in out.failure_status.items()
                   if f is not TrackFailure.NONE and self._on_line(b)]
-        sold = [f"{s}+{n}" for s, n in out.ticket_sales.items() if n]
         heaters_on = [short_name(s) for s, on in out.heater_states.items()
                       if on and self._on_line(s)]
-        total = sum(self._sales_total.values())
         # Track temperature of the selected block's section.
         section = self._selected_block.split("-", 1)[0]
         temp = out.track_temp_c.get(section)
@@ -489,10 +489,22 @@ class TrackModelTestHarness(QObject):
             if temp is None else
             _row("trk temp", "float", round(temp, 2), "°C",
                  row_id="track_temp_c"),
-            _row("sold now", "string", ", ".join(sold) or "none",
-                 row_id="ticket_sales"),
-            _row("sold total", "int", total, row_id="ticket_sales_total"),
         ]
+
+    @Property(list, notify=outputsChanged)
+    def ctcRows(self) -> list[dict[str, Any]]:
+        """Ticket sales, sent to the CTC Office directly.
+
+        Each sale is an event; the Track Model keeps no running total.
+        """
+        if self._outputs is None:
+            return []
+        ctc = self._outputs.ctc
+        sold = [f"{station} +{n}" for station, n in ctc.tickets_sold_now.items()
+                if n]
+        rows = [_row("sold now", "string", ", ".join(sold) or "none",
+                     row_id="tickets_sold_now")]
+        return rows
 
     @Property(list, notify=outputsChanged)
     def deviceStateRows(self) -> list[dict[str, Any]]:
@@ -541,8 +553,8 @@ class TrackModelTestHarness(QObject):
                  row_id="track_info.station_name"),
             _row("cmd speed", "int", sig.commanded_speed_mps, "m/s",
                  row_id="track_signal.commanded_speed_mps"),
-            _row("authority", "string", sig.authority_block_id or "none",
-                 row_id="track_signal.authority_block_id"),
+            _row("authority", "uint", sig.authority_blocks, "blocks",
+                 row_id="track_signal.authority_blocks"),
             _row("beacon", "string", beacon_text),
             _row("boarded", "uint", feed.passengers_boarded,
                  row_id="passengers_boarded"),
@@ -575,7 +587,7 @@ class TrackModelTestHarness(QObject):
         self._selected_train = ""
         self._selected_block = ""
         self._speed: dict[str, int] = {}
-        self._authority: dict[str, str] = {}
+        self._authority: dict[str, int] = {}
         self._switches: dict[str, str] = {}
         self._signals: dict[str, str] = {}
         self._crossings: dict[str, bool] = {}
@@ -657,6 +669,8 @@ class TrackModelTestHarness(QObject):
             train.block_changed = bool(value)
         elif name == "passenger_capacity":
             train.capacity = max(0, int(float(value)))
+        elif name == "doors_open":
+            train.doors_open = bool(value)
         else:
             raise KeyError(name)
 
@@ -665,12 +679,8 @@ class TrackModelTestHarness(QObject):
         block_id = self._selected_block
         if name == "commanded_speed_mps":
             self._speed[block_id] = int(value)
-        elif name == "authority_block_id":
-            text = str(value).strip()
-            if text:
-                self._authority[block_id] = text
-            else:
-                self._authority.pop(block_id, None)
+        elif name == "authority_blocks":
+            self._authority[block_id] = max(0, int(float(value)))
         else:
             raise KeyError(name)
 
@@ -696,6 +706,7 @@ class TrackModelTestHarness(QObject):
                     actual_speed_mps=t.speed_mps,
                     block_changed=t.block_changed,
                     passenger_capacity=t.capacity,
+                    doors_open=t.doors_open,
                 )
                 for train_id, t in self._trains.items()
             },
@@ -713,10 +724,6 @@ class TrackModelTestHarness(QObject):
         for train_id, seen in outputs.signal_seen.items():
             if seen is not None:
                 self._last_seen[train_id] = seen.name
-        for station, sold in outputs.controller.ticket_sales.items():
-            self._sales_total[station] = (
-                self._sales_total.get(station, 0) + sold
-            )
         if learned:
             self.filterChanged.emit()
         if learned or self._act_as_train_model:

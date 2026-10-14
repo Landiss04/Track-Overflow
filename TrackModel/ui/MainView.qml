@@ -1,8 +1,10 @@
 // Track Model operator view, after knowledge/track_model_ui_wireframe.html.
 // Everything shown is in display units, converted by track_model/state.py.
-// Murphy's failure injection is the only action on this page.
+// Murphy's failure injection and loading a track from JSON are the actions
+// on this page.
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../../ui"
 
@@ -10,6 +12,15 @@ Item {
     id: root
 
     property int view: 0  // 0 = blocks, 1 = switches & lights
+
+    // Loading replaces the line named in the file (or adds it) and
+    // restarts the module, so trains and commands are cleared.
+    FileDialog {
+        id: loadDialog
+        title: qsTr("Load track from JSON")
+        nameFilters: [qsTr("Track layout (*.json)")]
+        onAccepted: trackModel.loadLayout(selectedFile)
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -74,13 +85,32 @@ Item {
                             trackModel.setFilter(String(value));
                         }
                     }
+
+                    AppButton {
+                        Layout.alignment: Qt.AlignBottom
+                        variant: "secondary"
+                        text: qsTr("Load track…")
+                        onClicked: loadDialog.open()
+                    }
+                }
+
+                Callout {
+                    Layout.fillWidth: true
+                    visible: trackModel.loadMessage !== ""
+                    variant: "warning"
+                    heading: qsTr("Track not loaded")
+                    body: trackModel.loadMessage
                 }
 
                 ScrollView {
+                    id: tableScroll
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    contentWidth: availableWidth
+                    // The block table needs about 1146; narrower than
+                    // that it scrolls sideways instead of overlapping.
+                    contentWidth: Math.max(availableWidth,
+                        root.view === 0 ? 1150 : 0)
 
                     ColumnLayout {
                         width: parent.width
@@ -89,29 +119,36 @@ Item {
                         DataTable {
                             Layout.fillWidth: true
                             visible: root.view === 0
+                            stickyFlickable: tableScroll.contentItem
                             columns: [
-                                { key: "id", label: qsTr("Block"),
-                                  mono: true, width: 110 },
+                                // Widths fit the header text; the table
+                                // scrolls sideways before it squeezes.
+                                { key: "name", label: qsTr("Block"),
+                                  mono: true, width: 76 },
                                 { key: "direction", label: qsTr("Dir"),
-                                  mono: true, width: 80 },
+                                  mono: true, width: 110 },
                                 { key: "length", label: qsTr("Len ft"),
-                                  numeric: true, width: 60 },
+                                  numeric: true, width: 80 },
                                 { key: "grade", label: qsTr("Grade °"),
-                                  numeric: true, width: 64 },
+                                  numeric: true, width: 90 },
                                 { key: "limit", label: qsTr("Limit mph"),
-                                  numeric: true, width: 74 },
+                                  numeric: true, width: 100 },
+                                { key: "cmdSpeed", label: qsTr("Cmd mph"),
+                                  numeric: true, width: 100 },
+                                { key: "authority", label: qsTr("Auth"),
+                                  numeric: true, width: 64 },
                                 { key: "station", label: qsTr("Station"),
-                                  width: 110 },
+                                  width: 100 },
                                 { key: "beacon", label: qsTr("Beacon"),
-                                  width: 110 },
+                                  width: 100 },
                                 { key: "heat", label: qsTr("Heat"),
-                                  mono: true, width: 44 },
-                                { key: "occupied", label: qsTr("Occ"),
                                   mono: true, width: 56 },
+                                { key: "occupied", label: qsTr("Occupied"),
+                                  mono: true, width: 96 },
                                 { key: "signal", label: qsTr("Signal"),
-                                  mono: true, width: 90 },
+                                  mono: true, width: 84 },
                                 { key: "failure", label: qsTr("Failure"),
-                                  mono: true, width: 110 }
+                                  mono: true, width: 130 }
                             ]
                             rows: trackModel.blockRows
                             onRowActivated: function (index, row) {
@@ -199,6 +236,33 @@ Item {
                             body: qsTr("Pick a row in the table.")
                         }
 
+                        // The light's colour, up front; the "Signal" row
+                        // below repeats it as text.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: trackModel.selectedBlock !== ""
+                            spacing: theme.space_3
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("Signal light")
+                                color: theme.text_secondary
+                                font.family: theme.ui_family
+                                font.pixelSize: theme.size_small
+                            }
+
+                            StatusBadge {
+                                readonly property string aspect:
+                                    trackModel.selectedSignal
+                                variant: aspect === "RED" ? "fault"
+                                    : aspect === "YELLOW" ? "warning"
+                                    : aspect === "" ? "idle" : "ok"
+                                label: aspect === ""
+                                    ? qsTr("No light")
+                                    : aspect.replace("_", " ")
+                            }
+                        }
+
                         Repeater {
                             model: trackModel.selectedDetails
 
@@ -232,11 +296,14 @@ Item {
                         Layout.fillWidth: true
                         title: qsTr("Conditions")
 
-                        KeyValueRow {
+                        ValueField {
                             Layout.fillWidth: true
-                            label: qsTr("Ambient temperature")
-                            value: trackModel.ambient
-                            rule: false
+                            label: qsTr("Ambient temperature (°F)")
+                            kind: "float"
+                            modelValue: trackModel.ambientF
+                            onCommitted: function (value) {
+                                trackModel.setAmbientF(value);
+                            }
                         }
                     }
 

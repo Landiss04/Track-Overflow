@@ -72,9 +72,12 @@ class LinkServer(QObject):
     #: The model changed: a step, failure, edit or reset.
     changed = Signal()
 
-    def __init__(self, model: TrackModel, parent: QObject | None = None):
+    def __init__(self, model: TrackModel, parent: QObject | None = None,
+                 name: str = SERVER_NAME):
         super().__init__(parent)
         self._model = model
+        # Tests pass their own name, so they never meet a running app.
+        self._name = name
         self._server = QLocalServer(self)
         self._server.newConnection.connect(self._on_new_connection)
         self._readers: dict[QLocalSocket, _LineReader] = {}
@@ -86,8 +89,8 @@ class LinkServer(QObject):
 
     def listen(self) -> bool:
         """Start listening, clearing a pipe a crashed run left behind."""
-        QLocalServer.removeServer(SERVER_NAME)
-        return self._server.listen(SERVER_NAME)
+        QLocalServer.removeServer(self._name)
+        return self._server.listen(self._name)
 
     def close(self) -> None:
         """Stop listening and drop every client.
@@ -175,8 +178,10 @@ class LinkClient(QObject):
     errorReceived = Signal(str)
     connectionChanged = Signal(bool)
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None,
+                 name: str = SERVER_NAME) -> None:
         super().__init__(parent)
+        self._name = name
         self._socket = QLocalSocket(self)
         self._reader = _LineReader()
         self._socket.readyRead.connect(self._on_ready)
@@ -208,7 +213,7 @@ class LinkClient(QObject):
         unconnected = QLocalSocket.LocalSocketState.UnconnectedState
         if not self._closed and self._socket.state() == unconnected:
             self._reader = _LineReader()
-            self._socket.connectToServer(SERVER_NAME)
+            self._socket.connectToServer(self._name)
 
     def step(self, dt: float, inputs: TrackModelInputs) -> bool:
         """Send one tick. Returns False if not connected."""

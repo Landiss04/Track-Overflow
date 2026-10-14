@@ -29,9 +29,9 @@ ColumnLayout {
     FieldLabel {
         Layout.fillWidth: true
         text: root.label.toUpperCase()
+        // Unlabeled in tables, where a header row names the column, and
+        // wherever labelVisible is false.
         visible: root.labelVisible && root.label !== ""
-        // Unlabeled in tables, where a header row names the column.
-        visible: root.label !== ""
     }
 
     ComboBox {
@@ -89,6 +89,7 @@ ColumnLayout {
 
             contentItem: Text {
                 text: fullText.text
+                textFormat: Text.PlainText
                 color: theme.text_primary
                 font: control.font
             }

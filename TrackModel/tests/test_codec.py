@@ -35,7 +35,7 @@ def test_inputs_round_trip() -> None:
         {"T1": report("GREEN A-1", 3.5, speed_mps=-0.25, capacity=9)},
         TrackControllerCommands(
             commanded_speed_mps={"GREEN A-1": 8},
-            commanded_authority={"GREEN A-1": "GREEN C-9"},
+            commanded_authority={"GREEN A-1": 3},
             switch_commands={"BLUE A-5": SwitchPosition.REVERSE},
             crossing_commands={"BLUE A-3": True},
             signal_commands={"BLUE A-4": SignalAspect.YELLOW},
