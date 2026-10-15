@@ -1,0 +1,54 @@
+// Green line, wayside 1: blocks 1-20, sections A-E.
+// Switch 12 joins 12-13 when normal and 1-13 when reversed. Its signal
+// shows the route into block 13. Railway crossing on block 19.
+//
+// AUTH_n passes the CTC Office's speed and authority to the train in
+// block n. Here a train keeps them only while the blocks beside it, on
+// the route the switch has set, are clear.
+
+VAR_IN  OCC_1..20
+VAR_IN  CLOSED_13 CLOSED_14 FAIL_13
+VAR_IN  SWREV_12 MAINT
+VAR_OUT AUTH_1..20
+VAR_OUT SW_12
+VAR_OUT SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG
+VAR_OUT XING_19
+
+// Switch 12: send a train waiting on the loop (block 1) into 13 once
+// the main-line approach is clear; otherwise keep the main line.
+SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
+
+// Signal 12 reads the route into 13 and the block beyond it. Exactly
+// one aspect is lit for every input: red, else yellow, else green or
+// super green.
+BLOCKED := OCC_13 OR CLOSED_13 OR FAIL_13
+CAUTION := OCC_14 OR CLOSED_14 OR SWREV_12 OR MAINT
+SIG_12_R  := BLOCKED
+SIG_12_Y  := NOT BLOCKED AND CAUTION
+SIG_12_G  := NOT BLOCKED AND NOT CAUTION AND OCC_15
+SIG_12_SG := NOT BLOCKED AND NOT CAUTION AND NOT OCC_15
+
+// Crossing 19: lights and gates for a train on 18, 19 or 20.
+XING_19 := OCC_18 OR OCC_19 OR OCC_20
+
+// Separation: hold a train whose neighbour on its route is occupied.
+AUTH_1  := NOT (OCC_2 OR (SWREV_12 AND OCC_13))
+AUTH_2  := NOT (OCC_1 OR OCC_3)
+AUTH_3  := NOT (OCC_2 OR OCC_4)
+AUTH_4  := NOT (OCC_3 OR OCC_5)
+AUTH_5  := NOT (OCC_4 OR OCC_6)
+AUTH_6  := NOT (OCC_5 OR OCC_7)
+AUTH_7  := NOT (OCC_6 OR OCC_8)
+AUTH_8  := NOT (OCC_7 OR OCC_9)
+AUTH_9  := NOT (OCC_8 OR OCC_10)
+AUTH_10 := NOT (OCC_9 OR OCC_11)
+AUTH_11 := NOT (OCC_10 OR OCC_12)
+AUTH_12 := NOT (OCC_11 OR (NOT SWREV_12 AND OCC_13))
+AUTH_13 := NOT (OCC_14 OR (NOT SWREV_12 AND OCC_12) OR (SWREV_12 AND OCC_1))
+AUTH_14 := NOT (OCC_13 OR OCC_15)
+AUTH_15 := NOT (OCC_14 OR OCC_16)
+AUTH_16 := NOT (OCC_15 OR OCC_17)
+AUTH_17 := NOT (OCC_16 OR OCC_18)
+AUTH_18 := NOT (OCC_17 OR OCC_19)
+AUTH_19 := NOT (OCC_18 OR OCC_20)
+AUTH_20 := NOT OCC_19

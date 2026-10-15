@@ -19,6 +19,7 @@ Rectangle {
     property string mode: ""
     property string modeKind: "info"
     property string faultText: ""
+    property string source: ""
     property string clock: "--:--:--"
     property alias controls: controlRow.data
 
@@ -58,6 +59,15 @@ Rectangle {
         RowLayout {
             id: controlRow
             spacing: theme.space_4
+        }
+
+        Text {
+            visible: root.source !== ""
+            text: root.source
+            textFormat: Text.PlainText
+            color: theme.text_muted
+            font.family: theme.ui_family
+            font.pixelSize: theme.size_small
         }
 
         Text {

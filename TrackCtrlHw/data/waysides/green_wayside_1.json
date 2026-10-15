@@ -1,0 +1,224 @@
+{
+  "line": "Green",
+  "wayside": "1",
+  "blocks": [
+    {
+      "block_number": 1,
+      "section": "A",
+      "length_m": 100,
+      "grade_percent": 0.5,
+      "speed_limit_kmh": 45,
+      "elevation_m": 0.5,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 2,
+      "section": "A",
+      "length_m": 100,
+      "grade_percent": 1,
+      "speed_limit_kmh": 45,
+      "elevation_m": 1,
+      "cumulative_elevation_m": 1.5,
+      "infrastructure": {
+        "station": "PIONEER"
+      },
+      "station_side": "Left",
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 3,
+      "section": "A",
+      "length_m": 100,
+      "grade_percent": 1.5,
+      "speed_limit_kmh": 45,
+      "elevation_m": 1.5,
+      "cumulative_elevation_m": 3,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 4,
+      "section": "B",
+      "length_m": 100,
+      "grade_percent": 2,
+      "speed_limit_kmh": 45,
+      "elevation_m": 2,
+      "cumulative_elevation_m": 5,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 5,
+      "section": "B",
+      "length_m": 100,
+      "grade_percent": 3,
+      "speed_limit_kmh": 45,
+      "elevation_m": 3,
+      "cumulative_elevation_m": 8,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 6,
+      "section": "B",
+      "length_m": 100,
+      "grade_percent": 4,
+      "speed_limit_kmh": 45,
+      "elevation_m": 4,
+      "cumulative_elevation_m": 12,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 7,
+      "section": "C",
+      "length_m": 100,
+      "grade_percent": 5,
+      "speed_limit_kmh": 45,
+      "elevation_m": 5,
+      "cumulative_elevation_m": 17,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 8,
+      "section": "C",
+      "length_m": 100,
+      "grade_percent": 0,
+      "speed_limit_kmh": 45,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 17,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 9,
+      "section": "C",
+      "length_m": 100,
+      "grade_percent": -5,
+      "speed_limit_kmh": 45,
+      "elevation_m": -5,
+      "cumulative_elevation_m": 12,
+      "infrastructure": {
+        "station": "EDGEBROOK"
+      },
+      "station_side": "Left",
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 10,
+      "section": "C",
+      "length_m": 100,
+      "grade_percent": -4.5,
+      "speed_limit_kmh": 45,
+      "elevation_m": -4.5,
+      "cumulative_elevation_m": 7.5,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 11,
+      "section": "C",
+      "length_m": 100,
+      "grade_percent": -4,
+      "speed_limit_kmh": 45,
+      "elevation_m": -4,
+      "cumulative_elevation_m": 3.5,
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 12,
+      "section": "C",
+      "length_m": 100,
+      "grade_percent": -3,
+      "speed_limit_kmh": 45,
+      "elevation_m": -3,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "switch": "12-13; 1-13"
+      },
+      "seconds_to_traverse": 8
+    },
+    {
+      "block_number": 13,
+      "section": "D",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 7.7143
+    },
+    {
+      "block_number": 14,
+      "section": "D",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 7.7143
+    },
+    {
+      "block_number": 15,
+      "section": "D",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 7.7143
+    },
+    {
+      "block_number": 16,
+      "section": "D",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "station": null
+      },
+      "station_side": "Left/Right",
+      "seconds_to_traverse": 7.7143
+    },
+    {
+      "block_number": 17,
+      "section": "E",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 60,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 9
+    },
+    {
+      "block_number": 18,
+      "section": "E",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 60,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 9
+    },
+    {
+      "block_number": 19,
+      "section": "E",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 60,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "infrastructure": {
+        "railway_crossing": true
+      },
+      "seconds_to_traverse": 9
+    },
+    {
+      "block_number": 20,
+      "section": "E",
+      "length_m": 150,
+      "grade_percent": 0,
+      "speed_limit_kmh": 60,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 0.5,
+      "seconds_to_traverse": 9
+    }
+  ]
+}

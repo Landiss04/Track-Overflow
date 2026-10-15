@@ -131,6 +131,19 @@ def load_line(name: str, path: Path) -> Line:
     )
 
 
+def station_lines(layout: dict[str, Line]) -> dict[str, str]:
+    """Each named station's line, by station name, in file order. No
+    name is used on both lines; a name on two blocks (the two platforms
+    of Green's DORMONT) is one station."""
+    found: dict[str, str] = {}
+    for name, line in layout.items():
+        for station in line.stations():
+            if found.setdefault(station, name) != name:
+                raise ValueError(f"station {station} is on both the "
+                                 f"{found[station]} and {name} lines")
+    return found
+
+
 def load_layout(files: dict[str, Path] | None = None) -> dict[str, Line]:
     """Read every line's layout file, keyed by line name."""
     files = LINE_FILES if files is None else files

@@ -36,7 +36,7 @@ ColumnLayout {
                 return { value: name, text: name };
             });
         if (field.kind === "block" || field.kind === "switch"
-                || field.kind === "crossing")
+                || field.kind === "crossing" || field.kind === "station")
             return (root.layoutOptions[field.kind] || {})[entry.line] || [];
         if (field.kind === "choice")
             return field.options;

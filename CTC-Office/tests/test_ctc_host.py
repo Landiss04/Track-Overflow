@@ -5,7 +5,6 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 
 from __future__ import annotations
 
-import dataclasses
 import sys
 import unittest
 from pathlib import Path
@@ -22,26 +21,33 @@ from ctc.interface import (  # noqa: E402
     CtcSnapshot,
     SwitchReport,
     TrackControllerInputs,
-    TrackFailureReport,
-    TicketSales,
     TrackModelInputs,
-    TrainReport,
 )
 from ctc.model import StubCtcOffice  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
+from ctc_ui.display import MPS_TO_MPH  # noqa: E402
 from ctc_ui.sim_clock import SimulationClockBridge  # noqa: E402
+from tests.occupancy import At, at, place, reports  # noqa: E402
 
 _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
 
 def _green(tickets: int) -> TrackModelInputs:
-    """Track Model inputs with Green line ticket sales."""
-    return TrackModelInputs((TicketSales("Green", tickets),))
+    """Track Model inputs: tickets sold at Glenbury, a Green station."""
+    return TrackModelInputs({"GLENBURY": tickets})
 
 
-def _sold(snap: CtcSnapshot, line: str = "Green") -> int:
-    """Tickets sold so far on one line."""
-    return {t.line: t.tickets for t in snap.tickets_sold}[line]
+def _sold(snap: CtcSnapshot, station: str = "GLENBURY") -> int:
+    """Tickets sold so far at one station."""
+    return snap.tickets_sold[station]
+
+
+def _report(host: CtcHost, module: StubCtcOffice, *trains: At,
+            **others) -> None:
+    """Have the module follow ``trains`` where they are, and hand the
+    window the Track Controller's report of them (occupancy only)."""
+    place(module, *trains)
+    host._receive_inputs(reports(*trains, **others))
 
 
 def _host() -> tuple[CtcHost, StubCtcOffice, SimulationClockBridge]:
@@ -104,44 +110,62 @@ class TickTest(unittest.TestCase):
 class PanelDataTest(unittest.TestCase):
     """What the panels read, and what their actions do."""
 
-    def test_block_states_show_the_most_urgent(self) -> None:
-        host, _, clock = _host()
+    def test_block_states_never_show_a_failure(self) -> None:
+        host, module, clock = _host()
         host.setMaintenanceMode(True)
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(
-                occupancy=(BlockOccupancy("Green", "1", True),
-                           BlockOccupancy("Green", "2", True)),
-                trains=(TrainReport("T1", "Red", "4", 0.0, 5.0),),
-                crossings=(CrossingReport("Green", "19", "active"),),
-                failures=(TrackFailureReport("Green", "2", "power"),))))
+        # Green 1 and 2 occupied with no train in them: the module
+        # infers failures, which the window shows only as occupied.
+        _report(host, module, occupied=[("Green", "1"), ("Green", "2")],
+                crossings=[CrossingReport("Green", "19", "active")])
         clock.clock.tick()
         # Green 1 is occupied, so its closure waits; Green 5 is clear.
         self.assertEqual(host.closeBlock("Green", "1"), "")
         self.assertEqual(host.closeBlock("Green", "5"), "")
         # Occupancy is drawn as trains, not a block state.
-        self.assertEqual(host.blockStates, {
-            "Green:5": "closed", "Green:2": "failure"})
+        self.assertEqual(host.blockStates, {"Green:5": "closed"})
         self.assertEqual(host.crossingStates, {"Green:19": "active"})
         self.assertEqual(
             [(r["block"], r["state"]) for r in host.closures],
             [("Green 1", "Closing \u2014 train in block"),
-             ("Green 2", "Power failure"), ("Green 5", "Closed")])
+             ("Green 5", "Closed")])
+        self.assertEqual(
+            [(t["train"], t["block"]) for t in host.mapTrains],
+            [("", "1"), ("", "2")])
 
     def test_map_trains(self) -> None:
-        host, _, clock = _host()
+        host, module, clock = _host()
+        place(module, at("T1", "3"))
         host._receive_inputs(CtcInputs(
             track_controller=TrackControllerInputs(
-                # Green 3 is 100 m long: 25 m in is a quarter of the way.
-                trains=(TrainReport("T1", "Green", "3", 25.0, 5.0),),
                 occupancy=(BlockOccupancy("Green", "3", True),
                            BlockOccupancy("Red", "8", True),
                            BlockOccupancy("Red", "9", False)))))
         clock.clock.tick()
         self.assertEqual(host.mapTrains, [
+            # Where in its block is not known: drawn at the middle.
             {"train": "T1", "line": "Green", "block": "3",
-             "fraction": 0.25},
-            # Occupied with no train reported: an unnamed train.
+             "fraction": 0.5},
+            # Occupied with no train in it: an unnamed train.
             {"train": "", "line": "Red", "block": "8", "fraction": 0.5}])
+
+    def test_a_train_crossing_into_the_next_block(self) -> None:
+        # Green 3 runs to 2. Once T1 has had time to cross 3, 2 becoming
+        # occupied is T1, which then holds both until 3 clears.
+        host, module, clock = _host()
+        host.dispatchTrain("T1", "Green", "1", "")
+        _report(host, module, at("T1", "3"))
+        for _ in range(200):                # 20 s
+            clock.clock.tick()
+        host._receive_inputs(reports(occupied=[("Green", "3"),
+                                               ("Green", "2")]))
+        clock.clock.tick()
+        self.assertEqual(host.trainDetail("T1")["block"], "3\u21922")
+        self.assertEqual(
+            [(t["train"], t["block"]) for t in host.mapTrains],
+            [("T1", "2")])
+        host._receive_inputs(reports(occupied=[("Green", "2")]))
+        clock.clock.tick()
+        self.assertEqual(host.trainDetail("T1")["block"], "2")
 
     def test_actions_return_errors_as_text(self) -> None:
         host, module, _ = _host()
@@ -158,17 +182,22 @@ class PanelDataTest(unittest.TestCase):
                          "")
         self.assertEqual(module.snapshot().orders[0].arrival_s, 30600.0)
 
-    def test_trains_merge_reports_and_orders(self) -> None:
-        host, _, clock = _host()
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "9", 0.0, 10.0),))))
+    def test_trains_merge_tracking_and_orders(self) -> None:
+        host, module, clock = _host()
+        _report(host, module, at("T1", "9"))
         clock.clock.tick()
         host.dispatchTrain("T1", "Green", "65", "08:30")
         host.dispatchTrain("T2", "Red", "7", "")
         rows = {row["train"]: row for row in host.trains}
         self.assertEqual(rows["T1"]["block"], "9")
-        self.assertEqual(rows["T1"]["speed"], "22.4")         # mph
+        # Its actual speed is never known; what the CTC suggests is.
+        self.assertNotIn("speed", rows["T1"])
+        (suggestion,) = module.snapshot().outputs.track_controller \
+            .suggestions
+        self.assertEqual(rows["T1"]["suggestedSpeed"],
+                         f"{suggestion.suggested_speed_mps * MPS_TO_MPH:.1f}")
+        self.assertEqual((rows["T1"]["status"], rows["T2"]["status"]),
+                         ("En route", "In yard"))
         self.assertEqual(rows["T1"]["destination"], "Glenbury (65)")
         self.assertEqual(rows["T1"]["eta"], "08:30")
         # Green 9 toward 65 runs down to 1, then through switch 12 (1 to
@@ -184,11 +213,8 @@ class PanelDataTest(unittest.TestCase):
 
     def test_selected_train_route(self) -> None:
         # T1 on Green 30 toward 37, T2 standing on 32: authority 1.
-        host, _, clock = _host()
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(trains=(
-                TrainReport("T1", "Green", "30", 0.0, 0.0),
-                TrainReport("T2", "Green", "32", 0.0, 0.0)))))
+        host, module, clock = _host()
+        _report(host, module, at("T1", "30"), at("T2", "32"))
         clock.clock.tick()
         host.dispatchTrain("T1", "Green", "37", "")
         states = host.routeStates("T1")
@@ -208,10 +234,8 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(host.routeDetail("T2")["chips"], [])
 
     def test_long_authority_chips_are_capped(self) -> None:
-        host, _, clock = _host()
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(trains=(
-                TrainReport("T1", "Green", "63", 0.0, 0.0),))))
+        host, module, clock = _host()
+        _report(host, module, at("T1", "63"))
         clock.clock.tick()
         host.dispatchTrain("T1", "Green", "75", "")
         chips = host.routeDetail("T1")["chips"]
@@ -223,11 +247,8 @@ class PanelDataTest(unittest.TestCase):
 
     def test_authority_held_by_another_train(self) -> None:
         # T1 and T2 face each other on Green F, both bound for 24.
-        host, _, clock = _host()
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(trains=(
-                TrainReport("T1", "Green", "20", 0.0, 0.0),
-                TrainReport("T2", "Green", "28", 0.0, 0.0)))))
+        host, module, clock = _host()
+        _report(host, module, at("T1", "20"), at("T2", "28"))
         clock.clock.tick()
         host.dispatchTrain("T1", "Green", "24", "")
         host.dispatchTrain("T2", "Green", "24", "")
@@ -238,12 +259,12 @@ class PanelDataTest(unittest.TestCase):
         # T5 on Red 28 cannot move (29 failed); T4 behind it wants 31,
         # which only reversing would reach.
         host, module, clock = _host()
-        reports = CtcInputs(track_controller=TrackControllerInputs(
-            trains=(TrainReport("T4", "Red", "20", 0.0, 0.0),
-                    TrainReport("T5", "Red", "28", 0.0, 0.0)),
-            failures=(TrackFailureReport("Red", "29", "power"),),
-            switches=(SwitchReport("Red", "27", "normal"),)))
-        host._receive_inputs(reports)
+        trains = (at("T4", "20", "Red"), at("T5", "28", "Red"))
+        switches = [SwitchReport("Red", "27", "normal")]
+        failed = reports(*trains, occupied=[("Red", "29")],
+                         switches=switches)
+        _report(host, module, *trains, occupied=[("Red", "29")],
+                switches=switches)
         host.dispatchTrain("T4", "Red", "31", "")
         host.dispatchTrain("T5", "Red", "45", "")
         clock.clock.tick()
@@ -253,19 +274,19 @@ class PanelDataTest(unittest.TestCase):
             "train": "T4", "line": "Red", "reverseAt": "33",
             "destination": "31",
             "blockedBy": "T5 is standing in block 28 and is not moving"})
-        self.assertEqual(alerts["T5"]["blockedBy"], "block 29 has failed")
+        # The failure shows only as an occupied block.
+        self.assertEqual(alerts["T5"]["blockedBy"], "block 29 is occupied")
         self.assertIn("reversing at block 33",
                       host.routeDetail("T4")["summary"])
         # Dismissed: gone until the situation clears and comes back.
         host.dismissReversal("T4")
         self.assertEqual([a["train"] for a in host.reversalAlerts], ["T5"])
-        host._receive_inputs(dataclasses.replace(
-            reports, track_controller=dataclasses.replace(
-                reports.track_controller, failures=())))
+        host._receive_inputs(reports(*trains, switches=switches))
         clock.clock.tick()
         clock.clock.tick()
         self.assertEqual(host.reversalAlerts, [])
-        host._receive_inputs(reports)
+        # Too soon for T5 to have got there: a failure again.
+        host._receive_inputs(failed)
         clock.clock.tick()
         clock.clock.tick()
         self.assertIn("T4", [a["train"] for a in host.reversalAlerts])
@@ -279,9 +300,7 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(host.closeBlock("Green", "5"),
                          "Green 5 is already closed.")
         # A block with a train in it is closing until the train leaves.
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "9", 0.0, 0.0),))))
+        _report(host, module, at("T1", "9"))
         clock.clock.tick()
         self.assertEqual(host.closeBlock("Green", "9"), "")
         self.assertEqual(host.closureState("Green", "9"), "closing")
@@ -289,10 +308,8 @@ class PanelDataTest(unittest.TestCase):
                          "Green 9 is already closing.")
 
     def test_authority_limit_at_the_destination(self) -> None:
-        host, _, clock = _host()
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "30", 0.0, 0.0),))))
+        host, module, clock = _host()
+        _report(host, module, at("T1", "30"))
         clock.clock.tick()
         host.dispatchTrain("T1", "Green", "30", "")
         row = host.trainDetail("T1")
@@ -303,8 +320,9 @@ class PanelDataTest(unittest.TestCase):
         host, _, clock = _host()
         self.assertEqual(host.throughput, {"Green": "—",
                                            "Red": "—"})
-        host._receive_inputs(CtcInputs(track_model=TrackModelInputs((
-            TicketSales("Green", 30), TicketSales("Red", 6)))))
+        # Per line is the sum over the line's stations.
+        host._receive_inputs(CtcInputs(track_model=TrackModelInputs({
+            "GLENBURY": 20, "DORMONT": 10, "SHADYSIDE": 6})))
         for _ in range(3600):          # six simulated minutes of ticks
             clock.clock.tick()
         # Sales count once, on the first tick: 30 in a tenth of an hour.
@@ -316,15 +334,15 @@ class PanelDataTest(unittest.TestCase):
     def test_history_buckets_sales_by_clock_hour(self) -> None:
         host, _, clock = _host()           # the clock starts at 05:00
 
-        def sell(line: str, tickets: int, at_s: float) -> None:
+        def sell(station: str, tickets: int, at_s: float) -> None:
             clock.clock.reset(at_s)
             host._receive_inputs(CtcInputs(track_model=TrackModelInputs(
-                (TicketSales(line, tickets),))))
+                {station: tickets})))
             clock.clock.tick()
 
-        sell("Green", 10, 5 * 3600)
-        sell("Green", 5, 5 * 3600 + 1800)
-        sell("Red", 4, 7 * 3600)
+        sell("GLENBURY", 10, 5 * 3600)
+        sell("DORMONT", 5, 5 * 3600 + 1800)
+        sell("SHADYSIDE", 4, 7 * 3600)
         history = host.throughputHistory
         # Twelve hours from the start hour, 05:00 to 16:00.
         self.assertEqual(history["hours"][0], "05:00")
@@ -336,7 +354,7 @@ class PanelDataTest(unittest.TestCase):
 
         # Past 12 hours the window follows the current hour, across
         # midnight: 05:00 drops out.
-        sell("Red", 1, 24 * 3600 + 900)          # 00:15 the next day
+        sell("SHADYSIDE", 1, 24 * 3600 + 900)        # 00:15 the next day
         history = host.throughputHistory
         self.assertEqual((history["hours"][0], history["hours"][-1]),
                          ("13:00", "00:00"))
@@ -359,9 +377,7 @@ class PanelDataTest(unittest.TestCase):
         # closed_blocks lists a closing block too; the window still
         # shows it once, as closing, with its train on the map.
         host, module, clock = _host()
-        host._receive_inputs(CtcInputs(
-            track_controller=TrackControllerInputs(
-                trains=(TrainReport("T1", "Green", "65", 0.0, 0.0),))))
+        _report(host, module, at("T1", "65"))
         clock.clock.tick()
         module.set_maintenance_mode(True)
         module.set_block_closed("Green", "65", True)

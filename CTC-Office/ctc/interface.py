@@ -9,11 +9,14 @@ and ``common/interfaces.py`` is never imported (decision D008).
 
 The CTC exchanges data with two modules:
 
-- Track Controller: sends block occupancy, train reports, switch and
-  crossing states and track failures in; receives suggested speed and
-  authority per train, the blocks closed in maintenance mode (which it
-  may not override) and switch commands out.
-- Track Model: sends ticket sales per line in.
+- Track Controller: sends block occupancy, switch states and crossing
+  states in; receives suggested speed and authority per train, the
+  blocks closed in maintenance mode (which it may not override) and
+  switch commands out. Occupancy is all it says about trains: no train
+  IDs, positions or speeds, and a failed block reports occupied
+  (``block-occupancy``, proposed on ``ctc-deployment``). The CTC follows
+  its own trains from it (``ctc.tracking``).
+- Track Model: sends ticket sales per station in.
 
 It also sends the clock speedup command to the central harness.
 
@@ -29,15 +32,14 @@ listed on in the track layout file.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal, Mapping, Protocol
 
 if TYPE_CHECKING:
     from ctc.schedule import Schedule
 
 SwitchPosition = Literal["normal", "reverse"]
 CrossingState = Literal["inactive", "active"]
-TrackFailureKind = Literal["broken_rail", "track_circuit", "power"]
 
 
 # ------------------------------------------------------------------ #
@@ -51,17 +53,6 @@ class BlockOccupancy:
     line: str
     block_id: str
     occupied: bool
-
-
-@dataclass(frozen=True, slots=True)
-class TrainReport:
-    """Where one train is and how fast it is moving."""
-
-    train_id: str
-    line: str
-    block_id: str
-    offset_m: float
-    speed_mps: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,37 +70,25 @@ class CrossingReport:
 
 
 @dataclass(frozen=True, slots=True)
-class TrackFailureReport:
-    line: str
-    block_id: str
-    kind: TrackFailureKind
-
-
-@dataclass(frozen=True, slots=True)
 class TrackControllerInputs:
     """From the Track Controller, every tick."""
 
+    # Occupied or not, per block; a block not listed is unoccupied. A
+    # train and a failure look the same.
     occupancy: tuple[BlockOccupancy, ...] = ()
-    trains: tuple[TrainReport, ...] = ()
     switches: tuple[SwitchReport, ...] = ()
     crossings: tuple[CrossingReport, ...] = ()
-    failures: tuple[TrackFailureReport, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class TicketSales:
-    """Tickets sold on one line."""
-
-    line: str
-    tickets: int
 
 
 @dataclass(frozen=True, slots=True)
 class TrackModelInputs:
     """From the Track Model, every tick."""
 
-    # Tickets sold since the previous tick, at most one entry per line.
-    ticket_sales: tuple[TicketSales, ...] = ()
+    # Tickets sold at each station since the previous tick, by station
+    # name as in the layout files: {"DORMONT": 12, "GLENBURY": 4}. A
+    # station that sold none may be left out
+    # (truth/signals/ticket-sales.md).
+    ticket_sales: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,7 +190,7 @@ class CancelledOrder:
     train_id: str
     line: str
     destination_block_id: str
-    # e.g. "block closed", "block closing", "track failure: power"
+    # "block closed" or "block closing"
     reason: str
 
 
@@ -224,9 +203,9 @@ class TrainAuthority:
     blocks: int
     # The last block the train may enter: its own when ``blocks`` is 0.
     end_block_id: str
-    # "destination", "occupied", "closed", "closing", "failed",
-    # "reserved" (within another train's authority), "switch" or
-    # "no route".
+    # "destination", "occupied" (a failed block too: the CTC never
+    # shows one), "closed", "closing", "reserved" (within another
+    # train's authority), "switch" or "no route".
     reason: str
     # The block or switch the reason names; "" for "destination" and
     # "no route".
@@ -245,14 +224,26 @@ class TrainAuthority:
 
 
 @dataclass(frozen=True, slots=True)
+class TrackedTrain:
+    """Where the CTC Office has followed one of its trains to."""
+
+    train_id: str
+    line: str
+    # The blocks it holds, tail first, head last: one, or two while it
+    # crosses a block boundary.
+    blocks: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CtcSnapshot:
     """Full observable state for the CTC UIs."""
 
     outputs: CtcOutputs
     inputs: CtcInputs | None = None
     elapsed_s: float = 0.0
-    # Tickets sold since the simulation started, one entry per line.
-    tickets_sold: tuple[TicketSales, ...] = ()
+    # Tickets sold at each named station since the simulation started,
+    # by station name.
+    tickets_sold: Mapping[str, int] = field(default_factory=dict)
     # Runs from the loaded schedule still waiting, by departure time.
     queued_trains: tuple[QueuedTrain, ...] = ()
     # Dispatcher orders, by train ID.
@@ -267,6 +258,13 @@ class CtcSnapshot:
     # Reports received while time was not passing (the clock paused);
     # they apply at the next step.
     inputs_staged: bool = False
+    # Trains the CTC is following from occupancy, by train ID. Blocks
+    # it has inferred to have failed are not given: the UIs show them
+    # only as occupied.
+    trains: tuple[TrackedTrain, ...] = ()
+    # Ordered trains it lost track of (their blocks cleared, outside the
+    # yard); dropped quietly.
+    lost_trains: tuple[str, ...] = ()
     # The dispatcher's operating mode. Not sent to any module: the
     # Track Controller gets ``closed_blocks`` instead.
     maintenance_mode: bool = False

@@ -1,0 +1,56 @@
+// Green line, wayside 3: blocks 74-88, sections M-O.
+// Switch 76 joins 76-77 when normal and 77-101 when reversed.
+// Switch 85 joins 85-86 when normal and 100-85 when reversed.
+// Blocks 100 and 101 lie outside this wayside.
+//
+// AUTH_n passes the CTC Office's speed and authority to the train in
+// block n. Here a train keeps them only while the blocks beside it, on
+// the route the switches have set, are clear.
+
+VAR_IN  OCC_74..88
+VAR_IN  CLOSED_76 FAIL_76 CLOSED_77 FAIL_77
+VAR_IN  FAIL_85 CLOSED_86 FAIL_86
+VAR_IN  SWREV_76 SWREV_85 MAINT
+VAR_OUT AUTH_74..88
+VAR_OUT SW_76 SW_85
+VAR_OUT SIG_76_R SIG_76_Y SIG_76_G SIG_76_SG
+VAR_OUT SIG_85_R SIG_85_Y SIG_85_G SIG_85_SG
+
+// Each switch routes around its normal leg while that leg is closed
+// or failed.
+SW_76 := CLOSED_76 OR FAIL_76
+SW_85 := CLOSED_86 OR FAIL_86
+
+// Signal 76 shows the route into block 77. Exactly one aspect is lit
+// for every input: red, else yellow, else green or super green.
+BLOCKED_76 := OCC_77 OR CLOSED_77 OR FAIL_77
+CAUTION_76 := OCC_78 OR SWREV_76 OR MAINT
+SIG_76_R  := BLOCKED_76
+SIG_76_Y  := NOT BLOCKED_76 AND CAUTION_76
+SIG_76_G  := NOT BLOCKED_76 AND NOT CAUTION_76 AND OCC_79
+SIG_76_SG := NOT BLOCKED_76 AND NOT CAUTION_76 AND NOT OCC_79
+
+// Signal 85 shows the route out of block 85.
+BLOCKED_85 := FAIL_85 OR (NOT SWREV_85 AND (OCC_86 OR CLOSED_86 OR FAIL_86))
+CAUTION_85 := SWREV_85 OR OCC_87 OR MAINT
+SIG_85_R  := BLOCKED_85
+SIG_85_Y  := NOT BLOCKED_85 AND CAUTION_85
+SIG_85_G  := NOT BLOCKED_85 AND NOT CAUTION_85 AND OCC_88
+SIG_85_SG := NOT BLOCKED_85 AND NOT CAUTION_85 AND NOT OCC_88
+
+// Separation: hold a train whose neighbour on its route is occupied.
+AUTH_74 := NOT OCC_75
+AUTH_75 := NOT (OCC_74 OR OCC_76)
+AUTH_76 := NOT (OCC_75 OR (NOT SWREV_76 AND OCC_77))
+AUTH_77 := NOT (OCC_78 OR (NOT SWREV_76 AND OCC_76))
+AUTH_78 := NOT (OCC_77 OR OCC_79)
+AUTH_79 := NOT (OCC_78 OR OCC_80)
+AUTH_80 := NOT (OCC_79 OR OCC_81)
+AUTH_81 := NOT (OCC_80 OR OCC_82)
+AUTH_82 := NOT (OCC_81 OR OCC_83)
+AUTH_83 := NOT (OCC_82 OR OCC_84)
+AUTH_84 := NOT (OCC_83 OR OCC_85)
+AUTH_85 := NOT (OCC_84 OR (NOT SWREV_85 AND OCC_86))
+AUTH_86 := NOT (OCC_87 OR (NOT SWREV_85 AND OCC_85))
+AUTH_87 := NOT (OCC_86 OR OCC_88)
+AUTH_88 := NOT OCC_87
