@@ -11,6 +11,8 @@ ScrollView {
     // The train shown, set by the window from the fleet's selection.
     property var trainModel
     readonly property var s: root.trainModel.snapshot
+    // The window keeps its overlays clear of this button.
+    readonly property alias passengerBrake: passengerBrake
 
     function fixed(value, digits) {
         const text = Number(value).toFixed(digits);
@@ -238,6 +240,8 @@ ScrollView {
                 statusVariant: root.s.emergency_brake ? "fault" : "ok"
 
                 SafetyButton {
+                    id: passengerBrake
+
                     Layout.fillWidth: true
                     Layout.preferredHeight: theme.safety_emphasis_height
                     Layout.topMargin: theme.space_5
