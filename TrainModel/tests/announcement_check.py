@@ -53,9 +53,46 @@ def main():
         return next(x for x in walk(popup)
                     if x.objectName() == "announcementText").property("text")
 
+    def shown_size():
+        return next(x for x in walk(popup)
+                    if x.objectName() == "announcementText").property(
+                        "font").pixelSize()
+
     announce("Next stop: Station B")
     assert popup.property("visible")
     assert shown_text() == "Next stop: Station B"
+
+    # No title: the message is the only text besides Dismiss.
+    assert not any(x.property("text") == "Announcement"
+                   for x in walk(popup))
+
+    # Three quarters of the canvas wide, centered on it.
+    canvas = window.property("canvas")
+    assert popup.width() == canvas.width() * 0.75
+    assert popup.x() == (canvas.width() - popup.width()) / 2
+
+    # The text sits at the panel's vertical center.
+    text = next(x for x in walk(popup)
+                if x.objectName() == "announcementText")
+    middle = text.mapToItem(popup, 0, text.height() / 2).y()
+    assert abs(middle - popup.height() / 2) <= 1, middle
+
+    # A short announcement reads larger than a long one.
+    short_size = shown_size()
+    announce(" ".join(["Next stop: Station B."] * 10))
+    assert shown_size() < short_size
+    announce("Next stop: Station B")
+
+    # It closes itself after 30 s; shortened here to keep the check fast.
+    assert popup.property("timeout") == 30000
+    popup.setProperty("timeout", 200)
+    announce("Doors closing")
+    assert popup.property("visible")
+    QTest.qWait(400)
+    assert not popup.property("visible")
+    popup.setProperty("timeout", 30000)
+    announce("Next stop: Station B")
+    assert popup.property("visible")
 
     # Dismissed, the same announcement on later ticks stays dismissed.
     dismiss = next(x for x in walk(popup)
@@ -96,7 +133,7 @@ def main():
     # announcement scrolls inside it, and Dismiss stays in the window.
     window.resize(720, 450)
     QTest.qWait(50)
-    announce(" ".join(["Please stand clear of the closing doors."] * 60))
+    announce(" ".join(["Please stand clear of the closing doors."] * 150))
     QTest.qWait(50)
     shown = popup.mapRectToScene(QRectF(0, 0, popup.width(),
                                         popup.height()))
