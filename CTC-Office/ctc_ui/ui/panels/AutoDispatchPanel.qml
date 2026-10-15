@@ -9,7 +9,9 @@ Panel {
     id: root
 
     property string scheduleFile: ""
+    // Dispatching a loaded schedule; paused by the dispatcher.
     property bool running: false
+    property bool paused: false
     property var departures: []
     // Why the last schedule file was rejected; empty when it loaded.
     property string scheduleError: ""
@@ -18,13 +20,15 @@ Panel {
     // The backend reads and parses the file; the panel only picks it.
     signal scheduleFileSelected(url fileUrl)
     signal pauseRequested()
+    signal resumeRequested()
 
     title: qsTr("Auto dispatch")
 
     headerItems: [
         StatusBadge {
-            label: root.running ? qsTr("Running") : qsTr("Stopped")
-            variant: root.running ? "ok" : "idle"
+            label: root.running ? qsTr("Running")
+                : root.paused ? qsTr("Paused") : qsTr("Stopped")
+            variant: root.running ? "ok" : root.paused ? "warning" : "idle"
         }
     ]
 
@@ -35,9 +39,11 @@ Panel {
         AppButton {
             Layout.fillWidth: true
             variant: "primary"
-            text: qsTr("Pause dispatch")
-            enabled: root.running
-            onClicked: root.pauseRequested()
+            text: root.paused ? qsTr("Resume dispatch")
+                : qsTr("Pause dispatch")
+            enabled: root.scheduleLoaded
+            onClicked: root.paused ? root.resumeRequested()
+                : root.pauseRequested()
         }
 
         AppButton {
@@ -47,15 +53,12 @@ Panel {
         }
     }
 
-    // Nothing sets `running` until the scheduling algorithm exists, so
-    // say why Pause dispatch is unavailable.
     HelperText {
         Layout.fillWidth: true
-        visible: !root.running
+        visible: root.paused
         color: theme.text_muted
-        text: qsTr("Automatic dispatch arrives with the scheduling "
-            + "algorithm; until then no run is dispatched, and Pause "
-            + "dispatch stays unavailable.")
+        text: qsTr("Paused: no run leaves the yard or a stop until "
+            + "dispatch resumes.")
     }
 
     FileDialog {
@@ -106,13 +109,15 @@ Panel {
         color: theme.danger
     }
 
-    FieldLabel { text: qsTr("NEXT DEPARTURES") }
+    FieldLabel { text: qsTr("DEPARTURES") }
 
     HelperText {
         Layout.fillWidth: true
         visible: root.departures.length > 0
-        text: qsTr("Due times count from the schedule start. Trains stay "
-            + "queued until the scheduling algorithm dispatches them.")
+        text: qsTr("Each run leaves the yard when due (the schedule "
+            + "starts at 05:00), stops 45 s at each of its scheduled "
+            + "stations in track order and nowhere else, then returns "
+            + "to the yard.")
         color: theme.text_muted
     }
 
@@ -134,7 +139,7 @@ Panel {
                 columns: [
                     { label: qsTr("Due"), key: "time", width: 64,
                       mono: true },
-                    { label: qsTr("Train"), key: "train", width: 72,
+                    { label: qsTr("Train"), key: "train", width: 56,
                       mono: true },
                     { label: qsTr("Status"), key: "status" }
                 ]

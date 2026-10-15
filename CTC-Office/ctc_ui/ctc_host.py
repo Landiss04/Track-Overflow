@@ -34,6 +34,7 @@ from ctc.interface import (
     CtcOffice,
     CtcSnapshot,
     DispatchOrder,
+    ScheduledRun,
     TrackModelInputs,
     TrainAuthority,
     TrainSuggestion,
@@ -75,6 +76,20 @@ def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
     return [b for b in snap.closed_blocks if b not in pending]
 
 
+def _run_status(run: ScheduledRun) -> str:
+    """A run's Status cell: where it is in its schedule."""
+    stop = (run.stop_station.title() if run.stop_station
+            else f"block {run.stop_block_id}")
+    return {
+        "queued": "Queued",
+        "in yard": "In yard",
+        "en route": f"To {stop}",
+        "dwelling": f"At {stop}",
+        "to yard": "To yard",
+        "done": "Done",
+    }.get(run.status, run.status)
+
+
 def _status(tracked: bool, order: DispatchOrder | None,
             lost: bool) -> str:
     """A train's Status column: where it is, as far as the CTC knows."""
@@ -114,11 +129,6 @@ def _hour(sim_time_s: float) -> int:
     """The simulated clock hour a time falls in, counted from midnight
     of the first simulated day."""
     return int(sim_time_s // 3600)
-
-
-def _offset(seconds: int) -> str:
-    """``+m:ss`` after the schedule start."""
-    return f"+{seconds // 60}:{seconds % 60:02d}"
 
 
 def _mph(speed_mps: float) -> str:
@@ -794,13 +804,36 @@ class CtcHost(QObject):
 
     @Property(list, notify=scheduleChanged)
     def departures(self) -> list[dict[str, Any]]:
-        """Queued runs as rows for the Next departures table."""
+        """Every run of the schedule as a row for the Departures table:
+        when it is due out of the yard, its train, and how far it has
+        got."""
         return [
-            {"time": _offset(q.departure_s),
-             "train": f"{q.line} {q.train_id}",
-             "status": "Queued"}
-            for q in self._module.snapshot().queued_trains
+            {"time": format_time_of_day(run.departure_s),
+             "train": run.train_id,
+             "status": _run_status(run)}
+            for run in self._module.snapshot().scheduled_runs
         ]
+
+    @Property(bool, notify=scheduleChanged)
+    def dispatchRunning(self) -> bool:  # noqa: N802
+        """Automatic dispatch is carrying out a loaded schedule."""
+        snap = self._module.snapshot()
+        return (snap.automatic_mode and not snap.dispatch_paused
+                and bool(snap.scheduled_runs))
+
+    @Property(bool, notify=scheduleChanged)
+    def dispatchPaused(self) -> bool:  # noqa: N802
+        return self._module.snapshot().dispatch_paused
+
+    @Slot(bool)
+    def setDispatchPaused(self, paused: bool) -> None:  # noqa: N802
+        """Pause or resume automatic dispatch."""
+        self._act(self._module.set_dispatch_paused, paused)
+
+    @Slot(bool)
+    def setAutomaticMode(self, active: bool) -> None:  # noqa: N802
+        """The window's operating mode is Automatic (or no longer)."""
+        self._act(self._module.set_automatic_mode, active)
 
     @Slot(QUrl)
     def loadSchedule(self, url: QUrl) -> None:  # noqa: N802

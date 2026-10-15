@@ -188,12 +188,31 @@ yet) through `ctc_ui/ctc_host.py`:
   not the line colors: the style guide keeps those to track strokes, and
   red and green bars are not distinguishable with deuteranopia.
 - **Load schedule** (Automatic view) loads a schedule JSON in the
-  `utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). Its
-  runs appear under **Next departures** as Queued, with due times counted
-  from the schedule start. They stay queued until a scheduling algorithm
-  exists; until then **Pause dispatch** is unavailable and the panel says
-  so. A malformed file, or one naming a block or line that is not on the
-  track layout, shows an error and keeps the current schedule.
+  `utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). A
+  malformed file, or one naming a block or line that is not on the track
+  layout, shows an error and keeps the current schedule.
+- **Automatic dispatch** (`ctc/scheduler.py`) carries the schedule out
+  while the window is in Automatic mode. Each run is a train named for
+  its line and run number (Green run 1 is `G1`). It is due out of the
+  yard at 05:00, when the simulation starts, plus its departure in the
+  file. It stops only at the stations the file lists for it, and runs
+  through every other station on its way. It visits them in the order
+  the track reaches them from the yard (the file lists them by block
+  number, which a train cannot always run), stops 45 s at each (D007),
+  then returns to the yard. The CTC does the stopping: it sends the train to
+  its next station, holds it there for the dwell, then sends it on. A
+  station that is closed or closing is skipped. **Departures** shows
+  every run's due time and where it has got to; **Pause dispatch**
+  holds them all, and so does leaving Automatic mode: no run leaves the
+  yard or a station until dispatch resumes.
+- Routes carry on the way each train is going (`ctc/tracking.py` knows
+  which block it came from), so the CTC never routes a train back the
+  way it came.
+- Known limit: the CTC does not plan where opposing trains meet. Track
+  run both ways (Green 77 to 100, Red from the yard out to the loop at
+  52) lets two trains meet head-on, and both then wait (the dispatcher
+  gets a reversal alert). One Red run at a time works; a second runs
+  into the first coming back.
 - Trains per hour and the per-line trains and dwell columns stay empty:
   nothing reports that data yet.
 
@@ -204,7 +223,7 @@ yet) through `ctc_ui/ctc_host.py`:
 | CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `setAuthority`, `cancelDispatch`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
 | Track map | `panels/TrackViewPanel.qml` → `mapCanvas`; `blockStates` and `crossingStates` style the blocks. Set `mapAvailable` to enable zoom and fit. |
 | Selected train | `SelectedTrainPanel.trainId` and `host`; `canReroute` adds the reroute controls. |
-| Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` → `ctc.loadSchedule`; `scheduleFile`, `scheduleError`, `departures` come back from `ctc`. |
+| Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` → `ctc.loadSchedule`; `scheduleFile`, `scheduleError`, `departures`, `dispatchRunning` and `dispatchPaused` come back from `ctc`; Pause / Resume call `ctc.setDispatchPaused`. The header's mode calls `ctc.setAutomaticMode`. |
 | Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |
 | Test harness | `ui/test/TestHarnessView.qml` in the test UI process. `inputs` / `outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once linked to a running CTC. |
 | Header | `CtcHeader.clock`, `.paused` and `.speed` are bound to `simClock` (see below); `.operatorName`. |
@@ -293,6 +312,8 @@ the context-property pattern shared with the Train Model UI.
   it leaves.
 - `ctc/tracking.py` follows the trains from block occupancy, and infers
   which occupied blocks have failed (above).
+- `ctc/scheduler.py` plans each run of the loaded schedule and, in
+  automatic mode, gives the orders that carry it out (above).
 - `ctc/routing.py` reads how blocks connect from the layout files
   (neighbouring blocks, and each switch's normal and reverse
   connections; the yard is left out) and counts authority along the

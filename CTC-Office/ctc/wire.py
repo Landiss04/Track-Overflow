@@ -19,7 +19,7 @@ from ctc.interface import (
     CtcOutputs,
     CtcSnapshot,
     DispatchOrder,
-    QueuedTrain,
+    ScheduledRun,
     SwitchCommand,
     SwitchReport,
     TrackControllerInputs,
@@ -106,8 +106,8 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         inputs=None if inputs is None else inputs_from_wire(inputs),
         elapsed_s=float(data.get("elapsed_s", 0.0)),
         tickets_sold=dict(data.get("tickets_sold", {})),
-        queued_trains=tuple(QueuedTrain(**q)
-                            for q in data.get("queued_trains", ())),
+        scheduled_runs=tuple(ScheduledRun(**r)
+                             for r in data.get("scheduled_runs", ())),
         orders=tuple(DispatchOrder(**o) for o in data.get("orders", ())),
         pending_closures=tuple(BlockRef(**b) for b in
                                data.get("pending_closures", ())),
@@ -122,6 +122,8 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
             for a in data.get("authorities", ())),
         inputs_staged=bool(data.get("inputs_staged", False)),
         maintenance_mode=bool(data.get("maintenance_mode", False)),
+        automatic_mode=bool(data.get("automatic_mode", False)),
+        dispatch_paused=bool(data.get("dispatch_paused", False)),
         trains=tuple(
             TrackedTrain(**{**t, "blocks": tuple(t.get("blocks", ()))})
             for t in data.get("trains", ())),

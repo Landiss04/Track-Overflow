@@ -174,14 +174,29 @@ class CtcOutputs:
 
 
 @dataclass(frozen=True, slots=True)
-class QueuedTrain:
-    """A scheduled run that has not been dispatched yet."""
+class ScheduledRun:
+    """One run of the loaded schedule, and how far it has got
+    (``ctc.scheduler``)."""
 
     line: str
+    # The run's number in the schedule file.
+    run_id: str
+    # The train ID it is dispatched as: run numbers repeat across lines,
+    # so the line's initial goes first ("G1").
     train_id: str
-    # Due at its first stop, in seconds after the schedule start.
-    departure_s: int
-    first_block_id: str
+    # Due to leave the yard, in simulated seconds since midnight.
+    departure_s: float
+    # "queued", "in yard", "en route", "dwelling", "to yard" or "done".
+    status: str
+    # The stop it is heading for or stopped at; "" when none.
+    stop_block_id: str = ""
+    stop_station: str = ""
+    # Due at that stop, in simulated seconds since midnight; None when
+    # there is no stop.
+    stop_due_s: float | None = None
+    # Stops reached so far, of how many.
+    stops_done: int = 0
+    stops_total: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,8 +272,8 @@ class CtcSnapshot:
     # Tickets sold at each named station since the simulation started,
     # by station name.
     tickets_sold: Mapping[str, int] = field(default_factory=dict)
-    # Runs from the loaded schedule still waiting, by departure time.
-    queued_trains: tuple[QueuedTrain, ...] = ()
+    # Every run of the loaded schedule, by departure time.
+    scheduled_runs: tuple[ScheduledRun, ...] = ()
     # Dispatcher orders, by train ID.
     orders: tuple[DispatchOrder, ...] = ()
     # Closures waiting for a train to leave the block; they close by
@@ -286,6 +301,10 @@ class CtcSnapshot:
     # The dispatcher's operating mode. Not sent to any module: the
     # Track Controller gets ``closed_blocks`` instead.
     maintenance_mode: bool = False
+    # Automatic mode: runs of the loaded schedule dispatch themselves,
+    # unless the dispatcher has paused them.
+    automatic_mode: bool = False
+    dispatch_paused: bool = False
 
 
 # ------------------------------------------------------------------ #
@@ -362,5 +381,15 @@ class CtcOffice(Protocol):
         ...
 
     def load_schedule(self, schedule: Schedule) -> None:
-        """Replace the schedule; its runs are queued for dispatch."""
+        """Replace the schedule. In automatic mode its runs dispatch
+        themselves when due (``ctc.scheduler``)."""
+        ...
+
+    def set_automatic_mode(self, active: bool) -> None:
+        """Enter or leave automatic mode. Outside it, the schedule
+        holds: no run leaves the yard or a stop."""
+        ...
+
+    def set_dispatch_paused(self, paused: bool) -> None:
+        """Pause or resume automatic dispatch."""
         ...

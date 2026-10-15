@@ -16,10 +16,13 @@ ScrollView {
     property string scheduleFile: ""
     property string scheduleError: ""
     property var departures: []
+    property bool dispatchRunning: false
+    property bool dispatchPaused: false
     // The CtcHost from __main__.py.
     property var host: null
     signal clearSelectionRequested()
     signal scheduleFileSelected(url fileUrl)
+    signal dispatchPauseRequested(bool paused)
 
     // Smallest height that still shows the departures table and the
     // throughput readouts.
@@ -72,9 +75,13 @@ ScrollView {
                 scheduleFile: root.scheduleFile
                 scheduleError: root.scheduleError
                 departures: root.departures
+                running: root.dispatchRunning
+                paused: root.dispatchPaused
                 onScheduleFileSelected: function (fileUrl) {
                     root.scheduleFileSelected(fileUrl);
                 }
+                onPauseRequested: root.dispatchPauseRequested(true)
+                onResumeRequested: root.dispatchPauseRequested(false)
             }
 
             ThroughputPanel {
