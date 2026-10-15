@@ -33,8 +33,40 @@ ScaledWindow {
             clock: window.snapshot.clock
             faulted: window.snapshot.emergency_brake
 
-            // Which train the window shows, right after the badges. The
-            // header's open middle is reserved for advertisements.
+            // The header's open middle is reserved for advertisements: a
+            // long, thin card like those above a subway car's windows,
+            // as tall as the header's controls. A placeholder until
+            // there are ads to show; it names its own size.
+            middle: Rectangle {
+                id: adPlaceholder
+
+                objectName: "adPlaceholder"
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                height: theme.control_h_lg
+                color: theme.bg_sunken
+                border.color: theme.border_strong
+                border.width: 1
+                radius: theme.radius_md
+
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: theme.space_3
+
+                    FieldLabel {
+                        text: qsTr("ADVERTISEMENT")
+                    }
+
+                    MonoText {
+                        text: Math.round(adPlaceholder.width) + " × "
+                            + Math.round(adPlaceholder.height)
+                        color: theme.text_muted
+                    }
+                }
+            }
+
+            // Which train the window shows, right after the badges.
             statusExtras: SelectField {
                 objectName: "trainSelector"
                 Layout.preferredWidth: 240
