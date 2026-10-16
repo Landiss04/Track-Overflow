@@ -20,11 +20,11 @@ from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 from train_ctrl import (  # noqa: E402
     EBRAKE_DECEL_MPS2, MASS_KG, MAX_FORCE_N, MPS_TO_MPH, SERVICE_DECEL_MPS2,
-    V_FLOOR_MPS, TrainControllerFleet, TrainModelCommands, f_to_c,
+    TICK_S, V_FLOOR_MPS, TrainControllerFleet, TrainModelCommands, f_to_c,
 )
 from train_ctrl.app import run  # noqa: E402
 
-DT_S = 0.05                     # one harness tick, real time
+DT_S = TICK_S                   # one harness tick, truth D017's 0.1 s
 COMMANDED_MPS = 55 / MPS_TO_MPH     # 55 mph
 CABIN_TEMP_C = f_to_c(75)           # 75 °F
 AUTHORITY_BLOCKS = 20
@@ -55,15 +55,21 @@ class StandInHarness:
             last = self.last.get(train_id)
             inputs[train_id] = {
                 "commanded_speed": COMMANDED_MPS,
-                "authority_blocks": 10,
                 "actual_speed": self.speed[train_id],
-                "cabin_temp": CABIN_TEMP_C,
+                # The key read_inputs() reads; "cabin_temp" was ignored.
+                "cabin_temperature": CABIN_TEMP_C,
                 "authority_blocks": AUTHORITY_BLOCKS,
                 "signal_light_ahead": SIGNAL_AHEAD,
                 # Echo the service brake so it is not taken for a
                 # failure. Emergency is reported only for a passenger
                 # pull, which this stand-in never makes.
                 "brake_state": [False, bool(last and last.service_brake)],
+                # The fleet wants the full set every tick; doors and
+                # lights simply do what they were last told.
+                "door_state": (list(last.door_command) if last
+                               else [False, False]),
+                "light_state": (list(last.light_command) if last
+                                else [True, True]),
             }
         commands = self.fleet.step_all(DT_S, inputs)
         for train_id, cmd in commands.items():

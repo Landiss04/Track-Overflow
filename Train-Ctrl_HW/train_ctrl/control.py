@@ -10,11 +10,11 @@ import math
 from typing import Any
 
 from .constants import (
+    ANNOUNCE_LOCKOUT_MS,
     BLOCK_LENGTH_M,
     BRAKE_DETECT_S,
     CABIN_DRIFT_FRACTION,
     CABIN_DRIFT_MAX_C,
-    CONTROL_HZ,
     EBRAKE_DECEL_MPS2,
     ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
@@ -29,6 +29,7 @@ from .constants import (
     SERVICE_DECEL_MPS2,
     SETTLE_MPS,
     STANDSTILL_MPS,
+    TICK_S,
     V_FLOOR_MPS,
 )
 from .state import State, TrainModelCommands
@@ -42,7 +43,7 @@ class ControllerCore:
 
     def __init__(self) -> None:
         self.state = State()
-        self.dt = 1.0 / CONTROL_HZ          # seconds of simulation
+        self.dt = TICK_S                    # seconds of simulation
         self.integral = 0.0
         # Inert until an engineer commissions the gains.
         self.armed = False
@@ -51,6 +52,14 @@ class ControllerCore:
         # bench published alone in between.
         self._acted_doors: tuple[bool, bool] | None = (False, False)
         self._acted_lights: tuple[bool, bool] | None = (True, True)
+        # Automatic station stop (REQUIREMENTS.md M6): a new beacon
+        # station not yet served, and whether the train is held at
+        # it, first with the doors open and then while they close.
+        self._station_pending = False
+        self._dwelling = False
+        self._closing = False
+        # Seconds left on an automatic announcement command.
+        self._announce_left_s = 0.0
         self._clear_detection()
 
     def _clear_detection(self) -> None:
@@ -110,13 +119,17 @@ class ControllerCore:
         off: the Train Model does the physics (truth D009).
         """
         s = self.state
+        if self._announce_left_s > 0.0:
+            self._announce_left_s -= self.dt
+            if self._announce_left_s <= 0.0:
+                s.announcement = ""
         self.detect_failures()
         if self.armed:
             if not s.manual:
-                # In Automatic the CTC's commanded speed already
-                # agrees with the signal ahead, so the only things
-                # left to respect are the line limit and the car.
-                s.target_mps = min(self.commanded_mps, s.speed_limit_mps)
+                # Commanded speed is the speed limit: no separate
+                # limit reaches this controller (REQUIREMENTS.md M1).
+                s.target_mps = self.commanded_mps
+            self._station_stop()
 
             error = s.target_mps - s.actual_mps
             # A target of zero means stop, so the brake holds to a
@@ -160,6 +173,16 @@ class ControllerCore:
         """
         s = self.state
         staged = dict(staged)
+        station = staged.get("beacon_station", s.beacon_station)
+        if station and station != s.beacon_station:
+            # A new station ahead, served once the train stops. In
+            # Automatic it is announced now, on the approach: the
+            # controller sends the command and the Train Model plays
+            # it (REQUIREMENTS.md M7).
+            self._station_pending = True
+            if not s.manual:
+                s.announcement = station
+                self._announce_left_s = ANNOUNCE_LOCKOUT_MS / 1000
         brakes = staged.pop("brake_state", None)
         for attr, value in staged.items():
             setattr(s, attr, value)
@@ -326,21 +349,66 @@ class ControllerCore:
         return True
 
     def set_target_mps(self, mps: float) -> None:
-        """Set the driver's target in m/s, capped at the limit."""
+        """Set the driver's target in m/s, capped at commanded speed.
+
+        Capped only when set: the target then follows the driver
+        (REQUIREMENTS.md M1).
+        """
         s = self.state
         if s.manual and self.authority_blocks > 0 and not self.failed:
-            s.target_mps = max(0.0, min(mps, s.speed_limit_mps))
+            s.target_mps = max(0.0, min(mps, self.commanded_mps))
 
     def platform_on(self, side: str) -> bool:
         """Whether the last beacon put a platform on this side."""
         return ("L" if side == "left" else "R") in self.state.beacon_side
 
-    def command_door(self, side: str, open_: bool) -> None:
+    @property
+    def at_stand(self) -> bool:
+        """Whether the Train Model reports the train stopped."""
+        return abs(self.state.actual_mps) < STANDSTILL_MPS
+
+    @property
+    def station_hold(self) -> bool:
+        """Whether an Automatic station stop is holding the train."""
+        return self._dwelling or self._closing
+
+    def _station_stop(self) -> None:
+        # Automatic only (REQUIREMENTS.md M6). Stopped at a new
+        # station: open the platform side and hold. The dwell is the
+        # Train Model's; the controller holds until the Track Signal
+        # resumes, then closes the doors and departs only once Door
+        # State reports them closed.
+        s = self.state
+        if s.manual:
+            self._dwelling = self._closing = False
+            return
+        if self._station_pending and self.at_stand:
+            self._station_pending = False
+            self._dwelling = True
+            for side in ("left", "right"):
+                if self.platform_on(side):
+                    self.command_door(side, True)
+        resumed = self.commanded_mps > 0.0 and self.authority_blocks > 0
+        if self._dwelling and resumed:
+            self._dwelling = False
+            self._closing = True
+            for side in ("left", "right"):
+                self.command_door(side, False)
+        if (self._closing and not s.fb_doors_left
+                and not s.fb_doors_right):
+            self._closing = False
+        if self.station_hold:
+            # Held, not creeping on what the integrator carried in.
+            s.target_mps = 0.0
+            self.integral = 0.0
+
+    def command_door(self, side: str, open_: bool) -> bool:
         """Command one side's doors, and have the plant answer it.
 
-        Only the platform side opens. Closing is always allowed, so
-        a door left open when the platform side changes is never
-        stuck open.
+        Only the platform side opens, and only at a stand (the door
+        interlock is the controller's, REQUIREMENTS.md M6). Closing is
+        always allowed, so a door left open when the platform side
+        changes is never stuck open. Returns whether it was sent.
 
         The plant answers a command on its edge. Pressing a tile
         again with the same command, because the reported state still
@@ -348,13 +416,14 @@ class ControllerCore:
         answered too, or the tile could never change anything.
         """
         s = self.state
-        if open_ and not self.platform_on(side):
-            return
+        if open_ and not (self.platform_on(side) and self.at_stand):
+            return False
         if side == "left":
             s.doors_left = open_
         else:
             s.doors_right = open_
         self._acted_doors = None
+        return True
 
     def command_lights(self, interior: bool, exterior: bool) -> None:
         """Command the lights, and have the plant answer it."""

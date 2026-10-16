@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 
 from .control import ControllerCore
-from .errors import DuplicateTrainError, TrainControllerError, UnknownTrainError
-from .inputs import read_inputs
+from .errors import (DuplicateTrainError, InvalidInputError,
+                     TrainControllerError, UnknownTrainError)
+from .inputs import EVERY_TICK, read_inputs
 from .state import TrainModelCommands
 
 class TrainControllerFleet:
@@ -77,6 +78,11 @@ class TrainControllerFleet:
         missing = [i for i in self._cores if i not in inputs_by_id]
         if missing:
             raise TrainControllerError(f"no inputs for trains: {missing}")
+        for train_id, values in inputs_by_id.items():
+            short = [key for key in EVERY_TICK if key not in values]
+            if short:
+                raise InvalidInputError(
+                    f"{train_id} is missing {short} this tick")
         staged = {train_id: read_inputs(inputs_by_id[train_id])
                   for train_id in self._cores}
         commands = {}

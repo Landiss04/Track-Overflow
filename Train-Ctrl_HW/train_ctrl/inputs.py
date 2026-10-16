@@ -8,6 +8,16 @@ from .constants import ASPECTS, BEACON_SIDES
 from .errors import InvalidInputError
 
 
+# What the Train Model sends every tick (module-interface.md on
+# development). A harness tick missing one would leave the last value
+# standing, and a stale Brake State reads as a brake failure, so the
+# fleet refuses it. Beacon and aspect are not here: a beacon is only
+# heard near a station (truth beacon.md).
+EVERY_TICK = ("actual_speed", "commanded_speed", "authority_blocks",
+              "brake_state", "door_state", "light_state",
+              "cabin_temperature")
+
+
 def _read_flags(values: dict, key: str, count: int) -> list[bool]:
     # A bool[N] signal arrives as a list; anything else, or a list of
     # the wrong length, is a caller error.
@@ -32,8 +42,8 @@ def _read_number(values: dict, key: str) -> float:
 def read_inputs(values: dict) -> dict[str, Any]:
     """Read and check a set of Train Model signals, touching no state.
 
-    Keys and shapes follow truth signals/: commanded_speed,
-    speed_limit and actual_speed (m/s, actual signed),
+    Keys and shapes follow truth signals/: commanded_speed and
+    actual_speed (m/s, actual signed),
     cabin_temperature (C), authority_blocks, signal_light_ahead,
     beacon_station / beacon_side / beacon_underground, brake_state
     bool[2] (emergency, service), door_state bool[2] (left, right)
@@ -47,10 +57,11 @@ def read_inputs(values: dict) -> dict[str, Any]:
     that cannot be read as its type.
     """
     staged: dict[str, Any] = {}
-    for key, attr in (("commanded_speed", "commanded_mps"),
-                      ("speed_limit", "speed_limit_mps")):
-        if key in values:
-            staged[attr] = max(0.0, _read_number(values, key))
+    # Commanded speed is the speed limit; a separate speed_limit is
+    # ignored like any unknown key (REQUIREMENTS.md M1).
+    if "commanded_speed" in values:
+        staged["commanded_mps"] = max(
+            0.0, _read_number(values, "commanded_speed"))
     if "actual_speed" in values:
         staged["actual_mps"] = _read_number(values, "actual_speed")
     if "cabin_temperature" in values:

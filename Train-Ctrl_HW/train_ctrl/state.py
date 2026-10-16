@@ -10,7 +10,6 @@ from .constants import (
     DEFAULT_KP,
     DEFAULT_TARGET_TEMP_C,
     FAILURES,
-    MAX_SPEED_MPS,
 )
 
 @dataclass
@@ -24,7 +23,6 @@ class State:
     actual_mps: float = 0.0
     commanded_mps: float = 0.0
     target_mps: float = 0.0
-    speed_limit_mps: float = MAX_SPEED_MPS
     accel_mps2: float = 0.0
 
     # Authority: how many blocks the train may still enter before it

@@ -3,7 +3,11 @@
 from .units import KMH_PER_MPS
 
 # ---------------------------------------------------------------- rates
-CONTROL_HZ = 20
+# One fixed step of simulated time, truth D006 / D017: 10x runs more
+# ticks per second, never a longer step (REQUIREMENTS.md M11).
+TICK_S = 0.1
+CONTROL_HZ = 10                 # ticks per second at real time
+CLOCK_START = (5, 0, 0)         # D017's clock starts at 05:00:00
 UI_HZ = 10
 ANNOUNCE_LOCKOUT_MS = 5000
 GAINS_HANDOVER_MS = 1500
@@ -38,14 +42,15 @@ CABIN_DRIFT_MAX_C = 0.011
 MASS_KG = 51_433.0
 MAX_ACCEL_MPS2 = 0.5            # and the car will not exceed it
 MAX_FORCE_N = MASS_KG * MAX_ACCEL_MPS2
-# The default line limit a train spawns with, not a hard ceiling.
+# The car's data-sheet top speed: the speed dial's fixed full scale.
+# Not enforced; commanded speed is the limit (REQUIREMENTS.md M1).
 MAX_SPEED_MPS = 70 / KMH_PER_MPS
 V_FLOOR_MPS = 1.0               # below which F = P / v is capped
 SERVICE_DECEL_MPS2 = 1.2
 EBRAKE_DECEL_MPS2 = 2.73
 # How far over target the train may drift before the brake helps.
 # Kept to about a tenth of a mile an hour, so a slow-down settles on
-# its target (35 -> 30 mph ends at 30.02).
+# its target (35 -> 30 mph ends at 30.08 at the 0.1 s step).
 SERVICE_BAND_MPS = 0.05
 # Rolling resistance, from truth modules/train-model.md. Applied only
 # under a brake failure for now; see ControllerCore._plant().

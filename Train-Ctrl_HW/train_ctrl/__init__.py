@@ -9,6 +9,6 @@ from .control import ControllerCore
 from .errors import (DuplicateTrainError, InvalidInputError,
                      TrainControllerError, UnknownTrainError)
 from .fleet import TrainControllerFleet
-from .inputs import read_inputs
+from .inputs import EVERY_TICK, read_inputs
 from .state import State, TrainModelCommands
 from .units import KMH_PER_MPS, MPS_TO_MPH, W_TO_KW, c_to_f, f_to_c
