@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#e6e5e2">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#e6e5e2"></rect><rect x="20" y="30" width="24" height="16" fill="none" stroke="#4a4a4a" stroke-width="2"></rect><rect x="60" y="55" width="24" height="16" fill="none" stroke="#4a4a4a" stroke-width="2"></rect><path d="M44,38 H60 V63" fill="none" stroke="#4a4a4a" stroke-width="2"></path></svg>
+</template>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e6e5e2;font-family:'IBM Plex Sans',system-ui,sans-serif}
+a{color:#2e2e2e}a:hover{color:#000}
+</style></helmet>
+<div style="max-width:1424px;margin:0 auto;padding:32px 32px 64px;color:#2e2e2e">
+ <div style="margin-bottom:24px">
+  <div style="font:600 18px/1.2 'IBM Plex Sans';letter-spacing:.04em;text-transform:uppercase">TRACK CONTROLLER &mdash; INFORMATION ARCHITECTURE &amp; INTERACTION DESIGN</div>
+  <div style="font:400 12px/1.6 'IBM Plex Sans';color:#6a6a6a;margin-top:6px;max-width:760px">Drawn in the Jesse James Garrett visual vocabulary &mdash; structure and interaction in one continuous flow, entry point to outputs. Interface detail is deliberately absent &mdash; the wireframes carry that.</div>
+ </div>
+
+ <sc-if value="{{ showLegend }}" hint-placeholder-val="{{ true }}">
+ <div style="background:#fff;border:1px solid #c2c2c2;padding:14px 16px;margin-bottom:28px">
+  <div style="font:600 11px/1 'IBM Plex Sans';letter-spacing:.1em;text-transform:uppercase;color:#3a3a3a;margin-bottom:10px">VOCABULARY USED</div>
+  <svg viewBox="0 0 1360 170" style="width:100%;height:auto;display:block" font-family="'IBM Plex Sans',sans-serif">
+   <defs>
+    <marker id="lar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a4a4a"></path></marker>
+   </defs>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <rect x="40" y="28" width="86" height="34"></rect>
+    <rect x="268" y="34" width="86" height="34"></rect><rect x="264" y="31" width="86" height="34"></rect><rect x="260" y="28" width="86" height="34"></rect>
+    <path d="M480,28 h72 l14,14 v20 h-86 z"></path><path d="M552,28 v14 h14" fill="none"></path>
+    <rect x="700" y="28" width="86" height="34" rx="9"></rect>
+    <rect x="920" y="28" width="86" height="34" rx="9" stroke-dasharray="5 4"></rect>
+    <rect x="1140" y="28" width="86" height="34" rx="9"></rect><rect x="1146" y="34" width="74" height="22" rx="6"></rect>
+    <path d="M52,104 h62 l12,12 v10 l-12,12 h-62 l-12,-12 v-10 z"></path>
+    <path d="M296,104 a22 22 0 0 0 0,44 z"></path><path d="M296,104 v44" fill="none"></path>
+    <path d="M503,104 L525,126 L503,148 L481,126 z"></path>
+    <path d="M714,104 h58 l14,44 h-86 z"></path>
+    <path d="M40,126 H116" stroke-dasharray="6 4" marker-end="url(#lar)" fill="none"></path>
+    <path d="M1152,104 h-10 v44 h10 M1214,104 h10 v44 h-10" fill="none"></path>
+   </g>
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M940,126 H1006" marker-end="url(#lar)"></path><path d="M940,118 V134"></path>
+   </g>
+   <g font-size="11" fill="#3a3a3a" text-anchor="middle">
+    <text x="83" y="78">page</text>
+    <text x="303" y="78">page stack</text>
+    <text x="523" y="78">file</text>
+    <text x="743" y="78">area</text>
+    <text x="963" y="78">conditional area</text>
+    <text x="1183" y="78">iterative area</text>
+    <text x="83" y="164">flow area / reference</text>
+    <text x="303" y="164">concurrent set</text>
+    <text x="523" y="164">decision point</text>
+    <text x="743" y="164">conditional selector</text>
+    <text x="963" y="164">conditional connector</text>
+    <text x="1183" y="164">continuation point</text>
+   </g>
+   <g font-size="10" fill="#8a8a8a" text-anchor="middle">
+    <text x="963" y="112">crossbar = no upstream</text>
+   </g>
+  </svg>
+ </div>
+ </sc-if>
+
+ <div style="background:#fff;border:1px solid #c2c2c2;padding:18px 20px 20px;margin-bottom:28px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+   <span style="font:600 12px/1 'IBM Plex Sans';letter-spacing:.1em;text-transform:uppercase">UNIFIED FLOW</span>
+   <span style="font:400 12px/1 'IBM Plex Sans';color:#5a5a5a">Application structure and the two core task paths, drawn as one diagram</span>
+  </div>
+  <svg viewBox="0 0 1680 900" style="width:100%;height:auto;display:block" font-family="'IBM Plex Sans',sans-serif">
+   <defs>
+    <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a4a4a"></path></marker>
+   </defs>
+
+   <!-- entry + top split -->
+   <g font-size="10.5" fill="#5a5a5a" text-anchor="middle"><text x="860" y="16">entry point: application</text></g>
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M860,24 V40" marker-end="url(#ar3)"></path>
+    <path d="M824,70 V112 H380 V122" marker-end="url(#ar3)"></path>
+    <path d="M896,70 V112 H1550 V142" marker-end="url(#ar3)"></path>
+    <path d="M470,155 H1460" marker-end="url(#ar3)"></path>
+    <path d="M1460,170 H470" marker-end="url(#ar3)"></path>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <path d="M860,40 L896,70 L860,100 L824,70 z"></path>
+   </g>
+   <g font-size="7" fill="#2e2e2e" text-anchor="middle">
+    <text x="860" y="64">Choose</text>
+    <text x="860" y="71">Program or</text>
+    <text x="860" y="78">View Tab</text>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <rect x="290" y="122" width="180" height="56"></rect>
+    <rect x="1460" y="142" width="180" height="56"></rect>
+   </g>
+   <g font-size="11.5" fill="#2e2e2e" text-anchor="middle" letter-spacing="0.6">
+    <text x="380" y="154">PROGRAM TAB</text>
+    <text x="1550" y="174">VIEW TAB</text>
+   </g>
+   <g font-size="10" fill="#8a8a8a" text-anchor="middle">
+    <text x="600" y="105">program tab</text>
+    <text x="1220" y="105">view tab</text>
+    <text x="965" y="148">switch to View tab</text>
+    <text x="965" y="200">switch to Program tab</text>
+   </g>
+
+   <!-- program bus: concurrent-set connector fans out to sub-pages -->
+   <g fill="none" stroke="#8a8a8a" stroke-width="1.5">
+    <path d="M380,178 V210"></path>
+    <path d="M380,238 V245"></path>
+    <path d="M40,245 H540"></path>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <path d="M348,210 A32,28 0 0,1 412,210 Z"></path><path d="M348,210 H412" fill="none"></path>
+   </g>
+   <g font-size="8" fill="#2e2e2e" text-anchor="middle">
+    <text x="380" y="223">display all</text>
+    <text x="380" y="232">sub-pages</text>
+   </g>
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M105,245 V255" marker-end="url(#ar3)"></path>
+    <path d="M290,245 V255" marker-end="url(#ar3)"></path>
+    <path d="M485,245 V255" marker-end="url(#ar3)"></path>
+    <path d="M390,245 V420 H280 V442" marker-end="url(#ar3)"></path>
+   </g>
+
+   <!-- program fan row -->
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <rect x="40" y="255" width="130" height="56"></rect>
+    <rect x="230" y="255" width="120" height="56"></rect>
+    <rect x="430" y="255" width="110" height="56"></rect>
+   </g>
+   <g font-size="11" fill="#2e2e2e" text-anchor="middle">
+    <text x="105" y="278">sidebar page<tspan x="105" dy="13" font-size="9.5" fill="#7c7c7c">program navigation</tspan></text>
+    <text x="290" y="278">choose track<tspan x="290" dy="13">controller</tspan><tspan x="290" dy="13" font-size="9.5" fill="#7c7c7c">TC-01 &hellip; TC-06</tspan></text>
+    <text x="485" y="278">maintenance<tspan x="485" dy="13">toggle</tspan><tspan x="485" dy="13" font-size="9.5" fill="#7c7c7c">auto &#8646; maintenance</tspan></text>
+   </g>
+
+   <!-- sidebar sub-flow: file explorer vs previous iteration -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M105,311 V343" marker-end="url(#ar3)"></path>
+    <path d="M70,375 V430 H95 V460" marker-end="url(#ar3)"></path>
+    <path d="M140,375 H155 V620 H230 V680" marker-end="url(#ar3)"></path>
+    <path d="M95,516 V546" marker-end="url(#ar3)"></path>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <path d="M105,343 L140,375 L105,407 L70,375 z"></path>
+    <rect x="40" y="460" width="110" height="56"></rect>
+    <rect x="175" y="680" width="110" height="56"></rect>
+    <rect x="40" y="546" width="110" height="56"></rect>
+   </g>
+   <g font-size="11" fill="#2e2e2e" text-anchor="middle">
+    <text x="95" y="483">File Explorer<tspan x="95" dy="13" font-size="9.5" fill="#7c7c7c">browse files</tspan></text>
+    <text x="230" y="703">Previous<tspan x="230" dy="13">Iteration</tspan><tspan x="230" dy="13" font-size="9.5" fill="#7c7c7c">read-only</tspan></text>
+    <text x="95" y="574">load<tspan x="95" dy="13">new file</tspan></text>
+   </g>
+   <g font-size="9.5" fill="#8a8a8a" text-anchor="middle">
+    <text x="60" y="420">explorer</text>
+    <text x="125" y="430">history</text>
+   </g>
+   <g font-size="6.5" fill="#2e2e2e" text-anchor="middle">
+    <text x="105" y="360">Choose</text>
+    <text x="105" y="367">File Explorer</text>
+    <text x="105" y="374">or Previous</text>
+    <text x="105" y="381">Iterations Tab</text>
+   </g>
+
+   <!-- maintenance -> set switch state (conditional) -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5" stroke-dasharray="6 4">
+    <path d="M485,311 V345" marker-end="url(#ar3)"></path>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="5 4">
+    <rect x="420" y="345" width="130" height="40" rx="8"></rect>
+   </g>
+   <g font-size="10.5" fill="#2e2e2e" text-anchor="middle">
+    <text x="485" y="369">set switch state</text>
+   </g>
+   <g font-size="9.5" fill="#8a8a8a" text-anchor="middle"><text x="485" y="332">maintenance only</text></g>
+
+   <!-- choose controller -> output terminal -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M290,311 V410 H705 V442" marker-end="url(#ar3)"></path>
+   </g>
+   <g font-size="9.5" fill="#8a8a8a"><text x="298" y="405">controller changed</text></g>
+
+   <!-- run sequence -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M360,470 H400" marker-end="url(#ar3)"></path>
+    <path d="M480,470 H620" marker-end="url(#ar3)"></path>
+    <path d="M440,506 V552" marker-end="url(#ar3)"></path>
+    <path d="M360,580 H280 V498" marker-end="url(#ar3)"></path>
+    <path d="M790,470 H830" marker-end="url(#ar3)" stroke-dasharray="6 4"></path>
+    <path d="M970,470 H1008" marker-end="url(#ar3)"></path>
+    <path d="M1072,470 H1150" marker-end="url(#ar3)"></path>
+    <path d="M1040,500 V530 H320 V498" marker-end="url(#ar3)"></path>
+    <path d="M1220,498 V550 H1420 V860 H230 V736" marker-end="url(#ar3)" stroke-dasharray="6 4"></path>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <rect x="200" y="442" width="160" height="56"></rect>
+    <path d="M440,434 L480,470 L440,506 L400,470 z"></path>
+    <rect x="620" y="442" width="170" height="56"></rect>
+    <rect x="360" y="552" width="160" height="56"></rect>
+    <rect x="830" y="442" width="140" height="56" rx="9"></rect>
+    <path d="M1040,440 L1072,470 L1040,500 L1008,470 z"></path>
+    <rect x="1150" y="442" width="140" height="56"></rect>
+   </g>
+   <g font-size="11.5" fill="#2e2e2e" text-anchor="middle">
+    <text x="280" y="466">editor buffer<tspan x="280" dy="14" font-size="9.5" fill="#7c7c7c">write boolean logic</tspan></text>
+    <text x="705" y="466">output terminal<tspan x="705" dy="14" font-size="9.5" fill="#7c7c7c">status of chosen controller</tspan></text>
+    <text x="440" y="574">terminal &mdash; parse error<tspan x="440" dy="14" font-size="9.5" fill="#7c7c7c">line and reason reported</tspan></text>
+    <text x="900" y="466">commit iteration<tspan x="900" dy="14" font-size="9.5" fill="#7c7c7c">confirm overwrite</tspan></text>
+    <text x="1220" y="466">iteration running<tspan x="1220" dy="14" font-size="9.5" fill="#7c7c7c">wayside executes this</tspan></text>
+   </g>
+   <g font-size="10" fill="#5a5a5a" text-anchor="middle">
+    <text x="440" y="460">RUN</text>
+    <text x="1040" y="474">confirm?</text>
+   </g>
+   <g font-size="9.5" fill="#8a8a8a">
+    <text x="550" y="462" text-anchor="middle">parses OK</text>
+    <text x="448" y="547">bugs found</text>
+    <text x="836" y="434">offered on successful run</text>
+    <text x="1078" y="465">confirm</text>
+    <text x="680" y="525">cancel</text>
+    <text x="825" y="850" text-anchor="middle">old iteration archived, read-only</text>
+   </g>
+
+   <!-- view tab flow -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M1550,198 V664" marker-end="url(#ar3)"></path>
+    <path d="M1510,700 V630 H1410" marker-end="url(#ar3)"></path>
+    <path d="M1550,736 V780 H1410" marker-end="url(#ar3)"></path>
+    <path d="M1290,630 H1160 V678" marker-end="url(#ar3)"></path>
+    <path d="M1290,780 H1160 V734" marker-end="url(#ar3)"></path>
+    <path d="M1020,706 V650 H970" marker-end="url(#ar3)"></path>
+    <path d="M1020,706 V762 H970" marker-end="url(#ar3)"></path>
+   </g>
+   <g fill="none" stroke="#8a8a8a" stroke-width="1.5">
+    <path d="M1080,706 H1020"></path>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <path d="M1550,664 L1590,700 L1550,736 L1510,700 z"></path>
+    <rect x="1290" y="602" width="120" height="56"></rect>
+    <rect x="1290" y="752" width="120" height="56"></rect>
+    <rect x="1080" y="678" width="160" height="56"></rect>
+    <rect x="790" y="622" width="180" height="56"></rect>
+    <rect x="790" y="734" width="180" height="56"></rect>
+   </g>
+   <g font-size="11.5" fill="#2e2e2e" text-anchor="middle">
+    <text x="1350" y="626">green line<tspan x="1350" dy="14" font-size="9.5" fill="#7c7c7c">controller list</tspan></text>
+    <text x="1350" y="776">red line<tspan x="1350" dy="14" font-size="9.5" fill="#7c7c7c">controller list</tspan></text>
+    <text x="1160" y="702">select controller<tspan x="1160" dy="14">from chosen line</tspan></text>
+    <text x="880" y="646">block state<tspan x="880" dy="14" font-size="9.5" fill="#7c7c7c">occupancy 0, 1, 2 &hellip;</tspan></text>
+    <text x="880" y="758">committed outputs<tspan x="880" dy="14" font-size="9.5" fill="#7c7c7c">CMD_*, SW_*, LT_*</tspan></text>
+   </g>
+   <g font-size="10" fill="#5a5a5a" text-anchor="middle"><text x="1550" y="704">line?</text></g>
+   <g font-size="9.5" fill="#8a8a8a">
+    <text x="1470" y="618">green</text>
+    <text x="1470" y="792">red</text>
+   </g>
+  </svg>
+  <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+  <div style="margin-top:14px;border-top:1px solid #ececec;padding-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 32px;font:400 11px/1.55 'IBM Plex Sans';color:#4a4a4a">
+   <div>Entry offers Program tab or View tab; either is reachable from the other at any time, so there is no fixed starting page.</div>
+   <div>Program tab: sidebar page branches to File Explorer or Previous Iteration; File Explorer can load a new file into the editor buffer. Choose controller and maintenance toggle sit alongside.</div>
+   <div>Maintenance mode is the only state from which switches can be set &mdash; it has no other manual control surface.</div>
+   <div>The output terminal updates from two independent triggers: selecting a different controller, and running the buffer.</div>
+   <div>Commit is offered only after a successful run. Confirming replaces the iteration the wayside executes and archives the previous one as a read-only file.</div>
+   <div>In the View tab, line and controller selection always resolves to the same simultaneous pair &mdash; block state and committed outputs update together.</div>
+  </div>
+  </sc-if>
+ </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showLegend&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showLegend: this.props.showLegend ?? true,
+      showNotes: this.props.showNotes ?? true
+    };
+  }
+}
+</script>
+</body>
+</html>

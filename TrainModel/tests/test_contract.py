@@ -49,7 +49,7 @@ def make_inputs(block_id: str = "A1") -> TrainModelInputs:
             ),
             track_signal=TrackSignal(
                 commanded_speed_mps=10.0,
-                authority_block_id="A9",
+                authority_blocks=9,
             ),
             beacon=Beacon("Station", "L", False),
             passengers_boarded=0,

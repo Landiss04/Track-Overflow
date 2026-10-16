@@ -59,7 +59,7 @@ class Beacon:
 class TrackSignal:
     """Encoded track-circuit signal the Train Controller reads off the rail."""
     commanded_speed_mps: float
-    authority_block_id: str     # destination block the train may travel up to
+    authority_blocks: int       # blocks the train may travel before it must stop
     beacon: Optional[Beacon] = None
 
 
@@ -372,3 +372,87 @@ class ICtcOffice(ABC):
     @abstractmethod
     def get_suggestion(self, block_id: str) -> tuple[float, str]:
         """Return (suggested_speed_mps, authority_block_id) for a block."""
+
+
+# ---------------------------------------------------------------------------
+# Track Model edge types
+#
+# Catalog types for the Track Model's edges, mapped by
+# common/harness/track_model_edges.py (D005, D008). Backend units; IDs are
+# strings. Per-block maps are keyed by block ID, per-train maps by train ID.
+# ---------------------------------------------------------------------------
+
+class SignalAspect(Enum):
+    RED = auto()
+    YELLOW = auto()
+    GREEN = auto()
+    SUPER_GREEN = auto()
+
+
+@dataclass
+class TrackInfo:
+    """Terrain of the block a train occupies (signals/track-info)."""
+    block_id: str
+    grade_deg: float            # positive uphill
+    elevation_m: float
+    speed_limit_mps: float
+    polarity: bool              # reverses at every block change
+    station_name: Optional[str] = None  # station in this block, if any
+
+
+@dataclass
+class TrainTrackReport:
+    """Train Model -> Track Model, per train, every tick.
+
+    The offset restarts at 0 when the Train Model sees a new block;
+    block_id "" means the train has no block yet."""
+    position: TrainPosition     # block and offset since entering it
+    actual_speed_mps: float     # signed; negative on rollback
+    block_changed: bool
+    passenger_capacity: int
+    doors_open: bool            # left or right open; boarding needs one
+
+
+@dataclass
+class WaysideCommands:
+    """Track Controller -> Track Model, every tick. Speed and authority
+    are per block: the track circuit signal covers the whole block."""
+    commanded_speed_mps: dict[str, int] = field(default_factory=dict)
+    authority_blocks: dict[str, int] = field(default_factory=dict)
+    switch_positions: dict[str, SwitchPosition] = field(default_factory=dict)
+    crossing_gates_closed: dict[str, bool] = field(default_factory=dict)
+    signal_aspects: dict[str, SignalAspect] = field(default_factory=dict)
+    heaters_on: dict[str, bool] = field(default_factory=dict)  # by section
+
+
+@dataclass
+class TrackReadback:
+    """Track Model -> Track Controller, every tick. The CTC Office reads
+    occupancy and device state through the Track Controller. Ticket sales
+    do not pass through it: see ``TicketSales``."""
+    block_occupancy: dict[str, bool]
+    switch_positions: dict[str, SwitchPosition]
+    crossing_gates_closed: dict[str, bool]
+    signal_aspects: dict[str, SignalAspect]
+    failures: dict[str, FailureMode]
+    heaters_on: dict[str, bool]     # by section, actually running
+    track_temp_c: dict[str, float] = field(default_factory=dict)  # section
+
+
+@dataclass
+class TicketSales:
+    """Track Model -> CTC Office, every tick, direct (truth
+    ``signals/ticket-sales``). Pairs of (count, station), for example
+    ``(3, "SHADYSIDE")``. ``sold_now`` is this tick. The Track Model keeps no
+    running total and sends none."""
+    sold_now: list[tuple[int, str]]
+
+
+@dataclass
+class TrainTrackFeed:
+    """Track Model -> Train Model, per train, every tick."""
+    track_info: TrackInfo
+    commanded_speed_mps: int        # whole m/s, of the occupied block
+    authority_blocks: int           # of the occupied block; 0 = stop
+    beacon: Optional[Beacon]        # platform_side "L", "R" or "LR"
+    passengers_boarded: int

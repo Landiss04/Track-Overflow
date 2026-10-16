@@ -47,6 +47,10 @@ INFO = "#4338CA"
 INFO_BG = "#EAE8FB"
 FOCUS_RING = "#1D6FD0"
 
+# Line identity (4.6): track strokes and section letters only.
+LINE_RED = "#B03A3A"
+LINE_GREEN = "#2F7D4F"
+
 # Typography (3). Helvetica and Monaco are not bundled; the fallback
 # stacks resolve to Arial and Consolas on Windows and to Helvetica Neue
 # and Menlo on macOS.
@@ -156,6 +160,8 @@ def build_theme() -> dict[str, Any]:
         "info": INFO,
         "info_bg": INFO_BG,
         "focus_ring": FOCUS_RING,
+        "line_red": LINE_RED,
+        "line_green": LINE_GREEN,
         "ui_families": UI_FAMILIES,
         "mono_families": MONO_FAMILIES,
         "ui_family": resolve_family(UI_FAMILIES),

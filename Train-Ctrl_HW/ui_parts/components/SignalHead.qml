@@ -14,8 +14,12 @@ Item {
     // 0 red, 1 yellow, 2 green, 3 super green.
     property int aspectIndex: 0
 
-    readonly property var lamps: [theme.signal_red, theme.signal_yellow,
-                                  theme.signal_green, theme.signal_super]
+    // Semantic tokens (guide 4.4). Yellow borrows the service-brake
+    // amber so the cab has one caution yellow rather than two. Green
+    // and super green share a colour; the ring and the panel's words
+    // tell them apart.
+    readonly property var lamps: [theme.danger, theme.brake_service,
+                                  theme.success, theme.success]
     readonly property real pad: theme.space_3
     readonly property real gap: theme.space_2
     // The ring sits 5 px outside its lamp, so every slot reserves it.

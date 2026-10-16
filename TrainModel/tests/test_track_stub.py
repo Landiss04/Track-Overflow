@@ -1,0 +1,437 @@
+"""Tests for the test UI's stand-in Track Model and its Blue Line.
+
+The layout conversion and block following alone, then the harness
+following the Blue Line with the real Train Model. No QML is loaded.
+"""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+pytest.importorskip("PySide6")
+
+from PySide6.QtCore import QCoreApplication  # noqa: E402
+
+from train_model import harness as harness_module  # noqa: E402
+from train_model.link import LocalLink  # noqa: E402
+from train_model.state import TrainModelState  # noqa: E402
+from train_model.track_stub import (  # noqa: E402
+    TrackBlock,
+    TrackStub,
+    blocks_from_layout,
+    blocks_from_route,
+    load_blue_line,
+    load_line,
+    parse_route,
+)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def qt_app() -> Iterator[None]:
+    """Provide the Qt application the harness timer needs."""
+    app = QCoreApplication.instance() or QCoreApplication([])
+    yield
+    del app
+
+
+def make_harness(**kwargs: Any) -> tuple[TrainModelState, Any]:
+    """Return a fresh model state and a harness driving it."""
+    state = TrainModelState()
+    return state, harness_module.TestHarnessState(LocalLink(state), **kwargs)
+
+
+def block(block_id: str, length_m: float = 50.0) -> TrackBlock:
+    """Return a flat block with no station."""
+    return TrackBlock(block_id, length_m, 0.0, 0.0, 10.0, "", "")
+
+
+def test_the_blue_line_loads_with_its_route_to_station_b() -> None:
+    """Check the default route: section A, then B through the switch."""
+    line = load_blue_line()
+    assert line is not None
+    assert line.name == "Blue Line"
+    ids = [b.block_id for b in line.route]
+    assert ids == [str(n) for n in range(1, 11)]
+    for b in line.route:
+        assert b.length_m == 50.0
+        assert b.grade_deg == 0.0
+        assert b.speed_limit_mps == pytest.approx(50 / 3.6)
+    assert line.route[9].station == "Station B"
+    # The transponder in block 9 announces the station ahead, and the
+    # first block announces it too, so the train starts knowing it.
+    assert line.route[8].beacon_station == "Station B"
+    assert line.route[0].beacon_station == "Station B"
+    assert [b.beacon_station for b in line.route[1:8]] == [""] * 7
+
+
+def test_the_other_leg_leads_to_station_c() -> None:
+    """Check that routing through section C reaches Station C."""
+    line = load_blue_line(sections=("A", "C"))
+    assert line is not None
+    ids = [b.block_id for b in line.route]
+    assert ids == [str(n) for n in [1, 2, 3, 4, 5, 11, 12, 13, 14, 15]]
+    assert line.route[-1].station == "Station C"
+    assert line.route[-2].beacon_station == "Station C"
+
+
+def test_layout_units_become_backend_units() -> None:
+    """Check percent grade, km/h and the cumulative elevation."""
+    layout = {"blocks": [{
+        "block_number": 7, "section": "X", "length_m": 100,
+        "grade_percent": 5, "speed_limit_kmh": 36,
+        "elevation_m": 5, "cumulative_elevation_m": 12.5,
+    }]}
+    (only,) = blocks_from_layout(layout, ("X",))
+    assert only.block_id == "7"
+    assert only.grade_deg == pytest.approx(math.degrees(math.atan(0.05)))
+    assert only.speed_limit_mps == pytest.approx(10.0)
+    assert only.elevation_m == 12.5
+
+
+def test_a_missing_layout_loads_nothing(tmp_path: Path) -> None:
+    """Check that an unreadable layout leaves the rows to be typed."""
+    assert load_blue_line(tmp_path / "missing.json") is None
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert load_blue_line(bad) is None
+
+
+def test_follow_moves_on_at_the_block_length_and_flips_polarity() -> None:
+    """Check block changes, polarity and the end of the route."""
+    stub = TrackStub("Test", [block("1"), block("2", 20.0)])
+    assert stub.inputs()["block"] == "1"
+    assert not stub.inputs()["polarity"]
+    assert not stub.follow(49.9)
+    assert stub.follow(50.0)
+    assert stub.inputs()["block"] == "2"
+    assert stub.inputs()["polarity"]
+    # The last block keeps the train.
+    assert not stub.follow(1_000.0)
+    assert stub.inputs()["block"] == "2"
+    stub.reset()
+    assert stub.inputs()["block"] == "1"
+    assert not stub.inputs()["polarity"]
+
+
+def test_an_empty_route_is_refused() -> None:
+    """Check that a stub needs a block to stand on."""
+    with pytest.raises(ValueError):
+        TrackStub("Empty", [])
+
+
+def test_the_harness_loads_the_blue_line_by_default() -> None:
+    """Check the track rows start on the Blue Line's first block."""
+    _, harness = make_harness()
+    assert harness.trackName == "Blue Line"
+    values = harness.inputValues
+    assert values["block"] == "1"
+    assert values["speed_limit"] == pytest.approx(50 / 3.6)
+    assert values["station"] == ""
+
+
+def test_a_manual_track_keeps_the_typed_rows() -> None:
+    """Check track=None leaves the track rows to the tester."""
+    _, harness = make_harness(track=None)
+    assert harness.trackName == "Manual"
+    assert harness.inputValues["block"] == ""
+    assert harness.inputValues["speed_limit"] == 0.0
+
+
+def test_the_train_runs_the_blue_line_to_station_b() -> None:
+    """Check blocks, the beacon and the station along the route."""
+    state, harness = make_harness()
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    seen: dict[str, dict[str, Any]] = {}
+    changes = 0
+    for _ in range(600):
+        harness.advanceTick()
+        outputs = state.outputs()
+        changes += outputs.track.block_changed
+        seen.setdefault(outputs.track.block_id, {
+            "beacon": outputs.controller.beacon,
+            "station": harness.inputValues["station"],
+        })
+    assert list(seen) == [str(n) for n in range(1, 11)]
+    assert changes == 9
+    beacon = seen["9"]["beacon"]
+    assert beacon is not None and beacon.station_name == "Station B"
+    assert seen["10"]["station"] == "Station B"
+
+
+def test_a_typed_track_row_lasts_until_the_next_block() -> None:
+    """Check that an edit is kept within a block and replaced after it."""
+    state, harness = make_harness()
+    harness.setInput("grade", 1.0)
+    harness.setInput("power_command", 200_000.0)
+    assert harness.sendInputs()
+    assert state.snapshot["grade"] == 1.0
+    while state.outputs().track.block_id == "1":
+        harness.advanceTick()
+    harness.advanceTick()
+    assert state.snapshot["grade"] == 0.0
+    assert harness.inputValues["block"] == "2"
+
+
+def test_every_block_is_a_block_change_after_a_typed_polarity() -> None:
+    """Check a typed polarity does not hide the next block change.
+
+    The model sees a block change only when the polarity differs from
+    the last one sent, so the track must flip what was sent, not what it
+    sent itself.
+    """
+    state, harness = make_harness()
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    harness.setInput("polarity", not harness.inputValues["polarity"])
+    assert harness.sendInputs()
+    while harness.inputValues["block"] == "1":
+        harness.advanceTick()
+    harness.advanceTick()
+    outputs = state.outputs()
+    assert outputs.track.block_id == "2"
+    assert outputs.track.block_changed
+    assert outputs.track.offset_m < 1.5
+
+
+def test_reset_returns_to_the_first_block() -> None:
+    """Check that resetting the module also resets the track."""
+    _, harness = make_harness()
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    for _ in range(300):
+        harness.advanceTick()
+    assert harness.inputValues["block"] != "1"
+    harness.resetModule()
+    assert harness.inputValues["block"] == "1"
+    assert not harness.inputValues["polarity"]
+
+
+# --------------------------------------------------------------------------- #
+# Red and Green lines, and the test UI's flags
+# --------------------------------------------------------------------------- #
+
+def layout_of(*rows: dict[str, Any]) -> dict[str, Any]:
+    """Return a layout file of flat 50 m blocks with the given fields."""
+    base = {"section": "A", "length_m": 50, "grade_percent": 0,
+            "speed_limit_kmh": 36, "elevation_m": 0,
+            "cumulative_elevation_m": 0}
+    return {"blocks": [dict(base, **row) for row in rows]}
+
+
+@pytest.mark.parametrize(("line", "first", "last", "count", "stations"), [
+    ("blue", "1", "10", 10, 1),
+    ("red", "9", "66", 60, 8),
+    ("green", "63", "57", 170, 21),
+])
+def test_each_line_loads_along_its_default_route(
+        line: str, first: str, last: str, count: int, stations: int) -> None:
+    """Check each line's default route, from its first block to its last."""
+    stub = load_line(line)
+    route = stub.route
+    assert stub.name == f"{line.title()} Line"
+    assert (route[0].block_id, route[-1].block_id) == (first, last)
+    assert len(route) == count
+    assert sum(1 for b in route if b.station) == stations
+
+
+def test_the_green_loop_follows_its_switches() -> None:
+    """Check the Green route turns at blocks 100, 77, 150 and 1."""
+    ids = [b.block_id for b in load_line("green").route]
+    for here, there in [("100", "85"), ("77", "101"), ("150", "28"),
+                        ("1", "13")]:
+        # Blocks 77 to 85 are passed twice; the turn is on the last pass.
+        last = len(ids) - 1 - ids[::-1].index(here)
+        assert ids[last + 1] == there
+
+
+def test_stations_and_beacons_come_from_the_layout() -> None:
+    """Check names, platform sides and underground from the layout."""
+    green = {b.block_id: b for b in load_line("green").route}
+    assert green["65"].station == "Glenbury"
+    # No transponders on the Green Line: the block before announces.
+    assert green["64"].beacon_station == "Glenbury"
+    assert green["64"].beacon_side == "R"
+    red = load_line("red")
+    assert red.route[1].block_id == "8"
+    assert red.route[1].beacon_station == "Shadyside"
+    # Platforms on both sides: the beacon carries both.
+    assert red.route[1].beacon_side == "LR"
+    # The first block announces the first station ahead.
+    assert load_line("green").route[0].beacon_station == "Glenbury"
+
+
+def test_an_unnamed_station_is_named_for_its_block() -> None:
+    """Check Green block 16, which the layout leaves unnamed."""
+    green = {b.block_id: b for b in load_line("green").route}
+    assert green["16"].station == "Station 16"
+
+
+def test_beacon_side_and_underground_follow_the_station() -> None:
+    """Check the announced station's side and underground flag."""
+    layout = layout_of(
+        {"block_number": 1},
+        {"block_number": 2, "station_side": "Right",
+         "infrastructure": {"station": "DEEP", "underground": True}},
+    )
+    first, second = blocks_from_route(layout, parse_route("1-2"))
+    assert first.beacon_station == "Deep"
+    assert (first.beacon_side, first.beacon_underground) == ("R", True)
+    assert second.station == "Deep"
+    assert stub_inputs(first)["beacon_underground"] is True
+
+
+def stub_inputs(block_: TrackBlock) -> dict[str, Any]:
+    """Return the input rows a stub sends for one block."""
+    return TrackStub("One", [block_]).inputs()
+
+
+def test_a_range_against_the_numbering_negates_the_grade() -> None:
+    """Check grade is positive uphill in the direction of travel."""
+    layout = layout_of({"block_number": 1, "grade_percent": 2},
+                       {"block_number": 2, "grade_percent": 0})
+    up, flat = blocks_from_route(layout, parse_route("1-2"))
+    flat_back, down = blocks_from_route(layout, parse_route("2-1"))
+    assert up.grade_deg == pytest.approx(math.degrees(math.atan(0.02)))
+    assert down.grade_deg == pytest.approx(-up.grade_deg)
+    # A flat block reads 0, never -0.
+    assert math.copysign(1.0, flat_back.grade_deg) == 1.0
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("3", [(3, 1)]),
+    ("1-3", [(1, 1), (2, 1), (3, 1)]),
+    ("3-1, 7", [(3, -1), (2, -1), (1, -1), (7, 1)]),
+])
+def test_routes_parse_as_block_ranges(
+        text: str, expected: list[tuple[int, int]]) -> None:
+    """Check block numbers and ranges in travel order."""
+    assert parse_route(text) == expected
+
+
+@pytest.mark.parametrize("text", ["", "a", "1-2-3", "9-x", "-4", "1,,2"])
+def test_a_malformed_route_is_refused(text: str) -> None:
+    """Check text that is not block ranges is refused."""
+    with pytest.raises(ValueError):
+        parse_route(text)
+
+
+def test_a_route_off_the_line_is_refused() -> None:
+    """Check a block the line does not have is named in the error."""
+    with pytest.raises(ValueError, match="999"):
+        load_line("red", "9-1,999")
+
+
+def test_the_flags_pick_the_line_and_route() -> None:
+    """Check --line and --route, leaving other arguments to Qt."""
+    import test_ui
+    args, qt_args = test_ui.parse_args([])
+    assert (args.line, args.route) == ("blue", None)
+    args, qt_args = test_ui.parse_args(
+        ["--line", "green", "--route", "63-70", "-platform", "offscreen"])
+    assert (args.line, args.route) == ("green", "63-70")
+    assert qt_args == ["-platform", "offscreen"]
+    stub = test_ui.load_track(args)
+    assert [b.block_id for b in stub.route] == [str(n) for n in range(63, 71)]
+
+
+def test_a_bad_route_flag_exits_with_the_reason() -> None:
+    """Check the test UI refuses to start on a route it cannot load."""
+    import test_ui
+    args, _ = test_ui.parse_args(["--line", "red", "--route", "9-1,999"])
+    with pytest.raises(SystemExit, match="999"):
+        test_ui.load_track(args)
+
+
+def test_the_harness_follows_a_red_line_stub() -> None:
+    """Check the harness drives the Red Line from its first block."""
+    state, harness = make_harness(track=load_line("red"))
+    assert harness.trackName == "Red Line"
+    assert harness.inputValues["block"] == "9"
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    while state.outputs().track.block_id == "9":
+        harness.advanceTick()
+    harness.advanceTick()
+    assert state.outputs().track.block_id == "8"
+
+
+def test_the_harness_starts_with_the_route_s_track_signal() -> None:
+    """Check commanded speed, authority and next station at the start."""
+    state, harness = make_harness()
+    rows = harness.property("inputValues")
+    assert rows["commanded_speed"] == pytest.approx(50 / 3.6)
+    # Authority is the destination block: the end of the route.
+    assert rows["authority"] == 10
+    assert rows["beacon_station"] == "Station B"
+    harness.sendInputs()
+    assert state.snapshot["next_station"] == "Station B"
+    assert state.outputs().controller.authority_blocks == 10
+
+
+def test_a_route_starts_by_announcing_its_first_station() -> None:
+    """Check the first block announces the station ahead, once."""
+    layout = layout_of(
+        {"block_number": 1},
+        {"block_number": 2, "station_side": "Left",
+         "infrastructure": {"station": "FIRST"}},
+        {"block_number": 3, "infrastructure": {"station": "SECOND"}},
+    )
+    first, second, third = blocks_from_route(layout, parse_route("1-3"))
+    assert (first.beacon_station, first.beacon_side) == ("First", "L")
+    # A route that starts at a station announces the next one.
+    start, _ = blocks_from_route(layout, parse_route("2-3"))
+    assert start.beacon_station == "Second"
+
+
+def test_a_start_signal_needs_a_numbered_last_block() -> None:
+    """Check authority is 0 where the last block's ID is not a number."""
+    signal = TrackStub("Test", [block("1"), block("B2")]).start_signal()
+    assert signal == {"commanded_speed": 10.0, "authority": 0}
+
+
+def test_a_block_change_carries_the_overshoot() -> None:
+    """Check the next block ends where the track does.
+
+    The module restarts its offset at 0 a tick after the stub moves on,
+    so the distance run past the last block's end is carried.
+    """
+    stub = TrackStub("Test", [block("1"), block("2"), block("3")])
+    assert stub.follow(52.0)
+    # 2 m into block 2 already: it ends 48 m after the module restarts.
+    assert not stub.follow(47.9)
+    assert stub.follow(48.0)
+    assert stub.block.block_id == "3"
+
+
+@pytest.mark.parametrize("line", ["blue", "red", "green"])
+def test_each_route_ends_where_its_track_does(line: str) -> None:
+    """Check full power reaches the last block after the track's length."""
+    state, harness = make_harness(track=load_line(line))
+    track = harness._track
+    harness.setInput("power_command", 480_000.0)
+    assert harness.sendInputs()
+    run_m = 0.0
+    while track.block is not track.route[-1]:
+        harness.advanceTick()
+        run_m += state.outputs().controller.actual_speed_mps * 0.1
+    length_m = sum(b.length_m for b in track.route[:-1])
+    # Within one tick's travel; dropped overshoots once added 7 to 77 m.
+    assert run_m - length_m < 2.0
+
+
+def test_a_huge_range_is_refused_before_it_is_built() -> None:
+    """Check 1-99999999 is refused at once rather than filling memory."""
+    with pytest.raises(ValueError, match="too long"):
+        parse_route("1-99999999")
+
+
+def test_missing_blocks_are_named_as_ranges() -> None:
+    """Check the reason lists 16-999, not 984 numbers."""
+    with pytest.raises(ValueError, match=r"blocks on this line: 16-999$"):
+        load_line("blue", "1-999")

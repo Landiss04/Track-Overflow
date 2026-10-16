@@ -1,5 +1,6 @@
 // Train Model application window.
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 import "../../ui"
@@ -7,7 +8,9 @@ import "../../ui"
 ScaledWindow {
     id: window
 
-    readonly property var snapshot: trainModel.snapshot
+    // The selected train; an idle stand-in while the fleet is empty.
+    readonly property var trainModel: fleet.current
+    readonly property var snapshot: window.trainModel.snapshot
 
     title: qsTr("Train Model")
 
@@ -23,30 +26,234 @@ ScaledWindow {
             Layout.fillWidth: true
             moduleName: qsTr("Train Model")
             instance: window.snapshot.train_id
-            mode: window.snapshot.mode
+            // Running while steps arrive, from the test UI or, once
+            // integrated, the central harness.
+            mode: window.trainModel.running ? qsTr("Running") : qsTr("Paused")
             line: window.snapshot.line
             clock: window.snapshot.clock
             faulted: window.snapshot.emergency_brake
-            navigationEntries: [qsTr("Overview"), qsTr("Test harness")]
-            currentNavigationIndex: views.currentIndex
-            onNavigationActivated: function (index) { views.currentIndex = index; }
+
+            // The header's open middle is reserved for advertisements: a
+            // long, thin card like those above a subway car's windows,
+            // as tall as the header's controls. The ads in pics/ take
+            // turns, each shown for the interval below.
+            middle: Item {
+                id: adBanner
+
+                readonly property var ads: [
+                    "../pics/boston_dynamics_711x44.png",
+                    "../pics/flock_safety_711x44.png",
+                    "../pics/lockheed_martin_711x44.png",
+                    "../pics/palantir_711x44.png",
+                ]
+                property int index: 0
+                // How long each ad stays up before the next replaces it.
+                property int interval: 30000
+
+                objectName: "adBanner"
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                height: theme.control_h_lg
+
+                Timer {
+                    interval: adBanner.interval
+                    running: adBanner.ads.length > 1
+                    repeat: true
+                    onTriggered: adBanner.index
+                        = (adBanner.index + 1) % adBanner.ads.length
+                }
+
+                // The ads are drawn at 711 x 44, the slot's widest. When
+                // the E-brake badge narrows the slot, their sides are
+                // cropped rather than the whole ad shrunk; the logos sit
+                // at the center.
+                Image {
+                    objectName: "adImage"
+                    anchors.fill: parent
+                    source: adBanner.ads[adBanner.index]
+                    fillMode: Image.PreserveAspectCrop
+                    clip: true
+                    asynchronous: true
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: qsTr("Advertisement")
+                }
+
+                // The card's frame, drawn over the ad. The ads' white
+                // ground matches the header's, so the corners outside
+                // the rounded frame do not show.
+                Rectangle {
+                    anchors.fill: parent
+                    color: "transparent"
+                    border.color: theme.border
+                    border.width: 1
+                    radius: theme.radius_md
+                }
+            }
+
+            // Which train the window shows, right after the badges.
+            statusExtras: SelectField {
+                objectName: "trainSelector"
+                Layout.preferredWidth: 240
+                Layout.fillWidth: false
+                label: qsTr("Train")
+                labelVisible: false
+                enabled: fleet.count > 0
+                model: fleet.count > 0
+                    ? fleet.trains
+                    : [{"id": "", "label": qsTr("No trains")}]
+                textRole: "label"
+                valueRole: "id"
+                currentIndex: Math.max(fleet.selectedIndex, 0)
+                onCommitted: function (value) {
+                    fleet.selectTrain(value);
+                }
+            }
         }
 
         // This fills the fixed reference canvas; the canvas transform
-        // scales the complete design uniformly with the window.
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 0
+        // scales the complete design uniformly with the window. The
+        // test UI is a separate window in its own process (test_ui.py).
+        MainView {
+            id: mainView
 
-            StackLayout {
-                id: views
+            Layout.fillWidth: true
+            trainModel: window.trainModel
+            Layout.fillHeight: true
+        }
+    }
+
+    // The Train Controller's announcement, shown to passengers as a
+    // popup each time a new one arrives. It is not modal, so the
+    // passenger emergency brake stays in reach; an empty announcement
+    // closes it, and so does the timeout. A panel in the design canvas
+    // rather than a Popup: a Popup draws in the window overlay, which
+    // the canvas scale does not reach, so in a small window it outgrew
+    // the rest of the UI.
+    Rectangle {
+        id: announcementPopup
+
+        readonly property string message: window.snapshot.announcement
+        property bool opened: false
+        // How long an announcement stays up before it closes itself.
+        property int timeout: 30000
+        // Shorter announcements read larger, stepping down the type
+        // scale as the text grows.
+        readonly property int textSize: message.length <= 40
+            ? theme.size_display
+            : message.length <= 100 ? theme.size_h1
+            : message.length <= 200 ? theme.size_h2
+            : message.length <= 400 ? theme.size_h3
+            : theme.size_body
+        // Its top edge, kept below the passenger emergency brake. Found
+        // on each open: mapToItem is not a binding, and at startup the
+        // layout has not placed the button yet.
+        property real minY: 0
+
+        function open() {
+            const brake = mainView.passengerBrake;
+            minY = brake.mapToItem(window.canvas, 0, brake.height).y
+                + theme.space_5;
+            opened = true;
+            closeTimer.restart();
+        }
+        function close() {
+            opened = false;
+            closeTimer.stop();
+        }
+
+        objectName: "announcementPopup"
+        visible: opened
+        z: 1
+        // Three quarters of the canvas wide and centered on it, but
+        // never over the emergency brake button.
+        width: window.canvas.width * 0.75
+        x: (window.canvas.width - width) / 2
+        y: Math.max(minY, (window.canvas.height - height) / 2)
+        // Never taller than the canvas: a long announcement scrolls,
+        // and Dismiss stays in sight.
+        height: Math.min(announcementContent.implicitHeight
+                + 2 * theme.space_5,
+            window.canvas.height - minY - theme.space_5)
+        color: theme.bg_surface
+        border.color: theme.border_strong
+        border.width: 1
+        radius: theme.radius_lg
+
+        onMessageChanged: {
+            if (message !== "")
+                open();
+            else
+                close();
+        }
+
+        Timer {
+            id: closeTimer
+
+            interval: announcementPopup.timeout
+            onTriggered: announcementPopup.close()
+        }
+
+        // Clicks on the panel stay on it, off the card underneath.
+        MouseArea {
+            anchors.fill: parent
+        }
+
+        Shortcut {
+            sequence: "Esc"
+            enabled: announcementPopup.visible
+            onActivated: announcementPopup.close()
+        }
+
+        ColumnLayout {
+            id: announcementContent
+
+            anchors.fill: parent
+            anchors.margins: theme.space_5
+            spacing: theme.space_4
+
+            // As tall as the Dismiss row, so the text sits at the
+            // panel's vertical center.
+            Item {
+                Layout.preferredHeight: dismissButton.implicitHeight
+            }
+
+            ScrollView {
+                id: announcementScroll
+
+                objectName: "announcementScroll"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                currentIndex: 0
+                Layout.preferredHeight: announcementText.implicitHeight
+                clip: true
+                contentWidth: availableWidth
 
-                MainView {}
-                TestView {}
+                Text {
+                    id: announcementText
+
+                    objectName: "announcementText"
+                    width: announcementScroll.availableWidth
+                    text: announcementPopup.message
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignHCenter
+                    color: theme.text_primary
+                    font.family: theme.ui_family
+                    font.pixelSize: announcementPopup.textSize
+                    // Bold on the heading steps of the scale, regular
+                    // at body size, as the type scale gives them.
+                    font.weight: announcementPopup.textSize > theme.size_body
+                        ? theme.weight_bold : theme.weight_regular
+                }
+            }
+
+            AppButton {
+                id: dismissButton
+
+                Layout.alignment: Qt.AlignRight
+                variant: "ghost"
+                text: qsTr("Dismiss")
+                onClicked: announcementPopup.close()
             }
         }
     }

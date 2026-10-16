@@ -62,6 +62,24 @@ Never resize the window from QML or Python after the fact (for example from
 `onWidthChanged` or a timer). See
 [`documents/SCALING_GUIDE.md`](../documents/SCALING_GUIDE.md).
 
+## Window icon
+
+Every module window shows the Track Overflow logo
+(`utils/Track_Overlow_Logo.png`). Right after creating the
+`QGuiApplication` and setting its name, call:
+
+```python
+from ui.app_icon import install_app_icon
+
+app.setApplicationName("My Module")
+install_app_icon(app)
+```
+
+This sets the icon for every window and dialog the app opens. On Windows it
+also gives the module its own taskbar entry, so the logo shows there instead
+of Python's. The packaged binary must bundle the logo at the same relative
+path (PyInstaller `--add-data "utils/Track_Overlow_Logo.png:utils"`).
+
 ## Component catalog
 
 | Component | Host-facing action / data |
