@@ -10,7 +10,10 @@ that stops short of any occupied, closed, closing or failed block and of
 any switch not reported set for its route (``ctc.routing``), recomputed
 every step.
 The blocks closed in maintenance mode (closing ones included) and
-switch commands pass through. Track
+switch commands pass through. Nothing is sent to a line's Track
+Controller, and no train is dispatched on the line, until it reports
+the line ready (a PLC program on every wayside): its waysides are
+vital. Track
 Controller and Track Model inputs are validated against the track
 layout and recorded. Real logic replaces this class behind the same
 ``CtcOffice`` contract.
@@ -32,7 +35,7 @@ from ctc.interface import (
     CtcOutputs,
     CtcSnapshot,
     DispatchOrder,
-    QueuedTrain,
+    ScheduledRun,
     SwitchCommand,
     SwitchPosition,
     SwitchReport,
@@ -42,6 +45,7 @@ from ctc.interface import (
     TrainAuthority,
     TrainSuggestion,
     TrackControllerOutputs,
+    WaysideStatus,
 )
 from ctc.routing import (
     authority,
@@ -50,6 +54,14 @@ from ctc.routing import (
     reversing_route,
 )
 from ctc.track_layout import Line, load_layout, station_lines
+from ctc.scheduler import (
+    SIMULATION_START_S,
+    AutoDispatcher,
+    Cancel,
+    World,
+    plan_run,
+    train_id_for,
+)
 from ctc.tracking import YARD_EXITS, Plan, TrainTracker, Waiting
 
 if TYPE_CHECKING:
@@ -152,6 +164,7 @@ _INPUT_LISTS = (
     ("track_controller", "occupancy", BlockOccupancy),
     ("track_controller", "switches", SwitchReport),
     ("track_controller", "crossings", CrossingReport),
+    ("track_controller", "waysides", WaysideStatus),
 )
 
 
@@ -243,6 +256,21 @@ class _Layout:
         rejected.
         """
         track_controller = inputs.track_controller
+        startup: dict[tuple[str, str], tuple[bool, str]] = {}
+        for status in track_controller.waysides:
+            self._line(status.line, "wayside report")
+            _require_id(status.wayside_id, "wayside ID")
+            if not isinstance(status.ready, bool):
+                raise InvalidInputError(
+                    f"ready of {status.line} wayside {status.wayside_id} "
+                    f"must be true or false, got {status.ready!r}")
+            if not isinstance(status.reason, str):
+                raise InvalidInputError(
+                    f"reason of {status.line} wayside {status.wayside_id} "
+                    f"must be text, got {_short(status.reason)}")
+            _no_conflict(startup, (status.line, status.wayside_id),
+                         (status.ready, status.reason),
+                         f"{status.line} wayside {status.wayside_id}")
         occupied: dict[tuple[str, str], bool] = {}
         for block in track_controller.occupancy:
             self.block(block.line, block.block_id, "occupancy")
@@ -315,6 +343,24 @@ def _normalize(inputs: CtcInputs) -> CtcInputs:
     return inputs
 
 
+def ready_lines(waysides: Collection[WaysideStatus]) -> frozenset[str]:
+    """The lines on which a wayside has reported and every wayside
+    reported is ready."""
+    reported = {status.line for status in waysides}
+    held = {status.line for status in waysides if not status.ready}
+    return frozenset(reported - held)
+
+
+def _not_ready(inputs: CtcInputs, line: str) -> str:
+    """Why a line is not ready, for a message."""
+    waiting = [s for s in inputs.track_controller.waysides
+               if s.line == line and not s.ready]
+    if not waiting:
+        return "no wayside has reported"
+    return "; ".join(f"wayside {s.wayside_id}: {s.reason or 'not ready'}"
+                     for s in waiting)
+
+
 def _trim(train_id: str) -> str:
     _require_train_id(train_id)
     return train_id.strip()
@@ -333,13 +379,21 @@ class StubCtcOffice:
     of switches not set for the route; no switch thrown under a train.
     Block closures are maintenance-mode only and wait for an occupied
     block to clear. Failed blocks are inferred from occupancy
-    (``ctc.tracking``) and shown to the UIs only as occupied.
+    (``ctc.tracking``) and shown to the UIs only as occupied. Nothing is
+    sent to a line's Track Controller until it reports the line ready,
+    and no train is dispatched on it: closures and switch commands are
+    kept and go out once it is.
     """
 
     def __init__(self, layout: Mapping[str, Line] | None = None) -> None:
         lines = load_layout() if layout is None else layout
         self._layout = _Layout(lines)
         self._graphs = build_graphs(lines)
+        # Blocks the layout marks as stations, named or not, per line.
+        self._station_blocks = {
+            name: frozenset(b.block_id for b in line.blocks
+                            if b.station is not None)
+            for name, line in lines.items()}
         self._lines = tuple(sorted(lines))
         self._orders: dict[str, DispatchOrder] = {}
         self._closed: set[BlockRef] = set()
@@ -363,6 +417,10 @@ class StubCtcOffice:
         self._tickets: dict[str, int] = {
             station: 0 for station in self._layout.station_lines}
         self._schedule: Schedule | None = None
+        # The loaded schedule's plans and progress (ctc.scheduler).
+        self._auto: AutoDispatcher | None = None
+        self._automatic = False
+        self._dispatch_paused = False
         # Where the trains are and which blocks failed, from occupancy.
         self._tracker = TrainTracker(SERVICE_DECEL_MPS2)
         # What each tracked train should do next, from the last step.
@@ -391,15 +449,19 @@ class StubCtcOffice:
         self._staged = None
         for station, tickets in inputs.track_model.ticket_sales.items():
             self._tickets[station] += tickets
+        # In automatic mode, the schedule's runs move on.
+        self._run_schedule()
         # Pending closures close once their block is clear.
         occupied = self._occupied(inputs)
         for block in sorted(self._pending, key=_block_order):
             if (block.line, block.block_id) not in occupied:
                 self._pending.discard(block)
                 self._closed.add(block)
-        # Commit this step's grants; later steps keep them.
+        # Commit this step's grants; later steps keep them. Nothing is
+        # granted on a line whose Track Controller is not ready.
+        ready = self._ready_lines()
         self._granted = {a.train_id: a.route[1:a.blocks + 1]
-                         for a in self._authorities()}
+                         for a in self._authorities() if a.line in ready}
         self._plans = self._make_plans()
         return self._outputs()
 
@@ -420,14 +482,18 @@ class StubCtcOffice:
             inputs=self._inputs,
             elapsed_s=self._elapsed_s,
             tickets_sold=dict(self._tickets),
-            queued_trains=self._queued(),
+            scheduled_runs=self._scheduled_runs(),
             orders=tuple(self._orders[t] for t in sorted(self._orders)),
             pending_closures=tuple(sorted(self._pending,
                                           key=_block_order)),
+            closed_blocks=self._closed_blocks(),
+            switch_commands=self._switch_commands(),
             cancelled_orders=tuple(self._cancelled),
             authorities=self._authorities(),
             inputs_staged=self._staged is not None,
             maintenance_mode=self._maintenance,
+            automatic_mode=self._automatic,
+            dispatch_paused=self._dispatch_paused,
             trains=tuple(TrackedTrain(train_id, t.line, t.blocks)
                          for train_id, t in sorted(
                              self._tracker.trains.items())),
@@ -449,10 +515,11 @@ class StubCtcOffice:
                  arrival_s: float | None = None) -> None:
         """Send a train toward a block; replaces any earlier order.
 
-        Refused (safety) into a closed or closing block, and onto a line
-        other than the one the train is on. A block inferred to have
-        failed is not refused: the UIs never show a failure, and the
-        train waits short of it until it clears.
+        Refused (safety) into a closed or closing block, onto a line
+        other than the one the train is on, and on a line whose Track
+        Controller is not ready (no PLC program loaded). A block inferred
+        to have failed is not refused: the UIs never show a failure, and
+        the train waits short of it until it clears.
         """
         train_id = _trim(train_id)
         self._layout.block(line, destination_block_id,
@@ -466,6 +533,11 @@ class StubCtcOffice:
                     f"arrival_s must be within one day, got {arrival_s}")
         target = BlockRef(line, destination_block_id)
         where = f"{line} block {destination_block_id}"
+        if line not in self._ready_lines(self._newest()):
+            raise UnsafeActionError(
+                f"The {line} line's Track Controller is not ready "
+                f"({_not_ready(self._newest(), line)}); no train can be "
+                "dispatched on it yet.")
         if target in self._closed:
             raise UnsafeActionError(
                 f"{where} is closed; no train can be sent into it.")
@@ -553,8 +625,10 @@ class StubCtcOffice:
 
     def load_schedule(self, schedule: Schedule) -> None:
         """Replace the schedule. Every stop must be a block of the
-        track layout. With no scheduling algorithm yet, every run stays
-        queued."""
+        track layout. Each run is planned at once (``ctc.scheduler``):
+        its scheduled stations, and no others, in track order from the
+        yard, each with the time it is due there. In automatic mode the
+        runs then dispatch themselves. Orders already given stay."""
         runs = set()
         for train in schedule.trains:
             what = f"schedule {train.line} train {train.train_id}"
@@ -567,7 +641,34 @@ class StubCtcOffice:
                 self._layout.block(train.line, stop.block_id,
                                    f"schedule {train.line} train "
                                    f"{train.train_id}")
+        train_ids = [train_id_for(t.line, t.train_id)
+                     for t in schedule.trains]
+        for train_id in train_ids:
+            if train_ids.count(train_id) > 1:
+                raise InvalidInputError(
+                    f"schedule: two runs would both be train {train_id}")
+            _require_train_id(train_id, "schedule train ID")
+        self._auto = AutoDispatcher([
+            plan_run(train, self._graphs[train.line],
+                     lambda route, line=train.line: self._run_time_s(
+                         line, route),
+                     self._station_blocks[train.line])
+            for train in schedule.trains])
         self._schedule = schedule
+
+    def set_automatic_mode(self, active: bool) -> None:
+        """Enter or leave automatic mode; see ``CtcOffice``."""
+        if not isinstance(active, bool):
+            raise InvalidInputError(
+                f"automatic mode must be true or false, got {active!r}")
+        self._automatic = active
+
+    def set_dispatch_paused(self, paused: bool) -> None:
+        """Pause or resume automatic dispatch; see ``CtcOffice``."""
+        if not isinstance(paused, bool):
+            raise InvalidInputError(
+                f"paused must be true or false, got {paused!r}")
+        self._dispatch_paused = paused
 
     # -- Internals ----------------------------------------------------
 
@@ -576,6 +677,15 @@ class StubCtcOffice:
         if self._staged is not None:
             return self._staged
         return self._inputs if self._inputs is not None else CtcInputs()
+
+    def _ready_lines(self, inputs: CtcInputs | None = None
+                     ) -> frozenset[str]:
+        """The lines whose Track Controller is ready, in ``inputs`` or
+        else in the reports last applied: a wayside on the line has
+        reported, and every wayside on it is ready."""
+        inputs = self._inputs if inputs is None else inputs
+        return (frozenset() if inputs is None
+                else ready_lines(inputs.track_controller.waysides))
 
     @staticmethod
     def _occupied(inputs: CtcInputs) -> set[tuple[str, str]]:
@@ -628,15 +738,61 @@ class StubCtcOffice:
                     train_id, block.line, block.block_id, reason))
         del self._cancelled[:-_CANCELLED_KEPT]
 
-    def _queued(self) -> tuple[QueuedTrain, ...]:
-        if self._schedule is None:
+    def _now_s(self) -> float:
+        """Simulated time of day: the module is stepped from the
+        simulation start (D017)."""
+        return SIMULATION_START_S + self._elapsed_s
+
+    def _run_schedule(self) -> None:
+        """Move the schedule's runs on, in automatic mode only, and give
+        the orders that takes, with the dispatcher's own safety checks.
+        A stop that cannot be ordered (closed or closing) is skipped."""
+        if self._auto is None or not self._automatic \
+                or self._dispatch_paused:
+            return
+        world = World(
+            now_s=self._now_s(),
+            ready_lines=self._ready_lines(self._newest()),
+            heads={train_id: t.head
+                   for train_id, t in self._tracker.trains.items()},
+            orders={train_id: o.destination_block_id
+                    for train_id, o in self._orders.items()},
+            lost=frozenset(self._tracker.lost))
+        pending = list(self._auto.step(world))
+        while pending:
+            action = pending.pop(0)
+            if isinstance(action, Cancel):
+                self.cancel_dispatch(action.train_id)
+                continue
+            try:
+                self.dispatch(action.train_id, action.line, action.block_id,
+                              action.due_s)
+            except UnsafeActionError:
+                skipped = self._auto.skip_stop(action.train_id)
+                if skipped is not None:
+                    pending.insert(0, skipped)
+
+    def _scheduled_runs(self) -> tuple[ScheduledRun, ...]:
+        if self._auto is None:
             return ()
-        runs = sorted(self._schedule.trains,
-                      key=lambda t: (t.departure_s, t.line, t.train_id))
-        return tuple(
-            QueuedTrain(t.line, t.train_id, t.departure_s,
-                        t.stops[0].block_id)
-            for t in runs)
+        runs = []
+        for plan in self._auto.plans:
+            progress = self._auto.progress[plan.train_id]
+            stop = (plan.stops[progress.leg]
+                    if progress.status in ("in yard", "en route",
+                                           "dwelling", "held")
+                    and progress.leg < len(plan.stops) else None)
+            done = {"dwelling": progress.leg + 1, "to yard": len(plan.stops),
+                    "done": len(plan.stops)}.get(progress.status,
+                                                 progress.leg)
+            runs.append(ScheduledRun(
+                plan.line, plan.run_id, plan.train_id, plan.departure_s,
+                progress.status,
+                stop.block_id if stop else "",
+                stop.station if stop else "",
+                stop.due_s if stop else None,
+                done, len(plan.stops)))
+        return tuple(runs)
 
     def _suggested_speed_mps(self, line: str, block_id: str,
                              limit: TrainAuthority) -> int:
@@ -700,8 +856,9 @@ class StubCtcOffice:
         """Authority of every ordered train on the track, by train ID.
 
         The yard is a black box: a train gets authority once it is
-        reported on the track. Recomputed from the applied reports every
-        time (``ctc.routing``), with no block in two trains' authorities
+        reported on the track. None while its line's Track Controller is
+        not ready (reason "not ready"). Recomputed from the applied reports
+        every time (``ctc.routing``), with no block in two trains' authorities
         (exclusive-authority): first every train keeps what it was
         granted at the last step and has not passed yet, then, most
         urgent first, each extends toward its destination through blocks
@@ -734,7 +891,8 @@ class StubCtcOffice:
         return stuck
 
     def _choose_route(self, line: str, block_id: str, destination: str,
-                      unusable: set[str], stuck: set[str]
+                      unusable: set[str], stuck: set[str],
+                      came_from: str | None = None
                       ) -> tuple[tuple[str, ...] | None, str]:
         """The route, and where the train would have to reverse ("" if
         nowhere).
@@ -747,34 +905,41 @@ class StubCtcOffice:
         taken. When the train waits on something that will not clear by
         itself and only reversing would get it round, the block it would
         reverse in is returned too: the CTC never reverses a train.
+
+        ``came_from`` is the block the train entered its block from, when
+        the CTC has seen it move: every route carries on that way.
         """
         graph = self._graphs[line]
         blocking = (unusable | stuck) - {block_id}
-        direct = graph.route(block_id, destination)
+        direct = graph.route(block_id, destination, came_from=came_from)
         if direct is None:
             return None, self._reversal(line, block_id, destination,
-                                        blocking)
+                                        blocking, came_from)
         for avoid in (unusable | stuck, unusable):
-            route = graph.route(block_id, destination, avoid - {block_id})
+            route = graph.route(block_id, destination, avoid - {block_id},
+                                came_from=came_from)
             if (route is not None
                     and len(route) <= MAX_DETOUR_FACTOR * len(direct)):
                 return route, ""
         if not set(direct[1:]) & blocking:
             return direct, ""
-        return direct, self._reversal(line, block_id, destination, blocking)
+        return direct, self._reversal(line, block_id, destination, blocking,
+                                      came_from)
 
     def _reversal(self, line: str, block_id: str, destination: str,
-                  blocking: set[str]) -> str:
+                  blocking: set[str], came_from: str | None = None) -> str:
         """Where reversing would get the train round ``blocking``, or
         ""."""
         graph = self._graphs[line]
-        route = reversing_route(graph, block_id, destination, blocking)
-        return first_reversal(graph, route) if route else ""
+        route = reversing_route(graph, block_id, destination, blocking,
+                                came_from)
+        return first_reversal(graph, route, came_from) if route else ""
 
     def _compute_authorities(self) -> tuple[TrainAuthority, ...]:
         applied = self._inputs if self._inputs is not None else CtcInputs()
         positions = {train_id: (t.line, t.head)
                      for train_id, t in self._tracker.trains.items()}
+        ready = self._ready_lines()
         found: dict[str, TrainAuthority] = {}
         obstructions = {line: self._obstructions(applied, line)
                         for line in self._lines}
@@ -787,11 +952,17 @@ class StubCtcOffice:
             if train_id not in positions:
                 continue
             line, block_id = positions[train_id]
+            if line not in ready:
+                # Vital waysides with no PLC program: no train may move.
+                found[train_id] = TrainAuthority(
+                    train_id, line, 0, block_id, "not ready")
+                continue
             unusable = self._unusable(line)
             route, reverse_at = (
                 self._choose_route(line, block_id,
                                    order.destination_block_id, unusable,
-                                   stuck[line])
+                                   stuck[line],
+                                   self._tracker.trains[train_id].came_from)
                 if line == order.line else (None, ""))
             if route is None:
                 found[train_id] = TrainAuthority(
@@ -838,32 +1009,44 @@ class StubCtcOffice:
         return tuple(found[t] for t in sorted(found))
 
     def _outputs(self) -> CtcOutputs:
+        # The waysides are vital: nothing goes to a line's Track
+        # Controller until it reports the line ready. Closures and
+        # switch commands are kept and sent once it does.
+        ready = self._ready_lines()
         # The yard is a black box: a train gets speed and authority once
         # it has left the yard, from the block its head is in.
         positions = {train_id: (t.line, t.head)
                      for train_id, t in self._tracker.trains.items()}
         suggestions = tuple(
-            TrainSuggestion(limit.train_id, limit.line,
+            TrainSuggestion(limit.train_id, *positions[limit.train_id],
                             self._suggested_speed_mps(
                                 *positions[limit.train_id], limit),
                             limit.blocks)
-            for limit in self._authorities()
+            for limit in self._authorities() if limit.line in ready
         )
         return CtcOutputs(
             track_controller=TrackControllerOutputs(
                 suggestions=suggestions,
-                # Closing blocks too: locked from the moment the
-                # closure is requested.
-                closed_blocks=tuple(sorted(
-                    self._closed | self._pending, key=_block_order)),
-                switch_commands=tuple(
-                    SwitchCommand(line, switch_id, position)
-                    for (line, switch_id), position in sorted(
-                        self._switches.items(),
-                        key=lambda item: _id_order(*item[0]))),
+                closed_blocks=tuple(b for b in self._closed_blocks()
+                                    if b.line in ready),
+                switch_commands=tuple(c for c in self._switch_commands()
+                                      if c.line in ready),
             ),
             clock_speedup=self._clock_speedup,
         )
+
+    def _closed_blocks(self) -> tuple[BlockRef, ...]:
+        # Closing blocks too: locked from the moment the closure is
+        # requested.
+        return tuple(sorted(self._closed | self._pending,
+                            key=_block_order))
+
+    def _switch_commands(self) -> tuple[SwitchCommand, ...]:
+        return tuple(
+            SwitchCommand(line, switch_id, position)
+            for (line, switch_id), position in sorted(
+                self._switches.items(),
+                key=lambda item: _id_order(*item[0])))
 
 
 def _id_order(line: str, block_id: str) -> tuple[str, int, str]:

@@ -20,8 +20,10 @@ from ctc.interface import (
     CtcOutputs,
     SwitchReport,
     TrackControllerInputs,
+    WaysideStatus,
 )
 from ctc.model import StubCtcOffice
+from ctc.track_layout import LINE_FILES
 
 DT_S = 0.1
 
@@ -41,14 +43,31 @@ def at(train_id: str, block_id: str, line: str = "Green") -> At:
 
 def reports(*trains: At, occupied: Iterable[tuple[str, str]] = (),
             switches: Iterable[SwitchReport] = (),
-            crossings: Iterable[CrossingReport] = ()) -> CtcInputs:
+            crossings: Iterable[CrossingReport] = (),
+            ready: bool | Iterable[str] = True) -> CtcInputs:
     """The Track Controller's report with ``trains`` in their blocks and
-    ``occupied`` ``(line, block)`` pairs occupied too."""
+    ``occupied`` ``(line, block)`` pairs occupied too. Ready on every
+    line unless told otherwise (False, or the lines that are): the CTC
+    sends a line that is not ready nothing."""
+    ready_lines = (tuple(LINE_FILES) if ready is True
+                   else () if ready is False else tuple(ready))
+    # One wayside per ready line, ready; a line not ready reports none.
+    waysides = tuple(WaysideStatus(f"{line[0]}1", line, True)
+                     for line in ready_lines)
     blocks = {(t.line, t.block_id) for t in trains} | set(occupied)
     return CtcInputs(track_controller=TrackControllerInputs(
         occupancy=tuple(BlockOccupancy(line, block_id, True)
                         for line, block_id in sorted(blocks)),
-        switches=tuple(switches), crossings=tuple(crossings)))
+        switches=tuple(switches), crossings=tuple(crossings),
+        waysides=waysides))
+
+
+def ready_office() -> StubCtcOffice:
+    """A CTC Office whose Track Controller has reported every line ready
+    (staged, so no time has passed): one a train can be dispatched on."""
+    ctc = StubCtcOffice()
+    ctc.stage_inputs(reports())
+    return ctc
 
 
 def place(ctc: StubCtcOffice, *trains: At) -> None:

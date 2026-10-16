@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import CtcInputs, TrackedTrain  # noqa: E402
 from ctc.model import StubCtcOffice  # noqa: E402
-from tests.occupancy import reports  # noqa: E402
+from tests.occupancy import ready_office, reports  # noqa: E402
 
 
 def _occupied(ctc: StubCtcOffice, *blocks: str, line: str = "Green",
@@ -44,7 +44,7 @@ class YardTest(unittest.TestCase):
         for line, exit_block, destination in (("Green", "63", "70"),
                                               ("Red", "9", "7")):
             with self.subTest(line=line):
-                ctc = StubCtcOffice()
+                ctc = ready_office()
                 ctc.dispatch("T1", line, destination)
                 _occupied(ctc, line=line)
                 self.assertEqual(ctc.snapshot().trains, ())
@@ -53,7 +53,7 @@ class YardTest(unittest.TestCase):
                     TrackedTrain("T1", line, (exit_block,)),))
 
     def test_the_train_most_behind_schedule_leaves_first(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "70")
         ctc.dispatch("T2", "Green", "70", arrival_s=9 * 3600)
         ctc.dispatch("T3", "Green", "70", arrival_s=8 * 3600)
@@ -62,14 +62,14 @@ class YardTest(unittest.TestCase):
         self.assertEqual(_where(ctc), {"T3": ("63",)})
 
     def test_with_no_arrival_times_by_train_id(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T2", "Green", "70")
         ctc.dispatch("T1", "Green", "70")
         _occupied(ctc, "63")
         self.assertEqual(_where(ctc), {"T1": ("63",)})
 
     def test_with_no_train_waiting_it_is_a_failure(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         _occupied(ctc, "63")
         # Ordered afterwards: 63 is not newly occupied, so T1 is still
         # in the yard, and 63 is a failure it waits behind.
@@ -84,7 +84,7 @@ class YardTest(unittest.TestCase):
     def test_a_train_that_ran_into_the_yard_may_leave_again(self) -> None:
         # Green 57 runs into the yard: a train whose blocks clear there
         # has gone back in, and is not lost.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "57")
         ctc.place_train("T1", "Green", "57")
         _occupied(ctc, "57")
@@ -101,7 +101,7 @@ class MovingTest(unittest.TestCase):
 
     def _out_of_the_yard(self) -> StubCtcOffice:
         # Green 63 to 70: 63 is 100 m long, limited to 70 km/h.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "70")
         _occupied(ctc, "63")
         return ctc
@@ -111,8 +111,12 @@ class MovingTest(unittest.TestCase):
         _occupied(ctc, "63", steps=10)
         _occupied(ctc, "63", "64")
         self.assertEqual(_where(ctc), {"T1": ("63", "64")})
-        # Authority is counted from its head.
+        # Authority is counted from its head, and the Track Controller
+        # is told to send it down the head's block.
         self.assertEqual(_authority(ctc).route[0], "64")
+        (suggestion,) = ctc.snapshot().outputs.track_controller.suggestions
+        self.assertEqual((suggestion.line, suggestion.block_id),
+                         ("Green", "64"))
         _occupied(ctc, "64")
         self.assertEqual(_where(ctc), {"T1": ("64",)})
 
@@ -156,7 +160,7 @@ class MovingTest(unittest.TestCase):
         # occupied a second later: 3 s in, too soon at 15 m/s (it would
         # need 3.3 s for half of 63's 100 m), but T1 may well have gone
         # 54 m by then. That is T1, not a failure.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "80")
         ctc.place_train("T1", "Green", "63")
         _occupied(ctc, "63", dt=0.1)
@@ -175,7 +179,7 @@ class LostTest(unittest.TestCase):
     quietly; its order stays."""
 
     def test_dropped_quietly(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         ctc.place_train("T1", "Green", "30")
         _occupied(ctc, "30")
@@ -192,7 +196,7 @@ class LostTest(unittest.TestCase):
         self.assertEqual(ctc.snapshot().lost_trains, ())
 
     def test_found_again_by_placing_it(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.place_train("T1", "Green", "30")
         _occupied(ctc, "30")
         ctc.step(1.0, CtcInputs())

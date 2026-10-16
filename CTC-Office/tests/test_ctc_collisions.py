@@ -25,10 +25,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import SwitchReport  # noqa: E402
-from ctc.model import StubCtcOffice  # noqa: E402
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc.tracking import YARD_EXITS  # noqa: E402
-from tests.occupancy import reports  # noqa: E402
+from tests.occupancy import ready_office, reports  # noqa: E402
 
 _LAYOUT = load_layout()
 _ON_TRACK = 4                    # trains placed on the track at the start
@@ -44,7 +43,7 @@ def _first_problem(seed: int, line: str) -> str | None:
     blocks = list(lengths)
     switch_ids = _LAYOUT[line].switch_ids()
     exit_block = YARD_EXITS[line]
-    ctc = StubCtcOffice()
+    ctc = ready_office()
     # Blocks each train holds, tail first; how far into its head block
     # it is; and how much of its suggested speed it runs at.
     trains: dict[str, list[str]] = {}
@@ -82,9 +81,12 @@ def _first_problem(seed: int, line: str) -> str | None:
             for s in switch_ids:
                 if s not in taken and rng.random() < 0.5:
                     switches[s] = rng.choice(("normal", "reverse"))
-        # A failure where no train is or may go; it clears later.
+        # A failure where no train is or may go, on a block that was
+        # clear at the last report too (one that fails the moment a
+        # train's tail leaves it looks like the tail staying, not a new
+        # occupancy); it clears later.
         if step % 10 == 5 and rng.random() < 0.5:
-            spare = [b for b in blocks if b not in taken]
+            spare = [b for b in blocks if b not in taken | reported]
             if spare:
                 failures[rng.choice(spare)] = rng.randint(5, 30)
         # The yard lets the next train out onto an exit block that was

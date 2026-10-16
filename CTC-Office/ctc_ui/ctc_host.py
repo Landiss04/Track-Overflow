@@ -34,11 +34,13 @@ from ctc.interface import (
     CtcOffice,
     CtcSnapshot,
     DispatchOrder,
+    ScheduledRun,
     TrackModelInputs,
     TrainAuthority,
     TrainSuggestion,
+    WaysideStatus,
 )
-from ctc.model import CtcError, StubCtcOffice
+from ctc.model import CtcError, StubCtcOffice, ready_lines
 from ctc.schedule import load_schedule
 from ctc.socket_link import CtcLinkServer
 from ctc.track_layout import Line, load_layout, station_lines
@@ -72,8 +74,27 @@ def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
     """Closed blocks, without the ones still closing: ``closed_blocks``
     lists both, since the Track Controller is locked out of either."""
     pending = set(snap.pending_closures)
-    return [b for b in snap.outputs.track_controller.closed_blocks
-            if b not in pending]
+    return [b for b in snap.closed_blocks if b not in pending]
+
+
+def _wayside_waiting(status: WaysideStatus) -> str:
+    """One wayside that is not ready, for a notice."""
+    return f"wayside {status.wayside_id}: {status.reason or 'not ready'}"
+
+
+def _run_status(run: ScheduledRun) -> str:
+    """A run's Status cell: where it is in its schedule."""
+    stop = (run.stop_station.title() if run.stop_station
+            else f"block {run.stop_block_id}")
+    return {
+        "queued": "Queued",
+        "held": "Held",
+        "in yard": "In yard",
+        "en route": f"To {stop}",
+        "dwelling": f"At {stop}",
+        "to yard": "To yard",
+        "done": "Done",
+    }.get(run.status, run.status)
 
 
 def _status(tracked: bool, order: DispatchOrder | None,
@@ -99,6 +120,8 @@ def _authority_limit(limit: TrainAuthority) -> str:
         return f"Block {limit.at} {_BLOCKED_LABELS[limit.reason]}"
     if limit.reason == "reserved":
         return f"Block {limit.at} held by {limit.held_by}"
+    if limit.reason == "not ready":
+        return "Track Controller not ready"
     return "No route"
 
 
@@ -113,11 +136,6 @@ def _hour(sim_time_s: float) -> int:
     """The simulated clock hour a time falls in, counted from midnight
     of the first simulated day."""
     return int(sim_time_s // 3600)
-
-
-def _offset(seconds: int) -> str:
-    """``+m:ss`` after the schedule start."""
-    return f"+{seconds // 60}:{seconds % 60:02d}"
 
 
 def _mph(speed_mps: float) -> str:
@@ -425,7 +443,7 @@ class CtcHost(QObject):
                     for o in self._applied().track_controller.occupancy
                     if o.occupied and o.line == line}
         closed = {b.block_id
-                  for b in snap.outputs.track_controller.closed_blocks
+                  for b in snap.closed_blocks
                   if b.line == line}
 
         def occupancy(block_id: str) -> str:
@@ -549,8 +567,7 @@ class CtcHost(QObject):
                     for s in self._applied().track_controller.switches}
         commanded = {
             (c.line, c.switch_id): c.position
-            for c in self._module.snapshot()
-            .outputs.track_controller.switch_commands}
+            for c in self._module.snapshot().switch_commands}
         return {
             "normal": connections[0],
             "reverse": connections[1] if len(connections) > 1 else NO_VALUE,
@@ -560,8 +577,7 @@ class CtcHost(QObject):
 
     @Property(int, notify=stateChanged)
     def switchCommandCount(self) -> int:  # noqa: N802
-        return len(self._module.snapshot()
-                   .outputs.track_controller.switch_commands)
+        return len(self._module.snapshot().switch_commands)
 
     # -- Throughput ---------------------------------------------------
 
@@ -620,6 +636,22 @@ class CtcHost(QObject):
         """Messages for the dispatcher, newest last."""
         snap = self._module.snapshot()
         found = []
+        waysides = self._applied().track_controller.waysides
+        ready = ready_lines(waysides)
+        waiting = []
+        for line in self._layout:
+            if line in ready:
+                continue
+            held = [s for s in waysides if s.line == line and not s.ready]
+            waiting.append(
+                f"{line} ({'; '.join(_wayside_waiting(s) for s in held)})"
+                if held else f"{line} (no wayside has reported)")
+        if waiting:
+            found.append(
+                "Track Controller not ready on " + " and ".join(waiting)
+                + " \u2014 nothing is sent to a line, and no train can be "
+                "dispatched on it, until every wayside on it has a PLC "
+                "program.")
         if snap.inputs_staged and self._clock is not None \
                 and self._clock.paused:
             found.append("Track Controller update staged \u2014 it "
@@ -735,7 +767,7 @@ class CtcHost(QObject):
         block = BlockRef(line, block_id)
         if block in snap.pending_closures:
             return "closing"
-        if block in snap.outputs.track_controller.closed_blocks:
+        if block in snap.closed_blocks:
             return "closed"
         return ""
 
@@ -791,13 +823,36 @@ class CtcHost(QObject):
 
     @Property(list, notify=scheduleChanged)
     def departures(self) -> list[dict[str, Any]]:
-        """Queued runs as rows for the Next departures table."""
+        """Every run of the schedule as a row for the Departures table:
+        when it is due out of the yard, its train, and how far it has
+        got."""
         return [
-            {"time": _offset(q.departure_s),
-             "train": f"{q.line} {q.train_id}",
-             "status": "Queued"}
-            for q in self._module.snapshot().queued_trains
+            {"time": format_time_of_day(run.departure_s),
+             "train": run.train_id,
+             "status": _run_status(run)}
+            for run in self._module.snapshot().scheduled_runs
         ]
+
+    @Property(bool, notify=scheduleChanged)
+    def dispatchRunning(self) -> bool:  # noqa: N802
+        """Automatic dispatch is carrying out a loaded schedule."""
+        snap = self._module.snapshot()
+        return (snap.automatic_mode and not snap.dispatch_paused
+                and bool(snap.scheduled_runs))
+
+    @Property(bool, notify=scheduleChanged)
+    def dispatchPaused(self) -> bool:  # noqa: N802
+        return self._module.snapshot().dispatch_paused
+
+    @Slot(bool)
+    def setDispatchPaused(self, paused: bool) -> None:  # noqa: N802
+        """Pause or resume automatic dispatch."""
+        self._act(self._module.set_dispatch_paused, paused)
+
+    @Slot(bool)
+    def setAutomaticMode(self, active: bool) -> None:  # noqa: N802
+        """The window's operating mode is Automatic (or no longer)."""
+        self._act(self._module.set_automatic_mode, active)
 
     @Slot(QUrl)
     def loadSchedule(self, url: QUrl) -> None:  # noqa: N802

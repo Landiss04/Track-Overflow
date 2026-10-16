@@ -70,6 +70,19 @@ class CrossingReport:
 
 
 @dataclass(frozen=True, slots=True)
+class WaysideStatus:
+    """Whether one wayside controller is started up: a PLC program on
+    its territory. From the ``ready`` and ``reason`` of the wayside's
+    report to the CTC Office (``CtcReport`` on ``Track-Ctrl-SW``)."""
+
+    wayside_id: str
+    line: str
+    ready: bool
+    # Why it is not ready; "" when it is.
+    reason: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class TrackControllerInputs:
     """From the Track Controller, every tick."""
 
@@ -78,6 +91,12 @@ class TrackControllerInputs:
     occupancy: tuple[BlockOccupancy, ...] = ()
     switches: tuple[SwitchReport, ...] = ()
     crossings: tuple[CrossingReport, ...] = ()
+    # Every wayside's startup, as each reports it
+    # (``track-controller-ready``, proposed on ``Track-Ctrl-SW``). The
+    # waysides are vital: a line is ready only once a wayside on it has
+    # reported and every wayside on it is ready. Until then the CTC
+    # sends nothing for the line and dispatches no train on it.
+    waysides: tuple[WaysideStatus, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,10 +122,18 @@ class CtcInputs:
 
 @dataclass(frozen=True, slots=True)
 class TrainSuggestion:
-    """Suggested speed and authority for one train."""
+    """Suggested speed and authority for one train, and the block it is
+    in. The Track Controller sees only which blocks are occupied, so the
+    block says which track circuit to send this speed and authority
+    down (``suggested-speed``, ``suggested-authority``, proposed on
+    ``ctc-deployment``)."""
 
     train_id: str
     line: str
+    # The block the train's head is in, as the CTC has followed it from
+    # occupancy (``ctc.tracking``): while it crosses into the next block,
+    # the one it is entering. Authority is counted from this block.
+    block_id: str
     # Whole m/s: a target for safe spacing, not the train's own speed;
     # never above the speed limit of the block the train is in.
     suggested_speed_mps: int
@@ -161,14 +188,32 @@ class CtcOutputs:
 
 
 @dataclass(frozen=True, slots=True)
-class QueuedTrain:
-    """A scheduled run that has not been dispatched yet."""
+class ScheduledRun:
+    """One run of the loaded schedule, and how far it has got
+    (``ctc.scheduler``)."""
 
     line: str
+    # The run's number in the schedule file.
+    run_id: str
+    # The train ID it is dispatched as: run numbers repeat across lines,
+    # so the line's initial goes first ("G1").
     train_id: str
-    # Due at its first stop, in seconds after the schedule start.
-    departure_s: int
-    first_block_id: str
+    # Due to leave the yard, in simulated seconds since midnight.
+    departure_s: float
+    # "queued", "held" (due to move on, but a stretch of two-way track
+    # ahead has another train in it), "in yard", "en route", "dwelling",
+    # "to yard" or "done".
+    status: str
+    # The stop it is heading for, stopped at, or held to go to; "" when
+    # none.
+    stop_block_id: str = ""
+    stop_station: str = ""
+    # Due at that stop, in simulated seconds since midnight; None when
+    # there is no stop.
+    stop_due_s: float | None = None
+    # Stops reached so far, of how many.
+    stops_done: int = 0
+    stops_total: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,13 +289,18 @@ class CtcSnapshot:
     # Tickets sold at each named station since the simulation started,
     # by station name.
     tickets_sold: Mapping[str, int] = field(default_factory=dict)
-    # Runs from the loaded schedule still waiting, by departure time.
-    queued_trains: tuple[QueuedTrain, ...] = ()
+    # Every run of the loaded schedule, by departure time.
+    scheduled_runs: tuple[ScheduledRun, ...] = ()
     # Dispatcher orders, by train ID.
     orders: tuple[DispatchOrder, ...] = ()
     # Closures waiting for a train to leave the block; they close by
     # themselves once it is clear. Already in ``closed_blocks``.
     pending_closures: tuple[BlockRef, ...] = ()
+    # The dispatcher's closed blocks (closing ones too) and switch
+    # commands. The same as in ``outputs`` while the Track Controller is
+    # ready; kept here while it is not, when nothing is sent to it.
+    closed_blocks: tuple[BlockRef, ...] = ()
+    switch_commands: tuple[SwitchCommand, ...] = ()
     # Orders the CTC cancelled itself, oldest first (the last few).
     cancelled_orders: tuple[CancelledOrder, ...] = ()
     # Authority of every train that has one, by train ID.
@@ -268,6 +318,10 @@ class CtcSnapshot:
     # The dispatcher's operating mode. Not sent to any module: the
     # Track Controller gets ``closed_blocks`` instead.
     maintenance_mode: bool = False
+    # Automatic mode: runs of the loaded schedule dispatch themselves,
+    # unless the dispatcher has paused them.
+    automatic_mode: bool = False
+    dispatch_paused: bool = False
 
 
 # ------------------------------------------------------------------ #
@@ -344,5 +398,15 @@ class CtcOffice(Protocol):
         ...
 
     def load_schedule(self, schedule: Schedule) -> None:
-        """Replace the schedule; its runs are queued for dispatch."""
+        """Replace the schedule. In automatic mode its runs dispatch
+        themselves when due (``ctc.scheduler``)."""
+        ...
+
+    def set_automatic_mode(self, active: bool) -> None:
+        """Enter or leave automatic mode. Outside it, the schedule
+        holds: no run leaves the yard or a stop."""
+        ...
+
+    def set_dispatch_paused(self, paused: bool) -> None:
+        """Pause or resume automatic dispatch."""
         ...

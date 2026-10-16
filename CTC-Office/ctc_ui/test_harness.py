@@ -2,7 +2,8 @@
 
 The harness stands in for the Track Controller, so the CTC Office can be
 run on its own. Its inputs are only what the Track Controller sends the
-CTC: occupied blocks, switch states and crossing states. Everything the
+CTC: each wayside's startup (ready or not, and why), occupied blocks,
+switch states and crossing states. Everything the
 CTC itself decides (dispatch orders, block closures, switch commands,
 the operating mode and the clock speed) is done in the CTC window, as a
 dispatcher would. The harness reaches the module only through its
@@ -41,6 +42,7 @@ from ctc.interface import (
     CtcOutputs,
     SwitchReport,
     TrackControllerInputs,
+    WaysideStatus,
 )
 from ctc.link import CtcLink, LocalLink
 from ctc.model import CtcError
@@ -54,6 +56,9 @@ Entry = dict[str, Any]
 
 #: Input rows, all from the Track Controller: (kind, default, unit).
 INPUT_DEFAULTS: dict[str, tuple[str, Any, str]] = {
+    # None, as at startup: the CTC sends a line nothing until a wayside
+    # on it has reported and every wayside on it is ready.
+    "waysides": ("list", (), ""),
     "occupied_blocks": ("list", (), ""),
     "switch_states": ("list", (), ""),
     "crossing_states": ("list", (), ""),
@@ -88,6 +93,11 @@ _SWITCH = _field("switch", "Switch", "switch", 204)
 
 #: Columns of each list row.
 LIST_FIELDS: dict[str, tuple[dict[str, Any], ...]] = {
+    "waysides": (
+        _field("wayside", "Wayside", "text", 88), _LINE,
+        _field("ready", "Ready", "choice", 124,
+               (("ready", "Ready"), ("not ready", "Not ready"))),
+        _field("reason", "Reason not ready", "text", 220)),
     "occupied_blocks": (_LINE, _BLOCK),
     "switch_states": (_LINE, _SWITCH, _POSITION),
     "crossing_states": (
@@ -98,6 +108,10 @@ LIST_FIELDS: dict[str, tuple[dict[str, Any], ...]] = {
 
 #: What each row is. Shown in the test UI under the row's name.
 ROW_HINTS: dict[str, str] = {
+    "waysides": "Each wayside's startup: ready once it has a PLC program "
+                "on its territory. A line is ready once every wayside on "
+                "it is; until then the CTC sends it nothing and "
+                "dispatches no train on it.",
     "occupied_blocks": "Blocks the Track Controller reports occupied: "
                        "trains and failed blocks alike. A train leaves "
                        "the yard into Green 63 or Red 9.",
@@ -109,6 +123,7 @@ ROW_HINTS: dict[str, str] = {
 
 #: What one entry of a list row is, for its "+ Add" button.
 ROW_NOUNS: dict[str, str] = {
+    "waysides": "wayside",
     "occupied_blocks": "block",
     "switch_states": "switch",
     "crossing_states": "crossing",
@@ -154,6 +169,11 @@ def build_inputs(lists: Mapping[str, list[Entry]]) -> CtcInputs:
             crossings=tuple(CrossingReport(e["line"], e["crossing"],
                                            e["state"])
                             for e in lists["crossing_states"]),
+            waysides=tuple(
+                WaysideStatus(str(e["wayside"]).strip(), e["line"],
+                              e["ready"] == "ready",
+                              str(e["reason"]).strip())
+                for e in lists["waysides"]),
         ),
     )
 
@@ -165,6 +185,14 @@ def output_rows(outputs: CtcOutputs,
     track = outputs.track_controller
     rows: list[dict[str, Any]] = []
     for suggestion in track.suggestions:
+        # Where the Track Controller sends this train's speed and
+        # authority: the block its head is in.
+        rows.append({
+            "name": f"block[{suggestion.train_id}]",
+            "kind": "string",
+            "value": block_key(suggestion.line, suggestion.block_id),
+            "unit": "",
+        })
         # The type column shows the boundary type (whole m/s); the value
         # is shown in display units, mph.
         rows.append({
@@ -327,7 +355,7 @@ class CtcTestHarness(QObject):
         """Add an entry to a list row, filled with the first options."""
         if self._kind(name) != "list":
             return
-        entry = {field["key"]: self._default(field)
+        entry = {field["key"]: self._default(field, name)
                  for field in LIST_FIELDS[name]}
         self._values[name].append(entry)
         self.inputsChanged.emit()
@@ -358,7 +386,8 @@ class CtcTestHarness(QObject):
             # A new line has different blocks, switches and crossings.
             for other in LIST_FIELDS[name]:
                 if other["kind"] in _LAYOUT_TYPES:
-                    entry[other["key"]] = self._default(other, line=value)
+                    entry[other["key"]] = self._default(other, name,
+                                                        line=value)
         if field["kind"] not in ("text", "number"):
             self.inputsChanged.emit()
 
@@ -414,7 +443,7 @@ class CtcTestHarness(QObject):
             rows.append(row)
         return rows
 
-    def _default(self, field: dict[str, Any],
+    def _default(self, field: dict[str, Any], row: str = "",
                  line: str | None = None) -> Any:
         """The value a new entry starts with in one field."""
         first_line = next(iter(self._layout))
@@ -428,6 +457,12 @@ class CtcTestHarness(QObject):
             return field["options"][0]["value"]
         if kind == "number":
             return 0.0
+        if field["key"] == "wayside":
+            used = {str(e.get("wayside", "")) for e in self._values[row]}
+            number = 1
+            while f"W{number}" in used:
+                number += 1
+            return f"W{number}"
         return ""
 
     def _refresh(self) -> None:

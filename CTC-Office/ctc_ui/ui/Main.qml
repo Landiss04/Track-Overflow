@@ -32,6 +32,10 @@ ScaledWindow {
 
     title: qsTr("CTC Office")
 
+    // The window opens in Automatic mode: the CTC runs a loaded
+    // schedule from the start.
+    Component.onCompleted: ctc.setAutomaticMode(modeIndex === 0)
+
     // A selected train that is no longer known (not followed, no order)
     // clears the selection.
     Connections {
@@ -60,7 +64,9 @@ ScaledWindow {
             occupancyOpen: window.occupancyState !== "closed"
             onModeActivated: function (index) {
                 window.modeIndex = index;
-                // Maintenance mode lets the dispatcher close blocks and set switches.
+                // Automatic mode runs the loaded schedule; maintenance
+                // mode lets the dispatcher close blocks and set switches.
+                ctc.setAutomaticMode(index === 0);
                 ctc.setMaintenanceMode(index === 2);
             }
             onOccupancyClicked: window.occupancyState = "open"
@@ -140,9 +146,14 @@ ScaledWindow {
                     scheduleFile: ctc.scheduleFile
                     scheduleError: ctc.scheduleError
                     departures: ctc.departures
+                    dispatchRunning: ctc.dispatchRunning
+                    dispatchPaused: ctc.dispatchPaused
                     onClearSelectionRequested: window.selectedTrainId = ""
                     onScheduleFileSelected: function (fileUrl) {
                         ctc.loadSchedule(fileUrl);
+                    }
+                    onDispatchPauseRequested: function (paused) {
+                        ctc.setDispatchPaused(paused);
                     }
                 }
 
