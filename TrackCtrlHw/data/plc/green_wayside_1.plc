@@ -7,7 +7,7 @@
 // the route the switch has set, are clear.
 
 VAR_IN  OCC_1..20
-VAR_IN  CLOSED_13 CLOSED_14 FAIL_13
+VAR_IN  CLOSED_13 CLOSED_14
 VAR_IN  SWREV_12 MAINT
 VAR_OUT AUTH_1..20
 VAR_OUT SW_12
@@ -21,7 +21,7 @@ SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
 // Signal 12 reads the route into 13 and the block beyond it. Exactly
 // one aspect is lit for every input: red, else yellow, else green or
 // super green.
-BLOCKED := OCC_13 OR CLOSED_13 OR FAIL_13
+BLOCKED := OCC_13 OR CLOSED_13
 CAUTION := OCC_14 OR CLOSED_14 OR SWREV_12 OR MAINT
 SIG_12_R  := BLOCKED
 SIG_12_Y  := NOT BLOCKED AND CAUTION

@@ -8,22 +8,20 @@
 // the route the switches have set, are clear.
 
 VAR_IN  OCC_74..88
-VAR_IN  CLOSED_76 FAIL_76 CLOSED_77 FAIL_77
-VAR_IN  FAIL_85 CLOSED_86 FAIL_86
+VAR_IN  CLOSED_76 CLOSED_77 CLOSED_86
 VAR_IN  SWREV_76 SWREV_85 MAINT
 VAR_OUT AUTH_74..88
 VAR_OUT SW_76 SW_85
 VAR_OUT SIG_76_R SIG_76_Y SIG_76_G SIG_76_SG
 VAR_OUT SIG_85_R SIG_85_Y SIG_85_G SIG_85_SG
 
-// Each switch routes around its normal leg while that leg is closed
-// or failed.
-SW_76 := CLOSED_76 OR FAIL_76
-SW_85 := CLOSED_86 OR FAIL_86
+// Each switch routes around its normal leg while that leg is closed.
+SW_76 := CLOSED_76
+SW_85 := CLOSED_86
 
 // Signal 76 shows the route into block 77. Exactly one aspect is lit
 // for every input: red, else yellow, else green or super green.
-BLOCKED_76 := OCC_77 OR CLOSED_77 OR FAIL_77
+BLOCKED_76 := OCC_77 OR CLOSED_77
 CAUTION_76 := OCC_78 OR SWREV_76 OR MAINT
 SIG_76_R  := BLOCKED_76
 SIG_76_Y  := NOT BLOCKED_76 AND CAUTION_76
@@ -31,7 +29,7 @@ SIG_76_G  := NOT BLOCKED_76 AND NOT CAUTION_76 AND OCC_79
 SIG_76_SG := NOT BLOCKED_76 AND NOT CAUTION_76 AND NOT OCC_79
 
 // Signal 85 shows the route out of block 85.
-BLOCKED_85 := FAIL_85 OR (NOT SWREV_85 AND (OCC_86 OR CLOSED_86 OR FAIL_86))
+BLOCKED_85 := NOT SWREV_85 AND (OCC_86 OR CLOSED_86)
 CAUTION_85 := SWREV_85 OR OCC_87 OR MAINT
 SIG_85_R  := BLOCKED_85
 SIG_85_Y  := NOT BLOCKED_85 AND CAUTION_85

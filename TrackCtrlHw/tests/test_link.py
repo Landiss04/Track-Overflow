@@ -75,7 +75,7 @@ class Link(unittest.TestCase):
             {"occupied": ["3", "4"], "suggestions": {"3": (30, 4)}},
             {"closed": ["7"], "suggestions": {"7": (5, 2), "8": (9, 1)}},
             {"maintenance": True, "switch_commands": {"12": "reverse"}},
-            {"failures": {"19": "power"}, "occupied": ["18"]},
+            {"occupied": ["18", "19"]},
         )):
             sent = inputs(local, time_s=18000.0 + step / 10, **kwargs)
             with self.subTest(step=step):

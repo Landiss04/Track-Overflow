@@ -20,7 +20,7 @@ from track_ctrl_hw.schematic import layout
 #: How the vital layer's rules read in the PLC details, in order.
 VITAL_RULES: tuple[tuple[str, str], ...] = (
     ("Speed above the block's limit", "Clamped to the limit"),
-    ("Speed or authority on a closed or failed block", "Held at zero"),
+    ("Speed or authority on a closed block", "Held at zero"),
     ("Route over a switch that does not agree",
      "Authority zero, signal red"),
     ("Switch with its block or point occupied", "Never moves"),
@@ -35,12 +35,9 @@ def block_state(snapshot: WaysideSnapshot, key: BlockKey) -> tuple[str, str]:
     """A block's most severe state and its label.
 
     Returns:
-        ``(state, label)``; state is ``failure``, ``closed``,
-        ``occupied`` or ``free``.
+        ``(state, label)``; state is ``closed``, ``occupied`` or
+        ``free``. A failed block is occupied: the wayside cannot tell.
     """
-    failure = snapshot.failures.get(key)
-    if failure is not None:
-        return "failure", display.failure_name(failure)
     if key in snapshot.closed_blocks:
         return "closed", "Closed"
     if key in snapshot.occupied_blocks:
@@ -49,7 +46,6 @@ def block_state(snapshot: WaysideSnapshot, key: BlockKey) -> tuple[str, str]:
 
 
 _BADGES = {
-    "failure": "fault",
     "closed": "warning",
     "occupied": "info",
     "free": "ok",
@@ -213,7 +209,6 @@ def report_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
                 if key not in snapshot.territory.crossings
                 else display.crossing_name(entry.crossing_active)
             ),
-            "failure": display.failure_name(entry.failure),
         })
     return rows
 

@@ -193,31 +193,17 @@ class VitalLayer(unittest.TestCase):
         _, by_number = circuits(controller, suggestions={"3": (30, 4)})
         self.assertEqual(by_number["3"], TrackCircuitCommand(12, 4))
 
-    def test_closed_or_failed_block_sends_zero(self) -> None:
+    def test_closed_block_sends_zero(self) -> None:
         controller = loaded(1)
         _, by_number = circuits(
-            controller, closed=["3"], failures={"5": "power"},
-            suggestions={"3": (10, 4), "5": (10, 4)},
+            controller, closed=["3"], suggestions={"3": (10, 4)},
         )
         self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
-        self.assertEqual(by_number["5"], TrackCircuitCommand(0, 0))
 
     def test_zero_authority_means_zero_speed(self) -> None:
         controller = loaded(1)
         _, by_number = circuits(controller, suggestions={"3": (10, 0)})
         self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
-
-    def test_failed_track_circuit_reads_occupied(self) -> None:
-        controller = loaded(1)
-        out, by_number = circuits(
-            controller, failures={"4": "track_circuit"},
-            suggestions={"3": (10, 4)},
-        )
-        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
-        report = out.ctc_reports[0].blocks
-        entry = report[keys(controller)["4"]]
-        self.assertTrue(entry.occupied)
-        self.assertEqual(entry.failure, "track_circuit")
 
     def test_switch_moves_by_program_then_locks_under_a_train(self) -> None:
         controller = loaded(1)
@@ -308,8 +294,7 @@ class Report(unittest.TestCase):
     def test_one_report_per_wayside_keyed_by_block(self) -> None:
         controller = loaded(1, 2, 3)
         k = keys(controller)
-        out, _ = circuits(controller, time_s=3600.0, occupied=["4"],
-                          failures={"22": "broken_rail"},
+        out, _ = circuits(controller, time_s=3600.0, occupied=["4", "22"],
                           lit={"12": "yellow"})
         self.assertEqual([r.wayside_id for r in out.ctc_reports],
                          ["1", "2", "3"])
@@ -326,8 +311,7 @@ class Report(unittest.TestCase):
         self.assertIsNone(
             out.ctc_reports[1].blocks[k["28"]].signal_aspect
         )
-        self.assertEqual(out.ctc_reports[1].blocks[k["22"]].failure,
-                         "broken_rail")
+        self.assertTrue(out.ctc_reports[1].blocks[k["22"]].occupied)
 
     def test_reset_forgets_scans_but_keeps_programs(self) -> None:
         controller = loaded(1)

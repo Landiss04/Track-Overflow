@@ -25,8 +25,8 @@ class Wire(unittest.TestCase):
     def test_round_trips_through_json(self) -> None:
         controller = loaded(1, 2, 3)
         sent = inputs(
-            controller, occupied=["4", "19"], closed=["30"],
-            failures={"80": "power"}, suggestions={"4": (12, 3)},
+            controller, occupied=["4", "19", "80"], closed=["30"],
+            suggestions={"4": (12, 3)},
             maintenance=True, switch_commands={"12": "reverse"},
             lit={"12": "green", "85": "super_green"},
         )
@@ -55,7 +55,7 @@ class Wire(unittest.TestCase):
             (("ctc", "suggestions", 0, "speed_mps"), -1),
             (("ctc", "suggestions", 0, "speed_mps"), 1.5),
             (("ctc", "suggestions", 0, "block", "line"), ""),
-            (("track_model", "failures"), [{"block": None, "kind": "power"}]),
+            (("track_model", "occupied_blocks"), [{"line": "Green"}]),
         ):
             case = json.loads(json.dumps(good))
             target = case
@@ -135,8 +135,8 @@ class Views(unittest.TestCase):
     def test_rows_show_display_units_and_states(self) -> None:
         controller = loaded(1)
         controller.step(0.1, inputs(
-            controller, occupied=["4"], closed=["7"],
-            failures={"9": "broken_rail"}, suggestions={"4": (12, 3)},
+            controller, occupied=["4", "9"], closed=["7"],
+            suggestions={"4": (12, 3)},
             lit={"12": "green"},
         ))
         wayside = controller.snapshot().waysides[0]
@@ -144,7 +144,7 @@ class Views(unittest.TestCase):
         self.assertEqual(rows["4"]["stateText"], "Occupied")
         self.assertEqual(rows["4"]["circuit"], "27 mph \u00b7 3 blocks")
         self.assertEqual(rows["7"]["badge"], "warning")
-        self.assertEqual(rows["9"]["stateText"], "Broken rail")
+        self.assertEqual(rows["9"]["stateText"], "Occupied")
         self.assertEqual(rows["1"]["circuit"], display.EM_DASH)
         self.assertEqual(rows["13"]["length"], "492 ft")
         office = views.office_rows(wayside)

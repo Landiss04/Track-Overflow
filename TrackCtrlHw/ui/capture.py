@@ -64,7 +64,6 @@ def _demo(window: Window) -> None:
             occupied_blocks=frozenset(
                 {keys["4"], keys["8"], keys["9"], keys["14"]}
             ),
-            failures={keys["20"]: "broken_rail"},
             switch_positions=switches,
             crossings_active={keys["19"]: False},
             signal_aspects={key: "green" for key in switches},

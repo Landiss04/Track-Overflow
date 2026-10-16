@@ -60,7 +60,6 @@ def inputs(
     time_s: float = 18000.0,
     occupied: Iterable[str] = (),
     closed: Iterable[str] = (),
-    failures: dict[str, str] | None = None,
     suggestions: dict[str, tuple[int, int]] | None = None,
     maintenance: bool = False,
     switch_commands: dict[str, str] | None = None,
@@ -96,10 +95,6 @@ def inputs(
         ),
         track_model=TrackModelInputs(
             occupied_blocks=frozenset(by_number[n] for n in occupied),
-            failures={
-                by_number[n]: kind  # type: ignore[misc]
-                for n, kind in (failures or {}).items()
-            },
             switch_positions=positions,
             signal_aspects={
                 by_number[n]: aspect  # type: ignore[misc]

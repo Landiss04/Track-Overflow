@@ -13,7 +13,6 @@ from typing import Any, Callable, Mapping, TypeVar
 
 from track_ctrl_hw.errors import WireFormatError
 from track_ctrl_hw.interface import (
-    FAILURE_KINDS,
     SIGNAL_ASPECTS,
     SWITCH_POSITIONS,
     Block,
@@ -111,7 +110,6 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
             "occupied_blocks": [
                 key_to_wire(k) for k in model.occupied_blocks
             ],
-            "failures": _entries(model.failures, lambda f: {"kind": f}),
             "switch_positions": _entries(
                 model.switch_positions, lambda p: {"position": p}
             ),
@@ -150,10 +148,6 @@ def inputs_from_wire(data: Any) -> TrackControllerInputs:
         track_model=TrackModelInputs(
             occupied_blocks=_key_set(
                 model.get("occupied_blocks"), "occupied_blocks"
-            ),
-            failures=_from_entries(
-                model.get("failures"), "failures",
-                lambda r: _choice(r, "kind", FAILURE_KINDS),
             ),
             switch_positions=_from_entries(
                 model.get("switch_positions"), "switch_positions",
@@ -201,7 +195,6 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
                     report.blocks,
                     lambda b: {
                         "occupied": b.occupied,
-                        "failure": b.failure,
                         "switch_position": b.switch_position,
                         "crossing_active": b.crossing_active,
                         "signal_aspect": b.signal_aspect,
@@ -230,7 +223,6 @@ def outputs_from_wire(data: Any) -> TrackControllerOutputs:
                 report.get("blocks"), "blocks",
                 lambda r: BlockReport(
                     occupied=_flag(r, "occupied"),
-                    failure=_optional_choice(r, "failure", FAILURE_KINDS),
                     switch_position=_optional_choice(
                         r, "switch_position", SWITCH_POSITIONS
                     ),

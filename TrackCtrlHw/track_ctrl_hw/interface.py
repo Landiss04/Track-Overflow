@@ -10,7 +10,10 @@ The module is one line's set of wayside controllers: the hardware
 Track Controller runs every wayside of its line, the software one the
 other line. Each wayside governs a territory loaded from a database
 file. Everything the module exchanges is keyed by block, because a
-wayside knows the blocks it governs, never the trains on them.
+wayside knows the blocks it governs, never the trains on them. Nor does
+it know failures: a broken rail, a dead track circuit or a power
+failure reaches it only as an occupied block, and it reports that block
+to the CTC Office as occupied.
 
 Units are backend units per ``truth/conventions/units.md``: speed in
 m/s, distance in m, time in s. Authority is a whole number of blocks.
@@ -25,7 +28,6 @@ from typing import Literal, Mapping, Protocol
 
 SwitchPosition = Literal["normal", "reverse"]
 SignalAspect = Literal["red", "yellow", "green", "super_green"]
-FailureKind = Literal["broken_rail", "track_circuit", "power"]
 
 SWITCH_POSITIONS: tuple[SwitchPosition, ...] = ("normal", "reverse")
 #: Most restrictive first; a signal falls back to the first entry.
@@ -34,11 +36,6 @@ SIGNAL_ASPECTS: tuple[SignalAspect, ...] = (
     "yellow",
     "green",
     "super_green",
-)
-FAILURE_KINDS: tuple[FailureKind, ...] = (
-    "broken_rail",
-    "track_circuit",
-    "power",
 )
 
 
@@ -144,8 +141,9 @@ class CtcInputs:
 class TrackModelInputs:
     """From the Track Model, every tick."""
 
+    # Blocks a train, or a failure, makes read as occupied. The module
+    # cannot tell which.
     occupied_blocks: frozenset[BlockKey] = frozenset()
-    failures: Mapping[BlockKey, FailureKind] = field(default_factory=dict)
     # Actual positions of the switch machines, by the switch's block.
     switch_positions: Mapping[BlockKey, SwitchPosition] = field(
         default_factory=dict
@@ -202,8 +200,8 @@ class TrackModelOutputs:
 class BlockReport:
     """What a wayside reports to the CTC Office about one block."""
 
+    # A train and a failure both read occupied.
     occupied: bool
-    failure: FailureKind | None = None
     # None where the block has no switch, or none was reported.
     switch_position: SwitchPosition | None = None
     # None where the block has no crossing, or none was reported.
@@ -306,7 +304,6 @@ class WaysideSnapshot:
     track_circuits: Mapping[BlockKey, TrackCircuitCommand]
     occupied_blocks: frozenset[BlockKey]
     closed_blocks: frozenset[BlockKey]
-    failures: Mapping[BlockKey, FailureKind]
     suggestions: Mapping[BlockKey, Suggestion]
     # Positions the dispatcher asked for, by the switch's block.
     switch_requests: Mapping[BlockKey, SwitchPosition]

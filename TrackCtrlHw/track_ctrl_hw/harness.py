@@ -59,12 +59,6 @@ ASPECTS = {
     "GREEN": "green",
     "SUPER GREEN": "super_green",
 }
-FAILURES = {
-    "NONE": None,
-    "BROKEN_RAIL": "broken_rail",
-    "TRACK_CIRCUIT": "track_circuit",
-    "POWER": "power",
-}
 
 #: Most ticks one Advance runs: ten simulated minutes.
 MAX_TICK_STEP = 6000
@@ -89,7 +83,6 @@ class BlockInputs:
     block_closed: bool = False
     switch_command: str = "NORMAL"
     block_occupancy: bool = False
-    track_failure: str = "NONE"
     switch_state: str = "NORMAL"
     crossing_state: str = "GATES UP"
     signal_aspect: str = "RED"
@@ -102,14 +95,12 @@ _FIELD_KINDS = {
     "block_closed": "bool",
     "switch_command": "enum",
     "block_occupancy": "bool",
-    "track_failure": "enum",
     "switch_state": "enum",
     "crossing_state": "enum",
     "signal_aspect": "enum",
 }
 _FIELD_OPTIONS = {
     "switch_command": list(POSITIONS),
-    "track_failure": list(FAILURES),
     "switch_state": list(POSITIONS),
     "crossing_state": list(GATES),
     "signal_aspect": list(ASPECTS),
@@ -120,7 +111,7 @@ _GROUP_FIELDS = {
         "block_closed", "switch_command",
     ),
     TRACK_MODEL_GROUP: (
-        "block_occupancy", "track_failure", "switch_state",
+        "block_occupancy", "switch_state",
         "crossing_state", "signal_aspect",
     ),
 }
@@ -426,11 +417,6 @@ class TestHarness(QObject):
                 occupied_blocks=frozenset(
                     k for k, v in items if v.block_occupancy
                 ),
-                failures={
-                    k: FAILURES[v.track_failure]
-                    for k, v in items
-                    if FAILURES[v.track_failure] is not None
-                },
                 switch_positions={
                     k: POSITIONS[v.switch_state]
                     for k, v in items
@@ -550,8 +536,6 @@ class TestHarness(QObject):
                 None if entry is None
                 else _label(ASPECTS, entry.signal_aspect) or None,
                 has_switch),
-            row("track_failure", "enum",
-                None if entry is None else _label(FAILURES, entry.failure)),
         ])
         self._model_outputs.set_rows([
             row("commanded_speed", "uint",

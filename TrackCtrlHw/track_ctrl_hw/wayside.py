@@ -12,9 +12,9 @@ PLC names, for a block numbered ``n``:
 ==============  =====  ====================================================
 Name            Kind   Meaning
 ==============  =====  ====================================================
-``OCC_n``       in     Occupied; a failed track circuit reads occupied
+``OCC_n``       in     Occupied: a train, or a failure the Track Model
+                       reports as occupancy
 ``CLOSED_n``    in     Closed by the dispatcher
-``FAIL_n``      in     A failure is reported on the block
 ``SWREV_n``     in     The switch listed on block n reports reverse
 ``MAINT``       in     The CTC Office has maintenance mode on
 ``AUTH_n``      out    1 passes the CTC's speed and authority down block n's
@@ -44,7 +44,6 @@ from track_ctrl_hw.interface import (
     BlockReport,
     CtcInputs,
     CtcReport,
-    FailureKind,
     Override,
     ProgramInfo,
     ScanInfo,
@@ -73,7 +72,7 @@ def input_names(territory: Territory) -> frozenset[str]:
     names = {"MAINT"}
     for block in territory.blocks:
         number = block.key.block_id
-        names.update((f"OCC_{number}", f"CLOSED_{number}", f"FAIL_{number}"))
+        names.update((f"OCC_{number}", f"CLOSED_{number}"))
     for switch in territory.switches:
         names.add(f"SWREV_{switch.switch_id}")
     return frozenset(names)
@@ -232,16 +231,8 @@ class Wayside:
         """Run one scan cycle against this tick's inputs."""
         territory = self._territory
         keys = territory.keys
-        failures = {
-            key: track_model.failures[key]
-            for key in keys
-            if key in track_model.failures
-        }
         occupied = frozenset(
-            key
-            for key in keys
-            if key in track_model.occupied_blocks
-            or failures.get(key) == "track_circuit"
+            key for key in keys if key in track_model.occupied_blocks
         )
         closed = frozenset(key for key in keys if key in ctc.closed_blocks)
         suggestions = {
@@ -252,7 +243,7 @@ class Wayside:
 
         started = time.perf_counter()
         values = self._run_program(
-            occupied, closed, failures, track_model, maintenance, overrides
+            occupied, closed, track_model, maintenance, overrides
         )
         duration = time.perf_counter() - started
 
@@ -264,11 +255,9 @@ class Wayside:
             != self._commanded[switch.key]
         }
         signals = self._decide_signals(values, disagreeing, overrides)
-        crossings = self._decide_crossings(
-            values, occupied, failures, overrides
-        )
+        crossings = self._decide_crossings(values, occupied, overrides)
         circuits = self._decide_circuits(
-            values, suggestions, closed, failures, disagreeing, overrides
+            values, suggestions, closed, disagreeing, overrides
         )
 
         report = CtcReport(
@@ -277,7 +266,6 @@ class Wayside:
             blocks={
                 key: BlockReport(
                     occupied=key in occupied,
-                    failure=failures.get(key),
                     switch_position=(
                         track_model.switch_positions.get(key)
                         if key in self._switch_by_key
@@ -310,7 +298,6 @@ class Wayside:
         )
         self._occupied = occupied
         self._closed = closed
-        self._failures = failures
         self._suggestions = suggestions
         self._switch_requests = {
             switch.key: ctc.switch_commands[switch.key]
@@ -348,7 +335,6 @@ class Wayside:
         self,
         occupied: frozenset[BlockKey],
         closed: frozenset[BlockKey],
-        failures: Mapping[BlockKey, FailureKind],
         track_model: TrackModelInputs,
         maintenance: bool,
         overrides: list[Override],
@@ -372,7 +358,6 @@ class Wayside:
             number = key.block_id
             image[f"OCC_{number}"] = key in occupied
             image[f"CLOSED_{number}"] = key in closed
-            image[f"FAIL_{number}"] = key in failures
         for switch in self._territory.switches:
             image[f"SWREV_{switch.switch_id}"] = (
                 track_model.switch_positions.get(switch.key) == "reverse"
@@ -484,7 +469,6 @@ class Wayside:
         self,
         values: Mapping[str, bool] | None,
         occupied: frozenset[BlockKey],
-        failures: Mapping[BlockKey, FailureKind],
         overrides: list[Override],
     ) -> dict[BlockKey, bool]:
         commands: dict[BlockKey, bool] = {}
@@ -494,15 +478,10 @@ class Wayside:
             index = self._index[key]
             nearby = keys[max(0, index - 1):index + 2]
             cause = next((k for k in nearby if k in occupied), None)
-            if not active and (cause is not None or key in failures):
-                reason = (
-                    f"{cause.label} occupied"
-                    if cause is not None
-                    else f"failure on {key.label}"
-                )
+            if not active and cause is not None:
                 overrides.append(Override(
                     "crossing_protected", f"XING-{key.block_id}",
-                    f"Activated: {reason}.",
+                    f"Activated: {cause.label} occupied.",
                 ))
                 active = True
             commands[key] = active
@@ -513,7 +492,6 @@ class Wayside:
         values: Mapping[str, bool] | None,
         suggestions: Mapping[BlockKey, Suggestion],
         closed: frozenset[BlockKey],
-        failures: Mapping[BlockKey, FailureKind],
         disagreeing: set[BlockKey],
         overrides: list[Override],
     ) -> dict[BlockKey, TrackCircuitCommand]:
@@ -541,8 +519,6 @@ class Wayside:
                 speed = limit
             reason = (
                 "closed" if key in closed
-                else f"failed ({failures[key].replace('_', ' ')})"
-                if key in failures
                 else "on a route over a disagreeing switch"
                 if key in unsafe_route
                 else ""
@@ -594,7 +570,6 @@ class Wayside:
         self._scan_info = ScanInfo()
         self._occupied: frozenset[BlockKey] = frozenset()
         self._closed: frozenset[BlockKey] = frozenset()
-        self._failures: dict[BlockKey, FailureKind] = {}
         self._suggestions: dict[BlockKey, Suggestion] = {}
         self._switch_requests: dict[BlockKey, SwitchPosition] = {}
         self._switch_reports: dict[BlockKey, SwitchPosition | None] = {}
@@ -643,7 +618,6 @@ class Wayside:
             track_circuits=dict(self._circuits),
             occupied_blocks=self._occupied,
             closed_blocks=self._closed,
-            failures=dict(self._failures),
             suggestions=dict(self._suggestions),
             switch_requests=dict(self._switch_requests),
             overrides=self._overrides,

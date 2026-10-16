@@ -27,10 +27,10 @@ ModalDialog {
     Shared.HelperText {
         Layout.fillWidth: true
         text: qsTr("Sent every scan. Each block key maps to that block's "
-            + "occupancy, switch position, signal aspect, crossing state "
-            + "and failure. A failed track circuit reports occupied. "
-            + "Switch, signal and crossing state are as the Track Model "
-            + "reports them.")
+            + "occupancy, switch position, signal aspect and crossing "
+            + "state. A failed block reports occupied: the wayside "
+            + "cannot tell a failure from a train. Switch, signal and "
+            + "crossing state are as the Track Model reports them.")
     }
 
     DataTable {
@@ -45,8 +45,7 @@ ModalDialog {
             { title: qsTr("Occupancy"), role: "occupied", width: 96 },
             { title: qsTr("Switch"), role: "switch", width: 80 },
             { title: qsTr("Signal"), role: "signal", width: 104 },
-            { title: qsTr("Crossing"), role: "crossing", fill: true },
-            { title: qsTr("Failure"), role: "failure", width: 112 }
+            { title: qsTr("Crossing"), role: "crossing", fill: true }
         ]
     }
 }

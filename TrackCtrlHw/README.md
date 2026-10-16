@@ -4,7 +4,9 @@ The hardware Track Controller runs **every wayside of one line**; the software
 Track Controller runs the other line. Each wayside governs a territory loaded
 from a database file and runs its own Boolean PLC program. The module knows the
 blocks it governs, never the trains on them: everything it exchanges is keyed
-by block.
+by block. Nor does it know failures: a broken rail, a dead track circuit or a
+power failure reaches it only as an occupied block, and it reports that block
+to the CTC Office as occupied.
 
 Two windows, each its own process:
 
@@ -105,8 +107,7 @@ wayside governs are ignored, so the harness can send the whole line.
 | `ctc.closed_blocks` | CTC Office | `frozenset[BlockKey]` |
 | `ctc.switch_commands` | CTC Office | `{switch block: "normal" \| "reverse"}`; obeyed only in maintenance |
 | `ctc.suggestions` | CTC Office | `{block: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing |
-| `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]` |
-| `track_model.failures` | Track Model | `{block: "broken_rail" \| "track_circuit" \| "power"}` |
+| `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]`; a train or a failure, the module cannot tell which |
 | `track_model.switch_positions` | Track Model | Actual positions, `{switch block: position}` |
 | `track_model.crossings_active` | Track Model | Actual state, `{crossing block: bool}` |
 | `track_model.signal_aspects` | Track Model | Lamps actually lit, `{signal block: "red" \| "yellow" \| "green" \| "super_green"}` |
@@ -122,10 +123,10 @@ wayside governs are ignored, so the harness can send the whole line.
 | `ctc_reports` | CTC Office | One `CtcReport` per wayside, every tick |
 
 A `CtcReport` is `wayside_id`, `sent_at_s`, and `blocks: dict[BlockKey,
-BlockReport]` — the block key mapped to that block's `occupied`, `failure`,
+BlockReport]` — the block key mapped to that block's `occupied`,
 `switch_position`, `signal_aspect` and `crossing_active`. Switch, signal and
 crossing fields are `None` where the block has none, and are the state the
-Track Model reports, not the command. A failed track circuit reports occupied.
+Track Model reports, not the command. A failed block reports occupied.
 
 ### Edge mappings the harness will need, and where they do not line up yet
 
@@ -192,7 +193,7 @@ variants share a language, not code. Full grammar in `track_ctrl_hw/plc.py`;
 the names a program can use are in `track_ctrl_hw/wayside.py`:
 
 ```
-VAR_IN  OCC_1..20 CLOSED_13 FAIL_13 SWREV_12 MAINT     // inputs
+VAR_IN  OCC_1..20 CLOSED_13 SWREV_12 MAINT     // inputs
 VAR_OUT AUTH_1..20 SW_12 SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG XING_19
 SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
 ```
@@ -209,13 +210,12 @@ loaded.
 It runs after every scan and can only make an output more restrictive:
 
 - Speed is clamped to the block's limit, rounded down to whole m/s.
-- A closed or failed block sends speed 0, authority 0; zero authority means zero speed.
+- A closed block sends speed 0, authority 0; zero authority means zero speed.
 - A switch that does not report its commanded position turns its signal red and
   zeroes every block on its route.
 - A switch never moves while the block it is listed on, or its point, is occupied.
 - A signal lit with no aspect or more than one shows red.
-- A crossing is active whenever its block or a block beside it is occupied, or
-  its own block has a failure.
+- A crossing is active whenever its block or a block beside it is occupied.
 - No program, or a channel disagreement: every signal red, authority zero,
   every crossing active, switches held.
 

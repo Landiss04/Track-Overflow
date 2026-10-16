@@ -17,7 +17,6 @@ from track_ctrl_hw.errors import (
     TerritoryError,
 )
 from track_ctrl_hw.interface import (
-    FAILURE_KINDS,
     SIGNAL_ASPECTS,
     SWITCH_POSITIONS,
     BlockKey,
@@ -205,7 +204,6 @@ def _validate(inputs: Any) -> None:
     _choices(ctc.switch_commands, SWITCH_POSITIONS, "switch_commands")
     _choices(model.switch_positions, SWITCH_POSITIONS, "switch_positions")
     _choices(model.signal_aspects, SIGNAL_ASPECTS, "signal_aspects")
-    _choices(model.failures, FAILURE_KINDS, "failures")
     _keys(model.crossings_active, "crossings_active")
     for key, active in model.crossings_active.items():
         if not isinstance(active, bool):
