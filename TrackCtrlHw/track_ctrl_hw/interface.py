@@ -259,15 +259,6 @@ class TrackControllerOutputs:
 # ------------------------------------------------------------------ #
 
 @dataclass(frozen=True, slots=True)
-class Override:
-    """One vital-layer intervention on a scan: what it held, and why."""
-
-    rule: str
-    target: str
-    message: str
-
-
-@dataclass(frozen=True, slots=True)
 class ProgramInfo:
     """The PLC program a wayside is running."""
 
@@ -293,8 +284,9 @@ class ScanInfo:
     overruns: int = 0
     # False once channels A and B disagree; cleared by a new program.
     channels_agree: bool = True
-    # Why every output is held at its most restrictive, or "".
-    vital_fault: str = ""
+    # What they disagreed on, or "". Every output is held fail-safe
+    # until a new program is loaded.
+    channel_fault: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,7 +322,9 @@ class WaysideSnapshot:
     suggestions: Mapping[BlockKey, Suggestion]
     # Positions the dispatcher asked for, by the switch's block.
     switch_requests: Mapping[BlockKey, SwitchPosition]
-    overrides: tuple[Override, ...]
+    # Why every output is at its fail-safe value, or "" while the
+    # program drives them.
+    holding: str
     report: CtcReport | None
 
 

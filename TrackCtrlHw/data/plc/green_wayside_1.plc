@@ -2,12 +2,12 @@
 // Switch 12 joins 12-13 when normal and 1-13 when reversed. Its signal
 // shows the route into block 13. Railway crossing on block 19.
 //
-// AUTH_n passes the CTC Office's speed and authority to the train in
-// block n. Here a train keeps them only while the blocks beside it, on
-// the route the switch has set, are clear.
+// The wayside runs this program and nothing else, so every protection
+// is here. AUTH_n passes the CTC Office's speed and authority to the
+// train in block n; 0 sends speed 0, authority 0.
 
 VAR_IN  OCC_1..20
-VAR_IN  CLOSED_13 CLOSED_14
+VAR_IN  CLOSED_1..20
 VAR_IN  SWREV_12 CTCSW_12 CTCREV_12
 VAR_OUT AUTH_1..20
 VAR_OUT SW_12
@@ -18,12 +18,19 @@ VAR_OUT XING_19
 // Otherwise send a train waiting on the loop (block 1) into 13 once
 // the main-line approach is clear, and keep the main line.
 AUTO_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
-SW_12 := (CTCSW_12 AND CTCREV_12) OR (NOT CTCSW_12 AND AUTO_12)
+WANT_12 := (CTCSW_12 AND CTCREV_12) OR (NOT CTCSW_12 AND AUTO_12)
+// A train on the points (block 12 or 13) locks the switch where it
+// reports.
+LOCK_12 := OCC_12 OR OCC_13
+SW_12   := (LOCK_12 AND SWREV_12) OR (NOT LOCK_12 AND WANT_12)
+// The switch does not report where it is commanded: moving, or failed.
+// Nothing may use the route over it (blocks 1, 12 and 13).
+BAD_12  := SW_12 XOR SWREV_12
 
 // Signal 12 reads the route into 13 and the block beyond it. Exactly
 // one aspect is lit for every input: red, else yellow, else green or
 // super green.
-BLOCKED := OCC_13 OR CLOSED_13
+BLOCKED := OCC_13 OR CLOSED_13 OR BAD_12
 CAUTION := OCC_14 OR CLOSED_14 OR SWREV_12 OR CTCSW_12
 SIG_12_R  := BLOCKED
 SIG_12_Y  := NOT BLOCKED AND CAUTION
@@ -33,24 +40,26 @@ SIG_12_SG := NOT BLOCKED AND NOT CAUTION AND NOT OCC_15
 // Crossing 19: lights and gates for a train on 18, 19 or 20.
 XING_19 := OCC_18 OR OCC_19 OR OCC_20
 
-// Separation: hold a train whose neighbour on its route is occupied.
-AUTH_1  := NOT (OCC_2 OR (SWREV_12 AND OCC_13))
-AUTH_2  := NOT (OCC_1 OR OCC_3)
-AUTH_3  := NOT (OCC_2 OR OCC_4)
-AUTH_4  := NOT (OCC_3 OR OCC_5)
-AUTH_5  := NOT (OCC_4 OR OCC_6)
-AUTH_6  := NOT (OCC_5 OR OCC_7)
-AUTH_7  := NOT (OCC_6 OR OCC_8)
-AUTH_8  := NOT (OCC_7 OR OCC_9)
-AUTH_9  := NOT (OCC_8 OR OCC_10)
-AUTH_10 := NOT (OCC_9 OR OCC_11)
-AUTH_11 := NOT (OCC_10 OR OCC_12)
-AUTH_12 := NOT (OCC_11 OR (NOT SWREV_12 AND OCC_13))
-AUTH_13 := NOT (OCC_14 OR (NOT SWREV_12 AND OCC_12) OR (SWREV_12 AND OCC_1))
-AUTH_14 := NOT (OCC_13 OR OCC_15)
-AUTH_15 := NOT (OCC_14 OR OCC_16)
-AUTH_16 := NOT (OCC_15 OR OCC_17)
-AUTH_17 := NOT (OCC_16 OR OCC_18)
-AUTH_18 := NOT (OCC_17 OR OCC_19)
-AUTH_19 := NOT (OCC_18 OR OCC_20)
-AUTH_20 := NOT OCC_19
+// A train keeps its authority while its own block is open and the
+// blocks beside it, on the route the switch has set, are clear.
+NEAR_13 := OCC_14 OR (NOT SWREV_12 AND OCC_12) OR (SWREV_12 AND OCC_1)
+AUTH_1  := NOT (CLOSED_1 OR OCC_2 OR (SWREV_12 AND OCC_13) OR BAD_12)
+AUTH_2  := NOT (CLOSED_2 OR OCC_1 OR OCC_3)
+AUTH_3  := NOT (CLOSED_3 OR OCC_2 OR OCC_4)
+AUTH_4  := NOT (CLOSED_4 OR OCC_3 OR OCC_5)
+AUTH_5  := NOT (CLOSED_5 OR OCC_4 OR OCC_6)
+AUTH_6  := NOT (CLOSED_6 OR OCC_5 OR OCC_7)
+AUTH_7  := NOT (CLOSED_7 OR OCC_6 OR OCC_8)
+AUTH_8  := NOT (CLOSED_8 OR OCC_7 OR OCC_9)
+AUTH_9  := NOT (CLOSED_9 OR OCC_8 OR OCC_10)
+AUTH_10 := NOT (CLOSED_10 OR OCC_9 OR OCC_11)
+AUTH_11 := NOT (CLOSED_11 OR OCC_10 OR OCC_12)
+AUTH_12 := NOT (CLOSED_12 OR OCC_11 OR (NOT SWREV_12 AND OCC_13) OR BAD_12)
+AUTH_13 := NOT (CLOSED_13 OR NEAR_13 OR BAD_12)
+AUTH_14 := NOT (CLOSED_14 OR OCC_13 OR OCC_15)
+AUTH_15 := NOT (CLOSED_15 OR OCC_14 OR OCC_16)
+AUTH_16 := NOT (CLOSED_16 OR OCC_15 OR OCC_17)
+AUTH_17 := NOT (CLOSED_17 OR OCC_16 OR OCC_18)
+AUTH_18 := NOT (CLOSED_18 OR OCC_17 OR OCC_19)
+AUTH_19 := NOT (CLOSED_19 OR OCC_18 OR OCC_20)
+AUTH_20 := NOT (CLOSED_20 OR OCC_19)

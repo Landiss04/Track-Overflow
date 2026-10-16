@@ -195,7 +195,8 @@ class TrackControllerState(QObject):
             else display.clock(snapshot.time_s),
             "uplink": "Not sent yet" if report is None
             else f"Sent {display.clock(report.sent_at_s)}",
-            "vitalFault": "" if wayside is None else wayside.scan.vital_fault,
+            "channelFault": "" if wayside is None
+            else wayside.scan.channel_fault,
             "agreeing": 0 if wayside is None
             else sum(1 for s in wayside.switches if s.agreeing),
             "switchCount": 0 if wayside is None else len(wayside.switches),
@@ -292,9 +293,10 @@ class TrackControllerState(QObject):
         return self._scalar("uplink")
 
     @Property(str, notify=changed)
-    def vitalFault(self) -> str:  # noqa: N802
-        """Why the wayside on screen holds every output, or ""."""
-        return self._scalar("vitalFault")
+    def channelFault(self) -> str:  # noqa: N802
+        """What channels A and B disagreed on in the wayside on screen,
+        or ""."""
+        return self._scalar("channelFault")
 
     @Property(int, notify=changed)
     def switchesAgreeing(self) -> int:  # noqa: N802

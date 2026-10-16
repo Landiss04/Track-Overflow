@@ -46,7 +46,7 @@ python -m unittest discover -s tests -t .
 ```
 track_ctrl_hw/interface.py   boundary types and the TrackController Protocol
 track_ctrl_hw/controller.py  HwTrackController: the module (one line)
-track_ctrl_hw/wayside.py     one wayside: I/O image, scan, vital layer, report
+track_ctrl_hw/wayside.py     one wayside: I/O image, scan, outputs, report
 track_ctrl_hw/plc.py         the PLC language: compile, scan on two channels
 track_ctrl_hw/territory.py   wayside database parsing
 track_ctrl_hw/errors.py      TrackControllerError and its subclasses
@@ -203,22 +203,33 @@ SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
 suggestion (1) or sends speed 0, authority 0 (0). Numbers never enter the
 program. Each statement is compiled twice by different algorithms (recursive
 descent and a tree walk; shunting-yard and a stack machine), and both channels
-run every scan. A disagreement is a latched vital fault until a new program is
+run every scan. A disagreement is a latched channel fault until a new program is
 loaded.
 
-## Vital layer
+## Nothing above the program
 
-It runs after every scan and can only make an output more restrictive:
+The wayside houses its PLC program and decides nothing itself. There is no
+vital layer: every protection is the program's to write, and the wayside drives
+the program's outputs onto the track as they are. The sample programs show how:
 
-- Speed is clamped to the block's limit, rounded down to whole m/s.
-- A closed block sends speed 0, authority 0; zero authority means zero speed.
-- A switch that does not report its commanded position turns its signal red and
-  zeroes every block on its route.
-- A switch never moves while the block it is listed on, or its point, is occupied.
-- A signal lit with no aspect or more than one shows red.
-- A crossing is active whenever its block or a block beside it is occupied.
-- No program, or a channel disagreement: every signal red, authority zero,
-  every crossing active, switches held.
+- Separation: a train keeps its authority only while the blocks beside it, on
+  the route the switches have set, are clear.
+- Closures: `CLOSED_n` zeroes `AUTH_n`.
+- Switch locking: a switch holds where it reports (`SWREV_n`) while its block or
+  its point is occupied.
+- Switch correspondence: `SW_n XOR SWREV_n` turns the signal red and zeroes
+  `AUTH` on every block of the route over the switch.
+- Crossings: active while a train is on the crossing's block or one beside it.
+
+The speed limit is still capped by the wayside: the CTC Office's speed is cut to
+the block's limit, rounded down to whole m/s.
+
+Signal outputs decode in a fixed order: red if `SIG_n_R` is 1 or none is,
+otherwise the first of `_Y`, `_G`, `_SG` that is 1.
+
+Outputs hold their fail-safe values (every signal red, every crossing active,
+speed 0 and authority 0, switches where they are) only while no program runs:
+none is loaded, a new one has not scanned yet, or the channels have disagreed.
 
 The CTC Office sends no maintenance flag. Its switch commands reach the program
 as `CTCSW_n` (a command is in effect) and `CTCREV_n` (it is reverse); the
@@ -226,8 +237,10 @@ sample programs obey them.
 
 ## Known gaps
 
-- Authority is not truncated at an occupied block by the vital layer: that
-  needs each train's direction, which a wayside that knows no trains does not
-  have. The sample programs hold a train whose neighbour is occupied instead.
+- Authority is not truncated at an occupied block: that needs each train's
+  direction, which a wayside that knows no trains does not have. The sample
+  programs hold a train whose neighbour is occupied instead.
+- With no memory between scans, a program can lock a switch only where it
+  reports, not where it was last commanded.
 - The test UI shows values in backend units (m/s, blocks); the Track Controller
   window shows imperial.

@@ -1,4 +1,4 @@
-"""The module: scans, the vital layer, maintenance and the report."""
+"""The module: scans, fail-safe holds, maintenance and the report."""
 
 from __future__ import annotations
 
@@ -130,7 +130,7 @@ class Loading(unittest.TestCase):
             self.assertEqual(wayside.program.warnings, ())
 
 
-class Restrictive(unittest.TestCase):
+class FailSafe(unittest.TestCase):
     def test_no_program_holds_everything(self) -> None:
         controller = loaded(1, programs=False)
         out, by_number = circuits(
@@ -140,6 +140,8 @@ class Restrictive(unittest.TestCase):
         signals = list(out.track_model.signal_commands.values())
         self.assertEqual(signals, ["red"])
         self.assertTrue(all(out.track_model.crossing_commands.values()))
+        wayside = controller.snapshot().waysides[0]
+        self.assertEqual(wayside.holding, "No PLC program is loaded.")
 
     def test_new_program_holds_until_its_first_scan(self) -> None:
         controller = loaded(1)
@@ -151,8 +153,10 @@ class Restrictive(unittest.TestCase):
             {k.block_id: v for k, v in wayside.track_circuits.items()},
             {"3": TrackCircuitCommand(0, 0)},
         )
+        circuits(controller, suggestions={"3": (10, 4)})
+        self.assertEqual(controller.snapshot().waysides[0].holding, "")
 
-    def test_channel_disagreement_is_a_latched_vital_fault(self) -> None:
+    def test_channel_disagreement_is_a_latched_channel_fault(self) -> None:
         controller = loaded(1)
         real = Program.scan_b
 
@@ -166,7 +170,7 @@ class Restrictive(unittest.TestCase):
         self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
         scan = controller.snapshot().waysides[0].scan
         self.assertFalse(scan.channels_agree)
-        self.assertIn("AUTH_3", scan.vital_fault)
+        self.assertIn("AUTH_3", scan.channel_fault)
         # Latched: a healthy scan does not clear it...
         _, by_number = circuits(controller, suggestions={"3": (10, 4)})
         self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
@@ -176,8 +180,61 @@ class Restrictive(unittest.TestCase):
         self.assertEqual(by_number["3"], TrackCircuitCommand(10, 4))
 
 
-class VitalLayer(unittest.TestCase):
-    def test_separation_from_the_sample_program(self) -> None:
+class NothingAboveTheProgram(unittest.TestCase):
+    """The wayside drives the program's outputs as they are."""
+
+    def test_a_closed_block_is_the_programs_to_honour(self) -> None:
+        controller = loaded(1, programs=False)
+        controller.load_program(
+            "1", "VAR_OUT AUTH_3\nAUTH_3 := 1\n", "x.plc"
+        )
+        _, by_number = circuits(
+            controller, closed=["3"], suggestions={"3": (10, 0)},
+        )
+        self.assertEqual(by_number["3"], TrackCircuitCommand(10, 0))
+
+    def test_a_switch_moves_under_a_train_if_the_program_says(self) -> None:
+        controller = loaded(1, programs=False)
+        controller.load_program(
+            "1", "VAR_OUT SW_12\nSW_12 := 1\n", "x.plc"
+        )
+        k = keys(controller)
+        out, _ = circuits(controller, occupied=["12", "13"])
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
+
+    def test_a_crossing_follows_the_program(self) -> None:
+        controller = loaded(1, programs=False)
+        controller.load_program("1", "VAR_OUT XING_19\nXING_19 := 0\n",
+                                "x.plc")
+        k = keys(controller)
+        out, _ = circuits(controller, occupied=["19"])
+        self.assertFalse(out.track_model.crossing_commands[k["19"]])
+
+    def test_signal_outputs_decode_in_a_fixed_order(self) -> None:
+        controller = loaded(1, programs=False)
+        k = keys(controller)
+        for lit, expected in (
+            ((), "red"),
+            (("G", "SG"), "green"),
+            (("R", "SG"), "red"),
+            (("Y", "G"), "yellow"),
+            (("SG",), "super_green"),
+        ):
+            source = "VAR_OUT SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG\n"
+            source += "".join(f"SIG_12_{suffix} := 1\n" for suffix in lit)
+            controller.load_program("1", source, "sig.plc")
+            circuits(controller)
+            with self.subTest(lit=lit):
+                out, _ = circuits(controller)
+                self.assertEqual(
+                    out.track_model.signal_commands[k["12"]], expected
+                )
+
+
+class SamplePrograms(unittest.TestCase):
+    """The protections the wayside no longer applies, in the samples."""
+
+    def test_separation(self) -> None:
         controller = loaded(1)
         _, by_number = circuits(
             controller, occupied=["3", "8", "9"],
@@ -193,27 +250,24 @@ class VitalLayer(unittest.TestCase):
         self.assertEqual(by_number["3"], TrackCircuitCommand(12, 4))
 
     def test_closed_block_sends_zero(self) -> None:
-        controller = loaded(1)
-        _, by_number = circuits(
-            controller, closed=["3"], suggestions={"3": (10, 4)},
-        )
-        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
-
-    def test_zero_authority_means_zero_speed(self) -> None:
-        controller = loaded(1)
-        _, by_number = circuits(controller, suggestions={"3": (10, 0)})
-        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
+        controller = loaded(1, 2, 3)
+        for block in ("3", "13", "29", "77"):
+            with self.subTest(block=block):
+                _, by_number = circuits(
+                    controller, closed=[block],
+                    suggestions={block: (5, 4)},
+                )
+                self.assertEqual(by_number[block],
+                                 TrackCircuitCommand(0, 0))
 
     def test_switch_moves_by_program_then_locks_under_a_train(self) -> None:
         controller = loaded(1)
         k = keys(controller)
         out, _ = circuits(controller, occupied=["1"])
         self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
-        # A train on the switch's own block holds it where it is.
+        # A train on the switch's own block holds it where it reports.
         out, _ = circuits(controller, occupied=["12"])
         self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
-        wayside = controller.snapshot().waysides[0]
-        self.assertIn("switch_locked", {o.rule for o in wayside.overrides})
         # Clear, the program returns it to normal.
         out, _ = circuits(controller)
         self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
@@ -223,29 +277,17 @@ class VitalLayer(unittest.TestCase):
         k = keys(controller)
         out, by_number = circuits(
             controller, reported={"12": "reverse"},
-            suggestions={"13": (10, 3), "5": (10, 3)},
+            suggestions={"13": (10, 3), "1": (10, 3), "5": (10, 3)},
         )
         self.assertEqual(out.track_model.signal_commands[k["12"]], "red")
         self.assertEqual(by_number["13"], TrackCircuitCommand(0, 0))
+        self.assertEqual(by_number["1"], TrackCircuitCommand(0, 0))
         self.assertEqual(by_number["5"], TrackCircuitCommand(10, 3))
         state = controller.snapshot().waysides[0].switches[0]
         self.assertFalse(state.agreeing)
 
-    def test_signal_with_two_aspects_is_red(self) -> None:
-        controller = loaded(1, programs=False)
-        controller.load_program(
-            "1",
-            "VAR_OUT SIG_12_G SIG_12_SG\nSIG_12_G := 1\nSIG_12_SG := 1\n",
-            "two.plc",
-        )
-        out, _ = circuits(controller)
-        self.assertEqual(list(out.track_model.signal_commands.values()),
-                         ["red"])
-
-    def test_crossing_protected_whatever_the_program_says(self) -> None:
-        controller = loaded(1, programs=False)
-        controller.load_program("1", "VAR_OUT XING_19\nXING_19 := 0\n",
-                                "x.plc")
+    def test_crossing_active_for_a_train_at_or_beside_it(self) -> None:
+        controller = loaded(1)
         k = keys(controller)
         for occupied, expected in (
             (["18"], True), (["19"], True), (["20"], True),

@@ -1,11 +1,17 @@
-"""One wayside controller: I/O image, scan cycle, vital layer, report.
+"""One wayside controller: I/O image, scan cycle, report.
 
-Each scan builds the Boolean input image from the CTC Office's and the
-Track Model's inputs for this wayside's blocks, runs the PLC program on
-both channels, and decodes the outputs. A vital layer then checks the
-result against the track. It can only make an output more restrictive:
-it never raises a speed, grants an authority, lifts a crossing gate or
-moves a switch the program held.
+The wayside houses its PLC program and decides nothing on its own. Each
+scan builds the Boolean input image from the CTC Office's and the Track
+Model's inputs for this wayside's blocks, runs the program on both
+channels, and drives its outputs onto the track as they are. Every
+protection (separation, closures, switch locking and correspondence,
+crossings) is the program's, except the speed limit: the wayside caps
+the CTC Office's speed at the block's limit.
+
+Outputs hold their fail-safe values (every signal red, every crossing
+active, every track circuit sending speed 0 and authority 0, every
+switch where it is) only while no program runs: none is loaded, a new
+one has not scanned yet, or channels A and B have disagreed.
 
 PLC names, for a block numbered ``n``:
 
@@ -23,7 +29,8 @@ Name            Kind   Meaning
                        track circuit; 0 sends speed 0, authority 0
 ``SW_n``        out    1 commands the switch on block n to reverse
 ``SIG_n_R``     out    The signal on block n shows red; likewise ``_Y``,
-                       ``_G`` and ``_SG``. Exactly one must be 1.
+                       ``_G`` and ``_SG``. Read in that order: red if
+                       ``_R`` is 1 or none is, else the first that is 1.
 ``XING_n``      out    1 activates the crossing on block n: lights on,
                        gates down
 ==============  =====  ====================================================
@@ -46,7 +53,6 @@ from track_ctrl_hw.interface import (
     BlockReport,
     CtcInputs,
     CtcReport,
-    Override,
     ProgramInfo,
     ScanInfo,
     SignalAspect,
@@ -105,6 +111,15 @@ def speed_limit_whole_mps(limit_mps: float) -> int:
     return int(math.floor(limit_mps + _LIMIT_TOLERANCE))
 
 
+def decode_aspect(values: Mapping[str, bool], switch: Switch) -> SignalAspect:
+    """What a signal's four outputs light: the first that is 1 of red,
+    yellow, green and super green, or red when none is."""
+    for aspect, name in zip(SIGNAL_ASPECTS, _signal_names(switch)):
+        if values[name]:
+            return aspect
+    return "red"
+
+
 def check_program(
     program: Program, territory: Territory
 ) -> tuple[list[str], list[str]]:
@@ -152,8 +167,6 @@ class Wayside:
     def __init__(self, territory: Territory) -> None:
         self._territory = territory
         self._keys = frozenset(territory.keys)
-        self._index = {key: i for i, key in enumerate(territory.keys)}
-        self._by_number = {key.block_id: key for key in territory.keys}
         self._blocks = {block.key: block for block in territory.blocks}
         self._program: Program | None = None
         self._program_info: ProgramInfo | None = None
@@ -200,7 +213,7 @@ class Wayside:
             warnings=tuple(warnings),
         )
         # A new program starts from a clean bill of health, and holds
-        # everything restrictive until its first scan.
+        # every output fail-safe until its first scan.
         self._scan_info = ScanInfo()
         self._hold_restrictive("A new program runs from the next scan.")
         return self._program_info
@@ -252,26 +265,21 @@ class Wayside:
             for switch in territory.switches
             if switch.key.ref in ctc.switch_commands
         }
-        overrides: list[Override] = []
 
         started = time.perf_counter()
-        values = self._run_program(
-            occupied, closed, requests, track_model, overrides
+        values, holding = self._run_program(
+            occupied, closed, requests, track_model
         )
         duration = time.perf_counter() - started
 
-        self._decide_switches(values, occupied, overrides)
-        disagreeing = {
-            switch.key
-            for switch in territory.switches
-            if track_model.switch_positions.get(switch.key)
-            != self._commanded[switch.key]
-        }
-        signals = self._decide_signals(values, disagreeing, overrides)
-        crossings = self._decide_crossings(values, occupied, overrides)
-        circuits = self._decide_circuits(
-            values, suggestions, closed, disagreeing, overrides
-        )
+        self._occupied = occupied
+        self._closed = closed
+        self._suggestions = suggestions
+        self._switch_requests = requests
+        if values is None:
+            self._hold_restrictive(holding)
+        else:
+            self._drive(values)
 
         report = CtcReport(
             wayside_id=territory.wayside_id,
@@ -307,16 +315,8 @@ class Wayside:
             last_duration_s=duration,
             overruns=info.overruns + (1 if duration > dt else 0),
             channels_agree=info.channels_agree,
-            vital_fault=info.vital_fault,
+            channel_fault=info.channel_fault,
         )
-        self._occupied = occupied
-        self._closed = closed
-        self._suggestions = suggestions
-        self._switch_requests = requests
-        self._signal_commands = signals
-        self._crossing_commands = crossings
-        self._circuits = circuits
-        self._overrides = tuple(overrides)
         self._report = report
         self._switch_reports = {
             switch.key: track_model.switch_positions.get(switch.key)
@@ -333,10 +333,10 @@ class Wayside:
             if key in track_model.crossings_active
         }
         return WaysideScan(
-            track_circuits=dict(circuits),
+            track_circuits=dict(self._circuits),
             switch_commands=dict(self._commanded),
-            crossing_commands=dict(crossings),
-            signal_commands=dict(signals),
+            crossing_commands=dict(self._crossing_commands),
+            signal_commands=dict(self._signal_commands),
             report=report,
         )
 
@@ -346,22 +346,12 @@ class Wayside:
         closed: frozenset[BlockKey],
         requests: Mapping[BlockKey, SwitchPosition],
         track_model: TrackModelInputs,
-        overrides: list[Override],
-    ) -> dict[str, bool] | None:
-        # The program's outputs, or None when every output must be held
-        # restrictive: no program, or a vital fault.
-        if self._scan_info.vital_fault:
-            overrides.append(Override(
-                "vital_fault", "ALL", self._scan_info.vital_fault
-            ))
-            return None
+    ) -> tuple[dict[str, bool] | None, str]:
+        # The program's outputs and "", or None and why no program runs.
+        if self._scan_info.channel_fault:
+            return None, self._scan_info.channel_fault
         if self._program is None:
-            overrides.append(Override(
-                "no_program", "ALL",
-                "No PLC program is loaded: every signal shows red and "
-                "every track circuit sends speed 0, authority 0.",
-            ))
-            return None
+            return None, "No PLC program is loaded."
         image: dict[str, bool] = {}
         for key in self._territory.keys:
             number = key.block_id
@@ -395,169 +385,42 @@ class Wayside:
                 last_duration_s=self._scan_info.last_duration_s,
                 overruns=self._scan_info.overruns,
                 channels_agree=False,
-                vital_fault=fault,
+                channel_fault=fault,
             )
-            overrides.append(Override("vital_fault", "ALL", fault))
-            return None
+            return None, fault
         # Outputs the program does not declare read as 0.
         values = {name: False for name in output_names(self._territory)}
         values.update(channel_a)
-        return values
+        return values, ""
 
-    def _decide_switches(
-        self,
-        values: Mapping[str, bool] | None,
-        occupied: frozenset[BlockKey],
-        overrides: list[Override],
-    ) -> None:
-        for switch in self._territory.switches:
-            current = self._commanded[switch.key]
-            if values is None:
-                wanted = current
-            else:
-                wanted = (
-                    "reverse" if values[f"SW_{switch.switch_id}"] else "normal"
-                )
-            if wanted != current:
-                locked = [
-                    key.label
-                    for key in self._lock_blocks(switch)
-                    if key in occupied
-                ]
-                if locked:
-                    overrides.append(Override(
-                        "switch_locked",
-                        f"SW-{switch.switch_id}",
-                        f"Held {current}: {', '.join(locked)} occupied.",
-                    ))
-                    continue
-                self._commanded[switch.key] = wanted
-
-    def _decide_signals(
-        self,
-        values: Mapping[str, bool] | None,
-        disagreeing: set[BlockKey],
-        overrides: list[Override],
-    ) -> dict[BlockKey, SignalAspect]:
-        aspects: dict[BlockKey, SignalAspect] = {}
-        for switch in self._territory.switches:
-            name = f"SIG-{switch.switch_id}"
-            aspect: SignalAspect = "red"
-            if values is not None:
-                lit = [
-                    candidate
-                    for candidate, signal_name in zip(
-                        SIGNAL_ASPECTS, _signal_names(switch)
-                    )
-                    if values[signal_name]
-                ]
-                if len(lit) == 1:
-                    aspect = lit[0]
-                else:
-                    overrides.append(Override(
-                        "signal_aspect", name,
-                        f"{len(lit)} aspects lit; shown red.",
-                    ))
-            if aspect != "red" and switch.key in disagreeing:
-                overrides.append(Override(
-                    "switch_disagrees", name,
-                    f"SW-{switch.switch_id} does not report its commanded "
-                    f"position; {aspect.replace('_', ' ')} dropped to red.",
-                ))
-                aspect = "red"
-            aspects[switch.key] = aspect
-        return aspects
-
-    def _decide_crossings(
-        self,
-        values: Mapping[str, bool] | None,
-        occupied: frozenset[BlockKey],
-        overrides: list[Override],
-    ) -> dict[BlockKey, bool]:
-        commands: dict[BlockKey, bool] = {}
-        keys = self._territory.keys
-        for key in self._territory.crossings:
-            active = True if values is None else values[f"XING_{key.block_id}"]
-            index = self._index[key]
-            nearby = keys[max(0, index - 1):index + 2]
-            cause = next((k for k in nearby if k in occupied), None)
-            if not active and cause is not None:
-                overrides.append(Override(
-                    "crossing_protected", f"XING-{key.block_id}",
-                    f"Activated: {cause.label} occupied.",
-                ))
-                active = True
-            commands[key] = active
-        return commands
-
-    def _decide_circuits(
-        self,
-        values: Mapping[str, bool] | None,
-        suggestions: Mapping[BlockKey, Suggestion],
-        closed: frozenset[BlockKey],
-        disagreeing: set[BlockKey],
-        overrides: list[Override],
-    ) -> dict[BlockKey, TrackCircuitCommand]:
-        # Blocks a route over a disagreeing switch would use.
-        unsafe_route = {
-            key
-            for switch in self._territory.switches
-            if switch.key in disagreeing
-            for key in self._route_blocks(switch)
+    def _drive(self, values: Mapping[str, bool]) -> None:
+        # The program's outputs, onto the track as they are.
+        territory = self._territory
+        for switch in territory.switches:
+            self._commanded[switch.key] = (
+                "reverse" if values[f"SW_{switch.switch_id}"] else "normal"
+            )
+        self._signal_commands = {
+            switch.key: decode_aspect(values, switch)
+            for switch in territory.switches
+        }
+        self._crossing_commands = {
+            key: values[f"XING_{key.block_id}"] for key in territory.crossings
         }
         circuits: dict[BlockKey, TrackCircuitCommand] = {}
-        for key in self._territory.keys:
-            suggestion = suggestions.get(key)
-            if suggestion is None:
-                continue
-            granted = values is not None and values[f"AUTH_{key.block_id}"]
-            speed = suggestion.speed_mps if granted else 0
-            authority = suggestion.authority_blocks if granted else 0
-            limit = speed_limit_whole_mps(self._blocks[key].speed_limit_mps)
-            if speed > limit:
-                overrides.append(Override(
-                    "speed_limit", key.label,
-                    f"{speed} m/s clamped to the {limit} m/s limit.",
-                ))
-                speed = limit
-            reason = (
-                "closed" if key in closed
-                else "on a route over a disagreeing switch"
-                if key in unsafe_route
-                else ""
-            )
-            if reason and (speed or authority):
-                overrides.append(Override(
-                    "block_unusable", key.label,
-                    f"Block is {reason}; speed and authority held at 0.",
-                ))
-                speed = authority = 0
-            if authority == 0:
-                speed = 0
-            circuits[key] = TrackCircuitCommand(speed, authority)
-        return circuits
-
-    def _lock_blocks(self, switch: Switch) -> list[BlockKey]:
-        # A train here may be on the points, so the switch must not
-        # move: the block it is listed on and its point. A train waiting
-        # on a leg does not lock it, or it could never be routed.
-        return self._keys_for((switch.switch_id, switch.point))
-
-    def _route_blocks(self, switch: Switch) -> list[BlockKey]:
-        # Every block whose route runs over the points: the two above
-        # and each leg end that lies in this territory.
-        return self._keys_for((
-            switch.switch_id, switch.point, switch.normal_end,
-            switch.reverse_end,
-        ))
-
-    def _keys_for(self, numbers: tuple[str, ...]) -> list[BlockKey]:
-        found: list[BlockKey] = []
-        for number in numbers:
-            key = self._by_number.get(number)
-            if key is not None and key not in found:
-                found.append(key)
-        return found
+        for key, suggestion in self._suggestions.items():
+            if values[f"AUTH_{key.block_id}"]:
+                limit = speed_limit_whole_mps(
+                    self._blocks[key].speed_limit_mps
+                )
+                circuits[key] = TrackCircuitCommand(
+                    min(suggestion.speed_mps, limit),
+                    suggestion.authority_blocks,
+                )
+            else:
+                circuits[key] = TrackCircuitCommand(0, 0)
+        self._circuits = circuits
+        self._holding = ""
 
     # -- state ---------------------------------------------------------
 
@@ -579,8 +442,9 @@ class Wayside:
         self._hold_restrictive("No scan has run yet.")
 
     def _hold_restrictive(self, reason: str) -> None:
-        # Every signal red, every crossing active, every track circuit
-        # that was sending told to stop.
+        # Fail-safe while no program runs: every signal red, every
+        # crossing active, every track circuit that was sending told to
+        # stop, and every switch left where it is.
         territory = self._territory
         self._signal_commands: dict[BlockKey, SignalAspect] = {
             switch.key: "red" for switch in territory.switches
@@ -591,9 +455,7 @@ class Wayside:
         self._circuits: dict[BlockKey, TrackCircuitCommand] = {
             key: TrackCircuitCommand(0, 0) for key in self._suggestions
         }
-        self._overrides: tuple[Override, ...] = (
-            Override("holding", "ALL", reason),
-        )
+        self._holding = reason
 
     def snapshot(self) -> WaysideSnapshot:
         """Full observable state of this wayside."""
@@ -619,6 +481,6 @@ class Wayside:
             closed_blocks=self._closed,
             suggestions=dict(self._suggestions),
             switch_requests=dict(self._switch_requests),
-            overrides=self._overrides,
+            holding=self._holding,
             report=self._report,
         )

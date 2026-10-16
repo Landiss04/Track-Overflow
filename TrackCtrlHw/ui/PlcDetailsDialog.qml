@@ -85,26 +85,15 @@ ModalDialog {
 
     Shared.Panel {
         Layout.fillWidth: true
-        title: qsTr("Collision protection")
+        title: qsTr("Outputs")
         bodyPadding: theme.space_4
 
         headerItems: Text {
-            text: qsTr("Above the program")
+            text: qsTr("Nothing above the program")
             textFormat: Text.PlainText
             color: theme.text_muted
             font.family: theme.ui_family
             font.pixelSize: theme.size_small
-        }
-
-        Repeater {
-            model: root.program.rules !== undefined ? root.program.rules : []
-
-            delegate: Shared.KeyValueRow {
-                required property var modelData
-                Layout.fillWidth: true
-                label: modelData.rule
-                value: modelData.action
-            }
         }
 
         Shared.KeyValueRow {
@@ -115,42 +104,27 @@ ModalDialog {
 
         Shared.KeyValueRow {
             Layout.fillWidth: true
-            label: qsTr("Vital fault")
-            value: root.program.vitalFault !== undefined ? root.program.vitalFault : "\u2014"
+            label: qsTr("Channel fault")
+            value: root.program.channelFault !== undefined ? root.program.channelFault : "\u2014"
+        }
+
+        Shared.KeyValueRow {
+            Layout.fillWidth: true
+            label: qsTr("Held fail-safe")
+            value: root.program.holding !== undefined ? root.program.holding : "\u2014"
             rule: false
         }
 
         Shared.HelperText {
             Layout.fillWidth: true
-            text: qsTr("A loaded program cannot override these checks. They "
-                + "run after every scan, before any command reaches the "
-                + "track, and can only make an output more restrictive. "
-                + "Both channels run the program by different algorithms; "
-                + "if they ever disagree, the wayside holds every output.")
-        }
-
-        Shared.FieldLabel {
-            Layout.fillWidth: true
-            Layout.topMargin: theme.space_2
-            text: qsTr("INTERVENTIONS ON THE LAST SCAN")
-        }
-
-        Shared.HelperText {
-            Layout.fillWidth: true
-            visible: root.program.interventions === undefined
-                || root.program.interventions.length === 0
-            text: qsTr("None.")
-        }
-
-        Repeater {
-            model: root.program.interventions !== undefined ? root.program.interventions : []
-
-            delegate: Shared.MonoText {
-                required property string modelData
-                Layout.fillWidth: true
-                text: modelData
-                wrapMode: Text.WordWrap
-            }
+            text: qsTr("The wayside runs the program and decides nothing "
+                + "itself: separation, closures, switch locking and "
+                + "correspondence, and crossings are all the program's. "
+                + "A signal shows red if R is lit or none is, otherwise "
+                + "the first lit of Y, G and SG. Every output is held "
+                + "fail-safe only while no program runs: none loaded, a "
+                + "new one not yet scanned, or channels A and B "
+                + "disagreeing, which lasts until a new program is loaded.")
         }
     }
 }

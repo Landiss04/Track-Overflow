@@ -11,24 +11,10 @@ from typing import Any
 from track_ctrl_hw import display
 from track_ctrl_hw.interface import (
     BlockKey,
-    Override,
     TrackControllerSnapshot,
     WaysideSnapshot,
 )
 from track_ctrl_hw.schematic import layout
-
-#: How the vital layer's rules read in the PLC details, in order.
-VITAL_RULES: tuple[tuple[str, str], ...] = (
-    ("Speed above the block's limit", "Clamped to the limit"),
-    ("Speed or authority on a closed block", "Held at zero"),
-    ("Route over a switch that does not agree",
-     "Authority zero, signal red"),
-    ("Switch with its block or point occupied", "Never moves"),
-    ("Signal lit with no aspect, or several", "Shown red"),
-    ("Train at or beside a crossing", "Lights on, gates down"),
-    ("No program, or channels A and B disagree",
-     "All signals red, authority zero"),
-)
 
 
 def block_state(snapshot: WaysideSnapshot, key: BlockKey) -> tuple[str, str]:
@@ -91,21 +77,13 @@ def office_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
     ]
 
 
-def _held(snapshot: WaysideSnapshot) -> bool:
-    return any(override.target == "ALL" for override in snapshot.overrides)
-
-
 def _route_order(end: str) -> tuple[bool, int]:
     # Block numbers in ascending order, then the yard.
     return (not end.isdigit(), int(end) if end.isdigit() else 0)
 
 
-def _set_by(snapshot: WaysideSnapshot, target: str) -> str:
-    if _held(snapshot):
-        return "Held"
-    if any(override.target == target for override in snapshot.overrides):
-        return "Vital"
-    return "PLC"
+def _set_by(snapshot: WaysideSnapshot) -> str:
+    return "Held" if snapshot.holding else "PLC"
 
 
 def switch_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
@@ -173,7 +151,7 @@ def device_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
                 snapshot.signal_commands.get(key)
             ),
             "reported": display.aspect_name(snapshot.signal_reports.get(key)),
-            "setBy": _set_by(snapshot, name),
+            "setBy": _set_by(snapshot),
         })
     for key in snapshot.territory.crossings:
         name = f"XING-{key.block_id}"
@@ -186,7 +164,7 @@ def device_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
             "reported": display.crossing_name(
                 snapshot.crossing_reports.get(key)
             ),
-            "setBy": _set_by(snapshot, name),
+            "setBy": _set_by(snapshot),
         })
     return rows
 
@@ -226,11 +204,6 @@ def program_details(snapshot: WaysideSnapshot) -> dict[str, Any]:
     """Everything the PLC details window shows."""
     program = snapshot.program
     scan = snapshot.scan
-    interventions = [
-        f"{override.target}: {override.message}"
-        for override in snapshot.overrides
-        if override.rule not in ("holding",)
-    ]
     loaded = (
         display.EM_DASH
         if program is None
@@ -265,12 +238,9 @@ def program_details(snapshot: WaysideSnapshot) -> dict[str, Any]:
         ),
         "overruns": str(scan.overruns),
         "channels": "Agree" if scan.channels_agree else "Disagree",
-        "vitalFault": scan.vital_fault or "None",
-        "rules": [
-            {"rule": rule, "action": action} for rule, action in VITAL_RULES
-        ],
-        "interventions": interventions,
-        "running": program is not None and not scan.vital_fault,
+        "channelFault": scan.channel_fault or "None",
+        "holding": snapshot.holding or "No: the program drives them",
+        "running": not snapshot.holding,
     }
 
 
@@ -334,8 +304,3 @@ def wayside(
 def geometry_for(snapshot: WaysideSnapshot) -> dict[str, Any]:
     """Schematic geometry for a wayside's territory."""
     return layout(snapshot.territory)
-
-
-def interventions(overrides: tuple[Override, ...]) -> list[str]:
-    """Vital interventions from one scan, as readable lines."""
-    return [f"{o.target}: {o.message}" for o in overrides]

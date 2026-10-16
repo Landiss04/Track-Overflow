@@ -30,7 +30,7 @@ Item {
             Layout.fillWidth: true
             moduleName: qsTr("Track Controller")
             instance: page.loaded ? tc.line + qsTr(" Line \u00b7 ") + page.waysideName : ""
-            faultText: tc.vitalFault !== "" ? qsTr("Vital fault") : ""
+            faultText: tc.channelFault !== "" ? qsTr("Channel fault") : ""
             source: tc.sourceText
             clock: tc.clockText
 
