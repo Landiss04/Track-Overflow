@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QObject, QUrl
-from PySide6.QtGui import QFont, QGuiApplication
+from PySide6.QtGui import QFont, QGuiApplication, QWindow
 from PySide6.QtQml import QQmlApplicationEngine
 
 # The design tokens are shared by every module's UI, so they live in the
@@ -16,7 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
-UI_DIR = Path(__file__).resolve().parents[1] / "ui"
+# The repository root, or in a PyInstaller build the bundle's root,
+# where the build lays the data folders out as they are in the source.
+ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+UI_DIR = ROOT / "TrainModel" / "ui"
 
 
 def run_window(
@@ -58,6 +61,9 @@ def run_window(
         return 1
 
     window = engine.rootObjects()[0]
+    if not isinstance(window, QWindow):
+        print("QML root object is not a window.", file=sys.stderr)
+        return 1
     aspect_lock = install_window_scaling(window)  # noqa: F841  keep alive
 
     exit_code = app.exec()

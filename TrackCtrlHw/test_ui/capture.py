@@ -1,65 +1,53 @@
-"""Render the Track Controller test window to a PNG for visual review.
+"""Render the Track Controller test UI to a PNG for visual review.
 
     python TrackCtrlHw/test_ui/capture.py out.png
-    python TrackCtrlHw/test_ui/capture.py out.png 720 450
+    python TrackCtrlHw/test_ui/capture.py out.png --size 720 450
 
-The optional width and height check the scaling guide's size checklist;
-without them the window opens at the 1440 x 900 reference canvas.
+Start the Track Controller window first to capture the test UI
+connected; otherwise it shows its waiting state.
 """
 
+import argparse
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtQuickControls2 import QQuickStyle
+from PySide6.QtCore import QTimer
 
-
-UI_DIR = Path(__file__).resolve().parent
-ENTRY_QML = UI_DIR / "Main.qml"
-MODULE_ROOT = UI_DIR.parent
-REPO_ROOT = UI_DIR.parents[1]
-
-for path in (str(REPO_ROOT), str(MODULE_ROOT)):
-    if path not in sys.path:
-        sys.path.insert(0, path)
-
-from track_ctrl.test_harness import TrackCtrlTestHarness  # noqa: E402
-from ui.aspect_lock import install_window_scaling  # noqa: E402
-from ui.theme import build_theme  # noqa: E402
+from app import TestWindow
 
 
 def main() -> int:
     """Load the window, grab one frame, write it to disk and exit."""
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "track-ctrl-test.png")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("out", nargs="?", default="track-ctrl-test.png")
+    parser.add_argument("--size", nargs=2, type=int, metavar=("W", "H"))
+    parser.add_argument("--block", help="select this block, e.g. C-12")
+    parser.add_argument("--send", type=int, default=0,
+                        help="send the inputs this many times first")
+    args = parser.parse_args()
 
-    app = QGuiApplication(sys.argv)
-    QQuickStyle.setStyle("Basic")
-
-    engine = QQmlApplicationEngine()
-    harness = TrackCtrlTestHarness()
-    context = engine.rootContext()
-    context.setContextProperty("theme", build_theme())
-    context.setContextProperty("harness", harness)
-    engine.load(QUrl.fromLocalFile(str(ENTRY_QML)))
-
-    roots = engine.rootObjects()
-    if not roots:
+    window = TestWindow(sys.argv[:1])
+    if window.window is None:
         return 1
-    window = roots[0]
-    window_scaling = install_window_scaling(window)  # noqa: F841  keep alive
-    if len(sys.argv) > 3:
-        window.resize(int(sys.argv[2]), int(sys.argv[3]))
+    if args.size:
+        window.window.resize(*args.size)
+
+    def prepare() -> None:
+        if args.block:
+            window.harness.selectBlock(args.block)
+        for _ in range(args.send):
+            window.harness.sendInputs()
 
     def grab() -> None:
-        window.grabWindow().save(str(out))
-        app.quit()
+        window.window.grabWindow().save(str(Path(args.out)))
+        window.app.quit()
 
-    # One second of event loop lets fonts and layouts settle.
-    QTimer.singleShot(1000, grab)
-    exit_code = app.exec()
-    del engine
+    # Give the link time to connect before preparing, and the layout
+    # time to settle before the capture.
+    QTimer.singleShot(1200, prepare)
+    QTimer.singleShot(2200, grab)
+    exit_code = window.app.exec()
+    window.shutdown()
     return exit_code
 
 

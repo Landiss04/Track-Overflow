@@ -78,9 +78,10 @@ class RawClient:
         return next(m for m in self.messages if m.get("id") == request_id)
 
     def step(self, inputs, dt=0.1, clear_passenger_brake=False):
+        """Step the one train, T-1."""
         return self.request(
-            op="step", dt=dt, inputs=inputs_to_wire(inputs),
-            clear_passenger_brake=clear_passenger_brake,
+            op="step", dt=dt, inputs={"T-1": inputs_to_wire(inputs)},
+            clear_passenger_brake=["T-1"] if clear_passenger_brake else [],
         )
 
 
@@ -128,9 +129,9 @@ def test_outputs_round_trip_exactly():
 # The Train Model side of the link
 # ---------------------------------------------------------------------- #
 
-def outputs_of(message):
+def outputs_of(message, train_id="T-1"):
     assert message["op"] == "outputs", message
-    return outputs_from_wire(message["outputs"])
+    return outputs_from_wire(message["trains"][train_id])
 
 
 def test_connect_pushes_the_current_outputs(served):
@@ -269,6 +270,74 @@ def test_reset_and_unknown_requests(served):
     assert reply["op"] == "error" and reply["kind"] == "request"
 
 
+def test_add_takes_the_next_train_id_and_steps_every_train(served):
+    state, server, client = served
+    reply = client.request(op="add")
+    assert reply["train"] == "T-2"
+    assert list(reply["trains"]) == ["T-1", "T-2"]
+    assert client.request(op="add")["train"] == "T-3"
+    wire = inputs_to_wire(make_inputs(power_w=100000))
+    reply = client.request(
+        op="step", dt=0.1, clear_passenger_brake=[],
+        inputs={i: wire for i in ("T-1", "T-2", "T-3")})
+    assert all(outputs_of(reply, i).controller.actual_speed_mps > 0
+               for i in ("T-1", "T-2", "T-3"))
+    assert outputs_of(reply) == state.outputs()
+
+
+def test_a_step_must_carry_inputs_for_every_train(served):
+    state, _, client = served
+    client.request(op="add")
+    before = state.snapshot
+    reply = client.step(make_inputs(power_w=100000))
+    assert reply["op"] == "error" and reply["kind"] == "request"
+    assert "T-2" in reply["message"]
+    assert state.snapshot == before
+
+
+def test_one_train_rejecting_its_inputs_steps_none(served):
+    state, _, client = served
+    client.request(op="add")
+    good = inputs_to_wire(make_inputs(power_w=100000))
+    bad = inputs_to_wire(make_inputs(power_w=-1))
+    before = state.snapshot
+    reply = client.request(op="step", dt=0.1, clear_passenger_brake=[],
+                           inputs={"T-1": good, "T-2": bad})
+    assert reply["op"] == "error" and reply["kind"] == "input"
+    assert state.snapshot == before
+
+
+def test_remove_takes_a_train_out_but_never_the_last(served):
+    _, _, client = served
+    client.request(op="add")
+    reply = client.request(op="remove", train="T-1")
+    assert list(reply["trains"]) == ["T-2"]
+    reply = client.request(op="remove", train="T-2")
+    assert reply["op"] == "error" and reply["kind"] == "request"
+    assert "last train" in reply["message"]
+    for bad in ("T-9", 2, None):
+        reply = client.request(op="remove", train=bad)
+        assert reply["op"] == "error" and reply["kind"] == "request"
+
+
+def test_a_test_ui_that_takes_over_keeps_the_trains_fresh(served):
+    """Trains the last test UI added stay in service, reset."""
+    state, server, client = served
+    client.request(op="add")
+    wire = inputs_to_wire(make_inputs(power_w=480_000))
+    for _ in range(10):
+        client.request(op="step", dt=0.1, clear_passenger_brake=[],
+                       inputs={"T-1": wire, "T-2": wire})
+    client.socket.disconnectFromServer()
+    wait_for(lambda: not server._clients)
+    taker = RawClient(server._name)
+    served_trains = taker.messages[-1]["trains"]
+    assert list(served_trains) == ["T-1", "T-2"]
+    for train_id in served_trains:
+        outputs = outputs_of(taker.messages[-1], train_id)
+        assert outputs.controller.actual_speed_mps == 0
+
+
 def test_a_second_train_model_does_not_take_over_the_link(served):
     _, server, client = served
     other = TestLinkServer(TrainModelState(), server._name)
@@ -286,7 +355,11 @@ def test_requests_fail_cleanly_while_the_train_model_is_down(app):
     harness = Harness(link)
     assert not harness.connected
     with pytest.raises(LinkError):
-        link.step(0.1, make_inputs())
+        link.step(0.1, {"T-1": make_inputs()})
+    with pytest.raises(LinkError):
+        link.add_train()
+    assert not harness.addTrain()
+    assert harness.trainIds == ["T-1"]
     harness.setRunning(True)
     harness.advanceTick()
     assert not harness.running
@@ -347,13 +420,26 @@ def test_both_windows_run_as_separate_processes(app):
         assert harness.sendInputs()
         for _ in range(5):
             harness.advanceTick()
-        assert link.outputs.controller.actual_speed_mps > 0
+        assert link.trains["T-1"].controller.actual_speed_mps > 0
         with pytest.raises(InvalidInputError, match="nonnegative"):
-            link.step(0.1, make_inputs(power_w=-1))
+            link.step(0.1, {"T-1": make_inputs(power_w=-1)})
         with pytest.raises(InvalidTimeStepError):
-            link.step(0.0, make_inputs())
+            link.step(0.0, {"T-1": make_inputs()})
+        # A second train, driven alongside the first, then removed.
+        assert harness.addTrain()
+        assert harness.trainIds == ["T-1", "T-2"]
+        assert harness.selectedTrain == "T-2"
+        harness.setInput("power_command", 200000)
+        assert harness.sendInputs()
+        harness.advanceTick()
+        speeds = {i: o.controller.actual_speed_mps
+                  for i, o in link.trains.items()}
+        assert speeds["T-1"] > 0 and speeds["T-2"] > 0
+        assert harness.removeTrain()
+        assert list(link.trains) == ["T-1"]
+        assert harness.selectedTrain == "T-1"
         harness.resetModule()
-        assert link.outputs.controller.actual_speed_mps == 0
+        assert link.trains["T-1"].controller.actual_speed_mps == 0
         assert harness.inputError == ""
         model.terminate()
         model.wait(10)
@@ -404,8 +490,8 @@ def test_a_test_ui_that_reconnects_starts_its_stand_ins_fresh(app):
         assert harness.inputValues["block"] == "1"
         assert harness.inputValues["power_command"] == 0.0
         assert harness.sendInputs()
-        assert link.outputs.track.block_id == "1"
-        assert link.outputs.controller.actual_speed_mps == 0.0
+        assert link.trains["T-1"].track.block_id == "1"
+        assert link.trains["T-1"].controller.actual_speed_mps == 0.0
     finally:
         model.terminate()
         model.communicate(timeout=10)

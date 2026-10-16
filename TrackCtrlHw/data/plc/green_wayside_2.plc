@@ -1,0 +1,44 @@
+// Green line, wayside 2: blocks 21-35, sections F-H.
+// Switch 28 joins 28-29 when normal and 150-28 when reversed. Block 150
+// lies outside this wayside. The signal shows the route out of 28.
+//
+// AUTH_n passes the CTC Office's speed and authority to the train in
+// block n. Here a train keeps them only while the blocks beside it, on
+// the route the switch has set, are clear.
+
+VAR_IN  OCC_21..35
+VAR_IN  CLOSED_29 FAIL_29
+VAR_IN  SWREV_28 MAINT
+VAR_OUT AUTH_21..35
+VAR_OUT SW_28
+VAR_OUT SIG_28_R SIG_28_Y SIG_28_G SIG_28_SG
+
+// Switch 28: route around block 29 while it is closed or failed.
+SW_28 := CLOSED_29 OR FAIL_29
+
+// Signal 28: red while the main route into 29 is blocked; caution on
+// the diverging route, which leaves this wayside. Exactly one aspect
+// is lit for every input.
+BLOCKED := NOT SWREV_28 AND (OCC_29 OR CLOSED_29 OR FAIL_29)
+CAUTION := SWREV_28 OR OCC_30 OR MAINT
+SIG_28_R  := BLOCKED
+SIG_28_Y  := NOT BLOCKED AND CAUTION
+SIG_28_G  := NOT BLOCKED AND NOT CAUTION AND OCC_31
+SIG_28_SG := NOT BLOCKED AND NOT CAUTION AND NOT OCC_31
+
+// Separation: hold a train whose neighbour on its route is occupied.
+AUTH_21 := NOT OCC_22
+AUTH_22 := NOT (OCC_21 OR OCC_23)
+AUTH_23 := NOT (OCC_22 OR OCC_24)
+AUTH_24 := NOT (OCC_23 OR OCC_25)
+AUTH_25 := NOT (OCC_24 OR OCC_26)
+AUTH_26 := NOT (OCC_25 OR OCC_27)
+AUTH_27 := NOT (OCC_26 OR OCC_28)
+AUTH_28 := NOT (OCC_27 OR (NOT SWREV_28 AND OCC_29))
+AUTH_29 := NOT (OCC_30 OR (NOT SWREV_28 AND OCC_28))
+AUTH_30 := NOT (OCC_29 OR OCC_31)
+AUTH_31 := NOT (OCC_30 OR OCC_32)
+AUTH_32 := NOT (OCC_31 OR OCC_33)
+AUTH_33 := NOT (OCC_32 OR OCC_34)
+AUTH_34 := NOT (OCC_33 OR OCC_35)
+AUTH_35 := NOT OCC_34

@@ -6,15 +6,15 @@
 //
 // The two columns behave differently on purpose. Train Model signals
 // are staged: typing fills a draft, edited rows are marked, and Send
-// publishes the set in one call, so the controller never sees a
-// half-typed set of signals. Cab controls act at once, because they
+// publishes the edited rows in one call, so the controller never sees
+// a half-typed set of signals. Cab controls act at once, because they
 // are buttons a hand presses, not a message being assembled.
 //
 // Units are the operator's throughout, in both columns: mph and
 // Fahrenheit, because a bench you type into all day is easier to
 // read in the same units as the console it drives. Only the backend
 // is SI, and the conversion happens where every other one does, in
-// ConsoleBackend (documents/units.md). Counts and identifiers are
+// ConsoleBackend (truth conventions/units.md). Counts and identifiers are
 // not measurements, so blocks and block IDs pass through as they
 // are.
 import QtQuick
@@ -24,28 +24,37 @@ import "../components"
 
 Panel {
     id: root
+    objectName: "testInputs"
 
     readonly property var s: controller.snapshot
     readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
     readonly property var roles: ["Signed out", "Driver", "Engineer"]
+    // Shown in words, sent as the beacon encodes them (truth
+    // beacon.md), index for index.
+    readonly property var sideLabels: ["Left", "Right", "Both"]
+    readonly property var sideCodes: ["L", "R", "LR"]
 
     // What the controller is holding right now.
     readonly property var live: ({
-        "commanded_speed": Math.round(s.commanded_mph * 10) / 10,
+        "commanded_speed": Math.round(s.track_commanded_mph * 10) / 10,
         "actual_speed": Math.round(s.actual_mph * 10) / 10,
         "speed_limit": Math.round(s.limit_mph),
-        "authority_blocks": s.authority_blocks,
-        "beacon": s.beacon,
+        "authority_blocks": s.track_authority_blocks,
+        "beacon_station": s.beacon_station,
+        "beacon_side": s.beacon_side,
+        "beacon_underground": s.beacon_underground,
         "cabin_temperature": Math.round(s.cabin_temp_f),
         "signal_light_ahead": s.next_signal,
-        "ebrake_state": s.emergency_brake,
+        "brake_state_emergency": s.fb_emergency_brake,
         "door_state_left": s.fb_doors_left,
         "door_state_right": s.fb_doors_right,
-        "light_state_cabin": s.fb_lights,
-        "light_state_headlights": s.fb_headlights,
-        "failure_engine": s.fault_engine,
-        "failure_brake": s.fault_brake,
-        "failure_signal_pickup": s.fault_pickup,
+        "light_state_interior": s.fb_interior_lights,
+        "light_state_exterior": s.fb_exterior_lights,
+        // Murphy's injections into the plant, not what the controller
+        // has detected (that is in the header pills).
+        "failure_engine": s.inject_engine,
+        "failure_signal_pickup": s.inject_pickup,
+        "failure_brake": s.inject_brake,
         // Staged like the rest, because sending is what commissions
         // them, but typed in the cab column where they belong.
         "kp": Math.round(s.kp),
@@ -94,6 +103,19 @@ Panel {
         return String(draft[key]) !== String(live[key]);
     }
 
+    // Only the rows that were edited and still differ from what the
+    // controller holds. Sending the whole draft would also write back
+    // rounded readings (actual speed to 0.1 mph, the limit to a whole
+    // mph) and, while paused, stale ones, such as an e-brake report
+    // the driver has since released.
+    function payload() {
+        var edits = {};
+        for (var key in touched)
+            if (pending(key))
+                edits[key] = draft[key];
+        return edits;
+    }
+
     function release() {
         draft = live;
         touched = ({});
@@ -130,7 +152,7 @@ Panel {
             enabled: root.dirty
             text: qsTr("Send to controller")
             onClicked: {
-                controller.applyInputs(root.draft);
+                controller.apply_bench_inputs(root.payload());
                 root.release();
             }
         }
@@ -169,7 +191,9 @@ Panel {
                 value: root.draft.commanded_speed
                 pending: root.touched["commanded_speed"] === true
                     && root.pending("commanded_speed")
-                onEdited: function (v) { root.stage("commanded_speed", v); }
+                onEdited: function (v) {
+                    root.stage("commanded_speed", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -184,7 +208,9 @@ Panel {
                 value: root.draft.actual_speed
                 pending: root.touched["actual_speed"] === true
                     && root.pending("actual_speed")
-                onEdited: function (v) { root.stage("actual_speed", v); }
+                onEdited: function (v) {
+                    root.stage("actual_speed", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -199,7 +225,9 @@ Panel {
                 value: root.draft.speed_limit
                 pending: root.touched["speed_limit"] === true
                     && root.pending("speed_limit")
-                onEdited: function (v) { root.stage("speed_limit", v); }
+                onEdited: function (v) {
+                    root.stage("speed_limit", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -214,7 +242,9 @@ Panel {
                 value: root.draft.authority_blocks
                 pending: root.touched["authority_blocks"] === true
                     && root.pending("authority_blocks")
-                onEdited: function (v) { root.stage("authority_blocks", v); }
+                onEdited: function (v) {
+                    root.stage("authority_blocks", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -223,12 +253,49 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "beacon"
+                name: "station"
                 kind: "string"
-                value: root.draft.beacon
-                pending: root.touched["beacon"] === true
-                    && root.pending("beacon")
-                onEdited: function (v) { root.stage("beacon", v); }
+                value: root.draft.beacon_station
+                pending: root.touched["beacon_station"] === true
+                    && root.pending("beacon_station")
+                onEdited: function (v) {
+                    root.stage("beacon_station", v);
+                }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "platform_side"
+                kind: "enum"
+                options: root.sideLabels
+                value: root.sideLabels[
+                    root.sideCodes.indexOf(root.draft.beacon_side)]
+                pending: root.touched["beacon_side"] === true
+                    && root.pending("beacon_side")
+                onEdited: function (v) {
+                    root.stage("beacon_side",
+                               root.sideCodes[root.sideLabels.indexOf(v)]);
+                }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "underground_state"
+                kind: "bool"
+                value: root.draft.beacon_underground
+                pending: root.touched["beacon_underground"] === true
+                    && root.pending("beacon_underground")
+                onEdited: function (v) {
+                    root.stage("beacon_underground", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -243,7 +310,9 @@ Panel {
                 value: root.draft.cabin_temperature
                 pending: root.touched["cabin_temperature"] === true
                     && root.pending("cabin_temperature")
-                onEdited: function (v) { root.stage("cabin_temperature", v); }
+                onEdited: function (v) {
+                    root.stage("cabin_temperature", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -252,12 +321,14 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "ebrake_state"
+                name: "brake_state_emergency"
                 kind: "bool"
-                value: root.draft.ebrake_state
-                pending: root.touched["ebrake_state"] === true
-                    && root.pending("ebrake_state")
-                onEdited: function (v) { root.stage("ebrake_state", v); }
+                value: root.draft.brake_state_emergency
+                pending: root.touched["brake_state_emergency"] === true
+                    && root.pending("brake_state_emergency")
+                onEdited: function (v) {
+                    root.stage("brake_state_emergency", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -273,7 +344,9 @@ Panel {
                 value: root.draft.door_state_left
                 pending: root.touched["door_state_left"] === true
                     && root.pending("door_state_left")
-                onEdited: function (v) { root.stage("door_state_left", v); }
+                onEdited: function (v) {
+                    root.stage("door_state_left", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -289,41 +362,51 @@ Panel {
                 value: root.draft.door_state_right
                 pending: root.touched["door_state_right"] === true
                     && root.pending("door_state_right")
-                onEdited: function (v) { root.stage("door_state_right", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                name: "light_state_cabin"
-                kind: "bool"
-                trueLabel: qsTr("On")
-                falseLabel: qsTr("Off")
-                value: root.draft.light_state_cabin
-                pending: root.touched["light_state_cabin"] === true
-                    && root.pending("light_state_cabin")
-                onEdited: function (v) { root.stage("light_state_cabin", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                name: "light_state_headlights"
-                kind: "bool"
-                trueLabel: qsTr("On")
-                falseLabel: qsTr("Off")
-                value: root.draft.light_state_headlights
-                pending: root.touched["light_state_headlights"] === true
-                    && root.pending("light_state_headlights")
                 onEdited: function (v) {
-                    root.stage("light_state_headlights", v);
+                    root.stage("door_state_right", v);
                 }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "light_state_interior"
+                kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
+                value: root.draft.light_state_interior
+                pending: root.touched["light_state_interior"] === true
+                    && root.pending("light_state_interior")
+                onEdited: function (v) {
+                    root.stage("light_state_interior", v);
+                }
+            }
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "light_state_exterior"
+                kind: "bool"
+                trueLabel: qsTr("On")
+                falseLabel: qsTr("Off")
+                value: root.draft.light_state_exterior
+                pending: root.touched["light_state_exterior"] === true
+                    && root.pending("light_state_exterior")
+                onEdited: function (v) {
+                    root.stage("light_state_exterior", v);
+                }
+            }
+            LabeledDivider {
+                Layout.fillWidth: true
+                Layout.topMargin: theme.space_2
+                Layout.bottomMargin: theme.space_1
+                text: qsTr("Injected failures (controller must detect)")
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -337,26 +420,13 @@ Panel {
                 value: root.draft.failure_engine
                 pending: root.touched["failure_engine"] === true
                     && root.pending("failure_engine")
-                onEdited: function (v) { root.stage("failure_engine", v); }
+                onEdited: function (v) {
+                    root.stage("failure_engine", v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
                 editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                name: "failure_brake"
-                kind: "bool"
-                value: root.draft.failure_brake
-                pending: root.touched["failure_brake"] === true
-                    && root.pending("failure_brake")
-                onEdited: function (v) { root.stage("failure_brake", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                rule: false
                 showKind: false
                 rowHeight: 38
                 valueWidth: 160
@@ -370,27 +440,22 @@ Panel {
                     root.stage("failure_signal_pickup", v);
                 }
             }
-            LabeledDivider {
-                Layout.fillWidth: true
-                Layout.topMargin: theme.space_3
-                Layout.bottomMargin: theme.space_1
-                text: qsTr("From the Track Model")
-            }
-
             SignalEditRow {
                 Layout.fillWidth: true
                 editable: true
+                rule: false
                 showKind: false
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "signal_light_ahead"
-                kind: "enum"
-                options: root.aspects
-                value: root.draft.signal_light_ahead
-                pending: root.touched["signal_light_ahead"] === true
-                    && root.pending("signal_light_ahead")
-                onEdited: function (v) { root.stage("signal_light_ahead", v); }
+                name: "failure_brake"
+                kind: "bool"
+                value: root.draft.failure_brake
+                pending: root.touched["failure_brake"] === true
+                    && root.pending("failure_brake")
+                onEdited: function (v) {
+                    root.stage("failure_brake", v);
+                }
             }
 
         }
@@ -420,7 +485,7 @@ Panel {
                 options: root.roles
                 value: root.roles[root.s.operator_index + 1]
                 onEdited: function (v) {
-                    controller.selectOperator(root.roles.indexOf(v) - 1);
+                    controller.select_operator(root.roles.indexOf(v) - 1);
                 }
             }
             SignalEditRow {
@@ -436,7 +501,7 @@ Panel {
                 options: ["Automatic", "Manual"]
                 value: root.s.manual ? "Manual" : "Automatic"
                 onEdited: function (v) {
-                    controller.setManual(v === "Manual");
+                    controller.set_manual(v === "Manual");
                 }
             }
             SignalEditRow {
@@ -481,7 +546,7 @@ Panel {
                 kind: "float"
                 unit: "mph"
                 value: Math.round(root.s.target_mph)
-                onEdited: function (v) { controller.setTargetMph(v); }
+                onEdited: function (v) { controller.set_target_mph(v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -495,7 +560,7 @@ Panel {
                 kind: "int"
                 unit: "\u00b0F"
                 value: Math.round(root.s.target_temp_f)
-                onEdited: function (v) { controller.setTargetTemp(v); }
+                onEdited: function (v) { controller.set_target_temp_f(v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -504,13 +569,15 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
+                // Off the platform side a door may only be closed.
                 enabled: root.s.can_drive
+                    && (root.s.platform_left || root.s.doors_left)
                 name: "door_command_left"
                 kind: "bool"
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
                 value: root.s.doors_left
-                onEdited: function (v) { controller.setDoor("left", v); }
+                onEdited: function (v) { controller.set_door("left", v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -520,12 +587,13 @@ Panel {
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
+                    && (root.s.platform_right || root.s.doors_right)
                 name: "door_command_right"
                 kind: "bool"
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
                 value: root.s.doors_right
-                onEdited: function (v) { controller.setDoor("right", v); }
+                onEdited: function (v) { controller.set_door("right", v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -535,12 +603,14 @@ Panel {
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
-                name: "cabin_lights_command"
+                name: "interior_lights_command"
                 kind: "bool"
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
-                value: root.s.lights
-                onEdited: function (v) { controller.setLights(v); }
+                value: root.s.interior_lights
+                onEdited: function (v) {
+                    controller.set_interior_lights(v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -550,12 +620,14 @@ Panel {
                 valueWidth: 160
                 unitWidth: 52
                 enabled: root.s.can_drive
-                name: "headlights_command"
+                name: "exterior_lights_command"
                 kind: "bool"
                 trueLabel: qsTr("On")
                 falseLabel: qsTr("Off")
-                value: root.s.headlights
-                onEdited: function (v) { controller.setHeadlights(v); }
+                value: root.s.exterior_lights
+                onEdited: function (v) {
+                    controller.set_exterior_lights(v);
+                }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -570,7 +642,7 @@ Panel {
                 value: root.s.emergency_brake
                 onEdited: function (v) {
                     if (v !== root.s.emergency_brake)
-                        controller.toggleEmergencyBrake();
+                        controller.toggle_emergency_brake();
                 }
             }
             SignalEditRow {
@@ -581,13 +653,13 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                enabled: root.s.can_drive
+                enabled: root.s.can_drive && !root.s.fault_brake
                 name: "service_brake"
                 kind: "bool"
                 value: root.s.service_request
                 onEdited: function (v) {
                     if (v !== root.s.service_request)
-                        controller.toggleServiceBrake();
+                        controller.toggle_service_brake();
                 }
             }
 
@@ -610,6 +682,29 @@ Panel {
                         ? qsTr("Sending the inputs commissions the gains "
                                + "and starts the run.")
                         : qsTr("Sign in as the engineer to set the gains.")
+            }
+
+            LabeledDivider {
+                Layout.fillWidth: true
+                Layout.topMargin: theme.space_3
+                Layout.bottomMargin: theme.space_1
+                text: qsTr("From the Track Model")
+            }
+
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "signal_light_ahead"
+                kind: "enum"
+                options: root.aspects
+                value: root.draft.signal_light_ahead
+                pending: root.touched["signal_light_ahead"] === true
+                    && root.pending("signal_light_ahead")
+                onEdited: function (v) { root.stage("signal_light_ahead", v); }
             }
         }
     }

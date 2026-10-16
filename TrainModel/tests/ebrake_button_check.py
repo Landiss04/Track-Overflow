@@ -19,8 +19,8 @@ from PySide6.QtTest import QTest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / "TrainModel")]
 
+from train_model.fleet import TrainModelFleet  # noqa: E402
 from train_model.link import TestLinkServer  # noqa: E402
-from train_model.state import TrainModelState  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
 APPLY = "APPLY EMERGENCY BRAKE"
@@ -35,12 +35,13 @@ def walk(item):
 def main():
     app = QGuiApplication([])
     name = f"ebrake-check-{uuid.uuid4().hex}"
-    state = TrainModelState()
-    server = TestLinkServer(state, name)
+    fleet = TrainModelFleet()
+    state = fleet.add("T-1", "Blue")
+    server = TestLinkServer(fleet, name)
     assert server.listen()
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("theme", build_theme())
-    engine.rootContext().setContextProperty("trainModel", state)
+    engine.rootContext().setContextProperty("fleet", fleet)
     engine.load(QUrl.fromLocalFile(str(ROOT / "TrainModel/ui/Main.qml")))
     window = engine.rootObjects()[0]
 
