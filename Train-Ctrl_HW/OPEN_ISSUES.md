@@ -146,20 +146,6 @@ Ivan's sizing and the failure banners that squeezed it were removed
     - The toy plant's Brake State during a failed service brake (reads false) is
       the plant's own stand-in, not taken from truth `brake-state.md`.
 
-15. **The spawner is not wired into the system yet.**
-    `TrainControllerFleet` (2026-10-16) is what the central harness would
-    drive, but nothing drives it yet:
-    - No harness edge maps the Train Model's outputs to our input keys, or
-      our `TrainModelCommands` to the Train Model's `ControllerCommands`
-      (truth D005 / D008; `common/harness/`, a shared folder).
-    - Steps are not tied to the shared clock (truth D017,
-      `utils/system_clock.py`); `step_all` takes `dt` from its caller.
-    - The inputs are plain dicts with read_inputs() keys, not boundary
-      dataclasses (D005 says each module defines its own boundary types).
-    - Dispatch (who calls `add` / `remove`, and with which train ID) is
-      the harness's, following the Train Model's `on_dispatch` sketch in
-      `TrainModel/docs/integration.md` on development.
-
 ## Carried over
 
 - **Rolling resistance outside a brake failure** is open. It (C_rr 0.002)

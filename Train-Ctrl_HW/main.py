@@ -40,7 +40,6 @@ import argparse
 import math
 import os
 import sys
-from collections.abc import Iterator, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -251,14 +250,6 @@ class InvalidInputError(TrainControllerError):
     """An input on the interface could not be read as its type."""
 
 
-class DuplicateTrainError(TrainControllerError):
-    """A train with that ID already has a controller."""
-
-
-class UnknownTrainError(TrainControllerError, KeyError):
-    """No train with that ID has a controller."""
-
-
 def check_shared_library() -> bool:
     """Report, in words, a missing shared QML library.
 
@@ -318,57 +309,6 @@ def _read_number(values: dict, key: str) -> float:
         raise InvalidInputError(
             f"{key} must be a number, not {values[key]!r}"
         ) from error
-
-
-def read_inputs(values: dict) -> dict[str, Any]:
-    """Read and check a set of Train Model signals, touching no state.
-
-    Keys and shapes follow truth signals/: commanded_speed,
-    speed_limit and actual_speed (m/s, actual signed),
-    cabin_temperature (C), authority_blocks, signal_light_ahead,
-    beacon_station / beacon_side / beacon_underground, brake_state
-    bool[2] (emergency, service), door_state bool[2] (left, right)
-    and light_state bool[2] (interior, exterior). There is no
-    failure status: the Train Model no longer sends one (truth
-    modules/train-model.md); detect_failures() infers failures
-    instead. Unknown keys are ignored.
-
-    The whole set is read before any of it is applied, so a caller
-    can refuse it outright. Raises InvalidInputError for a value
-    that cannot be read as its type.
-    """
-    staged: dict[str, Any] = {}
-    for key, attr in (("commanded_speed", "commanded_mps"),
-                      ("speed_limit", "speed_limit_mps")):
-        if key in values:
-            staged[attr] = max(0.0, _read_number(values, key))
-    if "actual_speed" in values:
-        staged["actual_mps"] = _read_number(values, "actual_speed")
-    if "cabin_temperature" in values:
-        staged["cabin_temp_c"] = _read_number(
-            values, "cabin_temperature")
-    if "authority_blocks" in values:
-        staged["authority_blocks"] = max(
-            0, int(_read_number(values, "authority_blocks")))
-    if "beacon_station" in values:
-        staged["beacon_station"] = str(values["beacon_station"])
-    if values.get("beacon_side") in BEACON_SIDES:
-        staged["beacon_side"] = values["beacon_side"]
-    if "beacon_underground" in values:
-        staged["beacon_underground"] = bool(
-            values["beacon_underground"])
-    if values.get("signal_light_ahead") in ASPECTS:
-        staged["next_signal"] = values["signal_light_ahead"]
-    if "brake_state" in values:
-        staged["brake_state"] = _read_flags(values, "brake_state", 2)
-    if "door_state" in values:
-        staged["fb_doors_left"], staged["fb_doors_right"] = (
-            _read_flags(values, "door_state", 2))
-    if "light_state" in values:
-        (staged["fb_interior_lights"],
-         staged["fb_exterior_lights"]) = _read_flags(
-            values, "light_state", 2)
-    return staged
 
 
 # The physical panel is not wired yet, so there is no hardware layer
@@ -536,17 +476,13 @@ class ControllerCore:
             return 0
         return self.received_signal[1]
 
-    def step(self, plant: bool = True) -> None:
+    def step(self) -> None:
         """Run one control period.
 
         Only the speed law waits for the gains. The brakes and the
         safety path run from the first tick, because a console that
         has not been commissioned yet still has to be able to stop
         the train and still has to report what the brakes are doing.
-
-        ``plant`` runs the toy train after the control law, for the
-        standalone console and bench. Driven by the harness it is
-        off: the Train Model does the physics (truth D009).
         """
         s = self.state
         self.detect_failures()
@@ -586,27 +522,7 @@ class ControllerCore:
 
         self.respond_to_failures()
         self.enforce_safety()
-        if plant:
-            self._plant()
-
-    def apply_staged(self, staged: dict[str, Any]) -> None:
-        """Apply a set of Train Model signals read by read_inputs().
-
-        A reported emergency brake that this controller did not
-        command is a passenger pull: latch it and cut power. A report
-        of false never releases it; only the driver does (D011,
-        arbitration/passenger-emergency-brake).
-        """
-        s = self.state
-        staged = dict(staged)
-        brakes = staged.pop("brake_state", None)
-        for attr, value in staged.items():
-            setattr(s, attr, value)
-        if brakes is not None:
-            emergency, service = brakes
-            if emergency and not s.emergency_brake:
-                self.engage_emergency()
-            s.fb_emergency_brake, s.fb_service_brake = emergency, service
+        self._plant()
 
     def detect_failures(self) -> None:
         """Infer failures from what the Train Model sends back.
@@ -895,86 +811,6 @@ class ControllerCore:
         )
 
 
-# ============================================================ fleet
-class TrainControllerFleet:
-    """One controller per running train, held by train ID.
-
-    The spawner: whoever owns dispatch (the central harness once
-    integrated) adds a train's controller when it enters service,
-    removes it when it leaves, and steps them all once per tick. It
-    mirrors the Train Model's TrainModelFleet on development, so the
-    harness drives both the same way. No Qt: the console is only one
-    of its users. Train IDs are opaque strings (identifiers.md).
-    """
-
-    def __init__(self) -> None:
-        # Insertion order is the roster order.
-        self._cores: dict[str, ControllerCore] = {}
-
-    def add(self, train_id: str, line: str = "") -> ControllerCore:
-        """Put a train's controller in service and return it."""
-        if train_id in self._cores:
-            raise DuplicateTrainError(f"train {train_id!r} already exists")
-        core = ControllerCore()
-        core.state.train_id = train_id
-        core.state.line = line
-        self._cores[train_id] = core
-        return core
-
-    def remove(self, train_id: str) -> None:
-        """Take a train's controller out of service."""
-        self.get(train_id)
-        del self._cores[train_id]
-
-    def get(self, train_id: str) -> ControllerCore:
-        """Return one train's controller."""
-        try:
-            return self._cores[train_id]
-        except KeyError:
-            raise UnknownTrainError(f"no train {train_id!r}") from None
-
-    def ids(self) -> list[str]:
-        """Every train's ID, in the order the trains were added."""
-        return list(self._cores)
-
-    def __contains__(self, train_id: object) -> bool:
-        return train_id in self._cores
-
-    def __len__(self) -> int:
-        return len(self._cores)
-
-    def __iter__(self) -> Iterator[ControllerCore]:
-        return iter(list(self._cores.values()))
-
-    def step_all(
-        self, dt: float, inputs_by_id: Mapping[str, dict],
-    ) -> dict[str, TrainModelCommands]:
-        """Step every train's controller one tick, or none of them.
-
-        ``inputs_by_id`` holds each train's Train Model signals in SI
-        (the keys read_inputs() takes), exactly one entry per train.
-        Every train's set is read before any train steps, so a set
-        one train would refuse leaves the whole fleet unchanged. The
-        toy plant does not run: the Train Model does the physics.
-        Returns each train's commands to its Train Model.
-        """
-        unknown = sorted(set(inputs_by_id) - set(self._cores))
-        if unknown:
-            raise UnknownTrainError(f"inputs for unknown trains: {unknown}")
-        missing = [i for i in self._cores if i not in inputs_by_id]
-        if missing:
-            raise TrainControllerError(f"no inputs for trains: {missing}")
-        staged = {train_id: read_inputs(inputs_by_id[train_id])
-                  for train_id in self._cores}
-        commands = {}
-        for train_id, core in self._cores.items():
-            core.dt = dt
-            core.apply_staged(staged[train_id])
-            core.step(plant=False)
-            commands[train_id] = core.commands()
-        return commands
-
-
 # ========================================================== bridge
 class ConsoleBackend(QObject):
     """What QML sees: one snapshot out, one slot per operator action.
@@ -999,10 +835,10 @@ class ConsoleBackend(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        # One controller per train, each with its own toy plant here.
-        # They all run; the console and the bench look at whichever
-        # one is selected.
-        self.fleet = TrainControllerFleet()
+        # One plant per train. They all run; the console and the
+        # bench look at whichever one is selected.
+        self.cores: dict[str, ControllerCore] = {}
+        self.order: list[str] = []
         self.selected = ""
         self.notes: dict[str, str] = {}
         self.announcing: set[str] = set()
@@ -1038,13 +874,17 @@ class ConsoleBackend(QObject):
         """
         prefix = LINES.get(line, "T")
         train_id = f"{prefix}-{int(number)}"
-        if train_id in self.fleet:
+        if train_id in self.cores:
             self.spawn_note = f"{train_id} is already running."
             return ""
 
-        core = self.fleet.add(train_id, line)
+        core = ControllerCore()
         core.dt = self.sim_rate / CONTROL_HZ
+        core.state.train_id = train_id
+        core.state.line = line
         core.state.authority_target = normalize_block_letter(target)
+        self.cores[train_id] = core
+        self.order.append(train_id)
         self.notes[train_id] = ""
         self.selected = train_id
         self.spawn_note = f"{train_id} spawned on the {line.lower()}."
@@ -1058,26 +898,25 @@ class ConsoleBackend(QObject):
         selected one, selection moves to the next train in the
         roster, or to none. Returns whether there was such a train.
         """
-        if train_id not in self.fleet:
+        if train_id not in self.cores:
             return False
-        index = self.fleet.ids().index(train_id)
-        self.fleet.remove(train_id)
+        index = self.order.index(train_id)
+        del self.cores[train_id]
+        self.order.remove(train_id)
         self.notes.pop(train_id, None)
         self.announcing.discard(train_id)
         self._last_commands.pop(train_id, None)
         if self.selected == train_id:
-            remaining = self.fleet.ids()
+            remaining = len(self.order)
             self.selected = (
-                remaining[min(index, len(remaining) - 1)]
-                if remaining else ""
+                self.order[min(index, remaining - 1)] if remaining else ""
             )
         self.spawn_note = f"{train_id} removed."
         self.roster_changed.emit()
         return True
 
     def _step_all(self) -> None:
-        for core in self.fleet:
-            train_id = core.state.train_id
+        for train_id, core in self.cores.items():
             core.step()
             commands = core.commands()
             if self._last_commands.get(train_id) != commands:
@@ -1088,12 +927,12 @@ class ConsoleBackend(QObject):
     @property
     def has_train(self) -> bool:
         """Whether a train is selected."""
-        return self.selected in self.fleet
+        return self.selected in self.cores
 
     @property
     def core(self) -> ControllerCore:
         """The train the console and the bench are pointed at."""
-        return self.fleet.get(self.selected) if self.has_train else self.idle
+        return self.cores[self.selected] if self.has_train else self.idle
 
     @property
     def brake_note(self) -> str:
@@ -1127,10 +966,10 @@ class ConsoleBackend(QObject):
     @Property("QVariantList", notify=roster_changed)
     def trains(self) -> list[dict[str, Any]]:
         """The roster the train selectors show."""
-        return [{"id": core.state.train_id,
-                 "line": core.state.line,
-                 "label": f"{core.state.train_id} · {core.state.line}"}
-                for core in self.fleet]
+        return [{"id": i,
+                 "line": self.cores[i].state.line,
+                 "label": f"{i} · {self.cores[i].state.line}"}
+                for i in self.order]
 
     @Property("QVariantMap", notify=snapshot_changed)
     def snapshot(self) -> dict[str, Any]:
@@ -1140,10 +979,9 @@ class ConsoleBackend(QObject):
             "train_id": s.train_id,
             "has_train": self.has_train,
             "train_index": (
-                self.fleet.ids().index(self.selected)
-                if self.has_train else -1
+                self.order.index(self.selected) if self.has_train else -1
             ),
-            "train_count": len(self.fleet),
+            "train_count": len(self.order),
             "sim_rate": self.sim_rate,
             "sim_rate_index": SIM_RATES.index(self.sim_rate),
             "spawn_note": self.spawn_note,
@@ -1297,7 +1135,7 @@ class ConsoleBackend(QObject):
     @Slot(str)
     def select_train(self, train_id: str) -> None:
         """Point the console and the bench at another train."""
-        if train_id in self.fleet:
+        if train_id in self.cores:
             self.selected = train_id
         self._publish()
 
@@ -1329,7 +1167,7 @@ class ConsoleBackend(QObject):
         if not 0 <= index < len(SIM_RATES):
             return
         self.sim_rate = SIM_RATES[index]
-        for core in self.fleet:
+        for core in self.cores.values():
             core.dt = self.sim_rate / CONTROL_HZ
         self._publish()
 
@@ -1431,8 +1269,8 @@ class ConsoleBackend(QObject):
 
     def _announce_done(self, train: str) -> None:
         self.announcing.discard(train)
-        if train in self.fleet:
-            self.fleet.get(train).state.announcement = ""
+        if train in self.cores:
+            self.cores[train].state.announcement = ""
         self._publish()
 
     # ------------------------------------------------- Train Model
@@ -1445,13 +1283,74 @@ class ConsoleBackend(QObject):
     def apply_inputs(self, values: dict) -> None:
         """Take a whole set of Train Model signals in one go, in SI.
 
-        See read_inputs() for the keys. A set with one bad value
-        changes nothing.
+        Keys and shapes follow truth signals/: commanded_speed,
+        speed_limit and actual_speed (m/s, actual signed),
+        cabin_temperature (C), authority_blocks, signal_light_ahead,
+        beacon_station / beacon_side / beacon_underground,
+        brake_state bool[2] (emergency, service), door_state bool[2]
+        (left, right) and light_state bool[2] (interior, exterior).
+        There is no failure status: the Train Model no longer sends
+        one (truth modules/train-model.md); detect_failures() infers
+        failures instead.
+
+        Every value is read before any is applied, so a set with one
+        bad value changes nothing. Raises InvalidInputError for a
+        value that cannot be read as its type.
         """
         if not self.has_train:
             return
-        self.core.apply_staged(read_inputs(values))
+        staged = self._read_inputs(values)
+        s = self.core.state
+        brakes = staged.pop("brake_state", None)
+        for attr, value in staged.items():
+            setattr(s, attr, value)
+        if brakes is not None:
+            # A reported emergency brake that this controller did not
+            # command is a passenger pull: latch it and cut power. A
+            # report of false never releases it; only the driver does
+            # (D011, arbitration/passenger-emergency-brake).
+            emergency, service = brakes
+            if emergency and not s.emergency_brake:
+                self.core.engage_emergency()
+            s.fb_emergency_brake, s.fb_service_brake = emergency, service
         self._publish()
+
+    @staticmethod
+    def _read_inputs(values: dict) -> dict[str, Any]:
+        # Read and check the whole set, touching no state, so that
+        # apply_inputs can refuse it outright.
+        staged: dict[str, Any] = {}
+        for key, attr in (("commanded_speed", "commanded_mps"),
+                          ("speed_limit", "speed_limit_mps")):
+            if key in values:
+                staged[attr] = max(0.0, _read_number(values, key))
+        if "actual_speed" in values:
+            staged["actual_mps"] = _read_number(values, "actual_speed")
+        if "cabin_temperature" in values:
+            staged["cabin_temp_c"] = _read_number(
+                values, "cabin_temperature")
+        if "authority_blocks" in values:
+            staged["authority_blocks"] = max(
+                0, int(_read_number(values, "authority_blocks")))
+        if "beacon_station" in values:
+            staged["beacon_station"] = str(values["beacon_station"])
+        if values.get("beacon_side") in BEACON_SIDES:
+            staged["beacon_side"] = values["beacon_side"]
+        if "beacon_underground" in values:
+            staged["beacon_underground"] = bool(
+                values["beacon_underground"])
+        if values.get("signal_light_ahead") in ASPECTS:
+            staged["next_signal"] = values["signal_light_ahead"]
+        if "brake_state" in values:
+            staged["brake_state"] = _read_flags(values, "brake_state", 2)
+        if "door_state" in values:
+            staged["fb_doors_left"], staged["fb_doors_right"] = (
+                _read_flags(values, "door_state", 2))
+        if "light_state" in values:
+            (staged["fb_interior_lights"],
+             staged["fb_exterior_lights"]) = _read_flags(
+                values, "light_state", 2)
+        return staged
 
     @Slot("QVariantMap")
     def apply_bench_inputs(self, values: dict) -> None:
