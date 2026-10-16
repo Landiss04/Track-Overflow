@@ -226,6 +226,42 @@ cd TrainModel
 
 PySide6 ships its own type stubs, so no local stubs are needed.
 
+## Build an executable
+
+PyInstaller builds each window as its own executable. Run from the
+repository root, not `TrainModel/`. The four data folders keep their
+source paths inside the bundle: the code finds them under the bundle's
+root (`sys._MEIPASS`) at the same paths as under the repository root,
+and the QML reaches the shared `ui/` and `pics/` by relative paths.
+A folder left out does not fail the build; the window fails to load,
+or loads with a blank ad or no track.
+
+| Folder | Holds |
+| --- | --- |
+| `TrainModel/ui` | the Train Model and test UI QML |
+| `TrainModel/pics` | the header ads |
+| `ui` | the shared QML components |
+| `TrackModel` | the line layouts the test UI loads |
+
+On Windows (PowerShell; `;` separates an `--add-data` source from its
+destination, `:` on Linux):
+
+```powershell
+foreach ($app in 'main', 'test_ui') {
+    pyinstaller --noconfirm --onedir --name $app `
+        --paths TrainModel --paths . `
+        --add-data "TrainModel\ui;TrainModel\ui" `
+        --add-data "TrainModel\pics;TrainModel\pics" `
+        --add-data "ui;ui" `
+        --add-data "TrackModel;TrackModel" `
+        --hidden-import ui.theme --hidden-import ui.aspect_lock `
+        "TrainModel\$app.py"
+}
+```
+
+The executables land in `dist\main\` and `dist\test_ui\`. Verified with
+PyInstaller 6.22.2 and PySide6 6.11.2 on Windows 11 and Linux.
+
 ## Layout
 
 ```

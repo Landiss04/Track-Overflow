@@ -2,3 +2,6 @@
 .claude
 __pycache__/
 scaling-report.txt
+/build/
+/dist/
+/*.spec
