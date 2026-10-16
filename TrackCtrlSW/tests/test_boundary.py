@@ -343,16 +343,60 @@ class Startup(unittest.TestCase):
             module.load_program(module.wayside_ids[0], "VAR_IN NOPE\n", "x.plc")
         self.assertFalse(module.ready)
 
-    def test_ready_crosses_the_wire(self) -> None:
-        for ready in (False, True):
-            out = interface.TrackControllerOutputs(ready=ready)
-            text = json.dumps(wire.outputs_to_wire(out))
-            self.assertEqual(wire.outputs_from_wire(json.loads(text)), out)
-        bad = wire.outputs_to_wire(interface.TrackControllerOutputs())
-        bad["ready"] = "yes"
+    def test_each_wayside_reports_its_own_readiness(self) -> None:
+        module = self.bare()
+        ids = module.wayside_ids
+        # Program every wayside but the second and the last.
+        skipped = {ids[1], ids[-1]}
+        for wayside_id in ids:
+            if wayside_id not in skipped:
+                module.load_program(
+                    wayside_id,
+                    default_program_source(module.controller(wayside_id)),
+                    "a.plc",
+                )
+        out = _tick(module, ctc=self.suggest_all())
+        self.assertFalse(out.ready)
+        self.assertEqual(
+            {report.wayside_id: report.ready for report in out.ctc_reports},
+            {wayside_id: wayside_id not in skipped for wayside_id in ids},
+        )
+        self.assertEqual(
+            {report.wayside_id for report in out.not_ready()}, skipped)
+        for report in out.ctc_reports:
+            self.assertEqual(report.line, "Green")
+            self.assertEqual(
+                report.reason,
+                "" if report.ready else "no PLC program")
+        # A wayside that is ready is still held while another is not.
+        self.hold_is_total(out)
+
+    def test_the_whole_is_ready_only_when_every_wayside_is(self) -> None:
+        module = self.bare()
+        self.assertFalse(interface.TrackControllerOutputs().ready)
+        module.load_starter_programs()
+        out = _tick(module, ctc=self.suggest_all())
+        self.assertTrue(all(report.ready for report in out.ctc_reports))
+        self.assertTrue(out.ready)
+        self.assertEqual(out.not_ready(), ())
+
+    def test_readiness_crosses_the_wire_per_wayside(self) -> None:
+        module = self.bare()
+        first = module.wayside_ids[0]
+        module.load_program(
+            first, default_program_source(module.controller(first)), "a.plc")
+        out = _tick(module)
+        text = json.dumps(wire.outputs_to_wire(out))
+        back = wire.outputs_from_wire(json.loads(text))
+        self.assertEqual(back, out)
+        self.assertTrue(back.ctc_reports[0].ready)
+        self.assertFalse(back.ctc_reports[1].ready)
+        self.assertNotIn("ready", json.loads(text))
+        bad = json.loads(text)
+        bad["ctc_reports"][0]["ready"] = "yes"
         with self.assertRaises(WireFormatError):
             wire.outputs_from_wire(bad)
-        del bad["ready"]
+        del bad["ctc_reports"][0]["ready"]
         with self.assertRaises(WireFormatError):
             wire.outputs_from_wire(bad)
 

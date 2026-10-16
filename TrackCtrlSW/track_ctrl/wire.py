@@ -268,7 +268,10 @@ def _optional(value: Any, where: str, read: Callable[[Any, str], T]) -> Any:
 def _report_to_wire(report: CtcReport) -> dict[str, Any]:
     return {
         "wayside_id": report.wayside_id,
+        "line": report.line,
         "sent_at_s": report.sent_at_s,
+        "ready": report.ready,
+        "reason": report.reason,
         "blocks": _map_to_wire(
             report.blocks,
             lambda each: {
@@ -302,10 +305,16 @@ def _block_report_from_wire(value: Any, where: str) -> BlockReport:
 
 
 def _report_from_wire(value: Any, where: str) -> CtcReport:
-    entry = _object(value, where, {"wayside_id", "sent_at_s", "blocks"})
+    entry = _object(
+        value, where,
+        {"wayside_id", "line", "sent_at_s", "ready", "reason", "blocks"},
+    )
     return CtcReport(
         wayside_id=_text(entry["wayside_id"], f"{where}.wayside_id"),
+        line=_text(entry["line"], f"{where}.line"),
         sent_at_s=_seconds(entry["sent_at_s"], f"{where}.sent_at_s"),
+        ready=_flag(entry["ready"], f"{where}.ready"),
+        reason=_text(entry["reason"], f"{where}.reason"),
         blocks=_map_from_wire(
             entry["blocks"], f"{where}.blocks", _block_report_from_wire
         ),
@@ -316,7 +325,6 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
     """One tick of outputs as JSON-ready data."""
     model = outputs.track_model
     return {
-        "ready": outputs.ready,
         "track_model": {
             "track_circuits": _map_to_wire(
                 model.track_circuits, _circuit_to_wire
@@ -331,14 +339,13 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
 
 def outputs_from_wire(value: Any) -> TrackControllerOutputs:
     """Read one tick of outputs, rejecting anything not exactly right."""
-    top = _object(value, "outputs", {"ready", "track_model", "ctc_reports"})
+    top = _object(value, "outputs", {"track_model", "ctc_reports"})
     model = _object(
         top["track_model"], "outputs.track_model",
         {"track_circuits", "switch_commands", "crossing_commands",
          "signal_commands"},
     )
     return TrackControllerOutputs(
-        ready=_flag(top["ready"], "outputs.ready"),
         track_model=TrackModelOutputs(
             track_circuits=_map_from_wire(
                 model["track_circuits"],

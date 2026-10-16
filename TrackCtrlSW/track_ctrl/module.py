@@ -427,7 +427,6 @@ class SwTrackController:
             reports.append(report)
 
         return TrackControllerOutputs(
-            ready=self.ready,
             track_model=TrackModelOutputs(
                 track_circuits=circuits,
                 switch_commands=switches,
@@ -470,7 +469,15 @@ class SwTrackController:
                     if block.block_id in signal_blocks else None
                 ),
             )
-        return CtcReport(wayside_id, time_s, blocks)
+        ready = controller.program is not None
+        return CtcReport(
+            wayside_id=wayside_id,
+            line=wayside.line,
+            sent_at_s=time_s,
+            ready=ready,
+            blocks=blocks,
+            reason="" if ready else "no PLC program",
+        )
 
     # --- programs ------------------------------------------------------------
 
