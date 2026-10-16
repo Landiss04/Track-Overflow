@@ -94,6 +94,25 @@ Ivan's sizing and the failure banners that squeezed it were removed
       9 s at 30 mph (measured 8.6 s). Kept as is by decision (2026-10-15);
       `check.py` covers both halves.
 
+13. **Requirements not met by this module** (SRS `documents/srs-filled.md`,
+    checked 2026-10-15; documented only, by decision):
+    - **REQ-FUNC-036 / D007 — stop at each station, 45 s dwell.** Not
+      implemented. `Train-Ctrl_SW` has one (`_update_station_stop`), built on
+      route and block tracking that this module dropped; a port would key off
+      the beacon (station, side) and authority instead. Truth does not say
+      which module owns the dwell.
+    - **REQ-NFR-008 / REQ-INTF-015 — CSV event log.** None here, in
+      `Train-Ctrl_SW` or on `development`.
+    - **REQ-FUNC-003 / REQ-INTF-013 / D017 — pause and one shared clock.**
+      D017 puts the clock (`utils/system_clock.py`, on `development` only) in
+      the central harness, paused and sped up by the CTC. This module runs its
+      own timers: its clock starts at 00:00:00, not D017's 05:00:00, and
+      steps at 20 Hz, not the 0.1 s default tick. The 1× / 10× control is the
+      bench's stand-in.
+    - **REQ-INTF-010 — HW and SW expose equivalent interfaces.** Not checked
+      against `Train-Ctrl_SW`, which still has route tracking and no failure
+      detection.
+
 14. **How a failure clears once integrated — undecided.**
     Today only the test bench clears a latched failure (`clear_failure`, called
     when a bench failure row is set back to False); the driver then releases
@@ -113,25 +132,6 @@ Ivan's sizing and the failure banners that squeezed it were removed
     To be decided with Kevin (Train Model owner) and the team, through truth.
     - The toy plant's Brake State during a failed service brake (reads false) is
       the plant's own stand-in, not taken from truth `brake-state.md`.
-
-13. **Requirements not met by this module** (SRS `documents/srs-filled.md`,
-    checked 2026-10-15; documented only, by decision):
-    - **REQ-FUNC-036 / D007 — stop at each station, 45 s dwell.** Not
-      implemented. `Train-Ctrl_SW` has one (`_update_station_stop`), built on
-      route and block tracking that this module dropped; a port would key off
-      the beacon (station, side) and authority instead. Truth does not say
-      which module owns the dwell.
-    - **REQ-NFR-008 / REQ-INTF-015 — CSV event log.** None here, in
-      `Train-Ctrl_SW` or on `development`.
-    - **REQ-FUNC-003 / REQ-INTF-013 / D017 — pause and one shared clock.**
-      D017 puts the clock (`utils/system_clock.py`, on `development` only) in
-      the central harness, paused and sped up by the CTC. This module runs its
-      own timers: its clock starts at 00:00:00, not D017's 05:00:00, and
-      steps at 20 Hz, not the 0.1 s default tick. The 1× / 10× control is the
-      bench's stand-in.
-    - **REQ-INTF-010 — HW and SW expose equivalent interfaces.** Not checked
-      against `Train-Ctrl_SW`, which still has route tracking and no failure
-      detection.
 
 ## Carried over
 
