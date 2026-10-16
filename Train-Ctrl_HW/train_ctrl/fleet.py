@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 
+from .constants import TICK_S
 from .control import ControllerCore
 from .errors import (DuplicateTrainError, InvalidInputError,
                      TrainControllerError, UnknownTrainError)
@@ -71,7 +72,14 @@ class TrainControllerFleet:
         one train would refuse leaves the whole fleet unchanged. The
         toy plant does not run: the Train Model does the physics.
         Returns each train's commands to its Train Model.
+
+        ``dt`` must be TICK_S: the step is fixed at 0.1 s (truth D006 /
+        D017) and faster simulation means more ticks, never longer
+        ones. It is still passed, as TrainModelFleet takes it.
         """
+        if dt != TICK_S:
+            raise InvalidInputError(
+                f"dt must be the fixed {TICK_S} s step, not {dt!r}")
         unknown = sorted(set(inputs_by_id) - set(self._cores))
         if unknown:
             raise UnknownTrainError(f"inputs for unknown trains: {unknown}")
@@ -87,7 +95,6 @@ class TrainControllerFleet:
                   for train_id in self._cores}
         commands = {}
         for train_id, core in self._cores.items():
-            core.dt = dt
             core.apply_staged(staged[train_id])
             core.step(plant=False)
             commands[train_id] = core.commands()

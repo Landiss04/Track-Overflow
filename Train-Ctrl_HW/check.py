@@ -735,6 +735,14 @@ def run_check(
         pass
     expect(fleet.get("T-1").state.actual_mps == before,
            "a refused tick still changed the train")
+    # The step is truth's fixed 0.1 s; any other dt is refused whole.
+    try:
+        fleet.step_all(0.05, {"T-1": dict(full, actual_speed=9.0)})
+        expect(False, "a step other than 0.1 s was accepted")
+    except mod.InvalidInputError:
+        pass
+    expect(fleet.get("T-1").state.actual_mps == before,
+           "a refused dt still changed the train")
     fleet.step_all(0.1, {"T-1": full})
 
     # Announcements are commands (REQUIREMENTS.md M7): in Automatic a
@@ -782,20 +790,30 @@ def run_check(
     backend.set_target_mph(30)
     expect(backend.core.state.target_mps == 0.0,
            "the driver could set a target with no authority left")
-    # Commanded speed is the speed limit (REQUIREMENTS.md M1): it caps
-    # the driver's target when set, and in Automatic it is the target,
-    # even above the car's data-sheet 70 km/h.
+    # Commanded speed is the speed limit, never above the car's 70 km/h
+    # (REQUIREMENTS.md M1): it caps the driver's target when set, and in
+    # Automatic it is the target.
+    car_max_mph = mod.MAX_SPEED_MPS * mod.MPS_TO_MPH
     backend.apply_bench_inputs({"authority_blocks": 6,
                                 "commanded_speed": 40})
     backend.set_manual(True)
     backend.set_target_mph(55)
     expect(abs(backend.snapshot["target_mph"] - 40) < 0.5,
            "the driver's target was not capped at the commanded speed")
+    backend.apply_bench_inputs({"commanded_speed": 60})
+    backend.set_target_mph(55)
+    expect(abs(backend.snapshot["target_mph"] - car_max_mph) < 0.01,
+           "the driver's target went above the car's 70 km/h")
     backend.set_manual(False)
+    backend.apply_bench_inputs({"commanded_speed": 30})
+    backend.core.step(plant=False)
+    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 30) < 0.5,
+           "Automatic did not take the commanded speed as its target")
     backend.apply_bench_inputs({"commanded_speed": 60})
     backend.core.step(plant=False)
-    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 60) < 0.5,
-           "Automatic did not take the commanded speed as its target")
+    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH
+               - car_max_mph) < 0.01,
+           "Automatic targeted more than the car's 70 km/h")
     backend.set_manual(True)
     _settle(app, 300)
 

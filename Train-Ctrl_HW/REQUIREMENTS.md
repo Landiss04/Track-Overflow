@@ -17,7 +17,7 @@ module documentation is to be updated later (see §6).
 
 | # | Rule |
 |---|---|
-| M1 | **Commanded speed is the speed limit.** There is no separate speed limit. Automatic: the target is the commanded speed. Manual: the driver's target is capped at the commanded speed when set, then follows the driver exactly. |
+| M1 | **Commanded speed is the speed limit, never above the car's 70 km/h (43.5 mph).** There is no separate speed limit. Automatic: the target is the commanded speed, capped at 70 km/h. Manual: the driver's target is capped at the lower of the two when set, then follows the driver exactly. The Train Model has no governor (truth D009), so this cap is the controller's. |
 | M2 | **Emergency brake.** The driver engages it from the cab; a passenger can also engage it through the Train Model. It latches. **Only the driver releases it**, only at a stand (< 0.1 m/s) and with no failure latched. A Train Model report of "off" never releases it. The engineer has no e-brake control. |
 | M3 | **Failures are detected, not reported.** The Train Model no longer sends failure status; the controller infers engine, brake and signal pickup failures from the signals it gets back (§4). |
 | M4 | **A brake failure disables the service brake only.** On detection the controller applies and latches the emergency brake. |
@@ -66,7 +66,7 @@ module documentation is to be updated later (see §6).
 | NFR-003 / 004 | — | Validate input; reject without changing state | Met | All or nothing |
 | DSN-001 / 002 | — | Standalone executable | Deferred | |
 
-Not taken up, by decision: the 70 km/h car maximum (not needed), the
+Not taken up, by decision: the
 deck's trapezoidal PI form (the code sums rectangles; to consider later)
 and a stability analysis of Kp and Ki.
 
@@ -122,7 +122,7 @@ new one.
 | R6 | Automatic announcement command on a new station beacon; labels say a command is sent | `control.py` `apply_staged`; `backend.py`; `AnnouncementPanel.qml` |
 | R7 | `TICK_S` 0.1 s; 10× = 10 ms ticks; clock from 05:00:00 on simulated time. Curves unchanged from the 0.05 s step (0 → 43 mph in 42.4 s; 35 → 30 mph settles at 30.08) | `constants.py`, `control.py`, `backend.py`, `harness_sim.py` |
 | R8 | Bench Pause holds every train and the clock; Paused pill in both headers | `backend.py` `set_paused`; `ConsoleHeader.qml`; `TestInputsPanel.qml` |
-| R9 | `step_all` refuses a tick missing any `EVERY_TICK` signal; `harness_sim.py` sends the full set | `inputs.py`, `fleet.py`, `harness_sim.py` |
+| R9 | `step_all` refuses a tick missing any `EVERY_TICK` signal, and any `dt` other than `TICK_S` (0.1 s); `harness_sim.py` sends the full set | `inputs.py`, `fleet.py`, `harness_sim.py` |
 | R10 | A refused bench set shows a "Not sent" callout instead of raising from the slot | `backend.py` `apply_bench_inputs`; `TestInputsPanel.qml` |
 | R11 | `OPEN_ISSUES.md`: stale mass and SW references removed; items 16–22 added | `OPEN_ISSUES.md` |
 | R12 | Settle (30.08 mph) and detection delay (0.6 s = 0.5 s rule + one tick) agree across CHANGELOG, OPEN_ISSUES and code | `CHANGELOG.md`, `OPEN_ISSUES.md`, `constants.py` |

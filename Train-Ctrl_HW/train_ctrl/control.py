@@ -23,6 +23,7 @@ from .constants import (
     MASS_KG,
     MAX_FORCE_N,
     MAX_POWER_W,
+    MAX_SPEED_MPS,
     PICKUP_DETECT_MIN_BLOCKS,
     ROLLING_DECEL_MPS2,
     SERVICE_BAND_MPS,
@@ -126,9 +127,9 @@ class ControllerCore:
         self.detect_failures()
         if self.armed:
             if not s.manual:
-                # Commanded speed is the speed limit: no separate
-                # limit reaches this controller (REQUIREMENTS.md M1).
-                s.target_mps = self.commanded_mps
+                # Commanded speed is the speed limit, never above the
+                # car's 70 km/h (REQUIREMENTS.md M1).
+                s.target_mps = self.speed_cap_mps
             self._station_stop()
 
             error = s.target_mps - s.actual_mps
@@ -348,15 +349,25 @@ class ControllerCore:
         s.emergency_brake = False
         return True
 
+    @property
+    def speed_cap_mps(self) -> float:
+        """The fastest the train may be asked to go, in m/s.
+
+        The commanded speed, never above the car's 70 km/h
+        (REQUIREMENTS.md M1). The Train Model has no governor (truth
+        D009), so the cap is the controller's.
+        """
+        return min(self.commanded_mps, MAX_SPEED_MPS)
+
     def set_target_mps(self, mps: float) -> None:
-        """Set the driver's target in m/s, capped at commanded speed.
+        """Set the driver's target in m/s, capped at speed_cap_mps.
 
         Capped only when set: the target then follows the driver
         (REQUIREMENTS.md M1).
         """
         s = self.state
         if s.manual and self.authority_blocks > 0 and not self.failed:
-            s.target_mps = max(0.0, min(mps, self.commanded_mps))
+            s.target_mps = max(0.0, min(mps, self.speed_cap_mps))
 
     def platform_on(self, side: str) -> bool:
         """Whether the last beacon put a platform on this side."""

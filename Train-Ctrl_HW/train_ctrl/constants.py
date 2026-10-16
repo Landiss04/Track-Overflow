@@ -42,8 +42,8 @@ CABIN_DRIFT_MAX_C = 0.011
 MASS_KG = 51_433.0
 MAX_ACCEL_MPS2 = 0.5            # and the car will not exceed it
 MAX_FORCE_N = MASS_KG * MAX_ACCEL_MPS2
-# The car's data-sheet top speed: the speed dial's fixed full scale.
-# Not enforced; commanded speed is the limit (REQUIREMENTS.md M1).
+# The car's data-sheet top speed: no target goes above it, and it is
+# the speed dial's fixed full scale (REQUIREMENTS.md M1).
 MAX_SPEED_MPS = 70 / KMH_PER_MPS
 V_FLOOR_MPS = 1.0               # below which F = P / v is capped
 SERVICE_DECEL_MPS2 = 1.2
