@@ -42,10 +42,14 @@ Item {
                     unit: "mph"
                 }
 
+                // With signal pickup failed there is no Track Signal to
+                // show; the controller acts on 0, the driver sees "--".
                 HeroReadout {
+                    objectName: "commandedReadout"
                     Layout.fillWidth: true
-                    label: qsTr("Speed limit")
-                    value: Math.round(root.s.limit_mph)
+                    label: qsTr("Commanded speed")
+                    value: root.s.fault_pickup
+                        ? "--" : Math.round(root.s.commanded_mph)
                     unit: "mph"
                 }
 
@@ -59,11 +63,12 @@ Item {
                 // Authority is a count of blocks, not a distance, so
                 // this counts the blocks left rather than feet.
                 HeroReadout {
+                    objectName: "authorityReadout"
                     Layout.fillWidth: true
                     label: qsTr("Stop in")
-                    value: root.s.authority_blocks
+                    value: root.s.fault_pickup ? "--" : root.s.authority_blocks
                     valueColor: root.s.authority_blocks <= 1
-                        ? theme.signal_red : theme.text_primary
+                        ? theme.danger : theme.text_primary
                     unit: root.s.authority_blocks === 1 ? qsTr("block")
                                                         : qsTr("blocks")
                 }

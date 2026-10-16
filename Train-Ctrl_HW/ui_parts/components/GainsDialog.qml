@@ -24,8 +24,8 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: theme.scrim_color
-        opacity: theme.scrim_opacity
+        color: theme.text_primary
+        opacity: 0.45
 
         // Swallow presses meant for the console behind the dialog.
         MouseArea { anchors.fill: parent }
@@ -116,7 +116,7 @@ Item {
             AppButton {
                 variant: "ghost"
                 text: qsTr("Back to driver")
-                onClicked: controller.selectOperator(0)
+                onClicked: controller.select_operator(0)
             }
 
             AppButton {
@@ -125,7 +125,7 @@ Item {
                 size: "large"
                 text: qsTr("Set gains")
                 enabled: !root.s.gains_locked && kp.valid && ki.valid
-                onClicked: controller.commissionGains(Number(kp.text),
+                onClicked: controller.commission_gains(Number(kp.text),
                                                       Number(ki.text))
             }
         }

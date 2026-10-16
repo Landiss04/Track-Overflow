@@ -13,11 +13,16 @@ Panel {
 
     title: qsTr("Stop the train")
     headerItems: [
+        // What the brakes are actually doing, as the Train Model
+        // reports it (Brake State), not what was asked of them.
         StatusBadge {
-            label: root.s.emergency_brake ? qsTr("Emergency")
-                : root.s.service_request ? qsTr("Braking") : qsTr("Running")
-            variant: root.s.emergency_brake ? "fault"
-                : root.s.service_request ? "warning" : "ok"
+            label: root.s.fault_brake ? qsTr("Brake failure")
+                : root.s.fb_emergency_brake ? qsTr("Emergency")
+                : root.s.fb_service_brake ? qsTr("Braking")
+                : qsTr("Running")
+            variant: root.s.fault_brake || root.s.fb_emergency_brake
+                ? "fault"
+                : root.s.fb_service_brake ? "warning" : "ok"
         }
     ]
 
@@ -32,7 +37,7 @@ Panel {
         applied: root.s.emergency_brake
         text: root.s.emergency_brake ? qsTr("Release emergency brake")
                                      : qsTr("Emergency brake")
-        onClicked: controller.toggleEmergencyBrake()
+        onClicked: controller.toggle_emergency_brake()
     }
 
     // Guide 7 separation, so neither brake is hit by reaching for the
@@ -47,11 +52,13 @@ Panel {
         Layout.fillHeight: true
         Layout.preferredHeight: 100
         tone: "service"
-        enabled: root.s.can_drive
+        // A brake failure is the service brake failing; the emergency
+        // brake above stands in for it.
+        enabled: root.s.can_drive && !root.s.fault_brake
         applied: root.s.service_request
         text: root.s.service_request ? qsTr("Release service brake")
                                      : qsTr("Service brake")
-        onClicked: controller.toggleServiceBrake()
+        onClicked: controller.toggle_service_brake()
     }
 
     HelperText {

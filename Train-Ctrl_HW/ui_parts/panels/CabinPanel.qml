@@ -23,6 +23,8 @@ Panel {
         }
     ]
 
+    // Only the platform side opens; an open door can always be closed,
+    // so a door left open when the platform side changes is not stuck.
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
@@ -30,19 +32,21 @@ Panel {
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
+                && (root.s.platform_left || root.s.fb_doors_left)
             on: root.s.fb_doors_left
             tone: "info"
             text: root.s.fb_doors_left ? qsTr("Close left") : qsTr("Open left")
-            onClicked: controller.setDoor("left", !root.s.fb_doors_left)
+            onClicked: controller.set_door("left", !root.s.fb_doors_left)
         }
 
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
+                && (root.s.platform_right || root.s.fb_doors_right)
             on: root.s.fb_doors_right
             tone: "info"
             text: root.s.fb_doors_right ? qsTr("Close right") : qsTr("Open right")
-            onClicked: controller.setDoor("right", !root.s.fb_doors_right)
+            onClicked: controller.set_door("right", !root.s.fb_doors_right)
         }
     }
 
@@ -53,7 +57,7 @@ Panel {
         actual: root.s.cabin_temp_f
         interactive: root.s.can_drive
         onTargetRequested: function (degrees) {
-            controller.setTargetTemp(degrees);
+            controller.set_target_temp_f(degrees);
         }
     }
 
@@ -64,18 +68,21 @@ Panel {
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.fb_lights
-            text: root.s.fb_lights ? qsTr("Lights on") : qsTr("Lights off")
-            onClicked: controller.setLights(!root.s.fb_lights)
+            on: root.s.fb_interior_lights
+            text: root.s.fb_interior_lights ? qsTr("Interior on")
+                                            : qsTr("Interior off")
+            onClicked: controller.set_interior_lights(
+                !root.s.fb_interior_lights)
         }
 
         ToggleTile {
             Layout.fillWidth: true
             enabled: root.s.can_drive
-            on: root.s.fb_headlights
-            text: root.s.fb_headlights ? qsTr("Headlights on")
-                                    : qsTr("Headlights off")
-            onClicked: controller.setHeadlights(!root.s.fb_headlights)
+            on: root.s.fb_exterior_lights
+            text: root.s.fb_exterior_lights ? qsTr("Exterior on")
+                                            : qsTr("Exterior off")
+            onClicked: controller.set_exterior_lights(
+                !root.s.fb_exterior_lights)
         }
     }
 }
