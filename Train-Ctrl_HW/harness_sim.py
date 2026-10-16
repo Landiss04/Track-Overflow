@@ -19,14 +19,16 @@ from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 from train_ctrl import (  # noqa: E402
-    EBRAKE_DECEL_MPS2, MASS_KG, MAX_FORCE_N, SERVICE_DECEL_MPS2,
-    V_FLOOR_MPS, TrainControllerFleet, TrainModelCommands,
+    EBRAKE_DECEL_MPS2, MASS_KG, MAX_FORCE_N, MPS_TO_MPH, SERVICE_DECEL_MPS2,
+    V_FLOOR_MPS, TrainControllerFleet, TrainModelCommands, f_to_c,
 )
 from train_ctrl.app import run  # noqa: E402
 
 DT_S = 0.05                     # one harness tick, real time
-COMMANDED_MPS = 12.0            # what the stand-in CTC asks of every train
-
+COMMANDED_MPS = 55 / MPS_TO_MPH     # 55 mph
+CABIN_TEMP_C = f_to_c(75)           # 75 °F
+AUTHORITY_BLOCKS = 20
+SIGNAL_AHEAD = "GREEN"
 
 class StandInHarness:
     """Spawns trains and plays a minimal Train Model for each."""
@@ -38,9 +40,6 @@ class StandInHarness:
 
     def spawn(self, train_id: str) -> None:
         core = self.fleet.add(train_id, "GREEN LINE")
-        # Stand-in for commissioning: there is no harness-side way to
-        # arm a train yet, so the simulation arms it with the defaults.
-        core.armed = True
         self.speed[train_id] = 0.0
         print(f"spawned {train_id}: {len(self.fleet)} train controllers")
 
@@ -58,6 +57,9 @@ class StandInHarness:
                 "commanded_speed": COMMANDED_MPS,
                 "authority_blocks": 10,
                 "actual_speed": self.speed[train_id],
+                "cabin_temp": CABIN_TEMP_C,
+                "authority_blocks": AUTHORITY_BLOCKS,
+                "signal_light_ahead": SIGNAL_AHEAD,
                 # Echo the service brake so it is not taken for a
                 # failure. Emergency is reported only for a passenger
                 # pull, which this stand-in never makes.
