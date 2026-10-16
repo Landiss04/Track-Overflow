@@ -515,6 +515,16 @@ def run_check(
                    f"the {name} was never detected")
         expect(state.emergency_brake and state.power_w == 0.0,
                f"a detected {name} did not apply the emergency brake")
+        if key == "signal_pickup":
+            # No Track Signal to show: the console says so with "--"
+            # rather than a 0 that reads like a real command.
+            _settle(app, 200)
+            for readout in ("commandedReadout", "authorityReadout"):
+                tile = window.findChild(QObject, readout)
+                shown = tile.property("value") if tile else None
+                expect(shown == "--",
+                       f"{readout} showed {shown!r}, not '--', during "
+                       "a signal pickup failure")
         expect(_until(app, lambda: state.actual_mps == 0.0, 20),
                f"a detected {name} did not stop the train")
         if key == "brake" and shots:

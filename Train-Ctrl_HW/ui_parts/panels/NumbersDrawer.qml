@@ -83,7 +83,9 @@ ColumnLayout {
             KeyValueRow {
                 Layout.fillWidth: true
                 label: qsTr("Commanded speed")
-                value: root.mph(root.s.commanded_mph)
+                // No Track Signal to show with signal pickup failed.
+                value: root.s.fault_pickup ? "--"
+                                           : root.mph(root.s.commanded_mph)
             }
             KeyValueRow {
                 Layout.fillWidth: true
@@ -170,8 +172,9 @@ ColumnLayout {
                 // A count and an ID, not a measurement: neither is
                 // converted.
                 label: qsTr("Authority")
-                value: qsTr("%1 to block %2").arg(root.s.authority_blocks)
-                    .arg(root.s.authority_target)
+                value: root.s.fault_pickup ? "--"
+                    : qsTr("%1 to block %2").arg(root.s.authority_blocks)
+                        .arg(root.s.authority_target)
             }
             KeyValueRow {
                 Layout.fillWidth: true

@@ -148,11 +148,12 @@ Ivan's sizing and the failure banners that squeezed it were removed
   is connected.
 - **Signal aspect has no truth entry** (truth's Track Signal carries only
   commanded speed and authority); a proposal exists on `Train-Ctrl_SW` only.
-- **Authority as a block count** is pending the conflict proposals in
-  `truth/_inbox/Train-Ctrl_HW/` (Kevin to resolve).
 - **Service-brake amber and the 72 px hero readouts** (`brake_service` and
-  `size_hero` in `main.py` `PENDING_TOKENS`) are pending the style-guide
-  proposals in the same inbox.
+  `size_hero` in `main.py` `PENDING_TOKENS`) are pending one style-guide
+  proposal, `truth/_inbox/Train-Ctrl_HW/20261007-2059-style-guide-size-hero-token.md`,
+  which carries both tokens. Authority as a block count is no longer open:
+  truth D013 (2026-10-06) adopted it, so the three authority proposals and
+  the separate brake-service one were withdrawn (2026-10-15).
 - **Other sizes kept to Ivan's design but outside the style guide** (restored
   2026-10-07 at Jonathan's request): the speed and temperature dial figures are
   computed from the dial radius (`Math.max(32, r * 0.6)` and

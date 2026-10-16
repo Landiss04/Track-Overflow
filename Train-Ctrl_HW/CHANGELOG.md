@@ -24,7 +24,7 @@ venv) — 0 QML warnings, 0 behaviour problems at `700d83d`.
 | Failure detection | The Train Model no longer reports failures (truth), so the controller infers them from what it sends back (`detect_failures()`, REQ-FUNC-038): brake — service brake commanded but never shown applied for 0.5 s; engine — power that should pull ≥ 0.1 m/s² leaves the speed flat for 2 s; signal pickup — speed and authority drop to 0 together from ≥ 2 blocks. The bench's failure rows now inject into the toy plant (Murphy) and the controller has to find them. Rules are the team's own design (`OPEN_ISSUES.md` item 12). |
 | Any detected failure | Emergency brake applied and latched, power 0, target 0; Manual/Automatic switching and the driver's target refused. Latched until the failure is cleared on the test bench; the driver then releases the e-brake at a stand. |
 | Engine failure | Traction is zero in the plant; detected as above. |
-| Signal pickup failure | The plant passes zeros for commanded speed and authority; once detected they are treated as 0 until the bench clears it. The signal lights are unaffected. The console's commanded speed and "Stop in N blocks" show what the controller reads. |
+| Signal pickup failure | The plant passes zeros for commanded speed and authority; once detected they are treated as 0 until the bench clears it. The signal lights are unaffected. Once detected, the console shows "--" for commanded speed and "Stop in" (hero tiles and numbers drawer) rather than a 0 that reads like a real command. |
 | Brake failure | Only the service brake fails (truth `modules/train-model.md`); the emergency brake still works. Once detected, the controller applies the emergency brake, the driver's service request is dropped and the service brake is never commanded; the Stop panel's service brake is greyed out, the emergency brake stays live. Detected 0.6 s after the service brake is asked for, in Manual and Automatic. Rolling resistance (C_rr 0.002) still acts under an injected brake failure only. |
 | Emergency brake release | Only by the driver, only at a stand, and never while any detected failure is latched. A Train Model report of "off" never releases it (D011). |
 | Reported state | The toy plant reports Brake State `[emergency, service]` (service false while an injected brake failure blocks it; the plant's own stand-in), Door State with the door interlock (opens only at a stand), and Light State. Door and light commands are answered when pressed, including a repeat press after the interlock held a door shut. |
@@ -86,9 +86,10 @@ stopwatch (it failed 4 of 4 runs on Windows before).
 - Venv at `Train-Ctrl_HW/.venv` (PySide6 6.11.2, PyInstaller 6.22.2), per truth
   `conventions/toolchain.md`. Not committed.
 - `OPEN_ISSUES.md` and this file added.
-- Truth proposals in `truth/_inbox/Train-Ctrl_HW/` (5 files: authority as a
-  block count, as conflicts, in units / identifiers / track-signal; the
-  service-brake colour token; the 72 px hero size token). Not promoted.
+- Truth proposals in `truth/_inbox/Train-Ctrl_HW/`: one left, the 72 px
+  hero size token (which also carries the service-brake colour token). The
+  three authority proposals were settled by truth D013 and withdrawn with
+  the separate brake-service one (2026-10-15).
 
 ---
 
@@ -111,7 +112,8 @@ stopwatch (it failed 4 of 4 runs on Windows before).
 | `ee22c30` | 10-07 | Brakes locked out during a brake failure in both modes (**replaced** by the next row); service band 0.05 m/s; slow-down check added. |
 | `55d66c3` | 10-08 | Authority countdown back in the toy plant as a stand-in for the Track Model: one block per 100 m, part-blocks carried. `check.py` gives the drives 200 blocks and checks 2.5 blocks of travel spends 2. Open issue 11 (block lengths unknown; overrun above 34.6 mph). |
 | `962f823` | 10-15 | 480 kW; failures detected from returned signals, injected from the bench; brake failure = service brake only, e-brake applied; the bench clears failures; requirements gaps documented. |
-| (next) | 10-15 | Audit before push: 61 behaviour checks (no false detections in normal running at 1× and 10×, Manual and Automatic; each failure detected, latched, stopped, cleared from the bench; multi-train isolation). Engine failure at a steady cruise found undetectable on the toy plant (no resistance), documented with a check; how a failure clears once integrated logged as undecided (`OPEN_ISSUES.md` items 12–14). |
+| `3ffb11b` | 10-15 | Audit before push: 61 behaviour checks (no false detections in normal running at 1× and 10×, Manual and Automatic; each failure detected, latched, stopped, cleared from the bench; multi-train isolation). Engine failure at a steady cruise found undetectable on the toy plant (no resistance), documented with a check; how a failure clears once integrated logged as undecided (`OPEN_ISSUES.md` items 12–14). |
+| (next) | 10-15 | Signal pickup failure shows "--" for commanded speed and authority on the console (hero tiles and numbers drawer) instead of a 0 that reads like a real command; the controller still acts on 0. |
 
 ---
 
