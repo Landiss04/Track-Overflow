@@ -130,6 +130,8 @@ Defined in `track_model/interface.py`. Every value is in backend units
   speed, a block-changed flag, passenger capacity and whether a door is
   open. Block `""` means the train isn't on the track yet.
 - `ambient_temp_c`.
+- `sim_time_s` (optional): the central clock's time, for the window's
+  time of day only. Behaviour never depends on it.
 
 **Out (`TrackModelOutputs`):**
 

@@ -82,8 +82,8 @@ reach into the module's types from outside the harness.
 | 5 | Track Model → Train Controller | `track_model_to_train_controller(outputs, train_id)` | → `SignalAspect` or `None` | out, per train |
 | 6 | Track Model → CTC Office | `track_model_to_ctc_office` | → `TicketSales` | out, direct |
 
-`build_track_model_inputs(commands, reports, ambient_temp_c)` runs edges 1
-and 2 and returns one `TrackModelInputs`. Use it instead of assembling
+`build_track_model_inputs(commands, reports, ambient_temp_c, sim_time_s)`
+runs edges 1 and 2 and returns one `TrackModelInputs`. Use it instead of assembling
 the input by hand.
 
 ### 3.1 Into the Track Model
@@ -123,9 +123,12 @@ The Track Model gives each train the values of the block it is in.
 A train missing from the map has **left the track**. Do not drop a train
 from the map to mean "no report this tick"; send its last report.
 
-**Ambient temperature** (°C) is the third argument to
-`build_track_model_inputs`. If a person sets it in the Track Model window,
-that value replaces yours until the module is reset.
+**Ambient temperature** (°C) is set by a person in the Track Model
+window (Conditions, in °F). That value is the source and replaces whatever
+the harness sends until the module is reset (**Reset module** or **Load
+track…**). `ambient_temp_c` is still a required input, so the harness
+passes a fixed default (the example uses 15 °C) that applies only until
+someone sets it in the window. After a reset the default applies again.
 
 ### 3.2 Out of the Track Model
 
@@ -180,25 +183,13 @@ order and keep it.
 `dt` is `clock.tick_s` (0.1 s). Never scale it with speed (D006). At 10x
 the harness simply ticks ten times as often.
 
-### 4.2 Dispatch and the yard
-
-- **Dispatch.** A new train has no block yet, so it gets no feed. The
-  harness must send the Track Model that train's first report itself, at
-  its starting block with `offset_m = 0`. The next `step` returns its
-  first feed. A train placed on `Yard-63` counts as coming out of the
-  yard and heads onto the line.
-- **Into the yard.** When a train runs into the yard,
-  `track_model_to_train_model` returns `None`. The harness should stop
-  stepping that Train Model and drop it from the reports map.
-
-### 4.3 Errors
-
-`step` validates the whole input first and, on a bad input, raises
-`InvalidInputError` (or `UnknownIdError` for a block, switch, crossing,
-signal or section that is not in the layout) and **changes nothing**. The
-harness should catch `TrackModelError`, log it, and skip that tick rather
-than stop the clock. The usual causes are a wrong ID format, a
-non-integer speed, or a non-finite number.
+**Simulation time.** The central clock owns time. Pass
+`clock.sim_time_s` as the `sim_time_s` argument of
+`build_track_model_inputs` every tick. The Track Model uses it only for
+the time of day in its window (24-hour `HH:MM:SS`, wrapping at midnight,
+D017). Its behaviour is driven by `dt`, never by this value. If you send
+none (`None`), the window shows the sum of the `dt` values it has been
+stepped by. A negative or non-finite value rejects the tick.
 
 ---
 
@@ -255,7 +246,9 @@ def on_tick(sim_time_s: float, dt: float) -> None:
     commands: WaysideCommands = ...      # Track Controller, via harness
     try:
         outputs = track.step(
-            dt, build_track_model_inputs(commands, reports, ambient_c)
+            dt, build_track_model_inputs(
+                commands, reports, ambient_c, sim_time_s
+            )
         )
     except TrackModelError as error:
         print(f"Track Model rejected tick: {error}")
@@ -338,7 +331,8 @@ call them from the harness.
 
 - [ ] Repo root and `TrackModel/` both on `sys.path`.
 - [ ] One `TrackModel` constructed with every `*_line.json`.
-- [ ] One `SystemClock`; `dt = clock.tick_s` in every `step` call.
+- [ ] One `SystemClock`; `dt = clock.tick_s` and
+      `sim_time_s = clock.sim_time_s` in every `step` call.
 - [ ] Commands and reports built only through the edge functions.
 - [ ] Block IDs in the `"<LINE> <section>-<number>"` form everywhere
       (`GREEN D-13`); section IDs as `"<LINE> <section>"` (`GREEN D`).
@@ -368,3 +362,4 @@ Track Model owner's reading as of this branch; none is a decision.
 | Authority as block count | all | D013 is on `truth`; the module's boundary types follow it. |
 | Offset restarts at 0 per block | Train Model | Holds in the Train Model's code but is not recorded in `truth`. |
 | Clock speed command | CTC Office | `clock-speedup` is a boolean to the harness. The harness maps it to `SystemClock.set_speed(1 or 10)`. |
+| Ambient temperature source | Track Model owner | Set in the Track Model window; the harness passes a default until then. |
