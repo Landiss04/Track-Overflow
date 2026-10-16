@@ -85,6 +85,19 @@ class ClockSpeedupTest(unittest.TestCase):
         self.assertIn(True, changes)
 
 
+class ClockPausedTest(unittest.TestCase):
+    """The window's Run / Pause is the module's clock_paused output."""
+
+    def test_run_and_pause_drive_clock_paused(self) -> None:
+        host, module, clock = _host()
+        # The clock starts paused, and so does the output.
+        self.assertTrue(module.snapshot().outputs.clock_paused)
+        clock.resume()
+        self.assertFalse(module.snapshot().outputs.clock_paused)
+        clock.pause()
+        self.assertTrue(module.snapshot().outputs.clock_paused)
+
+
 class TickTest(unittest.TestCase):
     """The clock steps the module with the latest inputs."""
 

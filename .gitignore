@@ -1,6 +1,7 @@
 .vscode
 .claude
 __pycache__/
+TrackCtrlHw/docs/presentation-quiz.html
 *.pyc
 scaling-report.txt
 /build/

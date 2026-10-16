@@ -227,6 +227,12 @@ def output_rows(outputs: CtcOutputs,
         "value": outputs.clock_speedup,
         "unit": "",
     })
+    rows.append({
+        "name": "clock_paused",
+        "kind": "bool",
+        "value": outputs.clock_paused,
+        "unit": "",
+    })
     rows.append({"name": "elapsed", "kind": "float",
                  "value": round(elapsed_s, 1), "unit": "s"})
     return rows

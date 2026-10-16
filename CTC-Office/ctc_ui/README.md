@@ -80,7 +80,8 @@ other:
 - **Outputs** update live from the module, in display units (mph): what
   the CTC sends the Track Controller (per train, the block its head is
   in with its suggested speed and authority; closed blocks; switch
-  commands) and the central harness (clock speedup), so the effect of
+  commands) and the central harness (clock speedup and clock pause), so
+  the effect of
   each action taken in the CTC window shows here.
 - Errors (an unknown block, a switch outside maintenance mode) show in
   the status line of the window where the action was taken.
@@ -118,7 +119,11 @@ yet) through `ctc_ui/ctc_host.py`:
   real second. The CTC owns the one shared clock until the central harness
   takes it over. The speed is also the CTC's `clock_speedup` output (true
   at 10×), the command the central harness will relay to every module so
-  they all run at one speed.
+  they all run at one speed, and Run / Pause is its `clock_paused` output
+  (true while paused; the simulation starts paused), the command the
+  harness pauses and resumes the shared clock on. No step happens while
+  the clock is paused, so the harness reads `clock_paused` from
+  `snapshot()` as well as from `step()`.
 - The **Operating mode** toggle switches the right-hand column between the
   Automatic, Manual, and Maintenance views. Maintenance lets the
   dispatcher close blocks and set switches; leaving it releases every
@@ -300,7 +305,8 @@ the context-property pattern shared with the Train Model UI.
 - `ctc/interface.py` is the CTC's boundary (decision D005): inputs from
   the Track Controller and Track Model, outputs to the Track Controller
   (suggested speed and authority, closed blocks, switch commands,
-  maintenance mode) and to the central harness (clock speedup), and the
+  maintenance mode) and to the central harness (clock speedup and clock
+  pause), and the
   `CtcOffice` contract (`step(dt, inputs) -> outputs`, `validate_inputs`,
   dispatcher actions and `load_schedule`). Every block, switch and
   crossing reference carries its line.

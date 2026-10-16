@@ -124,10 +124,16 @@ unprogrammed wayside stalls them all. The header shows **Not ready** and says
 what is missing. Loading a new line, or `reset()`, makes a ready module not
 ready again.
 
-`TrackControllerOutputs.ready` carries this to the CTC Office every tick, so it
-knows it is safe to dispatch trains and send speeds and authorities. The CTC
-Office must send nothing until it is true; the stand-in CTC in the test UI does
-exactly that. For a demo, **Load starters** in the header (or `python main.py
+Readiness is reported **per wayside, and so per line**: each wayside's
+`CtcReport` carries its line, a `ready` flag (it has a program) and a `reason`
+(`no PLC program`), so the CTC Office, and anyone debugging, can see exactly
+which waysides are not ready. There is no module-level flag on the wire.
+`TrackControllerOutputs.ready` is derived: true only when at least one wayside
+reports and all of them are ready, and `.not_ready()` lists the ones that are
+not. A wayside that is ready is still held while another is not, since the track
+is only safe with every wayside running. The CTC Office must dispatch nothing and
+send no speed or authority, on any line, until the whole is ready; the stand-in
+CTC in the test UI does exactly that. For a demo, **Load starters** in the header (or `python main.py
 --load-starters`) commits a generated program to every wayside that has none.
 
 ## The module boundary
@@ -146,7 +152,7 @@ knows and does not:
   occupied block. There is no failure input.
 - **No heaters.** The Track Model switches them from the temperature.
 
-A module-level `ready` flag goes out with the outputs: see **Startup**.
+Each wayside's report carries its own `ready`: see **Startup**.
 
 Inputs, every tick (`TrackControllerInputs`): from the CTC Office the closed
 blocks, switch commands (line, switch, position) and a suggested speed and

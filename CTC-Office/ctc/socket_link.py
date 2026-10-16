@@ -351,6 +351,9 @@ class SocketLink(QObject):
     def set_clock_speedup(self, active: bool) -> None:
         self._call("set_clock_speedup", active=active)
 
+    def set_clock_paused(self, paused: bool) -> None:
+        self._call("set_clock_paused", paused=paused)
+
     def reset(self) -> None:
         """Not available: the module belongs to the CTC Office."""
 

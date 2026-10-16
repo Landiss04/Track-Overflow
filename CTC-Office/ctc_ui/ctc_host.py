@@ -211,13 +211,18 @@ class CtcHost(QObject):
     # -- Clock --------------------------------------------------------
 
     def follow_clock(self, clock: SimulationClockBridge) -> None:
-        """Step the module on the window's clock, and keep
-        clock_speedup in step with its speed."""
+        """Step the module on the window's clock, and keep the
+        clock_speedup and clock_paused outputs in step with it."""
         def apply_speed() -> None:
             # speedChanged also fires on pause; repeats are ignored.
             self.setClockSpeedup(clock.speed == SPEEDUP_FACTOR)
+
+        def apply_paused() -> None:
+            self.setClockPaused(clock.paused)
         clock.speedChanged.connect(apply_speed)
+        clock.pausedChanged.connect(apply_paused)
         apply_speed()
+        apply_paused()
         self._first_hour = self._current_hour = _hour(clock.clock.sim_time_s)
         self._clock = clock
         clock.pausedChanged.connect(self.noticesChanged)
@@ -810,6 +815,13 @@ class CtcHost(QObject):
         """Apply the window's clock speed (10x is True) to the module."""
         if active != self.clockSpeedup:
             self._act(self._module.set_clock_speedup, active)
+
+    @Slot(bool)
+    def setClockPaused(self, paused: bool) -> None:  # noqa: N802
+        """Apply the window's Run / Pause to the module's clock_paused
+        output, for the central harness."""
+        if paused != self._module.snapshot().outputs.clock_paused:
+            self._act(self._module.set_clock_paused, paused)
 
     # -- Schedule -----------------------------------------------------
 
