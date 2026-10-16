@@ -321,7 +321,7 @@ class Wayside:
             line=territory.line,
             sent_at_s=time_s,
             ready=not reason,
-            not_ready_reason=reason,
+            reason=reason,
             blocks={
                 key: BlockReport(
                     occupied=key in occupied,

@@ -242,7 +242,7 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
                 "line": report.line,
                 "sent_at_s": report.sent_at_s,
                 "ready": report.ready,
-                "not_ready_reason": report.not_ready_reason,
+                "reason": report.reason,
                 "blocks": _entries(
                     report.blocks,
                     lambda b: {
@@ -273,7 +273,7 @@ def outputs_from_wire(data: Any) -> TrackControllerOutputs:
             line=_text(report, "line"),
             sent_at_s=_number(report, "sent_at_s"),
             ready=_flag(report, "ready"),
-            not_ready_reason=_reason(report, "not_ready_reason"),
+            reason=_reason(report, "reason"),
             blocks=_from_entries(
                 report.get("blocks"), "blocks",
                 lambda r: BlockReport(

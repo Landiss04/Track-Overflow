@@ -402,7 +402,7 @@ class Report(unittest.TestCase):
         self.assertEqual(first.sent_at_s, 3600.0)
         self.assertEqual(first.line, "Green")
         self.assertTrue(first.ready)
-        self.assertEqual(first.not_ready_reason, "")
+        self.assertEqual(first.reason, "")
         self.assertEqual(len(first.blocks), 20)
         self.assertTrue(first.blocks[k["4"]].occupied)
         self.assertEqual(first.blocks[k["12"]].switch_position, "normal")
@@ -437,13 +437,14 @@ class Ready(unittest.TestCase):
                          ("No wayside database is loaded.",))
         out = controller.step(0.1, TrackControllerInputs(time_s=1.0))
         self.assertEqual(out.ctc_reports, ())
+        self.assertFalse(out.ready)
 
     def test_a_wayside_without_a_program_is_not_ready(self) -> None:
         controller = loaded(1, programs=False)
         out, _ = circuits(controller)
         (report,) = out.ctc_reports
         self.assertFalse(report.ready)
-        self.assertEqual(report.not_ready_reason, "No PLC program is loaded.")
+        self.assertEqual(report.reason, "No PLC program is loaded.")
         self.assertEqual(controller.snapshot().not_ready,
                          ("Wayside 1: No PLC program is loaded.",))
 
@@ -458,6 +459,8 @@ class Ready(unittest.TestCase):
         # Wayside 1 is started up, and says so, but holds fail-safe.
         self.assertTrue(first.ready)
         self.assertFalse(second.ready)
+        self.assertFalse(out.ready)
+        self.assertEqual(out.not_ready(), (second,))
         self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
         self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
         self.assertTrue(out.track_model.crossing_commands[k["19"]])
@@ -469,6 +472,7 @@ class Ready(unittest.TestCase):
             controller, occupied=["1"], suggestions={"3": (10, 4)}
         )
         self.assertTrue(all(r.ready for r in out.ctc_reports))
+        self.assertTrue(out.ready)
         self.assertTrue(controller.snapshot().ready)
         self.assertEqual(by_number["3"], TrackCircuitCommand(10, 4))
         self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
@@ -485,7 +489,7 @@ class Ready(unittest.TestCase):
         with mock.patch.object(Program, "scan_b", broken):
             out, _ = circuits(controller)
         self.assertFalse(out.ctc_reports[0].ready)
-        self.assertIn("AUTH_3", out.ctc_reports[0].not_ready_reason)
+        self.assertIn("AUTH_3", out.ctc_reports[0].reason)
 
     def test_ready_survives_a_new_program_and_a_reset(self) -> None:
         controller = loaded(1)

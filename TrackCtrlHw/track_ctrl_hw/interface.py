@@ -247,9 +247,9 @@ class CtcReport:
     # Every wayside of a line holds its fail-safe outputs while any one
     # is not ready, so a ready wayside may still be held.
     ready: bool
-    # Why it is not ready, or "".
-    not_ready_reason: str
     blocks: Mapping[BlockKey, BlockReport] = field(default_factory=dict)
+    # Why it is not ready, or "" when it is.
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +259,21 @@ class TrackControllerOutputs:
     track_model: TrackModelOutputs = field(default_factory=TrackModelOutputs)
     # One report per wayside, in the order the waysides were loaded.
     ctc_reports: tuple[CtcReport, ...] = ()
+
+    @property
+    def ready(self) -> bool:
+        """Whether the whole module is started up: derived, not sent.
+
+        True only when at least one wayside reports and every one is
+        ready.
+        """
+        return bool(self.ctc_reports) and all(
+            report.ready for report in self.ctc_reports
+        )
+
+    def not_ready(self) -> tuple[CtcReport, ...]:
+        """The reports of the waysides that are not ready."""
+        return tuple(r for r in self.ctc_reports if not r.ready)
 
 
 # ------------------------------------------------------------------ #

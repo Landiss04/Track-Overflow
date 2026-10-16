@@ -185,7 +185,7 @@ class TrackControllerState(QObject):
             "notReady": " ".join(snapshot.not_ready),
             "reportReady": "" if report is None
             else "Ready" if report.ready
-            else f"Not ready: {report.not_ready_reason}",
+            else f"Not ready: {report.reason}",
             "maintenance": "" if wayside is None
             else views.maintenance_text(wayside),
             "testUi": self._server.connected,

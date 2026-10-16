@@ -525,8 +525,8 @@ class TestHarness(QObject):
         self._ctc_outputs.set_rows([
             # Per wayside, not per block: the selected block's wayside.
             row("ready", "bool", None if report is None else report.ready),
-            row("not_ready_reason", "string",
-                None if report is None else report.not_ready_reason),
+            row("reason", "string",
+                None if report is None else report.reason),
             row("block_occupancy", "bool",
                 None if entry is None else entry.occupied),
             row("switch_state", "enum",

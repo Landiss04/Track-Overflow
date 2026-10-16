@@ -123,17 +123,22 @@ harness can send the whole line.
 | `track_model.signal_commands` | Track Model | `{signal block: aspect}` |
 | `ctc_reports` | CTC Office | One `CtcReport` per wayside, every tick |
 
-A `CtcReport` is `wayside_id`, `line`, `sent_at_s`, `ready`,
-`not_ready_reason`, and `blocks: dict[BlockKey, BlockReport]` — the block key
-mapped to that block's `occupied`, `switch_position`, `signal_aspect` and
-`crossing_active`. Switch, signal and crossing fields are `None` where the block
-has none, and are the state the Track Model reports, not the command. A failed
-block reports occupied.
+`TrackControllerOutputs.ready` is derived, not sent: true when at least one
+wayside reports and every one is ready. `not_ready()` lists the reports that
+are not.
+
+A `CtcReport` is `wayside_id`, `line`, `sent_at_s`, `ready`, `blocks:
+dict[BlockKey, BlockReport]` and `reason` — each block key mapped to that
+block's `occupied`, `switch_position`, `signal_aspect` and `crossing_active`.
+Switch, signal and crossing fields are `None` where the block has none, and are
+the state the Track Model reports, not the command. A failed block reports
+occupied. The shape is the software Track Controller's.
 
 ### Ready
 
 A wayside is **ready** once a PLC program is loaded on it and its two channels
-agree; `ready` and `not_ready_reason` say so in its report, every tick. The
+agree; `ready` and `reason` (why not, or `""`) say so in its report, every
+tick. The
 track is safe only with every wayside running its program, so the whole line
 stalls with any part: while one wayside is not ready, every wayside holds its
 fail-safe outputs, a ready one included. A controller with no database loaded
@@ -152,7 +157,8 @@ decided. The CTC Office's interface is the one on `ctc-deployment`.
 2. **Reports.** The CTC Office takes occupancy, switch and crossing state as
    flat lists keyed by line and ID; the harness flattens each `CtcReport`.
 3. **Ready.** The CTC Office takes one `ready` per line; this module reports
-   one per wayside. A line is ready when every wayside's report says so.
+   one per wayside. A line is ready when every wayside's report says so, which
+   is `TrackControllerOutputs.ready` for this module's line.
 4. **PLC names.** `CTCSW_n`, `CTCREV_n`, `SPD_n_b` and `CMD_n_b` are this
    module's; the software Track Controller still uses `MAINT` and has no speed
    bits, so one program file no longer runs on both (REQ-INTF-009).
@@ -198,10 +204,12 @@ The three samples are exact cuts of `TrackModel/green_line.json`:
 
 ## PLC language
 
-The grammar is the software Track Controller's, so one program file runs on
-either variant (REQ-INTF-009). This implementation is written separately: the
-variants share a language, not code. Full grammar in `track_ctrl_hw/plc.py`;
-the names a program can use are in `track_ctrl_hw/wayside.py`:
+The grammar is the software Track Controller's (proposed D016). This
+implementation is written separately: the variants share a language, not code.
+The names a program uses differ between the variants (see edge mapping 4), so a
+program written for one does not yet load on the other. Full grammar in
+`track_ctrl_hw/plc.py`; the names a program can use are in
+`track_ctrl_hw/wayside.py`:
 
 ```
 VAR_IN  OCC_1..20 CLOSED_13 SWREV_12 CTCSW_12 CTCREV_12   // inputs
