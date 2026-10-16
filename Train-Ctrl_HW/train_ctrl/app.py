@@ -1,9 +1,10 @@
 """Open the console and the bench, wired to one backend.
 
 main.py decides which windows; this builds the Qt application, the
-backend QML reads as `controller`, and the windows themselves. The
-backend starts with an empty roster: trains are spawned from the
-bench, not here.
+backend QML reads as `controller`, and the windows themselves.
+Standalone, the backend starts with an empty roster and the bench
+spawns trains. Given a central harness's fleet, the harness spawns
+and steps them and the console shows them.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from PySide6.QtQuick import QQuickWindow  # noqa: F401
 from check import check_snapshot_contract, run_check
 from ui.aspect_lock import install_window_scaling
 
+from .fleet import TrainControllerFleet
 from .backend import ConsoleBackend
 from .console_theme import build_console_theme, check_shared_library
 
@@ -32,11 +34,14 @@ _TEST_QML = _UI_DIR / "TestWindow.qml"
 
 
 def run(console: bool, bench: bool, check: bool = False,
-        shots: Path | None = None) -> int:
+        shots: Path | None = None, 
+        fleet: TrainControllerFleet | None = None) -> int:
     """Open the requested windows and run until they close.
 
-    With ``check`` it runs offscreen instead, drives a session
-    through both windows, and returns non-zero on any problem.
+    ``fleet`` is a central harness's TrainControllerFleet; without
+    one the console owns its own. With ``check`` it runs offscreen
+    instead, drives a session through both windows, and returns
+    non-zero on any problem.
     """
     if check:
         # Must be set before QGuiApplication is constructed.
@@ -47,7 +52,7 @@ def run(console: bool, bench: bool, check: bool = False,
         qInstallMessageHandler(
             lambda kind, context, message: warnings.append(message))
 
-    app = QGuiApplication(sys.argv)
+    app = QGuiApplication.instance() or QGuiApplication(sys.argv)
     app.setApplicationName("Train Controller")
 
     theme = build_console_theme()
@@ -58,7 +63,7 @@ def run(console: bool, bench: bool, check: bool = False,
 
     # Keep a Python reference so it is not garbage collected while
     # QML holds only a C++ pointer to it.
-    backend = ConsoleBackend()
+    backend = ConsoleBackend(fleet=fleet)
 
     if not check_shared_library():
         return 1

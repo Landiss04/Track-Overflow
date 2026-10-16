@@ -1,7 +1,7 @@
 """HW Train Controller: control law, fleet and Qt bridge.
 
-Importing the package does not import Qt. The bridge is
-train_ctrl.backend and has to be imported by name.
+Importing the package does not import Qt. The Qt modules,
+train_ctrl.backend and train_ctrl.app, have to be imported by name.
 """
 
 from .constants import *  # noqa: F401,F403

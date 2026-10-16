@@ -51,13 +51,17 @@ class ConsoleBackend(QObject):
     ROLES = ("driver", "engineer")
     ENGINEER_INDEX = ROLES.index("engineer")
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None, *,
+                 fleet: TrainControllerFleet | None = None) -> None:
         super().__init__(parent)
-        # One controller per train, each with its own toy plant here.
-        # They all run; the console and the bench look at whichever
-        # one is selected.
-        self.fleet = TrainControllerFleet()
-        self.selected = ""
+        # Standalone, the console owns its fleet and steps every train
+        # with the toy plant. Given the central harness's fleet, the
+        # harness adds, removes and steps the trains; the console only
+        # shows them and takes the operator's actions.
+        self._owns_fleet = fleet is None
+        self.fleet = fleet if fleet is not None else TrainControllerFleet()
+        self._roster: tuple[str, ...] = tuple(self.fleet.ids())
+        self.selected = self._roster[0] if self._roster else ""
         self.notes: dict[str, str] = {}
         self.announcing: set[str] = set()
         self.sim_rate = 1
@@ -74,9 +78,10 @@ class ConsoleBackend(QObject):
         # rather than every binding needing a null check.
         self.idle = ControllerCore()
 
-        self._control = QTimer(self)
-        self._control.timeout.connect(self._step_all)
-        self._control.start(int(1000 / CONTROL_HZ))
+        if self._owns_fleet:
+            self._control = QTimer(self)
+            self._control.timeout.connect(self._step_all)
+            self._control.start(int(1000 / CONTROL_HZ))
 
         self._ui = QTimer(self)
         self._ui.timeout.connect(self._tick)
@@ -102,7 +107,7 @@ class ConsoleBackend(QObject):
         self.notes[train_id] = ""
         self.selected = train_id
         self.spawn_note = f"{train_id} spawned on the {line.lower()}."
-        self.roster_changed.emit()
+        self._sync_roster()
         return train_id
 
     def drop_train(self, train_id: str) -> bool:
@@ -126,8 +131,19 @@ class ConsoleBackend(QObject):
                 if remaining else ""
             )
         self.spawn_note = f"{train_id} removed."
-        self.roster_changed.emit()
+        self._sync_roster()
         return True
+    
+    def _sync_roster(self) -> None:
+        # The harness changes the fleet without telling the console,
+        # so the roster is compared once per UI tick.
+        ids = tuple(self.fleet.ids())
+        if ids == self._roster:
+            return
+        self._roster = ids
+        if self.selected not in self.fleet:
+            self.selected = ids[0] if ids else ""
+        self.roster_changed.emit()
 
     def _step_all(self) -> None:
         for core in self.fleet:
@@ -606,6 +622,7 @@ class ConsoleBackend(QObject):
 
     # ----------------------------------------------------------- ticks
     def _tick(self) -> None:
+        self._sync_roster() 
         if self.core.armed:
             self.elapsed = self.elapsed.addMSecs(
                 int(1000 / UI_HZ) * self.sim_rate)
