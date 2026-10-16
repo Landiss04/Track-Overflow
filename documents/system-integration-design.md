@@ -2,76 +2,159 @@
 
 | | |
 |---|---|
-| **Status** | Initial draft v0.1, for team review. Not normative. |
+| **Status** | Draft v0.2, revised after the team's review of v0.1. Not normative. |
 | **Date** | 2026-10-16 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
-| **Basis** | `development` at `c3f317a`; `truth` at `f7c52c1`; all remote branches as fetched on 2026-10-16; test runs of 2026-10-16 |
+| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; test runs of 2026-10-16 |
 
 The `truth` branch is the authoritative record. This document cites it by shard path
 (`origin/truth:truth/<path>`, shortened below to the shard name) and does not override it.
 Where a fact is missing or contested, the document records a gap (section 6) instead of
-choosing a value. Where it recommends something, it says so and names the decision that has
-to be made first. Nothing here is filled in silently.
+choosing a value. Nothing here is filled in silently.
+
+**Changes since v0.1**
+
+- Section 1 records the team's decisions (R1 to R32) and the questions still open.
+- Every gap in section 6 is marked Resolved, Partly resolved, Closed or Open. Section 6.7
+  adds risks found while checking the decisions against the code.
+- The process model is one process per module (section 4.5). The tick model is concurrent,
+  and each module sees its inputs only on the clock's rising edge (section 4.3).
+- The event logger is out of the plan. Its conflict with the SRS is filed as a `truth`
+  proposal.
+- Section 3 was re-read at `1aaa9a8`, on the open branches, and on
+  [Landiss04/Track-Overflow#43](https://github.com/Landiss04/Track-Overflow/pull/43).
+- Section 7 lists the sixteen proposals filed from this work, plus a promote-or-deny
+  recommendation for every other pending proposal that the decisions touch.
 
 **Tags**
 
 | Tag | Meaning |
 |---|---|
 | [T] | Normative fact on `truth`. |
-| [U] | Stated by Kevin Schillinger on 2026-10-16 when requesting this design. Statements new to `truth` were filed as proposals (section 7.1). |
+| [R*n*] | Decision *n* from the team's review of v0.1 on 2026-10-16, as stated by Kevin Schillinger (section 1). Statements new to `truth` were filed as proposals (section 7). |
+| [U] | Stated by Kevin Schillinger on 2026-10-16 when requesting this design. |
 | [P] | Pending proposal under `truth/_inbox/`. Not a fact. |
-| [C] | Observed in code at `c3f317a`: current behaviour, not a decision. |
-| [D] | Stated in a project document: SRS, course deck, interface dictionary, module README, or meeting log. |
-| G-… | Open gap or question, listed in section 6. |
+| [C] | Observed in code at `1aaa9a8`, unless another ref is named. Current behaviour, not a decision. |
+| [D] | Stated in a project document: SRS, course deck, module README or guide, or meeting log. |
+| G-… | Gap or question, listed in section 6. |
+| Q*n* | Open question for the team, listed in section 1.3. |
 
-## 1. Decisions needed first
+## 1. Decisions and open questions
 
-These block the harness core or the first end-to-end run. That run is graded at Iteration 3
-on 2026-11-12. Evidence for each is in section 6.
+### 1.1 The ten questions of v0.1
 
-| # | Question | Gap |
+Quotes are verbatim from the review.
+
+| # | v0.1 question | Decision | What it settles | What it leaves open |
+|---|---|---|---|---|
+| R1 | What "in parallel" means | "Direct fan out to the modules. Modules only see inputs on the rising clock edge" | The harness sends every tick straight to every module, and no module relays it. A module steps on the inputs delivered with tick *k*. Because the steps run at the same time (R4), those inputs come from outputs of tick *k*−1. | Whether the harness waits for every reply before the next tick (G-CLK-11) |
+| R2 | What each module receives per tick | "Send both dt and sim time" | Every module receives dt and the simulation time. | Which simulation time: unwrapped, or time of day (G-CLK-2) |
+| R3 | How pause and resume reach the harness | "Clock_paused and clock speedup signals were added to the ctc" | The CTC Office's `clock_paused` and `clock_speedup` outputs carry pause, resume and speed. | How the harness reads `clock_paused` while nothing is stepped (G-CLK-3) |
+| R4 | One process, or one per module | "Central harness is one process that spawns processes for each module, the whole thing runs as one exe". Section 4.3: "Option C". Section 4.5: "Process model 2. One process per module chosen" | Process model 2 and tick option C. | The harness-to-module protocol, liveness and packaging (G-RUN-2, G-RUN-6, G-RUN-7) |
+| R5 | What makes the HW variants hardware; which variant runs where | "The HW variants run on Raspberry pis and communicate with the host pc via USB. HW on the red line and SW on the green. If a train is on the green line it gets SW train controller on red a HW controller" | Track Controller: HW on Red, SW on Green. Train Controller: chosen by the line the train is on. | The USB link, and the Blue Line (G-HW-1, Q11) |
+| R6 | The canonical block identifier | "Follow the block identifier used in the CTC module" | Line and block number as strings, for example `("Green", "63")`. This matches [T] `conventions/identifiers.md`. | How the case of line names fits R17 (Q15) |
+| R7 | Suggestions per train or per block | `TrainSuggestion(train_id="T1", line="Green", block_id="63", suggested_speed_mps=18, authority_blocks=2)`: "this is what the ctc sends" | One suggestion per train, naming the block the train is in. The CTC Office's type already has these fields. | The train ID format (Q4) and the speed's type (Q9) |
+| R8 | Readiness shape and what it gates | "Shape is 2d array : per line, per track controller. Action is fully gated per line until every track controller signals ready. One line can operate while the other is stalled but all track controllers on one line need to be ready for safe operation(i.e. no dispatch of trains until ready)" | The shape, and gating per line. | What makes a controller ready, who loads PLC programs in an integrated run, and the roster risk (Q13, G-NEW-2) |
+| R9 | Who creates and retires trains | "The CTC pulls trains from the "yard" and sends them back into the yard.The yard is just a blackbox with unlimited capacity" | The CTC Office owns dispatch from the yard and return to it. | How a pulled train comes into being in the Train Model and Train Controller (Q3, G-SIG-6) |
+| R10 | Stale commanded speed and authority | "The track controller sends commanded speed and authority to a block. This block is assumed to be occupied by the correct train. Then once the track model sends the commanded speed and authority to the train model and clears these values back to zero" | Per-block values that the Track Model clears to zero after delivering them. | A conflict with the Train Controller's failure detection (Q5, G-NEW-1) |
+
+### 1.2 Other rulings from the review
+
+| # | v0.1 section | Ruling (quoted or closely paraphrased) |
 |---|---|---|
-| 1 | What does "propagated to all modules in parallel" require beyond direct fan-out from the harness? Concurrent execution, or only that every module steps on the same tick? Within one tick, does a module see other modules' outputs from that same tick? | G-CLK-1 |
-| 2 | What does the harness pass each module per tick: simulation time, dt, or both? D017 says simulation time, but five of the seven implementations take no simulation-time input. | G-CLK-2 |
-| 3 | How do the CTC Office's pause and resume reach the harness? No signal exists. A command returned from `step()` cannot resume a paused clock, because nothing is stepped while paused. | G-CLK-3 |
-| 4 | Does the system run as one process, or one process per module? | G-RUN-1 |
-| 5 | What makes the HW variants "hardware"? Which Track Controller variant runs which line, and which Train Controller variant drives which train? | G-HW-1, G-HW-2 |
-| 6 | What is the canonical block identifier inside the harness? Every module uses a different one today. | G-SIG-11 |
-| 7 | Are suggested speed and authority keyed per train, as [T] says, or per block, as both Track Controllers implement? | G-SIG-3 |
-| 8 | Track Controller readiness: what shape, and what does it gate? Does the harness hold the clock until the system is ready? | G-SIG-5 |
-| 9 | Who creates and retires trains in the Train Model and Train Controller, and on what trigger? | G-SIG-6 |
-| 10 | When a Track Controller stops sending a block's commanded speed and authority, the Track Model keeps the last value. Which side changes? This one is safety-relevant. | G-SIG-12 |
+| R11 | 2.2, 3.4 | "Common/interfaces.py is stale and should not be treated as true"; "common/interfaces.py has been superseded"; "common/harness/track_model_edges.py is just the module interface". |
+| R12 | 2.2 | The Train Model test UI is removed at integration and the harness becomes its single driver: "this is true for all modules". |
+| R13 | 2.2, G-RUN-4 | "No event logger is needed"; "event logger does not exist". |
+| R14 | 3.2 | Track Controller SW and HW: "time_s will not be used as the sim time will be sent to every module on every tick". |
+| R15 | 3.2, 3.3 | Train Controller: "No SW controller exists code is the same as HW". Outputs: "bool[2] for brakes, lights, and doors, announcement_command". The speed-scaled dt "was assumed for the train controller test ui only". |
+| R16 | 3.4 | The four `SystemClock` instances "are for the testing harnesses only they should be replaced by the single central harness". |
+| R17 | 4.4 | "All enums should be all caps". |
+| R18 | 4.6 | "the line JSON files should be loaded by default on startup". |
+| R19 | 4.6, G-LIFE-4 | When a module rejects a tick: "Continue under assumption that a proper tick will be coming in the near future". G-LIFE-4: "we will come back to this, we have no clue what is going to cause a breakage". |
+| R20 | G-SIG-3 | "follow CTC structure, Track controllers will only parse the block ID and suggested speed but subsequent modules need associated train IDs". |
+| R21 | G-SIG-4 | "Stale". |
+| R22 | G-SIG-7 | Ticket sales: "Truth never got updated, it should be sent to CTC as per station and then CTC aggregates the total ticket sales." |
+| R23 | G-SIG-8 | "update software such that it should consume failures that come from track model. Track controller also only reports failures as closures". |
+| R24 | G-SIG-9 | `track-info`: "it should be all 6 fields, and the speed should be a float. Train model should send the doors open signal". |
+| R25 | G-SIG-10 | The driver sees the light through the windshield: "make sure that the driver is able to see next light state". |
+| R26 | G-SIG-15 | Station dwell: "its 45 seconds". |
+| R27 | G-SIG-17 | Maintenance: "it should reference closed-blocks and query that array before trying to open/close blocks on the track controller sides, any block that is in this array is considered to be under maintenence, hence why we dont need to send the maintenence mode boolean". |
+| R28 | G-SIG-18 | "Ambient temp should be a UI input from Track Model." |
+| R29 | G-RUN-2 | "the single executable that will open the central harness and then from there each module can be opened is how we are proceeding". |
+| R30 | G-RUN-3 | "final iteration, all modules will be able to run on one computer". |
+| R31 | G-RUN-5 | PySide6: "follow 6.11 or later". This matches [T] `conventions/toolchain.md`. |
+| R32 | G-HW-1 | "Every hardware modules are running on raspberry Pis. The interfaces between the software and hardware modules are identical meaning that they will consume the same IO, but hardware will communicate over USB to the PIS". |
+
+The review also said: section 2.1 "Ok"; section 5 "All good"; section 6.1 repeats earlier
+points; for the Track Controller HW, "see pr #43 for updates"; and the CTC pause signal was
+added.
+
+### 1.3 Questions still open
+
+The Blocks column says what each one holds up: "Core" is the harness skeleton, "Iter 3"
+is the first train run, graded on 2026-11-12, and "Full" is the complete system.
+
+| Q | Question | Gap | Blocks |
+|---|---|---|---|
+| Q1 | Barrier: does the harness wait for every module's reply to tick *k* before it sends tick *k*+1? What happens to a reply that is late or never comes? R19 covers a rejected tick, but a late reply is a different case. | G-CLK-11 | Core |
+| Q2 | Which simulation time does every module receive? `SystemClock.sim_time_s` keeps counting past midnight, and only `time_of_day_s` wraps. The two Track Controller test drivers already differ on this. | G-CLK-2 | Core |
+| Q3 | How does a train that the CTC Office pulls from the yard come into being in the Train Model and the Train Controller, and how is it retired? The CTC Office has no dispatch output. It learns that a train exists only when the yard exit block reads occupied, and that needs a train in the Train Model first. | G-SIG-6 | Iter 3 |
+| Q4 | Is `T1` (R7's example) the train ID format? The CTC Office makes `T{n}` for manual dispatch and `G1` or `R1` for scheduled runs. The Train Model's link assigns `T-n` itself. | G-SIG-6 | Iter 3 |
+| Q5 | R10 against the Train Controller: when a train reads exactly 0 m/s and 0 blocks right after a nonzero speed with at least 2 blocks of authority, the controller latches a signal-pickup failure and the emergency brake. Under R10 that can happen at every block boundary. Which side changes? | G-NEW-1 | Iter 3 |
+| Q6 | Failures: R23 says the Track Controllers consume Track Model failures and report them as closures. PR #43 has the HW variant see failures only as occupancy and report them as occupied. The CTC Office has no input for closures from a Track Controller. Which design holds, and what carries the closures? | G-SIG-8 | Iter 3 |
+| Q7 | The USB link to the Raspberry Pis: what protocol, who builds it, and what runs on each Pi? Do the Pis count toward R30's "one computer"? How many Pis serve the Red-line trains? | G-HW-1, G-RUN-3 | Full |
+| Q8 | Brakes as `bool[2]` (R15): which element is which? Is `announcement_command` a rename of today's `announcement`? | G-SIG-19 | Iter 3 |
+| Q9 | R24 makes commanded speed a float. Does that also cover the Track Controller's output, an int today that the SW variant rejects as a float, and the CTC Office's suggested speed, an int on [T] and in code? | G-SIG-9 | Iter 3 |
+| Q10 | The next light (R25): does it reach the driver through the Train Model, or straight from the Track Model? Is the fourth aspect `SUPER_GREEN` or `SUPER GREEN`? | G-SIG-10 | Full |
+| Q11 | The Blue Line: which variants serve it, or is it outside the integrated system? R5 names only Green and Red. | G-HW-2 | Full |
+| Q12 | With the catalog gone (R11), does each edge map straight from the producer's type to the consumer's? What becomes of `common/harness/track_model_edges.py`, whose six functions each map one side to the old catalog? | G-SIG-13 | Core |
+| Q13 | Who loads the PLC programs, and the HW wayside databases, in an integrated run? Does the harness hold the clock until a line is ready? | G-SIG-5 | Iter 3 |
+| Q14 | A Train Controller applies no power until an engineer commissions its gains in the UI. How are gains set in an integrated run, and on a Pi? | G-NEW-4 | Iter 3 |
+| Q15 | Are line names enumerated values under R17 (`GREEN`) or identifiers under R6 (`Green`)? | G-SIG-11 | Iter 3 |
+| Q16 | Who holds the 45 s dwell once the Train Model test UI is removed? SRS REQ-FUNC-036 gives station stops to the Train Controller, and neither implementation stops at stations. | G-SIG-15 | Iter 3 |
+| Q17 | R20 says modules after the Track Controller need the train ID. Which modules, and how does the ID reach them, given that the Track Controller passes on only block and speed? | G-SIG-3 | Iter 3 |
+| Q18 | The Train Model rejects the whole fleet's tick when one train's input is invalid. Under R19 the run continues, but every train then misses that tick. Is a per-train rejection needed? | G-NEW-3 | Full |
+| Q19 | The event logger: [T] and the SRS require one, and R13 says none is needed. The conflict is filed for its resolution owner, Kevin. Does the SRS change? | G-RUN-4 | Full |
 
 ## 2. Goal and fixed constraints
 
-### 2.1 Goal [U]
+### 2.1 Goal [U] [R]
 
 1. Integrate all seven module implementations into one functional system through a central
    harness. The seven are the CTC Office, Track Controller SW and HW, Train Controller SW
    and HW, Track Model, and Train Model.
-2. The clock lives in the central harness and is propagated to all modules in parallel.
-3. The CTC Office sets the clock speed, 1x or 10x only, and pauses and resumes the clock.
-4. Commanded speed and authority come from the Track Controller.
+2. The clock lives in the central harness. On every tick the harness sends dt and the
+   simulation time straight to every module. Each module sees its inputs only on the
+   rising clock edge [U, R1, R2].
+3. The CTC Office sets the clock speed, 1x or 10x only, and pauses and resumes the clock,
+   through its `clock_speedup` and `clock_paused` outputs [U, R3].
+4. Commanded speed and authority come from the Track Controller, per block. The Track Model
+   clears them after it delivers them to the train [U, R10].
+5. The harness is one process that spawns one process per module. The system is one
+   executable: it opens the harness, and each module is opened from there [R4, R29].
+6. The HW variants run on Raspberry Pis connected to the host PC by USB, with the same
+   inputs and outputs as the SW variants. Track Controller HW runs Red and SW runs Green.
+   A train gets the Train Controller of its line [R5, R32].
 
-Items 2 and 3 match D017, except that "in parallel" is new. Item 4 is new to `truth`. Both
-new statements were filed as proposals (section 7.1).
+### 2.2 Constraints on `truth` [T], and pending changes
 
-### 2.2 Constraints already on `truth` [T]
-
-| Constraint | Shard |
-|---|---|
-| A central harness sits between the modules. Each module defines only its own boundary types. The harness owns one pure mapping function per producer-to-consumer edge. No module's interface contains another module's types. | `decisions/D005-central-harness.md` |
-| `common/interfaces.py` is the harness-side signal catalog. Edge mappings go from producer type to catalog type to consumer type. Modules never import it, and it must agree with `truth`. | `decisions/D008-interfaces-harness-catalog.md` |
-| There is one shared `SystemClock`, at `utils/system_clock.py`. The harness owns it and passes simulation time to every module, and modules run no clocks of their own. Speeds are 1x and 10x only. The clock can pause and resume, starts at 05:00:00, and shows 24-hour `HH:MM:SS`. The default tick is 0.1 s and stays fixed while running. The CTC Office sets the speed and pauses and resumes the clock through the harness. | `decisions/D017-shared-simulation-clock.md` |
-| Steps use a constant dt. Speed and pause change the tick rate, never dt. Decided for the Train Model; the other owners have not confirmed. | `decisions/D006-fixed-time-step.md` |
-| The CTC's speed command is a boolean from the CTC to the harness, true for 10x. The harness relays it so that all modules run in sync. | `signals/clock-speedup.md` |
-| Values crossing a boundary are in backend SI units. Conversion happens only in the display layer. | `decisions/D002-two-unit-systems.md`, `conventions/units.md` |
-| The Train Model test UI is removed at integration, and the harness becomes the Train Model's single driver. | `decisions/D010-train-model-test-ui-boundary.md` |
-| The Train Model is physics only. Speed regulation belongs to the Train Controller. | `decisions/D009-train-model-control-boundary.md` |
-| Authority is a non-negative count of blocks ahead of the train. | `decisions/D013-authority-block-count.md` |
-| The system is delivered as one runnable executable, with no external services or network at runtime. The clock and an event logger are standalone shared utilities. | `conventions/files-and-paths.md` |
-| There are five modules. The Track Controller and the Train Controller each have a software and a hardware instance. MBO is out of scope. | `conventions/naming.md`, `decisions/D001-drop-mbo-from-scope.md` |
+| Constraint | Shard | Pending change [P] |
+|---|---|---|
+| A central harness sits between the modules. Each module defines only its own boundary types. The harness owns one pure mapping function per producer-to-consumer edge. | `decisions/D005-central-harness.md` | Adds the process model and the single driver (R4, R12, R29). |
+| `common/interfaces.py` is the harness-side signal catalog. Edge mappings go from producer type to catalog type to consumer type. | `decisions/D008-interfaces-harness-catalog.md` | Superseded (R11). |
+| One shared `SystemClock` at `utils/system_clock.py`, owned by the harness. It passes simulation time to every module, and modules run no clocks of their own. Speeds are 1x and 10x only. The clock pauses and resumes, starts at 05:00:00, shows 24-hour `HH:MM:SS`, and ticks every 0.1 s. The CTC Office sets the speed and pauses and resumes the clock through the harness. | `decisions/D017-shared-simulation-clock.md` | Sends dt and the simulation time, directly, with inputs seen on the rising edge (R1, R2). |
+| Steps use a constant dt. Speed and pause change the tick rate, never dt. | `decisions/D006-fixed-time-step.md` | none |
+| The CTC Office's speed command is a boolean to the harness, true for 10x. | `signals/clock-speedup.md` | `signals/clock-pause.md` adds pause (from `ctc-deployment`) |
+| Values crossing a boundary are in backend SI units. | `decisions/D002-two-unit-systems.md`, `conventions/units.md` | none |
+| The Train Model test UI is removed at integration, and the harness becomes the Train Model's single driver. | `decisions/D010-train-model-test-ui-boundary.md` | R12 extends this to every module, through the D005 proposal. |
+| The Train Model is physics only. Speed regulation belongs to the Train Controller. | `decisions/D009-train-model-control-boundary.md` | none |
+| Authority is a non-negative count of blocks. | `decisions/D013-authority-block-count.md` | none |
+| Station dwell is 45 s, with a recorded conflict against a 60 s schedule. | `decisions/D007-station-dwell.md` | Conflict resolved for 45 s (R26). |
+| One runnable executable, with no external services or network at runtime. The clock and an event logger are standalone shared utilities. | `conventions/files-and-paths.md` | The event logger is recorded as a conflict with R13. |
+| A block is named by its line and block number, as strings: `("Green", "12")`. | `conventions/identifiers.md` | none. R6 agrees. |
+| Five modules. The Track Controller and the Train Controller each have a SW and a HW instance. Enum members are UPPER_CASE. | `conventions/naming.md` | Every enumerated value is all caps, including values that cross a boundary (R17). |
+| PySide6 6.11 or later; PyInstaller 6.22.2 or later. | `conventions/toolchain.md` | none. R31 agrees. |
 
 ### 2.3 Course and customer requirements that bear on integration [D]
 
@@ -82,561 +165,627 @@ From `documents/srs-filled.md` (line numbers in parentheses):
   - REQ-FUNC-001, -002 and -003 (237-241): real-time speed, "at least 10x", and pause.
   - REQ-NFR-001.1 (443): the simulation *should* advance in 1 ms ticks.
   - REQ-NFR-001.2 (444): the simulation *shall not* drop any ticks.
-  - REQ-NFR-002 (446): correctness in fast-forward.
-  - REQ-NFR-007 (462): ready within 20 s of launch.
+  - REQ-NFR-007 (462): ready within 20 s of launch. Under R4 that covers seven processes.
 - Channels:
   - REQ-INTF-017 (223): the track circuit carries speed and authority from the Track
     Controller to the Train Controller.
-  - REQ-INTF-018 (225): a Track Model to Track Controller channel for occupancy and train
-    presence.
-  - REQ-INTF-019 and -020 (227-229): CTC to Track Controller speed and authority; Track
-    Controller to CTC occupancy.
+  - REQ-INTF-018 (225): the Track Model tells the Track Controller about occupancy and
+    train presence.
+  - REQ-INTF-019 and -020 (227-229): the CTC Office sends speed and authority to the Track
+    Controller, which reports occupancy back.
   - REQ-INTF-021 (231): every channel is non-vital.
 - Variants: REQ-INTF-009 and -010 (199-201): the HW and SW variants expose equivalent
-  external interfaces.
-- Event log: REQ-NFR-008 (466) and REQ-INTF-015 (215): an event log, written as CSV.
+  external interfaces. R32 says they are identical.
+- Event log: REQ-NFR-008 (466), REQ-INTF-015 (215) and REQ-DSN-005 (512) require one, in
+  CSV. R13 drops it, and the conflict is filed (Q19).
 - Delivery: REQ-DSN-001, -002 and -003 (496-504): a standalone, pre-compiled executable on
-  a single machine with no network.
+  a single machine with no network. R5 adds Raspberry Pis on USB (Q7).
 
-Notes:
+Schedule (`documents/Track_Overflow_Schedule.gan`): Design Review on 2026-10-22; Iteration 3,
+the System Group Review, on 2026-11-12; Iteration 4, the final, on 2026-12-10. The
+Iteration 3 rubric gives 35 points each to "Do the Sub-systems Communicate" and "Does the
+Train Move from Yard to Destination Block". The course deck (`Final Project vF.pdf`, p.80)
+advises integrating in the order "Train -> Train Controller -> Track -> Wayside Controller
+-> CTC", after "All at once… FAILED".
 
-- REQ-FUNC-002's "at least 10x" is met by D017's 10x.
-- REQ-NFR-001.1 and REQ-NFR-001.2 are not reflected in D017 (G-CLK-4, G-CLK-5).
-- Schedule (`documents/Track_Overflow_Schedule.gan`):
-  - Design Review: 2026-10-22.
-  - Iteration 3, System Group Review: 2026-11-12.
-  - Iteration 4, Final: 2026-12-10.
-- The Iteration 3 rubric (`documents/rubrics/detailed-png/semester-06-…png`) gives 35 points
-  each to "Do the Sub-systems Communicate" and "Does the Train Move from Yard to Destination
-  Block". Its heading item is "Dispatch a Train from Yard to a Station - Completely Working
-  Systemwide".
-- The course deck (`Final Project vF.pdf`, p.80) says: "Initial order of integration: All at
-  once… FAILED" and "Successful order of integration: Train -> Train Controller -> Track ->
-  Wayside Controller -> CTC".
-
-## 3. Current state (read from the repo on 2026-10-16)
+## 3. Current state (re-read on 2026-10-16)
 
 ### 3.1 Integration guides
 
-The request assumed that every module already has an integration guide. Only the Train Model
-has one. For every other module, the notes in section 3.3 come from the code.
+The request assumed that every module already had an integration guide. On `development`
+only the Train Model has one. The Track Model's is on a branch.
 
-| Module | Guide | Nearest material |
+| Module | Guide | Nearest material, and how it stands against the decisions |
 |---|---|---|
-| CTC Office | Partial | `CTC-Office/ctc_ui/README.md` covers the boundary contract and test links, and says the harness "calls the module directly". It has nothing on stepping, startup, threading or shutdown, and still describes scheduling as absent although `ctc/scheduler.py` exists. |
-| Track Controller SW | None | `TrackCtrlSW/README.md` has one paragraph on integrated mode. `TrackCtrlSW/INTEGRATION_DISCREPANCIES.md` also applies. |
-| Track Controller HW | None | `TrackCtrlHw/README.md`, section "Integrating the module" (lines 66-160). |
-| Train Controller SW | None | `TrainController/README.md`, which says "no PI control law and no Train Model yet". |
-| Train Controller HW | None | The `Train-Ctrl_HW/main.py` docstring and `Train-Ctrl_HW/OPEN_ISSUES.md`. There is no guide on the `Train-Ctrl_HW` or `train-ctrl-hw-integration` branches either. |
-| Track Model | None | `TrackModel/README.md` and `TrackModel/knowledge/CODE_OVERVIEW.md` §6. |
-| Train Model | **Yes** | `TrainModel/docs/integration.md`: the fleet API, per-tick stepping, and edge tables. Parts are stale: it says no harness code exists, and it omits `doors_open` on the Track Model edge. |
+| CTC Office | Partial | `CTC-Office/ctc_ui/README.md` covers the boundary, the test links and the snapshot fields, `clock_paused` included (lines 123-126). It has nothing on stepping, startup or shutdown. |
+| Track Controller SW | None | One paragraph in `TrackCtrlSW/README.md`, and `TrackCtrlSW/INTEGRATION_DISCREPANCIES.md`. |
+| Track Controller HW | Partial | `TrackCtrlHw/README.md`, "Integrating the module" (lines 66-160). It keeps the test UI and has the harness hand the window its controller in the same process. Both contradict R4 and R12. PR #43 rewrites the boundary. |
+| Train Controller (SW and HW) | None | R15: one code base. The only integration material is the `TrainControllerFleet` docstring and `Train-Ctrl_HW/harness_sim.py`, both on branches (section 3.6). |
+| Track Model | On a branch | `origin/track-model:TrackModel/INTEGRATION.md`, 365 lines. It runs the Track Model in the harness's process, contradicting R4. It has no shutdown section, and it says to delete `test_ui/`, `test_link/` and the link server at integration. The branch is 132 commits behind `development`. |
+| Train Model | Yes, needs an update | `TrainModel/docs/integration.md` §3 says "Every train runs in the system process… There is no process per train and no IPC" (lines 162-164), which contradicts R4. It also says to delete `link.py`, the only transport the Train Model has. |
 
 ### 3.2 Module status at a glance [C]
 
-| Module | Callable boundary | Time input | Own clock or timer today | Instances | Tests (2026-10-16) |
-|---|---|---|---|---|---|
-| CTC Office | `CtcOffice.step(dt, inputs) -> CtcOutputs` (`ctc/interface.py:334`); Qt-free core | dt only | Yes. The window owns a `SystemClock` and `ClockDriver` (`ctc_ui/sim_clock.py:40-44`) and steps the module on each tick (`ctc_ui/ctc_host.py:226-228`). | One per system; trains are records inside it | 205 passed |
-| Track Controller SW | `SwTrackController.step(dt, inputs) -> outputs` (`track_ctrl/module.py:278`); Qt-free core | dt and `time_s` (seconds since midnight) | Not in the core. The test client owns a `SystemClock` (`track_ctrl_test/client.py:102-103`). | One per process. Loads Green (6 waysides) and Red (5). | 178 passed |
-| Track Controller HW | `HwTrackController.step(dt, inputs) -> outputs` (`track_ctrl_hw/interface.py:340`); Qt-free core | dt and `time_s` | Not in the core. The test harness owns a `SystemClock` (`track_ctrl_hw/harness.py:164-167`). | One per process, one line only (`controller.py:75-81`) | 61 passed, **1 failed** |
-| Train Controller SW | **None.** No inputs from or outputs to any module. | dt only. `step(dt)` is public, but its own timer calls it. | Yes. A 1 s `QTimer` calls `step(1.0)` (`train_controller/train_controller_state.py:31, 160-173`). | One train, ID hard-coded as `"T-214"` | 24 passed |
-| Train Controller HW | Partial. `ConsoleBackend.apply_inputs(dict)` writes the selected train only. Outputs go out on the Qt signal `commands_changed`, on change only (`main.py:830`). | None on `development` | Yes. Timers at 20 Hz and 10 Hz (`main.py:77-78`), with dt = speed / 20 (`main.py:882, 1171`). | Many trains per backend | No pytest suite |
-| Track Model | `TrackModel.step(dt, inputs) -> TrackModelOutputs` (`track_model/model.py:149`); Qt-free core | dt only | Not in the core. The test UI has its own `QTimer`. | One instance for all lines; trains keyed by ID | 266 passed |
-| Train Model | `TrainModelFleet.add` / `remove` / `step_all(dt, inputs_by_id)` (`train_model/fleet.py:59-124`); Qt-free physics | dt only | Not in the module. The test UI owns a `SystemClock` (`train_model/harness.py:354-358`). | One model per train in a fleet | 760 passed, 13 skipped |
+| Module | Callable boundary | Time input | Clock or timer of its own | Scope | Entry point and link | Tests |
+|---|---|---|---|---|---|---|
+| CTC Office | `CtcOffice.step(dt, inputs) -> CtcOutputs`; Qt-free core | dt only | Yes. The window owns a `SystemClock` and `ClockDriver` (`ctc_ui/sim_clock.py:40-45`). | One per system | `python -m ctc_ui`; link `trains-ctc-office`, plus a clock link | 208 passed |
+| Track Controller SW | `step(dt, TrackControllerInputs(time_s, ctc, track_model))`; Qt-free core | dt and `time_s` | Not in the core. The test client has one. | Loads Green and Red (`track_ctrl/state.py:69-71`) | `python main.py [--no-test-link] [--load-starters]`; link `ece1140-track-controller-stimulus` | 186 passed |
+| Track Controller HW | Same shape as SW; Qt-free core | dt and `time_s` | Not in the core. The test UI has one. | One line (`controller.py:75-81`) | `python TrackCtrlHw/ui/main.py`, or `launch.py` for window plus test UI; link `trains-track-controller-hw` | 61 passed, **1 failed** |
+| Train Controller SW | None. R15: there is no SW controller; the HW code serves both. `TrainController/` is an earlier prototype with no boundary and is not used. | n/a | `TrainController/` has its own 1 s timer. | n/a | n/a | 24 passed (`TrainController/`) |
+| Train Controller HW | `development`: `ConsoleBackend.apply_inputs`, with outputs on a Qt signal. Branches: `TrainControllerFleet.add`, `remove` and `step_all(dt, inputs_by_id)`, with no Qt. | dt only (fleet) | Yes: 20 Hz and 10 Hz timers. With a fleet only the 10 Hz UI timer runs, and it still advances the console's own clock. | Many trains per process | `python main.py [--test \| --both \| --check]`; no link | No pytest suite |
+| Track Model | `TrackModel.step(dt, inputs) -> TrackModelOutputs`; Qt-free core | dt; an optional `sim_time_s` on `origin/track-model` | Not in the core. The test UI has a `QTimer`. | One instance for all lines | `python TrackModel/main.py`; link `track-overflow-track-model` | 266 passed |
+| Train Model | `TrainModelFleet.add`, `remove`, `step_all(dt, inputs_by_id)`; Qt-free physics | dt only | Not in the module. The test UI has a `SystemClock`. | One model per train | `python main.py`, which creates train `T-1`; link `trains-train-model` | 760 passed, 13 skipped |
 
-Neither HW implementation contains hardware I/O. `Train-Ctrl_HW/main.py:314-320` says: "The
-physical panel is not wired yet, so there is no hardware layer". `TrackCtrlHw/` has no GPIO,
-serial or network code. No hardware platform is documented anywhere in the repository
-(G-HW-1).
+Neither HW variant has hardware or USB code. There is no serial, USB or GPIO code on any
+branch, and no document says what runs on a Pi (G-HW-1).
 
-### 3.3 Per-module notes (read from the code where no guide exists) [C]
+### 3.3 Per-module notes [C], checked against the decisions
 
 **CTC Office** (`CTC-Office/`)
-- The harness can call `step(tick_s, CtcInputs)`.
-  - Inputs from the Track Controller: per-block occupancy, switch and crossing reports, and
-    `WaysideStatus(wayside_id, line, ready, reason)` per wayside.
-  - Input from the Track Model: `ticket_sales: Mapping[str, int]`, keyed by station
-    (`ctc/interface.py:86-110`).
-  - Outputs:
-    - `TrainSuggestion(train_id, line, block_id, suggested_speed_mps: int, authority_blocks: int)`,
-      one per followed train.
-    - The full `closed_blocks` set.
-    - Switch commands, in maintenance only.
-    - `clock_speedup: bool` (`ctc/interface.py:124-187`).
-- The clock is backwards relative to D017.
-  - The dispatcher's Run/Pause and 1x/10x controls act on the window's own clock
-    (`ctc_ui/sim_clock.py:68-81`).
-  - The module's `clock_speedup` is then set *from* that clock (`ctc_ui/ctc_host.py:213-219`).
-  - Nothing outside the CTC reads `clock_speedup`.
-- The CTC has no pause or resume output and no simulation-time input. It keeps its own
-  elapsed time from 05:00:00.
-- It sends nothing to a line, and refuses dispatch, until every wayside on that line reports
-  ready (`ctc/model.py:346-350`, `ready_lines`).
-- It never announces a new train. It matches yard-exit occupancy against waiting orders
-  (`ctc/tracking.py:160-173`).
-- The test link's `step` op lets any local client step the module with any dt
-  (`ctc/socket_link.py:225-229`).
+- Boundary: `step(dt, CtcInputs) -> CtcOutputs`.
+  - Inputs from the Track Controller: occupancy, switch reports, crossing reports and one
+    `WaysideStatus` per wayside (`ctc/interface.py:86-92`). There is no input for closures.
+  - Input from the Track Model: ticket sales per station (`:110`).
+  - Outputs: one `TrainSuggestion` per followed train (`:124-142`), which matches R7 field
+    for field with `suggested_speed_mps: int`; `closed_blocks`; switch commands;
+    `clock_speedup`; and `clock_paused`, which defaults to true (`:183-193`).
+- Clock (R3, R16): the window still owns a `SystemClock`. The header's Run, Pause, 1x and
+  10x act on it (`ctc_ui/ui/Main.qml:73-79`), and the host copies its state into the
+  module's outputs (`ctc_ui/ctc_host.py:213-229, 811-824`). The module's own setters exist
+  (`ctc/interface.py:402-406`), but the header does not call them directly.
+- Time (R2): the module takes dt only. It keeps its own time, 05:00:00 plus the sum of every
+  dt it was given (`ctc/model.py:417-445, 754`), so a rejected step loses that dt. The
+  throughput history and the current hour are updated in the window's tick handler
+  (`ctc_host.py:231-247`), outside the module.
+- Readiness (R8): a line is ready when a wayside on it has reported and every wayside
+  that reported is ready (`ctc/model.py:346-351`). It keeps no roster of the waysides it
+  expects (G-NEW-2).
+- Trains (R9): the CTC Office never announces a train. It matches occupancy of the yard
+  exit block, Green 63 or Red 9, against waiting orders. Trains return to the yard from
+  Green 57 or Red 9 (`ctc/tracking.py:39-44`). IDs are `T{n}` for manual dispatch
+  (`ctc_host.py:493-496`) and `G1` or `R1` for scheduled runs (`ctc/scheduler.py:79`).
+- Against the decisions: enumerated values are lowercase (`"normal"`, `"active"`) (R17),
+  and there is no closure input (R23).
 
-**Track Controller SW** (`TrackCtrlSW/`)
-- The harness can call
-  `step(dt, TrackControllerInputs(time_s, ctc, track_model)) -> TrackControllerOutputs(ready, track_model, ctc_reports)`
-  (`track_ctrl/interface.py:113-186`). The core has no Qt, timers or threads.
-- It produces commanded speed and authority **per block**, consistent with [U] item 4:
-  - The field is
-    `track_circuits: Mapping[BlockKey, TrackCircuitCommand(speed_mps: int, authority_blocks: int)]`.
-  - It forwards the CTC's suggestion for a block when the PLC grants `AUTH_<block>` and the
-    vital rules allow it (`track_ctrl/vital.py:289-335`).
-  - Switch, crossing and signal commands go out every tick. It sends no heater commands.
-- Blocks are keyed as `BlockKey(line, block_id)`. Suggestions are keyed by block, and the
-  module has no notion of which train is where.
-- Both lines load in `TrackControllerState.__init__` (`track_ctrl/state.py:69-71`).
-- PLC programs load only through the UI, so only a person can make the module ready.
-- `ready` is one module-level flag on `development`. On `origin/Track-Ctrl-SW` it becomes
-  per-wayside `ready` and `reason`, with an incompatible wire format.
+**Track Controller SW** (`TrackCtrlSW/`; PR #41 merged since v0.1)
+- Boundary: `step(dt, TrackControllerInputs(time_s, ctc, track_model))`. Each wayside
+  reports `CtcReport(wayside_id, line, sent_at_s, ready, blocks, reason)`. While any wayside
+  is not ready the whole module stalls, and its docstring tells the CTC Office to send
+  nothing "on any line" (`track_ctrl/interface.py:175-215`).
+- `common/harness/ctc_edges.py`, now on `development`, maps `TrainSuggestion` to a per-block
+  `Suggestion` and drops the train ID, which fits R20. If two suggestions name one block, it
+  takes the lower speed and the lower authority separately, as its docstring says.
+- Against the decisions:
+  - It loads both lines (R5: Green only). Once it loads only Green, its module-wide stall
+    becomes the per-line stall of R8.
+  - It takes `time_s` (R14).
+  - Speed must be an int: a float rejects the tick (`track_ctrl/module.py:83-90, 330`)
+    (R24, Q9).
+  - Enumerated values are lowercase (R17).
+  - It has no failure input (R23).
+  - It treats a CTC switch command in force as maintenance (`module.py:16-18`), where R27
+    makes a block under maintenance one that is in `closed-blocks`.
+  - Its README installs PySide6 6.8 (R31).
+- PLC programs load from the UI, from `--load-starters`, or by the test link's
+  `load_starter_programs` operation.
 
-**Track Controller HW** (`TrackCtrlHw/`)
-- The call has the same shape as the SW variant. The boundary differs in these ways:
-  - The block key is `BlockKey(line, section, block_id)`.
-  - It requires `ctc.maintenance_mode: bool`, a signal that [T] superseded
-    (`signals/maintenance-mode.md`).
-  - It consumes per-block failures.
-  - It reports no readiness.
-  - It runs one line only.
-- Its window always starts a test-link server that can step the module. A harness and a
-  test UI could therefore both drive it; there is no single-driver guard.
-- One test fails (section 3.5).
+**Track Controller HW** (`TrackCtrlHw/`; PR #43 open)
+- PR #43 is open from `feature/TrackCtrl-Showcase-Feedback`: 7 commits, 32 files, merge
+  blocked. It:
+  - keys CTC Office inputs by `BlockRef(line, block_id)`, which fits R6;
+  - drops `maintenance_mode`, which fits R27;
+  - adds per-wayside readiness with a module-wide stall, which fits R8 while the module
+    runs one line;
+  - states that a failure "reaches it only as an occupied block, and it reports that block
+    to the CTC Office as occupied" (`track_ctrl_hw/interface.py:14-16` on the PR head).
+    That is against R23 (Q6).
+- Data: wayside databases and PLC programs exist for three Green waysides only, 50 of the
+  line's 150 blocks. There are none for Red, where R5 puts this variant (G-NEW-5).
+- Still against the decisions on the PR head:
+  - Track Model-side keys keep the section letter (`BlockKey(line, section, block_id)`).
+  - Enumerated values are lowercase (R17).
+  - It takes `time_s` (R14).
+  - The README keeps the test UI (R12).
+  - Databases and programs load from the window (`loadDatabase`, `loadProgram` in
+    `track_ctrl_hw/state.py`). On `development` the link cannot load them (R18, Q13).
+  - It has no USB or Pi code (R5).
+- One test fails on `development` (section 3.5).
 
-**Both Track Controllers.** A block with no current suggestion gets no track-circuit entry:
-"A block not listed transmits nothing" (`TrackCtrlSW/track_ctrl/interface.py:139`). The HW
-variant skips such blocks the same way (`TrackCtrlHw/track_ctrl_hw/wayside.py:529-531`). The
-Track Model, however, keeps the last value for an absent key
-(`TrackModel/track_model/interface.py:184`; `model.py:280-281`). A withdrawn suggestion
-therefore leaves a train running on stale values (G-SIG-12).
-
-**Train Controller SW** (`TrainController/`)
-- It has no integration boundary. The only Qt slots are those its own cab UI uses.
-- It has no PI law and no power output. It simulates its own speed, distance and cabin
-  temperature.
-- Its own 1 s timer calls `step(1.0)`. The clock starts at 21:26:35. It runs one train,
-  `"T-214"`.
-- Authority is a distance (`train_controller_state.py:128`), not a block count as [T] D013
-  requires.
-
-**Train Controller HW** (`Train-Ctrl_HW/`)
-- Implemented: a PI speed law, failure detection, and per-train controller cores via
-  `add_train` and `drop_train`.
+**Train Controller** (`Train-Ctrl_HW/`; one code base for SW and HW, R15)
+- The `train_ctrl/` package with `TrainControllerFleet` is on `origin/Train-Ctrl_HW` and
+  `origin/Train_Ctrl_integration` (section 3.6), not on `development`. The fleet has no Qt.
+  `run(..., fleet=)` then skips the 20 Hz timer, but `main.py` never passes a fleet.
 - Outputs are `TrainModelCommands(power_w, service_brake, emergency_brake, door_command,
-  light_command, temperature_setpoint_c, announcement)`.
-- dt is speed / 20: 0.05 s at 1x and 0.5 s at 10x. This contradicts [T] D006 and D017,
-  under which dt is fixed.
-- The clock starts at 00:00:00 (`main.py:851`). There is no pause.
-- Its announcement lockout and gains hand-over run on wall-clock timers.
-- `TrainControllerFleet.step_all(dt, inputs_by_id)` exists only on
-  `origin/train-ctrl-hw-integration`. The `origin/Train-Ctrl_HW` branch added it and then
-  reverted it.
-- A train applies no power until an engineer commissions gains in the UI.
-- There is no pytest suite. `check.py` is a self-check, which was not run.
+  light_command, temperature_setpoint_c, announcement)`. Doors are (left, right) and lights
+  are (interior, exterior). R15 wants the brakes as `bool[2]` and an `announcement_command`
+  (Q8).
+- Signal-pickup detection: if the received (speed, authority) becomes exactly (0.0, 0)
+  right after a nonzero speed with authority of at least 2 blocks, the controller latches a
+  signal-pickup failure. That cuts power and latches the emergency brake until the failure
+  clears (`train_ctrl/control.py:219-223`; on `development`, `main.py:575-579`). See
+  G-NEW-1.
+- Light ahead: the input is taken only if it is `"RED"`, `"YELLOW"`, `"GREEN"` or
+  `"SUPER GREEN"`, with a space. Anything else is dropped without an error
+  (`train_ctrl/inputs.py:69-70`; `main.py:196`). The Track Model sends `SUPER_GREEN` (Q10).
+- A train applies no power until an engineer commissions its gains in the UI (Q14).
+- It has no link, no pytest suite and no hardware layer.
 
 **Track Model** (`TrackModel/`)
-- The harness can call `step(dt, TrackModelInputs(controller, trains, ambient_temp_c))`.
-- Commanded speed and authority arrive per block from the Track Controller
-  (`TrackControllerCommands.commanded_speed_mps` and `.commanded_authority`, keyed by Track
-  Model block ID; `track_model/interface.py:180-193`). It puts them on the track circuit of
-  the block each train occupies.
-- Outputs:
-  - Per train, to the Train Model: `train_feeds`.
-  - To the Track Controller: occupancy, switch, crossing and signal states, failures,
-    heaters, and track temperature.
-  - To the CTC: `tickets_sold_now`, per station.
-- Block IDs look like `"GREEN D-13"` (`track_model/layout.py:62-64`).
-- Heaters run only when commanded, and the Track Controller SW does not command them.
-- Ambient temperature has no source.
-- It takes dt only and counts elapsed time from 0.
+- Boundary: `step(dt, TrackModelInputs(controller, trains, ambient_temp_c))`.
+- Commanded speed and authority arrive per block. "A key that is absent keeps the last value
+  commanded for it" (`track_model/interface.py:184`; `model.py:280-281`). That is
+  against R10, under which the values are cleared to zero after delivery.
+- `ambient_temp_c` is a required input, and the UI can override it (`model.py:156-158`).
+  Under R28 the UI is the source, so the input becomes optional or goes.
+- Enumerated values are all caps (`NORMAL`, `RED`, `SUPER_GREEN`), which fits R17. Block IDs
+  look like `"GREEN K-63"`, with an upper-case line and a section letter, which differs from
+  R6.
+- Commanded speed is an int (`model.py:124`), against R24.
+- `track-info` has six fields in code, which fits R24. `doors_open` is an input, so it needs
+  the Train Model output that R24 asks for.
+- Ticket sales go out per station, which fits R22. Nothing converts its list to the CTC
+  Office's per-station mapping.
+- `origin/track-model` (`3e7c15f`) adds `INTEGRATION.md` and an optional `sim_time_s` input
+  (R2).
 
-**Train Model** (`TrainModel/`)
-- Usage, per its guide (`TrainModel/docs/integration.md` §3):
-  - Keep one `TrainModelFleet`.
-  - Call `fleet.add(train_id, line)` on dispatch and `fleet.remove(train_id)` on retire.
-  - Call `fleet.step_all(tick_s, inputs_by_id)` once per tick, on the Qt thread only.
-- It takes dt only (G-CLK-2).
-- It rejects the whole tick on any invalid input. One example: a beacon whose platform side
-  is `""`. The existing Track Model edge emits exactly that for Blue Line stations
-  (`common/harness/track_model_edges.py:192`), and `train_model/model.py:264-268` rejects it.
-- Its window shows elapsed time from 00:00:00, not time of day.
-- 20 trains step in under 10 ms at 10x (`TrainModel/tests/test_fleet.py:197-213`). This is
-  the only timing budget measured anywhere in the repository.
+**Train Model** (`TrainModel/`, unchanged since v0.1)
+- `TrainModelFleet.add(train_id, line)`, `remove(train_id)` and `step_all(dt, inputs_by_id)`,
+  on one thread. It takes dt only (R2).
+- It has no doors-open output (R24) and no field for the light ahead (R25).
+- One invalid input rejects the whole fleet's tick (Q18).
+- Passenger emergency brake release has no mechanism (G-SIG-16). The test UI holds the dwell,
+  and R12 removes the test UI (Q16).
+- Its link (`train_model/link.py`) assigns train IDs `T-n` itself (`:170-189`) and refuses
+  to remove the last train (`:191-197`). `main.py` creates `T-1` at startup, and `step` must
+  name exactly the current roster (`fleet.py:136-144`). All of this clashes with
+  CTC-owned dispatch (R9, Q3).
 
 ### 3.4 Shared infrastructure [C]
 
-- `utils/system_clock.py` already implements D017:
-  - Start 05:00:00, tick 0.1 s, speeds {1, 10}.
-  - Pause, resume and reset; `HH:MM:SS` formatting.
-  - It starts paused. Tick listeners receive `(sim_time_s, tick_s)` and are called one
-    after another, in registration order, on the calling thread
-    (`system_clock.py:140-149`).
-- `utils/clock_driver.py` paces that clock from the Qt event loop.
-  - With more than 100 ticks owed, it runs one tick and discards the backlog. Simulated
-    time then falls behind wall-clock time, but no step is skipped (`clock_driver.py:27-30`).
-  - From reading the code (not run): an exception in a tick listener skips the remaining
-    listeners for that tick. It also leaves the driver unarmed until the next state change.
-- Four independent `SystemClock` instances exist today: in the CTC window, the Train Model
-  test UI, the Track Controller HW test UI, and the Track Controller SW test client. There is
-  no central harness.
-- `common/interfaces.py`, the D008 catalog, is partly out of date with `truth`:
-  - The beacon side comment says "left/right".
-  - Track-signal speed is a float in one type and an int in another.
-  - `TrainState` still carries failure flags.
-  - It has no types for the CTC ↔ Track Controller edge, the Train Model ↔ Train Controller
-    edge, or clock commands.
-  - Nothing implements its abstract module interfaces.
-- `common/harness/track_model_edges.py` holds six Track Model edges. Each maps only one side,
-  to or from the catalog. Only a Track Model test calls them.
-- `origin/Track-Ctrl-SW:common/harness/ctc_edges.py` maps CTC to Track Controller SW. It turns
-  per-train suggestions into per-block ones, taking the minimum on conflicts, and bypasses the
-  catalog, against D008.
-- No branch has a system launcher, PyInstaller spec, CI workflow or event logger.
-- Every inter-process link is a `QLocalServer` test link: six endpoints, no TCP or UDP
-  (Appendix B).
+- `utils/system_clock.py` implements D017: start 05:00:00, tick 0.1 s, speeds 1 and 10,
+  pause, resume, reset and `HH:MM:SS`. It starts paused, which matches the CTC Office's
+  `clock_paused` default. Tick listeners receive `(sim_time_s, tick_s)` and run one after
+  another on the calling thread (`system_clock.py:140-149`).
+- `utils/clock_driver.py` paces the clock from a Qt event loop. Owed ticks run back to back
+  in one timer fire. With more than 100 owed it runs one and drops the rest, so simulated
+  time slips (`clock_driver.py:27-30, 155-177`).
+- The CTC window, the Train Model test UI, the Track Controller HW test UI and the Track
+  Controller SW test client each have a clock. R16 replaces them with the harness's clock.
+- `common/interfaces.py` is superseded (R11).
+- `common/harness/` holds `ctc_edges.py` (CTC Office to Track Controller SW) and
+  `track_model_edges.py`, six one-sided Track Model edges to the old catalog (Q12).
+- Six `QLocalServer` test links exist (Appendix B). None was built as a harness channel, and
+  the docs of three modules say to delete theirs at integration. Neither Train Controller
+  has a link.
+- Encoders and decoders for boundary types exist only in that test scaffolding:
+  `ctc/wire.py`, `track_ctrl/wire.py`, `track_ctrl_hw/wire.py`, `TrackModel/test_link/codec.py`
+  and `train_model/link.py:95-126`. There are none for the Train Controller. A block is
+  encoded four different ways among them.
+- Packaging:
+  - `requirements.txt` pins PyInstaller 6.22.2 and PySide6 6.11.2.
+  - The only build recipe is in `TrainModel/README.md` (lines 226-263): two separate
+    `--onedir` executables.
+  - Only the Train Model handles `sys._MEIPASS`.
+  - There is no `.spec` file, no `freeze_support`, no build script and no packaging CI.
+  - `TrackCtrlHw/launch.py` is the only code that spawns processes. It runs
+    `[sys.executable, <script>.py]`, which assumes a Python interpreter and `.py` files on
+    disk.
 
-### 3.5 Tests (run 2026-10-16)
+### 3.5 Tests (re-run 2026-10-16 at `1aaa9a8`)
 
-Environment: a scratch virtual environment outside the repo, with Python 3.13.16, PySide6
-6.11.2 and pytest 9.1.1. Settings were `QT_QPA_PLATFORM=offscreen` and
-`-p no:cacheprovider`. Each suite ran from its module folder, one after another.
+Environment: a scratch virtual environment outside the repository, with Python 3.13.16,
+PySide6 6.11.2 and pytest 9.1.1, `QT_QPA_PLATFORM=offscreen` and `-p no:cacheprovider`. Each
+suite ran from its module folder, one after another. The runs changed no file in the
+repository.
 
 | Suite | Result |
 |---|---|
-| `utils` | 32 passed |
-| `CTC-Office` | 205 passed |
-| `TrackCtrlSW` | 178 passed |
-| `TrackCtrlHw` | 61 passed, **1 failed**. `tests/test_territory.py:64-72`: the sample waysides `data/waysides/green_wayside_{1,2,3}.json` lack the `next_blocks` field that `TrackModel/green_line.json` gained in PR #24. |
+| `utils` | 31 passed, **1 failed**: `test_clock_driver.py::ClockDriverAccuracyTest::test_stall_drops_backlog_instead_of_bursting` (12.4 s against 13.0 ± 0.5 s). It is a wall-clock test. It passed in the v0.1 run with `utils/` unchanged since, and on three isolated reruns it passed twice and failed once. |
+| `CTC-Office` | 208 passed |
+| `TrackCtrlSW` | 186 passed |
+| `TrackCtrlHw` | 61 passed, **1 failed**: `tests/test_territory.py`, where the sample waysides lack the `next_blocks` field that `TrackModel/green_line.json` gained in PR #24 |
 | `TrainController` | 24 passed |
 | `TrackModel` | 266 passed |
 | `TrainModel` | 760 passed, 13 skipped |
 | `Train-Ctrl_HW` | No pytest suite |
 
-No integration or system test exists. `documents/test_plan.md` is an unfilled template.
+No integration or system test exists.
 
 ### 3.6 Work outside `development`
 
-- `origin/Track-Ctrl-SW` (3 commits, 2026-10-16) adds `common/harness/ctc_edges.py` and
-  per-wayside readiness. It changes the wire format incompatibly, and its copy of the CTC is
-  one commit older than `development`'s.
-- `origin/train-ctrl-hw-integration` (37 commits) adds `TrainControllerFleet` and
-  `step_all(dt, inputs_by_id)`.
-- `origin/Train-Ctrl_HW` (40 commits) added the fleet and then reverted it. Inside
-  `Train-Ctrl_HW/`, only `OPEN_ISSUES.md` differs from `development`.
-  - Both Train Controller HW branches fork 231 commits behind `development`.
-  - Both delete the `TrainModel/` tree and the meeting logs, and move
-    `TrackModel/*_line.json` to `Track_layout/` without `next_blocks`.
-  - Take only the `Train-Ctrl_HW/` folder from them, as `Train-Ctrl_HW/OPEN_ISSUES.md`
-    already warns.
-- `origin/feature/TrackCtrl-Module-Implementation`, open as
-  [Landiss04/Track-Overflow#39](https://github.com/Landiss04/Track-Overflow/pull/39), adds
-  example PLC programs only.
+- Merged since v0.1:
+  - PR #41 (`Track-Ctrl-SW`): `ctc_edges.py` and per-wayside readiness.
+  - PR #39: Track Controller HW example PLC programs.
+  - PR #42 (`ctc-deployment`): the CTC Office's `clock_paused`.
+- Open: [Landiss04/Track-Overflow#43](https://github.com/Landiss04/Track-Overflow/pull/43),
+  Track Controller HW (section 3.3).
+- `origin/track-model` (`3e7c15f`) holds `INTEGRATION.md` and `sim_time_s`. It is 132 commits
+  behind `development`.
+- `origin/Train_Ctrl_integration` (`b9e3f6a`) and `origin/Train-Ctrl_HW` (`1bc21d1`) hold the
+  `train_ctrl/` package and its fleet. The first also has `harness_sim.py`, a stand-in
+  harness in one process: it spawns three trains, feeds each a fixed 55 mph command and
+  integrates a toy plant. It is not a harness for the real modules.
+- Both Train Controller branches fork far behind `development`, delete `TrainModel/`, and
+  have no `utils/`. Take only `Train-Ctrl_HW/` from them.
 
-## 4. Proposed architecture (initial)
+## 4. Architecture
 
-### 4.1 Topology
-
-The harness owns the single clock and is the only party that talks to every module. Each
-module receives every tick directly from the harness; this follows from D017, where the
-harness passes time to every module. All module-to-module data passes through the harness's
-edge mappings (D005), via catalog types (D008).
+### 4.1 Topology (decided: R1, R4, R5)
 
 ```mermaid
 flowchart LR
-    subgraph H["Central harness"]
-        CLK["SystemClock (utils/system_clock.py)<br/>1x or 10x, pause, 05:00:00, tick 0.1 s"]
-        MAP["Edge mappings (common/harness/)<br/>producer → catalog → consumer"]
+    subgraph PC["Host PC: one executable"]
+        subgraph H["Central harness process"]
+            CLK["SystemClock<br/>1x or 10x, pause, 05:00:00, tick 0.1 s"]
+            HUB["Tick fan-out and<br/>edge mappings"]
+        end
+        CTC["CTC Office process"]
+        TKS["Track Controller SW process<br/>Green"]
+        TKM["Track Model process"]
+        TRM["Train Model process<br/>one model per train"]
+        TCS["Train Controller SW process<br/>Green-line trains"]
     end
-    CTC["CTC Office"]
-    TKC["Track Controller<br/>SW and HW"]
-    TKM["Track Model"]
-    TRM["Train Model<br/>(one per train, in a fleet)"]
-    TRC["Train Controller<br/>SW and HW (one per train)"]
-
-    CLK -. tick .-> CTC
-    CLK -. tick .-> TKC
-    CLK -. tick .-> TKM
-    CLK -. tick .-> TRM
-    CLK -. tick .-> TRC
-    CTC -- "speed 1x or 10x; pause and resume (G-CLK-3)" --> CLK
-
-    CTC <--> MAP
-    TKC <--> MAP
-    TKM <--> MAP
-    TRM <--> MAP
-    TRC <--> MAP
+    subgraph PI["Raspberry Pis"]
+        TKH["Track Controller HW<br/>Red"]
+        TCH["Train Controller HW<br/>Red-line trains"]
+    end
+    CLK --> HUB
+    HUB <-->|"dt, sim time and inputs; outputs back"| CTC
+    HUB <--> TKS
+    HUB <--> TKM
+    HUB <--> TRM
+    HUB <--> TCS
+    HUB <-->|"USB (Q7)"| TKH
+    HUB <-->|"USB (Q7)"| TCH
+    CTC -.->|"clock_speedup, clock_paused"| CLK
 ```
 
-The data carried on each edge is listed in Appendix A.
+All module-to-module data passes through the harness's edge mappings (D005). Appendix A
+lists what each edge carries.
 
 ### 4.2 Clock
 
-| Aspect | Design | Source |
-|---|---|---|
-| Owner | One `SystemClock`, created by the harness. Module-owned clocks and timers are removed or redirected (G-CLK-7). | [T] D017; [U] |
-| Tick and dt | `tick_s` is 0.1 s and constant. Every module steps with dt = `tick_s`. The Train Controller HW's speed-scaled dt has to go. | [T] D006, D017 |
-| Speed | 1x or 10x. The CTC's `CtcOutputs.clock_speedup` (bool) goes to the harness, which calls `SystemClock.set_speed(10)` when it is true and `set_speed(1)` when it is false. | [T] `signals/clock-speedup.md`, D017; [U] |
-| Pause and resume | The CTC asks the harness, which calls `SystemClock.pause()` or `resume()`. The carrier is undefined (G-CLK-3). | [T] D017; [U] |
-| Start and display | Starts at 05:00:00, shown as `HH:MM:SS`. Every window shows harness time (G-CLK-8). | [T] D017 |
-| Pacing | `ClockDriver` on a Qt event loop (exists), or a new pacer if the process model needs one (G-RUN-1). The policy when behind is G-CLK-5. | [C] |
+| Aspect | Design | Source | Open |
+|---|---|---|---|
+| Owner | One `SystemClock` in the harness process. Every module clock and test clock goes. | [T] D017; [R16] | The CTC window clock (G-CLK-7) |
+| Per tick | The harness sends dt and the simulation time, with each module's inputs, straight to every module. | [R1, R2] | Which simulation time (Q2) |
+| dt | 0.1 s, fixed. Speed and pause change the tick rate only. The Train Controller's speed-scaled dt belonged to its test UI. | [T] D006, D017; [R15] | none |
+| Speed | `clock_speedup` true makes the harness call `set_speed(10)`, and false `set_speed(1)`. | [T] `clock-speedup`; [R3] | none |
+| Pause and resume | `clock_paused` true makes the harness call `pause()`, and false `resume()`. While paused nothing is stepped, so the CTC Office cannot report a resume as a step output. The harness has to read `clock_paused` outside a step, for example from a state message the CTC Office's process sends when the value changes. [P] `ctc-deployment/20261016-1517-clock-pause.md` proposes exactly that. | [R3]; [P] | G-CLK-3 |
+| Start | Paused at 05:00:00. | [T] D017 | none |
+| Display | Every window shows the time the harness sends. | [T] D017 | G-CLK-8 |
+| Pacing | `ClockDriver` on the harness's Qt event loop. | [C] | Q1, G-CLK-5 |
 
-**Design consequence for pause.** A paused clock steps no module. A "resume" that travels as
-an output of the CTC's `step()` would therefore never arrive. Pause and resume have to reach
-the harness outside the tick: for example, the CTC UI calls a harness method, or the harness
-reads the CTC's requested clock state between ticks. Speed can travel either way. Which
-mechanism to use, and how `truth` records it, is G-CLK-3.
+### 4.3 One tick (decided: option C with R1)
 
-### 4.3 One tick, and what "in parallel" could mean (G-CLK-1)
+Tick *k*:
 
-| Option | Meaning of "in parallel" | Consequences |
-|---|---|---|
-| **A. Same tick, snapshot inputs** | Each module receives tick *k* directly from the harness. Every module steps on inputs mapped from all modules' outputs at tick *k*−1. The harness collects all outputs, then maps them for tick *k*+1. Steps may run one after another on one thread. | Order-independent and deterministic. Fits the five existing single-threaded `step()` cores. Each edge hop adds one tick of latency. |
-| **B. Same tick, fixed order** | Each module receives tick *k* directly, but the harness steps modules in a fixed order, and each sees upstream outputs from the same tick. | Less latency. Results depend on the order, so this is hardly "parallel". |
-| **C. Concurrent execution** | Modules step at the same time on separate threads or processes. The harness waits at a barrier before tick *k*+1. | True parallelism. But the Train Model fleet and the Track Controller SW state are QObjects bound to one thread. Python threads share one interpreter lock. Processes need inter-process calls on every tick, which is 100 per second at 10x. |
+1. The clock fires tick *k*, with its simulation time and dt.
+2. The harness maps the outputs it holds from tick *k*−1 into each module's inputs.
+3. It sends dt, the simulation time and the inputs to every module process at once.
+4. Every module steps in its own process at the same time and replies with its outputs.
+5. The harness stores the replies for tick *k*+1.
+6. Windows refresh from their own module's state. What an operator changes in a window
+   reaches the other modules through that module's next outputs (G-RUN-8).
 
-**Recommendation (not a decision): option A.** It gives "in parallel" a precise, testable
-meaning without threads. It fits every existing `step()` core, and it leaves option C open
-for any module that cannot meet the tick budget. Tick *k* under option A:
+Open (Q1, G-CLK-11): whether step 5 waits for every reply before tick *k*+1, and what
+happens to a reply that is late. A rejected tick is skipped and the run continues (R19).
 
-1. The clock fires tick *k*, carrying (simulation time, dt). What modules receive is G-CLK-2.
-2. The harness maps the stored outputs of tick *k*−1 through the edge mappings into each
-   module's inputs.
-3. The harness steps every module with the same tick. The order does not affect results.
-4. The harness stores all outputs.
-5. Between ticks, the harness applies its own commands: CTC speed, pause and resume, and
-   train dispatch and retirement (G-SIG-6).
-6. Windows refresh from module snapshots. Display only.
+Latency: a suggestion travels CTC Office → Track Controller → Track Model → Train Model →
+Train Controller in four ticks, 0.4 s simulated. A block change goes round in about five
+ticks: from the Track Model's occupancy, through the Track Controller to the CTC Office, and
+back as a new suggestion through the Track Controller and the Track Model to the train.
+G-NEW-1 depends on this.
 
-Latency under option A: a suggestion travels CTC → Track Controller → Track Model → Train
-Model → Train Controller in four ticks. That is 0.4 s simulated, or 40 ms real at 10x.
-
-Budget: at 10x a tick arrives every 10 ms of real time, so steps 2 to 6 must average under
-10 ms for the whole system. No system-level measurement exists (G-CLK-6).
+Budget: at 10x a tick comes every 10 ms of real time. Seven module processes make 700 step
+messages a second, two of them over USB. Nothing has been measured (G-CLK-6).
 
 ### 4.4 Data exchange
 
-- One mapping function per producer-to-consumer edge in `common/harness/` (D005). Each
-  translates producer type → catalog type → consumer type (D008).
-- Translations the harness needs whatever the open decisions say:
-  - Block identifiers (G-SIG-11).
-  - Enum spelling: `NORMAL` and `RED` in the Track Model versus `"normal"` and `"red"` in
-    the Track Controllers.
-  - Field names, for example `speed_mps` versus `commanded_speed_mps`.
-  - Flat catalog feeds versus the Train Model's nested `TrackInputs`.
-  - Per-train versus per-block suggestions (G-SIG-3).
-  - Meaning of an absent key (G-SIG-12).
-- Track Controller and Train Controller variants need one mapping per variant per edge until
-  their contracts converge (G-HW-3).
-- Appendix A shows, for each edge, which signals [T] defines and which mappings exist today.
+- One mapping function per edge (D005). The catalog is gone (R11), so each mapping
+  presumably goes straight from producer type to consumer type (Q12).
+- Blocks are named as the CTC Office names them, `("Green", "63")` (R6). The Track Model
+  (`"GREEN K-63"`) and the Track Controller HW's Track Model side (with the section letter)
+  need translating.
+- Every enumerated value is all caps (R17). The CTC Office and both Track Controllers spell
+  theirs in lower case today. The Track Model is all caps. The Train Controller spells the
+  fourth aspect `"SUPER GREEN"`, with a space.
+- Suggestions: the CTC Office sends one `TrainSuggestion` per train, naming the block (R7).
+  The Track Controllers read the block and speed (R20). How the train ID reaches later
+  modules is Q17.
+- Commanded speed is a float (R24). Its reach is Q9.
+- Process boundary: every edge now crosses two process boundaries, module to harness and
+  harness to module. So every module needs an encoder and decoder for its boundary types, in
+  one wire format shared by all (G-RUN-6). Today these exist only in test scaffolding
+  (section 3.4).
 
-### 4.5 Process model (G-RUN-1)
+### 4.5 Process model (decided: option 2)
 
-| Option | Description | For | Against |
-|---|---|---|---|
-| 1. One process | The harness creates one Qt application, constructs every module core, calls `step()` directly, and opens each module's window in the same event loop. | Direct calls, with no inter-process traffic per tick. Matches the Train Model guide ("one system process, no IPC"), a single executable, and a single machine (REQ-DSN-003). | Every module's entry point builds its own `QGuiApplication`. Only the Train Model's guide documents attaching its window to an externally created engine. A stalled window stalls the clock. Import-root collisions must be resolved: five top-level `tests` packages, two `app.py` files in `TrackCtrlHw/`, and the `ui` namespace package. |
-| 2. One process per module | Each module keeps its window process, and the harness steps it over a local socket. | Modules keep their entry points and run isolated from each other. | The existing links are test scaffolding (D010). They use six different protocols, and several block for up to 2 s per reply. At 10x that is 100 round trips per module per second. Packaging must spawn child processes, and `TrackCtrlHw/launch.py`, for example, would not run from a frozen build. |
-| 3. Hybrid | Cores and the harness run in one process, and windows run in others. | Isolates the windows from the clock. | Window state would have to be mirrored across processes. Nothing supports this today. |
+The harness is one process. It spawns one process per module, and the HW variants run on
+Pis on USB (R4, R5). The executable opens the harness, and the harness opens each module
+(R29).
 
-**Recommendation (not a decision): option 1 for Iteration 3.** Five of the seven
-implementations already offer a synchronous in-process `step()`, and the Train Model guide
-assumes one process. Revisit the choice if the HW variants turn out to need separate
-devices (G-HW-1).
+What each module needs when the harness launches it [C]:
 
-### 4.6 Lifecycle (each step names the gap that blocks it)
+| Module | Today's entry point | Must be off or replaced under the harness |
+|---|---|---|
+| CTC Office | `python -m ctc_ui` | The window's own clock and its clock link (`ctc_ui/__main__.py:76-77`). The header must drive the module's `clock_paused` and `clock_speedup`. Its time of day and hourly history must come from the harness's time. |
+| Track Controller SW | `python main.py` | Loading Red. The test client is simply not launched. PLC programs must be loaded (Q13). |
+| Track Controller HW | `python TrackCtrlHw/ui/main.py` | The test UI (R12). Its databases and programs load only from the window (Q13). |
+| Train Controller | `python main.py` in `Train-Ctrl_HW/` | The test bench, the console's own timers and clock, and commissioning through the UI (Q14). Its fleet must be passed in. |
+| Track Model | `python TrackModel/main.py` | The test UI (R12). |
+| Train Model | `python main.py` in `TrainModel/` | The test UI (R12), and the `T-1` it creates at startup (Q3). |
 
-1. **Launch.** The harness creates the clock, which starts paused at 05:00:00 (the
-   `SystemClock` default), and the event logger (G-RUN-4).
-2. **Layouts.** Who loads `TrackModel/*_line.json` is undecided (G-LIFE-1). Today the CTC,
-   the Track Controller SW, the Track Model and the Train Model's stand-in each read the
-   files themselves. The Track Controller HW reads its own wayside cuts of them.
-3. **Modules.** Construct the cores and select variants per line and per train (G-HW-2).
-4. **Readiness.** A person loads PLC programs in the Track Controller UI. The CTC sends
-   nothing to a line until that line is ready (G-SIG-5).
-5. **Run.** The dispatcher resumes the clock from the CTC (G-CLK-3).
-6. **Dispatch.** The trigger that adds a train to the Train Model fleet and the Train
-   Controller is undefined. So are the train ID format and the yard entry block (G-SIG-6).
-7. **Retire.** On a run's completion or yard entry, the Train Model and Train Controller
-   instances are removed (G-SIG-6).
-8. **Errors.** What to do when a module rejects a tick is undefined (G-LIFE-4).
-9. **Shutdown.** No requirement or module defines it (G-LIFE-3).
+Existing links, measured against what a harness channel needs [C] (Appendix B):
 
-## 5. Integration plan (suggested)
+| Link | Usable as is | Missing |
+|---|---|---|
+| CTC Office | It has request IDs and `step`, and it pushes a snapshot on change, `clock_paused` and `clock_speedup` included. | Simulation time in `step`. Each reply is the whole snapshot. The client blocks for up to 2 s. Any number of clients may drive it. The code calls itself "only for testing". |
+| Track Controller SW | `step` carries `time_s`, and PLC programs load over the link. | Up to 25 full UI snapshots a second interleave with replies. A second client is refused, so a test UI left running would lock out the harness. There is no reusable client. |
+| Track Controller HW | It has `step` and `reset`. | Territories and PLC programs cannot load over the link. |
+| Track Model | It has `step`. | It has no request IDs, so an error cannot be matched to its request. Pushes and replies both carry `outputs`. Any number of clients may drive it. |
+| Train Model | It has request IDs, `step`, `add` and `remove`. | `add` picks the train ID itself, and the last train cannot be removed. `step` must name exactly the current roster. |
+| Train Controller | none | Everything |
 
-Following the course deck's advice against all-at-once integration (p.80) and the readiness
-in section 3, each phase ends with a runnable harness test.
+Decisions this leaves open:
+
+- **G-RUN-6, protocol.** One harness-to-module protocol and wire format for all seven, over
+  local sockets on the PC and over USB to the Pis. It needs request IDs, a guard so the
+  harness is the only driver, a client that does not block the harness, simulation time in
+  every step, and a way to deliver state that changes between ticks.
+- **G-RUN-7, liveness.** No module prints a ready line or has a quit operation. Closing a
+  window ends its process (Qt's default). The harness has to notice a child that is up,
+  dead or closed.
+- **G-RUN-8, changes between ticks.** Window actions change module state outside any tick:
+  dispatcher actions, Track Model failures and ambient temperature, the Train Model's
+  passenger brake, PLC loads and commits, and gain commissioning. Under R1 they have to
+  reach the harness as outputs of the next tick, or as pushes.
+- **G-RUN-2, packaging.** How one frozen executable launches itself once per module. Data
+  and QML load from paths relative to `__file__`. Several modules edit `sys.path`. There are
+  seven `main.py` files and several `ui` folders. Whether `launch.py`'s pattern survives
+  freezing has not been tried.
+
+### 4.6 Lifecycle
+
+1. **Launch.** The executable starts the harness, which creates the clock, paused at
+   05:00:00 (R29).
+2. **Modules.** The harness spawns each module process and chooses variants by line (R5):
+   the Track Controller SW for Green, the HW on a Pi for Red, and for each train the Train
+   Controller of its line. How a Pi is started is open (Q7).
+3. **Layouts.** Each module loads the line JSON files by default at startup (R18). The CTC
+   Office, the Track Controller SW and the Track Model already read them. The Track
+   Controller HW reads its own wayside files, Green only, and only from its window.
+4. **Readiness.** Gated per line (R8): no dispatch on a line until every Track Controller on
+   it is ready. Who loads the programs, and whether the clock waits, is Q13.
+5. **Run.** The dispatcher presses Run in the CTC Office. `clock_paused` goes false, and the
+   harness resumes the clock (R3).
+6. **Dispatch.** The CTC Office pulls a train from the yard (R9). How the Train Model and the
+   Train Controller learn of it is Q3.
+7. **Retire.** The CTC Office returns the train to the yard (R9). The same question applies.
+8. **Errors.** A rejected tick is skipped and the run continues (R19). What can break is to
+   be revisited (G-LIFE-4).
+9. **Shutdown.** Undefined, and it now includes the child processes (G-LIFE-3).
+
+There is no event logger (R13).
+
+## 5. Integration plan
+
+The team accepted the phases ("All good"). Phase 0 changes to fit process model 2. Each
+phase still ends with a runnable harness test, following the course deck's advice against
+integrating everything at once.
 
 | Phase | Content | Needs first |
 |---|---|---|
-| 0 | Harness skeleton: one `SystemClock` and pacer; tick fan-out to stub modules; CTC speed, pause and resume hook; event-log hook; one end-to-end tick test | G-CLK-1, G-CLK-2, G-CLK-3, G-RUN-1 |
-| 1 | Train Model plus one Train Controller on a fixed track feed. HW first: it has a PI law, and its fleet exists on `train-ctrl-hw-integration`. Fix the speed-scaled dt. | G-SIG-6, G-HW-2, G-HW-3 |
-| 2 | Add the Track Model, with real track feeds and position reports. Complete the half-built edges. | G-SIG-9, G-SIG-11 |
-| 3 | Add one Track Controller variant for commanded speed and authority, switches and signals, and readiness. | G-SIG-1, G-SIG-2, G-SIG-5, G-SIG-12 |
-| 4 | Add the CTC: dispatch, suggestions, occupancy, ticket sales, and clock control. Iteration 3 scenario: dispatch a train from the yard to a station (2026-11-12). | G-SIG-3, G-SIG-4, G-SIG-7 |
-| 5 | Second variants of both controllers, the Train Controller SW boundary, packaging as one executable, and the event log in CSV | G-HW-1, G-RUN-2, G-RUN-4 |
+| 0 | Harness process: `SystemClock` and `ClockDriver`; spawning and watching the child processes; the protocol and wire format; tick fan-out to stub module processes; reading the CTC Office's speed and pause; an end-to-end tick test with stubs. | Q1, Q2, G-RUN-6, G-RUN-7 |
+| 1 | Train Model and one Train Controller on a fixed track feed, for one Green train: fleet `add`, the commands, `bool[2]` brakes. | Q3, Q4, Q8, Q14 |
+| 2 | Track Model: track feeds, position reports, doors open, and clearing after delivery (R10). | Q5, Q9 |
+| 3 | Track Controller SW on Green: commanded speed and authority per block, switches, signals, readiness, failures as closures. | Q6, Q13 |
+| 4 | CTC Office: dispatch from the yard, suggestions, occupancy, ticket sales and clock control. The Iteration 3 scenario on Green: dispatch a train from the yard to a station (2026-11-12). | Q3, Q17 |
+| 5 | Red: Track Controller HW and Train Controller HW on Pis over USB; packaging as one executable. | Q7, G-RUN-2, G-NEW-5 |
 
-Missing integration guides (section 3.1) should be written as each module joins, so that
-the harness code is not the only record of how to drive a module.
+The missing integration guides (section 3.1) should be written as each module joins.
 
 ## 6. Gaps and open questions
 
-"Owner" is the owner named on the governing `truth` entry. Where `truth` names none, it says
-"unassigned". "Blocks" means the harness core (**Core**), the first train run at Iteration 3
-(**Iter 3**), or the full system (**Full**).
+"Owner" is the owner named on the governing `truth` entry, or "unassigned". Status is one
+of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolved, **Closed**
+(dropped by a decision), or **Open**.
 
 ### 6.1 Clock and timing
 
-| ID | Gap or question | Evidence | Owner | Blocks |
-|---|---|---|---|---|
-| G-CLK-1 | What "in parallel" pins down beyond direct fan-out: concurrent execution or not; same-tick or previous-tick visibility between modules; a barrier before the next tick (options in section 4.3). | [U]; [P] D017 proposal (section 7.1). Every module core is single-threaded, and `SystemClock.tick()` calls listeners in sequence. | Kevin (statement); D017 owner Landis | Core |
-| G-CLK-2 | What each module receives per tick. D017 says simulation time. The CTC, Track Model, Train Model and Train Controller SW take dt only, and the Train Controller HW's control step takes no time argument on `development`. The Track Controllers accept `time_s` as "seconds since midnight", while `SystemClock.sim_time_s` keeps counting past midnight (only `time_of_day_s` wraps). | `ctc/interface.py:334`; `track_model/model.py:149`; `train_model/model.py:149`; `TrackCtrlSW/track_ctrl/interface.py:118` | D017 owner Landis; module owners | Core |
-| G-CLK-3 | How pause and resume travel from the CTC to the harness, and how `truth` records it. D017 gives the CTC pause and resume, and [U] confirmed it. No signal entry exists. `CtcOutputs` has no pause field. A resume cannot ride on a step output (section 4.2). | `signals/clock-speedup.md` covers speed only; `ctc/interface.py:182-187` | D017 owner Landis; signal owner CTC Office | Core |
-| G-CLK-4 | Tick length. REQ-NFR-001.1 says the simulation *should* advance in 1 ms ticks, while D017 sets 0.1 s. Record a deviation, or change the tick? | `srs-filled.md:443`; D017 | D017 owner Landis | Full |
-| G-CLK-5 | Dropped ticks. REQ-NFR-001.2 says the simulation *shall not* drop ticks. `ClockDriver` discards any backlog beyond 100 owed ticks, so simulated time slips but no step is skipped. Does slipping count as dropping? What is the harness policy when it falls behind? | `srs-filled.md:444`; `utils/clock_driver.py:27-30` | D017 owner Landis | Core |
-| G-CLK-6 | Real-time budget. At 10x every tick has 10 ms of real time. Only the Train Model is measured (20 trains, under 10 ms). No per-module budget or system measurement exists. | `TrainModel/tests/test_fleet.py:197-213` | unassigned | Iter 3 |
-| G-CLK-7 | Clocks and timers inside modules that must be removed or redirected: the CTC window's clock and clock link; the Train Controller SW's 1 s timer; the Train Controller HW's 20 Hz and 10 Hz timers and its speed-scaled dt; the four test-UI clocks. Wall-clock UI timers also exist: Train Controller HW announcement lockout and gains hand-over, Train Model ad rotation and popup close. Which of them may stay on wall-clock time? | Section 3.2; `Train-Ctrl_HW/main.py:882` | module owners (unassigned except Train Model: Kevin Schillinger) | Iter 3 |
-| G-CLK-8 | Displayed time. D017 requires time of day from 05:00:00. The Train Model and Track Model windows show elapsed time from 00:00:00, the Train Controller SW starts at 21:26:35, and the Train Controller HW at 00:00:00. | `TrainModel/train_model/state.py`; `Train-Ctrl_HW/main.py:851`; `train_controller_state.py:130` | module owners | Iter 3 |
-| G-CLK-9 | Location. D017 puts `SystemClock` code in `utils/` with the harness owning the instance; [U] said "the clock lives in the central harness". Confirm the code is not meant to move. | D017; [U] | Kevin; D017 owner Landis | Core (low) |
-| G-CLK-10 | Clock reset. `SystemClock.reset()` is not relayed to modules. Do modules reset with the clock? | `utils/system_clock.py:177` | D017 owner Landis | Full |
+| ID | Status | Gap, and what remains | Owner |
+|---|---|---|---|
+| G-CLK-1 | Resolved (R1, R4) | Meaning of "in parallel": direct fan-out, concurrent steps, inputs on the rising edge. The barrier question moved to G-CLK-11. | D017 owner Landis |
+| G-CLK-2 | Partly (R2) | Every module gets dt and the simulation time. Open: which time (Q2). The CTC Office, Track Model, Train Model and Train Controller take dt only and need the new input. The Track Controllers' `time_s` gives way to the common field (R14). | D017 owner Landis; module owners |
+| G-CLK-3 | Partly (R3) | The carrier is the CTC Office's `clock_paused` and `clock_speedup`. Open: how the harness reads `clock_paused` while paused ([P] `ctc-deployment/20261016-1517-clock-pause.md`, whose form waits for Landis to confirm). The header must drive the module's values, not the window's clock. | signal owner CTC Office |
+| G-CLK-4 | Open | Tick length: REQ-NFR-001.1 asks for 1 ms ticks, and D017 sets 0.1 s. | D017 owner Landis |
+| G-CLK-5 | Open | Dropped ticks: REQ-NFR-001.2 forbids them, and `ClockDriver` drops the backlog beyond 100 owed ticks. Under process model 2 the reply timeouts of the existing links (2000 ms, or 200 ticks at 10x) exceed that cap. | D017 owner Landis |
+| G-CLK-6 | Open | Real-time budget: 10 ms per tick at 10x across seven processes and USB. Only the Train Model is measured: 20 trains step in under 10 ms in one process. The wall-clock driver test fails intermittently on this machine (section 3.5). | unassigned |
+| G-CLK-7 | Partly (R15, R16) | The test-UI clocks go, and the speed-scaled dt was test-only. Left: the CTC window's clock; the Train Controller's 10 Hz UI timer, which advances the console's own clock; and wall-clock UI timers (announcement lockout, gains hand-over, Train Model ads). May those stay on wall-clock time? | module owners |
+| G-CLK-8 | Open | Displayed time: the Train Model and Track Model windows show elapsed time from 00:00:00, and the Train Controller starts at 00:00:00. D017 requires time of day from 05:00:00. | module owners |
+| G-CLK-9 | Open (low) | Location: the `SystemClock` code is in `utils/`, and the harness owns the instance. Confirm the code stays there. | D017 owner Landis |
+| G-CLK-10 | Open | Clock reset is not passed to modules. Do modules reset with it? | D017 owner Landis |
+| G-CLK-11 | Open (new) | Barrier and late replies (Q1). | D017 owner Landis |
 
 ### 6.2 Signals and edges
 
-| ID | Gap or question | Evidence | Owner | Blocks |
-|---|---|---|---|---|
-| G-SIG-1 | `truth` has no signal entries for Track Controller → Track Model. That covers commanded speed and authority, whose origin is now stated ([U], section 7.1) but whose form, keying and timing are open. It also covers switch position, signal aspect ([P] `signal-light-command`, aspect names open) and crossing commands. | `signals/switch-command.md` mentions this edge with no entry; both Track Controllers and the Track Model already exchange these per block | Track Controller and Track Model module owners (unassigned) | Iter 3 |
-| G-SIG-2 | `truth` has no entries for Track Model → Track Controller: occupancy (REQ-INTF-018), switch, crossing and signal read-back, or failures. The HW variant consumes failures and the SW variant does not. | `signals/block-occupancy.md` says this is "outside this entry" | unassigned | Iter 3 |
-| G-SIG-3 | Suggested speed and authority keying. [T] says per train ID. Both Track Controllers key per block. The CTC's `TrainSuggestion` carries train ID, line and block. The branch edge maps to blocks and drops the train ID. | `signals/suggested-speed.md`, `suggested-authority.md`; [P] D015 "Track Controller knows blocks, never trains"; [P] conflict records name Kevin as resolver | Kevin (per [P]); signal owner CTC Office | Iter 3 |
-| G-SIG-4 | Track Controller → CTC reports beyond occupancy. The CTC consumes switch and crossing reports and per-wayside readiness, none of which has a `truth` entry. Crossing form differs: the CTC uses `"active"`/`"inactive"` and the Track Controllers use a bool. | `ctc/interface.py:59-82` | unassigned | Iter 3 |
-| G-SIG-5 | Readiness handshake. No `truth` entry exists. Four pending proposals disagree on granularity: module, line or wayside. The CTC gates per line. The Track Controller SW reports a module-level flag on `development` and per-wayside on its branch; the HW reports none. Only a person at the Track Controller UI can make a line ready. Does the harness hold the clock until ready? | [P] `Track-Ctrl-SW/20261014-0950-track-controller-ready.md`; [P] `ctc-deployment/20261015-1949-…`, `20261016-1354-…` | unassigned | Iter 3 |
-| G-SIG-6 | Train dispatch and retirement. No signal creates or retires a train. The CTC infers trains from yard-exit occupancy and never announces one, yet a train must exist in the Train Model and Track Model before any occupancy appears. `fleet.add(train_id, line)` and the HW's `add_train` need a caller. The train ID format is undecided (`"T-214"`, `"T-114"` and `"T-1"` are all in code). | `ctc/tracking.py:160-173`; [P] `train-model-instance-mgmt/20261009-1928-…` gives dispatch to the harness; `conventions/identifiers.md` lists the train ID as pending | identifiers owner Kevin; unassigned | Iter 3 |
-| G-SIG-7 | Ticket sales. [T] says per line as `<int, string>`. The code is per station in both the Track Model and the CTC. The existing edge emits a list labelled by line, but the CTC expects a dict. Five pending proposals disagree. | `signals/ticket-sales.md`; `ctc/interface.py:110`; `track_model_edges.py:134-144` | signal owner Track Model | Full |
-| G-SIG-8 | Failure reporting. The Track Model reports per-block failures to the Track Controller. The HW consumes them and the SW does not. The CTC infers failures from occupancy. The [T] arbitration `no-authority-into-unusable-block` assumes the Track Controller reports failures, but no signal carries them. | `TrackCtrlHw/track_ctrl_hw/interface.py:148`; `ctc/tracking.py` | unassigned | Full |
-| G-SIG-9 | Mismatches on the Track Model ↔ Train Model edge. `track-info` has 5 fields in `truth` but 6 in code (`station_name`). Commanded speed is an int in the Track Model and a float in the Train Model. Blue Line beacons carry side `""`, which the Train Model rejects (it fails the whole tick). The Track Model sends beacons and boarding counts every tick in the block, while the Train Model docs expect one event. `doors_open` is required by the Track Model but missing from the Train Model's outputs. | `signals/track-info.md`; `track_model_edges.py:192`; `train_model/model.py:264-268`; `common/interfaces.py:413` | signal owner Track Model; Train Model owner Kevin Schillinger | Iter 3 |
-| G-SIG-10 | Signal aspect seen by the train. A provisional Track Model → Train Controller edge exists, the HW input `signal_light_ahead` exists, and the SW is fixed at GREEN. No `truth` entry. | `track_model_edges.py:171-181` | unassigned | Full |
-| G-SIG-11 | Canonical block identifier. The Track Model uses `"GREEN D-13"`. The Track Controller SW uses `BlockKey(line, block_id)`, the HW `BlockKey(line, section, block_id)`, and the CTC `(line, block_id)`. [T] specifies line plus block number as strings, with "Green". Line names are also upper case in the Track Model. Switch identity differs: point block versus the block it is listed on. The catalog keys by `block_id` alone. | `TrackModel/track_model/layout.py:62-64`; `conventions/identifiers.md` | identifiers owner Kevin | Iter 3 |
-| G-SIG-12 | **Absent-key semantics (safety-relevant).** In both Track Controllers, a block not listed transmits nothing. In the Track Model, an absent key keeps its last commanded speed and authority. When a suggestion is withdrawn, the train keeps the old values. One side must change, or the harness must write explicit zeros. | `TrackCtrlSW/track_ctrl/interface.py:139`; `TrackCtrlHw/track_ctrl_hw/wayside.py:529-531`; `TrackModel/track_model/interface.py:184`, `model.py:280-281` | Track Controller and Track Model module owners (unassigned) | Iter 3 |
-| G-SIG-13 | Catalog drift. D008 requires `common/interfaces.py` to agree with `truth`, and it does not (section 3.4). The catalog has no types for CTC ↔ Track Controller, Train Model ↔ Train Controller, or clock commands. The branch edge `ctc_edges.py` bypasses the catalog. | `common/interfaces.py`; D008 | D008 owner Kevin | Core |
-| G-SIG-14 | Edge coverage. The only complete mapping is CTC → Track Controller SW, and it is on a branch. Six Track Model edges are one-sided. Nothing maps Track Controller → CTC, Train Model ↔ Train Controller, or CTC → clock. | Appendix A | unassigned | Iter 3 |
-| G-SIG-15 | Station dwell. Its owner and value are open. [T] D007 says 45 s and records a 60 s conflict. The CTC scheduler uses 45 s. The Train Model test UI holds the dwell. SRS REQ-FUNC-036 assigns station stops to the Train Controller, and neither Train Controller implements them. | `decisions/D007-station-dwell.md` | D007 resolution owner Kevin | Iter 3 |
-| G-SIG-16 | Door interlock owner: nothing enforces it. Passenger emergency brake release: no signal or mechanism. | `signals/door-command.md`; `arbitration/passenger-emergency-brake.md` | Train Controller; Train Model | Full |
-| G-SIG-17 | Maintenance mode. [T] superseded it in favour of `closed-blocks`. The Track Controller HW still requires the flag, and SRS REQ-FUNC-057 says the wayside must know maintenance mode. | `signals/maintenance-mode.md`; `srs-filled.md:422` | signal owner CTC Office | Iter 3 |
-| G-SIG-18 | Heaters and ambient temperature. The Track Model runs heaters only when commanded. The Track Controller SW says the Track Model switches them on its own, so as built the heaters never run. Ambient temperature has no source. | `TrackCtrlSW/track_ctrl/interface.py:17-18`; `TrackModel/track_model/interface.py:199-200` | unassigned | Full |
+| ID | Status | Gap, and what remains | Owner |
+|---|---|---|---|
+| G-SIG-1 | Partly (R10) | Track Controller → Track Model. Commanded speed and authority go per block and are cleared after delivery ([P] `track-signal`). Open: `truth` entries for the switch, signal and crossing commands; the signal is [P] `signal-light-command`, with its aspect names in conflict and Braden named to resolve it. | Track Controller and Track Model owners |
+| G-SIG-2 | Partly (R23) | Track Model → Track Controller. R23 sends failures this way. Open: `truth` entries for occupancy, the read-back states and failures. | unassigned |
+| G-SIG-3 | Resolved (R7, R20) | One suggestion per train, naming the block ([P] `suggested-speed`, `suggested-authority`). The Track Controller reads block and speed. Left: Q17. | signal owner CTC Office |
+| G-SIG-4 | Closed (R21) | Track Controller → CTC Office reports. The team ruled it stale. The crossing spelling difference (`"active"` against a bool) falls under R17 and the mappings. | none |
+| G-SIG-5 | Partly (R8) | Readiness: a 2-D array, per line and per Track Controller, gated per line ([P] `track-controller-ready`). Open: what makes a controller ready, and who loads its programs (Q13). Three competing proposals hold every line (section 7.2). | Track Controller owners |
+| G-SIG-6 | Partly (R9) | Train creation: the CTC Office pulls trains from a black-box yard and returns them ([P] D022). Open: the signal that creates and retires a train in the Train Model and the Train Controller, and the ID format (Q3, Q4). The Train Model link's own ID scheme and its `T-1` at startup must go. | identifiers owner Kevin; unassigned |
+| G-SIG-7 | Resolved (R22) | Ticket sales per station, summed by the CTC Office. `truth` still says per line. Two pending proposals are per station (section 7.2). Left: a converter from the Track Model's list to the CTC Office's mapping. | signal owner Track Model |
+| G-SIG-8 | Partly (R23) | Failures: the Track Controllers consume Track Model failures and report them as closures. Open: PR #43 does the opposite for HW (Q6). The SW variant has no failure input. The CTC Office has no closure input. | Track Controller owners |
+| G-SIG-9 | Resolved (R24) | `track-info` has six fields, commanded speed is a float, and the Train Model sends doors open ([P] `track-info`, `door-state`). Left in code: the Track Model's commanded speed is an int; the Train Model has no doors-open output; how far the float reaches (Q9); Blue Line beacons with side `""`, which the Train Model rejects (Q11); and beacons sent every tick against one event. | signal owner Track Model; Train Model owner Kevin Schillinger |
+| G-SIG-10 | Partly (R25) | The driver sees the next light. Open: the path and the fourth aspect's spelling (Q10). The Train Controller silently drops an aspect it does not know. | unassigned |
+| G-SIG-11 | Resolved (R6) | The block identifier is the CTC Office's. Left: mappings for the Track Model's and the HW variant's keys, and the case of line names (Q15). | identifiers owner Kevin |
+| G-SIG-12 | Resolved (R10) | Stale values: the Track Model clears them to zero after delivery ([P] `track-signal`). Left: the Track Model still keeps the last value, and G-NEW-1. | Track Model owner |
+| G-SIG-13 | Resolved (R11) | Catalog drift: the catalog is superseded ([P] D008). Left: Q12. | D008 owner Kevin |
+| G-SIG-14 | Open | Edge coverage: only CTC Office → Track Controller SW is mapped end to end. Nothing maps Track Controller → CTC Office, Train Model ↔ Train Controller, or the clock. | unassigned |
+| G-SIG-15 | Resolved (R26) | Dwell is 45 s ([P] D007). Left: who holds it (Q16). | D007 owner Kevin |
+| G-SIG-16 | Open | Nothing enforces the door interlock, and nothing releases the passenger emergency brake. | Train Controller; Train Model |
+| G-SIG-17 | Resolved (R27) | Maintenance is `closed-blocks`, with no boolean, as [T] already says. PR #43 drops the HW flag. Left: the SW variant reads maintenance from switch commands, and SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
+| G-SIG-18 | Partly (R28) | Ambient temperature comes from the Track Model UI. Left: the Track Model input is still required. The Track Model runs heaters only when commanded, and the SW variant does not command them. | unassigned |
+| G-SIG-19 | Open (new) | Train Controller → Train Model shapes: brakes as `bool[2]` and the `announcement_command` name (R15, Q8). The [T] signals are one per brake. | Train Controller |
 
 ### 6.3 Lifecycle
 
-| ID | Gap or question | Evidence | Owner | Blocks |
-|---|---|---|---|---|
-| G-LIFE-1 | Who owns and loads the track layout. The CTC, the Track Controller SW, the Track Model and the Train Model's stand-in read `TrackModel/*_line.json` directly; the Track Controller HW keeps its own cuts of the file. The Train Controller HW branches move those files. | `documents/requirements-matrix.md` §4.6; `modules/track-model.md` (placeholder) | unassigned | Iter 3 |
-| G-LIFE-2 | Startup order and the 20 s budget (REQ-NFR-007), including initial clock state and PLC program loading. | Section 4.6 | unassigned | Iter 3 |
-| G-LIFE-3 | Shutdown. No requirement or module defines it. | Searched SRS, guides and code | unassigned | Full |
-| G-LIFE-4 | Error policy when a step raises or rejects input. Today the CTC prints and drops, the Track Controller HW test UI pauses the clock, the Train Model test UI holds the clock, the Track Model test UI drops ticks, and the Track Controller SW client owes up to 50. A rejected step freezes the CTC's elapsed time. | Section 3.3; `ctc_ui/ctc_host.py:229-231` | unassigned | Core |
-| G-LIFE-5 | Test UIs and other drivers at integration. [T] D010 removes the Train Model test UI, [P] D018 keeps the Track Controller HW test UI, and the rest are unstated. Every module's test link can step its module, so a single-driver guard is needed. | `decisions/D010-…`; [P] `feature/TrackCtrl-Module-Implementation/20261008-1314-D018-…` | D010 owner Kevin Schillinger | Iter 3 |
+| ID | Status | Gap, and what remains | Owner |
+|---|---|---|---|
+| G-LIFE-1 | Partly (R18) | Layouts load by default at startup. Left: the Track Controller HW's wayside files load only from its window, and none exist for Red (G-NEW-5). | unassigned |
+| G-LIFE-2 | Open | Startup order, and 20 s to ready (REQ-NFR-007) for seven processes. Nothing is measured. | unassigned |
+| G-LIFE-3 | Open | Shutdown, now including child processes and the Pis. | unassigned |
+| G-LIFE-4 | Partly (R19) | Rejected ticks: continue. The team will return to what can break. | unassigned |
+| G-LIFE-5 | Resolved (R12) | Every test UI goes at integration, and the harness is every module's single driver ([P] D005). Left: [P] D018 and the Track Controller HW README keep that test UI. | D010 owner Kevin Schillinger |
 
 ### 6.4 Process, packaging and runtime
 
-| ID | Gap or question | Evidence | Owner | Blocks |
-|---|---|---|---|---|
-| G-RUN-1 | Process model (section 4.5). | Entry points create their own `QGuiApplication`; links are test-only | unassigned | Core |
-| G-RUN-2 | Packaging. [T] requires one executable, but the course deck (p.17) also asks for each subsystem as an installable executable. No PyInstaller spec exists. Many files edit `sys.path`. QML and data load relative to the module, and only the Train Model handles `sys._MEIPASS`. Top-level names collide. | `conventions/files-and-paths.md`; meeting 007 deferred PyInstaller | unassigned | Full |
-| G-RUN-3 | Single machine (REQ-DSN-003) versus HW variants that might run on separate devices. Meeting 009 left "must all modules run on one computer?" open. | `origin/meeting-logs:documents/meeting_logs/009.md` | unassigned | Core |
-| G-RUN-4 | Event logger. [T] names one as a shared utility, and REQ-NFR-008 and REQ-INTF-015 require a CSV log. None exists. Location and format are needed. | `conventions/files-and-paths.md` | unassigned | Full |
-| G-RUN-5 | Toolchain. This machine has no project virtual environment. `TrackCtrlSW/README.md` pins PySide6 6.8.*, while [T] requires 6.11 or later. | `conventions/toolchain.md` | toolchain owner Kevin | Full |
+| ID | Status | Gap, and what remains | Owner |
+|---|---|---|---|
+| G-RUN-1 | Resolved (R4) | Process model 2. The work it creates is G-RUN-6, -7 and -8. | none |
+| G-RUN-2 | Partly (R29) | One executable that opens the harness, which opens the modules. Left: how it launches itself per module, and frozen-build behaviour (section 4.5). The course deck (p.17) also asks for each subsystem as its own installable executable. | unassigned |
+| G-RUN-3 | Partly (R30) | Everything runs on one computer in the final iteration. Left: how that fits the Pis (Q7). | unassigned |
+| G-RUN-4 | Closed (R13) | No event logger. The conflict with the SRS is filed (Q19). | files-and-paths owner Kevin |
+| G-RUN-5 | Resolved (R31) | PySide6 6.11 or later. Left: `TrackCtrlSW/README.md` still installs 6.8. | toolchain owner Kevin |
+| G-RUN-6 | Open (new) | The harness-to-module protocol and wire format (section 4.5). | unassigned |
+| G-RUN-7 | Open (new) | Knowing whether a child process is up, dead or closed (section 4.5). | unassigned |
+| G-RUN-8 | Open (new) | State that windows change between ticks (section 4.5). | unassigned |
 
 ### 6.5 Hardware variants and variant selection
 
-| ID | Gap or question | Evidence | Owner | Blocks |
-|---|---|---|---|---|
-| G-HW-1 | What "hardware" means. Neither HW variant has hardware I/O, and no hardware platform is documented anywhere. REQ-INTF-006 and -007 require hardware variations. The answer decides whether the HW variants are windows in the harness process or external devices on a link. | `Train-Ctrl_HW/main.py:314-320`; `TrackCtrlHw/` | unassigned | Core |
-| G-HW-2 | Variant selection: which Track Controller variant runs which line, and which Train Controller variant drives which train. [P] D014 has HW run one line and SW the other; the HW refuses a second line, and the SW loads both. Per `AGENTS.md`, active-variant selection is a `decisions/` entry, and none exists. | `TrackCtrlHw/track_ctrl_hw/controller.py:75-81`; `TrackCtrlSW/track_ctrl/state.py:69-71` | unassigned | Iter 3 |
-| G-HW-3 | Variant contracts. Track Controller SW and HW differ at the boundary in block key, maintenance flag, failures, readiness and line scope. Train Controller SW and HW share no interface. Both contract shards are placeholders with no named owner, although `AGENTS.md` requires one. REQ-INTF-009 and -010 require equivalence. | `modules/track-controller/track-controller.md`; `modules/train-controller/train-controller.md` | unassigned | Iter 3 |
+| ID | Status | Gap, and what remains | Owner |
+|---|---|---|---|
+| G-HW-1 | Partly (R5, R32) | Pis on USB, with the same inputs and outputs as SW. Open: the USB protocol, what runs on a Pi, and who builds it (Q7). No code exists. | unassigned |
+| G-HW-2 | Resolved (R5) | Track Controller HW on Red and SW on Green; Train Controller by the train's line ([P] D021). Left: the Blue Line (Q11); no HW data for Red (G-NEW-5); the SW variant still loads both lines. | D021 owner Kevin |
+| G-HW-3 | Partly (R32) | The interfaces are to be identical. Left: the Track Controller variants still differ in block keys, failures and line scope (PR #43 closes some of it). Neither contract shard on `truth` names an owner. | unassigned |
 
 ### 6.6 Truth and process
 
-| ID | Gap or question | Evidence | Owner |
+| ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-TR-1 | Commit `201708b` on `development` removed five `ctc-deployment` proposals as "promoted and denied". `truth` has no commit after 2026-10-08 and no `_promotions.md` row for them, and no promotion PR exists. The CTC implements four of them: suggestions carry the block, nothing is sent until ready, automatic dispatch (D020), and stops only at scheduled stations. | `git show 201708b --stat`; `origin/truth:truth/_promotions.md` | humans who promote |
-| G-TR-2 | Eight of nine module shards are placeholders with no owner. Only `modules/train-model.md` is populated. | `truth/INDEX.md` | unassigned |
-| G-TR-3 | Pending proposals contradict each other: ticket sales (five versions), readiness (four), maintenance mode (re-adding versus superseded), vital restrictions, D015 versus five arbitration entries, and D018 versus D010. | `truth/_inbox/**` | humans who promote |
-| G-TR-4 | Stale integration documents: the Train Model guide (says no harness exists), the CTC README (says no scheduling), the Track Controller SW README (describes an authority look-ahead that was removed), and the Track Model README (cites a check on a branch that no longer exists). | Section 3.1 | module owners |
+| G-TR-1 | Open | Commit `201708b` removed five `ctc-deployment` proposals as "promoted and denied", but `truth` records no promotion after 2026-10-08. Two of them are re-filed here (section 7.1). | humans who promote |
+| G-TR-2 | Open | Eight of nine module shards are placeholders with no owner. | unassigned |
+| G-TR-3 | Partly | The decisions settle several contradictions between pending proposals. Section 7.2 recommends what to promote and what to deny. | humans who promote |
+| G-TR-4 | Open | Stale integration documents: the Train Model guide (one process, no IPC); the Track Model guide (in-process); the Track Controller HW README (keeps the test UI); and the Track Controller SW README (PySide6 6.8). | module owners |
 
-## 7. Truth: proposals filed and candidate items
+### 6.7 Risks found while checking the decisions against the code
 
-### 7.1 Proposals filed in this session (pending human promotion)
+| ID | Risk | Evidence | Owner |
+|---|---|---|---|
+| G-NEW-1 | **Block boundaries can trip the emergency brake (safety-relevant).** Under R10 the Track Model clears a block's values after delivering them. When a train enters a block that has not yet received its own values, the train reads (0 m/s, 0 blocks), and keeps reading it until the new block's values arrive, about five ticks after the block change (section 4.3). The Train Controller treats exactly that reading, after a nonzero speed with at least 2 blocks of authority, as a signal-pickup failure, and latches the emergency brake (Q5). | `Train-Ctrl_HW/main.py:575-579`; `train_ctrl/control.py:219-223` on the Train Controller branches; `PICKUP_DETECT_MIN_BLOCKS = 2` | Train Controller and Track Model owners |
+| G-NEW-2 | **A wayside that never reports does not hold its line.** The CTC Office treats a line as ready when every wayside that has reported is ready, and it has no roster. If the harness drops one wayside's report, for example because its process died, its line still reads ready. R8 needs every Track Controller on the line. | `ctc/model.py:346-351` | CTC Office; harness |
+| G-NEW-3 | **One bad input stops every train for that tick.** The Train Model rejects the whole fleet's tick. Under R19 the run continues, but a repeated rejection freezes every train (Q18). | `TrainModel/train_model/fleet.py:124-146` | Train Model owner Kevin Schillinger |
+| G-NEW-4 | **No power without commissioning.** A train applies no power until an engineer sets its gains in the UI. An integrated run, and a Pi, need another way (Q14). | Section 3.3 | Train Controller |
+| G-NEW-5 | **No Red data for the Track Controller HW.** R5 puts the HW variant on Red, but only three Green wayside databases and programs exist. | `TrackCtrlHw/data/` | Track Controller HW |
 
-| File (under `truth/_inbox/claude/quirky-fermi-sickg4/`) | Target | Change |
-|---|---|---|
-| `20261016-1828-D017-clock-to-every-module-in-parallel.md` | `decisions/D017-shared-simulation-clock.md` (replace) | Adds "in parallel" to the harness passing simulation time to every module, as Kevin Schillinger stated on 2026-10-16. Everything else is carried over unchanged, including the CTC's pause and resume. What "in parallel" pins down is G-CLK-1. |
-| `20261016-1844-track-signal-from-track-controller.md` | `signals/track-signal.md` (replace) | States that commanded speed and authority come from the Track Controller, as Kevin Schillinger stated on 2026-10-16. Leaves open how they reach the track circuit (form, keying, timing): G-SIG-1, G-SIG-12. |
+## 7. Truth proposals
 
-Nothing was filed for "the CTC Office sets speed and pauses and resumes the clock"; that is
-already D017.
+### 7.1 Filed from this work (under `truth/_inbox/claude/quirky-fermi-sickg4/`)
 
-### 7.2 Candidate items found in documents (not filed)
+Each of the sixteen is a complete entry. The first two were overtaken by the review and
+should be denied. Promotion is for humans only.
 
-The research found these normative statements in documents that `truth` does not record.
-Each needs an owner's call on scope or interpretation before anyone writes a proposal.
+| File | Target | Change | Recommendation |
+|---|---|---|---|
+| `20261016-1828-D017-clock-to-every-module-in-parallel.md` | `decisions/D017-shared-simulation-clock.md` | "In parallel", as first stated | Deny: superseded by `20261016-2155-D017-…` |
+| `20261016-1844-track-signal-from-track-controller.md` | `signals/track-signal.md` | Values come from the Track Controller | Deny: superseded by `20261016-2155-track-signal-…` |
+| `20261016-2155-D017-fan-out-dt-and-sim-time.md` | `decisions/D017-shared-simulation-clock.md` | dt and simulation time sent straight to every module; inputs seen on the rising edge (R1, R2) | Promote |
+| `20261016-2155-D005-harness-process-per-module.md` | `decisions/D005-central-harness.md` | One harness process that spawns a process per module, one executable, single driver, no test UIs (R4, R12, R29) | Promote |
+| `20261016-2155-track-signal-per-block-cleared-after-delivery.md` | `signals/track-signal.md` | Per block, commanded speed a float, cleared after delivery (R10, R24) | Promote, with G-NEW-1 in mind |
+| `20261016-2254-D021-hardware-variants-and-selection.md` | `decisions/D021-hardware-variants-and-selection.md` (new) | Pis on USB, identical interfaces, variant by line (R5, R32) | Promote |
+| `20261016-2254-D022-yard-black-box.md` | `decisions/D022-yard-black-box.md` (new) | The yard is a black box of unlimited capacity; the CTC Office pulls and returns trains (R9) | Promote |
+| `20261016-2254-D008-catalog-superseded.md` | `decisions/D008-interfaces-harness-catalog.md` | Superseded (R11) | Promote |
+| `20261016-2254-D007-dwell-conflict-resolved.md` | `decisions/D007-station-dwell.md` | 45 s; conflict resolved (R26) | Promote |
+| `20261016-2254-track-info-six-fields.md` | `signals/track-info.md` | Six fields, station name included (R24) | Promote |
+| `20261016-2254-door-state-to-track-model.md` | `signals/door-state.md` | Also sent to the Track Model (R24) | Promote |
+| `20261016-2254-suggested-speed-with-block.md` | `signals/suggested-speed.md` | Carries the block (R7). Re-filed from a `ctc-deployment` proposal removed in `201708b` | Promote |
+| `20261016-2254-suggested-authority-with-block.md` | `signals/suggested-authority.md` | Carries the block (R7). Re-filed likewise | Promote |
+| `20261016-2254-track-controller-ready-per-line.md` | `signals/track-controller-ready.md` (new) | A 2-D array, gated per line (R8) | Promote; deny the three competing versions (section 7.2) |
+| `20261016-2259-files-and-paths-event-logger-conflict.md` | `conventions/files-and-paths.md` | The event logger recorded as a Conflict between the SRS and R13; resolution owner Kevin | Promote, then resolve |
+| `20261016-2259-naming-enum-values-all-caps.md` | `conventions/naming.md` | Every enumerated value is all caps (R17) | Promote |
 
-| Statement | Source |
-|---|---|
-| The HW and SW variants expose equivalent external interfaces. | SRS REQ-INTF-009, -010 |
-| The event log is written in CSV. | SRS REQ-INTF-015 |
-| The simulation should advance in 1 ms ticks and shall not drop ticks. This conflicts with D017's 0.1 s tick. | SRS REQ-NFR-001.1, -001.2 |
-| Ready within 20 s of launch. | SRS REQ-NFR-007 |
-| At least two wayside controllers per line. | Meeting 006 (2026-09-23); [P] D014 |
-| The wayside gets switch state from the Track Model by query. | Meeting 006 |
-| Each test screen has its own dedicated clock. This conflicts with D010 and D017. | Meeting 005 (2026-09-16) |
-| `track-info` carries the station name. | `TrainModel/docs/integration.md`; catalog `TrackInfo` |
+### 7.2 Other pending proposals that the decisions touch
+
+Only proposals that `truth/_promotions.md` does not list as promoted or denied are included.
+
+| Proposal (branch/file) | Target | Against the decisions | Recommendation |
+|---|---|---|---|
+| `ctc-deployment/20261016-1517-clock-pause.md` | `signals/clock-pause.md` | Fits R3, and it covers reading the value while paused. | Promote once Landis confirms its form |
+| `ctc-deployment/20261016-1354-nothing-sent-until-every-wayside-ready.md` | `arbitration/nothing-sent-until-track-controller-ready.md` | Fits R8: each line is gated on its own waysides. | Promote |
+| `ctc-deployment/20261015-1949-nothing-sent-until-track-controller-ready-per-line.md` | same | Superseded by the 1354 version above. | Deny |
+| `Track-Ctrl-SW/20261014-0950-track-controller-ready.md` | `signals/track-controller-ready.md` | One flag for the whole module; superseded by its own branch's 1000 version. | Deny |
+| `Track-Ctrl-SW/20261016-1000-track-controller-ready-per-wayside.md`; `feature/TrackCtrl-Showcase-Feedback/20261016-1430-track-controller-ready.md` | same | Hold "every wayside of every line", against R8's gating per line. | Deny, or amend the gating and promote one in place of section 7.1's |
+| `track-model/20261013-1900-ticket-sales-per-station.md`; `ctc-interfacing/20261012-1704-ticket-sales-per-station.md` | `signals/ticket-sales.md` | Both per station (R22). They differ in form: a list with one pair per station every tick, against a mapping that may leave out stations that sold none. | Signal owner picks one; deny the other |
+| `track-model/20261008-1824-ticket-sales-direct-to-ctc.md`; `track-model/20261013-1830-ticket-sales-no-total.md` | same | Per line, against R22, and they spell the line `"GREEN"`, against R6. | Deny |
+| `feature/TrackCtrl-Module-Implementation/20261008-1314-D018-track-controller-test-ui-kept.md` | `decisions/D018-…` | Keeps the HW test UI at integration, against R12. | Deny, or the team records an exception to R12 |
+| `feature/TrackCtrl-Module-Implementation/20261007-0110-maintenance-mode.md` | `signals/maintenance-mode.md` | Revives the boolean, against R27 and [T]. | Deny |
+| `feature/TrackCtrl-Module-Implementation/20261007-0110-D014-track-controller-line-split.md` | `decisions/D014-…` | HW on one line and SW on the other. It leaves open which line, which R5 decides. Its databases "loaded … in the Track Controller UI" bear on Q13. | Promote alongside D021 |
+| `feature/TrackCtrl-Showcase-Feedback/20261016-1430-D015-track-controller-knows-blocks.md`, and its two earlier versions | `decisions/D015-…` | Says a failure reaches the Track Controller only as occupancy and is reported as occupied, against R23. | Hold until Q6 is answered; deny the two earlier versions |
+| `feature/TrackCtrl-Module-Implementation/20261007-0110-signal-light-command.md` | `signals/signal-light-command.md` | The aspect names are in conflict with Braden named to resolve it. R17 makes them all caps; the spelling of the fourth is Q10. | Hold for the aspect names |
+| `feature/TrackCtrl-TestUI-PerBlock/20261006-1530-suggested-speed.md`, `…-suggested-authority.md` | `signals/suggested-*.md` | Per-train versus per-block keying is settled by R7. | Deny: superseded by section 7.1 |
+| `train-model-instance-mgmt/20261008-2035-train-model-fleet.md`; `…/20261009-1928-train-model-fleet-test-ui-trains.md` | `decisions/D0NN-train-model-fleet.md` | "Runs in the system process… no IPC" against R4, and "the central harness decides when a train is dispatched" against R9. | Amend, or deny |
+| `Track-Ctrl-SW/20261008-1732-test-ui-clock.md` | `decisions/track-controller-test-ui-clock.md` | Moot: R12 removes the test UI. | Deny |
+| `feature/TrackCtrl-UI-Implementation/20261002-1452-track-controller-hw.md` | `modules/track-controller/track-controller-hw.md` | Lists the test UI as an entry point (R12), and a package path that no longer exists. | Refresh before promotion |
+
+Not filed, because they wait on the questions in section 1.3: the train ID format (Q4), the
+brake and announcement shapes (Q8), the reach of the float (Q9), the light path and spelling
+(Q10), the Blue Line (Q11), and failures as closures (Q6).
 
 ## Appendix A: Edge map
 
-Signals are named by their `truth` key (`signals/<key>.md`). The table lists names only; the
-shards hold the definitions.
+Signals are named by their `truth` key (`signals/<key>.md`).
 
-| Edge | Signals on `truth` [T] | Mapping today [C] |
-|---|---|---|
-| CTC Office → Track Controller | `suggested-speed`, `suggested-authority`, `closed-blocks`, `switch-command` | `ctc_to_track_controller`, SW only, on `origin/Track-Ctrl-SW` only |
-| Track Controller → CTC Office | `block-occupancy` (switch and crossing reports and readiness have no entry: G-SIG-4, G-SIG-5) | None |
-| CTC Office → harness clock | `clock-speedup` (pause and resume have no entry: G-CLK-3) | None. Today the flow is reversed inside the CTC. |
-| Track Controller → Track Model | None. Commanded speed and authority come from the Track Controller ([U], [P]). Switch, signal and crossing commands also have no entry: G-SIG-1. | `track_controller_to_track_model`, catalog to Track Model only; nothing produces the catalog type |
-| Track Model → Track Controller | None (G-SIG-2) | `track_model_to_track_controller`, Track Model to catalog only |
-| Track Model → CTC Office | `ticket-sales` | `track_model_to_ctc_office`, Track Model to catalog only |
-| Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track_model_to_train_model`, Track Model to catalog only |
-| Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `train_model_to_track_model`, catalog to Track Model only |
-| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; pass-through of `track-signal`, `beacon`, and the speed limit from `track-info` | None |
-| Train Controller → Train Model | `power-command`, `service-brake-command`, `emergency-brake-command`, `door-command`, `light-command`, `temperature-setpoint`, `announcement` | None |
-| Track Model → Train Controller | None (`signal_seen` is provisional: G-SIG-10) | `track_model_to_train_controller`, Track Model to catalog only |
+| Edge | On `truth` [T] | Pending [P] or decided [R] | Mapping today [C] |
+|---|---|---|---|
+| Harness → every module | D017: simulation time | dt and simulation time, direct [P, R1, R2] | none |
+| CTC Office → harness | `clock-speedup` | `clock-pause` [P, R3] | none |
+| CTC Office → Track Controller | `suggested-speed`, `suggested-authority`, `closed-blocks`, `switch-command` | Suggestions carry the block [P, R7] | `ctc_to_track_controller`, SW only |
+| Track Controller → CTC Office | `block-occupancy` | `track-controller-ready` [P, R8]; failures as closures [R23], no entry | none |
+| Track Controller → Track Model | none (`track-signal` runs Track Model → Train Model) | `track-signal` values come from the Track Controller, per block, cleared after delivery [P, R10]; `signal-light-command` [P] | one-sided, to the old catalog |
+| Track Model → Track Controller | none | Failures [R23], no entry | one-sided, to the old catalog |
+| Track Model → CTC Office | `ticket-sales` (per line) | Per station [P, R22] | one-sided, to the old catalog |
+| Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | one-sided, to the old catalog |
+| Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | one-sided, to the old catalog |
+| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; pass-through of `track-signal`, `beacon` and the speed limit | The next light [R25], path open (Q10) | none |
+| Train Controller → Train Model | `power-command`, `service-brake-command`, `emergency-brake-command`, `door-command`, `light-command`, `temperature-setpoint`, `announcement` | `bool[2]` brakes and `announcement_command` [R15] (Q8) | none |
+| Track Model → Train Controller | none | The next light [R25] (Q10) | one-sided, to the old catalog |
 
 `failure-status` and `maintenance-mode` are superseded on `truth`.
 
 ## Appendix B: Inter-process endpoints today [C]
 
-All six are `QLocalServer` test links. There are no TCP or UDP ports, and no names collide.
+All six are `QLocalServer` links with newline-delimited JSON, handled on the module's GUI
+thread. There are no TCP or UDP ports, and no thread or `multiprocessing` use in module code.
 
-| Endpoint name | Server | Client | Purpose |
+| Endpoint | Server | Requests and replies | Clients and pushes |
 |---|---|---|---|
-| `trains-train-model` (env `TRAIN_MODEL_LINK`) | Train Model window (`TrainModel/train_model/link.py`) | Train Model test UI | Test link |
-| `trains-ctc-office` (env `CTC_LINK`) | CTC window (`CTC-Office/ctc/socket_link.py`) | CTC test UI | Test link to the CTC module |
-| `TrackOverflow.CTCOffice.clock` | CTC window (`CTC-Office/ctc_ui/clock_link.py`) | CTC test UI | Clock control from the test UI |
-| `trains-track-controller-hw` (env `TRACK_CTRL_HW_LINK`) | Track Controller HW window (`TrackCtrlHw/track_ctrl_hw/link.py`) | Track Controller HW test UI | Test link |
-| `ece1140-track-controller-stimulus` | Track Controller SW window (`TrackCtrlSW/track_ctrl/link.py`) | Track Controller SW test client | Test link |
-| `track-overflow-track-model` | Track Model window (`TrackModel/test_link/link.py`) | Track Model test UI | Test link |
+| `trains-ctc-office` (env `CTC_LINK`) | CTC window (`ctc/socket_link.py`) | `{id, op, args}`; replies are the whole snapshot. Operations: `step(dt, inputs)`, `set_inputs`, `batch`, `snapshot` and dispatcher actions. The client blocks: 2000 ms per reply. | Any number. Snapshot pushed on connect and on each change or new simulated second. `listen()` refuses if a CTC Office already serves. |
+| `TrackOverflow.CTCOffice.clock` | CTC window (`ctc_ui/clock_link.py`) | `{type: pause, resume or set_speed}` in; `{type: "clock", time, paused, speed}` out | Any number |
+| `ece1140-track-controller-stimulus` | Track Controller SW window (`track_ctrl/link.py`) | `{id, type, …}`. `step` carries dt and `inputs.time_s`; `user` covers 12 operations, PLC loading included. The test client has no reply timeout. | One; a second is told `busy` and closed. UI snapshots at up to 25 a second. |
+| `trains-track-controller-hw` (env `TRACK_CTRL_HW_LINK`) | Track Controller HW window (`track_ctrl_hw/link.py`) | Integer `id` required. Operations: `step` and `reset`. The client blocks: 2000 ms per reply. | One; a second is told `busy`. Territories and last outputs pushed on connect. |
+| `track-overflow-track-model` | Track Model window (`TrackModel/test_link/link.py`) | No request IDs. Operations: `step`, `set_block_failure`, `edit_block`, `reset`. | Any number. Outputs pushed on connect and after window actions. |
+| `trains-train-model` (env `TRAIN_MODEL_LINK`) | Train Model window (`train_model/link.py`) | Integer `id` required. Operations: `step` (dt, per-train inputs, `clear_passenger_brake`), `add`, `remove`, `reset`. The client blocks: 2000 ms per reply. | One; a second is told `busy`. A new client resets every train the last one stepped. |
 
-The two Train Controllers have no link and step themselves on timers.
+Neither Train Controller has an endpoint.
 
 ## Appendix C: How this document was gathered
 
 - `truth` was read with `git show`, `git grep` and `git ls-tree` on `origin/truth` only.
-  Nothing from `truth` was written into the repository.
-- Ten read-only research passes covered:
-  - each of the seven module implementations;
-  - the shared clock and harness code;
-  - the project documents (SRS, course PDFs, interface dictionary, meeting logs on
-    `origin/meeting-logs`, schedule);
-  - the `truth` store.
-- Each pass cited file and line for every claim and marked anything it could not find as not
-  found. The claims this design depends on were then checked directly against the code: the
-  module boundaries, clock behaviour, absent-key semantics, readiness gating, the SRS lines,
-  and the rubric.
-- The test suites were run once each, as described in section 3.5. The runs left no files in
-  the repository.
+  Nothing from `truth` was written into the repository except proposals under
+  `truth/_inbox/claude/quirky-fermi-sickg4/`.
+- v0.1 drew on ten read-only research passes over the seven modules, the shared clock and
+  harness code, the project documents and the `truth` store.
+- For v0.2, as the review asked, a second round of read-only research passes (Haiku and
+  Sonnet agents) re-read each module against the decisions, PR #43 and the open branches,
+  the pending proposals on every branch, and the process model.
+- The facts this revision depends on were then checked directly in the code:
+  - the CTC Office's clock outputs, readiness rule, yard blocks and train IDs;
+  - the Track Controller SW's readiness and whole-number check;
+  - PR #43's failure handling and its Green-only data;
+  - the Track Model's last-value rule and ambient temperature;
+  - the Train Controller's signal-pickup latch, light aspects and outputs;
+  - the Train Model guide's one-process statement.
+- The test suites were run again at `1aaa9a8`, as described in section 3.5.
