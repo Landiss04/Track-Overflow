@@ -5,8 +5,7 @@ scan builds the Boolean input image from the CTC Office's and the Track
 Model's inputs for this wayside's blocks, runs the program on both
 channels, and drives its outputs onto the track as they are. Every
 protection (separation, closures, switch locking and correspondence,
-crossings) is the program's, except the speed limit: the wayside caps
-the CTC Office's speed at the block's limit.
+crossings, the speed limit) is the program's.
 
 Outputs hold their fail-safe values (every signal red, every crossing
 active, every track circuit sending speed 0 and authority 0, every
@@ -25,8 +24,12 @@ Name            Kind   Meaning
 ``CTCSW_n``     in     The CTC Office commands the switch on block n (it
                        does so only in maintenance mode)
 ``CTCREV_n``    in     That command is reverse; 0 with no command
-``AUTH_n``      out    1 passes the CTC's speed and authority down block n's
-                       track circuit; 0 sends speed 0, authority 0
+``SPD_n_b``     in     Bit b (0 to 4) of the CTC Office's speed for block
+                       n, in whole m/s; 0 with no suggestion
+``AUTH_n``      out    1 passes the CTC's authority down block n's track
+                       circuit; 0 sends authority 0
+``CMD_n_b``     out    Bit b (0 to 4) of the speed sent down block n's
+                       track circuit, in whole m/s
 ``SW_n``        out    1 commands the switch on block n to reverse
 ``SIG_n_R``     out    The signal on block n shows red; likewise ``_Y``,
                        ``_G`` and ``_SG``. Read in that order: red if
@@ -35,8 +38,10 @@ Name            Kind   Meaning
                        gates down
 ==============  =====  ====================================================
 
-Numbers stay outside the program: it decides whether the CTC Office's
-suggestion goes out, and the wayside sends the numbers.
+Speed is a number, so it crosses the I/O card as five bits, bit 0 being
+1 m/s and bit 4 16 m/s: 0 to 31 m/s. Keeping it under the block's
+limit is the program's job. Authority stays outside the program: the
+wayside sends the CTC Office's count when ``AUTH_n`` is 1.
 """
 
 from __future__ import annotations
@@ -69,6 +74,10 @@ from track_ctrl_hw.plc import Program, compile_program
 
 #: PLC suffix for each signal aspect, in ``SIGNAL_ASPECTS`` order.
 ASPECT_SUFFIXES: tuple[str, ...] = ("R", "Y", "G", "SG")
+#: Width of the speed in and out of the program.
+SPEED_BITS = 5
+#: The fastest speed the I/O card carries, in m/s.
+MAX_SPEED_MPS = (1 << SPEED_BITS) - 1
 
 # A speed limit within this of a whole m/s counts as that whole number,
 # so 36 km/h is 10 m/s rather than 9.999... after division.
@@ -81,6 +90,7 @@ def input_names(territory: Territory) -> frozenset[str]:
     for block in territory.blocks:
         number = block.key.block_id
         names.update((f"OCC_{number}", f"CLOSED_{number}"))
+        names.update(_speed_names("SPD", number))
     for switch in territory.switches:
         number = switch.switch_id
         names.update(
@@ -91,7 +101,11 @@ def input_names(territory: Territory) -> frozenset[str]:
 
 def output_names(territory: Territory) -> frozenset[str]:
     """Every name this wayside reads back from a PLC program."""
-    names = {f"AUTH_{block.key.block_id}" for block in territory.blocks}
+    names = set()
+    for block in territory.blocks:
+        number = block.key.block_id
+        names.add(f"AUTH_{number}")
+        names.update(_speed_names("CMD", number))
     for switch in territory.switches:
         names.add(f"SW_{switch.switch_id}")
         names.update(_signal_names(switch))
@@ -104,6 +118,11 @@ def _signal_names(switch: Switch) -> tuple[str, ...]:
     return tuple(
         f"SIG_{switch.switch_id}_{suffix}" for suffix in ASPECT_SUFFIXES
     )
+
+
+def _speed_names(prefix: str, number: str) -> tuple[str, ...]:
+    # Least significant bit first.
+    return tuple(f"{prefix}_{number}_{bit}" for bit in range(SPEED_BITS))
 
 
 def speed_limit_whole_mps(limit_mps: float) -> int:
@@ -167,7 +186,6 @@ class Wayside:
     def __init__(self, territory: Territory) -> None:
         self._territory = territory
         self._keys = frozenset(territory.keys)
-        self._blocks = {block.key: block for block in territory.blocks}
         self._program: Program | None = None
         self._program_info: ProgramInfo | None = None
         self._clear_runtime()
@@ -268,7 +286,7 @@ class Wayside:
 
         started = time.perf_counter()
         values, holding = self._run_program(
-            occupied, closed, requests, track_model
+            occupied, closed, suggestions, requests, track_model
         )
         duration = time.perf_counter() - started
 
@@ -344,6 +362,7 @@ class Wayside:
         self,
         occupied: frozenset[BlockKey],
         closed: frozenset[BlockKey],
+        suggestions: Mapping[BlockKey, Suggestion],
         requests: Mapping[BlockKey, SwitchPosition],
         track_model: TrackModelInputs,
     ) -> tuple[dict[str, bool] | None, str]:
@@ -357,6 +376,10 @@ class Wayside:
             number = key.block_id
             image[f"OCC_{number}"] = key in occupied
             image[f"CLOSED_{number}"] = key in closed
+            suggestion = suggestions.get(key)
+            speed = 0 if suggestion is None else suggestion.speed_mps
+            for bit, name in enumerate(_speed_names("SPD", number)):
+                image[name] = bool(speed >> bit & 1)
         for switch in self._territory.switches:
             number = switch.switch_id
             image[f"SWREV_{number}"] = (
@@ -409,16 +432,18 @@ class Wayside:
         }
         circuits: dict[BlockKey, TrackCircuitCommand] = {}
         for key, suggestion in self._suggestions.items():
-            if values[f"AUTH_{key.block_id}"]:
-                limit = speed_limit_whole_mps(
-                    self._blocks[key].speed_limit_mps
-                )
-                circuits[key] = TrackCircuitCommand(
-                    min(suggestion.speed_mps, limit),
-                    suggestion.authority_blocks,
-                )
-            else:
-                circuits[key] = TrackCircuitCommand(0, 0)
+            number = key.block_id
+            speed = sum(
+                1 << bit
+                for bit, name in enumerate(_speed_names("CMD", number))
+                if values[name]
+            )
+            authority = (
+                suggestion.authority_blocks
+                if values[f"AUTH_{number}"]
+                else 0
+            )
+            circuits[key] = TrackCircuitCommand(speed, authority)
         self._circuits = circuits
         self._holding = ""
 

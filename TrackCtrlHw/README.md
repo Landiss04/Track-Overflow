@@ -107,7 +107,7 @@ harness can send the whole line.
 | `time_s` | Clock | Simulation seconds since midnight |
 | `ctc.closed_blocks` | CTC Office | `frozenset[BlockRef]`, the full set every tick |
 | `ctc.switch_commands` | CTC Office | `{BlockRef of the switch: "normal" \| "reverse"}`; sent only in maintenance mode. The PLC program decides whether to obey |
-| `ctc.suggestions` | CTC Office | `{BlockRef: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing |
+| `ctc.suggestions` | CTC Office | `{BlockRef: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing. Speed 0 to 31 m/s: the program's speed input is 5 bits |
 | `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]`; a train or a failure, the module cannot tell which |
 | `track_model.switch_positions` | Track Model | Actual positions, `{switch block: position}` |
 | `track_model.crossings_active` | Track Model | Actual state, `{crossing block: bool}` |
@@ -195,13 +195,17 @@ the names a program can use are in `track_ctrl_hw/wayside.py`:
 
 ```
 VAR_IN  OCC_1..20 CLOSED_13 SWREV_12 CTCSW_12 CTCREV_12   // inputs
+VAR_IN  SPD_3_0..4                                         // speed, bit 0 first
 VAR_OUT AUTH_1..20 SW_12 SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG XING_19
+VAR_OUT CMD_3_0..4
 SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
 ```
 
 `AUTH_n` decides whether block *n*'s track circuit passes the CTC Office's
-suggestion (1) or sends speed 0, authority 0 (0). Numbers never enter the
-program. Each statement is compiled twice by different algorithms (recursive
+authority (1) or sends 0 (0). Speed is a number, so it crosses into the program
+as five bits, `SPD_n_0` (1 m/s) to `SPD_n_4` (16 m/s), and back out as
+`CMD_n_0..4`; keeping it under the block's limit is the program's job. Each
+statement is compiled twice by different algorithms (recursive
 descent and a tree walk; shunting-yard and a stack machine), and both channels
 run every scan. A disagreement is a latched channel fault until a new program is
 loaded.
@@ -220,9 +224,10 @@ the program's outputs onto the track as they are. The sample programs show how:
 - Switch correspondence: `SW_n XOR SWREV_n` turns the signal red and zeroes
   `AUTH` on every block of the route over the switch.
 - Crossings: active while a train is on the crossing's block or one beside it.
-
-The speed limit is still capped by the wayside: the CTC Office's speed is cut to
-the block's limit, rounded down to whole m/s.
+- Speed limits: `OVER_n` compares the five `SPD_n` bits with the block's limit,
+  written into the program as constants; above it, the limit's own bits go out
+  as `CMD_n`. Every `CMD_n` bit is ANDed with `AUTH_n`, so held authority sends
+  no speed. Six statements a block, so programs run to a few hundred lines.
 
 Signal outputs decode in a fixed order: red if `SIG_n_R` is 1 or none is,
 otherwise the first of `_Y`, `_G`, `_SG` that is 1.

@@ -23,6 +23,7 @@ from track_ctrl_hw.interface import (
 )
 from track_ctrl_hw.plc import Program
 from track_ctrl_hw.territory import parse_territory
+from track_ctrl_hw.wayside import speed_limit_whole_mps
 
 from tests.support import inputs, keys, loaded, program_source, territory
 
@@ -60,6 +61,9 @@ class Contract(unittest.TestCase):
                 suggestions={k["3"].ref: Suggestion(-1, 2)})),
             replace(inputs(controller), ctc=CtcInputs(
                 suggestions={k["3"].ref: Suggestion(5.5, 2)})),  # type: ignore
+            # Five bits carry at most 31 m/s.
+            replace(inputs(controller), ctc=CtcInputs(
+                suggestions={k["3"].ref: Suggestion(32, 2)})),
             replace(inputs(controller), ctc=CtcInputs(
                 switch_commands={k["12"].ref: "sideways"})),  # type: ignore
             # The CTC Office names blocks by BlockRef, not BlockKey.
@@ -189,9 +193,20 @@ class NothingAboveTheProgram(unittest.TestCase):
             "1", "VAR_OUT AUTH_3\nAUTH_3 := 1\n", "x.plc"
         )
         _, by_number = circuits(
-            controller, closed=["3"], suggestions={"3": (10, 0)},
+            controller, closed=["3"], suggestions={"3": (10, 4)},
         )
-        self.assertEqual(by_number["3"], TrackCircuitCommand(10, 0))
+        # Authority passes; no CMD_3 output, so speed 0.
+        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 4))
+
+    def test_the_speed_limit_is_the_programs_to_honour(self) -> None:
+        controller = loaded(1, programs=False)
+        source = "VAR_IN SPD_3_0..4\nVAR_OUT CMD_3_0..4\n" + "".join(
+            f"CMD_3_{bit} := SPD_3_{bit}\n" for bit in range(5)
+        )
+        controller.load_program("1", source, "x.plc")
+        # 30 m/s on a 12 m/s block goes out as sent; AUTH_3 is 0.
+        _, by_number = circuits(controller, suggestions={"3": (30, 4)})
+        self.assertEqual(by_number["3"], TrackCircuitCommand(30, 0))
 
     def test_a_switch_moves_under_a_train_if_the_program_says(self) -> None:
         controller = loaded(1, programs=False)
@@ -248,6 +263,32 @@ class SamplePrograms(unittest.TestCase):
         # 45 km/h is 12.5 m/s: 12 is the highest whole m/s allowed.
         _, by_number = circuits(controller, suggestions={"3": (30, 4)})
         self.assertEqual(by_number["3"], TrackCircuitCommand(12, 4))
+
+    def test_every_speed_capped_on_every_block(self) -> None:
+        controller = loaded(1, 2, 3)
+        limits = {
+            block.key.block_id: speed_limit_whole_mps(block.speed_limit_mps)
+            for wayside in controller.snapshot().waysides
+            for block in wayside.territory.blocks
+        }
+        for speed in range(32):
+            _, by_number = circuits(
+                controller,
+                suggestions={n: (speed, 3) for n in limits},
+            )
+            for number, limit in limits.items():
+                self.assertEqual(
+                    by_number[number],
+                    TrackCircuitCommand(min(speed, limit), 3),
+                    f"block {number}, {speed} m/s",
+                )
+
+    def test_held_authority_sends_no_speed(self) -> None:
+        controller = loaded(1)
+        _, by_number = circuits(
+            controller, occupied=["4"], suggestions={"3": (10, 4)}
+        )
+        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
 
     def test_closed_block_sends_zero(self) -> None:
         controller = loaded(1, 2, 3)

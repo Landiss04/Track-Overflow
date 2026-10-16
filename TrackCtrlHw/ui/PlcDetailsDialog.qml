@@ -119,7 +119,9 @@ ModalDialog {
             Layout.fillWidth: true
             text: qsTr("The wayside runs the program and decides nothing "
                 + "itself: separation, closures, switch locking and "
-                + "correspondence, and crossings are all the program's. "
+                + "correspondence, crossings and speed limits are all the "
+                + "program's. Speed goes in and out as five bits a block "
+                + "(SPD_n, CMD_n). "
                 + "A signal shows red if R is lit or none is, otherwise "
                 + "the first lit of Y, G and SG. Every output is held "
                 + "fail-safe only while no program runs: none loaded, a "

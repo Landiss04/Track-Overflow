@@ -30,7 +30,7 @@ from track_ctrl_hw.interface import (
     TrackControllerSnapshot,
     TrackModelOutputs,
 )
-from track_ctrl_hw.wayside import Wayside
+from track_ctrl_hw.wayside import MAX_SPEED_MPS, SPEED_BITS, Wayside
 
 
 class HwTrackController:
@@ -224,6 +224,13 @@ def _validate(inputs: Any) -> None:
                     f"suggestions[{key.label}].{name} must not be "
                     f"negative, got {value}"
                 )
+        if suggestion.speed_mps > MAX_SPEED_MPS:
+            raise InvalidInputError(
+                f"suggestions[{key.label}].speed_mps must be at most "
+                f"{MAX_SPEED_MPS} m/s, the most the wayside's "
+                f"{SPEED_BITS}-bit speed input carries; got "
+                f"{suggestion.speed_mps}"
+            )
 
 
 def _keys(
