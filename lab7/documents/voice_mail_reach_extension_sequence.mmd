@@ -1,0 +1,27 @@
+sequenceDiagram
+    actor User
+    participant Telephone as :Telephone
+    participant Connection as :Connection
+    participant MailSystem as :MailSystem
+    participant Mailbox as :Mailbox
+    User->>Telephone: dials main number
+    Telephone->>Connection: connect()
+    Connection->>Telephone: speak(prompt)
+    Note over Telephone: Enter mailbox number followed by pound
+    loop for each digit of the extension
+        User->>Telephone: presses a digit
+        Telephone->>Connection: dial(key)
+        Connection->>Connection: add key to accumulatedKeys
+    end
+    User->>Telephone: presses pound
+    Telephone->>Connection: dial(pound)
+    Connection->>MailSystem: findMailbox(extension)
+    MailSystem-->>Connection: mailbox
+    alt mailbox found
+        Connection->>Mailbox: getGreeting()
+        Mailbox-->>Connection: greeting
+        Connection->>Telephone: speak(greeting)
+        Note over Telephone: You have reached mailbox xx. Please leave a message now
+    else no such mailbox
+        Connection->>Telephone: speak(incorrect mailbox number)
+    end
