@@ -50,6 +50,7 @@ Rectangle {
         }
 
         FormField {
+            objectName: "modeField"
             Layout.alignment: Qt.AlignTop
             Layout.preferredWidth: 240
             label: qsTr("Operating mode")
@@ -71,12 +72,30 @@ Rectangle {
         // Whether this train has been commissioned. Gains are per
         // train, so a console pointed at a fresh one says so rather
         // than leaving the driver to wonder why nothing moves.
-        StatusBadge {
+        // The slot is as wide as the longer label, so the badge
+        // narrowing to "Gains set" never hands width to the toggles
+        // and nothing in the bar moves when the gains are set.
+        Item {
+            objectName: "gainsSlot"
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: theme.space_1
-            label: root.s.gains_locked ? qsTr("Gains set")
-                                       : qsTr("Gains missing")
-            variant: root.s.gains_locked ? "ok" : "warning"
+            implicitWidth: widest.implicitWidth
+            implicitHeight: gainsBadge.implicitHeight
+
+            StatusBadge {
+                id: widest
+                visible: false
+                label: qsTr("Gains missing")
+                variant: "warning"
+            }
+
+            StatusBadge {
+                id: gainsBadge
+                anchors.right: parent.right
+                label: root.s.gains_locked ? qsTr("Gains set")
+                                           : qsTr("Gains missing")
+                variant: root.s.gains_locked ? "ok" : "warning"
+            }
         }
 
         TrainPicker {

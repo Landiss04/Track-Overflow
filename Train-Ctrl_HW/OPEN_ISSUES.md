@@ -67,6 +67,19 @@ Ivan's sizing and the failure banners that squeezed it were removed
     counts (delete the countdown from `_plant()` then), or when the block
     lengths are known.
 
+    How the real system does it (checked on `development`, 2026-10-15): the
+    controller needs no block-change input. The Track Model flips the track
+    circuit polarity at each block, the Train Model turns that flip into a
+    block-change event sent to the **Track Model only** (truth
+    `signals/block-change-event.md`), and the Track Model then sends each
+    train the Track Signal of the block it occupies, which the Train Model
+    passes through to us. So the authority count is refreshed per block by
+    the wayside, provided the Track Controller writes a decreasing count into
+    each block along the route (not checked). A dead or uncommanded block
+    arrives as 0 m/s and 0 blocks, which the controller reads as a lost
+    signal and stops on: correct, the failure propagates from the track
+    circuit through the Train Model.
+
 ## Added 2026-10-15
 
 12. **Failure detection rules are this team's own design, for review.**
