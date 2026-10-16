@@ -8,21 +8,23 @@
 
 VAR_IN  OCC_1..20
 VAR_IN  CLOSED_13 CLOSED_14
-VAR_IN  SWREV_12 MAINT
+VAR_IN  SWREV_12 CTCSW_12 CTCREV_12
 VAR_OUT AUTH_1..20
 VAR_OUT SW_12
 VAR_OUT SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG
 VAR_OUT XING_19
 
-// Switch 12: send a train waiting on the loop (block 1) into 13 once
-// the main-line approach is clear; otherwise keep the main line.
-SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
+// Switch 12: while the CTC Office commands it (maintenance), obey.
+// Otherwise send a train waiting on the loop (block 1) into 13 once
+// the main-line approach is clear, and keep the main line.
+AUTO_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
+SW_12 := (CTCSW_12 AND CTCREV_12) OR (NOT CTCSW_12 AND AUTO_12)
 
 // Signal 12 reads the route into 13 and the block beyond it. Exactly
 // one aspect is lit for every input: red, else yellow, else green or
 // super green.
 BLOCKED := OCC_13 OR CLOSED_13
-CAUTION := OCC_14 OR CLOSED_14 OR SWREV_12 OR MAINT
+CAUTION := OCC_14 OR CLOSED_14 OR SWREV_12 OR CTCSW_12
 SIG_12_R  := BLOCKED
 SIG_12_Y  := NOT BLOCKED AND CAUTION
 SIG_12_G  := NOT BLOCKED AND NOT CAUTION AND OCC_15

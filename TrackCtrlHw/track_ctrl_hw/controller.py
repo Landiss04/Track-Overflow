@@ -20,6 +20,7 @@ from track_ctrl_hw.interface import (
     SIGNAL_ASPECTS,
     SWITCH_POSITIONS,
     BlockKey,
+    BlockRef,
     ProgramInfo,
     Suggestion,
     Territory,
@@ -39,7 +40,6 @@ class HwTrackController:
         self._waysides: dict[str, Wayside] = {}
         self._time_s: float | None = None
         self._ticks = 0
-        self._maintenance = False
 
     # -- configuration, from the Track Controller UI -----------------
 
@@ -123,7 +123,6 @@ class HwTrackController:
             wayside.reset()
         self._time_s = None
         self._ticks = 0
-        self._maintenance = False
 
     # -- the module boundary -----------------------------------------
 
@@ -157,7 +156,6 @@ class HwTrackController:
             reports.append(result.report)
         self._time_s = inputs.time_s
         self._ticks += 1
-        self._maintenance = inputs.ctc.maintenance_mode
         return TrackControllerOutputs(
             track_model=TrackModelOutputs(
                 track_circuits=circuits,
@@ -175,7 +173,6 @@ class HwTrackController:
             waysides=tuple(
                 wayside.snapshot() for wayside in self._waysides.values()
             ),
-            maintenance_mode=self._maintenance,
             time_s=self._time_s,
             ticks=self._ticks,
         )
@@ -197,11 +194,10 @@ def _validate(inputs: Any) -> None:
         )
     ctc = inputs.ctc
     model = inputs.track_model
-    if not isinstance(ctc.maintenance_mode, bool):
-        raise InvalidInputError("maintenance_mode must be true or false")
-    _keys(ctc.closed_blocks, "closed_blocks")
+    _keys(ctc.closed_blocks, "closed_blocks", BlockRef)
     _keys(model.occupied_blocks, "occupied_blocks")
-    _choices(ctc.switch_commands, SWITCH_POSITIONS, "switch_commands")
+    _choices(ctc.switch_commands, SWITCH_POSITIONS, "switch_commands",
+             BlockRef)
     _choices(model.switch_positions, SWITCH_POSITIONS, "switch_positions")
     _choices(model.signal_aspects, SIGNAL_ASPECTS, "signal_aspects")
     _keys(model.crossings_active, "crossings_active")
@@ -210,7 +206,7 @@ def _validate(inputs: Any) -> None:
             raise InvalidInputError(
                 f"crossings_active[{key.label}] must be true or false"
             )
-    _keys(ctc.suggestions, "suggestions")
+    _keys(ctc.suggestions, "suggestions", BlockRef)
     for key, suggestion in ctc.suggestions.items():
         if not isinstance(suggestion, Suggestion):
             raise InvalidInputError(
@@ -230,16 +226,24 @@ def _validate(inputs: Any) -> None:
                 )
 
 
-def _keys(keys: Iterable[Any], name: str) -> None:
+def _keys(
+    keys: Iterable[Any], name: str, kind: type = BlockKey
+) -> None:
+    # The CTC Office names blocks by BlockRef; the Track Model by BlockKey.
     for key in keys:
-        if not isinstance(key, BlockKey):
-            raise InvalidInputError(f"{name} must be keyed by BlockKey")
+        if not isinstance(key, kind):
+            raise InvalidInputError(
+                f"{name} must be keyed by {kind.__name__}"
+            )
 
 
 def _choices(
-    values: Mapping[Any, Any], allowed: tuple[str, ...], name: str
+    values: Mapping[Any, Any],
+    allowed: tuple[str, ...],
+    name: str,
+    kind: type = BlockKey,
 ) -> None:
-    _keys(values, name)
+    _keys(values, name, kind)
     for key, value in values.items():
         if value not in allowed:
             raise InvalidInputError(

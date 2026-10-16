@@ -108,9 +108,7 @@ def _set_by(snapshot: WaysideSnapshot, target: str) -> str:
     return "PLC"
 
 
-def switch_rows(
-    snapshot: WaysideSnapshot, maintenance: bool
-) -> list[dict[str, Any]]:
+def switch_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:
     """Rows of the switch table."""
     rows = []
     for state in snapshot.switches:
@@ -124,14 +122,6 @@ def switch_rows(
         joined = sorted((switch.point, ends), key=_route_order)
         route = "\u2013".join(joined)
         request = snapshot.switch_requests.get(switch.key)
-        if maintenance:
-            set_by = "CTC"
-            if request is not None and request != state.commanded:
-                set_by = "CTC \u00b7 held"
-        elif any(o.target == name for o in snapshot.overrides):
-            set_by = "PLC \u00b7 held"
-        else:
-            set_by = "PLC"
         if state.reported is None:
             agree_text, agree_badge = "No report", "idle"
         elif state.agreeing:
@@ -143,12 +133,31 @@ def switch_rows(
             "commanded": f"{display.position_name(state.commanded)} "
             f"\u00b7 {route}",
             "reported": display.position_name(state.reported),
-            "setBy": set_by,
+            "ctcRequest": display.position_name(request),
             "agreeing": state.agreeing,
             "agreeText": agree_text,
             "agreeBadge": agree_badge,
         })
     return rows
+
+
+def maintenance_text(snapshot: WaysideSnapshot) -> str:
+    """The CTC Office's closures and switch commands in this wayside,
+    written its way: ``Closed: Green:13, Green:14 · Switch commands:
+    Green:12=reverse``. Empty when there are none."""
+    keys = snapshot.territory.keys
+    closed = [k.ref.label for k in keys if k in snapshot.closed_blocks]
+    commands = [
+        f"{k.ref.label}={snapshot.switch_requests[k]}"
+        for k in keys
+        if k in snapshot.switch_requests
+    ]
+    parts = []
+    if closed:
+        parts.append("Closed: " + ", ".join(closed))
+    if commands:
+        parts.append("Switch commands: " + "; ".join(commands))
+    return " \u00b7 ".join(parts)
 
 
 def device_rows(snapshot: WaysideSnapshot) -> list[dict[str, Any]]:

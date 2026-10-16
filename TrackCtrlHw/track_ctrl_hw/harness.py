@@ -6,9 +6,10 @@ CTC Office, the Track Model and the clock. It drives the module through
 reads back only the module's outputs (decision D010 sets the pattern).
 
 Every input and output is per block. One wayside and one block are
-selected at a time, and all four tables show that block. Maintenance
-mode is the only input that is not per block: the CTC Office sets it
-for the whole system.
+selected at a time, and all four tables show that block. What the CTC
+Office sends goes keyed its way, by line and block (``Green:13``). It
+sends no maintenance flag; a switch command is sent only while one is
+set, as the CTC Office sends them only in maintenance mode.
 
 Values are shown in backend units (m/s, blocks), because this page
 probes the module boundary rather than presenting it to an operator.
@@ -32,6 +33,7 @@ from track_ctrl_hw import display
 from track_ctrl_hw.errors import TrackControllerError
 from track_ctrl_hw.interface import (
     BlockKey,
+    BlockRef,
     CtcInputs,
     Suggestion,
     Territory,
@@ -52,6 +54,8 @@ CTC_GROUP = "ctc"
 TRACK_MODEL_GROUP = "track_model"
 
 POSITIONS = {"NORMAL": "normal", "REVERSE": "reverse"}
+#: What the CTC Office commands a switch to; NONE sends no command.
+SWITCH_COMMANDS = {"NONE": None, **POSITIONS}
 GATES = {"GATES UP": False, "GATES DOWN": True}
 ASPECTS = {
     "RED": "red",
@@ -81,7 +85,7 @@ class BlockInputs:
     suggested_speed: int = 0
     suggested_authority: int = 1
     block_closed: bool = False
-    switch_command: str = "NORMAL"
+    switch_command: str = "NONE"
     block_occupancy: bool = False
     switch_state: str = "NORMAL"
     crossing_state: str = "GATES UP"
@@ -100,7 +104,7 @@ _FIELD_KINDS = {
     "signal_aspect": "enum",
 }
 _FIELD_OPTIONS = {
-    "switch_command": list(POSITIONS),
+    "switch_command": list(SWITCH_COMMANDS),
     "switch_state": list(POSITIONS),
     "crossing_state": list(GATES),
     "signal_aspect": list(ASPECTS),
@@ -137,7 +141,6 @@ class TestHarness(QObject):
         self._link = link or TestLinkClient(parent=self)
         self._territories: dict[str, Territory] = {}
         self._inputs: dict[BlockKey, BlockInputs] = {}
-        self._maintenance = False
         self._selected_wayside = ""
         self._selected_block = ""
         self._error = ""
@@ -206,6 +209,7 @@ class TestHarness(QObject):
         self._fix_block()
         self._refresh()
         self.connectionChanged.emit()
+        self.statusChanged.emit()
 
     def _fix_block(self) -> None:
         labels = self._block_labels()
@@ -278,16 +282,6 @@ class TestHarness(QObject):
         self._refresh()
         self.statusChanged.emit()
 
-    @Slot(bool)
-    def setMaintenance(self, active: bool) -> None:  # noqa: N802
-        """Turn the CTC Office's maintenance mode on or off."""
-        if active != self._maintenance:
-            self._maintenance = bool(active)
-            self._edits += 1
-            self.selectionChanged.emit()
-            self._refresh()
-            self.statusChanged.emit()
-
     # -- run control -----------------------------------------------------
 
     @Slot()
@@ -355,7 +349,6 @@ class TestHarness(QObject):
             return
         self._clock.reset()
         self._inputs = {}
-        self._maintenance = False
         self._edits = 0
         self._last_sent = ""
         self._on_territories()
@@ -395,20 +388,14 @@ class TestHarness(QObject):
         return TrackControllerInputs(
             time_s=time_s,
             ctc=CtcInputs(
-                maintenance_mode=self._maintenance,
-                closed_blocks=frozenset(k for k, v in items if v.block_closed),
-                # The CTC Office sends switch commands only in maintenance.
-                switch_commands=(
-                    {
-                        k: POSITIONS[v.switch_command]
-                        for k, v in items
-                        if k in switch_keys
-                    }
-                    if self._maintenance
-                    else {}
+                closed_blocks=frozenset(
+                    k.ref for k, v in items if v.block_closed
                 ),
+                switch_commands=self._switch_commands(switch_keys),
                 suggestions={
-                    k: Suggestion(v.suggested_speed, v.suggested_authority)
+                    k.ref: Suggestion(
+                        v.suggested_speed, v.suggested_authority
+                    )
                     for k, v in items
                     if v.suggestion
                 },
@@ -438,6 +425,20 @@ class TestHarness(QObject):
     def _set_error(self, message: str) -> None:
         self._error = message
         self.statusChanged.emit()
+
+    def _switch_commands(
+        self, switch_keys: set[BlockKey]
+    ) -> dict[BlockRef, Any]:
+        return {
+            k.ref: SWITCH_COMMANDS[v.switch_command]
+            for k, v in self._inputs.items()
+            if k in switch_keys and SWITCH_COMMANDS[v.switch_command]
+        }
+
+    def _sent_order(self) -> list[BlockKey]:
+        return sorted(
+            self._inputs, key=lambda k: (k.line, int(k.block_id))
+        )
 
     # -- tables ----------------------------------------------------------
 
@@ -598,15 +599,32 @@ class TestHarness(QObject):
         """The block all four tables show."""
         return self._selected_block
 
-    @Property(bool, notify=selectionChanged)
-    def maintenance(self) -> bool:
-        """The CTC Office's maintenance mode, as sent."""
-        return self._maintenance
-
     @Property(QObject, constant=True)
     def ctcInputs(self) -> RowsModel:  # noqa: N802
         """What the CTC Office sends for the selected block."""
         return self._ctc_inputs
+
+    @Property(str, notify=statusChanged)
+    def closedBlocksText(self) -> str:  # noqa: N802
+        """Every closed block sent, as the CTC Office writes them."""
+        return ", ".join(
+            k.ref.label for k in self._sent_order()
+            if self._inputs[k].block_closed
+        )
+
+    @Property(str, notify=statusChanged)
+    def switchCommandsText(self) -> str:  # noqa: N802
+        """Every switch command sent, as the CTC Office writes them."""
+        switch_keys = {
+            switch.key
+            for territory in self._territories.values()
+            for switch in territory.switches
+        }
+        commands = self._switch_commands(switch_keys)
+        return "; ".join(
+            f"{k.ref.label}={commands[k.ref]}" for k in self._sent_order()
+            if k.ref in commands
+        )
 
     @Property(QObject, constant=True)
     def trackModelInputs(self) -> RowsModel:  # noqa: N802

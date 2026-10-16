@@ -53,11 +53,11 @@ def _demo(window: Window) -> None:
     inputs = TrackControllerInputs(
         time_s=14 * 3600 + 32 * 60 + 7,
         ctc=CtcInputs(
-            closed_blocks=frozenset({keys["17"]}),
+            closed_blocks=frozenset({keys["17"].ref}),
             suggestions={
-                keys["4"]: Suggestion(12, 3),
-                keys["8"]: Suggestion(12, 2),
-                keys["14"]: Suggestion(19, 4),
+                keys["4"].ref: Suggestion(12, 3),
+                keys["8"].ref: Suggestion(12, 2),
+                keys["14"].ref: Suggestion(19, 4),
             },
         ),
         track_model=TrackModelInputs(

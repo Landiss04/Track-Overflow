@@ -19,6 +19,11 @@ Units are backend units per ``truth/conventions/units.md``: speed in
 m/s, distance in m, time in s. Authority is a whole number of blocks.
 Every ID is a string. A switch, its signal and a crossing are each
 identified by the block they are listed on in the database.
+
+What the CTC Office sends names a block as it does, by line and block
+number with no section (``BlockRef``, written ``Green:13``). It sends
+no maintenance flag: only the blocks it has closed and, while its
+dispatcher is in maintenance mode, the switch positions it commands.
 """
 
 from __future__ import annotations
@@ -60,6 +65,25 @@ class BlockKey:
     def label(self) -> str:
         """Section and number, as the UIs print it: ``C-12``."""
         return f"{self.section}-{self.block_id}"
+
+    @property
+    def ref(self) -> BlockRef:
+        """The block as the CTC Office names it."""
+        return BlockRef(self.line, self.block_id)
+
+
+@dataclass(frozen=True, slots=True)
+class BlockRef:
+    """A block, or the switch listed on it, as the CTC Office names it:
+    line and block number, no section."""
+
+    line: str
+    block_id: str
+
+    @property
+    def label(self) -> str:
+        """The CTC Office's text form: ``Green:13``."""
+        return f"{self.line}:{self.block_id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,18 +147,19 @@ class Suggestion:
 
 @dataclass(frozen=True, slots=True)
 class CtcInputs:
-    """From the CTC Office, every tick."""
+    """From the CTC Office, every tick, keyed as it names blocks."""
 
-    maintenance_mode: bool = False
-    # Blocks the dispatcher has closed. A block not listed is open.
-    closed_blocks: frozenset[BlockKey] = frozenset()
-    # Positions the dispatcher set, by the switch's block. Obeyed only
-    # in maintenance mode.
-    switch_commands: Mapping[BlockKey, SwitchPosition] = field(
+    # Blocks the dispatcher has closed, the full set every tick. A block
+    # not listed is open.
+    closed_blocks: frozenset[BlockRef] = frozenset()
+    # Positions the dispatcher commands, by the switch's block. Sent only
+    # while the dispatcher is in maintenance mode, and withdrawn when it
+    # ends. They go to the PLC program, which decides whether to obey.
+    switch_commands: Mapping[BlockRef, SwitchPosition] = field(
         default_factory=dict
     )
     # A block not listed has nothing to send down its track circuit.
-    suggestions: Mapping[BlockKey, Suggestion] = field(default_factory=dict)
+    suggestions: Mapping[BlockRef, Suggestion] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,8 +304,6 @@ class SwitchState:
     switch: Switch
     commanded: SwitchPosition
     reported: SwitchPosition | None
-    # "PLC" or "CTC".
-    set_by: str
 
     @property
     def agreeing(self) -> bool:
@@ -317,7 +340,6 @@ class TrackControllerSnapshot:
 
     line: str | None
     waysides: tuple[WaysideSnapshot, ...]
-    maintenance_mode: bool
     # Simulation time of the last tick; None before the first.
     time_s: float | None
     ticks: int

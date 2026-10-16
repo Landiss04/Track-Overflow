@@ -1,8 +1,10 @@
 """JSON forms of the module's boundary types, for the test UI link.
 
-Every per-block mapping travels as a list of entries, each naming its
-block as ``{"line", "section", "block_id"}``. Decoding is strict: a
-message from another process is untrusted, so anything that is not
+Every per-block mapping travels as a list of entries. A Track Model
+entry names its block as ``{"line", "section", "block_id"}``. A CTC
+Office entry names it the CTC Office's way, ``{"line", "block_id"}``,
+or ``{"line", "switch_id"}`` for a switch command. Decoding is strict:
+a message from another process is untrusted, so anything that is not
 exactly the expected shape raises ``WireFormatError``.
 """
 
@@ -17,6 +19,7 @@ from track_ctrl_hw.interface import (
     SWITCH_POSITIONS,
     Block,
     BlockKey,
+    BlockRef,
     BlockReport,
     CtcInputs,
     CtcReport,
@@ -82,6 +85,53 @@ def _key_set(data: Any, name: str) -> frozenset[BlockKey]:
     return frozenset(key_from_wire(item) for item in data)
 
 
+def _ref_to_wire(ref: BlockRef, id_name: str = "block_id") -> dict[str, str]:
+    return {"line": ref.line, id_name: ref.block_id}
+
+
+def _ref_from_wire(
+    record: Mapping[str, Any], id_name: str = "block_id"
+) -> BlockRef:
+    return BlockRef(
+        line=_text(record, "line"), block_id=_text(record, id_name)
+    )
+
+
+def _ref_entries(
+    mapping: Mapping[BlockRef, T],
+    encode: Callable[[T], dict[str, Any]],
+    id_name: str = "block_id",
+) -> list[dict[str, Any]]:
+    return [
+        {**_ref_to_wire(ref, id_name), **encode(value)}
+        for ref, value in mapping.items()
+    ]
+
+
+def _from_ref_entries(
+    data: Any,
+    name: str,
+    decode: Callable[[Mapping[str, Any]], T],
+    id_name: str = "block_id",
+) -> dict[BlockRef, T]:
+    if not isinstance(data, list):
+        raise WireFormatError(f"{name} must be a list")
+    result: dict[BlockRef, T] = {}
+    for entry in data:
+        record = _object(entry, name)
+        ref = _ref_from_wire(record, id_name)
+        if ref in result:
+            raise WireFormatError(f"{name} lists {ref.label} twice")
+        result[ref] = decode(record)
+    return result
+
+
+def _ref_set(data: Any, name: str) -> frozenset[BlockRef]:
+    if not isinstance(data, list):
+        raise WireFormatError(f"{name} must be a list")
+    return frozenset(_ref_from_wire(_object(item, name)) for item in data)
+
+
 # ------------------------------------------------------------------ #
 # Inputs and outputs
 # ------------------------------------------------------------------ #
@@ -93,12 +143,11 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
     return {
         "time_s": inputs.time_s,
         "ctc": {
-            "maintenance_mode": ctc.maintenance_mode,
-            "closed_blocks": [key_to_wire(k) for k in ctc.closed_blocks],
-            "switch_commands": _entries(
-                ctc.switch_commands, lambda p: {"position": p}
+            "closed_blocks": [_ref_to_wire(r) for r in ctc.closed_blocks],
+            "switch_commands": _ref_entries(
+                ctc.switch_commands, lambda p: {"position": p}, "switch_id"
             ),
-            "suggestions": _entries(
+            "suggestions": _ref_entries(
                 ctc.suggestions,
                 lambda s: {
                     "speed_mps": s.speed_mps,
@@ -131,13 +180,13 @@ def inputs_from_wire(data: Any) -> TrackControllerInputs:
     return TrackControllerInputs(
         time_s=_number(record, "time_s"),
         ctc=CtcInputs(
-            maintenance_mode=_flag(ctc, "maintenance_mode"),
-            closed_blocks=_key_set(ctc.get("closed_blocks"), "closed_blocks"),
-            switch_commands=_from_entries(
+            closed_blocks=_ref_set(ctc.get("closed_blocks"), "closed_blocks"),
+            switch_commands=_from_ref_entries(
                 ctc.get("switch_commands"), "switch_commands",
                 lambda r: _choice(r, "position", SWITCH_POSITIONS),
+                "switch_id",
             ),
-            suggestions=_from_entries(
+            suggestions=_from_ref_entries(
                 ctc.get("suggestions"), "suggestions",
                 lambda r: Suggestion(
                     speed_mps=_count(r, "speed_mps"),

@@ -74,7 +74,7 @@ class Link(unittest.TestCase):
             {"occupied": ["1"]},
             {"occupied": ["3", "4"], "suggestions": {"3": (30, 4)}},
             {"closed": ["7"], "suggestions": {"7": (5, 2), "8": (9, 1)}},
-            {"maintenance": True, "switch_commands": {"12": "reverse"}},
+            {"switch_commands": {"12": "reverse"}},
             {"occupied": ["18", "19"]},
         )):
             sent = inputs(local, time_s=18000.0 + step / 10, **kwargs)
@@ -89,7 +89,7 @@ class Link(unittest.TestCase):
             client.step(0.0, inputs(local))
         bad = inputs(local)
         bad = type(bad)(time_s=bad.time_s, ctc=CtcInputs(
-            suggestions={keys(local)["3"]: Suggestion(-4, 1)}))
+            suggestions={keys(local)["3"].ref: Suggestion(-4, 1)}))
         with self.assertRaises(InvalidInputError):
             client.step(0.1, bad)
         # The link still works after a rejection.

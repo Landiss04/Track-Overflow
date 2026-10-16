@@ -181,7 +181,8 @@ class TrackControllerState(QObject):
             "waysides": ids,
             "selected": self._selected,
             "clock": display.clock(snapshot.time_s),
-            "maintenance": snapshot.maintenance_mode,
+            "maintenance": "" if wayside is None
+            else views.maintenance_text(wayside),
             "testUi": self._server.connected,
             "source": (
                 "Inputs from test UI" if self._server.connected
@@ -202,13 +203,11 @@ class TrackControllerState(QObject):
         self._details = (
             {} if wayside is None else views.program_details(wayside)
         )
-        self._fill_tables(wayside, snapshot.maintenance_mode)
+        self._fill_tables(wayside)
         self._update_diagram(wayside)
         self.changed.emit()
 
-    def _fill_tables(
-        self, wayside: WaysideSnapshot | None, maintenance: bool
-    ) -> None:
+    def _fill_tables(self, wayside: WaysideSnapshot | None) -> None:
         if wayside is None:
             for model in (
                 self._blocks, self._office, self._switches, self._devices,
@@ -218,7 +217,7 @@ class TrackControllerState(QObject):
             return
         self._blocks.set_rows(views.block_rows(wayside))
         self._office.set_rows(views.office_rows(wayside))
-        self._switches.set_rows(views.switch_rows(wayside, maintenance))
+        self._switches.set_rows(views.switch_rows(wayside))
         self._devices.set_rows(views.device_rows(wayside))
         self._report.set_rows(views.report_rows(wayside))
 
@@ -261,9 +260,10 @@ class TrackControllerState(QObject):
         """Simulation time of the last tick."""
         return self._scalar("clock")
 
-    @Property(bool, notify=changed)
-    def maintenance(self) -> bool:
-        """Whether the CTC Office has maintenance mode on."""
+    @Property(str, notify=changed)
+    def maintenanceText(self) -> str:  # noqa: N802
+        """The CTC Office's closures and switch commands in the wayside
+        on screen, or "" when there are none."""
         return self._scalar("maintenance")
 
     @Property(bool, notify=changed)

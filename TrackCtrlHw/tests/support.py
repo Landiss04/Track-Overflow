@@ -61,14 +61,13 @@ def inputs(
     occupied: Iterable[str] = (),
     closed: Iterable[str] = (),
     suggestions: dict[str, tuple[int, int]] | None = None,
-    maintenance: bool = False,
     switch_commands: dict[str, str] | None = None,
     reported: dict[str, str] | None = None,
     lit: dict[str, str] | None = None,
 ) -> TrackControllerInputs:
-    """Inputs by block number. Every switch reports its commanded
-    position unless ``reported`` says otherwise; ``lit`` gives the
-    aspects the Track Model reports."""
+    """Inputs by block number, the CTC Office's keyed its way. Every
+    switch reports its commanded position unless ``reported`` says
+    otherwise; ``lit`` gives the aspects the Track Model reports."""
     by_number = keys(controller)
     snapshot = controller.snapshot()
     commanded = {
@@ -82,14 +81,13 @@ def inputs(
     return TrackControllerInputs(
         time_s=time_s,
         ctc=CtcInputs(
-            maintenance_mode=maintenance,
-            closed_blocks=frozenset(by_number[n] for n in closed),
+            closed_blocks=frozenset(by_number[n].ref for n in closed),
             switch_commands={
-                by_number[n]: p  # type: ignore[misc]
+                by_number[n].ref: p  # type: ignore[misc]
                 for n, p in (switch_commands or {}).items()
             },
             suggestions={
-                by_number[n]: Suggestion(*value)
+                by_number[n].ref: Suggestion(*value)
                 for n, value in (suggestions or {}).items()
             },
         ),

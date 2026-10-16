@@ -30,8 +30,6 @@ Item {
             Layout.fillWidth: true
             moduleName: qsTr("Track Controller")
             instance: page.loaded ? tc.line + qsTr(" Line \u00b7 ") + page.waysideName : ""
-            mode: tc.maintenance ? qsTr("Maintenance") : qsTr("Automatic")
-            modeKind: tc.maintenance ? "warning" : "info"
             faultText: tc.vitalFault !== "" ? qsTr("Vital fault") : ""
             source: tc.sourceText
             clock: tc.clockText
@@ -184,13 +182,14 @@ Item {
                 spacing: theme.space_3
 
                 Banner {
+                    readonly property bool active: tc.maintenanceText !== ""
                     Layout.fillWidth: true
-                    compact: true
-                    kind: tc.maintenance ? "warning" : "info"
-                    heading: tc.maintenance ? qsTr("MAINTENANCE") : qsTr("AUTOMATIC")
-                    body: tc.maintenance
-                        ? qsTr("The CTC Office sets the switches. The PLC still sets signals and crossings.")
-                        : qsTr("The PLC program sets switches, signals and crossings.")
+                    compact: !active
+                    kind: active ? "warning" : "info"
+                    heading: active ? qsTr("CTC MAINTENANCE") : qsTr("NO CTC MAINTENANCE")
+                    body: active
+                        ? tc.maintenanceText + qsTr(". The PLC program decides what to do with them.")
+                        : qsTr("No block closed and no switch commanded by the CTC Office here.")
                 }
 
                 RowLayout {
@@ -288,7 +287,7 @@ Item {
                             { title: qsTr("Switch"), role: "name", width: 72, mono: true },
                             { title: qsTr("Commanded"), role: "commanded", fill: true, mono: true },
                             { title: qsTr("Reported"), role: "reported", width: 80 },
-                            { title: qsTr("Set by"), role: "setBy", width: 96, tone: "secondary" },
+                            { title: qsTr("CTC asks"), role: "ctcRequest", width: 96, tone: "secondary" },
                             { title: qsTr("Agreement"), role: "agreeText", badgeRole: "agreeBadge", width: 144 }
                         ]
                     }

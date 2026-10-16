@@ -26,8 +26,6 @@ from track_ctrl_hw.territory import parse_territory
 
 from tests.support import inputs, keys, loaded, program_source, territory
 
-CLEAR_RUN = "VAR_IN MAINT\n"
-
 
 def circuits(controller: HwTrackController, **kwargs: object):
     out = controller.step(0.1, inputs(controller, **kwargs))  # type: ignore
@@ -59,13 +57,14 @@ class Contract(unittest.TestCase):
             replace(inputs(controller), time_s=-1),
             replace(inputs(controller), time_s=math.nan),
             replace(inputs(controller), ctc=CtcInputs(
-                suggestions={k["3"]: Suggestion(-1, 2)})),
+                suggestions={k["3"].ref: Suggestion(-1, 2)})),
             replace(inputs(controller), ctc=CtcInputs(
-                suggestions={k["3"]: Suggestion(5.5, 2)})),  # type: ignore
+                suggestions={k["3"].ref: Suggestion(5.5, 2)})),  # type: ignore
             replace(inputs(controller), ctc=CtcInputs(
-                switch_commands={k["12"]: "sideways"})),  # type: ignore
+                switch_commands={k["12"].ref: "sideways"})),  # type: ignore
+            # The CTC Office names blocks by BlockRef, not BlockKey.
             replace(inputs(controller), ctc=CtcInputs(
-                maintenance_mode=1)),  # type: ignore
+                closed_blocks=frozenset({k["3"]}))),  # type: ignore
         ]
         for case in bad:
             with self.subTest(case), self.assertRaises(InvalidInputError):
@@ -74,7 +73,7 @@ class Contract(unittest.TestCase):
 
     def test_ignores_blocks_it_does_not_govern(self) -> None:
         controller = loaded(1)
-        other = replace(keys(controller)["3"], line="Red")
+        other = replace(keys(controller)["3"], line="Red").ref
         step = TrackControllerInputs(
             time_s=1.0, ctc=CtcInputs(suggestions={other: Suggestion(5, 5)})
         )
@@ -123,7 +122,7 @@ class Loading(unittest.TestCase):
             with self.subTest(source), self.assertRaises(PlcError):
                 controller.load_program("1", source, "bad.plc")
         with self.assertRaises(PlcError):
-            controller.load_program("7", "VAR_IN MAINT\n", "x.plc")
+            controller.load_program("7", "VAR_IN OCC_1\n", "x.plc")
 
     def test_samples_compile_cleanly(self) -> None:
         controller = loaded(1, 2, 3)
@@ -260,34 +259,52 @@ class VitalLayer(unittest.TestCase):
 
 
 class Maintenance(unittest.TestCase):
-    def test_switches_obey_the_ctc_not_the_program(self) -> None:
+    def test_the_program_obeys_ctc_switch_commands(self) -> None:
         controller = loaded(1)
         k = keys(controller)
-        # The program would reverse the switch for a train on block 1.
-        out, _ = circuits(controller, occupied=["1"], maintenance=True,
+        # On its own the program would reverse the switch for a train on
+        # block 1; the sample program obeys the CTC Office instead.
+        out, _ = circuits(controller, occupied=["1"],
                           switch_commands={"12": "normal"})
         self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
-        out, _ = circuits(controller, maintenance=True,
-                          switch_commands={"12": "reverse"})
+        out, _ = circuits(controller, switch_commands={"12": "reverse"})
         self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
-        self.assertEqual(
-            controller.snapshot().waysides[0].switches[0].set_by, "CTC"
+        wayside = controller.snapshot().waysides[0]
+        self.assertEqual(wayside.switch_requests, {k["12"]: "reverse"})
+
+    def test_commands_reach_the_program_as_inputs(self) -> None:
+        controller = loaded(1, programs=False)
+        # A program that ignores the CTC Office is not overridden.
+        controller.load_program(
+            "1", "VAR_IN CTCSW_12\nVAR_OUT SW_12\nSW_12 := 0\n", "x.plc"
         )
+        k = keys(controller)
+        out, _ = circuits(controller, switch_commands={"12": "reverse"})
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
 
     def test_ctc_command_still_locked_under_a_train(self) -> None:
         controller = loaded(1)
         k = keys(controller)
-        out, _ = circuits(controller, occupied=["13"], maintenance=True,
+        out, _ = circuits(controller, occupied=["13"],
                           switch_commands={"12": "reverse"})
         self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
 
-    def test_program_resumes_when_maintenance_ends(self) -> None:
+    def test_program_resumes_when_commands_end(self) -> None:
         controller = loaded(1)
         k = keys(controller)
-        circuits(controller, maintenance=True,
-                 switch_commands={"12": "reverse"})
+        circuits(controller, switch_commands={"12": "reverse"})
         out, _ = circuits(controller)
         self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
+
+    def test_closures_are_named_by_line_and_block(self) -> None:
+        controller = loaded(1)
+        k = keys(controller)
+        _, by_number = circuits(controller, closed=["3"],
+                                suggestions={"3": (10, 4)})
+        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
+        self.assertEqual(k["3"].ref.label, "Green:3")
+        wayside = controller.snapshot().waysides[0]
+        self.assertEqual(wayside.closed_blocks, frozenset({k["3"]}))
 
 
 class Report(unittest.TestCase):

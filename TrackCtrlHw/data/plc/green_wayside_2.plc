@@ -8,19 +8,20 @@
 
 VAR_IN  OCC_21..35
 VAR_IN  CLOSED_29
-VAR_IN  SWREV_28 MAINT
+VAR_IN  SWREV_28 CTCSW_28 CTCREV_28
 VAR_OUT AUTH_21..35
 VAR_OUT SW_28
 VAR_OUT SIG_28_R SIG_28_Y SIG_28_G SIG_28_SG
 
-// Switch 28: route around block 29 while it is closed.
-SW_28 := CLOSED_29
+// Switch 28: while the CTC Office commands it (maintenance), obey.
+// Otherwise route around block 29 while it is closed.
+SW_28 := (CTCSW_28 AND CTCREV_28) OR (NOT CTCSW_28 AND CLOSED_29)
 
 // Signal 28: red while the main route into 29 is blocked; caution on
 // the diverging route, which leaves this wayside. Exactly one aspect
 // is lit for every input.
 BLOCKED := NOT SWREV_28 AND (OCC_29 OR CLOSED_29)
-CAUTION := SWREV_28 OR OCC_30 OR MAINT
+CAUTION := SWREV_28 OR OCC_30 OR CTCSW_28
 SIG_28_R  := BLOCKED
 SIG_28_Y  := NOT BLOCKED AND CAUTION
 SIG_28_G  := NOT BLOCKED AND NOT CAUTION AND OCC_31

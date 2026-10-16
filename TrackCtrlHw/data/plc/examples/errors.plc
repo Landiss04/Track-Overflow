@@ -1,7 +1,7 @@
 // Compile errors: load into wayside 1 and it is refused, with every
 // problem listed. The running program keeps running.
 
-VAR_IN  OCC_1..20 SWREV_12 MAINT
+VAR_IN  OCC_1..20 SWREV_12 CTCSW_12
 VAR_OUT SW_12 XING_19 AUTH_1 AUTH_2
 VAR_IN  OCC_21                      // wayside 1 has no block 21
 VAR_OUT AUTH_5..1                   // a range must ascend

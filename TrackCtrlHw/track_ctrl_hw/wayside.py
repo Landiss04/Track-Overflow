@@ -16,7 +16,9 @@ Name            Kind   Meaning
                        reports as occupancy
 ``CLOSED_n``    in     Closed by the dispatcher
 ``SWREV_n``     in     The switch listed on block n reports reverse
-``MAINT``       in     The CTC Office has maintenance mode on
+``CTCSW_n``     in     The CTC Office commands the switch on block n (it
+                       does so only in maintenance mode)
+``CTCREV_n``    in     That command is reverse; 0 with no command
 ``AUTH_n``      out    1 passes the CTC's speed and authority down block n's
                        track circuit; 0 sends speed 0, authority 0
 ``SW_n``        out    1 commands the switch on block n to reverse
@@ -69,12 +71,15 @@ _LIMIT_TOLERANCE = 1e-9
 
 def input_names(territory: Territory) -> frozenset[str]:
     """Every name this wayside feeds a PLC program."""
-    names = {"MAINT"}
+    names = set()
     for block in territory.blocks:
         number = block.key.block_id
         names.update((f"OCC_{number}", f"CLOSED_{number}"))
     for switch in territory.switches:
-        names.add(f"SWREV_{switch.switch_id}")
+        number = switch.switch_id
+        names.update(
+            (f"SWREV_{number}", f"CTCSW_{number}", f"CTCREV_{number}")
+        )
     return frozenset(names)
 
 
@@ -234,20 +239,28 @@ class Wayside:
         occupied = frozenset(
             key for key in keys if key in track_model.occupied_blocks
         )
-        closed = frozenset(key for key in keys if key in ctc.closed_blocks)
+        closed = frozenset(
+            key for key in keys if key.ref in ctc.closed_blocks
+        )
         suggestions = {
-            key: ctc.suggestions[key] for key in keys if key in ctc.suggestions
+            key: ctc.suggestions[key.ref]
+            for key in keys
+            if key.ref in ctc.suggestions
         }
-        maintenance = ctc.maintenance_mode
+        requests = {
+            switch.key: ctc.switch_commands[switch.key.ref]
+            for switch in territory.switches
+            if switch.key.ref in ctc.switch_commands
+        }
         overrides: list[Override] = []
 
         started = time.perf_counter()
         values = self._run_program(
-            occupied, closed, track_model, maintenance, overrides
+            occupied, closed, requests, track_model, overrides
         )
         duration = time.perf_counter() - started
 
-        self._decide_switches(values, ctc, maintenance, occupied, overrides)
+        self._decide_switches(values, occupied, overrides)
         disagreeing = {
             switch.key
             for switch in territory.switches
@@ -299,11 +312,7 @@ class Wayside:
         self._occupied = occupied
         self._closed = closed
         self._suggestions = suggestions
-        self._switch_requests = {
-            switch.key: ctc.switch_commands[switch.key]
-            for switch in territory.switches
-            if switch.key in ctc.switch_commands
-        }
+        self._switch_requests = requests
         self._signal_commands = signals
         self._crossing_commands = crossings
         self._circuits = circuits
@@ -335,8 +344,8 @@ class Wayside:
         self,
         occupied: frozenset[BlockKey],
         closed: frozenset[BlockKey],
+        requests: Mapping[BlockKey, SwitchPosition],
         track_model: TrackModelInputs,
-        maintenance: bool,
         overrides: list[Override],
     ) -> dict[str, bool] | None:
         # The program's outputs, or None when every output must be held
@@ -353,15 +362,18 @@ class Wayside:
                 "every track circuit sends speed 0, authority 0.",
             ))
             return None
-        image = {"MAINT": maintenance}
+        image: dict[str, bool] = {}
         for key in self._territory.keys:
             number = key.block_id
             image[f"OCC_{number}"] = key in occupied
             image[f"CLOSED_{number}"] = key in closed
         for switch in self._territory.switches:
-            image[f"SWREV_{switch.switch_id}"] = (
+            number = switch.switch_id
+            image[f"SWREV_{number}"] = (
                 track_model.switch_positions.get(switch.key) == "reverse"
             )
+            image[f"CTCSW_{number}"] = switch.key in requests
+            image[f"CTCREV_{number}"] = requests.get(switch.key) == "reverse"
         channel_a = self._program.scan_a(image)
         channel_b = self._program.scan_b(image)
         if channel_a != channel_b:
@@ -395,26 +407,17 @@ class Wayside:
     def _decide_switches(
         self,
         values: Mapping[str, bool] | None,
-        ctc: CtcInputs,
-        maintenance: bool,
         occupied: frozenset[BlockKey],
         overrides: list[Override],
     ) -> None:
-        faulted = bool(self._scan_info.vital_fault)
         for switch in self._territory.switches:
             current = self._commanded[switch.key]
-            if faulted:
-                wanted = current
-            elif maintenance:
-                # The dispatcher sets switches; one not commanded holds.
-                wanted = ctc.switch_commands.get(switch.key, current)
-            elif values is None:
+            if values is None:
                 wanted = current
             else:
                 wanted = (
                     "reverse" if values[f"SW_{switch.switch_id}"] else "normal"
                 )
-            self._set_by[switch.key] = "CTC" if maintenance else "PLC"
             if wanted != current:
                 locked = [
                     key.label
@@ -564,9 +567,6 @@ class Wayside:
         self._commanded: dict[BlockKey, SwitchPosition] = {
             switch.key: "normal" for switch in territory.switches
         }
-        self._set_by: dict[BlockKey, str] = {
-            switch.key: "PLC" for switch in territory.switches
-        }
         self._scan_info = ScanInfo()
         self._occupied: frozenset[BlockKey] = frozenset()
         self._closed: frozenset[BlockKey] = frozenset()
@@ -607,7 +607,6 @@ class Wayside:
                     switch=switch,
                     commanded=self._commanded[switch.key],
                     reported=self._switch_reports.get(switch.key),
-                    set_by=self._set_by[switch.key],
                 )
                 for switch in territory.switches
             ),

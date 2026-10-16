@@ -95,18 +95,19 @@ All errors derive from `TrackControllerError`.
 
 ### Inputs (`TrackControllerInputs`)
 
-Backend units only (`truth/conventions/units.md`). Blocks are `BlockKey(line,
-section, block_id)`, all strings. A switch, its signal and a crossing are each
-keyed by the block they are listed on in the database. Inputs for blocks no
-wayside governs are ignored, so the harness can send the whole line.
+Backend units only (`truth/conventions/units.md`). Track Model blocks are
+`BlockKey(line, section, block_id)`, all strings. The CTC Office names a block
+its own way, `BlockRef(line, block_id)`, written `Green:13`, with no section. A
+switch, its signal and a crossing are each keyed by the block they are listed
+on in the database. Inputs for blocks no wayside governs are ignored, so the
+harness can send the whole line.
 
 | Field | From | Type |
 | --- | --- | --- |
 | `time_s` | Clock | Simulation seconds since midnight |
-| `ctc.maintenance_mode` | CTC Office | `bool`, system-wide |
-| `ctc.closed_blocks` | CTC Office | `frozenset[BlockKey]` |
-| `ctc.switch_commands` | CTC Office | `{switch block: "normal" \| "reverse"}`; obeyed only in maintenance |
-| `ctc.suggestions` | CTC Office | `{block: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing |
+| `ctc.closed_blocks` | CTC Office | `frozenset[BlockRef]`, the full set every tick |
+| `ctc.switch_commands` | CTC Office | `{BlockRef of the switch: "normal" \| "reverse"}`; sent only in maintenance mode. The PLC program decides whether to obey |
+| `ctc.suggestions` | CTC Office | `{BlockRef: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing |
 | `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]`; a train or a failure, the module cannot tell which |
 | `track_model.switch_positions` | Track Model | Actual positions, `{switch block: position}` |
 | `track_model.crossings_active` | Track Model | Actual state, `{crossing block: bool}` |
@@ -193,7 +194,7 @@ variants share a language, not code. Full grammar in `track_ctrl_hw/plc.py`;
 the names a program can use are in `track_ctrl_hw/wayside.py`:
 
 ```
-VAR_IN  OCC_1..20 CLOSED_13 SWREV_12 MAINT     // inputs
+VAR_IN  OCC_1..20 CLOSED_13 SWREV_12 CTCSW_12 CTCREV_12   // inputs
 VAR_OUT AUTH_1..20 SW_12 SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG XING_19
 SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
 ```
@@ -219,8 +220,9 @@ It runs after every scan and can only make an output more restrictive:
 - No program, or a channel disagreement: every signal red, authority zero,
   every crossing active, switches held.
 
-In maintenance mode the switches follow the CTC Office's commands instead of the
-program; the program still sets signals, crossings and authority.
+The CTC Office sends no maintenance flag. Its switch commands reach the program
+as `CTCSW_n` (a command is in effect) and `CTCREV_n` (it is reverse); the
+sample programs obey them.
 
 ## Known gaps
 
