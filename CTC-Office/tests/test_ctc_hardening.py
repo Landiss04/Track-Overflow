@@ -26,7 +26,6 @@ from ctc.model import (  # noqa: E402
     MAX_TRAIN_ID_LENGTH,
     InvalidInputError,
     InvalidTimeStepError,
-    StubCtcOffice,
 )
 from ctc.schedule import (  # noqa: E402
     Schedule,
@@ -34,6 +33,7 @@ from ctc.schedule import (  # noqa: E402
     ScheduledTrain,
     parse_schedule,
 )
+from tests.occupancy import ready_office  # noqa: E402
 
 DT_S = 0.1
 HUGE = 10**400       # an int too big for a float
@@ -47,7 +47,7 @@ def _occupancy(*blocks: Any) -> CtcInputs:
 class NumberTest(unittest.TestCase):
 
     def test_huge_numbers_are_rejected(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         with self.assertRaises(InvalidTimeStepError):
             ctc.step(HUGE, CtcInputs())
         with self.assertRaises(InvalidInputError):
@@ -56,14 +56,14 @@ class NumberTest(unittest.TestCase):
                 "destination_block_id": "5", "arrival_s": HUGE})
 
     def test_elapsed_time_stays_finite(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.step(1e308, CtcInputs())
         with self.assertRaises(InvalidTimeStepError):
             ctc.step(1e308, CtcInputs())
         self.assertEqual(ctc.snapshot().elapsed_s, 1e308)
 
     def test_ticket_sales_are_bounded(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         for tickets in (MAX_TICKETS + 1, 2**63, -1):
             with self.subTest(tickets=tickets), \
                     self.assertRaises(InvalidInputError):
@@ -78,7 +78,7 @@ class ShapeTest(unittest.TestCase):
     are read, and change nothing."""
 
     def test_wrong_types_are_rejected(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         before = ctc.snapshot()
         for bad in (None, {}, _occupancy(None), _occupancy("abc"),
                     CtcInputs(track_controller=TrackControllerInputs(
@@ -93,7 +93,7 @@ class ShapeTest(unittest.TestCase):
         self.assertEqual(ctc.snapshot(), before)
 
     def test_lists_are_taken_as_tuples(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         listed = [BlockOccupancy("Green", "5", True)]
         ctc.step(DT_S, CtcInputs(track_controller=TrackControllerInputs(
             occupancy=listed)))  # type: ignore[arg-type]
@@ -105,7 +105,7 @@ class ShapeTest(unittest.TestCase):
 class ReportTest(unittest.TestCase):
 
     def test_train_ids(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         for bad in ("T\n1", "T\x001", "T" * (MAX_TRAIN_ID_LENGTH + 1)):
             with self.subTest(train_id=bad):
                 with self.assertRaises(InvalidInputError):
@@ -145,7 +145,7 @@ class ScheduleTest(unittest.TestCase):
                 self._train("1", 60, 30)]}])
 
     def test_module_refuses_a_run_with_no_stops(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         with self.assertRaisesRegex(InvalidInputError, "no stops"):
             ctc.load_schedule(Schedule("x", (
                 ScheduledTrain("Green", "1", ()),)))

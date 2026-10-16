@@ -22,12 +22,19 @@ from ctc.interface import (  # noqa: E402
     SwitchReport,
     TrackControllerInputs,
     TrackModelInputs,
+    WaysideStatus,
 )
 from ctc.model import StubCtcOffice  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
 from ctc_ui.display import MPS_TO_MPH  # noqa: E402
 from ctc_ui.sim_clock import SimulationClockBridge  # noqa: E402
-from tests.occupancy import At, at, place, reports  # noqa: E402
+from tests.occupancy import (  # noqa: E402
+    At,
+    at,
+    place,
+    ready_office,
+    reports,
+)
 
 _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
@@ -51,7 +58,7 @@ def _report(host: CtcHost, module: StubCtcOffice, *trains: At,
 
 
 def _host() -> tuple[CtcHost, StubCtcOffice, SimulationClockBridge]:
-    module = StubCtcOffice()
+    module = ready_office()
     host = CtcHost(module)
     clock = SimulationClockBridge()
     host.follow_clock(clock)
@@ -86,7 +93,8 @@ class TickTest(unittest.TestCase):
         inputs = CtcInputs(
             track_controller=TrackControllerInputs(
                 occupancy=(BlockOccupancy("Green", "3", True),),
-                ready=True),
+                waysides=(WaysideStatus("G1", "Green", True),
+                          WaysideStatus("R1", "Red", True))),
             track_model=_green(4))
         host._receive_inputs(inputs)
         # Paused: the update is staged. The window keeps showing the last
@@ -111,6 +119,18 @@ class TickTest(unittest.TestCase):
 class PanelDataTest(unittest.TestCase):
     """What the panels read, and what their actions do."""
 
+    def test_not_ready_names_the_waysides(self) -> None:
+        host, _, clock = _host()
+        host._receive_inputs(CtcInputs(
+            track_controller=TrackControllerInputs(waysides=(
+                WaysideStatus("G1", "Green", True),
+                WaysideStatus("G2", "Green", False, "no PLC program"),
+                WaysideStatus("R1", "Red", True)))))
+        clock.clock.tick()
+        (notice,) = [n for n in host.notices if "not ready" in n]
+        self.assertIn("Green (wayside G2: no PLC program)", notice)
+        self.assertNotIn("Red", notice)
+
     def test_not_ready_is_shown_and_closures_still_listed(self) -> None:
         # Nothing is sent to a Track Controller that is not ready, but
         # the dispatcher still sees their own closures and commands.
@@ -121,7 +141,12 @@ class PanelDataTest(unittest.TestCase):
         host.setSwitch("Green", "12", 1)
         _report(host, module, at("T1", "63"), ready=False)
         clock.clock.tick()
-        self.assertIn("Track Controller not ready", " ".join(host.notices))
+        self.assertIn("Track Controller not ready on Green (no wayside "
+                      "has reported) and Red (no wayside has reported)",
+                      " ".join(host.notices))
+        # No train can be dispatched now.
+        self.assertIn("not ready", host.dispatchTrain("T2", "Green", "65",
+                                                      ""))
         self.assertEqual(host.trainDetail("T1")["authorityLimit"],
                          "Track Controller not ready")
         self.assertEqual(host.trainDetail("T1")["suggestedSpeed"], "\u2014")

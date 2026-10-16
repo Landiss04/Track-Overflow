@@ -3,3 +3,6 @@
 __pycache__/
 *.pyc
 scaling-report.txt
+/build/
+/dist/
+/*.spec

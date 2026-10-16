@@ -21,8 +21,8 @@ python -m ctc_ui
 
 The test harness is a separate process with its own window. It stands
 in for the Track Controller: its only inputs are what the Track
-Controller sends the CTC (whether it is ready, occupied blocks, switch
-states, crossing states). Everything the CTC itself decides (dispatching, closing blocks,
+Controller sends the CTC (each wayside's startup, occupied blocks,
+switch states, crossing states). Everything the CTC itself decides (dispatching, closing blocks,
 setting switches, the operating mode and the clock speed) is done in the
 CTC window, as a dispatcher would. Ticket sales come from the Track
 Model, so the test UI does not force them either. Start the CTC Office
@@ -62,12 +62,16 @@ other:
   window's clock, add its next block and Send, then remove the block
   behind it and Send. Standalone, each Send is only 0.1 s, too soon for
   any train to move.
-- **ready** is off at first, as when the Track Controller starts up
-  with no PLC program. Its waysides are vital, so until it is on the
-  CTC sends the Track Controller nothing: no speed or authority, no
-  closed blocks, no switch commands. Orders, closures and switch
-  commands made in the CTC window are kept and go out once it is on;
-  the CTC window says the Track Controller is not ready.
+- **waysides** has each wayside's startup as it reports it: its ID,
+  line, whether it is ready (a PLC program on its territory) and, if
+  not, why. It starts empty, as at startup. A line is ready once a
+  wayside on it has reported and every wayside on it is ready. The
+  waysides are vital, so until then the CTC sends nothing for the line
+  (no speed or authority, closed blocks or switch commands) and refuses
+  to dispatch a train on it; automatic dispatch waits too. Closures and
+  switch commands made in the CTC window are kept and go out once the
+  line is ready; the CTC window names each wayside that is not ready
+  and why.
 - Send is all or nothing: if the inputs are rejected (an unknown block,
   a switch reported in two positions), none of them is applied and the
   status line says why.
@@ -208,11 +212,14 @@ yet) through `ctc_ui/ctc_host.py`:
 - Routes carry on the way each train is going (`ctc/tracking.py` knows
   which block it came from), so the CTC never routes a train back the
   way it came.
-- Known limit: the CTC does not plan where opposing trains meet. Track
-  run both ways (Green 77 to 100, Red from the yard out to the loop at
-  52) lets two trains meet head-on, and both then wait (the dispatcher
-  gets a reversal alert). One Red run at a time works; a second runs
-  into the first coming back.
+- Runs are never sent to meet head-on. Where their paths cross the same
+  track in both directions (Green 77 to 100 and 1 to 28, each run out
+  and back; Red from 16 out through the loop and back), that stretch is
+  a two-way zone that holds one scheduled train at a time. A train due
+  to enter a busy zone waits at its last stop, or in the yard, as
+  **Held**. On Red the zone is most of the line, so Red runs go about
+  one at a time. A head-on meet that happens anyway (a manual train, say)
+  is for the wayside controllers to handle.
 - Trains per hour and the per-line trains and dwell columns stay empty:
   nothing reports that data yet.
 
@@ -301,8 +308,9 @@ the context-property pattern shared with the Train Model UI.
   It checks every reference and value against the track layout files
   and the boundary types, enforces the safety rules above, accepts
   switch commands and block closures only in maintenance mode, and gives
-  each dispatched train it is following (once the Track Controller
-  reports ready; until then it sends the Track Controller nothing) an
+  each dispatched train it is following (once its line's Track
+  Controller reports ready; until then it sends nothing for the line,
+  and dispatches no train on it) an
   authority counted in blocks
   (above) and a suggested speed 1 m/s under its head block's speed limit
   (whole m/s, rounded down), lower if it needs to stop within its

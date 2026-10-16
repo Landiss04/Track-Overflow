@@ -1,11 +1,12 @@
 // The console's own header.
 //
-// A local copy of the shared ui/ModuleHeader, carrying one addition:
-// `alerts`, a list of fault labels shown beside the emergency badge.
-// The shared component has no slot for them and this module did not
-// want to change a file every other module uses. If that slot is
-// ever added upstream, delete this file and go back to the shared
-// header with `alerts` bound the same way.
+// A local copy of the shared ui/ModuleHeader, carrying two additions:
+// `underground`, a pill beside the mode badge, and `alerts`, a list
+// of fault labels shown beside the emergency badge. The shared
+// component has no slot for either and this module did not want to
+// change a file every other module uses. If those slots are ever
+// added upstream, delete this file and go back to the shared header
+// with both bound the same way.
 //
 // Everything else here is the shared component as it stands, so keep
 // the two in step if the style guide's section 6.7 moves.
@@ -22,6 +23,8 @@ Rectangle {
     property string line: ""
     property string clock: ""
     property bool faulted: false
+    //: The last beacon said the station is underground.
+    property bool underground: false
     //: Fault labels shown after the emergency badge, hidden when empty.
     property var alerts: []
     property var navigationEntries: []
@@ -64,6 +67,14 @@ Rectangle {
             label: root.mode
             variant: "info"
             visible: root.mode !== ""
+        }
+
+        // Info, the mode badge's purple: a fact about where the train
+        // is, not a fault.
+        StatusBadge {
+            label: qsTr("Underground")
+            variant: "info"
+            visible: root.underground
         }
 
         StatusBadge {

@@ -28,8 +28,8 @@ from ctc.interface import (  # noqa: E402
     TrackedTrain,
     TrackModelInputs,
     TrainAuthority,
+    WaysideStatus,
 )
-from ctc.model import StubCtcOffice  # noqa: E402
 from ctc.model import StubCtcOffice as _Module  # noqa: E402
 from ctc.socket_link import (  # noqa: E402
     CtcLinkServer,
@@ -39,7 +39,7 @@ from ctc.socket_link import (  # noqa: E402
 )
 from ctc.wire import inputs_from_wire, snapshot_from_wire, to_wire  # noqa
 from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
-from tests.occupancy import reports  # noqa: E402
+from tests.occupancy import ready_office, reports  # noqa: E402
 
 HOST = Path(__file__).with_name("link_host.py")
 
@@ -62,14 +62,16 @@ class WireTest(unittest.TestCase):
                 occupancy=(BlockOccupancy("Green", "1", True),),
                 switches=(SwitchReport("Green", "12", "reverse"),),
                 crossings=(CrossingReport("Green", "19", "active"),),
-                ready=True,
+                waysides=(WaysideStatus("G1", "Green", True),
+                          WaysideStatus("R2", "Red", False,
+                                        "no PLC program")),
             ),
             track_model=_green(3),
         )
         self.assertEqual(inputs_from_wire(to_wire(inputs)), inputs)
 
     def test_snapshot_round_trip(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "65", 30600.0)
         ctc.set_maintenance_mode(True)
         ctc.set_block_closed("Red", "2", True)
@@ -116,6 +118,8 @@ class SocketLinkTest(unittest.TestCase):
             time.sleep(0.01)
 
     def test_requests_reach_the_remote_module(self) -> None:
+        # The Track Controller reports both lines ready.
+        self.link.set_inputs(reports())
         self.link.dispatch("T1", "Green", "65", 30600.0)
         self.link.set_maintenance_mode(True)
         self.link.set_block_closed("Red", "2", True)
@@ -171,8 +175,8 @@ class SocketLinkTest(unittest.TestCase):
         # action belong to the CTC window.
         harness = CtcTestHarness(self.link)
         self.assertEqual([row["name"] for row in harness.inputs],
-                         ["ready", "occupied_blocks", "switch_states",
-                          "crossing_states"])
+                         ["waysides", "occupied_blocks",
+                          "switch_states", "crossing_states"])
 
     def test_remote_rejection_is_reported(self) -> None:
         with self.assertRaises(RemoteCtcError):

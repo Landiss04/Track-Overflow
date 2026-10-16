@@ -38,8 +38,9 @@ from ctc.interface import (
     TrackModelInputs,
     TrainAuthority,
     TrainSuggestion,
+    WaysideStatus,
 )
-from ctc.model import CtcError, StubCtcOffice
+from ctc.model import CtcError, StubCtcOffice, ready_lines
 from ctc.schedule import load_schedule
 from ctc.socket_link import CtcLinkServer
 from ctc.track_layout import Line, load_layout, station_lines
@@ -76,12 +77,18 @@ def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
     return [b for b in snap.closed_blocks if b not in pending]
 
 
+def _wayside_waiting(status: WaysideStatus) -> str:
+    """One wayside that is not ready, for a notice."""
+    return f"wayside {status.wayside_id}: {status.reason or 'not ready'}"
+
+
 def _run_status(run: ScheduledRun) -> str:
     """A run's Status cell: where it is in its schedule."""
     stop = (run.stop_station.title() if run.stop_station
             else f"block {run.stop_block_id}")
     return {
         "queued": "Queued",
+        "held": "Held",
         "in yard": "In yard",
         "en route": f"To {stop}",
         "dwelling": f"At {stop}",
@@ -629,10 +636,22 @@ class CtcHost(QObject):
         """Messages for the dispatcher, newest last."""
         snap = self._module.snapshot()
         found = []
-        if not self._applied().track_controller.ready:
-            found.append("Track Controller not ready \u2014 nothing is "
-                         "sent to it until a PLC program is loaded on "
-                         "every wayside.")
+        waysides = self._applied().track_controller.waysides
+        ready = ready_lines(waysides)
+        waiting = []
+        for line in self._layout:
+            if line in ready:
+                continue
+            held = [s for s in waysides if s.line == line and not s.ready]
+            waiting.append(
+                f"{line} ({'; '.join(_wayside_waiting(s) for s in held)})"
+                if held else f"{line} (no wayside has reported)")
+        if waiting:
+            found.append(
+                "Track Controller not ready on " + " and ".join(waiting)
+                + " \u2014 nothing is sent to a line, and no train can be "
+                "dispatched on it, until every wayside on it has a PLC "
+                "program.")
         if snap.inputs_staged and self._clock is not None \
                 and self._clock.paused:
             found.append("Track Controller update staged \u2014 it "

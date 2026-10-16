@@ -28,6 +28,7 @@ from ctc.interface import (
     TrackModelInputs,
     TrainAuthority,
     TrainSuggestion,
+    WaysideStatus,
 )
 
 
@@ -75,8 +76,8 @@ def inputs_from_wire(data: Mapping[str, Any]) -> CtcInputs:
                            for s in _items(track, "switches")),
             crossings=tuple(CrossingReport(**c)
                             for c in _items(track, "crossings")),
-            # As sent: anything but a real boolean is rejected later.
-            ready=track.get("ready", False),
+            waysides=tuple(WaysideStatus(**s)
+                           for s in _items(track, "waysides")),
         ),
         track_model=TrackModelInputs(
             ticket_sales=_sales(track_model.get("ticket_sales", {}))),

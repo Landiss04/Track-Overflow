@@ -24,23 +24,26 @@ ScaledWindow {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        // While the gains dialog is up the console behind it is out of
+        // reach, for the keyboard as well as the mouse (guide 8).
+        enabled: window.s.operator !== "engineer"
 
         // Guide 6.7: name and instance, the mode badge, the clock, and
         // the persistent fault badge an active emergency brake requires.
         ConsoleHeader {
             Layout.fillWidth: true
             moduleName: qsTr("HW Train Controller")
-            // The train and its line are named by the selector below,
-            // so the header does not repeat them.
-            mode: window.s.signed_in ? window.s.mode_label : qsTr("Signed out")
+            instance: window.s.has_train ? window.s.train_id : ""
+            mode: window.s.has_train ? window.s.mode_label : ""
             clock: window.s.clock
+            underground: window.s.beacon_underground
             faulted: window.s.emergency_brake
             // One badge per subsystem the Train Model reports failed,
             // up only while the failure is up, like the e-brake's.
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
-                window.s.fault_brake ? qsTr("Brake fault") : "",
-                window.s.fault_pickup ? qsTr("Signal pickup fault") : ""
+                window.s.fault_pickup ? qsTr("Signal pickup fault") : "",
+                window.s.fault_brake ? qsTr("Brake fault") : ""
             ].filter(function (label) { return label !== ""; })
         }
 

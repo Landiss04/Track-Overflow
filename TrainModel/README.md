@@ -226,6 +226,42 @@ cd TrainModel
 
 PySide6 ships its own type stubs, so no local stubs are needed.
 
+## Build an executable
+
+PyInstaller builds each window as its own executable. Run from the
+repository root, not `TrainModel/`. The four data folders keep their
+source paths inside the bundle: the code finds them under the bundle's
+root (`sys._MEIPASS`) at the same paths as under the repository root,
+and the QML reaches the shared `ui/` and `pics/` by relative paths.
+A folder left out does not fail the build; the window fails to load,
+or loads with a blank ad or no track.
+
+| Folder | Holds |
+| --- | --- |
+| `TrainModel/ui` | the Train Model and test UI QML |
+| `TrainModel/pics` | the header ads |
+| `ui` | the shared QML components |
+| `TrackModel` | the line layouts the test UI loads |
+
+On Windows (PowerShell; `;` separates an `--add-data` source from its
+destination, `:` on Linux):
+
+```powershell
+foreach ($app in 'main', 'test_ui') {
+    pyinstaller --noconfirm --onedir --name $app `
+        --paths TrainModel --paths . `
+        --add-data "TrainModel\ui;TrainModel\ui" `
+        --add-data "TrainModel\pics;TrainModel\pics" `
+        --add-data "ui;ui" `
+        --add-data "TrackModel;TrackModel" `
+        --hidden-import ui.theme --hidden-import ui.aspect_lock `
+        "TrainModel\$app.py"
+}
+```
+
+The executables land in `dist\main\` and `dist\test_ui\`. Verified with
+PyInstaller 6.22.2 and PySide6 6.11.2 on Windows 11 and Linux.
+
 ## Layout
 
 ```
@@ -242,6 +278,7 @@ ui/Main.qml             Train Model window shell, train selector, page 3a
 ui/TestMain.qml         test UI window shell around page 3b
 ui/MainView.qml         page 3a
 ui/TestView.qml         page 3b
+pics/                   header ads, 711 x 44 PNG each
 ```
 
 Reusable QML components are not in this folder. They live in the shared
@@ -315,6 +352,13 @@ Controller command from the test UI, or a pull) and while a pull is latched.
 
 ## Train Model window
 
+- **Ads.** The open middle of the header, between the train selector and
+  the line and clock, shows an ad: a long, thin card like those in a
+  subway car. The ads in `pics/` take turns, each up for 30 s. They are
+  drawn at 711 x 44 px on the 1440 x 900 canvas, the slot's full width;
+  while the *E-brake* badge shows, the slot narrows to 591 px and the
+  ad's sides are cropped. A new ad is added to `pics/` and to the list
+  in `ui/Main.qml`.
 - **Announcements.** Each new announcement from the Train Controller opens a
   popup with its text, over the left column and clear of the emergency brake
   button. It is not modal; **Dismiss** or Escape closes it, the same

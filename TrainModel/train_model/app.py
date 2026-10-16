@@ -16,7 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ui.aspect_lock import install_window_scaling  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
-UI_DIR = Path(__file__).resolve().parents[1] / "ui"
+# The repository root, or in a PyInstaller build the bundle's root,
+# where the build lays the data folders out as they are in the source.
+ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+UI_DIR = ROOT / "TrainModel" / "ui"
 
 
 def run_window(

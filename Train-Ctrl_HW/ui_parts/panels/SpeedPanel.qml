@@ -1,4 +1,4 @@
-// Commanded speed reads above; the dial sets the target below.
+// The dial sets the target. Commanded speed reads in the hero row.
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
@@ -17,13 +17,6 @@ Panel {
         }
     ]
 
-    TelemetryReadout {
-        Layout.fillWidth: true
-        label: qsTr("Commanded speed")
-        value: Math.round(root.s.commanded_mph)
-        unit: "mph"
-    }
-
     SpeedDial {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -31,7 +24,7 @@ Panel {
         actual: root.s.actual_mph
         limit: root.s.limit_mph
         interactive: root.s.can_drive && root.s.armed
-        onTargetRequested: function (mph) { controller.setTargetMph(mph); }
+        onTargetRequested: function (mph) { controller.set_target_mph(mph); }
     }
 
     // Two lines of room, always: the panel never resizes under the hand

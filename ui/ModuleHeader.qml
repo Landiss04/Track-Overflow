@@ -17,6 +17,11 @@ Rectangle {
     // Module-specific controls placed right after the status badges,
     // such as the Train Model's train selector. Empty for most modules.
     property alias statusExtras: statusExtrasRow.data
+    // Content for the open middle of the header, between the status
+    // controls and the line and clock, such as the Train Model's
+    // advertisement. It spans the full header height. Empty for most
+    // modules.
+    property alias middle: middleSlot.data
     signal navigationActivated(int index)
 
     implicitHeight: theme.control_h_lg + 2 * theme.space_3
@@ -103,7 +108,12 @@ Rectangle {
             }
         }
 
-        Item { Layout.fillWidth: true }
+        Item {
+            id: middleSlot
+
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
 
         MonoText {
             text: root.line
