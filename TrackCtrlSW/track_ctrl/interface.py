@@ -67,7 +67,15 @@ class BlockKey:
 
 @dataclass(frozen=True, slots=True)
 class Suggestion:
-    """Speed and authority the CTC Office suggests for one block."""
+    """Speed and authority the CTC Office suggests for one block.
+
+    The CTC Office addresses a suggestion to a train and names the block
+    the train is in (``TrainSuggestion``: train, line, block, speed,
+    authority). A wayside cannot address a train, so the harness maps it
+    to the block's suggestion and the train ID stops there
+    (``common/harness/ctc_edges.py``). Authority is counted from that
+    block.
+    """
 
     speed_mps: int
     authority_blocks: int
@@ -165,25 +173,49 @@ class BlockReport:
 
 @dataclass(frozen=True, slots=True)
 class CtcReport:
-    """One wayside's report to the CTC Office: all of its blocks."""
+    """One wayside's report to the CTC Office: its startup and its blocks."""
 
     wayside_id: str
+    line: str
     sent_at_s: float
+    # This wayside has been started up: it has a PLC program on its
+    # territory. The CTC Office reads it for every wayside of every line,
+    # so it can see exactly which are not ready. A wayside that is ready
+    # may still be held: while any wayside is not ready the whole module
+    # stalls, because the track is only safe with every wayside running.
+    ready: bool
     blocks: Mapping[BlockKey, BlockReport] = field(default_factory=dict)
+    # Why it is not ready, or "" when it is.
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class TrackControllerOutputs:
     """Everything one tick produces."""
 
-    # The module has been started up: a line is loaded and every wayside
-    # has a PLC program. Until then the module drives only its fail-safe
-    # outputs, so the CTC Office must not dispatch a train or send a
-    # speed or authority. It is the whole module's, not a wayside's.
-    ready: bool = False
     track_model: TrackModelOutputs = field(default_factory=TrackModelOutputs)
-    # One report per wayside, in the order the waysides were loaded.
+    # One report per wayside, in the order the waysides were loaded. Each
+    # carries that wayside's own ``ready``.
     ctc_reports: tuple[CtcReport, ...] = ()
+
+    @property
+    def ready(self) -> bool:
+        """Whether the whole module is started up: derived, not sent.
+
+        True only when at least one wayside reports and every wayside
+        that reports is ready. Until then the module drives only its
+        fail-safe outputs, so the CTC Office must not dispatch a train or
+        send a speed or authority, on any line.
+        """
+        return bool(self.ctc_reports) and all(
+            report.ready for report in self.ctc_reports
+        )
+
+    def not_ready(self) -> tuple[CtcReport, ...]:
+        """The reports of the waysides that are not ready."""
+        return tuple(
+            report for report in self.ctc_reports if not report.ready
+        )
 
 
 # ------------------------------------------------------------------ #
