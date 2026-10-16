@@ -5,39 +5,11 @@ picked up later. Last reviewed 2026-10-15 (requirements check against the SRS).
 
 ## From the 2026-10-07 code review
 
-1. **Driver target is not re-capped when the speed limit drops.**
-   `main.py` — `ControllerCore.set_target_mps` caps the Manual target only when
-   the driver sets it; `step()` and `enforce_safety()` never re-cap it. Manual,
-   limit 43 mph, target 43 mph, then the limit drops to 25 mph: the train keeps
-   holding 43 mph until the driver touches the dial.
-
 3. **Half of the speed dial's dead zone requests full speed.**
    `ui_parts/components/SpeedDial.qml` — `valueFor` maps only the left half of the
    90° gap at the bottom to zero; the right half (270–315°) clamps to the limit.
    A press just right of bottom-centre in Manual commands line speed, not 0,
    contradicting the file's own header comment.
-
-4. **The engineer hand-over can sign a driver in unasked.**
-   `main.py` — `_retire_engineer` runs 1.5 s after commissioning and sets
-   `operator = "driver"` unconditionally. Sign the console out (for example from
-   the bench Operator row) inside that window and a driver is signed in anyway,
-   unlocking Manual controls.
-
-10. **The branch carries shared-file deletions and committed bytecode.**
-    Commit `eb84435` (before this module work) deletes
-    `documents/meeting_logs/*`, `WorkPackageTracking/WP1/deliverables-checklist.html`
-    and `Utils/Track_Overlow_Logo.png`, moves `TrackModel/*.json` to
-    `Track_layout/`, and commits `ui/__pycache__/*.pyc`, which every run
-    rewrites. Merging the branch whole would apply all of that; take the module
-    folder only (the merge guide's "rescue a folder" route) instead.
-
-Items 5–8 from the same review are fixed (bench sends only edited rows;
-inputs validated before any is applied; door and light tiles re-send; roster
-signals only on change). Item 2 is fixed (2026-10-15): the console's commanded
-speed and "Stop in N blocks" now show what the controller reads, so a lost
-Track Signal shows as 0. Item 9 no longer applies: the signal head is back to
-Ivan's sizing and the failure banners that squeezed it were removed
-(2026-10-07).
 
 ## Added 2026-10-08
 
@@ -80,51 +52,10 @@ Ivan's sizing and the failure banners that squeezed it were removed
     signal and stops on: correct, the failure propagates from the track
     circuit through the Train Model.
 
+    Resolution: train model will need a block change event. This causes authority
+    decrement. Should be already implemented as a dumby function currently
+
 ## Added 2026-10-15
-
-12. **Failure detection rules are this team's own design, for review.**
-    Truth's Train Model no longer reports its failures (`modules/train-model.md`;
-    `signals/failure-status.md` withdrawn 2026-10-05), so `detect_failures()`
-    infers them from what comes back (REQ-FUNC-038):
-
-    | Failure | Detected when | Constant |
-    |---|---|---|
-    | Brake | service brake commanded, e-brake off, Brake State never shows the service brake applied | `BRAKE_DETECT_S` 0.5 s |
-    | Engine | commanded power should pull ≥ 0.1 m/s², no brake on, speed has not risen 0.05 m/s | `ENGINE_DETECT_S` 2 s |
-    | Signal pickup | commanded speed and authority fall to 0 in one update, from ≥ 2 blocks | `PICKUP_DETECT_MIN_BLOCKS` 2 |
-
-    - A brake failure is only seen when the service brake is asked for.
-    - Pickup assumes a lost signal reads as zeros. Truth leaves zeros or stale
-      values open; stale values would go undetected.
-    - A Track Signal update cutting authority from ≥ 2 straight to 0 with speed 0
-      would read as a pickup failure.
-    - Engine detection could false-trip on a steep up-grade once the real Train
-      Model, with grade, is connected.
-    - An engine failure at a steady cruise is not seen on the toy plant until
-      the train is asked to speed up: with no resistance, holding speed takes
-      0 kW, so a dead engine changes nothing measurable. With rolling
-      resistance (as the real Train Model has) the same rule finds it in about
-      9 s at 30 mph (measured 8.6 s). Kept as is by decision (2026-10-15);
-      `check.py` covers both halves.
-
-13. **Requirements not met by this module** (SRS `documents/srs-filled.md`,
-    checked 2026-10-15; documented only, by decision):
-    - **REQ-FUNC-036 / D007 — stop at each station, 45 s dwell.** Not
-      implemented. `Train-Ctrl_SW` has one (`_update_station_stop`), built on
-      route and block tracking that this module dropped; a port would key off
-      the beacon (station, side) and authority instead. Truth does not say
-      which module owns the dwell.
-    - **REQ-NFR-008 / REQ-INTF-015 — CSV event log.** None here, in
-      `Train-Ctrl_SW` or on `development`.
-    - **REQ-FUNC-003 / REQ-INTF-013 / D017 — pause and one shared clock.**
-      D017 puts the clock (`utils/system_clock.py`, on `development` only) in
-      the central harness, paused and sped up by the CTC. This module runs its
-      own timers: its clock starts at 00:00:00, not D017's 05:00:00, and
-      steps at 20 Hz, not the 0.1 s default tick. The 1× / 10× control is the
-      bench's stand-in.
-    - **REQ-INTF-010 — HW and SW expose equivalent interfaces.** Not checked
-      against `Train-Ctrl_SW`, which still has route tracking and no failure
-      detection.
 
 14. **How a failure clears once integrated — undecided.**
     Today only the test bench clears a latched failure (`clear_failure`, called
