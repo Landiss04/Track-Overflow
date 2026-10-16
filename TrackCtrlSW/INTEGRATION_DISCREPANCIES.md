@@ -24,16 +24,16 @@ someone else's work says what is left for them.
 - [x] **A1. Units.** Speed is whole m/s inside the module; only the screen shows
   mph (**truth** `conventions/units.md`, D002).
 
-- [ ] **A2. Suggestions are per block here, per train in the CTC.**
-  - Us (**decided**): one speed and authority per **block**. A wayside sends
-    down a track circuit and cannot address one train.
-  - HW: per block too (`ctc.suggestions: {block: Suggestion}`), and
-    **proposed** D015 says the Track Controller never knows trains.
-  - CTC (**code**): `TrainSuggestion` per train, and **truth**
-    `signals/suggested-speed.md` and `suggested-authority.md` say "keyed by
-    train ID". **That is the open item, and it is the CTC's and truth's to
-    change:** the CTC has to send per block, or the harness has to map a
-    train to the block it is in.
+- [x] **A2. Suggestions are addressed by block.** The CTC Office now sends
+  `TrainSuggestion(train_id, line, block_id, suggested_speed_mps,
+  authority_blocks)`: the block the train is in, with authority counted from it.
+  A wayside cannot address a train, so the harness edge
+  (`common/harness/ctc_edges.py`, `ctc_to_track_controller`) drops the train ID
+  and hands this module one `Suggestion` per `BlockKey`, as HW does. Two
+  suggestions for one block (the CTC's one-train-per-block rule should prevent
+  it) take the more restrictive speed and authority. Left over: **truth**
+  `signals/suggested-speed.md` and `suggested-authority.md` still say "keyed by
+  train ID" until the CTC's proposals on `ctc-deployment` are promoted.
 
 - [x] **A3. Module boundary.** `track_ctrl/interface.py` holds the boundary
   types and the `TrackController` Protocol (`step`, `snapshot`, `load_program`,
@@ -179,7 +179,7 @@ someone else's work says what is left for them.
 
 - [ ] **D4. Truth proposals.** In `truth/_inbox/Track-Ctrl-SW/` now:
   `signal-yellow`, `test-ui-clock`, `vital-restrictions`, and two new ones
-  (`track-controller-ready`, `track-controller-vital-restrictions`).
+  (`track-controller-ready`, `track-controller-vital-restrictions`, and `track-controller-ready-per-wayside`, which supersedes the first).
   **`vital-restrictions` is out of date** (it records the maintenance hold and
   authority truncation, both removed); the new proposal supersedes it. Only a
   human edits or deletes an existing proposal, so it is left as it is for you to
@@ -191,9 +191,11 @@ someone else's work says what is left for them.
 
 - [ ] **E1. A startup gate and a `ready` signal.** The module is not ready until
   a line is loaded and every wayside has a PLC program; until then no program
-  runs and every output is fail-safe. `TrackControllerOutputs.ready` goes to the
-  CTC Office every tick, and the CTC must not dispatch or send a speed or
-  authority until it is true.
+  runs and every output is fail-safe. Readiness is **per wayside and per
+  line**: each `CtcReport` carries `line`, `ready` and `reason`, so the CTC sees
+  which waysides are not ready. `TrackControllerOutputs.ready` is derived (all
+  ready). The CTC must not dispatch or send a speed or authority on any line
+  until every wayside is ready.
   - Neither the CTC, HW, the catalog nor the harness has anything like it. HW
     has the same startup (it loads territories and programs) but reports no
     readiness.
