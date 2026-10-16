@@ -70,6 +70,19 @@ class CrossingReport:
 
 
 @dataclass(frozen=True, slots=True)
+class WaysideStatus:
+    """Whether one wayside controller is started up: a PLC program on
+    its territory. From the ``ready`` and ``reason`` of the wayside's
+    report to the CTC Office (``CtcReport`` on ``Track-Ctrl-SW``)."""
+
+    wayside_id: str
+    line: str
+    ready: bool
+    # Why it is not ready; "" when it is.
+    reason: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class TrackControllerInputs:
     """From the Track Controller, every tick."""
 
@@ -78,11 +91,12 @@ class TrackControllerInputs:
     occupancy: tuple[BlockOccupancy, ...] = ()
     switches: tuple[SwitchReport, ...] = ()
     crossings: tuple[CrossingReport, ...] = ()
-    # True once the Track Controller is started up: a PLC program
-    # loaded on every wayside (``track-controller-ready``, proposed on
-    # ``Track-Ctrl-SW``). The waysides are vital: until it is true the
-    # CTC sends them nothing at all. False until reported.
-    ready: bool = False
+    # Every wayside's startup, as each reports it
+    # (``track-controller-ready``, proposed on ``Track-Ctrl-SW``). The
+    # waysides are vital: a line is ready only once a wayside on it has
+    # reported and every wayside on it is ready. Until then the CTC
+    # sends nothing for the line and dispatches no train on it.
+    waysides: tuple[WaysideStatus, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,9 +200,12 @@ class ScheduledRun:
     train_id: str
     # Due to leave the yard, in simulated seconds since midnight.
     departure_s: float
-    # "queued", "in yard", "en route", "dwelling", "to yard" or "done".
+    # "queued", "held" (due to move on, but a stretch of two-way track
+    # ahead has another train in it), "in yard", "en route", "dwelling",
+    # "to yard" or "done".
     status: str
-    # The stop it is heading for or stopped at; "" when none.
+    # The stop it is heading for, stopped at, or held to go to; "" when
+    # none.
     stop_block_id: str = ""
     stop_station: str = ""
     # Due at that stop, in simulated seconds since midnight; None when

@@ -117,7 +117,8 @@ Panel {
         text: qsTr("Each run leaves the yard when due (the schedule "
             + "starts at 05:00), stops 45 s at each of its scheduled "
             + "stations in track order and nowhere else, then returns "
-            + "to the yard.")
+            + "to the yard. Held: waiting for a stretch of two-way "
+            + "track ahead to clear.")
         color: theme.text_muted
     }
 

@@ -21,15 +21,17 @@ from ctc.schedule import (  # noqa: E402
     parse_schedule,
 )
 from ctc.scheduler import (  # noqa: E402
+    DONE,
     DWELL_S,
     EN_ROUTE,
     SIMULATION_START_S,
     Progress,
     train_id_for,
+    two_way_zones,
 )
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc.tracking import YARD_EXITS  # noqa: E402
-from tests.occupancy import at, reports, step_at  # noqa: E402
+from tests.occupancy import at, ready_office, reports, step_at  # noqa: E402
 
 SCHEDULE = load_schedule(
     Path(__file__).resolve().parents[2] / "utils" / "schedule_v4.json")
@@ -47,7 +49,7 @@ RED_ORDER = ["7", "16", "21", "25", "35", "45", "48", "60"]
 
 def _loaded(automatic: bool = True,
             schedule: Schedule = SCHEDULE) -> StubCtcOffice:
-    ctc = StubCtcOffice()
+    ctc = ready_office()
     ctc.load_schedule(schedule)
     ctc.set_automatic_mode(automatic)
     return ctc
@@ -134,6 +136,56 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(sorted(r.train_id for r in runs if r.line == "Red"),
                          sorted(f"R{n}" for n in range(1, 11)))
         self.assertEqual(train_id_for("Green", "7"), "G7")
+
+
+class ZoneTest(unittest.TestCase):
+    """Runs are never sent to meet head-on: where their paths cross the
+    same track both ways, one scheduled train at a time."""
+
+    def test_the_zones(self) -> None:
+        zones = _loaded()._auto.zones
+        green: dict[str, set[str]] = {}
+        for block, zone in zones["Green"].items():
+            green.setdefault(zone, set()).add(block)
+        # Up N and back down, through the loop O to Q; down D to F, round
+        # A to C, and back up.
+        self.assertEqual(sorted(green.values(), key=len), [
+            {str(n) for n in range(77, 101)},
+            {str(n) for n in range(1, 29)}])
+        # Red: out from 16, round the loop at 52, and back to 16.
+        self.assertEqual(set(zones["Red"]),
+                         {str(n) for n in range(16, 67)})
+        # The yards are outside them.
+        self.assertNotIn("63", zones["Green"])
+        self.assertNotIn("9", zones["Red"])
+
+    def test_out_and_back_track_is_a_zone(self) -> None:
+        # One path out along 1-2-3 and back: all of it. A path that only
+        # passes one way is not.
+        self.assertEqual(set(two_way_zones([("1", "2", "3", "2", "1")])),
+                         {"1", "2", "3"})
+        self.assertEqual(two_way_zones([("1", "2", "3")]), {})
+
+    def test_held_until_the_zone_is_clear(self) -> None:
+        # G1 is in N (77 to 100) on its way to Poplar (88). G2, done at
+        # Dormont (73), would go into N for Mt Lebanon (77): it waits.
+        ctc = _loaded()
+        step_at(ctc)
+        plans = {p.train_id: p for p in ctc._auto.plans}
+        ctc._auto.progress["G1"] = Progress(
+            EN_ROUTE, 3, at=plans["G1"].path.index("80"))
+        ctc._auto.progress["G2"] = Progress(
+            "dwelling", 1, at=plans["G2"].stop_indexes[1])
+        ctc.dispatch("G2", "Green", "73")
+        step_at(ctc, at("G1", "80"), at("G2", "73"), dt=DWELL_S)
+        run = _run(ctc, "G2")
+        self.assertEqual((run.status, run.stop_block_id), ("held", "77"))
+        self.assertEqual(_order(ctc, "G2"), "73")
+        # G1's run is over: N is clear, and G2 goes on.
+        ctc._auto.progress["G1"] = Progress(DONE, 18)
+        step_at(ctc, at("G2", "73"))
+        self.assertEqual((_run(ctc, "G2").status, _order(ctc, "G2")),
+                         ("en route", "77"))
 
 
 class DispatchTest(unittest.TestCase):
@@ -253,8 +305,13 @@ class _Railway:
         snap = self.ctc.snapshot()
         runs = [r for r in snap.scheduled_runs if r.line == self.line]
         exit_block = YARD_EXITS[self.line]
+        # The yard lets a train out onto a clear exit block that no
+        # train is authorized into (on Red it is the yard entry too).
+        authorized = {b for a in snap.authorities
+                      for b in a.route[1:a.blocks + 1]}
         if (any(r.status == "in yard" for r in runs)
-                and exit_block not in self.occupied() | self.reported):
+                and exit_block not in (self.occupied() | self.reported
+                                       | authorized)):
             self.trains["?"], self.progress["?"] = [exit_block], 0.0
         self._throw_switches(snap)
         self.reported = self.occupied()
@@ -327,25 +384,31 @@ class _Railway:
 
 class EndToEndTest(unittest.TestCase):
     """Whole runs, start to finish, with nothing between the CTC and the
-    trains but occupancy and switch states.
-
-    Two Green runs, but only one Red run: Red runs out and back over the
-    same single track, so a second run meets the first head-on and both
-    wait. The CTC does not plan meets yet."""
+    trains but occupancy and switch states. Enough runs that they queue
+    for the two-way zones (four Green runs met head-on in N before the
+    zones), and never more than one train in a zone."""
 
     def _run_line(self, line: str, run_ids: tuple[str, ...]) -> None:
         runs = tuple(t for t in SCHEDULE.trains
                      if t.line == line and t.train_id in run_ids)
         ctc = _loaded(schedule=Schedule("some runs", runs))
         railway = _Railway(ctc, line)
+        zones = ctc._auto.zones[line]
         # Where each run dwelt, and for how long.
         dwells: dict[str, list[tuple[str, float]]] = {
             train_id_for(line, run_id): [] for run_id in run_ids}
         started: dict[str, tuple[str, float]] = {}
         dt = 2.0
-        for _ in range(int(2 * 3600 / dt)):
+        for _ in range(int(3 * 3600 / dt)):
             problem = railway.step(dt)
             self.assertIsNone(problem)
+            in_zone: dict[str, set[str]] = {}
+            for train_id, blocks in railway.trains.items():
+                for block in blocks:
+                    if block in zones:
+                        in_zone.setdefault(zones[block], set()).add(train_id)
+            self.assertTrue(all(len(trains) == 1
+                                for trains in in_zone.values()), in_zone)
             snap = ctc.snapshot()
             for run in snap.scheduled_runs:
                 if run.status == "dwelling" and run.train_id not in started:
@@ -371,10 +434,10 @@ class EndToEndTest(unittest.TestCase):
                                     for _, seconds in stops), stops)
 
     def test_green(self) -> None:
-        self._run_line("Green", ("1", "2"))
+        self._run_line("Green", ("1", "2", "3", "4"))
 
     def test_red(self) -> None:
-        self._run_line("Red", ("1",))
+        self._run_line("Red", ("1", "2", "3"))
 
 
 if __name__ == "__main__":

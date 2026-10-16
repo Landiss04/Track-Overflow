@@ -24,6 +24,7 @@ from ctc.interface import (  # noqa: E402
     SwitchReport,
     TrackModelInputs,
     TrackControllerInputs,
+    WaysideStatus,
 )
 from ctc.link import STANDALONE_DT_S as DT_S, LocalLink  # noqa: E402
 from ctc.model import (  # noqa: E402
@@ -31,7 +32,6 @@ from ctc.model import (  # noqa: E402
     InvalidInputError,
     InvalidTimeStepError,
     MaintenanceModeRequiredError,
-    StubCtcOffice,
 )
 from ctc_ui.display import (  # noqa: E402
     TimeOfDayError,
@@ -43,7 +43,7 @@ from ctc_ui.test_harness import (  # noqa: E402
     MPS_TO_MPH,
     CtcTestHarness,
 )
-from tests.occupancy import reports  # noqa: E402
+from tests.occupancy import ready_office, reports  # noqa: E402
 
 
 def _green(tickets: int) -> TrackModelInputs:
@@ -74,7 +74,7 @@ def _outputs(harness: CtcTestHarness) -> dict[str, object]:
 class StubModuleTest(unittest.TestCase):
 
     def test_dispatch_becomes_suggestion_and_authority(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "65", arrival_s=8 * 3600)
         # Not on the track yet (the yard is a black box): no suggestion.
         out = ctc.step(DT_S, CtcInputs())
@@ -98,7 +98,7 @@ class StubModuleTest(unittest.TestCase):
                          (DispatchOrder("T1", "Green", "65", 28800.0),))
 
     def test_dispatch_again_reroutes(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "65", arrival_s=8 * 3600)
         ctc.dispatch("T1", "Green", "73")
         (order,) = ctc.snapshot().orders
@@ -106,7 +106,7 @@ class StubModuleTest(unittest.TestCase):
                          ("73", None))
 
     def test_blocks_are_checked_against_the_layout(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.set_maintenance_mode(True)
         # Red has 76 blocks, Green 150: the same number, different lines.
         ctc.set_block_closed("Green", "150", True)
@@ -118,7 +118,7 @@ class StubModuleTest(unittest.TestCase):
                     ctc.dispatch("T1", line, block)
 
     def test_closed_blocks_carry_their_line(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.step(DT_S, reports())                  # a ready Track Controller
         ctc.set_maintenance_mode(True)
         ctc.set_block_closed("Red", "12", True)
@@ -130,7 +130,7 @@ class StubModuleTest(unittest.TestCase):
                                   BlockRef("Red", "12")))
 
     def test_switches_only_in_maintenance_mode(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         with self.assertRaises(MaintenanceModeRequiredError):
             ctc.set_switch("Green", "12", "reverse")
         ctc.set_maintenance_mode(True)
@@ -152,7 +152,7 @@ class StubModuleTest(unittest.TestCase):
             ctc.snapshot().outputs.track_controller.switch_commands, ())
 
     def test_bad_switch_commands_rejected(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.set_maintenance_mode(True)
         for line, switch_id, position in (
                 ("Green", "13", "normal"),        # no switch on block 13
@@ -164,7 +164,7 @@ class StubModuleTest(unittest.TestCase):
                                    position)  # type: ignore[arg-type]
 
     def test_clock_speedup_output(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         self.assertFalse(ctc.step(DT_S, CtcInputs()).clock_speedup)
         ctc.set_clock_speedup(True)
         self.assertTrue(ctc.step(DT_S, CtcInputs()).clock_speedup)
@@ -172,13 +172,13 @@ class StubModuleTest(unittest.TestCase):
         self.assertFalse(ctc.snapshot().outputs.clock_speedup)
 
     def test_bad_dt_rejected(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         for dt in (0.0, -0.1, math.inf, math.nan):
             with self.assertRaises(InvalidTimeStepError):
                 ctc.step(dt, CtcInputs())
 
     def test_invalid_inputs_change_no_state(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.step(DT_S, CtcInputs(track_model=_green(3)))
         before = ctc.snapshot()
         for bad_track in (
@@ -199,7 +199,7 @@ class StubModuleTest(unittest.TestCase):
                 self.assertEqual(ctc.snapshot(), before)
 
     def test_tickets_accumulate(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         for sold in (2, 3):
             ctc.step(DT_S, CtcInputs(track_model=_green(sold)))
         snap = ctc.snapshot()
@@ -209,7 +209,7 @@ class StubModuleTest(unittest.TestCase):
     def test_ticket_sales_total_per_station(self) -> None:
         # Each station reports its own sales since the last report; a
         # station that sold none is left out.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(
             {"DORMONT": 3, "SHADYSIDE": 1})))
         ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(
@@ -221,7 +221,7 @@ class StubModuleTest(unittest.TestCase):
         self.assertEqual(len(sold), 20)
 
     def test_bad_ticket_sales_rejected(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         for sales in ({"NOWHERE": 1},       # no such station
                       {"dormont": 1},       # names are exact
                       {"DORMONT": -1},
@@ -236,7 +236,7 @@ class StubModuleTest(unittest.TestCase):
 
     def test_ticket_sales_are_copied(self) -> None:
         # A later change to the caller's dict changes nothing.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         sales = {"DORMONT": 2}
         ctc.step(DT_S, CtcInputs(track_model=TrackModelInputs(sales)))
         sales["DORMONT"] = 99
@@ -245,7 +245,7 @@ class StubModuleTest(unittest.TestCase):
         self.assertEqual(inputs.track_model.ticket_sales, {"DORMONT": 2})
 
     def test_bad_arrival_rejected(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         for arrival in (-1.0, 86400.0, math.nan):
             with self.subTest(arrival=arrival):
                 with self.assertRaises(InvalidInputError):
@@ -291,12 +291,14 @@ class HarnessEntryTest(unittest.TestCase):
         # sales come from the Track Model: neither is forced here.
         harness = CtcTestHarness(LocalLink())
         rows = {r["name"]: r for r in harness.inputs}
-        self.assertEqual(list(rows), ["ready", "occupied_blocks",
+        self.assertEqual(list(rows), ["waysides", "occupied_blocks",
                                       "switch_states", "crossing_states"])
         self.assertFalse(hasattr(harness, "dispatcherInputs"))
-        # Not ready at first, as when the Track Controller starts up.
-        self.assertEqual((rows["ready"]["kind"], rows["ready"]["value"]),
-                         ("bool", False))
+        # No wayside has reported at first, as at startup.
+        self.assertEqual((rows["waysides"]["kind"],
+                          rows["waysides"]["entries"]), ("list", []))
+        self.assertEqual([f["key"] for f in rows["waysides"]["fields"]],
+                         ["wayside", "line", "ready", "reason"])
         self.assertEqual(rows["occupied_blocks"]["kind"], "list")
         self.assertEqual(
             [f["key"] for f in rows["occupied_blocks"]["fields"]],
@@ -347,17 +349,28 @@ class HarnessEntryTest(unittest.TestCase):
 
     def test_reset_clears_every_row(self) -> None:
         harness = CtcTestHarness(LocalLink())
-        harness.setInput("ready", True)
+        _add(harness, "waysides")
         _add(harness, "occupied_blocks")
         _add(harness, "crossing_states")
         harness.resetInputs()
-        self.assertEqual({r["name"]: r.get("entries", r.get("value"))
-                          for r in harness.inputs},
-                         {"ready": False, "occupied_blocks": [],
-                          "switch_states": [], "crossing_states": []})
+        self.assertEqual([r["entries"] for r in harness.inputs],
+                         [[], [], [], []])
 
 
 class HarnessSendTest(unittest.TestCase):
+
+    def test_waysides_are_sent(self) -> None:
+        # A new wayside gets the next free ID; one not ready says why.
+        link = LocalLink()
+        harness = CtcTestHarness(link)
+        _add(harness, "waysides")
+        _add(harness, "waysides", ready="not ready",
+             reason="no PLC program")
+        harness.send()
+        self.assertFalse(harness.statusIsError, harness.status)
+        self.assertEqual(link.snapshot().inputs.track_controller.waysides, (
+            WaysideStatus("W1", "Green", True),
+            WaysideStatus("W2", "Green", False, "no PLC program")))
 
     def test_occupancy_is_sent(self) -> None:
         link = LocalLink()
@@ -376,7 +389,10 @@ class HarnessSendTest(unittest.TestCase):
         # Dispatching, closing blocks, setting switches and the clock
         # speed happen in the CTC window; the test UI reads the outputs.
         link = LocalLink()
+        # A train can be dispatched only on a line that is ready.
+        link.set_inputs(reports())
         link.dispatch("T1", "Green", "65", 8 * 3600)
+        link.set_inputs(reports(ready=False))
         link.set_maintenance_mode(True)
         link.set_block_closed("Green", "5", True)
         link.set_switch("Green", "12", "reverse")
@@ -386,9 +402,10 @@ class HarnessSendTest(unittest.TestCase):
         rows = _outputs(harness)
         self.assertEqual((rows["closed_blocks"], rows["switch_commands"]),
                          ("", ""))
-        harness.setInput("ready", True)
+        _add(harness, "waysides")       # W1, Green, ready
         harness.send()
-        self.assertTrue(link.snapshot().inputs.track_controller.ready)
+        self.assertEqual(link.snapshot().inputs.track_controller.waysides,
+                         (WaysideStatus("W1", "Green", True),))
         rows = _outputs(harness)
         # Still in the yard: no speed or authority yet.
         self.assertNotIn("authority[T1]", rows)

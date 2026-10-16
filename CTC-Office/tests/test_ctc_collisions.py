@@ -25,10 +25,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import SwitchReport  # noqa: E402
-from ctc.model import StubCtcOffice  # noqa: E402
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc.tracking import YARD_EXITS  # noqa: E402
-from tests.occupancy import reports  # noqa: E402
+from tests.occupancy import ready_office, reports  # noqa: E402
 
 _LAYOUT = load_layout()
 _ON_TRACK = 4                    # trains placed on the track at the start
@@ -44,7 +43,7 @@ def _first_problem(seed: int, line: str) -> str | None:
     blocks = list(lengths)
     switch_ids = _LAYOUT[line].switch_ids()
     exit_block = YARD_EXITS[line]
-    ctc = StubCtcOffice()
+    ctc = ready_office()
     # Blocks each train holds, tail first; how far into its head block
     # it is; and how much of its suggested speed it runs at.
     trains: dict[str, list[str]] = {}

@@ -28,7 +28,7 @@ from ctc.routing import (  # noqa: E402
     reversing_route,
 )
 from ctc.track_layout import Line, load_layout, load_line  # noqa: E402
-from tests.occupancy import DT_S, At, at, step_at  # noqa: E402
+from tests.occupancy import DT_S, At, at, ready_office, step_at  # noqa: E402
 
 _LAYOUT = load_layout()
 _GREEN = TrackGraph(_LAYOUT["Green"])
@@ -216,7 +216,7 @@ class StubAuthorityTest(unittest.TestCase):
     """The stub recomputes authority from the reports every step."""
 
     def test_a_train_ahead_shortens_authority_until_it_moves(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         out = step_at(ctc, _train("T1", "30"), _train("T2", "32"))
         (suggestion,) = out.track_controller.suggestions
@@ -229,7 +229,7 @@ class StubAuthorityTest(unittest.TestCase):
             out.track_controller.suggestions[0].authority_blocks, 7)
 
     def test_occupancy_no_train_explains_counts(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "30"), occupied=[("Green", "34")])
         limit = _authority(ctc)
@@ -238,7 +238,7 @@ class StubAuthorityTest(unittest.TestCase):
                          (3, "occupied", "34"))
 
     def test_a_closed_block_shortens_authority_until_reopened(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.set_maintenance_mode(True)
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "30"))
@@ -251,7 +251,7 @@ class StubAuthorityTest(unittest.TestCase):
         self.assertEqual(_authority(ctc).blocks, 7)
 
     def test_a_closing_block_shortens_authority(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.set_maintenance_mode(True)
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "30"), _train("T2", "33"))
@@ -261,7 +261,7 @@ class StubAuthorityTest(unittest.TestCase):
                          (2, "closing", "33"))
 
     def test_switches_count_only_as_reported(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "30")
         step_at(ctc, _train("T1", "26"))
         self.assertEqual(_authority(ctc).blocks, 2)
@@ -274,21 +274,21 @@ class StubAuthorityTest(unittest.TestCase):
         self.assertEqual(_authority(ctc).blocks, 4)
 
     def test_zero_once_at_the_destination(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "37"))
         self.assertEqual(_authority(ctc), TrainAuthority(
             "T1", "Green", 0, "37", "destination", route=("37",)))
 
     def test_zero_on_another_line_than_the_order(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "37", line="Red"))
         self.assertEqual(_authority(ctc), TrainAuthority(
             "T1", "Red", 0, "37", "no route"))
 
     def test_no_authority_before_the_train_is_on_the_track(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         ctc.step(DT_S, CtcInputs())
         self.assertEqual(ctc.snapshot().authorities, ())
@@ -300,7 +300,7 @@ class ExclusiveAuthorityTest(unittest.TestCase):
     def _head_on(self) -> StubCtcOffice:
         # Green 20 to 24 and 28 to 24 face each other on F, which runs
         # both ways: both want 24.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "24")
         ctc.dispatch("T2", "Green", "24")
         return ctc
@@ -345,7 +345,7 @@ class ExclusiveAuthorityTest(unittest.TestCase):
         self.assertEqual(_authority(ctc, "T2").held_by, "T1")
 
     def test_blocks_passed_are_given_up(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "30"))
         # T1 moves on to 34; T2 behind it can now run up to 33.
@@ -375,7 +375,7 @@ class RerouteTest(unittest.TestCase):
     _BYPASS = ("27", "76", "75", "74", "73", "72", "33")
 
     def test_round_an_inferred_failure(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Red", "35")
         _red(ctc, ("T1", "20"), failed=("30",))
         route = _authority(ctc).route
@@ -384,7 +384,7 @@ class RerouteTest(unittest.TestCase):
 
     def test_round_a_train_that_is_not_moving(self) -> None:
         # T5 on 28 cannot move: 29 has failed. T4 goes round it.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T4", "Red", "35")
         ctc.dispatch("T5", "Red", "45")
         # The second step: T5 had no authority, so it is stuck.
@@ -394,7 +394,7 @@ class RerouteTest(unittest.TestCase):
 
     def test_not_round_a_train_that_is_moving(self) -> None:
         # T5 on 28 is on its way: T4 follows it rather than go round.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T4", "Red", "35")
         ctc.dispatch("T5", "Red", "45")
         _red(ctc, ("T4", "20"), ("T5", "28"), switches=(("27", "normal"),),
@@ -406,7 +406,7 @@ class RerouteTest(unittest.TestCase):
     def test_waits_rather_than_take_a_long_detour(self) -> None:
         # Red 31 is inside the bypassed stretch: reaching it round T5
         # would mean looping far round, so T4 waits behind T5.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T4", "Red", "31")
         ctc.dispatch("T5", "Red", "45")
         _red(ctc, ("T4", "20"), ("T5", "28"), failed=("29",),
@@ -422,7 +422,7 @@ class ReversalTest(unittest.TestCase):
 
     def _held(self, t4_destination: str) -> StubCtcOffice:
         # T5 on Red 28 cannot move (29 has failed); T4 behind it on 20.
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T4", "Red", t4_destination)
         ctc.dispatch("T5", "Red", "45")
         _red(ctc, ("T4", "20"), ("T5", "28"), failed=("29",),
@@ -457,7 +457,7 @@ class ReversalTest(unittest.TestCase):
         self.assertIn("76", t4.route)
 
     def test_no_reversal_when_only_waiting_on_a_moving_train(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         ctc.dispatch("T2", "Green", "40")
         for _ in range(2):
@@ -474,7 +474,7 @@ class SafeSpeedTest(unittest.TestCase):
         return suggestion.suggested_speed_mps
 
     def test_capped_by_the_room_to_stop(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "70")
         # Green 63 is limited to 70 km/h (18 m/s suggested), but with
         # only block 64 (100 m) ahead: sqrt(2 * 1.2 * 100) = 15.
@@ -484,7 +484,7 @@ class SafeSpeedTest(unittest.TestCase):
         self.assertEqual(self._speed(out), 18)
 
     def test_zero_with_no_authority(self) -> None:
-        ctc = StubCtcOffice()
+        ctc = ready_office()
         ctc.dispatch("T1", "Green", "70")
         out = step_at(ctc, _train("T1", "63"), _train("T2", "64"))
         self.assertEqual(self._speed(out), 0)
