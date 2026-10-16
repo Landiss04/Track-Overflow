@@ -87,6 +87,30 @@ Ivan's sizing and the failure banners that squeezed it were removed
       would read as a pickup failure.
     - Engine detection could false-trip on a steep up-grade once the real Train
       Model, with grade, is connected.
+    - An engine failure at a steady cruise is not seen on the toy plant until
+      the train is asked to speed up: with no resistance, holding speed takes
+      0 kW, so a dead engine changes nothing measurable. With rolling
+      resistance (as the real Train Model has) the same rule finds it in about
+      9 s at 30 mph (measured 8.6 s). Kept as is by decision (2026-10-15);
+      `check.py` covers both halves.
+
+14. **How a failure clears once integrated — undecided.**
+    Today only the test bench clears a latched failure (`clear_failure`, called
+    when a bench failure row is set back to False); the driver then releases
+    the emergency brake at a stand. With the real Train Model and no bench,
+    nothing clears it, so the train stays stopped on the emergency brake.
+    Candidate approaches, none chosen:
+    - (a) **Auto-clear when the returned signals look healthy again** — brake:
+      a service-brake test at a stand shows Brake State applied; engine:
+      commanded power produces acceleration again; pickup: a valid non-zero
+      Track Signal resumes.
+    - (b) **Murphy's clear reaches the controller** through the harness. This
+      needs a truth signal, since `failure-status` was withdrawn.
+    - (c) **A maintenance or CTC action** clears it.
+    - (d) **A driver or engineer acknowledgement at a stand.** A driver "Reset
+      failure" button was tried and removed (2026-10-15).
+
+    To be decided with Kevin (Train Model owner) and the team, through truth.
     - The toy plant's Brake State during a failed service brake (reads false) is
       the plant's own stand-in, not taken from truth `brake-state.md`.
 

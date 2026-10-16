@@ -109,8 +109,9 @@ stopwatch (it failed 4 of 4 runs on Windows before).
 | `2fa4b6d` | 10-07 | Bench service-brake input removed; Ivan's sizes restored (72 px readouts, dial figures, tiles, output rows). |
 | `700d83d` | 10-07 | Truth proposal: `--size-hero` token. |
 | `ee22c30` | 10-07 | Brakes locked out during a brake failure in both modes (**replaced** by the next row); service band 0.05 m/s; slow-down check added. |
-| (next) | 10-15 | 480 kW; failures detected from returned signals, injected from the bench; brake failure = service brake only, e-brake applied; the bench clears failures; requirements gaps documented. |
-| (this one) | 10-08 | Authority countdown back in the toy plant as a stand-in for the Track Model: one block per 100 m, part-blocks carried. `check.py` gives the drives 200 blocks and checks 2.5 blocks of travel spends 2. Open issue 11 (block lengths unknown; overrun above 34.6 mph). |
+| `55d66c3` | 10-08 | Authority countdown back in the toy plant as a stand-in for the Track Model: one block per 100 m, part-blocks carried. `check.py` gives the drives 200 blocks and checks 2.5 blocks of travel spends 2. Open issue 11 (block lengths unknown; overrun above 34.6 mph). |
+| `962f823` | 10-15 | 480 kW; failures detected from returned signals, injected from the bench; brake failure = service brake only, e-brake applied; the bench clears failures; requirements gaps documented. |
+| (next) | 10-15 | Audit before push: 61 behaviour checks (no false detections in normal running at 1× and 10×, Manual and Automatic; each failure detected, latched, stopped, cleared from the bench; multi-train isolation). Engine failure at a steady cruise found undetectable on the toy plant (no resistance), documented with a check; how a failure clears once integrated logged as undecided (`OPEN_ISSUES.md` items 12–14). |
 
 ---
 

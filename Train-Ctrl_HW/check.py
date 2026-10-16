@@ -556,6 +556,29 @@ def run_check(
             backend.toggle_service_brake()
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
+    # An engine failure at a steady cruise shows only once traction is
+    # needed: the toy plant has no resistance, so holding speed takes
+    # no power and a dead engine changes nothing until the train is
+    # asked to speed up (OPEN_ISSUES.md).
+    cruise = mod.ControllerCore()
+    cruise.armed = True
+    cruise.state.manual = True
+    cruise.state.authority_blocks = 999
+    cruise.set_target_mps(20 / mod.MPS_TO_MPH)
+    for _ in range(round(60 / cruise.dt)):
+        cruise.step()
+    cruise.state.injected["engine"] = True
+    for _ in range(round(10 / cruise.dt)):
+        cruise.step()
+    expect(not cruise.failed,
+           "an engine failure was claimed at a cruise needing no power")
+    cruise.set_target_mps(30 / mod.MPS_TO_MPH)
+    for _ in range(round(5 / cruise.dt)):
+        cruise.step()
+    expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
+           "an engine failure at cruise was not found once speed was "
+           "asked for")
+
     # Until the Track Model sends the count, the toy plant spends one
     # block of authority per BLOCK_LENGTH_M travelled, part-blocks
     # carried over.
