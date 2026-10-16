@@ -35,34 +35,59 @@ ScaledWindow {
 
             // The header's open middle is reserved for advertisements: a
             // long, thin card like those above a subway car's windows,
-            // as tall as the header's controls. A placeholder until
-            // there are ads to show; it names its own size.
-            middle: Rectangle {
-                id: adPlaceholder
+            // as tall as the header's controls. The ads in pics/ take
+            // turns, each shown for the interval below.
+            middle: Item {
+                id: adBanner
 
-                objectName: "adPlaceholder"
+                readonly property var ads: [
+                    "../pics/boston_dynamics_711x44.png",
+                    "../pics/flock_safety_711x44.png",
+                    "../pics/lockheed_martin_711x44.png",
+                    "../pics/palantir_711x44.png",
+                ]
+                property int index: 0
+                // How long each ad stays up before the next replaces it.
+                property int interval: 30000
+
+                objectName: "adBanner"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 height: theme.control_h_lg
-                color: theme.bg_sunken
-                border.color: theme.border_strong
-                border.width: 1
-                radius: theme.radius_md
 
-                RowLayout {
-                    anchors.centerIn: parent
-                    spacing: theme.space_3
+                Timer {
+                    interval: adBanner.interval
+                    running: adBanner.ads.length > 1
+                    repeat: true
+                    onTriggered: adBanner.index
+                        = (adBanner.index + 1) % adBanner.ads.length
+                }
 
-                    FieldLabel {
-                        text: qsTr("ADVERTISEMENT")
-                    }
+                // The ads are drawn at 711 x 44, the slot's widest. When
+                // the E-brake badge narrows the slot, their sides are
+                // cropped rather than the whole ad shrunk; the logos sit
+                // at the center.
+                Image {
+                    objectName: "adImage"
+                    anchors.fill: parent
+                    source: adBanner.ads[adBanner.index]
+                    fillMode: Image.PreserveAspectCrop
+                    clip: true
+                    asynchronous: true
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: qsTr("Advertisement")
+                }
 
-                    MonoText {
-                        text: Math.round(adPlaceholder.width) + " × "
-                            + Math.round(adPlaceholder.height)
-                        color: theme.text_muted
-                    }
+                // The card's frame, drawn over the ad. The ads' white
+                // ground matches the header's, so the corners outside
+                // the rounded frame do not show.
+                Rectangle {
+                    anchors.fill: parent
+                    color: "transparent"
+                    border.color: theme.border
+                    border.width: 1
+                    radius: theme.radius_md
                 }
             }
 
