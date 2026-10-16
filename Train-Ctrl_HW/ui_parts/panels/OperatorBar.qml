@@ -3,6 +3,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
+import "../components"
 
 Rectangle {
     id: root
@@ -43,7 +44,7 @@ Rectangle {
                 options: [qsTr("Driver"), qsTr("Engineer")]
                 currentIndex: root.s.operator_index
                 onActivated: function (index) {
-                    controller.selectOperator(index);
+                    controller.select_operator(index);
                 }
             }
         }
@@ -60,7 +61,7 @@ Rectangle {
                 options: [qsTr("Automatic"), qsTr("Manual")]
                 currentIndex: root.s.manual ? 1 : 0
                 onActivated: function (index) {
-                    controller.setManual(index === 1);
+                    controller.set_manual(index === 1);
                 }
             }
         }
@@ -78,21 +79,15 @@ Rectangle {
             variant: root.s.gains_locked ? "ok" : "warning"
         }
 
-        SelectField {
+        TrainPicker {
+            objectName: "trainPicker"
             Layout.preferredWidth: 280
             Layout.alignment: Qt.AlignTop
             enabled: root.s.signed_in && root.s.train_count > 0
             label: qsTr("Current selected train")
-            model: root.s.train_count > 0
-                ? controller.trains
-                : [{"id": "", "label": qsTr("No trains available")}]
-            textRole: "label"
-            valueRole: "id"
-            currentIndex: Math.max(0, root.s.train_index)
-            onCommitted: function (value) {
-                if (value !== "")
-                    controller.selectTrain(value);
-            }
+            trains: controller.trains
+            currentId: root.s.has_train ? root.s.train_id : ""
+            onPicked: function (trainId) { controller.select_train(trainId); }
         }
     }
 }

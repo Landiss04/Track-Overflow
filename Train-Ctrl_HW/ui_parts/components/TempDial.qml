@@ -35,6 +35,29 @@ Item {
         return startDeg + span * sweepDeg;
     }
 
+    function nudge(step) {
+        if (root.interactive)
+            root.targetRequested(Math.max(low, Math.min(high,
+                Math.round(root.target) + step)));
+    }
+
+    // Keyboard reach and a visible focus ring (guide 8): arrows step
+    // the target by one, the same request a drag makes.
+    activeFocusOnTab: root.interactive
+    Keys.onUpPressed: root.nudge(1)
+    Keys.onRightPressed: root.nudge(1)
+    Keys.onDownPressed: root.nudge(-1)
+    Keys.onLeftPressed: root.nudge(-1)
+
+    Rectangle {
+        anchors.fill: parent
+        visible: root.activeFocus && root.interactive
+        color: "transparent"
+        radius: width / 2
+        border.width: 2
+        border.color: theme.focus_ring
+    }
+
     onTargetChanged: face.requestPaint()
     onActualChanged: face.requestPaint()
     onInteractiveChanged: face.requestPaint()

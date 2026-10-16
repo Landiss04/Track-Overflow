@@ -2,7 +2,7 @@
 // produced by the control law and the driver's controls, so the way to
 // change one is to drive the console, not to type here.
 //
-// Shown in the display units (documents/units.md): power in
+// Shown in the display units (truth conventions/units.md): power in
 // kilowatts, temperature in Fahrenheit. The payload itself leaves in
 // watts and Celsius; this column is the readable side of it, which is
 // why it differs from the SI inputs beside it.
@@ -110,9 +110,9 @@ Panel {
             valueWidth: 150
             inlineUnit: true
             valueSize: theme.size_h3
-            name: "cabin_lights_command"
+            name: "interior_lights_command"
             kind: "bool"
-            value: root.s.lights
+            value: root.s.interior_lights
         }
         SignalEditRow {
             Layout.fillWidth: true
@@ -121,9 +121,21 @@ Panel {
             valueWidth: 150
             inlineUnit: true
             valueSize: theme.size_h3
-            name: "headlights_command"
+            name: "exterior_lights_command"
             kind: "bool"
-            value: root.s.headlights
+            value: root.s.exterior_lights
+        }
+        SignalEditRow {
+            Layout.fillWidth: true
+            rowHeight: 44
+            showKind: false
+            valueWidth: 150
+            inlineUnit: true
+            valueSize: theme.size_h3
+            name: "temperature_setpoint"
+            kind: "int"
+            unit: "\u00b0F"
+            value: Math.round(root.s.target_temp_f)
         }
         SignalEditRow {
             Layout.fillWidth: true
@@ -133,10 +145,9 @@ Panel {
             inlineUnit: true
             valueSize: theme.size_h3
             rule: false
-            name: "temperature_setpoint"
-            kind: "int"
-            unit: "\u00b0F"
-            value: Math.round(root.s.target_temp_f)
+            name: "announcement"
+            kind: "string"
+            value: root.s.announcement
         }
     }
 
