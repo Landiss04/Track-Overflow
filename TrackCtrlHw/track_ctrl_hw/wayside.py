@@ -206,6 +206,14 @@ class Wayside:
         """Whether this wayside governs ``key``."""
         return key in self._keys
 
+    @property
+    def not_ready_reason(self) -> str:
+        """Why this wayside is not ready, or "" when it is: a program
+        is loaded and its channels agree."""
+        if self._program is None:
+            return "No PLC program is loaded."
+        return self._scan_info.channel_fault
+
     def load_program(
         self, source: str, file_name: str, time_s: float | None
     ) -> ProgramInfo:
@@ -263,8 +271,13 @@ class Wayside:
         time_s: float,
         ctc: CtcInputs,
         track_model: TrackModelInputs,
+        stall: str = "",
     ) -> WaysideScan:
-        """Run one scan cycle against this tick's inputs."""
+        """Run one scan cycle against this tick's inputs.
+
+        ``stall`` is why another wayside of the line holds this one
+        fail-safe, or "". A wayside that is not ready holds itself.
+        """
         territory = self._territory
         keys = territory.keys
         occupied = frozenset(
@@ -285,9 +298,12 @@ class Wayside:
         }
 
         started = time.perf_counter()
-        values, holding = self._run_program(
-            occupied, closed, suggestions, requests, track_model
-        )
+        if stall and not self.not_ready_reason:
+            values, holding = None, stall
+        else:
+            values, holding = self._run_program(
+                occupied, closed, suggestions, requests, track_model
+            )
         duration = time.perf_counter() - started
 
         self._occupied = occupied
@@ -299,9 +315,13 @@ class Wayside:
         else:
             self._drive(values)
 
+        reason = self.not_ready_reason
         report = CtcReport(
             wayside_id=territory.wayside_id,
+            line=territory.line,
             sent_at_s=time_s,
+            ready=not reason,
+            not_ready_reason=reason,
             blocks={
                 key: BlockReport(
                     occupied=key in occupied,

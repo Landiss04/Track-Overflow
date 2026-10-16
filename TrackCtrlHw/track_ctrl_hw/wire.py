@@ -239,7 +239,10 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
         "ctc_reports": [
             {
                 "wayside_id": report.wayside_id,
+                "line": report.line,
                 "sent_at_s": report.sent_at_s,
+                "ready": report.ready,
+                "not_ready_reason": report.not_ready_reason,
                 "blocks": _entries(
                     report.blocks,
                     lambda b: {
@@ -267,7 +270,10 @@ def outputs_from_wire(data: Any) -> TrackControllerOutputs:
         report = _object(raw, "ctc_report")
         reports.append(CtcReport(
             wayside_id=_text(report, "wayside_id"),
+            line=_text(report, "line"),
             sent_at_s=_number(report, "sent_at_s"),
+            ready=_flag(report, "ready"),
+            not_ready_reason=_reason(report, "not_ready_reason"),
             blocks=_from_entries(
                 report.get("blocks"), "blocks",
                 lambda r: BlockReport(
@@ -390,6 +396,13 @@ def _text(record: Mapping[str, Any], name: str) -> str:
     value = record.get(name)
     if not isinstance(value, str) or not value:
         raise WireFormatError(f"{name} must be non-empty text")
+    return value
+
+
+def _reason(record: Mapping[str, Any], name: str) -> str:
+    value = record.get(name)
+    if not isinstance(value, str):
+        raise WireFormatError(f"{name} must be text")
     return value
 
 

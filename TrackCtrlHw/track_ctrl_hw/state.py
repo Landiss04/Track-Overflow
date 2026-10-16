@@ -181,6 +181,11 @@ class TrackControllerState(QObject):
             "waysides": ids,
             "selected": self._selected,
             "clock": display.clock(snapshot.time_s),
+            "ready": snapshot.ready,
+            "notReady": " ".join(snapshot.not_ready),
+            "reportReady": "" if report is None
+            else "Ready" if report.ready
+            else f"Not ready: {report.not_ready_reason}",
             "maintenance": "" if wayside is None
             else views.maintenance_text(wayside),
             "testUi": self._server.connected,
@@ -260,6 +265,21 @@ class TrackControllerState(QObject):
     def clockText(self) -> str:  # noqa: N802
         """Simulation time of the last tick."""
         return self._scalar("clock")
+
+    @Property(bool, notify=changed)
+    def ready(self) -> bool:
+        """Whether every wayside has a running program."""
+        return self._scalar("ready")
+
+    @Property(str, notify=changed)
+    def notReadyText(self) -> str:  # noqa: N802
+        """What startup still needs, or ""."""
+        return self._scalar("notReady")
+
+    @Property(str, notify=changed)
+    def reportReadyText(self) -> str:  # noqa: N802
+        """The ready flag in the last report of the wayside on screen."""
+        return self._scalar("reportReady")
 
     @Property(str, notify=changed)
     def maintenanceText(self) -> str:  # noqa: N802

@@ -13,6 +13,7 @@ ModalDialog {
     property var model: null
     property string waysideName: ""
     property string sentText: ""
+    property string readyText: ""
 
     title: qsTr("Last report to CTC Office")
     meta: root.waysideName === "" ? "" : root.waysideName + " \u00b7 " + root.sentText
@@ -31,6 +32,14 @@ ModalDialog {
             + "state. A failed block reports occupied: the wayside "
             + "cannot tell a failure from a train. Switch, signal and "
             + "crossing state are as the Track Model reports them.")
+    }
+
+    Shared.KeyValueRow {
+        Layout.fillWidth: true
+        visible: root.readyText !== ""
+        label: qsTr("Wayside ready")
+        value: root.readyText
+        rule: false
     }
 
     DataTable {

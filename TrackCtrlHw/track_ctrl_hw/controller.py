@@ -3,6 +3,10 @@
 ``HwTrackController`` implements the ``TrackController`` protocol in
 ``track_ctrl_hw.interface``. It holds one ``Wayside`` per loaded
 database, all on the same line, and scans each of them once per step.
+
+The track is safe only with every wayside running its program, so the
+whole line stalls with any part: while one wayside is not ready, every
+wayside holds its fail-safe outputs, and each says so in its report.
 """
 
 from __future__ import annotations
@@ -59,6 +63,17 @@ class HwTrackController:
     def ticks(self) -> int:
         """Steps taken since the last reset."""
         return self._ticks
+
+    def not_ready_reasons(self) -> tuple[str, ...]:
+        """What startup still needs, one line per cause; empty when
+        every wayside is ready."""
+        if not self._waysides:
+            return ("No wayside database is loaded.",)
+        return tuple(
+            f"Wayside {wayside_id}: {wayside.not_ready_reason}"
+            for wayside_id, wayside in self._waysides.items()
+            if wayside.not_ready_reason
+        )
 
     def load_territory(self, territory: Territory) -> tuple[str, ...]:
         """Add a wayside, or replace the one with the same ID.
@@ -140,6 +155,14 @@ class HwTrackController:
                 f"dt must be finite and positive, got {dt!r}"
             )
         _validate(inputs)
+        stall = ""
+        for wayside_id, wayside in self._waysides.items():
+            if wayside.not_ready_reason:
+                stall = (
+                    f"Wayside {wayside_id} is not ready: "
+                    f"{wayside.not_ready_reason}"
+                )
+                break
         circuits: dict[BlockKey, TrackCircuitCommand] = {}
         switches = {}
         crossings = {}
@@ -147,7 +170,8 @@ class HwTrackController:
         reports = []
         for wayside in self._waysides.values():
             result = wayside.scan(
-                float(dt), inputs.time_s, inputs.ctc, inputs.track_model
+                float(dt), inputs.time_s, inputs.ctc, inputs.track_model,
+                stall,
             )
             circuits.update(result.track_circuits)
             switches.update(result.switch_commands)
@@ -168,6 +192,7 @@ class HwTrackController:
 
     def snapshot(self) -> TrackControllerSnapshot:
         """Current state for display. No side effects."""
+        not_ready = self.not_ready_reasons()
         return TrackControllerSnapshot(
             line=self.line,
             waysides=tuple(
@@ -175,6 +200,8 @@ class HwTrackController:
             ),
             time_s=self._time_s,
             ticks=self._ticks,
+            ready=not not_ready,
+            not_ready=not_ready,
         )
 
 

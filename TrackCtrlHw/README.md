@@ -123,29 +123,39 @@ harness can send the whole line.
 | `track_model.signal_commands` | Track Model | `{signal block: aspect}` |
 | `ctc_reports` | CTC Office | One `CtcReport` per wayside, every tick |
 
-A `CtcReport` is `wayside_id`, `sent_at_s`, and `blocks: dict[BlockKey,
-BlockReport]` — the block key mapped to that block's `occupied`,
-`switch_position`, `signal_aspect` and `crossing_active`. Switch, signal and
-crossing fields are `None` where the block has none, and are the state the
-Track Model reports, not the command. A failed block reports occupied.
+A `CtcReport` is `wayside_id`, `line`, `sent_at_s`, `ready`,
+`not_ready_reason`, and `blocks: dict[BlockKey, BlockReport]` — the block key
+mapped to that block's `occupied`, `switch_position`, `signal_aspect` and
+`crossing_active`. Switch, signal and crossing fields are `None` where the block
+has none, and are the state the Track Model reports, not the command. A failed
+block reports occupied.
+
+### Ready
+
+A wayside is **ready** once a PLC program is loaded on it and its two channels
+agree; `ready` and `not_ready_reason` say so in its report, every tick. The
+track is safe only with every wayside running its program, so the whole line
+stalls with any part: while one wayside is not ready, every wayside holds its
+fail-safe outputs, a ready one included. A controller with no database loaded
+sends no report, so it is not ready. Replacing a program on a ready wayside
+keeps it ready; loading a database its program no longer fits does not. The
+window shows **Ready** or **Not ready** in its header.
 
 ### Edge mappings the harness will need, and where they do not line up yet
 
 These are cross-module mismatches, recorded here so they are not lost. None is
-decided.
+decided. The CTC Office's interface is the one on `ctc-deployment`.
 
-1. **CTC suggestions are per train; this module is per block.** The CTC
-   Office's `TrainSuggestion` (on `ctc-interfacing`) carries `train_id` and no
-   block, and `signals/suggested-speed.md` and `suggested-authority.md` on
-   `truth` key each value by train ID. The harness must know which block each
-   train occupies to map it.
-2. **The CTC Office expects train reports** (`TrainReport`: train ID, block,
-   offset, speed). This module knows no trains and sends none. Train location and
-   speed must come from elsewhere.
-3. **Authority.** A count of blocks (D013, on `truth`). The CTC's current
-   `TrainSuggestion` still carries `authority_block_id`.
-4. **Signal aspects.** The software Track Controller uses ORANGE where this
-   module uses YELLOW; REQ-INTF-009 requires the two to match.
+1. **Suggestions.** The CTC Office's `TrainSuggestion` carries the train's
+   `line` and `block_id`; the harness maps it to `BlockRef(line, block_id)` and
+   drops `train_id`.
+2. **Reports.** The CTC Office takes occupancy, switch and crossing state as
+   flat lists keyed by line and ID; the harness flattens each `CtcReport`.
+3. **Ready.** The CTC Office takes one `ready` per line; this module reports
+   one per wayside. A line is ready when every wayside's report says so.
+4. **PLC names.** `CTCSW_n`, `CTCREV_n`, `SPD_n_b` and `CMD_n_b` are this
+   module's; the software Track Controller still uses `MAINT` and has no speed
+   bits, so one program file no longer runs on both (REQ-INTF-009).
 
 ### The test UI stays
 

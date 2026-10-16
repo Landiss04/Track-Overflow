@@ -30,6 +30,8 @@ Item {
             Layout.fillWidth: true
             moduleName: qsTr("Track Controller")
             instance: page.loaded ? tc.line + qsTr(" Line \u00b7 ") + page.waysideName : ""
+            mode: tc.ready ? qsTr("Ready") : qsTr("Not ready")
+            modeKind: tc.ready ? "ok" : "warning"
             faultText: tc.channelFault !== "" ? qsTr("Channel fault") : ""
             source: tc.sourceText
             clock: tc.clockText
@@ -180,6 +182,16 @@ Item {
                 Layout.maximumWidth: 616
                 Layout.fillHeight: true
                 spacing: theme.space_3
+
+                Banner {
+                    Layout.fillWidth: true
+                    visible: !tc.ready
+                    kind: "warning"
+                    heading: qsTr("NOT READY")
+                    body: tc.notReadyText + qsTr(" Until every wayside is "
+                        + "ready, every wayside holds its fail-safe outputs "
+                        + "and reports not ready to the CTC Office.")
+                }
 
                 Banner {
                     readonly property bool active: tc.maintenanceText !== ""
@@ -343,6 +355,7 @@ Item {
         model: tc.report
         waysideName: page.waysideName
         sentText: tc.uplinkText
+        readyText: tc.reportReadyText
     }
 
     ModalDialog {

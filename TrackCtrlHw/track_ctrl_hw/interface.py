@@ -241,7 +241,14 @@ class CtcReport:
     """One wayside's report to the CTC Office: all of its blocks."""
 
     wayside_id: str
+    line: str
     sent_at_s: float
+    # Started up: a PLC program is loaded and running on both channels.
+    # Every wayside of a line holds its fail-safe outputs while any one
+    # is not ready, so a ready wayside may still be held.
+    ready: bool
+    # Why it is not ready, or "".
+    not_ready_reason: str
     blocks: Mapping[BlockKey, BlockReport] = field(default_factory=dict)
 
 
@@ -337,6 +344,10 @@ class TrackControllerSnapshot:
     # Simulation time of the last tick; None before the first.
     time_s: float | None
     ticks: int
+    # Whether at least one wayside is loaded and every one is ready, and
+    # if not, what is missing, one line per cause.
+    ready: bool
+    not_ready: tuple[str, ...]
 
 
 # ------------------------------------------------------------------ #
@@ -346,8 +357,10 @@ class TrackControllerSnapshot:
 class TrackController(Protocol):
     """One line's wayside controllers, stepped by the harness.
 
-    Constructed with no arguments; waysides are added by loading their
-    databases from the Track Controller UI.
+    Constructed with no arguments, and not ready; waysides are added by
+    loading their databases from the Track Controller UI. A wayside is
+    ready once a PLC program is loaded on it and running. While any
+    wayside is not ready, every wayside holds its fail-safe outputs.
     """
 
     def step(

@@ -400,6 +400,9 @@ class Report(unittest.TestCase):
                          ["1", "2", "3"])
         first = out.ctc_reports[0]
         self.assertEqual(first.sent_at_s, 3600.0)
+        self.assertEqual(first.line, "Green")
+        self.assertTrue(first.ready)
+        self.assertEqual(first.not_ready_reason, "")
         self.assertEqual(len(first.blocks), 20)
         self.assertTrue(first.blocks[k["4"]].occupied)
         self.assertEqual(first.blocks[k["12"]].switch_position, "normal")
@@ -423,6 +426,86 @@ class Report(unittest.TestCase):
         self.assertIsNone(wayside.report)
         self.assertIsNotNone(wayside.program)
         self.assertEqual(wayside.switches[0].commanded, "normal")
+
+
+class Ready(unittest.TestCase):
+    def test_nothing_loaded_is_not_ready(self) -> None:
+        controller = HwTrackController()
+        snapshot = controller.snapshot()
+        self.assertFalse(snapshot.ready)
+        self.assertEqual(snapshot.not_ready,
+                         ("No wayside database is loaded.",))
+        out = controller.step(0.1, TrackControllerInputs(time_s=1.0))
+        self.assertEqual(out.ctc_reports, ())
+
+    def test_a_wayside_without_a_program_is_not_ready(self) -> None:
+        controller = loaded(1, programs=False)
+        out, _ = circuits(controller)
+        (report,) = out.ctc_reports
+        self.assertFalse(report.ready)
+        self.assertEqual(report.not_ready_reason, "No PLC program is loaded.")
+        self.assertEqual(controller.snapshot().not_ready,
+                         ("Wayside 1: No PLC program is loaded.",))
+
+    def test_the_line_stalls_until_every_wayside_is_ready(self) -> None:
+        controller = loaded(1)
+        controller.load_territory(territory(2))
+        k = keys(controller)
+        out, by_number = circuits(
+            controller, occupied=["1", "19"], suggestions={"3": (10, 4)}
+        )
+        first, second = out.ctc_reports
+        # Wayside 1 is started up, and says so, but holds fail-safe.
+        self.assertTrue(first.ready)
+        self.assertFalse(second.ready)
+        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
+        self.assertTrue(out.track_model.crossing_commands[k["19"]])
+        held = controller.snapshot().waysides[0].holding
+        self.assertIn("Wayside 2 is not ready", held)
+        # A program on wayside 2 starts the whole line.
+        controller.load_program("2", program_source(2), "w2.plc")
+        out, by_number = circuits(
+            controller, occupied=["1"], suggestions={"3": (10, 4)}
+        )
+        self.assertTrue(all(r.ready for r in out.ctc_reports))
+        self.assertTrue(controller.snapshot().ready)
+        self.assertEqual(by_number["3"], TrackCircuitCommand(10, 4))
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
+
+    def test_a_channel_fault_is_not_ready(self) -> None:
+        controller = loaded(1)
+        real = Program.scan_b
+
+        def broken(program: Program, image: object) -> dict[str, bool]:
+            values = real(program, image)  # type: ignore[arg-type]
+            values["AUTH_3"] = not values["AUTH_3"]
+            return values
+
+        with mock.patch.object(Program, "scan_b", broken):
+            out, _ = circuits(controller)
+        self.assertFalse(out.ctc_reports[0].ready)
+        self.assertIn("AUTH_3", out.ctc_reports[0].not_ready_reason)
+
+    def test_ready_survives_a_new_program_and_a_reset(self) -> None:
+        controller = loaded(1)
+        controller.load_program("1", program_source(1), "again.plc")
+        self.assertTrue(controller.snapshot().ready)
+        controller.reset()
+        self.assertTrue(controller.snapshot().ready)
+
+    def test_a_database_the_program_no_longer_fits_loses_ready(self) -> None:
+        controller = loaded(1)
+        smaller = parse_territory({
+            "line": "Green", "wayside": "1",
+            "blocks": [
+                {"block_number": int(b.key.block_id), "section": b.key.section,
+                 "length_m": b.length_m, "speed_limit_kmh": 45}
+                for b in territory(1).blocks[10:]
+            ],
+        })
+        controller.load_territory(smaller)
+        self.assertFalse(controller.snapshot().ready)
 
 
 if __name__ == "__main__":
