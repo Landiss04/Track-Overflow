@@ -13,6 +13,7 @@ ModalDialog {
     property var model: null
     property string waysideName: ""
     property string sentText: ""
+    property string readyText: ""
 
     title: qsTr("Last report to CTC Office")
     meta: root.waysideName === "" ? "" : root.waysideName + " \u00b7 " + root.sentText
@@ -27,10 +28,18 @@ ModalDialog {
     Shared.HelperText {
         Layout.fillWidth: true
         text: qsTr("Sent every scan. Each block key maps to that block's "
-            + "occupancy, switch position, signal aspect, crossing state "
-            + "and failure. A failed track circuit reports occupied. "
-            + "Switch, signal and crossing state are as the Track Model "
-            + "reports them.")
+            + "occupancy, switch position, signal aspect and crossing "
+            + "state. A failed block reports occupied: the wayside "
+            + "cannot tell a failure from a train. Switch, signal and "
+            + "crossing state are as the Track Model reports them.")
+    }
+
+    Shared.KeyValueRow {
+        Layout.fillWidth: true
+        visible: root.readyText !== ""
+        label: qsTr("Wayside ready")
+        value: root.readyText
+        rule: false
     }
 
     DataTable {
@@ -45,8 +54,7 @@ ModalDialog {
             { title: qsTr("Occupancy"), role: "occupied", width: 96 },
             { title: qsTr("Switch"), role: "switch", width: 80 },
             { title: qsTr("Signal"), role: "signal", width: 104 },
-            { title: qsTr("Crossing"), role: "crossing", fill: true },
-            { title: qsTr("Failure"), role: "failure", width: 112 }
+            { title: qsTr("Crossing"), role: "crossing", fill: true }
         ]
     }
 }

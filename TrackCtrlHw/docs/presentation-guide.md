@@ -1,5 +1,10 @@
 # Track Controller (hardware): presentation guide
 
+> **This guide describes the build shown at the 2026-10-08 showcase.** Since
+> then the vital layer, the failure inputs and the maintenance flag have been
+> removed, speed is capped in the PLC program, and a Ready signal goes to the
+> CTC Office. `TrackCtrlHw/README.md` describes the module as it is now.
+
 Your crib sheet for presenting the module and answering questions about it.
 Every expected result in the walkthrough was checked by running the module
 on 2026-10-08. Anything not verified is marked **(unverified)** or

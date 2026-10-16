@@ -3,6 +3,10 @@
 ``HwTrackController`` implements the ``TrackController`` protocol in
 ``track_ctrl_hw.interface``. It holds one ``Wayside`` per loaded
 database, all on the same line, and scans each of them once per step.
+
+The track is safe only with every wayside running its program, so the
+whole line stalls with any part: while one wayside is not ready, every
+wayside holds its fail-safe outputs, and each says so in its report.
 """
 
 from __future__ import annotations
@@ -17,10 +21,10 @@ from track_ctrl_hw.errors import (
     TerritoryError,
 )
 from track_ctrl_hw.interface import (
-    FAILURE_KINDS,
     SIGNAL_ASPECTS,
     SWITCH_POSITIONS,
     BlockKey,
+    BlockRef,
     ProgramInfo,
     Suggestion,
     Territory,
@@ -30,7 +34,7 @@ from track_ctrl_hw.interface import (
     TrackControllerSnapshot,
     TrackModelOutputs,
 )
-from track_ctrl_hw.wayside import Wayside
+from track_ctrl_hw.wayside import MAX_SPEED_MPS, SPEED_BITS, Wayside
 
 
 class HwTrackController:
@@ -40,7 +44,6 @@ class HwTrackController:
         self._waysides: dict[str, Wayside] = {}
         self._time_s: float | None = None
         self._ticks = 0
-        self._maintenance = False
 
     # -- configuration, from the Track Controller UI -----------------
 
@@ -60,6 +63,17 @@ class HwTrackController:
     def ticks(self) -> int:
         """Steps taken since the last reset."""
         return self._ticks
+
+    def not_ready_reasons(self) -> tuple[str, ...]:
+        """What startup still needs, one line per cause; empty when
+        every wayside is ready."""
+        if not self._waysides:
+            return ("No wayside database is loaded.",)
+        return tuple(
+            f"Wayside {wayside_id}: {wayside.not_ready_reason}"
+            for wayside_id, wayside in self._waysides.items()
+            if wayside.not_ready_reason
+        )
 
     def load_territory(self, territory: Territory) -> tuple[str, ...]:
         """Add a wayside, or replace the one with the same ID.
@@ -124,7 +138,6 @@ class HwTrackController:
             wayside.reset()
         self._time_s = None
         self._ticks = 0
-        self._maintenance = False
 
     # -- the module boundary -----------------------------------------
 
@@ -142,6 +155,14 @@ class HwTrackController:
                 f"dt must be finite and positive, got {dt!r}"
             )
         _validate(inputs)
+        stall = ""
+        for wayside_id, wayside in self._waysides.items():
+            if wayside.not_ready_reason:
+                stall = (
+                    f"Wayside {wayside_id} is not ready: "
+                    f"{wayside.not_ready_reason}"
+                )
+                break
         circuits: dict[BlockKey, TrackCircuitCommand] = {}
         switches = {}
         crossings = {}
@@ -149,7 +170,8 @@ class HwTrackController:
         reports = []
         for wayside in self._waysides.values():
             result = wayside.scan(
-                float(dt), inputs.time_s, inputs.ctc, inputs.track_model
+                float(dt), inputs.time_s, inputs.ctc, inputs.track_model,
+                stall,
             )
             circuits.update(result.track_circuits)
             switches.update(result.switch_commands)
@@ -158,7 +180,6 @@ class HwTrackController:
             reports.append(result.report)
         self._time_s = inputs.time_s
         self._ticks += 1
-        self._maintenance = inputs.ctc.maintenance_mode
         return TrackControllerOutputs(
             track_model=TrackModelOutputs(
                 track_circuits=circuits,
@@ -171,14 +192,16 @@ class HwTrackController:
 
     def snapshot(self) -> TrackControllerSnapshot:
         """Current state for display. No side effects."""
+        not_ready = self.not_ready_reasons()
         return TrackControllerSnapshot(
             line=self.line,
             waysides=tuple(
                 wayside.snapshot() for wayside in self._waysides.values()
             ),
-            maintenance_mode=self._maintenance,
             time_s=self._time_s,
             ticks=self._ticks,
+            ready=not not_ready,
+            not_ready=not_ready,
         )
 
 
@@ -198,21 +221,19 @@ def _validate(inputs: Any) -> None:
         )
     ctc = inputs.ctc
     model = inputs.track_model
-    if not isinstance(ctc.maintenance_mode, bool):
-        raise InvalidInputError("maintenance_mode must be true or false")
-    _keys(ctc.closed_blocks, "closed_blocks")
+    _keys(ctc.closed_blocks, "closed_blocks", BlockRef)
     _keys(model.occupied_blocks, "occupied_blocks")
-    _choices(ctc.switch_commands, SWITCH_POSITIONS, "switch_commands")
+    _choices(ctc.switch_commands, SWITCH_POSITIONS, "switch_commands",
+             BlockRef)
     _choices(model.switch_positions, SWITCH_POSITIONS, "switch_positions")
     _choices(model.signal_aspects, SIGNAL_ASPECTS, "signal_aspects")
-    _choices(model.failures, FAILURE_KINDS, "failures")
     _keys(model.crossings_active, "crossings_active")
     for key, active in model.crossings_active.items():
         if not isinstance(active, bool):
             raise InvalidInputError(
                 f"crossings_active[{key.label}] must be true or false"
             )
-    _keys(ctc.suggestions, "suggestions")
+    _keys(ctc.suggestions, "suggestions", BlockRef)
     for key, suggestion in ctc.suggestions.items():
         if not isinstance(suggestion, Suggestion):
             raise InvalidInputError(
@@ -230,18 +251,33 @@ def _validate(inputs: Any) -> None:
                     f"suggestions[{key.label}].{name} must not be "
                     f"negative, got {value}"
                 )
+        if suggestion.speed_mps > MAX_SPEED_MPS:
+            raise InvalidInputError(
+                f"suggestions[{key.label}].speed_mps must be at most "
+                f"{MAX_SPEED_MPS} m/s, the most the wayside's "
+                f"{SPEED_BITS}-bit speed input carries; got "
+                f"{suggestion.speed_mps}"
+            )
 
 
-def _keys(keys: Iterable[Any], name: str) -> None:
+def _keys(
+    keys: Iterable[Any], name: str, kind: type = BlockKey
+) -> None:
+    # The CTC Office names blocks by BlockRef; the Track Model by BlockKey.
     for key in keys:
-        if not isinstance(key, BlockKey):
-            raise InvalidInputError(f"{name} must be keyed by BlockKey")
+        if not isinstance(key, kind):
+            raise InvalidInputError(
+                f"{name} must be keyed by {kind.__name__}"
+            )
 
 
 def _choices(
-    values: Mapping[Any, Any], allowed: tuple[str, ...], name: str
+    values: Mapping[Any, Any],
+    allowed: tuple[str, ...],
+    name: str,
+    kind: type = BlockKey,
 ) -> None:
-    _keys(values, name)
+    _keys(values, name, kind)
     for key, value in values.items():
         if value not in allowed:
             raise InvalidInputError(

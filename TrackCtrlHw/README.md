@@ -4,7 +4,9 @@ The hardware Track Controller runs **every wayside of one line**; the software
 Track Controller runs the other line. Each wayside governs a territory loaded
 from a database file and runs its own Boolean PLC program. The module knows the
 blocks it governs, never the trains on them: everything it exchanges is keyed
-by block.
+by block. Nor does it know failures: a broken rail, a dead track circuit or a
+power failure reaches it only as an occupied block, and it reports that block
+to the CTC Office as occupied.
 
 Two windows, each its own process:
 
@@ -44,7 +46,7 @@ python -m unittest discover -s tests -t .
 ```
 track_ctrl_hw/interface.py   boundary types and the TrackController Protocol
 track_ctrl_hw/controller.py  HwTrackController: the module (one line)
-track_ctrl_hw/wayside.py     one wayside: I/O image, scan, vital layer, report
+track_ctrl_hw/wayside.py     one wayside: I/O image, scan, outputs, report
 track_ctrl_hw/plc.py         the PLC language: compile, scan on two channels
 track_ctrl_hw/territory.py   wayside database parsing
 track_ctrl_hw/errors.py      TrackControllerError and its subclasses
@@ -93,20 +95,20 @@ All errors derive from `TrackControllerError`.
 
 ### Inputs (`TrackControllerInputs`)
 
-Backend units only (`truth/conventions/units.md`). Blocks are `BlockKey(line,
-section, block_id)`, all strings. A switch, its signal and a crossing are each
-keyed by the block they are listed on in the database. Inputs for blocks no
-wayside governs are ignored, so the harness can send the whole line.
+Backend units only (`truth/conventions/units.md`). Track Model blocks are
+`BlockKey(line, section, block_id)`, all strings. The CTC Office names a block
+its own way, `BlockRef(line, block_id)`, written `Green:13`, with no section. A
+switch, its signal and a crossing are each keyed by the block they are listed
+on in the database. Inputs for blocks no wayside governs are ignored, so the
+harness can send the whole line.
 
 | Field | From | Type |
 | --- | --- | --- |
 | `time_s` | Clock | Simulation seconds since midnight |
-| `ctc.maintenance_mode` | CTC Office | `bool`, system-wide |
-| `ctc.closed_blocks` | CTC Office | `frozenset[BlockKey]` |
-| `ctc.switch_commands` | CTC Office | `{switch block: "normal" \| "reverse"}`; obeyed only in maintenance |
-| `ctc.suggestions` | CTC Office | `{block: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing |
-| `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]` |
-| `track_model.failures` | Track Model | `{block: "broken_rail" \| "track_circuit" \| "power"}` |
+| `ctc.closed_blocks` | CTC Office | `frozenset[BlockRef]`, the full set every tick |
+| `ctc.switch_commands` | CTC Office | `{BlockRef of the switch: "normal" \| "reverse"}`; sent only in maintenance mode. The PLC program decides whether to obey |
+| `ctc.suggestions` | CTC Office | `{BlockRef: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing. Speed 0 to 31 m/s: the program's speed input is 5 bits |
+| `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]`; a train or a failure, the module cannot tell which |
 | `track_model.switch_positions` | Track Model | Actual positions, `{switch block: position}` |
 | `track_model.crossings_active` | Track Model | Actual state, `{crossing block: bool}` |
 | `track_model.signal_aspects` | Track Model | Lamps actually lit, `{signal block: "red" \| "yellow" \| "green" \| "super_green"}` |
@@ -121,29 +123,39 @@ wayside governs are ignored, so the harness can send the whole line.
 | `track_model.signal_commands` | Track Model | `{signal block: aspect}` |
 | `ctc_reports` | CTC Office | One `CtcReport` per wayside, every tick |
 
-A `CtcReport` is `wayside_id`, `sent_at_s`, and `blocks: dict[BlockKey,
-BlockReport]` — the block key mapped to that block's `occupied`, `failure`,
-`switch_position`, `signal_aspect` and `crossing_active`. Switch, signal and
-crossing fields are `None` where the block has none, and are the state the
-Track Model reports, not the command. A failed track circuit reports occupied.
+A `CtcReport` is `wayside_id`, `line`, `sent_at_s`, `ready`,
+`not_ready_reason`, and `blocks: dict[BlockKey, BlockReport]` — the block key
+mapped to that block's `occupied`, `switch_position`, `signal_aspect` and
+`crossing_active`. Switch, signal and crossing fields are `None` where the block
+has none, and are the state the Track Model reports, not the command. A failed
+block reports occupied.
+
+### Ready
+
+A wayside is **ready** once a PLC program is loaded on it and its two channels
+agree; `ready` and `not_ready_reason` say so in its report, every tick. The
+track is safe only with every wayside running its program, so the whole line
+stalls with any part: while one wayside is not ready, every wayside holds its
+fail-safe outputs, a ready one included. A controller with no database loaded
+sends no report, so it is not ready. Replacing a program on a ready wayside
+keeps it ready; loading a database its program no longer fits does not. The
+window shows **Ready** or **Not ready** in its header.
 
 ### Edge mappings the harness will need, and where they do not line up yet
 
 These are cross-module mismatches, recorded here so they are not lost. None is
-decided.
+decided. The CTC Office's interface is the one on `ctc-deployment`.
 
-1. **CTC suggestions are per train; this module is per block.** The CTC
-   Office's `TrainSuggestion` (on `ctc-interfacing`) carries `train_id` and no
-   block, and `signals/suggested-speed.md` and `suggested-authority.md` on
-   `truth` key each value by train ID. The harness must know which block each
-   train occupies to map it.
-2. **The CTC Office expects train reports** (`TrainReport`: train ID, block,
-   offset, speed). This module knows no trains and sends none. Train location and
-   speed must come from elsewhere.
-3. **Authority.** A count of blocks (D013, on `truth`). The CTC's current
-   `TrainSuggestion` still carries `authority_block_id`.
-4. **Signal aspects.** The software Track Controller uses ORANGE where this
-   module uses YELLOW; REQ-INTF-009 requires the two to match.
+1. **Suggestions.** The CTC Office's `TrainSuggestion` carries the train's
+   `line` and `block_id`; the harness maps it to `BlockRef(line, block_id)` and
+   drops `train_id`.
+2. **Reports.** The CTC Office takes occupancy, switch and crossing state as
+   flat lists keyed by line and ID; the harness flattens each `CtcReport`.
+3. **Ready.** The CTC Office takes one `ready` per line; this module reports
+   one per wayside. A line is ready when every wayside's report says so.
+4. **PLC names.** `CTCSW_n`, `CTCREV_n`, `SPD_n_b` and `CMD_n_b` are this
+   module's; the software Track Controller still uses `MAINT` and has no speed
+   bits, so one program file no longer runs on both (REQ-INTF-009).
 
 ### The test UI stays
 
@@ -192,40 +204,58 @@ variants share a language, not code. Full grammar in `track_ctrl_hw/plc.py`;
 the names a program can use are in `track_ctrl_hw/wayside.py`:
 
 ```
-VAR_IN  OCC_1..20 CLOSED_13 FAIL_13 SWREV_12 MAINT     // inputs
+VAR_IN  OCC_1..20 CLOSED_13 SWREV_12 CTCSW_12 CTCREV_12   // inputs
+VAR_IN  SPD_3_0..4                                         // speed, bit 0 first
 VAR_OUT AUTH_1..20 SW_12 SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG XING_19
+VAR_OUT CMD_3_0..4
 SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
 ```
 
 `AUTH_n` decides whether block *n*'s track circuit passes the CTC Office's
-suggestion (1) or sends speed 0, authority 0 (0). Numbers never enter the
-program. Each statement is compiled twice by different algorithms (recursive
+authority (1) or sends 0 (0). Speed is a number, so it crosses into the program
+as five bits, `SPD_n_0` (1 m/s) to `SPD_n_4` (16 m/s), and back out as
+`CMD_n_0..4`; keeping it under the block's limit is the program's job. Each
+statement is compiled twice by different algorithms (recursive
 descent and a tree walk; shunting-yard and a stack machine), and both channels
-run every scan. A disagreement is a latched vital fault until a new program is
+run every scan. A disagreement is a latched channel fault until a new program is
 loaded.
 
-## Vital layer
+## Nothing above the program
 
-It runs after every scan and can only make an output more restrictive:
+The wayside houses its PLC program and decides nothing itself. There is no
+vital layer: every protection is the program's to write, and the wayside drives
+the program's outputs onto the track as they are. The sample programs show how:
 
-- Speed is clamped to the block's limit, rounded down to whole m/s.
-- A closed or failed block sends speed 0, authority 0; zero authority means zero speed.
-- A switch that does not report its commanded position turns its signal red and
-  zeroes every block on its route.
-- A switch never moves while the block it is listed on, or its point, is occupied.
-- A signal lit with no aspect or more than one shows red.
-- A crossing is active whenever its block or a block beside it is occupied, or
-  its own block has a failure.
-- No program, or a channel disagreement: every signal red, authority zero,
-  every crossing active, switches held.
+- Separation: a train keeps its authority only while the blocks beside it, on
+  the route the switches have set, are clear.
+- Closures: `CLOSED_n` zeroes `AUTH_n`.
+- Switch locking: a switch holds where it reports (`SWREV_n`) while its block or
+  its point is occupied.
+- Switch correspondence: `SW_n XOR SWREV_n` turns the signal red and zeroes
+  `AUTH` on every block of the route over the switch.
+- Crossings: active while a train is on the crossing's block or one beside it.
+- Speed limits: `OVER_n` compares the five `SPD_n` bits with the block's limit,
+  written into the program as constants; above it, the limit's own bits go out
+  as `CMD_n`. Every `CMD_n` bit is ANDed with `AUTH_n`, so held authority sends
+  no speed. Six statements a block, so programs run to a few hundred lines.
 
-In maintenance mode the switches follow the CTC Office's commands instead of the
-program; the program still sets signals, crossings and authority.
+Signal outputs decode in a fixed order: red if `SIG_n_R` is 1 or none is,
+otherwise the first of `_Y`, `_G`, `_SG` that is 1.
+
+Outputs hold their fail-safe values (every signal red, every crossing active,
+speed 0 and authority 0, switches where they are) only while no program runs:
+none is loaded, a new one has not scanned yet, or the channels have disagreed.
+
+The CTC Office sends no maintenance flag. Its switch commands reach the program
+as `CTCSW_n` (a command is in effect) and `CTCREV_n` (it is reverse); the
+sample programs obey them.
 
 ## Known gaps
 
-- Authority is not truncated at an occupied block by the vital layer: that
-  needs each train's direction, which a wayside that knows no trains does not
-  have. The sample programs hold a train whose neighbour is occupied instead.
+- Authority is not truncated at an occupied block: that needs each train's
+  direction, which a wayside that knows no trains does not have. The sample
+  programs hold a train whose neighbour is occupied instead.
+- With no memory between scans, a program can lock a switch only where it
+  reports, not where it was last commanded.
 - The test UI shows values in backend units (m/s, blocks); the Track Controller
   window shows imperial.

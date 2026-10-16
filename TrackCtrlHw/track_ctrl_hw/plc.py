@@ -29,8 +29,9 @@ name is 1, so the compiler warns about every such read in advance.
 Each statement is compiled twice, by different algorithms. Channel A
 parses by recursive descent and walks the tree. Channel B parses with
 the shunting-yard algorithm and runs postfix code on a stack. The
-wayside runs both on every scan and treats any disagreement as a vital
-fault.
+wayside runs both on every scan and treats any disagreement as a
+channel fault: every output is held fail-safe until a new program is
+loaded.
 """
 
 from __future__ import annotations
