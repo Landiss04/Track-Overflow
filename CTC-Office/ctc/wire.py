@@ -97,6 +97,7 @@ def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
                 for c in track.get("switch_commands", ())),
         ),
         clock_speedup=bool(data.get("clock_speedup", False)),
+        clock_paused=bool(data.get("clock_paused", True)),
     )
 
 

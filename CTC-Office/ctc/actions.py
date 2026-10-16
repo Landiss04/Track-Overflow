@@ -76,6 +76,8 @@ def apply_action(module: CtcOffice, op: str,
         module.set_maintenance_mode(_bool(args, "active"))
     elif op == "set_clock_speedup":
         module.set_clock_speedup(_bool(args, "active"))
+    elif op == "set_clock_paused":
+        module.set_clock_paused(_bool(args, "paused"))
     else:
         raise InvalidInputError(f"unknown action {op!r}")
 

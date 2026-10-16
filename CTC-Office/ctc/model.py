@@ -409,6 +409,8 @@ class StubCtcOffice:
         self._authority_cache = None
         self._maintenance = False
         self._clock_speedup = False
+        # The simulation starts paused, until the dispatcher runs it.
+        self._clock_paused = True
         self._inputs: CtcInputs | None = None
         # Reports received while no time passes; applied at next step.
         self._staged: CtcInputs | None = None
@@ -622,6 +624,14 @@ class StubCtcOffice:
             raise InvalidInputError(
                 f"clock speedup must be true or false, got {active!r}")
         self._clock_speedup = active
+
+    def set_clock_paused(self, paused: bool) -> None:
+        """Command the shared clock to pause or resume; see
+        ``CtcOffice.set_clock_paused``."""
+        if not isinstance(paused, bool):
+            raise InvalidInputError(
+                f"clock paused must be true or false, got {paused!r}")
+        self._clock_paused = paused
 
     def load_schedule(self, schedule: Schedule) -> None:
         """Replace the schedule. Every stop must be a block of the
@@ -1033,6 +1043,7 @@ class StubCtcOffice:
                                       if c.line in ready),
             ),
             clock_speedup=self._clock_speedup,
+            clock_paused=self._clock_paused,
         )
 
     def _closed_blocks(self) -> tuple[BlockRef, ...]:
