@@ -411,7 +411,8 @@ class StrictActionTest(unittest.TestCase):
                 ("set_block_closed", {"line": "Green", "block_id": "3",
                                       "closed": "false"}),
                 ("set_maintenance_mode", {"active": "false"}),
-                ("set_clock_speedup", {"active": 0})):
+                ("set_clock_speedup", {"active": 0}),
+                ("set_clock_paused", {"paused": "false"})):
             with self.subTest(op=op), self.assertRaises(InvalidInputError):
                 apply_action(ctc, op, args)
         snap = ctc.snapshot()

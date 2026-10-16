@@ -171,6 +171,18 @@ class StubModuleTest(unittest.TestCase):
         ctc.set_clock_speedup(False)
         self.assertFalse(ctc.snapshot().outputs.clock_speedup)
 
+    def test_clock_paused_output(self) -> None:
+        # The simulation starts paused, until the dispatcher runs it.
+        ctc = ready_office()
+        self.assertTrue(ctc.snapshot().outputs.clock_paused)
+        ctc.set_clock_paused(False)
+        self.assertFalse(ctc.step(DT_S, CtcInputs()).clock_paused)
+        # No step happens while paused: the snapshot says so at once.
+        ctc.set_clock_paused(True)
+        self.assertTrue(ctc.snapshot().outputs.clock_paused)
+        with self.assertRaises(InvalidInputError):
+            ctc.set_clock_paused("no")  # type: ignore[arg-type]
+
     def test_bad_dt_rejected(self) -> None:
         ctc = ready_office()
         for dt in (0.0, -0.1, math.inf, math.nan):
@@ -412,6 +424,7 @@ class HarnessSendTest(unittest.TestCase):
         self.assertEqual(rows["closed_blocks"], "Green:5")
         self.assertEqual(rows["switch_commands"], "Green:12=reverse")
         self.assertTrue(rows["clock_speedup"])
+        self.assertTrue(rows["clock_paused"])
         self.assertFalse([name for name in rows
                           if name.startswith("tickets_sold")])
 

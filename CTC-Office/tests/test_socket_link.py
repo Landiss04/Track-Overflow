@@ -170,6 +170,11 @@ class SocketLinkTest(unittest.TestCase):
         self.link.set_clock_speedup(True)
         self.assertTrue(self.link.snapshot().outputs.clock_speedup)
 
+    def test_clock_paused_reaches_the_remote_module(self) -> None:
+        self.assertTrue(self.link.snapshot().outputs.clock_paused)
+        self.link.set_clock_paused(False)
+        self.assertFalse(self.link.snapshot().outputs.clock_paused)
+
     def test_test_ui_forces_only_track_controller_inputs(self) -> None:
         # Maintenance mode, the clock speed and every other dispatcher
         # action belong to the CTC window.

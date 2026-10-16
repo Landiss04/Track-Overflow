@@ -86,6 +86,9 @@ class CtcLink(Protocol):
     def set_clock_speedup(self, active: bool) -> None:
         ...
 
+    def set_clock_paused(self, paused: bool) -> None:
+        ...
+
     def reset(self) -> None:
         """Test only: replace the module with a fresh instance."""
         ...
@@ -148,6 +151,9 @@ class LocalLink:
 
     def set_clock_speedup(self, active: bool) -> None:
         self._module.set_clock_speedup(active)
+
+    def set_clock_paused(self, paused: bool) -> None:
+        self._module.set_clock_paused(paused)
 
     def reset(self) -> None:
         self._module = self._factory()

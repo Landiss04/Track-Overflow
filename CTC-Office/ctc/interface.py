@@ -185,6 +185,12 @@ class CtcOutputs:
     # Clock speedup command, for the central harness to relay to every
     # module so all run at one speed: True for 10x, False for 1x.
     clock_speedup: bool = False
+    # Clock pause command, for the central harness: True while the
+    # dispatcher has the shared clock paused, False once they resume it
+    # (D017: the CTC Office pauses and resumes the clock through the
+    # harness). The simulation starts paused. While the clock is paused
+    # no step happens, so the harness reads it from ``snapshot()`` too.
+    clock_paused: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,6 +401,10 @@ class CtcOffice(Protocol):
 
     def set_clock_speedup(self, active: bool) -> None:
         """Command the shared clock to 10x (True) or 1x (False)."""
+        ...
+
+    def set_clock_paused(self, paused: bool) -> None:
+        """Command the shared clock to pause (True) or resume (False)."""
         ...
 
     def load_schedule(self, schedule: Schedule) -> None:
