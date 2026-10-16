@@ -62,6 +62,7 @@ class WireTest(unittest.TestCase):
                 occupancy=(BlockOccupancy("Green", "1", True),),
                 switches=(SwitchReport("Green", "12", "reverse"),),
                 crossings=(CrossingReport("Green", "19", "active"),),
+                ready=True,
             ),
             track_model=_green(3),
         )
@@ -124,7 +125,8 @@ class SocketLinkTest(unittest.TestCase):
                 occupied=[("Green", "63")]).track_controller,
             track_model=_green(5)))
         (suggestion,) = out.track_controller.suggestions
-        self.assertEqual(suggestion.authority_blocks, 2)
+        self.assertEqual((suggestion.block_id, suggestion.authority_blocks),
+                         ("63", 2))
         # Still ints after the JSON round trip.
         self.assertIs(type(suggestion.suggested_speed_mps), int)
         self.assertIs(type(suggestion.authority_blocks), int)
@@ -152,13 +154,13 @@ class SocketLinkTest(unittest.TestCase):
             self.link.set_switch("Green", "12", "reverse")
         self._wait(lambda: self.link.snapshot().maintenance_mode)
         self.link.set_switch("Green", "12", "reverse")
-        (command,) = (self.link.snapshot().outputs.track_controller
-                      .switch_commands)
+        # The dispatcher's command; it is sent once the Track Controller
+        # reports ready.
+        (command,) = self.link.snapshot().switch_commands
         self.assertEqual((command.switch_id, command.position),
                          ("12", "reverse"))
         self.link.release_switch("Green", "12")
-        self.assertEqual(self.link.snapshot().outputs.track_controller
-                         .switch_commands, ())
+        self.assertEqual(self.link.snapshot().switch_commands, ())
 
     def test_clock_speedup_reaches_the_remote_module(self) -> None:
         self.link.set_clock_speedup(True)
@@ -169,7 +171,7 @@ class SocketLinkTest(unittest.TestCase):
         # action belong to the CTC window.
         harness = CtcTestHarness(self.link)
         self.assertEqual([row["name"] for row in harness.inputs],
-                         ["occupied_blocks", "switch_states",
+                         ["ready", "occupied_blocks", "switch_states",
                           "crossing_states"])
 
     def test_remote_rejection_is_reported(self) -> None:

@@ -27,11 +27,14 @@ class ScheduleLoadingTest(unittest.TestCase):
     def test_real_schedule_queues_every_run_in_time_order(self) -> None:
         ctc = StubCtcOffice()
         ctc.load_schedule(load_schedule(SCHEDULE))
-        queued = ctc.snapshot().queued_trains
-        self.assertEqual(len(queued), 20)
-        times = [q.departure_s for q in queued]
+        runs = ctc.snapshot().scheduled_runs
+        self.assertEqual(len(runs), 20)
+        times = [r.departure_s for r in runs]
         self.assertEqual(times, sorted(times))
-        self.assertEqual({q.line for q in queued}, {"Green", "Red"})
+        self.assertEqual({r.line for r in runs}, {"Green", "Red"})
+        self.assertEqual({r.status for r in runs}, {"queued"})
+        # Time zero is the simulation start, 05:00 (D017).
+        self.assertEqual(times[0], 5 * 3600)
 
     def test_queued_trains_cross_the_wire(self) -> None:
         ctc = StubCtcOffice()
@@ -67,9 +70,10 @@ class HostDeparturesTest(unittest.TestCase):
         self.assertEqual(host.scheduleFile, "schedule_v4.json")
         self.assertEqual(host.scheduleError, "")
         rows = host.departures
-        self.assertEqual(rows[0], {"time": "+0:00", "train": "Green 1",
+        self.assertEqual(rows[0], {"time": "05:00", "train": "G1",
                                    "status": "Queued"})
-        self.assertEqual(rows[2]["time"], "+3:00")
+        self.assertEqual(rows[2], {"time": "05:03", "train": "G2",
+                                   "status": "Queued"})
 
         layout = SCHEDULE.parents[1] / "TrackModel" / "green_line.json"
         host.loadSchedule(QUrl.fromLocalFile(str(layout)))

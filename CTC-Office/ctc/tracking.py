@@ -63,6 +63,10 @@ class Tracked:
     reach_m: float = 0.0
     # The fastest it could be going now, in m/s.
     speed_mps: float = 0.0
+    # The block its head entered its head block from: which way it is
+    # going. None until it has moved a block (placed, or just out of
+    # the yard).
+    came_from: str | None = None
 
     @property
     def head(self) -> str:
@@ -152,7 +156,7 @@ class TrainTracker:
                 continue                    # too early: not this train
             self.trains[train_id] = replace(
                 train, blocks=train.blocks + (plan.next_block,),
-                reach_m=0.0)
+                reach_m=0.0, came_from=train.head)
             claimed.add(ahead)
 
         held = {(t.line, b) for t in self.trains.values() for b in t.blocks}

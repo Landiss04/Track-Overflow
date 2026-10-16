@@ -2,7 +2,8 @@
 
 The harness stands in for the Track Controller, so the CTC Office can be
 run on its own. Its inputs are only what the Track Controller sends the
-CTC: occupied blocks, switch states and crossing states. Everything the
+CTC: whether it is ready, occupied blocks, switch states and crossing
+states. Everything the
 CTC itself decides (dispatch orders, block closures, switch commands,
 the operating mode and the clock speed) is done in the CTC window, as a
 dispatcher would. The harness reaches the module only through its
@@ -54,6 +55,8 @@ Entry = dict[str, Any]
 
 #: Input rows, all from the Track Controller: (kind, default, unit).
 INPUT_DEFAULTS: dict[str, tuple[str, Any, str]] = {
+    # Off, as at startup: the CTC sends nothing until it is on.
+    "ready": ("bool", False, ""),
     "occupied_blocks": ("list", (), ""),
     "switch_states": ("list", (), ""),
     "crossing_states": ("list", (), ""),
@@ -98,6 +101,8 @@ LIST_FIELDS: dict[str, tuple[dict[str, Any], ...]] = {
 
 #: What each row is. Shown in the test UI under the row's name.
 ROW_HINTS: dict[str, str] = {
+    "ready": "On once a PLC program is loaded on every wayside. Until "
+             "then the CTC sends the Track Controller nothing.",
     "occupied_blocks": "Blocks the Track Controller reports occupied: "
                        "trains and failed blocks alike. A train leaves "
                        "the yard into Green 63 or Red 9.",
@@ -154,6 +159,7 @@ def build_inputs(lists: Mapping[str, list[Entry]]) -> CtcInputs:
             crossings=tuple(CrossingReport(e["line"], e["crossing"],
                                            e["state"])
                             for e in lists["crossing_states"]),
+            ready=lists["ready"],
         ),
     )
 
@@ -165,6 +171,14 @@ def output_rows(outputs: CtcOutputs,
     track = outputs.track_controller
     rows: list[dict[str, Any]] = []
     for suggestion in track.suggestions:
+        # Where the Track Controller sends this train's speed and
+        # authority: the block its head is in.
+        rows.append({
+            "name": f"block[{suggestion.train_id}]",
+            "kind": "string",
+            "value": block_key(suggestion.line, suggestion.block_id),
+            "unit": "",
+        })
         # The type column shows the boundary type (whole m/s); the value
         # is shown in display units, mph.
         rows.append({

@@ -21,6 +21,7 @@ from ctc.interface import (  # noqa: E402
     CtcInputs,
     SwitchReport,
     TrackControllerInputs,
+    TrackControllerOutputs,
 )
 from ctc.model import (  # noqa: E402
     InvalidInputError,
@@ -32,13 +33,15 @@ from ctc.model import (  # noqa: E402
 from ctc.schedule import parse_schedule  # noqa: E402
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc.wire import WireFormatError, inputs_from_wire  # noqa: E402
-from tests.occupancy import DT_S, at, step_at  # noqa: E402
+from tests.occupancy import DT_S, at, reports, step_at  # noqa: E402
 
 _GREEN = load_layout()["Green"]
 
 
 def _maintenance() -> StubCtcOffice:
+    """A CTC in maintenance mode, with a ready Track Controller."""
     ctc = StubCtcOffice()
+    step_at(ctc)
     ctc.set_maintenance_mode(True)
     return ctc
 
@@ -80,6 +83,71 @@ class AuthoritySafetyTest(unittest.TestCase):
         ctc.dispatch("T5", "Green", "65")
         # A train not on the track yet may go to either line.
         ctc.dispatch("T9", "Red", "7")
+
+
+class TrackControllerReadyTest(unittest.TestCase):
+    """The waysides are vital: the CTC sends the Track Controller nothing
+    until it reports ready (a PLC program on every wayside)."""
+
+    def _set_up(self) -> StubCtcOffice:
+        # T1 out of the yard on Green 63 toward 65; a closure and a
+        # switch command made in maintenance mode.
+        ctc = StubCtcOffice()
+        ctc.dispatch("T1", "Green", "65")
+        ctc.set_maintenance_mode(True)
+        ctc.set_block_closed("Green", "5", True)
+        ctc.set_switch("Green", "12", "reverse")
+        ctc.place_train("T1", "Green", "63")
+        return ctc
+
+    def test_nothing_is_sent_until_ready(self) -> None:
+        ctc = self._set_up()
+        for not_ready in (CtcInputs(), reports(at("T1", "63"),
+                                               ready=False)):
+            with self.subTest(inputs=not_ready):
+                out = ctc.step(DT_S, not_ready)
+                self.assertEqual(out.track_controller,
+                                 TrackControllerOutputs())
+                # Kept, and shown: only not sent.
+                snap = ctc.snapshot()
+                self.assertEqual(snap.closed_blocks,
+                                 (BlockRef("Green", "5"),))
+                self.assertEqual(len(snap.switch_commands), 1)
+                (limit,) = snap.authorities
+                self.assertEqual((limit.blocks, limit.reason),
+                                 (0, "not ready"))
+        # Ready: everything goes out.
+        track = ctc.step(DT_S, reports(at("T1", "63"))).track_controller
+        (suggestion,) = track.suggestions
+        self.assertEqual((suggestion.block_id, suggestion.authority_blocks),
+                         ("63", 2))
+        self.assertEqual(track.closed_blocks, (BlockRef("Green", "5"),))
+        self.assertEqual(len(track.switch_commands), 1)
+        # Ready lost (a new line loaded, say): nothing again.
+        out = ctc.step(DT_S, reports(at("T1", "63"), ready=False))
+        self.assertEqual(out.track_controller, TrackControllerOutputs())
+
+    def test_no_train_moves_while_not_ready(self) -> None:
+        # With no authority sent, 64 becoming occupied is not T1.
+        ctc = self._set_up()
+        for _ in range(30):
+            ctc.step(1.0, reports(at("T1", "63"), ready=False))
+        ctc.step(1.0, reports(at("T1", "63"), occupied=[("Green", "64")],
+                              ready=False))
+        self.assertEqual([t.blocks for t in ctc.snapshot().trains],
+                         [("63",)])
+
+    def test_ready_must_be_true_or_false(self) -> None:
+        for ready in ("true", 1, None):
+            with self.subTest(ready=ready), \
+                    self.assertRaises(InvalidInputError):
+                StubCtcOffice().step(DT_S, CtcInputs(
+                    track_controller=TrackControllerInputs(
+                        ready=ready)))  # type: ignore[arg-type]
+        # Over the wire too: a string is not a boolean.
+        with self.assertRaises(InvalidInputError):
+            StubCtcOffice().step(DT_S, inputs_from_wire(
+                {"track_controller": {"ready": "true"}}))
 
 
 class SuggestedSpeedTest(unittest.TestCase):
@@ -154,12 +222,12 @@ class ClosureTest(unittest.TestCase):
         ctc.set_block_closed("Green", "5", True)
         ctc.set_block_closed("Red", "2", True)
         ctc.set_maintenance_mode(False)
-        out = ctc.step(DT_S, CtcInputs())
+        out = step_at(ctc)
         self.assertEqual(out.track_controller.closed_blocks,
                          (BlockRef("Green", "5"), BlockRef("Red", "2")))
         ctc.set_maintenance_mode(True)
         ctc.set_block_closed("Green", "5", False)
-        out = ctc.step(DT_S, CtcInputs())
+        out = step_at(ctc)
         self.assertEqual(out.track_controller.closed_blocks,
                          (BlockRef("Red", "2"),))
 

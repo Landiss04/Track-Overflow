@@ -227,10 +227,14 @@ class TrackGraph:
                 and self._ends[(here, before)] == self._ends[(here, after)])
 
     def route(self, start: str, destination: str,
-              avoid: Collection[str] = ()) -> tuple[str, ...] | None:
+              avoid: Collection[str] = (),
+              came_from: str | None = None) -> tuple[str, ...] | None:
         """The blocks from ``start`` to ``destination``, both included,
         by the shortest path a train can run; None if there is none.
-        With ``avoid``, the path enters none of those blocks."""
+        With ``avoid``, the path enters none of those blocks. With
+        ``came_from``, the block the train entered ``start`` from, the
+        path carries on the way the train is going instead of turning
+        back."""
         if start not in self._neighbors or destination not in self._neighbors:
             return None
         if destination in avoid:
@@ -239,7 +243,7 @@ class TrackGraph:
             return (start,)
         # Search over (previous block, block) so that turning back can
         # be ruled out.
-        first: tuple[str | None, str] = (None, start)
+        first: tuple[str | None, str] = (came_from, start)
         came_from: dict[tuple[str | None, str],
                         tuple[str | None, str] | None] = {first: None}
         queue = deque([first])
@@ -267,14 +271,18 @@ class TrackGraph:
 
 
 def reversing_route(graph: TrackGraph, start: str, destination: str,
-                    avoid: Collection[str] = ()) -> tuple[str, ...] | None:
+                    avoid: Collection[str] = (),
+                    came_from: str | None = None
+                    ) -> tuple[str, ...] | None:
     """The route from ``start`` to ``destination`` if the train may
     reverse (in a block it is allowed to leave by the end it came in),
     each reversal costing ``REVERSAL_COST`` blocks; None if there is
-    none. Directions of travel still hold."""
+    none. Directions of travel still hold. ``came_from`` is the block
+    the train entered ``start`` from, if known: going back that way is
+    a reversal too."""
     if destination in avoid or start == destination:
         return None if destination in avoid else (start,)
-    first: tuple[str | None, str] = (None, start)
+    first: tuple[str | None, str] = (came_from, start)
     best = {first: 0}
     came_from: dict[tuple[str | None, str],
                     tuple[str | None, str] | None] = {first: None}
@@ -306,8 +314,12 @@ def reversing_route(graph: TrackGraph, start: str, destination: str,
     return None
 
 
-def first_reversal(graph: TrackGraph, route: tuple[str, ...]) -> str:
-    """The first block on ``route`` where the train reverses, or ""."""
+def first_reversal(graph: TrackGraph, route: tuple[str, ...],
+                   came_from: str | None = None) -> str:
+    """The first block on ``route`` where the train reverses, or "".
+    With ``came_from``, reversing in the first block counts too."""
+    if came_from is not None:
+        route = (came_from, *route)
     for before, here, after in zip(route, route[1:], route[2:]):
         if graph.turns_back(before, here, after):
             return here

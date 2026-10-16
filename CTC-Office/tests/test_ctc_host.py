@@ -85,7 +85,8 @@ class TickTest(unittest.TestCase):
         host, module, clock = _host()
         inputs = CtcInputs(
             track_controller=TrackControllerInputs(
-                occupancy=(BlockOccupancy("Green", "3", True),)),
+                occupancy=(BlockOccupancy("Green", "3", True),),
+                ready=True),
             track_model=_green(4))
         host._receive_inputs(inputs)
         # Paused: the update is staged. The window keeps showing the last
@@ -109,6 +110,31 @@ class TickTest(unittest.TestCase):
 
 class PanelDataTest(unittest.TestCase):
     """What the panels read, and what their actions do."""
+
+    def test_not_ready_is_shown_and_closures_still_listed(self) -> None:
+        # Nothing is sent to a Track Controller that is not ready, but
+        # the dispatcher still sees their own closures and commands.
+        host, module, clock = _host()
+        host.dispatchTrain("T1", "Green", "65", "")
+        module.set_maintenance_mode(True)
+        host.closeBlock("Green", "5")
+        host.setSwitch("Green", "12", 1)
+        _report(host, module, at("T1", "63"), ready=False)
+        clock.clock.tick()
+        self.assertIn("Track Controller not ready", " ".join(host.notices))
+        self.assertEqual(host.trainDetail("T1")["authorityLimit"],
+                         "Track Controller not ready")
+        self.assertEqual(host.trainDetail("T1")["suggestedSpeed"], "\u2014")
+        self.assertEqual(host.blockStates, {"Green:5": "closed"})
+        self.assertEqual(host.switchDetail("Green", "12")["commanded"],
+                         "reverse")
+        self.assertEqual(module.snapshot().outputs.track_controller
+                         .closed_blocks, ())
+        # Ready: the notice goes and the train gets its authority.
+        _report(host, module, at("T1", "63"))
+        clock.clock.tick()
+        self.assertNotIn("not ready", " ".join(host.notices))
+        self.assertEqual(host.trainDetail("T1")["authorityBlocks"], "2")
 
     def test_block_states_never_show_a_failure(self) -> None:
         host, module, clock = _host()

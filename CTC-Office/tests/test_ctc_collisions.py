@@ -82,9 +82,12 @@ def _first_problem(seed: int, line: str) -> str | None:
             for s in switch_ids:
                 if s not in taken and rng.random() < 0.5:
                     switches[s] = rng.choice(("normal", "reverse"))
-        # A failure where no train is or may go; it clears later.
+        # A failure where no train is or may go, on a block that was
+        # clear at the last report too (one that fails the moment a
+        # train's tail leaves it looks like the tail staying, not a new
+        # occupancy); it clears later.
         if step % 10 == 5 and rng.random() < 0.5:
-            spare = [b for b in blocks if b not in taken]
+            spare = [b for b in blocks if b not in taken | reported]
             if spare:
                 failures[rng.choice(spare)] = rng.randint(5, 30)
         # The yard lets the next train out onto an exit block that was
