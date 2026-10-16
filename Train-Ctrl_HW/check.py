@@ -135,9 +135,20 @@ def run_check(
     expect(not backend.core.state.service_request,
            "service brake answered a signed-out operator")
 
+    # Nothing in the operator bar may move when the gains are set:
+    # the badge's label changes, its slot and the toggles do not.
+    def bar_geometry() -> list:
+        found = []
+        for name in ("modeField", "gainsSlot"):
+            item = window.findChild(QObject, name)
+            found.append(None if item is None else
+                         (item.property("x"), item.property("width")))
+        return found
+
     # Engineer commissions the gains once; the role is then spent.
     backend.select_operator(1)
     _settle(app, 200)
+    bar_before = bar_geometry()
     expect(backend.snapshot["operator"] == "engineer",
            "engineer sign-in failed")
     if shots:
@@ -151,6 +162,10 @@ def run_check(
            "console not handed over")
     expect(backend.snapshot["gains_locked"],
            "the gains did not lock after commissioning")
+    bar_after = bar_geometry()
+    expect(None not in bar_before and bar_before == bar_after,
+           f"the operator bar moved when the gains were set: "
+           f"{bar_before} -> {bar_after}")
     backend.select_operator(1)
     expect(backend.snapshot["operator"] == "driver",
            "engineer role re-entered after the gains were set")
