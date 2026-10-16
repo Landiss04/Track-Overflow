@@ -98,7 +98,9 @@ stopwatch (it failed 4 of 4 runs on Windows before).
   `__pycache__/check.cpython-314.pyc` was untracked.
 - Venv at `Train-Ctrl_HW/.venv` (PySide6 6.11.2, PyInstaller 6.22.2), per truth
   `conventions/toolchain.md`. Not committed.
-- `OPEN_ISSUES.md` and this file added.
+- `OPEN_ISSUES.md` and this file added; `REQUIREMENTS.md` and
+  `HARNESS_INTEGRATION.md` (how the central harness drives the fleet)
+  added 2026-10-16.
 - Truth proposals in `truth/_inbox/Train-Ctrl_HW/`: one left, the 72 px
   hero size token (which also carries the service-brake colour token). The
   three authority proposals were settled by truth D013 and withdrawn with
