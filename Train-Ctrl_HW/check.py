@@ -29,6 +29,8 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QGuiApplication
 
+import train_ctrl as mod
+
 
 # ========================================================== contract
 def check_snapshot_contract(backend: Any, ui_dir: Path) -> bool:
@@ -97,7 +99,6 @@ def run_check(
     Exits non-zero if QML logged a warning or the console let an
     operator do something the rules forbid.
     """
-    mod = sys.modules[type(backend).__module__]
     problems: list[str] = []
 
     def expect(condition: bool, what: str) -> None:
@@ -383,20 +384,20 @@ def run_check(
     backend.spawn_train(301, "RED LINE", "f")
     second = backend.selected
     expect(second == "R-301", "spawning did not add the train asked for")
-    expect(backend.cores[second].state.authority_target == "F",
+    expect(backend.fleet.get(second).state.authority_target == "F",
            "a block typed in lower case did not come back capitalised")
     expect(backend.snapshot["train_count"] == 2, "roster did not grow")
     backend.spawn_train(301, "RED LINE", "RED F")
     expect(backend.snapshot["train_count"] == 2,
            "spawning the same id twice added a second copy")
     expect(not backend.core.armed, "a new train came up commissioned")
-    expect(backend.cores[first].armed, "spawning disarmed the first train")
+    expect(backend.fleet.get(first).armed, "spawning disarmed the first train")
     # A new train is stopped, so this engages and releases cleanly,
     # and the train beside it is not touched either way.
     backend.toggle_emergency_brake()
     expect(backend.core.state.emergency_brake,
            "the new train has no e-brake")
-    expect(not backend.cores[first].state.emergency_brake,
+    expect(not backend.fleet.get(first).state.emergency_brake,
            "one train's emergency brake reached another train")
     backend.toggle_emergency_brake()
     expect(not backend.core.state.emergency_brake,
@@ -650,7 +651,7 @@ def run_check(
     # selection on; removing it twice changes nothing.
     backend.select_train(second)
     backend.remove_train(second)
-    expect(second not in backend.cores and second not in backend.order,
+    expect(second not in backend.fleet,
            "removing a train left it in the simulation")
     expect(backend.selected == first,
            "the selection did not move to the remaining train")
