@@ -1,7 +1,7 @@
 # Train-Ctrl_HW — open issues for review
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
-picked up later. Last reviewed 2026-10-07 (code review of `Train-Ctrl_HW`).
+picked up later. Last reviewed 2026-10-15 (requirements check against the SRS).
 
 ## From the 2026-10-07 code review
 
@@ -10,12 +10,6 @@ picked up later. Last reviewed 2026-10-07 (code review of `Train-Ctrl_HW`).
    the driver sets it; `step()` and `enforce_safety()` never re-cap it. Manual,
    limit 43 mph, target 43 mph, then the limit drops to 25 mph: the train keeps
    holding 43 mph until the driver touches the dial.
-
-2. **"Stop in N blocks" ignores a signal-pickup failure.**
-   `main.py` — the snapshot reports the raw `authority_blocks`, while the
-   controller acts on `ControllerCore.authority_blocks`, which is 0 during a
-   pickup failure. The train is braked to a stand on no authority while the hero
-   readout and the numbers drawer still say "Stop in 4 blocks", uncoloured.
 
 3. **Half of the speed dial's dead zone requests full speed.**
    `ui_parts/components/SpeedDial.qml` — `valueFor` maps only the left half of the
@@ -39,7 +33,9 @@ picked up later. Last reviewed 2026-10-07 (code review of `Train-Ctrl_HW`).
 
 Items 5–8 from the same review are fixed (bench sends only edited rows;
 inputs validated before any is applied; door and light tiles re-send; roster
-signals only on change). Item 9 no longer applies: the signal head is back to
+signals only on change). Item 2 is fixed (2026-10-15): the console's commanded
+speed and "Stop in N blocks" now show what the controller reads, so a lost
+Track Signal shows as 0. Item 9 no longer applies: the signal head is back to
 Ivan's sizing and the failure banners that squeezed it were removed
 (2026-10-07).
 
@@ -71,21 +67,61 @@ Ivan's sizing and the failure banners that squeezed it were removed
     counts (delete the countdown from `_plant()` then), or when the block
     lengths are known.
 
+## Added 2026-10-15
+
+12. **Failure detection rules are this team's own design, for review.**
+    Truth's Train Model no longer reports its failures (`modules/train-model.md`;
+    `signals/failure-status.md` withdrawn 2026-10-05), so `detect_failures()`
+    infers them from what comes back (REQ-FUNC-038):
+
+    | Failure | Detected when | Constant |
+    |---|---|---|
+    | Brake | service brake commanded, e-brake off, Brake State never shows the service brake applied | `BRAKE_DETECT_S` 0.5 s |
+    | Engine | commanded power should pull ≥ 0.1 m/s², no brake on, speed has not risen 0.05 m/s | `ENGINE_DETECT_S` 2 s |
+    | Signal pickup | commanded speed and authority fall to 0 in one update, from ≥ 2 blocks | `PICKUP_DETECT_MIN_BLOCKS` 2 |
+
+    - A brake failure is only seen when the service brake is asked for.
+    - Pickup assumes a lost signal reads as zeros. Truth leaves zeros or stale
+      values open; stale values would go undetected.
+    - A Track Signal update cutting authority from ≥ 2 straight to 0 with speed 0
+      would read as a pickup failure.
+    - Engine detection could false-trip on a steep up-grade once the real Train
+      Model, with grade, is connected.
+    - The toy plant's Brake State during a failed service brake (reads false) is
+      the plant's own stand-in, not taken from truth `brake-state.md`.
+
+13. **Requirements not met by this module** (SRS `documents/srs-filled.md`,
+    checked 2026-10-15; documented only, by decision):
+    - **REQ-FUNC-036 / D007 — stop at each station, 45 s dwell.** Not
+      implemented. `Train-Ctrl_SW` has one (`_update_station_stop`), built on
+      route and block tracking that this module dropped; a port would key off
+      the beacon (station, side) and authority instead. Truth does not say
+      which module owns the dwell.
+    - **REQ-NFR-008 / REQ-INTF-015 — CSV event log.** None here, in
+      `Train-Ctrl_SW` or on `development`.
+    - **REQ-FUNC-003 / REQ-INTF-013 / D017 — pause and one shared clock.**
+      D017 puts the clock (`utils/system_clock.py`, on `development` only) in
+      the central harness, paused and sped up by the CTC. This module runs its
+      own timers: its clock starts at 00:00:00, not D017's 05:00:00, and
+      steps at 20 Hz, not the 0.1 s default tick. The 1× / 10× control is the
+      bench's stand-in.
+    - **REQ-INTF-010 — HW and SW expose equivalent interfaces.** Not checked
+      against `Train-Ctrl_SW`, which still has route tracking and no failure
+      detection.
+
 ## Carried over
 
 - **Rolling resistance outside a brake failure** is open. It (C_rr 0.002)
-  applies under a brake failure only, as a trial. The slow-down overshoot it
-  once fixed is now fixed by the 0.05 m/s service band instead (35 → 30 mph
-  settles at 30.02 mph).
+  applies under an injected brake failure only, as a trial. The slow-down
+  overshoot it once fixed is now fixed by the 0.05 m/s service band instead
+  (35 → 30 mph settles at 30.09 mph at 480 kW).
 - **Toy plant parameters differ from truth's Train Model**
-  (`truth/modules/train-model.md`): 120 kW vs 480 kW, 51,433 kg vs about
-  52,312 kg reference mass, Euler vs trapezoidal integration, rolling
-  resistance only under a brake failure (C_rr 0.002).
+  (`truth/modules/train-model.md`): 51,433 kg vs about 52,312 kg reference
+  mass, Euler vs trapezoidal integration, rolling resistance only under a
+  brake failure (C_rr 0.002). Power now matches (480 kW, provisional in truth).
 - **The controller simulates the train itself** (truth D009 gives physics to the
   Train Model). `ControllerCore._plant()` is the stand-in until the Train Model
   is connected.
-- **Station dwell (truth D007, 45 s) is not implemented**; truth does not say
-  which module owns it.
 - **Signal aspect has no truth entry** (truth's Track Signal carries only
   commanded speed and authority); a proposal exists on `Train-Ctrl_SW` only.
 - **Authority as a block count** is pending the conflict proposals in

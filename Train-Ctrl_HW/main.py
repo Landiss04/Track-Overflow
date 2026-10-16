@@ -76,15 +76,11 @@ _TEST_QML = _UI_DIR / "TestWindow.qml"
 
 CONTROL_HZ = 20
 UI_HZ = 10
-# The Flexity 2 data sheet's power figure, taken as the whole car's.
-#
-# Worth knowing what it costs. The same sheet quotes 0.5 m/s^2 from 0
-# to 70 km/h, and 0.5 m/s^2 at 70 km/h on a 2/3-load car needs
-# F x v = 500 kW. At 120 kW the car pulls its rated acceleration
-# only to about 10 mph and tails off from there, taking roughly a
-# minute and a half to reach 70 km/h. The sheet's two figures cannot
-# both hold; this is the one the team picked.
-MAX_POWER_W = 120_000.0
+# Truth modules/train-model.md: 4 x 120 kW, the data sheet's 120 kW
+# per motor rather than for the whole car (provisional, pending the
+# instructor). The car's 0.5 m/s^2 force cap now binds up to about
+# 67 km/h, nearly the whole 70 km/h range, as the sheet quotes it.
+MAX_POWER_W = 480_000.0
 ANNOUNCE_LOCKOUT_MS = 5000
 GAINS_HANDOVER_MS = 1500
 
@@ -162,6 +158,25 @@ STANDSTILL_MPS = 0.1
 # Below this, with nothing asked of it, the toy plant settles to an
 # exact stand instead of creeping.
 SETTLE_MPS = 0.12
+# Failure detection. Truth's Train Model no longer reports its
+# failures (modules/train-model.md), so the controller infers them
+# from what the Train Model sends back. The rules and thresholds are
+# this controller's own design; see detect_failures() and
+# OPEN_ISSUES.md.
+#
+# Brake: the service brake was commanded but Brake State never
+# showed it applied for this long.
+BRAKE_DETECT_S = 0.5
+# Engine: power that should have pulled at least this acceleration
+# left the speed no higher for this long, with no brake on.
+ENGINE_DETECT_ACCEL_MPS2 = 0.1
+ENGINE_DETECT_S = 2.0
+# How much the speed has to rise to count as the engine answering.
+ENGINE_RISE_MPS = 0.05
+# Signal pickup: commanded speed and authority fall to zero in the
+# same update from at least this much authority. A normal countdown
+# only ever goes from 1 to 0.
+PICKUP_DETECT_MIN_BLOCKS = 2
 # Stand-in block length for the toy plant's authority countdown. The
 # real lengths vary block by block and are not known here yet; see
 # OPEN_ISSUES.md.
@@ -186,8 +201,8 @@ ASPECT_TEXT = {
     "SUPER GREEN": "All clear ahead.",
 }
 
-#: Failure Status, in the bool[3] order truth signals/failure-status.md
-#: gives: engine, signal pickup, brake.
+#: The Train Model's three failures (truth modules/train-model.md),
+#: in the order the bench lists them: engine, signal pickup, brake.
 FAILURES = ("engine", "signal_pickup", "brake")
 FAILURE_TEXT = {
     "engine": "engine failure",
@@ -336,9 +351,13 @@ class State:
     service_request: bool = False
     emergency_brake: bool = False
 
-    # Failure Status from the Train Model, one flag per subsystem, in
-    # the FAILURES order.
+    # Failures this controller has detected, one flag per subsystem,
+    # latched until the test bench clears them.
     failures: dict = field(
+        default_factory=lambda: {name: False for name in FAILURES})
+    # Failures injected into the toy plant from the bench (Murphy).
+    # The controller never reads these; it has to detect them.
+    injected: dict = field(
         default_factory=lambda: {name: False for name in FAILURES})
 
     # State reported back by the Train Model, as opposed to what this
@@ -411,23 +430,51 @@ class ControllerCore:
         # bench published alone in between.
         self._acted_doors: tuple[bool, bool] | None = (False, False)
         self._acted_lights: tuple[bool, bool] | None = (True, True)
+        self._clear_detection()
+
+    def _clear_detection(self) -> None:
+        # What detect_failures() carries from one tick to the next.
+        self._brake_unanswered_s = 0.0
+        self._engine_stalled_s = 0.0
+        self._engine_ref_mps = 0.0
+        self._last_signal: tuple[float, int] | None = None
 
     @property
     def failed(self) -> list[str]:
-        """The reported failures that are active, in FAILURES order."""
+        """The detected failures still latched, in FAILURES order."""
         return [name for name in FAILURES if self.state.failures[name]]
+
+    @property
+    def received_signal(self) -> tuple[float, int]:
+        """The Track Signal as it reaches the controller.
+
+        Commanded speed (m/s) and authority (blocks). The toy plant
+        stands in for the Train Model passing it through: with signal
+        pickup injected it passes zeros (truth leaves zeros or stale
+        values open; zeros is this plant's choice).
+        """
+        s = self.state
+        if s.injected["signal_pickup"]:
+            return 0.0, 0
+        return s.commanded_mps, s.authority_blocks
+
+    @property
+    def commanded_mps(self) -> float:
+        """The commanded speed the controller may act on."""
+        if self.state.failures["signal_pickup"]:
+            return 0.0
+        return self.received_signal[0]
 
     @property
     def authority_blocks(self) -> int:
         """The authority the controller may act on.
 
-        With signal pickup failed the Track Signal cannot be trusted,
-        so it fails safe to none (truth failure-status.md).
+        With a signal pickup failure detected the Track Signal cannot
+        be trusted, so it fails safe to none.
         """
-        s = self.state
-        if s.failures["signal_pickup"]:
+        if self.state.failures["signal_pickup"]:
             return 0
-        return s.authority_blocks
+        return self.received_signal[1]
 
     def step(self) -> None:
         """Run one control period.
@@ -438,12 +485,13 @@ class ControllerCore:
         the train and still has to report what the brakes are doing.
         """
         s = self.state
+        self.detect_failures()
         if self.armed:
             if not s.manual:
                 # In Automatic the CTC's commanded speed already
                 # agrees with the signal ahead, so the only things
                 # left to respect are the line limit and the car.
-                s.target_mps = min(s.commanded_mps, s.speed_limit_mps)
+                s.target_mps = min(self.commanded_mps, s.speed_limit_mps)
 
             error = s.target_mps - s.actual_mps
             # A target of zero means stop, so the brake holds to a
@@ -476,25 +524,94 @@ class ControllerCore:
         self.enforce_safety()
         self._plant()
 
+    def detect_failures(self) -> None:
+        """Infer failures from what the Train Model sends back.
+
+        REQ-FUNC-038. The Train Model does not report its failures
+        (truth modules/train-model.md), so each one is read off the
+        signals it does return, against what this controller last
+        commanded:
+
+            brake          the service brake was commanded, the
+                           emergency brake was not, and Brake State
+                           has not shown the service brake applied
+                           for BRAKE_DETECT_S
+            engine         the power commanded should have pulled at
+                           least ENGINE_DETECT_ACCEL_MPS2, no brake is
+                           on, and the actual speed has not risen for
+                           ENGINE_DETECT_S
+            signal pickup  commanded speed and authority both fell to
+                           zero in one update, from at least
+                           PICKUP_DETECT_MIN_BLOCKS of authority
+
+        A detected failure latches until it is cleared on the test
+        bench (clear_failure).
+        """
+        s = self.state
+
+        if (s.service_brake and not s.emergency_brake
+                and not s.fb_service_brake):
+            self._brake_unanswered_s += self.dt
+            if self._brake_unanswered_s >= BRAKE_DETECT_S:
+                s.failures["brake"] = True
+        else:
+            self._brake_unanswered_s = 0.0
+
+        v = s.actual_mps
+        force = min(MAX_FORCE_N, s.power_w / max(abs(v), V_FLOOR_MPS))
+        pulling = (force / MASS_KG >= ENGINE_DETECT_ACCEL_MPS2
+                   and not s.service_brake and not s.emergency_brake)
+        if not pulling or v > self._engine_ref_mps + ENGINE_RISE_MPS:
+            # Not asked to pull, or the speed is answering: start
+            # watching again from here.
+            self._engine_stalled_s = 0.0
+            self._engine_ref_mps = v
+        else:
+            self._engine_stalled_s += self.dt
+            if self._engine_stalled_s >= ENGINE_DETECT_S:
+                s.failures["engine"] = True
+
+        signal = self.received_signal
+        last = self._last_signal
+        if (last is not None and last[0] > 0.0
+                and last[1] >= PICKUP_DETECT_MIN_BLOCKS
+                and signal == (0.0, 0)):
+            s.failures["signal_pickup"] = True
+        self._last_signal = signal
+
+    def clear_failure(self, name: str) -> None:
+        """Let go of one detected failure, once it has been resolved.
+
+        The test bench decides that, by clearing the failure it
+        injected. The emergency brake stays on; the driver releases
+        it at a stand once no failure is left.
+        """
+        self.state.failures[name] = False
+        if name == "brake":
+            self._brake_unanswered_s = 0.0
+        elif name == "engine":
+            self._engine_stalled_s = 0.0
+            self._engine_ref_mps = self.state.actual_mps
+        else:
+            self._last_signal = None
+
     def respond_to_failures(self) -> None:
-        """Stop the train while any failure is reported.
+        """Stop the train while any detected failure is latched.
 
         REQ-FUNC-037.2: the controller stops the train when a failure
-        is detected. Every failure removes the target and the power;
-        how the train then stops depends on what failed:
+        is detected. Every failure removes the target and the power,
+        and applies and latches the emergency brake:
 
-            engine         the emergency brake is applied and latched;
-                           no traction is left to drive with
-            signal pickup  the emergency brake is applied and latched;
-                           commanded speed and authority cannot be
+            engine         no traction is left to drive with
+            signal pickup  commanded speed and authority cannot be
                            read from the track circuit, so they fail
                            safe to zero (the signal lights still read)
-            brake          neither brake answers, so no brake is
-                           commanded; with power cut, rolling
-                           resistance coasts the train down
+            brake          only the service brake has failed (truth
+                           modules/train-model.md); the emergency
+                           brake still works, so it stops the train
 
         The emergency brake cannot be released until the failure
-        clears (release_emergency refuses while any is active).
+        clears (release_emergency refuses while any is latched).
         """
         if not self.failed:
             return
@@ -502,10 +619,12 @@ class ControllerCore:
         s.target_mps = 0.0
         s.power_w = 0.0
         self.integral = 0.0
-        if ((s.failures["engine"] or s.failures["signal_pickup"])
-                and not s.emergency_brake):
+        if not s.emergency_brake:
             self.engage_emergency()
         s.service_brake = False
+        if s.failures["brake"]:
+            # The driver's request was for the brake that failed.
+            s.service_request = False
 
     def enforce_safety(self) -> None:
         """Override the PI law with the safety rules.
@@ -526,15 +645,14 @@ class ControllerCore:
                 s.service_brake = True
 
         # The emergency brake comes from the driver, from a Train
-        # Model report of a passenger pull, or from an engine or
-        # signal pickup failure (respond_to_failures).
+        # Model report of a passenger pull, or from a detected
+        # failure (respond_to_failures).
         if s.emergency_brake:
             s.power_w = 0.0
             self.integral = 0.0
 
-        # A brake failure disables both brakes (truth
-        # failure-status.md), so nothing here or upstream may command
-        # the service brake while it lasts, in either mode.
+        # A failed service brake is not commanded, whatever asked for
+        # it, in either mode; the emergency brake stands in for it.
         if s.failures["brake"]:
             s.service_brake = False
 
@@ -543,11 +661,8 @@ class ControllerCore:
 
         Guide section 7 calls the emergency brake immediate, so the
         safety path runs on the press rather than up to one control
-        period later. A brake failure disables it, so then nothing
-        engages: not the driver, a passenger pull, or another failure.
+        period later.
         """
-        if self.state.failures["brake"]:
-            return
         self.state.emergency_brake = True
         self.enforce_safety()
 
@@ -625,26 +740,28 @@ class ControllerCore:
         # diagram and nothing else. A train with no power applied
         # coasts forever, so the only ways down are the two brakes,
         # and the speed law holds its target from below rather than
-        # settling onto it from both sides. The failures act here the
-        # way truth failure-status.md says the Train Model applies
-        # them. Under a brake failure, and only then for now, rolling
-        # resistance (truth modules/train-model.md) is what slows the
-        # train, so it coasts down to a stand instead of for ever.
+        # settling onto it from both sides. The injected failures act
+        # here the way truth modules/train-model.md says the Train
+        # Model applies them: an engine failure zeroes traction, and a
+        # brake failure blocks the service brake only; the emergency
+        # brake still works. Under a brake failure, and only then for
+        # now, rolling resistance (same source) also acts on the
+        # train. Signal pickup is applied in received_signal.
         s = self.state
-        brakes_work = not s.failures["brake"]
-        power = 0.0 if s.failures["engine"] else s.power_w
+        service_works = not s.injected["brake"]
+        power = 0.0 if s.injected["engine"] else s.power_w
         v = s.actual_mps
         force = min(MAX_FORCE_N, power / max(abs(v), V_FLOOR_MPS))
         a = force / MASS_KG
         decel = 0.0
-        if brakes_work and s.emergency_brake:
+        if s.emergency_brake:
             decel = EBRAKE_DECEL_MPS2
-        elif brakes_work and s.service_brake:
+        elif service_works and s.service_brake:
             decel = SERVICE_DECEL_MPS2
         if decel:
             # A brake opposes the motion and never reverses it.
             a = -math.copysign(decel, v) if v else 0.0
-        elif not brakes_work:
+        elif not service_works:
             # Resistance opposes the motion, holds the train at rest,
             # and never reverses it.
             a = (a - math.copysign(ROLLING_DECEL_MPS2, v) if v
@@ -666,11 +783,12 @@ class ControllerCore:
             s.block_progress_m -= BLOCK_LENGTH_M
             s.authority_blocks = max(0, s.authority_blocks - 1)
 
-        # Brake State reports what is actually engaged, so a failed
-        # brake reads false whatever was commanded (truth
-        # brake-state.md).
-        s.fb_emergency_brake = s.emergency_brake and brakes_work
-        s.fb_service_brake = s.service_brake and brakes_work
+        # Brake State, as this plant reports it: what is engaged, so
+        # a failed service brake reads false whatever was commanded.
+        # That is the plant's own stand-in; what the real Train Model
+        # reports is for it to settle.
+        s.fb_emergency_brake = s.emergency_brake
+        s.fb_service_brake = s.service_brake and service_works
 
         # Door and light commands are answered on their edge. A door
         # only opens at a stand (the door interlock, truth
@@ -886,7 +1004,12 @@ class ConsoleBackend(QObject):
             # operator sees, so a reader can tell which side of the
             # line a value is on at a glance.
             "actual_mph": s.actual_mps * MPS_TO_MPH,
-            "commanded_mph": s.commanded_mps * MPS_TO_MPH,
+            # What the controller reads and acts on, so a lost Track
+            # Signal shows as the zero it is driving to.
+            "commanded_mph": self.core.commanded_mps * MPS_TO_MPH,
+            # What the Track Model sent, before the pickup: the bench's
+            # rows follow these.
+            "track_commanded_mph": s.commanded_mps * MPS_TO_MPH,
             "target_mph": s.target_mps * MPS_TO_MPH,
             "limit_mph": s.speed_limit_mps * MPS_TO_MPH,
             # Shown in SI by the team's choice for this module, a
@@ -903,10 +1026,15 @@ class ConsoleBackend(QObject):
             "service_request": s.service_request,
             "emergency_brake": s.emergency_brake,
             "brake_note": self.brake_note,
+            # Detected and latched by this controller.
             "faulted": any(s.failures.values()),
             "fault_engine": s.failures["engine"],
             "fault_brake": s.failures["brake"],
             "fault_pickup": s.failures["signal_pickup"],
+            # Injected into the toy plant from the bench (Murphy).
+            "inject_engine": s.injected["engine"],
+            "inject_brake": s.injected["brake"],
+            "inject_pickup": s.injected["signal_pickup"],
             "fb_doors_left": s.fb_doors_left,
             "fb_doors_right": s.fb_doors_right,
             "fb_interior_lights": s.fb_interior_lights,
@@ -921,7 +1049,8 @@ class ConsoleBackend(QObject):
             "announcement": s.announcement,
 
             # Identifiers and counts, so they are shown as they are.
-            "authority_blocks": s.authority_blocks,
+            "authority_blocks": self.core.authority_blocks,
+            "track_authority_blocks": s.authority_blocks,
             "authority_target": s.authority_target,
 
             "cabin_temp_f": c_to_f(s.cabin_temp_c),
@@ -1056,14 +1185,12 @@ class ConsoleBackend(QObject):
 
         Engagement is immediate and unconfirmed, the one exception the
         style guide grants (section 7). Release is refused unless the
-        train is stopped and no failure is reported.
+        train is stopped and no failure is latched.
         """
         if not self.has_train or not self.signed_in:
             return
         s = self.core.state
-        if not s.emergency_brake and s.failures["brake"]:
-            self.brake_note = "Brakes unavailable: brake failure."
-        elif not s.emergency_brake:
+        if not s.emergency_brake:
             self.core.engage_emergency()
             self.brake_note = (
                 "Emergency brake engaged. "
@@ -1082,7 +1209,8 @@ class ConsoleBackend(QObject):
     def toggle_service_brake(self) -> None:
         """Apply or release the driver's service brake request.
 
-        Refused during a brake failure, which disables the brake.
+        Refused while a brake failure is latched: the service brake
+        is the one that failed.
         """
         if not self.can_drive or self.core.state.failures["brake"]:
             return
@@ -1159,9 +1287,11 @@ class ConsoleBackend(QObject):
         speed_limit and actual_speed (m/s, actual signed),
         cabin_temperature (C), authority_blocks, signal_light_ahead,
         beacon_station / beacon_side / beacon_underground,
-        failure_status bool[3] (engine, pickup, brake), brake_state
-        bool[2] (emergency, service), door_state bool[2] (left,
-        right) and light_state bool[2] (interior, exterior).
+        brake_state bool[2] (emergency, service), door_state bool[2]
+        (left, right) and light_state bool[2] (interior, exterior).
+        There is no failure status: the Train Model no longer sends
+        one (truth modules/train-model.md); detect_failures() infers
+        failures instead.
 
         Every value is read before any is applied, so a set with one
         bad value changes nothing. Raises InvalidInputError for a
@@ -1171,12 +1301,9 @@ class ConsoleBackend(QObject):
             return
         staged = self._read_inputs(values)
         s = self.core.state
-        failures = staged.pop("failure_status", None)
         brakes = staged.pop("brake_state", None)
         for attr, value in staged.items():
             setattr(s, attr, value)
-        if failures is not None:
-            s.failures.update(zip(FAILURES, failures))
         if brakes is not None:
             # A reported emergency brake that this controller did not
             # command is a passenger pull: latch it and cut power. A
@@ -1214,9 +1341,6 @@ class ConsoleBackend(QObject):
                 values["beacon_underground"])
         if values.get("signal_light_ahead") in ASPECTS:
             staged["next_signal"] = values["signal_light_ahead"]
-        if "failure_status" in values:
-            staged["failure_status"] = _read_flags(
-                values, "failure_status", len(FAILURES))
         if "brake_state" in values:
             staged["brake_state"] = _read_flags(values, "brake_state", 2)
         if "door_state" in values:
@@ -1255,10 +1379,11 @@ class ConsoleBackend(QObject):
                     "beacon_underground"):
             if key in values:
                 si[key] = values[key]
+        # The failure rows are Murphy injecting into the toy plant, not
+        # a Train Model signal: the controller has to detect them.
+        injected = {name: bool(values[f"failure_{name}"])
+                    for name in FAILURES if f"failure_{name}" in values}
         groups = (
-            ("failure_status",
-             ("failure_engine", "failure_signal_pickup", "failure_brake"),
-             [s.failures[name] for name in FAILURES]),
             ("brake_state",
              ("brake_state_emergency",),
              [s.fb_emergency_brake]),
@@ -1283,6 +1408,12 @@ class ConsoleBackend(QObject):
             kp = _read_number(values, "kp") if "kp" in values else s.kp
             ki = _read_number(values, "ki") if "ki" in values else s.ki
         self.apply_inputs(si)
+        s.injected.update(injected)
+        # Clearing a failure on the bench is what resolves it; setting
+        # one only injects it, and the controller has to find it.
+        for name, on in injected.items():
+            if not on:
+                self.core.clear_failure(name)
         if commission:
             self.commission_gains(kp, ki)
 

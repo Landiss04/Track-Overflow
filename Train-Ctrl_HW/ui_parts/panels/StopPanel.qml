@@ -16,7 +16,7 @@ Panel {
         // What the brakes are actually doing, as the Train Model
         // reports it (Brake State), not what was asked of them.
         StatusBadge {
-            label: root.s.fault_brake ? qsTr("Brakes failed")
+            label: root.s.fault_brake ? qsTr("Brake failure")
                 : root.s.fb_emergency_brake ? qsTr("Emergency")
                 : root.s.fb_service_brake ? qsTr("Braking")
                 : qsTr("Running")
@@ -34,8 +34,6 @@ Panel {
         Layout.fillHeight: true
         Layout.preferredHeight: 170
         tone: "emergency"
-        // A brake failure disables both brakes, in either mode.
-        enabled: !root.s.fault_brake
         applied: root.s.emergency_brake
         text: root.s.emergency_brake ? qsTr("Release emergency brake")
                                      : qsTr("Emergency brake")
@@ -54,6 +52,8 @@ Panel {
         Layout.fillHeight: true
         Layout.preferredHeight: 100
         tone: "service"
+        // A brake failure is the service brake failing; the emergency
+        // brake above stands in for it.
         enabled: root.s.can_drive && !root.s.fault_brake
         applied: root.s.service_request
         text: root.s.service_request ? qsTr("Release service brake")

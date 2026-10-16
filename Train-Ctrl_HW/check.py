@@ -459,79 +459,101 @@ def run_check(
            "authority not taken as a block count")
     expect(backend.snapshot["next_signal"] == "RED", "aspect not set")
 
-    # Each reported failure stops the train (REQ-FUNC-037.2), refuses
-    # driving and brake release while it is up, and lets go once it
-    # clears. A brake failure cannot stop the train: power is cut and
-    # it coasts. Ten times real time keeps the stops short.
+    # The Train Model does not report its failures, so the bench
+    # injects them into the plant and the controller has to detect
+    # each one from what comes back (REQ-FUNC-038). A detected failure
+    # applies and latches the emergency brake and stops the train
+    # (REQ-FUNC-037.2), and refuses driving and brake release until
+    # the bench clears it. Ten times real time keeps the stops short.
     backend.set_sim_rate(mod.SIM_RATES.index(10))
-    for row, name in (("failure_engine", "engine"),
-                      ("failure_signal_pickup", "signal pickup"),
-                      ("failure_brake", "brake")):
+    state = backend.core.state
+
+    def drive_off(why: str) -> None:
         backend.set_target_mph(30)
-        moving = _until(
-            app, lambda: backend.core.state.actual_mps > 5.0, 20)
-        expect(moving, f"the train did not move before the {name} test")
+        expect(_until(app, lambda: state.actual_mps > 5.0, 20),
+               f"the train did not move {why}")
+
+    # A Failure Status sent the old way is not an input any more.
+    backend.apply_inputs({"failure_status": [True, True, True]})
+    expect(not backend.core.failed,
+           "a failure status from the Train Model was still taken")
+
+    for row, key in (("failure_engine", "engine"),
+                     ("failure_signal_pickup", "signal_pickup"),
+                     ("failure_brake", "brake")):
+        name = mod.FAILURE_TEXT[key]
+        backend.apply_bench_inputs({"authority_blocks": 20,
+                                    "commanded_speed": 30})
+        drive_off(f"before the {name} test")
         backend.apply_bench_inputs({row: True})
-        _settle(app, 100)
-        expect(backend.core.state.power_w == 0.0,
-               f"power stayed on after a {name} failure")
-        if name == "brake":
-            # Neither brake answers: no brake is commanded, both
-            # report off, and rolling resistance alone slows it.
-            speed = backend.core.state.actual_mps
+        expect(not state.failures[key],
+               f"the {name} was known before it could be seen")
+        if key == "brake":
+            # Only the service brake fails, and it is only seen
+            # failing when it is asked for: until then the train runs
+            # on, with nothing detected and no brake applied.
             _settle(app, 300)
-            expect(0.0 < backend.core.state.actual_mps < speed
-                   and abs(backend.core.state.accel_mps2
-                           + mod.ROLLING_DECEL_MPS2) < 1e-6,
-                   "a brake failure did not coast down on rolling "
-                   "resistance")
-            expect(not backend.core.state.fb_service_brake
-                   and not backend.core.state.fb_emergency_brake,
-                   "a failed brake reported itself engaged")
-            expect(not backend.core.state.emergency_brake,
-                   "a brake failure applied the emergency brake")
-            if shots:
-                window.grabWindow().save(str(shots / "06-failure.png"))
-                bench.grabWindow().save(str(shots / "07-test.png"))
-        else:
-            # Engine and pickup failures apply the emergency brake.
-            expect(backend.core.state.emergency_brake,
-                   f"a {name} failure did not apply the emergency brake")
-            stopped = _until(
-                app, lambda: backend.core.state.actual_mps == 0.0, 20)
-            expect(stopped, f"a {name} failure did not stop the train")
-        if name == "brake":
-            # A brake failure disables both brakes: nothing engages
-            # them, not the driver, a passenger pull, or the law.
-            backend.toggle_emergency_brake()
+            expect(not backend.core.failed and not state.emergency_brake
+                   and state.actual_mps > 5.0,
+                   "a brake failure was acted on before the brake was "
+                   "asked for")
             backend.toggle_service_brake()
-            backend.apply_inputs({"brake_state": [True, False]})
-            _settle(app, 100)
-            expect(not backend.core.state.emergency_brake
-                   and not backend.core.state.service_request
-                   and not backend.core.state.service_brake,
-                   "a brake could be set during a brake failure")
+            asked = state.actual_mps
+            expect(_until(app, lambda: state.failures[key], 10),
+                   "the brake failure was never detected")
+            expect(not state.fb_service_brake,
+                   "a failed service brake reported itself applied")
+            expect(state.fb_emergency_brake,
+                   "the emergency brake did not report applied during "
+                   "a brake failure")
+            expect(not state.service_brake and not state.service_request,
+                   "the failed service brake was still commanded")
+            expect(state.actual_mps <= asked,
+                   "the train sped up on a brake failure")
         else:
-            backend.toggle_emergency_brake()
-            backend.toggle_emergency_brake()
-            expect(backend.core.state.emergency_brake,
-                   f"the emergency brake released during a {name} "
-                   "failure")
+            expect(_until(app, lambda: state.failures[key], 10),
+                   f"the {name} was never detected")
+        expect(state.emergency_brake and state.power_w == 0.0,
+               f"a detected {name} did not apply the emergency brake")
+        expect(_until(app, lambda: state.actual_mps == 0.0, 20),
+               f"a detected {name} did not stop the train")
+        if key == "brake" and shots:
+            window.grabWindow().save(str(shots / "06-failure.png"))
+            bench.grabWindow().save(str(shots / "07-test.png"))
+
+        # Latched while the bench still has it in: no release, no
+        # target, no service brake, and still detected at a stand.
+        _settle(app, 300)
+        expect(state.failures[key],
+               f"the {name} cleared by itself while still injected")
+        backend.toggle_emergency_brake()
+        expect(state.emergency_brake,
+               f"the emergency brake released during a {name}")
         backend.set_target_mph(30)
-        expect(backend.core.state.target_mps == 0.0,
-               f"the driver set a target during a {name} failure")
+        expect(state.target_mps == 0.0,
+               f"the driver set a target during a {name}")
+        if key == "brake":
+            backend.toggle_service_brake()
+            expect(not state.service_request,
+                   "the service brake could be asked for while failed")
+
+        # The bench resolves it; the driver then releases the brake.
         backend.apply_bench_inputs({row: False})
-        stopped = _until(
-            app, lambda: backend.core.state.actual_mps == 0.0, 20)
-        expect(stopped, f"the train did not stop after the {name} test")
-        # Engine and pickup failures left the emergency brake latched;
-        # a brake failure never let one engage, so there is nothing to
-        # release after it.
-        if backend.core.state.emergency_brake:
-            backend.toggle_emergency_brake()
-        expect(not backend.core.state.emergency_brake,
-               f"the brake would not release once the {name} failure "
-               "cleared")
+        expect(not backend.core.failed,
+               f"clearing the {name} on the bench did not resolve it")
+        backend.toggle_emergency_brake()
+        expect(not state.emergency_brake,
+               f"the brake would not release once the {name} cleared")
+        if key == "brake":
+            # The service brake answers again.
+            drive_off("after the brake failure cleared")
+            backend.toggle_service_brake()
+            expect(_until(app, lambda: state.fb_service_brake, 10),
+                   "the service brake did not work after the failure "
+                   "cleared")
+            expect(not backend.core.failed,
+                   "a working service brake was taken for a failure")
+            backend.toggle_service_brake()
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
     # Until the Track Model sends the count, the toy plant spends one

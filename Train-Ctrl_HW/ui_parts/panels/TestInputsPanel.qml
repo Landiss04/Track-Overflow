@@ -36,10 +36,10 @@ Panel {
 
     // What the controller is holding right now.
     readonly property var live: ({
-        "commanded_speed": Math.round(s.commanded_mph * 10) / 10,
+        "commanded_speed": Math.round(s.track_commanded_mph * 10) / 10,
         "actual_speed": Math.round(s.actual_mph * 10) / 10,
         "speed_limit": Math.round(s.limit_mph),
-        "authority_blocks": s.authority_blocks,
+        "authority_blocks": s.track_authority_blocks,
         "beacon_station": s.beacon_station,
         "beacon_side": s.beacon_side,
         "beacon_underground": s.beacon_underground,
@@ -50,9 +50,11 @@ Panel {
         "door_state_right": s.fb_doors_right,
         "light_state_interior": s.fb_interior_lights,
         "light_state_exterior": s.fb_exterior_lights,
-        "failure_engine": s.fault_engine,
-        "failure_signal_pickup": s.fault_pickup,
-        "failure_brake": s.fault_brake,
+        // Murphy's injections into the plant, not what the controller
+        // has detected (that is in the header pills).
+        "failure_engine": s.inject_engine,
+        "failure_signal_pickup": s.inject_pickup,
+        "failure_brake": s.inject_brake,
         // Staged like the rest, because sending is what commissions
         // them, but typed in the cab column where they belong.
         "kp": Math.round(s.kp),
@@ -400,6 +402,12 @@ Panel {
                     root.stage("light_state_exterior", v);
                 }
             }
+            LabeledDivider {
+                Layout.fillWidth: true
+                Layout.topMargin: theme.space_2
+                Layout.bottomMargin: theme.space_1
+                text: qsTr("Injected failures (controller must detect)")
+            }
             SignalEditRow {
                 Layout.fillWidth: true
                 editable: true
@@ -628,7 +636,7 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                enabled: root.s.signed_in && !root.s.fault_brake
+                enabled: root.s.signed_in
                 name: "emergency_brake"
                 kind: "bool"
                 value: root.s.emergency_brake
