@@ -383,20 +383,20 @@ def run_check(
     backend.spawn_train(301, "RED LINE", "f")
     second = backend.selected
     expect(second == "R-301", "spawning did not add the train asked for")
-    expect(backend.cores[second].state.authority_target == "F",
+    expect(backend.fleet.get(second).state.authority_target == "F",
            "a block typed in lower case did not come back capitalised")
     expect(backend.snapshot["train_count"] == 2, "roster did not grow")
     backend.spawn_train(301, "RED LINE", "RED F")
     expect(backend.snapshot["train_count"] == 2,
            "spawning the same id twice added a second copy")
     expect(not backend.core.armed, "a new train came up commissioned")
-    expect(backend.cores[first].armed, "spawning disarmed the first train")
+    expect(backend.fleet.get(first).armed, "spawning disarmed the first train")
     # A new train is stopped, so this engages and releases cleanly,
     # and the train beside it is not touched either way.
     backend.toggle_emergency_brake()
     expect(backend.core.state.emergency_brake,
            "the new train has no e-brake")
-    expect(not backend.cores[first].state.emergency_brake,
+    expect(not backend.fleet.get(first).state.emergency_brake,
            "one train's emergency brake reached another train")
     backend.toggle_emergency_brake()
     expect(not backend.core.state.emergency_brake,
@@ -604,6 +604,54 @@ def run_check(
            "an engine failure at cruise was not found once speed was "
            "asked for")
 
+    # The spawner: one controller per train ID, which whoever owns
+    # dispatch adds, removes and steps together, all or nothing, with
+    # no toy plant (the Train Model does the physics).
+    fleet = mod.TrainControllerFleet()
+    t1 = fleet.add("T-1", "GREEN LINE")
+    t2 = fleet.add("T-2", "RED LINE")
+    expect(fleet.ids() == ["T-1", "T-2"] and len(fleet) == 2
+           and "T-1" in fleet and t1.state.line == "GREEN LINE",
+           "the fleet did not hold one controller per train")
+    for bad_call, error in ((lambda: fleet.add("T-1"),
+                             mod.DuplicateTrainError),
+                            (lambda: fleet.get("T-9"),
+                             mod.UnknownTrainError),
+                            (lambda: fleet.remove("T-9"),
+                             mod.UnknownTrainError)):
+        try:
+            bad_call()
+            expect(False, f"the fleet did not raise {error.__name__}")
+        except error:
+            pass
+    for core in (t1, t2):
+        core.armed = True
+    running = {"actual_speed": 10.0, "commanded_speed": 15.0,
+               "authority_blocks": 5}
+    standing = {"actual_speed": 0.0, "commanded_speed": 0.0,
+                "authority_blocks": 0}
+    sent = fleet.step_all(0.05, {"T-1": running, "T-2": standing})
+    expect(sent["T-1"].power_w > 0.0 and sent["T-2"].power_w == 0.0,
+           "stepping the fleet did not keep the trains apart")
+    expect(t1.state.actual_mps == 10.0,
+           "the fleet ran the toy plant; the Train Model moves the train")
+    for bad_set, error in (
+            ({"T-1": dict(running, commanded_speed=20.0),
+              "T-2": {"actual_speed": "fast"}}, mod.InvalidInputError),
+            ({"T-1": running}, mod.TrainControllerError),
+            ({"T-1": running, "T-2": standing, "T-9": standing},
+             mod.UnknownTrainError)):
+        try:
+            fleet.step_all(0.05, bad_set)
+            expect(False, f"a bad fleet step did not raise "
+                          f"{error.__name__}")
+        except error:
+            pass
+    expect(t1.state.commanded_mps == 15.0,
+           "a fleet step with one bad train changed another train")
+    fleet.remove("T-1")
+    expect(fleet.ids() == ["T-2"], "removing a train left it in the fleet")
+
     # Until the Track Model sends the count, the toy plant spends one
     # block of authority per BLOCK_LENGTH_M travelled, part-blocks
     # carried over.
@@ -650,7 +698,7 @@ def run_check(
     # selection on; removing it twice changes nothing.
     backend.select_train(second)
     backend.remove_train(second)
-    expect(second not in backend.cores and second not in backend.order,
+    expect(second not in backend.fleet,
            "removing a train left it in the simulation")
     expect(backend.selected == first,
            "the selection did not move to the remaining train")
