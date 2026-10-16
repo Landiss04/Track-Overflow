@@ -33,8 +33,65 @@ ScaledWindow {
             clock: window.snapshot.clock
             faulted: window.snapshot.emergency_brake
 
-            // Which train the window shows, right after the badges. The
-            // header's open middle is reserved for advertisements.
+            // The header's open middle is reserved for advertisements: a
+            // long, thin card like those above a subway car's windows,
+            // as tall as the header's controls. The ads in pics/ take
+            // turns, each shown for the interval below.
+            middle: Item {
+                id: adBanner
+
+                readonly property var ads: [
+                    "../pics/boston_dynamics_711x44.png",
+                    "../pics/flock_safety_711x44.png",
+                    "../pics/lockheed_martin_711x44.png",
+                    "../pics/palantir_711x44.png",
+                ]
+                property int index: 0
+                // How long each ad stays up before the next replaces it.
+                property int interval: 30000
+
+                objectName: "adBanner"
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                height: theme.control_h_lg
+
+                Timer {
+                    interval: adBanner.interval
+                    running: adBanner.ads.length > 1
+                    repeat: true
+                    onTriggered: adBanner.index
+                        = (adBanner.index + 1) % adBanner.ads.length
+                }
+
+                // The ads are drawn at 711 x 44, the slot's widest. When
+                // the E-brake badge narrows the slot, their sides are
+                // cropped rather than the whole ad shrunk; the logos sit
+                // at the center.
+                Image {
+                    objectName: "adImage"
+                    anchors.fill: parent
+                    source: adBanner.ads[adBanner.index]
+                    fillMode: Image.PreserveAspectCrop
+                    clip: true
+                    asynchronous: true
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: qsTr("Advertisement")
+                }
+
+                // The card's frame, drawn over the ad. The ads' white
+                // ground matches the header's, so the corners outside
+                // the rounded frame do not show.
+                Rectangle {
+                    anchors.fill: parent
+                    color: "transparent"
+                    border.color: theme.border
+                    border.width: 1
+                    radius: theme.radius_md
+                }
+            }
+
+            // Which train the window shows, right after the badges.
             statusExtras: SelectField {
                 objectName: "trainSelector"
                 Layout.preferredWidth: 240

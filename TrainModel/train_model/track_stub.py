@@ -29,12 +29,16 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-#: Where the Track Model keeps its layout files.
-LAYOUT_DIR = Path(__file__).resolve().parents[2] / "TrackModel"
+#: Where the Track Model keeps its layout files: under the repository
+#: root, or in a PyInstaller build the bundle's root.
+LAYOUT_DIR = Path(
+    getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])
+) / "TrackModel"
 
 #: The lines a test UI can load, by the name ``--line`` takes.
 LINE_FILES: dict[str, str] = {
