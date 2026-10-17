@@ -89,11 +89,6 @@ ColumnLayout {
             }
             KeyValueRow {
                 Layout.fillWidth: true
-                label: qsTr("Speed limit")
-                value: root.mph(root.s.limit_mph)
-            }
-            KeyValueRow {
-                Layout.fillWidth: true
                 rule: false
                 label: qsTr("Acceleration")
                 value: Number(root.s.accel_mps2).toFixed(2) + " m/s^2"
