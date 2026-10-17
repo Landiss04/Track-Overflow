@@ -18,11 +18,14 @@ Panel {
     ]
 
     SpeedDial {
+        objectName: "speedDial"
         Layout.fillWidth: true
         Layout.fillHeight: true
         target: root.s.target_mph
         actual: root.s.actual_mph
-        limit: root.s.limit_mph
+        // A fixed scale: the car's 70 km/h. The driver's target is
+        // still capped at the commanded speed (REQUIREMENTS.md M1).
+        limit: root.s.dial_max_mph
         interactive: root.s.can_drive && root.s.armed
         onTargetRequested: function (mph) { controller.set_target_mph(mph); }
     }
