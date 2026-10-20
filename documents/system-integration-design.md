@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.4, revised after the answers of 2026-10-20 to the per-module questions. Not normative. |
+| **Status** | Draft v0.5, revised after the second round of answers on 2026-10-20. Not normative. |
 | **Date** | 2026-10-20 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
@@ -13,28 +13,24 @@ The `truth` branch is the authoritative record. This document cites it by shard 
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
 
-**Changes since v0.3**
+**Changes since v0.4**
 
-- Section 1.4 records the answers of 2026-10-20 (R44 to R64). Everything not answered
-  directly took the suggestion, except the Track Controller items, which wait on the
-  Track Controller owners.
-- Section 1.5 updates every question's status and adds Q21 to Q25. Section 1.6 restates
-  the Track Controller items as plain questions.
-- Sections 4 to 6 now show the decisions: wait for every reply, unwrapped time, release
-  and retirement of trains, preloading the next block, and the harness protocol.
-- Section 7 adds twenty proposals, seven of them re-filed CTC proposals, and lists which
-  of this branch's proposals to promote and which to deny.
-- `TrainModel/docs/integration.md` now assumes one process per module (R62).
+- Section 1.4 adds the second round of answers (R65 to R78): scheduled stops only, a
+  "return to yard" action, no Blue Line in the Track Model, the D019 renumbering, and
+  the Track Controller owners' answers to TC-1 to TC-10 (section 1.6).
+- Q6, Q20, Q21, Q22, Q24 and Q25 are answered. Q7, Q19 and Q23 stay open.
+- Section 7 adds nine proposals, five of them replacing this branch's earlier versions,
+  and updates the promote-or-deny lists.
 
-v0.3 recorded the answers of 2026-10-17 (R33 to R43), and v0.2 the review of v0.1 (R1
-to R32). Git history holds the earlier text.
+v0.4 recorded the first answers of 2026-10-20 (R44 to R64), v0.3 those of 2026-10-17 (R33
+to R43), and v0.2 the review of v0.1 (R1 to R32). Git history holds the earlier text.
 
 **Tags**
 
 | Tag | Meaning |
 |---|---|
 | [T] | Normative fact on `truth`. |
-| [R*n*] | Decision *n*: R1 to R32 from the team's review of v0.1 on 2026-10-16, R33 to R43 from the answers of 2026-10-17, and R44 to R64 from the answers of 2026-10-20 (section 1). Statements new to `truth` were filed as proposals (section 7). |
+| [R*n*] | Decision *n*: R1 to R32 from the team's review of v0.1 on 2026-10-16, R33 to R43 from the answers of 2026-10-17, and R44 to R78 from the answers of 2026-10-20 (section 1). Statements new to `truth` were filed as proposals (section 7). |
 | [U] | Stated by Kevin Schillinger on 2026-10-16 when requesting this design. |
 | [P] | Pending proposal under `truth/_inbox/`. Not a fact. |
 | [C] | Observed in code at `1aaa9a8`, unless another ref is named. Current behaviour, not a decision. |
@@ -138,6 +134,20 @@ are as written.
 | R62 | Train Model guide | "replace" | Done in this revision. |
 | R63 | Displayed time (Train Model) | "fine" | Harness time of day. |
 | R64 | Everything else | "any other open question that was not directly addressed is that your suggestions were accepted" | Applied to every module except the Track Controller ("waiting on track ctrl"). Q7 and Q19 stay open: Q7 was left "open still", and Q19 had no single suggestion. |
+| R65 | Q24 | "stop at scheduled only" | A train stops only at its scheduled stations, where its authority ends ([P] D007, D020). |
+| R66 | Q21 | "add return to yard" | A "return to yard" action retires manual trains too ([P] D022). |
+| R67 | Q22 | "track model will not load blue line" | No Blue Line station reaches the CTC Office ([P] D023). |
+| R68 | Q25 | "renumber as needed" | The re-filed CTC D019 becomes D025; PR #43 keeps D019 ([P] D025). |
+| R69 | TC-1 (Q6) | "yes" | A failed block is reported to the CTC Office as occupied, with no separate closure ([P] `block-occupancy`). This replaces "reports failures as closures" (R23). |
+| R70 | TC-2 (Q20) | "yes, not ready until ready" | Every wayside of a line is reported from startup, not ready until loaded ([P] `track-controller-ready`). |
+| R71 | TC-3 | "yes" | A wayside is ready exactly when its database and PLC program are both loaded. |
+| R72 | TC-4 | "no, should match CTC command" | No change: the SW variant's maintenance state follows the CTC Office's commands. |
+| R73 | TC-5 | "no, track model switches automatically" | The Track Model switches the heaters; no heater commands ([P] D026). |
+| R74 | TC-6 | "no" | The Track Controller owners will not file `truth` entries for the Track Controller ↔ Track Model signals. |
+| R75 | TC-7 | "Harry" | Harry Tye owns the Track Controller contract shard ([P]). |
+| R76 | TC-8 | "Leave the test UI just don't call it." | The HW test UI stays, and the harness never starts it ([P] D005; pending D018). |
+| R77 | TC-9 | "SW: Green line only, HW: Red line only. HW dependd just on the database file you feed it" | As D021; the HW variant's line follows the databases it is given. |
+| R78 | TC-10 | "Yes" | The HW sample wayside files get `next_blocks`. |
 
 ### 1.5 Questions
 
@@ -151,7 +161,7 @@ is the first train run, graded on 2026-11-12, and "Full" is the complete system.
 | Q3 | How a new train comes into being, and how it is retired. | Answered (R46). | G-SIG-6 | none |
 | Q4 | Train ID format. | Answered (R47). | G-SIG-6 | none |
 | Q5 | The emergency brake at block changes. | Answered (R49, R64): the CTC Office preloads the next block, and a block not commanded on the latest tick reads zero. | G-NEW-1 | none |
-| Q6 | Is a failed block reported to the CTC Office as occupied or as a closure? | Waiting on the Track Controller (TC-1). The CTC Office prefers occupied. | G-SIG-8 | Iter 3 |
+| Q6 | Is a failed block reported to the CTC Office as occupied or as a closure? | Answered (R69): as occupied, with no separate closure. | G-SIG-8 | none |
 | Q7 | The USB link: protocol, who builds it, what runs on a Pi; whether the Pis count as "one computer"; how many Pis serve the Red-line trains. | Open (R41). | G-HW-1, G-RUN-3 | Full |
 | Q8 | Brake commands as `bool[2]` or two booleans? | Answered (R54): two booleans. | G-SIG-19 | none |
 | Q9–Q11 | Float reach, next light, Blue Line. | Answered (R38–R40). | | none |
@@ -163,30 +173,29 @@ is the first train run, graded on 2026-11-12, and "Full" is the complete system.
 | Q17 | Who needs the train ID. | Answered (R48). | G-SIG-3 | none |
 | Q18 | Fleet-wide rejection. | Answered (R60). | G-NEW-3 | none |
 | Q19 | The event logger: amend the SRS, or keep one CSV file written by the harness? | Open. Kevin is the resolution owner of the filed conflict. | G-RUN-4 | Full |
-| Q20 | Should each line have a roster of its waysides, so it cannot read ready before all are loaded? | Waiting on the Track Controller (TC-2). Loading by hand (R44) makes this more likely. | G-NEW-2 | Iter 3 |
-| Q21 | Only scheduled runs go back to the yard. Should the CTC Office get a "return to yard" action for manual trains? The CTC Office asks to decide this now. | Open (new) | G-SIG-6 | Iter 3 |
-| Q22 | Blue Line stations: the CTC Office rejects any station it does not know. Should the harness drop stations not on Green or Red, or should the Track Model not load the Blue Line at integration? Suggestion: the Track Model does not load it, since D023 puts the Blue Line out of scope. | Open (new) | G-SIG-7 | Iter 3 |
+| Q20 | Should each line have a roster of its waysides, so it cannot read ready before all are loaded? | Answered (R70): every wayside is reported from startup, not ready until loaded. | G-NEW-2 | none |
+| Q21 | Should the CTC Office get a "return to yard" action for manual trains? | Answered (R66): yes. | G-SIG-6 | none |
+| Q22 | How to keep Blue Line stations from reaching the CTC Office. | Answered (R67): the Track Model does not load the Blue Line. | G-SIG-7 | none |
 | Q23 | Door interlock: "no power while a door is open" means the Train Controller commands zero traction power whenever a door is open, so a train can never be driven with a door open. Doors still open only when stopped, on the platform side. Adopt it? | Open (new) | G-SIG-16 | Iter 3 |
-| Q24 | Which stations does a train stop at? The station-stop sequence you accepted stops at every station beacon. The re-filed D020 has a train stop only at its scheduled stations, where the CTC Office ends its authority. Suggestion: the Train Controller dwells only where its authority ends at a station, so D020 decides which stations. | Open (new) | G-SIG-15 | Iter 3 |
-| Q25 | ID clash: the re-filed CTC D019 (test UI boundary, first filed 2026-10-14) and PR #43's D019 (wayside runs only its program, 2026-10-16). Which one is renumbered? | Open (new) | G-TR-3 | none |
+| Q24 | Which stations does a train stop at? | Answered (R65): its scheduled stations only. | G-SIG-15 | none |
+| Q25 | The D019 ID clash. | Answered (R68): the re-filed CTC proposal becomes D025. | G-TR-3 | none |
 
 ### 1.6 Questions for the Track Controller owners
 
-The v0.3 items read as statements, so here they are as questions. Each needs a yes or no,
-or a choice.
+All answered on 2026-10-20.
 
-| # | Question | Gap |
+| # | Question | Answer |
 |---|---|---|
-| TC-1 | When a block fails, the Track Model makes it read occupied. Should the Track Controller report that block to the CTC Office as occupied, as PR #43 does, with no separate closure? | Q6, G-SIG-8 |
-| TC-2 | Waysides are loaded by hand, one at a time. Today a line reads ready as soon as the first loaded wayside has a program, even if the others are not loaded yet. Should each Track Controller report every wayside of its line from startup, as not ready until loaded? | Q20, G-NEW-2 |
-| TC-3 | Is a wayside ready exactly when both its database and its PLC program are loaded, or does it need anything else? | G-SIG-5 |
-| TC-4 | The SW variant treats a CTC switch command in force as maintenance. The team decided that a block in `closed_blocks` is under maintenance (R27). Can the SW variant switch to that? | G-SIG-17 |
-| TC-5 | The Track Model runs heaters only when commanded, and the SW variant never commands them, so they never run. Should the Track Model switch them itself, with heater commands dropped, or should the Track Controller command them? | G-SIG-18 |
-| TC-6 | Will you file `truth` entries for what you send the Track Model (switch, signal and crossing commands) and what you receive from it (occupancy, and the switch, crossing and signal read-backs)? | G-SIG-1, G-SIG-2 |
-| TC-7 | Who owns the Track Controller contract shard on `truth`? Toward the CTC Office, can both variants name blocks by line and number, as PR #43 does, leaving the section letter to the harness? | G-HW-3 |
-| TC-8 | Should the HW test UI stay as a standalone fallback that the harness never launches (an exception to "all test UIs removed", pending D018), or go at integration? | G-LIFE-5 |
-| TC-9 | Can the SW variant load the Green Line only, since it serves Green? | G-HW-2 |
-| TC-10 | Can the three sample HW wayside files get `next_blocks`, so the failing `test_territory.py` test passes? | Section 3.5 |
+| TC-1 | Report a failed block to the CTC Office as occupied, with no separate closure, as PR #43 does? | Yes (R69). |
+| TC-2 | Report every wayside of the line from startup, not ready until loaded? | Yes (R70). |
+| TC-3 | Is a wayside ready exactly when its database and PLC program are both loaded? | Yes (R71). |
+| TC-4 | SW: treat a block in `closed_blocks` as under maintenance, instead of a CTC switch command? | No: it should match the CTC Office's command (R72). |
+| TC-5 | Heaters: does the Track Model switch them, or the Track Controller? | The Track Model, automatically (R73). |
+| TC-6 | File `truth` entries for the Track Controller ↔ Track Model signals? | No (R74). |
+| TC-7 | Who owns the contract shard? | Harry (R75). Both variants already name blocks to the CTC Office by line and number. |
+| TC-8 | Keep the HW test UI as a standalone fallback? | Keep it; the harness never calls it (R76). |
+| TC-9 | SW: Green Line only? | SW Green only, HW Red only; the HW variant's line follows its databases (R77). |
+| TC-10 | Add `next_blocks` to the sample HW wayside files? | Yes (R78). |
 
 Already decided, for both variants: enumerated values become all caps (`NORMAL`,
 `REVERSE`, `RED`), and `time_s` gives way to the common unwrapped simulation time.
@@ -710,8 +719,8 @@ Decided on 2026-10-20 (R64; [P] D005 and `files-and-paths`):
    window.
 4. **Readiness.** Gated per line (R8): no dispatch on a line until every Track Controller on
    it is ready. A person loads the PLC programs and wayside databases, and the clock does
-   not wait for readiness (R44). A line whose waysides load one at a time can read ready
-   too early (Q20).
+   not wait for readiness (R44). Every wayside is reported from startup, so a line
+   cannot read ready before all its waysides are loaded (R70).
 5. **Run.** The dispatcher presses Run in the CTC Office. `clock_paused` goes false, and the
    harness resumes the clock (R3).
 6. **Release.** A dispatch only creates an order. The CTC Office releases one train per
@@ -720,7 +729,7 @@ Decided on 2026-10-20 (R64; [P] D005 and `files-and-paths`):
    the line's yard exit block. An engineer sets its gains before it moves (R55).
 7. **Retire.** A train sent back to the yard stops at the yard entry block with authority
    0. The CTC Office reports a `retired_trains` event, and the harness removes the train.
-   Manual trains are Q21.
+   Manual trains go back through a "return to yard" action (R66).
 8. **Errors.** A rejected tick is skipped and the run continues (R19). What can break is to
    be revisited (G-LIFE-4).
 9. **Shutdown.** The harness tells every module to quit, and ends any that do not (R64).
@@ -738,8 +747,8 @@ integrating everything at once.
 | 0 | Harness process: `SystemClock` and `ClockDriver`; spawning and watching the child processes; the protocol and wire format; tick fan-out to stub module processes; reading the CTC Office's speed and pause; an end-to-end tick test with stubs. | Measure the budget (G-CLK-6) |
 | 1 | Train Model and one Train Controller on a fixed track feed, for one Green train: fleet `add`, the commands, the release command. | Q23 |
 | 2 | Track Model: track feeds, position reports, doors open, clearing after delivery (R10), and zero for blocks not commanded. | none |
-| 3 | Track Controller SW on Green: commanded speed and authority per block, switches, signals, readiness, failures. | Q6, Q20 (TC-1, TC-2) |
-| 4 | CTC Office: dispatch from the yard, suggestions, occupancy, ticket sales and clock control. The Iteration 3 scenario on Green: dispatch a train from the yard to a station (2026-11-12). | Q21, Q22, Q24 |
+| 3 | Track Controller SW on Green: commanded speed and authority per block, switches, signals, readiness, failures. | none |
+| 4 | CTC Office: dispatch from the yard, suggestions, occupancy, ticket sales and clock control. The Iteration 3 scenario on Green: dispatch a train from the yard to a station (2026-11-12). | none |
 | 5 | Red: Track Controller HW and Train Controller HW on Pis over USB, with the Red wayside data loaded (R34); packaging as one executable. | Q7 |
 
 The missing integration guides (section 3.1) should be written as each module joins.
@@ -770,24 +779,24 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-SIG-1 | Partly (R10, R39, R45) | Track Controller → Track Model. Commanded speed and authority go per block ([P] `track-signal`). The aspects are `RED`, `YELLOW`, `GREEN` and `SUPER_GREEN`. Waiting on the Track Controller: `truth` entries for the switch, signal and crossing commands (TC-6). | Track Controller and Track Model owners |
-| G-SIG-2 | Waiting on the Track Controller (R23, R33) | Track Model → Track Controller. Failures arrive as occupancy. `truth` entries for occupancy and the read-back states are TC-6. | Track Controller owners |
+| G-SIG-1 | Partly (R10, R39, R45, R74) | Track Controller → Track Model. Commanded speed and authority go per block ([P] `track-signal`), and the aspects are `RED`, `YELLOW`, `GREEN` and `SUPER_GREEN`. The switch, signal and crossing commands have no `truth` entries, and the Track Controller owners will not file them (R74); the harness mappings follow the code. | unassigned |
+| G-SIG-2 | Partly (R33, R69, R73, R74) | Track Model → Track Controller. Failures arrive as occupancy, and no heater commands go the other way. Occupancy and the read-back states have no `truth` entries (R74); the mappings follow the code. | unassigned |
 | G-SIG-3 | Resolved (R7, R20, R48) | One suggestion per train, naming the block. Only the per-train modules need the train ID, and they get it from the new-train event; the harness drops it on the way to the Track Controller. | signal owner CTC Office |
 | G-SIG-4 | Closed (R21) | Track Controller → CTC Office reports. The team ruled it stale. The crossing spelling difference (`"active"` against a bool) falls under R17 and the mappings. | none |
-| G-SIG-5 | Partly (R8, R44) | Readiness: a 2-D array, gated per line ([P] `track-controller-ready`). Programs and databases are loaded by hand, and an unready line does not hold the clock. Waiting on the Track Controller: what makes a wayside ready (TC-3), and a roster of each line's waysides (Q20, TC-2). | Track Controller owners |
-| G-SIG-6 | Resolved (R9, R35, R46, R47) | The CTC Office creates a train when it releases it from the yard, one per line at a time and only when the line is clear and ready, and retires it at the yard entry block. Both go out as one-time events, applied exactly once. The CTC Office's IDs are the train IDs ([P] D022, `identifiers`). Left: a "return to yard" action for manual trains (Q21). | identifiers owner Kevin |
-| G-SIG-7 | Resolved (R22, R52) | A mapping from station to count, zeros optional, counting sales since the last report. The harness passes each tick's sales on exactly once ([P] D005). Left: the Blue Line stations, which the CTC Office rejects (Q22). | signal owner Track Model |
-| G-SIG-8 | Waiting on the Track Controller (R23, R33) | A failed block reads as occupied. Whether the Track Controller reports it to the CTC Office as occupied (PR #43, D015) or as a closure is Q6 (TC-1). The CTC Office prefers occupied, and its re-filed proposals assume it. | Track Controller owners |
+| G-SIG-5 | Resolved (R8, R44, R70, R71) | A 2-D array, gated per line. A wayside is ready when its database and PLC program are loaded by hand, every wayside is reported from startup, and readiness never holds the clock ([P] `track-controller-ready`). | Track Controller owners |
+| G-SIG-6 | Resolved (R9, R35, R46, R47, R66) | The CTC Office creates a train when it releases it from the yard and retires it at the yard entry block; a "return to yard" action covers manual trains. Both go out as one-time events, applied exactly once, and the CTC Office's IDs are the train IDs ([P] D022, `identifiers`). | identifiers owner Kevin |
+| G-SIG-7 | Resolved (R22, R52, R67) | A mapping from station to count, zeros optional, as sales since the last report, passed on exactly once. The Track Model does not load the Blue Line, so no unknown station reaches the CTC Office ([P] D023). | signal owner Track Model |
+| G-SIG-8 | Resolved (R33, R69) | A failed block reads as occupied, and the Track Controller reports it to the CTC Office as occupied, with no closure ([P] `block-occupancy`; pending D015). | Track Controller owners |
 | G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Left in code: the Track Model's commanded speed is an int; the Train Model has no doors-open output. | signal owner Track Model; Train Model owner Kevin Schillinger |
 | G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN`, and the Track Model must produce the light ahead of each train. | signal owner Track Model |
 | G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Left: the harness maps the Track Model's `GREEN` and the HW variant's section keys. | identifiers owner Kevin |
 | G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Left: the Track Model code still keeps the last value. | Track Model owner |
 | G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). | D008 owner Kevin |
 | G-SIG-14 | Open | Edge coverage: only CTC Office → Track Controller SW is mapped end to end. Nothing maps Track Controller → CTC Office, Train Model ↔ Train Controller, or the clock. | unassigned |
-| G-SIG-15 | Resolved (R26, R43, R56) | The Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007). Left: which stations a train stops at (Q24); the Train Controller has no dwell logic yet. | D007 owner Kevin |
+| G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Left: the Train Controller has no dwell logic yet. | D007 owner Kevin |
 | G-SIG-16 | Partly (R61) | The Train Controller releases a passenger pull with a one-shot command ([P] `passenger-brake-release`). Open: the door interlock (Q23). | Train Controller; Train Model |
-| G-SIG-17 | Resolved (R27); SW change waiting on the Track Controller | Maintenance is `closed-blocks`, with no boolean. The SW variant still reads maintenance from switch commands (TC-4), and SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
-| G-SIG-18 | Partly (R28, R64) | Ambient temperature comes from the Track Model UI, and the input becomes optional. Waiting on the Track Controller: who switches the heaters (TC-5). | unassigned |
+| G-SIG-17 | Resolved (R27, R72) | Maintenance is `closed-blocks`, with no boolean. The SW variant's maintenance state follows the CTC Office's commands, as it already does. Left: SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
+| G-SIG-18 | Resolved (R28, R64, R73) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Left: the Track Model's switching rule. | Track Model owner |
 | G-SIG-19 | Resolved (R37, R54) | The brake commands stay two separate booleans, as on [T] and in the Train Model. The announcement keeps the Train Model's field name, and both brakes may be applied at once ([P] `brakes-apply-together`). | Train Controller |
 
 ### 6.3 Lifecycle
@@ -798,7 +807,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-LIFE-2 | Resolved (R64), to measure | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Left: measure it against 20 s. | unassigned |
 | G-LIFE-3 | Resolved (R64) | On exit the harness tells every module to quit, and ends any that do not ([P] D005). | unassigned |
 | G-LIFE-4 | Partly (R19, R64) | A rejected tick is skipped, the run continues, and the harness shows the rejection in its window. The team will return to what can break. | unassigned |
-| G-LIFE-5 | Resolved (R12) | Every test UI goes at integration ([P] D005). Waiting on the Track Controller: whether the HW test UI stays as a standalone fallback (TC-8). | D010 owner Kevin Schillinger |
+| G-LIFE-5 | Resolved (R12, R76) | Every test UI goes at integration except the Track Controller HW test UI, which stays and is never started by the harness ([P] D005; pending D018). | D010 owner Kevin Schillinger |
 
 ### 6.4 Process, packaging and runtime
 
@@ -818,8 +827,8 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-HW-1 | Open (R41) | Pis on USB with the UI on the host ([P] D021). The USB protocol, what runs on a Pi, and whether the Pis count as "one computer" are still open (Q7). | unassigned |
-| G-HW-2 | Resolved (R5, R40) | Track Controller HW on Red and SW on Green; Train Controller by the train's line ([P] D021). The Blue Line is out of scope (R40, [P] D023). Left: the HW variant's Red data, to be loaded later (R34); the SW variant still loads both lines. | D021 owner Kevin |
-| G-HW-3 | Waiting on the Track Controller (R32) | The interfaces are to be identical. Who owns the contract shard, and how blocks are named toward the CTC Office, are TC-7. | unassigned |
+| G-HW-2 | Resolved (R5, R40, R77) | Track Controller HW on Red and SW on Green, the HW variant's line set by the databases it is given; Train Controller by the train's line ([P] D021). The Blue Line is out of scope ([P] D023). Left: the HW variant's Red data, later (R34); the SW variant's code still loads both lines. | D021 owner Kevin |
+| G-HW-3 | Resolved (R32, R75) | The interfaces are to be identical, and Harry Tye owns the Track Controller contract shard ([P]). Both variants already name blocks to the CTC Office by line and number. | Harry Tye |
 
 ### 6.6 Truth and process
 
@@ -827,15 +836,15 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 |---|---|---|---|
 | G-TR-1 | Resolved (R53) | Commits `61f4a28` and `201708b` removed eleven `ctc-deployment` proposals without promotion. Seven are re-filed on this branch (section 7.1). Three should be logged as denied, and `20261014-1702` is replaced by the pending `20261016-1354` (section 7.2). | humans who promote |
 | G-TR-2 | Open, action agreed (R64) | Eight of nine module shards are placeholders; each owner fills in their own. | module owners |
-| G-TR-3 | Partly | Section 7.2 recommends what to promote and what to deny, including the CTC Office's list (R53) and the D019 clash (Q25). | humans who promote |
-| G-TR-4 | Partly (R62, R64) | The Train Model guide now assumes one process per module. Left, for their owners: the Track Model guide (in-process), the Track Controller HW README (keeps the test UI) and the Track Controller SW README (PySide6 6.8). | module owners |
+| G-TR-3 | Partly | Section 7.2 recommends what to promote and what to deny. The D019 clash is settled by renumbering the CTC one (R68). | humans who promote |
+| G-TR-4 | Partly (R62, R64, R76) | The Train Model guide now assumes one process per module, and the Track Controller HW README's kept test UI now fits R76. Left, for their owners: the Track Model guide (in-process) and the Track Controller SW README (PySide6 6.8). | module owners |
 
 ### 6.7 Risks found while checking the decisions against the code
 
 | ID | Risk | Evidence | Owner |
 |---|---|---|---|
 | G-NEW-1 | Resolved (R49, R64). The CTC Office also suggests values for the next block on the train's route, and a block not commanded on the latest tick reads zero ([P] `suggested-speed`, `suggested-authority`, `track-signal`). | Section 4.3 | CTC Office; Track Model |
-| G-NEW-2 | **A line can read ready before all its waysides are loaded.** With programs and databases loaded by hand (R44), the HW variant's line reads ready once its first loaded wayside has a program. Waiting on the Track Controller (Q20, TC-2). | `ctc/model.py:346-351`; `track_ctrl_hw/controller.py:67-76` on PR #43 | Track Controller; CTC Office |
+| G-NEW-2 | Resolved (R70). Every wayside is reported from startup and is not ready until loaded, so a line cannot read ready early ([P] `track-controller-ready`). | `ctc/model.py:346-351`; `track_ctrl_hw/controller.py:67-76` on PR #43 | Track Controller |
 | G-NEW-3 | Resolved (R60). Only the train whose input is invalid misses the tick ([P] `modules/train-model.md`). Left: the `step_all` code. | `TrainModel/train_model/fleet.py:124-146` | Train Model owner Kevin Schillinger |
 | G-NEW-4 | Closed (R42). Gains are set in the UI, which runs on the host PC for the HW variant too. Each new train still waits for an engineer to set its gains before it moves. | Section 3.3 | Train Controller |
 | G-NEW-5 | Closed (R34). Red data for the Track Controller HW will be loaded later. | `TrackCtrlHw/data/` | Track Controller HW |
@@ -844,7 +853,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 ### 7.1 Filed from this work (under `truth/_inbox/claude/quirky-fermi-sickg4/`)
 
-Forty-two proposals, each a complete entry. Promote these twenty-seven:
+Fifty-one proposals, each a complete entry. Promote these twenty-nine:
 
 | File | Target | Records |
 |---|---|---|
@@ -853,16 +862,10 @@ Forty-two proposals, each a complete entry. Promote these twenty-seven:
 | `20261016-2254-door-state-to-track-model.md` | `signals/door-state.md` | Also sent to the Track Model (R24) |
 | `20261016-2259-naming-enum-values-all-caps.md` | `conventions/naming.md` | Enumerated values all caps (R17) |
 | `20261017-1433-D021-hardware-ui-on-host.md` | `decisions/D021-…` (new) | HW variants on Pis over USB, UI on the host, variant by line (R5, R32, R42) |
-| `20261017-1433-D023-blue-line-out-of-scope.md` | `decisions/D023-…` (new) | The Blue Line is out of scope (R40) |
 | `20261017-1433-brakes-apply-together.md` | `arbitration/brakes-apply-together.md` (new) | Neither brake supersedes the other (R37) |
-| `20261020-0039-D005-protocol-and-liveness.md` | `decisions/D005-central-harness.md` | Process per module, single driver, protocol, readiness, shutdown, exactly-once delivery (R4, R12, R29, R46, R64) |
-| `20261020-0039-D007-depart-on-commanded-speed.md` | `decisions/D007-station-dwell.md` | 45 s; the Train Controller holds it and departs on commanded speed (R26, R43, R56) |
 | `20261020-0039-D017-unwrapped-time-and-wait.md` | `decisions/D017-shared-simulation-clock.md` | dt and unwrapped time to every module; wait with a timeout; no reset; the tick deviation (R1, R2, R64) |
-| `20261020-0039-D019-ctc-test-ui-boundary.md` | `decisions/D019-ctc-test-ui-boundary.md` (new) | CTC test UI scope (re-filed; ID clash, Q25) |
-| `20261020-0039-D020-automatic-dispatch-scheduled-stations-only.md` | `decisions/D020-…` (new) | Scheduled stations only, in track order (re-filed) |
-| `20261020-0039-D022-release-and-retire.md` | `decisions/D022-yard-black-box.md` (new) | Yard as a black box; creation on release; retirement at the yard entry (R9, R35, R46) |
+| `20261020-0039-D020-automatic-dispatch-scheduled-stations-only.md` | `decisions/D020-…` (new) | Scheduled stations only, in track order (re-filed; R65) |
 | `20261020-0039-D024-train-gains-set-by-engineer.md` | `decisions/D024-…` (new) | Gains set by an engineer; defaults never auto-applied (R55) |
-| `20261020-0039-block-occupancy-only-train-information.md` | `signals/block-occupancy.md` | Occupancy is all the CTC Office learns about trains (re-filed) |
 | `20261020-0039-files-and-paths-executable-modes.md` | `conventions/files-and-paths.md` | The executable's harness and module modes (R64); the event logger as a Conflict (R13) |
 | `20261020-0039-identifiers-train-ids-and-names.md` | `conventions/identifiers.md` | Train IDs, exact line names, station names (R47, R50) |
 | `20261020-0039-no-authority-into-inferred-failure.md` | `arbitration/no-authority-into-unusable-block.md` | No authority into an inferred failure (re-filed) |
@@ -871,30 +874,45 @@ Forty-two proposals, each a complete entry. Promote these twenty-seven:
 | `20261020-0039-signal-aspect-ahead-yellow.md` | `signals/signal-aspect-ahead.md` (new) | The next light, direct to the Train Controller; four aspects (R39, R45) |
 | `20261020-0039-suggested-authority-next-block.md` | `signals/suggested-authority.md` | With the block; second value for the next block (R7, R49; re-filed) |
 | `20261020-0039-suggested-speed-next-block.md` | `signals/suggested-speed.md` | With the block; second value for the next block (R7, R49; re-filed) |
-| `20261020-0039-track-controller-ready-loaded-by-hand.md` | `signals/track-controller-ready.md` (new) | 2-D array gated per line; loaded by hand; never holds the clock (R8, R44) |
 | `20261020-0039-track-signal-uncommanded-reads-zero.md` | `signals/track-signal.md` | Per block; cleared after delivery; uncommanded reads zero (R10, R24, R64) |
 | `20261020-0039-train-model-per-train-rejection.md` | `modules/train-model.md` | Per-train rejection; consumes the release command (R60, R61) |
 | `20261020-0039-train-tracking-from-occupancy.md` | `arbitration/train-tracking-from-occupancy.md` (new) | Tracking from occupancy, yard rule updated for release (re-filed) |
+| `20261020-0234-D005-hw-test-ui-kept.md` | `decisions/D005-central-harness.md` | Process per module, single driver, protocol, readiness, shutdown, exactly once; the HW test UI kept but never started (R4, R12, R29, R46, R64, R76) |
+| `20261020-0234-D007-scheduled-stops-only.md` | `decisions/D007-station-dwell.md` | 45 s, held by the Train Controller; departure on commanded speed; scheduled stops only (R26, R43, R56, R65) |
+| `20261020-0234-D022-return-to-yard.md` | `decisions/D022-yard-black-box.md` (new) | Creation on release; retirement at the yard entry; return to yard for manual trains (R9, R35, R46, R66) |
+| `20261020-0234-D023-track-model-skips-blue-line.md` | `decisions/D023-…` (new) | The Blue Line is out of scope; the Track Model does not load it (R40, R67) |
+| `20261020-0234-D025-ctc-test-ui-boundary.md` | `decisions/D025-ctc-test-ui-boundary.md` (new) | CTC test UI scope (re-filed, renumbered from D019; R68) |
+| `20261020-0234-D026-track-model-switches-heaters.md` | `decisions/D026-…` (new) | The Track Model switches the heaters (R73) |
+| `20261020-0234-block-occupancy-confirmed.md` | `signals/block-occupancy.md` | Occupancy is all the CTC Office learns; failures reported as occupied (re-filed; R69) |
+| `20261020-0234-track-controller-contract-owner.md` | `modules/track-controller/track-controller.md` | Owner Harry Tye (R75) |
+| `20261020-0234-track-controller-ready-roster.md` | `signals/track-controller-ready.md` (new) | Gated per line; loaded by hand; ready when database and program are loaded; every wayside reported from startup (R8, R44, R70, R71) |
 
-Deny these fifteen, each overtaken by a later proposal on this branch:
+Deny these twenty-two, each overtaken by a later proposal on this branch:
 
 | File | Superseded by |
 |---|---|
 | `20261016-1828-D017-clock-to-every-module-in-parallel.md` | `20261020-0039-D017-…` |
 | `20261016-1844-track-signal-from-track-controller.md` | `20261020-0039-track-signal-…` |
 | `20261016-2155-D017-fan-out-dt-and-sim-time.md` | `20261020-0039-D017-…` |
-| `20261016-2155-D005-harness-process-per-module.md` | `20261020-0039-D005-…` |
+| `20261016-2155-D005-harness-process-per-module.md` | `20261020-0234-D005-…` |
 | `20261016-2155-track-signal-per-block-cleared-after-delivery.md` | `20261020-0039-track-signal-…` |
 | `20261016-2254-D021-hardware-variants-and-selection.md` | `20261017-1433-D021-…` |
-| `20261016-2254-D022-yard-black-box.md` | `20261020-0039-D022-…` |
-| `20261016-2254-D007-dwell-conflict-resolved.md` | `20261020-0039-D007-…` |
+| `20261016-2254-D022-yard-black-box.md` | `20261020-0234-D022-…` |
+| `20261016-2254-D007-dwell-conflict-resolved.md` | `20261020-0234-D007-…` |
 | `20261016-2254-suggested-speed-with-block.md` | `20261020-0039-suggested-speed-…` |
 | `20261016-2254-suggested-authority-with-block.md` | `20261020-0039-suggested-authority-…` |
-| `20261016-2254-track-controller-ready-per-line.md` | `20261020-0039-track-controller-ready-…` |
+| `20261016-2254-track-controller-ready-per-line.md` | `20261020-0234-track-controller-ready-…` |
 | `20261016-2259-files-and-paths-event-logger-conflict.md` | `20261020-0039-files-and-paths-…` |
-| `20261017-1433-D022-ctc-creates-trains.md` | `20261020-0039-D022-…` |
-| `20261017-1433-D007-train-controller-holds-dwell.md` | `20261020-0039-D007-…` |
+| `20261017-1433-D022-ctc-creates-trains.md` | `20261020-0234-D022-…` |
+| `20261017-1433-D007-train-controller-holds-dwell.md` | `20261020-0234-D007-…` |
+| `20261017-1433-D023-blue-line-out-of-scope.md` | `20261020-0234-D023-…` |
 | `20261017-1433-signal-aspect-ahead.md` | `20261020-0039-signal-aspect-ahead-…` |
+| `20261020-0039-D005-protocol-and-liveness.md` | `20261020-0234-D005-…` |
+| `20261020-0039-D007-depart-on-commanded-speed.md` | `20261020-0234-D007-…` |
+| `20261020-0039-D019-ctc-test-ui-boundary.md` | `20261020-0234-D025-…` (renumbered) |
+| `20261020-0039-D022-release-and-retire.md` | `20261020-0234-D022-…` |
+| `20261020-0039-block-occupancy-only-train-information.md` | `20261020-0234-block-occupancy-…` |
+| `20261020-0039-track-controller-ready-loaded-by-hand.md` | `20261020-0234-track-controller-ready-…` |
 
 ### 7.2 Other pending proposals that the decisions touch
 
@@ -911,10 +929,10 @@ Only proposals that `truth/_promotions.md` does not list as promoted or denied a
 | `ctc-interfacing/20261012-1704-ticket-sales-per-station.md` | `signals/ticket-sales.md` | A mapping from station to count, which R52 chose. | Promote |
 | `track-model/20261013-1900-ticket-sales-per-station.md` | `signals/ticket-sales.md` | Per station, but as a list of pairs; R52 chose the mapping. | Deny |
 | `track-model/20261008-1824-ticket-sales-direct-to-ctc.md`; `track-model/20261013-1830-ticket-sales-no-total.md` | same | Per line, against R22, and they spell the line `"GREEN"`, against R6. | Deny |
-| `feature/TrackCtrl-Module-Implementation/20261008-1314-D018-track-controller-test-ui-kept.md` | `decisions/D018-…` | Keeps the HW test UI at integration, against R12. | Deny, or the team records an exception to R12 |
+| `feature/TrackCtrl-Module-Implementation/20261008-1314-D018-track-controller-test-ui-kept.md` | `decisions/D018-…` | Keeps the HW test UI, which R76 now allows: it stays, and the harness never starts it. | Promote |
 | `feature/TrackCtrl-Module-Implementation/20261007-0110-maintenance-mode.md` | `signals/maintenance-mode.md` | Revives the boolean, against R27 and [T]. | Deny |
 | `feature/TrackCtrl-Module-Implementation/20261007-0110-D014-track-controller-line-split.md` | `decisions/D014-…` | HW on one line and SW on the other. It leaves open which line, which R5 decides. Its databases "loaded … in the Track Controller UI" bear on Q13. | Promote alongside D021 |
-| `feature/TrackCtrl-Showcase-Feedback/20261016-1430-D015-track-controller-knows-blocks.md`, and its two earlier versions | `decisions/D015-…` | A failure reaches the Track Controller only as occupancy, which fits R33, and is reported to the CTC Office as occupied, which waits on Q6. | Promote if Q6 comes out "occupied"; deny the two earlier versions |
+| `feature/TrackCtrl-Showcase-Feedback/20261016-1430-D015-track-controller-knows-blocks.md`, and its two earlier versions | `decisions/D015-…` | A failure reaches the Track Controller only as occupancy and is reported to the CTC Office as occupied, as R33 and R69 decided. | Promote; deny the two earlier versions |
 | `feature/TrackCtrl-Module-Implementation/20261007-0110-signal-light-command.md` | `signals/signal-light-command.md` | Its aspect-name conflict is settled: `RED`, `YELLOW`, `GREEN`, `SUPER_GREEN` (R39, R45). | Amend to those names, then promote |
 | `feature/TrackCtrl-TestUI-PerBlock/20261006-1530-suggested-speed.md`, `…-suggested-authority.md` | `signals/suggested-*.md` | Per-train versus per-block keying is settled by R7. | Deny: superseded by section 7.1 |
 | `train-model-instance-mgmt/20261008-2035-train-model-fleet.md`; `…/20261009-1928-train-model-fleet-test-ui-trains.md` | `decisions/D0NN-train-model-fleet.md` | "Runs in the system process… no IPC" against R4, and "the central harness decides when a train is dispatched" against R46, under which the CTC Office releases trains. | Deny |
@@ -929,12 +947,11 @@ Also for the humans who promote:
   `ctc-deployment/20261014-1810-automatic-dispatch-from-schedule.md`. The removed
   `ctc-deployment/20261014-1702-nothing-sent-until-track-controller-ready.md` is not
   re-filed: the pending `20261016-1354` replaces it.
-- PR #43's `20261016-1430-D019-wayside-runs-only-its-program.md` clashes with the re-filed
-  CTC D019. Renumber one of them (Q25).
+- PR #43's `20261016-1430-D019-wayside-runs-only-its-program.md` keeps D019. The re-filed
+  CTC decision moved to D025 (R68).
 
-Not filed, because they wait on open questions: failures reported as occupied or as
-closures (Q6), a wayside roster (Q20), manual trains returning to the yard (Q21), the Blue
-Line stations (Q22), the door interlock (Q23) and which stations a train stops at (Q24).
+Not filed: the door interlock, which waits on Q23, and `truth` entries for the Track
+Controller ↔ Track Model signals, which the Track Controller owners declined (R74).
 
 ## Appendix A: Edge map
 
@@ -945,9 +962,9 @@ Signals are named by their `truth` key (`signals/<key>.md`).
 | Harness → every module | D017: simulation time | dt and simulation time, direct [P, R1, R2] | none |
 | CTC Office → harness | `clock-speedup` | `clock-pause` [P, R3, R51]; `new_trains` and `retired_trains` events [P, R46] | none |
 | CTC Office → Track Controller | `suggested-speed`, `suggested-authority`, `closed-blocks`, `switch-command` | Suggestions carry the block, up to two per train with the second for the next block [P, R7, R49]; the speed stays an int [R38] | `ctc_to_track_controller`, SW only |
-| Track Controller → CTC Office | `block-occupancy` | `track-controller-ready` [P, R8]; failures as closures [R23], no entry | none |
+| Track Controller → CTC Office | `block-occupancy` | A failed block reads occupied [P, R69]; `track-controller-ready` [P, R8, R70, R71] | none |
 | Track Controller → Track Model | none (`track-signal` runs Track Model → Train Model) | `track-signal` values come from the Track Controller, per block, cleared after delivery, zero when not commanded [P, R10, R64]; `signal-light-command` [P] | one-sided, to the old catalog |
-| Track Model → Track Controller | none | Failures [R23], no entry | one-sided, to the old catalog |
+| Track Model → Track Controller | none | Failures arrive as occupancy [R33, R69]; no heater commands the other way [P, R73]; no `truth` entries planned [R74] | one-sided, to the old catalog |
 | Track Model → CTC Office | `ticket-sales` (per line) | Per station, as a mapping [P, R22, R52] | one-sided, to the old catalog |
 | Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | one-sided, to the old catalog |
 | Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | one-sided, to the old catalog |
