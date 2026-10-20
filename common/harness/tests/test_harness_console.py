@@ -31,6 +31,13 @@ from utils.event_log import EventLog
 
 _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
+# The startup timeout, and how long the Train Model stub takes to say
+# READY. The other stubs are ready in about 0.1 to 0.3 s, more under
+# load, so the timeout leaves them a wide margin and the Train Model
+# misses it by as much: only the Train Model is ever named.
+STARTUP_TIMEOUT_S = 2.0
+SLOW_READY_MS = 4000
+
 
 class ConsoleStateTest(unittest.TestCase):
     """Keep publications bounded and independent of tick frequency."""
@@ -169,11 +176,11 @@ class ConsoleFaultRunTest(unittest.TestCase):
         cls.addClassCleanup(cls.log.close)
         cls.harness = Harness(stub_specs({
             CTC_OFFICE: ["--run-on-ready", "--speedup-at-tick", "0"],
-            TRAIN_MODEL: ["--ready-delay-ms", "600",
+            TRAIN_MODEL: ["--ready-delay-ms", str(SLOW_READY_MS),
                           "--reject-at-tick", "2"],
             TRACK_MODEL: ["--delay-ms", "1600", "--delay-at-tick", "4"],
             TRAIN_CONTROLLER_SW: ["--exit-at-tick", "8"],
-        }), cls.log, startup_timeout_s=0.3)
+        }), cls.log, startup_timeout_s=STARTUP_TIMEOUT_S)
         cls.addClassCleanup(cls.harness.stop)
         cls.console = HarnessConsole(cls.harness)
         cls.addClassCleanup(cls.console.deleteLater)
@@ -186,6 +193,7 @@ class ConsoleFaultRunTest(unittest.TestCase):
             lambda: TRAIN_MODEL in cls.harness.startup_timed_out_modules
         ):
             raise AssertionError("No startup timeout")
+        cls.timed_out = cls.harness.startup_timed_out_modules
         cls.startup_tick = cls.harness.clock.tick_count
         if not wait_until(lambda: TRACK_MODEL in cls.harness.late_modules):
             raise AssertionError("No late reply")
@@ -204,6 +212,8 @@ class ConsoleFaultRunTest(unittest.TestCase):
     def test_startup_timeout_names_the_loading_module(self) -> None:
         """Hold at tick zero and name readiness stragglers."""
         self.assertEqual(self.startup_tick, 0)
+        # The loading module, and only it, was named.
+        self.assertEqual(self.timed_out, (TRAIN_MODEL,))
         self.assertTrue(any(
             "Train Model" in s["startup_timeout"] for s in self.snapshots
         ))
