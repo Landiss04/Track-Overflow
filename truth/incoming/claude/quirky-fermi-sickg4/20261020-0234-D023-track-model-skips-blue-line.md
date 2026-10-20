@@ -1,7 +1,7 @@
 **Target:** truth/decisions/D023-blue-line-out-of-scope.md
 **Action:** create
 **Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-17, answering which variants serve the Blue Line: "The blue line was for testing on a previous iteration not for the final product nothing on the blue line should be accounted for". ID D023 because D019 and D020 are reserved and D021 and D022 are proposed on this branch.
+**Provenance:** as `20261017-1433-D023-blue-line-out-of-scope.md` on this branch, which this proposal supersedes (deny that one), plus Kevin Schillinger 2026-10-20: "track model will not load blue line". The CTC Office rejects a station name it does not know, so Blue Line ticket sales must not reach it.
 
 ---
 
@@ -9,9 +9,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** asserted by Kevin Schillinger 2026-10-17
+**Provenance:** asserted by Kevin Schillinger 2026-10-17; the Track Model not loading the Blue Line at integration asserted by Kevin Schillinger 2026-10-20
 **Aliases:** Blue Line, blue line, `blue_line.json`, test line
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-20
 
 ## Context
 
@@ -28,5 +28,7 @@ iteration. Nothing on the Blue Line is accounted for.
 ## Consequences
 
 - The integrated system runs the Green and Red Lines only.
+- The Track Model does not load the Blue Line at integration, so no Blue Line block or
+  station reaches another module.
 - The Blue Line default in D010 belongs to the Train Model test UI, which is removed at
   integration.

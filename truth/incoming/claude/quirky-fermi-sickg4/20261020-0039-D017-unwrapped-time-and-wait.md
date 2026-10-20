@@ -1,7 +1,7 @@
 **Target:** truth/decisions/D017-shared-simulation-clock.md
 **Action:** replace
 **Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-16 in the team's review of `documents/system-integration-design.md` (decisions 1 and 2): "Direct fan out to the modules. Modules only see inputs on the rising clock edge"; "Send both dt and sim time". Supersedes the unpromoted proposal `20261016-1828-D017-clock-to-every-module-in-parallel.md` on this branch.
+**Provenance:** as `20261016-2155-D017-fan-out-dt-and-sim-time.md` on this branch, which this proposal supersedes (deny that one), plus four points proposed in the per-module questions of `documents/system-integration-design.md` and accepted by Kevin Schillinger 2026-10-20 ("any other open question that was not directly addressed is that your suggestions were accepted"): send unwrapped simulation time and let each module derive the time of day; wait for every reply, with a timeout of about 1 s that pauses the clock and names the late module; no reset during a run; and record the 0.1 s tick as a deviation from REQ-NFR-001.1.
 
 ---
 
@@ -9,9 +9,9 @@
 
 **Status:** current
 **Owner:** Landis
-**Provenance:** asserted by Landis 2026-10-01 (generic-clock-config proposal `20261001-1658-shared-simulation-clock.md`), including the 05:00:00 start time and 24-hour display; adoption by every module once integrated asserted by Kevin Schillinger 2026-10-02; speed command per `signals/clock-speedup.md`; direct fan-out of dt and simulation time to every module, and inputs seen only on the rising clock edge, asserted by Kevin Schillinger 2026-10-16
+**Provenance:** asserted by Landis 2026-10-01 (generic-clock-config proposal `20261001-1658-shared-simulation-clock.md`), including the 05:00:00 start time and 24-hour display; adoption by every module once integrated asserted by Kevin Schillinger 2026-10-02; speed command per `signals/clock-speedup.md`; direct fan-out of dt and simulation time to every module, and inputs seen only on the rising clock edge, asserted by Kevin Schillinger 2026-10-16; unwrapped simulation time, waiting for every module's reply with a timeout, no reset during a run, and the 0.1 s tick as a recorded deviation, proposed in the design doc's per-module questions and accepted by Kevin Schillinger 2026-10-20
 **Aliases:** system clock, simulation clock, shared clock, SystemClock, sim time, D009-shared-simulation-clock, D012-shared-simulation-clock
-**Last updated:** 2026-10-16
+**Last updated:** 2026-10-20
 
 ## Context
 
@@ -37,6 +37,13 @@ who controls it.
   simulation time directly to every module; no module relays the clock to another.
   Modules do not run clocks of their own.
 - A module sees its inputs only on the rising edge of the clock.
+- The simulation time sent is unwrapped: `SystemClock.sim_time_s`, which starts at
+  18 000 s (05:00:00) and keeps counting past midnight. Each module works out the time
+  of day from it.
+- The harness waits for every module's reply to a tick before it sends the next one.
+  If a reply takes longer than a set limit, about 1 s, the harness pauses the clock and
+  names the late module.
+- The clock is not reset during a run. Resetting means restarting the system.
 - The CTC Office sets the speed and pauses or resumes the clock, through the harness.
 
 ## Consequences
@@ -46,6 +53,10 @@ who controls it.
 - The CTC Office's speed and pause controls act on the shared clock. They do not
   change any module's time step.
 - Time crosses module boundaries in seconds (`conventions/units.md`).
+- No tick is skipped. When the harness falls behind, simulated time runs slower than
+  real time instead, which is how REQ-NFR-001.2 ("shall not drop any ticks") is met.
+- The 0.1 s tick departs from REQ-NFR-001.1, under which the simulation should advance
+  in 1 ms ticks. This is a recorded deviation.
 - The CTC Office's speed command reaches the clock as the clock-speedup signal
   (`signals/clock-speedup.md`).
 

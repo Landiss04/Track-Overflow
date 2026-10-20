@@ -1,7 +1,7 @@
 **Target:** truth/conventions/files-and-paths.md
 **Action:** replace
 **Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-16, the entry's owner, in the team's review of `documents/system-integration-design.md` (§2.2): "No event logger is needed." This contradicts `documents/srs-filled.md` REQ-DSN-005, REQ-NFR-008 and REQ-INTF-015, so the two values are kept as a Conflict rather than one replacing the other.
+**Provenance:** as `20261020-0039-files-and-paths-executable-modes.md` on this branch, which this proposal supersedes (deny that one). Kevin Schillinger, the resolution owner of that proposal's event-logger Conflict, resolved it on 2026-10-20: "keep the logger it is useful", answering "amend the SRS, or keep one CSV file written by the harness?". The Conflict is therefore gone, and the shared-utilities bullet stays as `truth` has it. The executable-modes bullet is carried over unchanged.
 
 ---
 
@@ -9,9 +9,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3 (REQ-INTF-012), §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `.gitattributes`; delivery as a prebuilt binary asserted by Kevin 2026-09-29; branch model per D003; `next_blocks` from `20572b1` (SeeingEyeTree, PR #24), adopted as the direction-of-travel format by Landis 2026-10-07; "No event logger is needed" asserted by Kevin Schillinger 2026-10-16 in the team review of `documents/system-integration-design.md` (see Conflict)
+**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3 (REQ-INTF-012), §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `.gitattributes`; delivery as a prebuilt binary asserted by Kevin 2026-09-29; branch model per D003; `next_blocks` from `20572b1` (SeeingEyeTree, PR #24), adopted as the direction-of-travel format by Landis 2026-10-07; the executable's harness and module modes proposed in `documents/system-integration-design.md` and accepted by Kevin Schillinger 2026-10-20; the event logger kept, as one CSV file written by the harness, asserted by Kevin Schillinger 2026-10-20
 **Aliases:** File and path conventions, file layout, paths, repo layout, project structure
-**Last updated:** 2026-10-16
+**Last updated:** 2026-10-20
 
 ## Paths
 
@@ -42,14 +42,19 @@
 - Python, PySide6, and PyInstaller minimum versions are in [toolchain.md](toolchain.md).
 - The whole system is submittable as one runnable executable; each subsystem is also
   independently installable.
+- The executable starts the central harness when run without arguments, and one module
+  when run with `--module <name>`. The harness starts each module by running the same
+  executable again with that flag.
 - No external services or network connections are required at runtime.
 
 ## Module boundaries
 
 - Modules interact through defined interfaces, never by reaching into another
   module's internal state.
-- The simulation clock is a standalone shared utility, usable by any part of the
-  system. Whether an event logger exists at all is in conflict; see Conflict.
+- Shared utilities — the simulation clock and the event logger — are standalone
+  modules usable by any part of the system.
+- The event log is one CSV file, written by the central harness, which sees every
+  message between modules (REQ-NFR-008, REQ-INTF-015).
 - All components share a single simulation clock supporting real-time and
   fast-forward operation.
 
@@ -101,14 +106,3 @@ of 88 conflicts with the standard above.
   binary (REQ-DSN-001, REQ-DSN-002; Kevin 2026-09-29).
 - Direction of travel: previously not in the layout files, so every block ran both
   ways; now `next_blocks` per block, on the Green line (PR #24, Landis 2026-10-07).
-
-## Conflict
-
-- An event logger is required. `documents/srs-filled.md` REQ-DSN-005: "Common
-  utilities such as the simulation clock and event logger shall be implemented as
-  standalone modules usable by any part of the system." REQ-NFR-008 requires a log
-  of significant simulation events, and REQ-INTF-015 requires that log in CSV.
-- No event logger is needed: asserted by Kevin Schillinger 2026-10-16 in the team
-  review of `documents/system-integration-design.md`.
-
-**Resolution owner:** Kevin
