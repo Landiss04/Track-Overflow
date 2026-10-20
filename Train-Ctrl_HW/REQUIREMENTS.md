@@ -26,7 +26,7 @@ module documentation is to be updated later (see §6).
 | M7 | **Announcements are commands.** The controller sends an announcement command; the Train Model makes the announcement. Automatic sends it on the approach to a station (beacon); Manual on the driver's press. |
 | M8 | **Lights in Automatic:** on in a tunnel (beacon underground) and at dusk. Nothing tells the train when it is dark yet, so this is documented for later. |
 | M9 | **Kp/Ki** are set in an Engineer-only pop-up, not in the driver's cab. |
-| M10 | **Max power 480 kW** (truth, provisional). |
+| M10 | **Max power 480 kW** (480 kW confirmed by Kevin’s October 20, 2026 SDD review). |
 | M11 | **Time follows truth:** a fixed 0.1 s step; 10× ticks faster, never a longer step. Pause stops the whole console. For now the clock lives in the test UI; later all modules share one. |
 | M12 | **Acceleration is shown in m/s²** in the numbers drawer only: a debugging exception to `units.md`'s ft/s². The drawer will be removed. |
 | M13 | **The SW variant is closed.** Only this module is developed. |

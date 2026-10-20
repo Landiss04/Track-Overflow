@@ -6,13 +6,15 @@ window goes: it quits when the harness sends ``QUIT``.
 
 Call ``keep_windows_open`` once, right after creating the
 ``QGuiApplication``.
+``ModuleLink.showRequested`` restores the main windows through
+``show_module_windows``, leaving transient dialogs hidden.
 """
 
 from __future__ import annotations
 
-__all__ = ["keep_windows_open"]
+__all__ = ["keep_windows_open", "show_module_windows"]
 
-from PySide6.QtCore import QEvent, QObject
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QGuiApplication, QWindow
 
 
@@ -41,3 +43,25 @@ def keep_windows_open(app: QGuiApplication) -> None:
     """
     app.setQuitOnLastWindowClosed(False)
     app.installEventFilter(_HideOnClose(app))
+
+
+def show_module_windows() -> None:
+    """Reopen this module's main windows without reopening dialogs.
+
+    ModuleLink connects its showRequested signal to this shared policy.
+    Each module owns one process, so no other module's windows appear.
+    """
+    app = QGuiApplication.instance()
+    if not isinstance(app, QGuiApplication):
+        return
+    for window in app.topLevelWindows():
+        if (
+            window.type() != Qt.WindowType.Window
+            or window.transientParent() is not None
+        ):
+            continue
+        if window.windowState() == Qt.WindowState.WindowMinimized:
+            window.showNormal()
+        else:
+            window.show()
+        window.requestActivate()

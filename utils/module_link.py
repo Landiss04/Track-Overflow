@@ -18,6 +18,9 @@ Messages sent before the link opens wait for it and go in order; once
 the link is lost, nothing more is sent.
 
 Messages are defined in ``utils.harness_protocol``.
+
+GUI modules reopen their main windows on ``showRequested`` through
+the shared ``utils.module_window`` policy. Core-only stubs ignore it.
 """
 
 from __future__ import annotations
@@ -28,11 +31,12 @@ import sys
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QTimer, Signal
 from PySide6.QtNetwork import QLocalSocket
 
 from utils.harness_protocol import (
     QUIT,
+    SHOW,
     STEP,
     LineBuffer,
     ProtocolError,
@@ -64,6 +68,8 @@ class ModuleLink(QObject):
 
     #: The harness sent ``QUIT``.
     quitRequested = Signal()
+    #: The harness asked to reopen this module's window.
+    showRequested = Signal()
     #: The harness could not be reached, or the connection closed.
     harnessLost = Signal()
 
@@ -84,6 +90,7 @@ class ModuleLink(QObject):
             parent: Optional Qt parent.
         """
         super().__init__(parent)
+        self.showRequested.connect(_show_module_windows)
         self._module = module
         self._server_name = server_name
         self._step = step
@@ -206,12 +213,14 @@ class ModuleLink(QObject):
             self._handle(message)
 
     def _handle(self, message: Mapping[str, Any]) -> None:
-        # STEP and QUIT are the only messages a module receives.
+        # SHOW has no reply and leaves the stepping state alone.
         op = message["op"]
         if op == STEP:
             self._answer_step(message)
         elif op == QUIT:
             self.quitRequested.emit()
+        elif op == SHOW:
+            self.showRequested.emit()
         else:
             self._complain(f"ignored an unexpected {op} from the harness")
 
@@ -253,3 +262,13 @@ class ModuleLink(QObject):
         # Module processes have no log of their own; the console keeps
         # the trail. The harness logs what reaches it.
         print(f"[{self._module}] {text}", file=sys.stderr, flush=True)
+
+
+def _show_module_windows() -> None:
+    # GUI modules share one window policy. Core-only stubs do nothing,
+    # and do not import GUI bindings just to ignore a SHOW.
+    app = QCoreApplication.instance()
+    if app is not None and app.inherits("QGuiApplication"):
+        from utils.module_window import show_module_windows
+
+        show_module_windows()

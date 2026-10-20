@@ -66,8 +66,11 @@ tests/                     pytest suite
 ## How other modules reach the Track Model
 
 Through the central harness (D005), never by importing `track_model`.
-`common/harness/track_model_edges.py` has one pure function per edge,
-mapping through the catalog types in `common/interfaces.py` (D008):
+`common/harness/track_model_edges.py` contains legacy one-sided helpers that
+still convert through stale `common/interfaces.py` types. D008 supersedes that
+catalog: intended integration maps producer types directly to consumer types,
+without a catalog intermediate. These helper names describe existing code, not
+completed process integration:
 
 | Edge | Function |
 |---|---|
@@ -166,37 +169,31 @@ through the Track Controller.
 
 ## Integrating with the Train Model
 
-Checked against Kevin's Train Model on `Train-model-Interface`
-(2026-10-07), running both modules together through the harness edges:
-the full Green course loop, rollback, boarding with doors open and shut,
-and speed/authority pass-through all work. What is still needed:
+The October 20 SDD review supersedes the older October 7 integration assumptions.
+See the [Train Model integration guide](../TrainModel/docs/integration.md).
+The current working tree was inspected for this documentation update; no new
+runtime verification is claimed.
 
-**On the Train Model side (Kevin):**
-
-1. **Platform side `"LR"`.** The layouts have two-sided stations (8 Red,
-   3 Green, e.g. MT LEBANON), sent as `"LR"`; the Train Model accepts only
-   `"L"` or `"R"` and fails the tick, at GREEN M-76 on the course route.
-   Blue's stations have no side in the layout and are sent as `""`.
-2. **The Train Model's harness edges**: catalog `TrainTrackFeed` → its
-   `TrackInputs`, and its outputs → catalog `TrainTrackReport`, including
-   `doors_open = door_left_open or door_right_open`.
-
-**In the harness (whoever writes the tick loop):**
-
-- Each tick: Track Model steps on last tick's train reports, then each
-  Train Model steps on this tick's feed. Other orders work too: a report
-  still naming the block a train just left is recognised as stale.
-- **Dispatch:** a new train has no block yet, so the harness sends the
-  Track Model the train's first report itself, at its starting block
-  (offset 0), to get the first feed.
-- **Yard:** when a train runs into the yard it gets no feed
-  (`track_model_to_train_model` returns `None`); the harness stops
-  stepping that Train Model.
-
-**In truth (proposals still to write):** D013 (authority as a block
-count) to promote; the Train Model's door state gaining the Track Model
-as a consumer; the offset-restarts-at-0 convention (open question 13
-below); `"LR"` in the beacon entry.
+- Train Model accepts platform sides `"L"`, `"R"`, `"LR"`. The complete canonical
+  ASCII JSON logical payload `[station_name, platform_side, underground]` must fit
+  128 characters including syntax/escapes. Reject without truncation; keep typed
+  beacon values and named outer fields. The current shared codec checks full length.
+  Send `None` between beacons; Train Controller retains information when needed.
+- Track Model sends boarding events only at stations. Train Model checks rest,
+  open doors, count bounds and capacity without a station-presence gate.
+- Offset references the front of the train. This adds no rollback/block-crossing
+  rule. Pickup failure zeroes commanded speed and authority; terrain is unaffected.
+- Intended integration uses separate module processes and one harness-owned clock.
+  The harness maps module-owned boundary types directly (D005/D008), with previous
+  tick outputs forming each tick’s input snapshot. `common/interfaces.py` is stale.
+- The active Phase 1 system still uses `FixedTrackFeed`; production Track Model
+  process wiring and direct edge mappings remain integration work. Legacy
+  `track_model_edges.py` catalog conversions do not satisfy that design.
+- The CTC Office creates/retires trains; the harness routes the roster and identity.
+  Avoid treating legacy yard/no-feed handling as the current lifecycle contract.
+- D013 already defines authority as a count of blocks. Train Model’s controller
+  outputs contain door state; adding the Track Model consumer/direct edge remains
+  distinct integration work, not an implemented `TrackOutputs` field.
 
 ## Provisional, pending decisions
 

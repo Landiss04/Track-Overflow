@@ -16,7 +16,7 @@ venv) — 0 QML warnings, 0 behaviour problems at `700d83d`.
 
 | Area | Behaviour now |
 |---|---|
-| Maximum power | 480 kW (truth `modules/train-model.md`: 4 × 120 kW, provisional). Before: 120 kW, which held the rated 0.5 m/s² only to about 10 mph; now to about 67 km/h (0 → 70 km/h in 43 s). |
+| Maximum power | 480 kW (truth `modules/train-model.md`: 4 × 120 kW; confirmed by Kevin’s October 20, 2026 SDD review). Before: 120 kW, which held the rated 0.5 m/s² only to about 10 mph; now to about 67 km/h (0 → 70 km/h in 43 s). |
 | Traction under braking | Power is 0 W whenever the service brake is applied, and the PI integrator holds (truth `arbitration/traction-cut-under-braking`). Before: up to 120 kW against the brake. |
 | Stopping on a zero target | A target of 0 brakes the train to a stand instead of leaving it creeping inside the service band. |
 | Service band | 0.05 m/s. Ivan's 0.5 m/s left slow-downs about 1.1 mph over target, since nothing slows the train once the brake lets go; 35 → 30 mph now settles at 30.08 mph (480 kW, 0.1 s step), with no brake chatter. |

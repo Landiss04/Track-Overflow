@@ -20,6 +20,7 @@ Harness to module:
   "sim_time_s": 18001.2, "inputs": {...}}``. ``sim_time_s`` is the
   unwrapped simulation time at the end of the step (D017).
 - ``QUIT``: end the process.
+- ``SHOW``: reopen the module window; no reply (additive in v1).
 
 Module to harness:
 
@@ -48,6 +49,7 @@ __all__ = [
     "READY",
     "REJECTED",
     "STATE",
+    "SHOW",
     "STEP",
     "LineBuffer",
     "decode",
@@ -57,6 +59,7 @@ __all__ = [
     "ready_message",
     "rejected_message",
     "state_message",
+    "show_message",
     "step_message",
     "validate",
 ]
@@ -66,7 +69,7 @@ import math
 from collections.abc import Mapping
 from typing import Any, TypeGuard
 
-#: Bumped whenever a message changes shape; READY carries it.
+#: Bumped for incompatible changes; additive SHOW remains in version 1.
 PROTOCOL_VERSION = 1
 
 #: Longest line accepted. A module's outputs for one tick stay far
@@ -79,8 +82,9 @@ READY = "READY"
 OUTPUTS = "OUTPUTS"
 REJECTED = "REJECTED"
 STATE = "STATE"
+SHOW = "SHOW"
 
-HARNESS_TO_MODULE = frozenset({STEP, QUIT})
+HARNESS_TO_MODULE = frozenset({STEP, QUIT, SHOW})
 MODULE_TO_HARNESS = frozenset({READY, OUTPUTS, REJECTED, STATE})
 
 # Fields each message must carry beyond op, id and tick, with a check
@@ -98,6 +102,7 @@ _REQUIRED_FIELDS: dict[str, dict[str, str]] = {
         "inputs": _OBJECT,
     },
     QUIT: {},
+    SHOW: {},
     READY: {"module": _STRING, "protocol": _INTEGER},
     OUTPUTS: {"outputs": _OBJECT},
     REJECTED: {"reason": _STRING},
@@ -205,6 +210,11 @@ def step_message(
 def quit_message(tick: int) -> dict[str, Any]:
     """Return a ``QUIT``."""
     return {"op": QUIT, "id": 0, "tick": tick}
+
+
+def show_message(tick: int) -> dict[str, Any]:
+    """Return a ``SHOW`` without requesting a reply."""
+    return {"op": SHOW, "id": 0, "tick": tick}
 
 
 def ready_message(module: str) -> dict[str, Any]:

@@ -290,7 +290,7 @@ class TrainModelState(QObject):
 
     @Slot()
     def releaseEmergencyBrake(self) -> None:
-        """Do nothing: normal UI release policy is still undecided."""
+        """No window release action; controller releases the passenger latch."""
 
     def clear_passenger_brake_for_test(self) -> None:
         """Clear the passenger latch for an explicit harness override."""

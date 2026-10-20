@@ -7,8 +7,7 @@ change to the module's physics or its interface.
 Read [module-interface.md](module-interface.md) first; this guide assumes it.
 
 The system runs one process per module. The central harness spawns the Train
-Model as its own process and drives it over the harness protocol (D005, as
-proposed; `documents/system-integration-design.md` §4.5).
+Model as its own process and drives it over the harness protocol (D005/D008; [system integration design](../../documents/system-integration-design.md) §4.5).
 
 The central harness exists (`common/harness/`, Phase 1 of the design). It
 starts the Train Model with `track_overflow.py --module train-model`, which
@@ -28,7 +27,7 @@ steps. Sections 3 to 5 say what that process and the harness each do.
 | | `train_model/track_stub.py`: stand-in Track Model; Blue Line by default, Red or Green by flag |
 | | `train_model/speed_limiter.py`: stand-in Train Controller speed limiter |
 | `ui/Main.qml`, `ui/MainView.qml`: Train Model window | |
-| `main.py`: the Train Model process the harness starts | |
+| `main.py`: standalone window entry point; harness uses `module_process.py` | |
 
 Shared code outside `TrainModel/` stays: `utils/system_clock.py` and
 `utils/clock_driver.py` (the system clock), `ui/` (theme, components,
@@ -49,7 +48,7 @@ test_ui.py process                      main.py process
 After integration, one process per module:
 
 ```
-harness process                           Train Model process (main.py)
+harness process                           Train Model process (module_process.py)
 ┌────────────────────────────────┐        ┌───────────────────────────────┐
 │ SystemClock ─tick─► harness    │  step  │ TrainModelFleet               │
 │ edge mappings (D005)           │ ─────► │  └ TrainModelState            │
@@ -61,7 +60,9 @@ harness process                           Train Model process (main.py)
 
 ## 2. Removing the test UI
 
-Do these in one commit, then run the checks in section 6.
+This is a development removal guide, not a product use case. The standalone
+utility still exists in the inspected repo; no files are removed by this
+documentation task. Run the relevant local checks after a future removal.
 
 ### 2.1 Delete the scaffolding files
 
@@ -148,8 +149,8 @@ left, but nothing in the system should call them:
 
 Removing the last one also means updating `test_contract.py` and the
 passenger-brake tests in `test_physics_extended.py` and
-`test_model_invariants.py`. Do not remove it until the release path below
-exists.
+`test_model_invariants.py`. The normal controller release path below already exists; retain the hook
+while local developer utilities still use it.
 
 ### Passenger brake release
 
@@ -158,7 +159,10 @@ D011) says the **Train Controller** releases it, with the one-shot
 `passenger-brake-release` command. The Train Model takes it as
 `ControllerCommands.passenger_brake_release` (2026-10-20), and the Train
 Controller sends it on the tick after the driver releases the emergency
-brake. Once the test UI is gone, nothing calls the test-only override.
+brake. The one-shot clears only the passenger latch: an independently held
+controller `emergency_brake` stays active. This path exists in `model.py` and
+`train_edges.py`; the window has no release action. Once the test UI is gone,
+nothing calls the test-only override.
 
 ### 2.5 Update the README
 
@@ -183,14 +187,13 @@ following on each of the harness's steps:
    `TrainConfig` to choose the seed instead. Adding an ID twice raises
    `DuplicateTrainError`, and an unknown ID raises `UnknownTrainError`.
 2. **Steps** the fleet once per shared-clock tick with
-   `fleet.step_all(clock.tick_s, inputs_by_id)`. Never vary dt; speed and
-   pause change only how often ticks come (D006).
+   individual `fleet.get(train_id).step(dt, inputs)` calls. Never vary dt;
+   speed and pause change only tick frequency (D006). The atomic `step_all`
+   helper is separate from integrated per-train rejection.
 3. **Builds inputs** each tick, one `TrainModelInputs` per train, keyed by
    train ID, from the latest Train Controller commands and Track Model data,
-   through the edge mappings (section 4). `step_all` needs exactly one entry
-   per train in the fleet.
-4. **Routes outputs** each tick: `step_all` returns each train's outputs by
-   ID. Send `outputs.controller` to that train's Train Controller and
+   through the edge mappings (section 4).
+4. **Routes outputs** each tick: collect each train’s outputs by ID. Send `outputs.controller` to that train's Train Controller and
    `outputs.track` to the Track Model.
 5. **Handles rejection.** Only the train whose input is invalid misses the
    tick; the other trains step, and the rejection names that train
@@ -205,8 +208,9 @@ following on each of the harness's steps:
 A 20-train `step_all` takes about 1.5 ms on a development laptop, well
 inside the 10 ms between ticks at 10x (`tests/test_fleet.py`).
 
-The Train Model never reads another module, never reads the clock, and never
-calls the harness. Everything arrives through `step`.
+The physics never reads another module or the clock and never calls the
+harness. Its process adapter receives dt and simulation time through the
+harness `STEP` message; clock reconciliation is described below.
 
 ## 4. Edge mappings
 
@@ -238,10 +242,10 @@ Train Model's side of each edge:
 | `track_info.elevation_m` | block elevation | |
 | `track_info.speed_limit_mps` | block speed limit | m/s. |
 | `track_info.polarity` | track-circuit polarity | Must flip on each block entry; that flip is the block change. |
-| `track_info.station_name` | the block's station, else `None` | Needed for boarding. The Track Model sends it: `track-info` has six fields. |
+| `track_info.station_name` | the block's station, else `None` | Display metadata; no Train Model station gate. `track-info` has six fields. |
 | `track_signal.commanded_speed_mps`, `authority_blocks` | track circuit | Authority is an `int` count of blocks, ≥ 0. |
-| `beacon` | beacon under the train this tick, else `None` | |
-| `passengers_boarded` | boarding count | Send once per boarding event, at rest with a door open, ≤ last `passenger_capacity`. Otherwise 0. |
+| `beacon` | beacon under the train this tick, else `None` | Preserve typed/named fields; enforce the complete 128-character canonical payload. Controller retains prior data when needed. |
+| `passengers_boarded` | boarding count | Track Model sends only at stations, once per event, ≤ last `passenger_capacity`. Train Model checks rest, doors, count and capacity without a station gate. Otherwise 0. |
 
 ### Train Model → Train Controller (`ControllerOutputs`)
 
@@ -251,7 +255,7 @@ Failure status is not sent. See [module-interface.md](module-interface.md#5-outp
 
 ### Train Model → Track Model (`TrackOutputs`)
 
-Block ID, offset (signed), actual speed, block-change flag, passenger
+Block ID, signed front-of-train offset in m, actual speed, block-change flag, passenger
 capacity. The Track Model uses position for occupancy and capacity for the
 next boarding count.
 
@@ -276,6 +280,23 @@ the tick before: a module sees its inputs only on the rising clock edge
 comes back in a report two ticks after it is sent, which the Train
 Controller allows for.
 
+### Integrated time reconciliation and drift
+
+Accepted design: `sim_time_s` is the unwrapped end-of-tick timestamp. On a train’s
+first roster appearance set `epoch = sim_time_s - dt` once. On harness tick
+numbers divisible by 15, after accepted stepping, compare
+`epoch + accepted_model_elapsed_s` with supplied `sim_time_s` using an absolute
+`1e-6 s` tolerance. Include rejected trains with their retained elapsed time.
+The window displays harness time independently; never reset model elapsed time
+or realign epochs to conceal missing steps or other discrepancies.
+
+The inspected working tree implements this in `module_process.py` (`_epochs`
+and the `tick % 15` check), `fleet.py` (time fan-out), and `state.py` (display
+and absolute drift tolerance). `Main.qml` displays selected-train drift diagnostics.
+These concurrent edits were inspected, not implemented or tested by this task.
+The older standalone utility check every 30 ticks remains a separate development
+path, not an integrated check.
+
 ## 5. Showing the Train Model window
 
 `train_model/app.py`'s `run_window` creates its own `QGuiApplication` and runs
@@ -294,19 +315,23 @@ shows an idle train that is never stepped. The header shows *Running* while
 steps arrive for the selected train and *Paused* when they stop, whoever
 sends them. Failure injection and the passenger emergency brake button call
 the selected `TrainModelState` directly, so they act on that train only and
-keep working with no test UI.
+keep working with no test UI. Identity and line already come from the fleet
+roster. The intended window retains next-station/platform information and removes
+arrival time. The inspected QML now shows next station/platform without arrival.
 
 ## 6. Checks after removal
 
 ```bash
 cd TrainModel
-grep -rn "harness\|train_model.link\|TestMain\|TestView\|test_ui" \
-    --include=*.py --include=*.qml .        # comments only, no imports
+rg -n "harness|train_model.link|TestMain|TestView|test_ui" \
+    -g "*.py" -g "*.qml" .        # comments only, no imports
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 QT_QPA_PLATFORM=offscreen timeout 8 .venv/bin/python main.py   # clean = no output
 .venv/bin/python -m mypy main.py train_model/
 ```
 
-The physics, integration, contract, stub, elapsed-clock and invariant tests
-should all pass unchanged; they never touched the test UI. mypy reports one
+These are local developer verification utilities. Select checks appropriate
+to removal and to any brake, beacon or integrated-clock changes. The working
+tree includes focused `test_beacon_codec.py` and `test_integrated_clock.py`
+utilities; their presence alone does not establish passing results. No tests were executed for this documentation edit. mypy reports one
 known error in `app.py` ([B17](bugs.md#b17)) until that is fixed.
