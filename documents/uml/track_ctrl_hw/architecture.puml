@@ -1,0 +1,61 @@
+@startuml architecture
+!include ../style.iuml
+title Track Controller (HW) — Software architecture
+skinparam componentStyle rectangle
+
+package "Host PC — Track Ctrl HW process (PySide6)" {
+  package "Presentation" {
+    [Track Controller window\nQML views and dialogs] as QML
+    [TrackControllerState\nQML bridge, 100 ms refresh] as State
+    [views / display / schematic\nsnapshot to rows, imperial units,\nterritory diagram layout] as Views
+    [territory parser\nwayside database JSON] as TerrHost
+  }
+  package "Communication (host side)" {
+    [HarnessEndpoint\nnewline JSON to the harness] as EP <<planned>>
+    [RemoteTrackController\nTrackController proxy] as Remote <<planned>>
+    [PiSerialLink\nQSerialPort, USB CDC-ACM] as Serial <<planned>>
+  }
+}
+
+package "Raspberry Pi 5 — Track Ctrl HW core (Python, no Qt)" {
+  package "Communication (Pi side)" {
+    [PiLinkServer\n/dev/ttyGS0, newline JSON] as PiLink <<planned>>
+  }
+  package "Control" {
+    [HwTrackController\nevery wayside of the Red Line] as Ctrl
+    [Wayside ×N\nI/O image, scan, drive, report] as W
+  }
+  package "PLC engine" {
+    [compile_program\ntwo compilations per statement] as Compile
+    [Channel A\ntree walk] as ChA
+    [Channel B\nstack machine] as ChB
+    [Vital block\nread-only, per territory] as Vital <<planned>>
+  }
+}
+
+package "Shared by both sides" {
+  [interface.py\nTrackController Protocol\nand boundary types] as Contract
+  [wire.py\nJSON form of every boundary type] as Wire
+  [errors.py\nTrackControllerError family] as Errors
+}
+
+[Central Harness] as Harness
+Harness -down-> EP : tick: dt, time, inputs
+EP --> Remote : step()
+QML --> State : slots, bindings
+State --> Views
+State --> TerrHost
+State --> Remote : load / snapshot
+Remote --> Serial
+Serial -right-> PiLink : USB serial
+PiLink --> Ctrl
+Ctrl --> W
+W --> Compile
+W --> ChA
+W --> ChB
+W --> Vital
+Remote ..> Contract : implements
+Ctrl ..> Contract : implements
+Remote ..> Wire
+PiLink ..> Wire
+@enduml

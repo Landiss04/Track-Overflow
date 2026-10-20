@@ -1,0 +1,54 @@
+@startuml sd01_load_database
+!include ../style.iuml
+title SD-01 Load wayside database (UC-01)
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "TrackControllerState" as State
+participant "territory" as Terr
+participant "RemoteTrackController\n+ PiSerialLink" as Remote <<planned>>
+box "Raspberry Pi 5" #F2F5F9
+participant "PiLinkServer" as Pi <<planned>>
+participant "HwTrackController" as Ctrl
+participant "Wayside" as W
+end box
+
+P -> QML : click **Load database**
+QML -> P : file dialog
+P -> QML : choose red_wayside_N.json
+QML -> State : loadDatabase(url)
+State -> Terr : load_territory_file(path)
+alt file unreadable or malformed
+  Terr --> State : TerritoryError
+  State --> QML : problem("Database not loaded", reason)
+  QML --> P : error dialog
+else valid
+  Terr --> State : Territory
+  State -> Remote : load_territory(territory)
+  Remote -> Pi : {"id", "op": "load_territory", territory} (USB serial)
+  Pi -> Ctrl : load_territory(territory)
+  alt other line, or a block another wayside governs
+    Ctrl --> Pi : TerritoryError
+    Pi --> Remote : {"id", "error": "TerritoryError", message}
+    Remote --> State : raise TerritoryError
+    State --> QML : problem("Database not loaded", reason)
+    QML --> P : error dialog
+  else accepted
+    Ctrl -> W ** : Wayside(territory)
+    opt a wayside with this ID was already loaded
+      Ctrl -> W : adopt_program(previous)
+      W --> Ctrl : kept or unloaded
+    end
+    Ctrl --> Pi : notices
+    Pi --> Remote : {"id", "ok": notices}
+    Remote --> State : notices
+    State -> State : select the new wayside, refresh()
+    State --> QML : changed
+    opt program no longer fits
+      State --> QML : notice("PLC program unloaded", ...)
+    end
+    QML --> P : wayside listed, header reads **Not ready**
+  end
+end
+@enduml

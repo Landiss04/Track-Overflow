@@ -1,0 +1,42 @@
+@startuml sd03_monitor
+!include ../style.iuml
+title SD-03 Select wayside and monitor its state (UC-03, UC-04)
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "TrackControllerState" as State
+participant "views / display\n/ schematic" as Views
+participant "RowsModel ×5" as Rows
+participant "RemoteTrackController\n+ PiSerialLink" as Remote <<planned>>
+box "Raspberry Pi 5" #F2F5F9
+participant "HwTrackController" as Ctrl
+end box
+
+P -> QML : pick a wayside in the header
+QML -> State : selectWayside(wayside_id)
+State -> State : refresh()
+activate State
+State -> Remote : snapshot()
+Remote -> Ctrl : {"op": "snapshot"} (USB serial)
+Ctrl --> Remote : TrackControllerSnapshot
+Remote --> State : snapshot
+State -> Views : block_rows, office_rows, switch_rows,\ndevice_rows, report_rows, diagram
+Views --> State : rows in display units (mph, ft)
+State -> Rows : set_rows(rows) — rows change in place
+State --> QML : changed, diagramChanged
+deactivate State
+QML --> P : territory diagram, block occupancy, office\nsuggestions, switches, signals and crossings
+
+loop every 100 ms while the window is open
+  State -> State : ticks changed since last refresh?
+  opt yes
+    State -> State : refresh() (as above)
+  end
+end
+
+opt zoom or **Fit** on the territory diagram
+  P -> QML : zoom in / out / fit
+  QML -> QML : rescale the diagram (QML only)
+end
+@enduml
