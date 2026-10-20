@@ -19,7 +19,10 @@ The stub playing the CTC Office also reports ``clock_paused`` and
 ``clock_speedup``, as the CTC Office does. It starts paused, as the
 clock does, and its options press Run, Pause and the speed toggle at
 chosen moments. Run and the speed toggle pressed between ticks reach
-the harness as ``STATE``.
+the harness as ``STATE``. It also releases and retires trains on cue,
+reporting them as the CTC Office does (D022): ``new_trains`` lists
+``{"train_id", "line"}`` for each train released on a tick, and
+``retired_trains`` lists ``{"train_id"}`` for each train retired.
 
 Run it through the executable::
 
@@ -65,6 +68,8 @@ _CTC_OPTIONS = (
     "speedup_at_tick",
     "pause_at_tick",
     "resume_after_ms",
+    "release_train",
+    "retire_train",
 )
 
 
@@ -147,7 +152,7 @@ class StubModule(QObject):
         if options.payload_bytes:
             outputs["pad"] = "x" * options.payload_bytes
         if self._is_ctc:
-            self._step_clock_controls(tick, outputs)
+            self._step_ctc(tick, outputs)
         if tick in options.duplicate_reply_at_tick:
             # After this reply is written, send it once more.
             QTimer.singleShot(0, self._send_reply_again)
@@ -163,11 +168,20 @@ class StubModule(QObject):
         if self._options.run_on_ready or self._speedup:
             self._link.push_state(self._clock_controls())
 
-    def _step_clock_controls(
-        self, tick: int, outputs: dict[str, Any]
-    ) -> None:
-        # The CTC Office's header, pressed at the scripted ticks.
+    def _step_ctc(self, tick: int, outputs: dict[str, Any]) -> None:
+        # The CTC Office's header, pressed at the scripted ticks, and
+        # the trains it releases and retires on them.
         options = self._options
+        outputs["new_trains"] = [
+            {"train_id": train_id, "line": line}
+            for train_id, line, at_tick in options.release_train
+            if at_tick == tick
+        ]
+        outputs["retired_trains"] = [
+            {"train_id": train_id}
+            for train_id, at_tick in options.retire_train
+            if at_tick == tick
+        ]
         if (
             options.speedup_at_tick is not None
             and tick >= options.speedup_at_tick
@@ -299,12 +313,30 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         type=_non_negative,
         help="press Run this long after the scripted Pause",
     )
+    ctc.add_argument(
+        "--release-train",
+        type=_release,
+        action="append",
+        default=[],
+        metavar="ID:LINE@TICK",
+        help="release a train from the yard on a tick; may be repeated",
+    )
+    ctc.add_argument(
+        "--retire-train",
+        type=_retire,
+        action="append",
+        default=[],
+        metavar="ID@TICK",
+        help="retire a train on a tick; may be repeated",
+    )
     options = parser.parse_args(argv)
     if options.module != CTC_OFFICE:
         given = [
             name
             for name in _CTC_OPTIONS
-            if getattr(options, name) not in (None, False)
+            if getattr(options, name) is not None
+            and getattr(options, name) is not False
+            and getattr(options, name) != []
         ]
         if given:
             parser.error(
@@ -322,3 +354,22 @@ def _non_negative(text: str) -> int:
     if value < 0:
         raise argparse.ArgumentTypeError(f"must not be negative: {text}")
     return value
+
+
+def _release(text: str) -> tuple[str, str, int]:
+    # ID:LINE@TICK, such as G1:Green@1.
+    train, _, tick = text.rpartition("@")
+    train_id, _, line = train.partition(":")
+    if not train_id or not line or not tick:
+        raise argparse.ArgumentTypeError(
+            f"expected ID:LINE@TICK, got {text!r}"
+        )
+    return train_id, line, _non_negative(tick)
+
+
+def _retire(text: str) -> tuple[str, int]:
+    # ID@TICK, such as G1@600.
+    train_id, _, tick = text.rpartition("@")
+    if not train_id or not tick:
+        raise argparse.ArgumentTypeError(f"expected ID@TICK, got {text!r}")
+    return train_id, _non_negative(tick)

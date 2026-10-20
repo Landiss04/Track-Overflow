@@ -1,9 +1,16 @@
 """Run the central harness from the command line.
 
 ``python track_overflow.py`` lands here. The harness starts every
-module (in Phase 0, a stub for each), and runs until Ctrl+C or
-``--run-seconds``. The CTC Office's stub presses Run as soon as it is
-ready, since no window exists yet to press it in.
+module and runs until Ctrl+C or ``--run-seconds``.
+
+The modules wired in so far run as themselves (Phase 1: the Train
+Model and the Train Controller SW, each in its window); the rest are
+stubs. The CTC Office's stub presses Run as soon as it is ready and
+releases train G1 onto the Green Line on the first tick. The Train
+Model runs G1 over a fixed track feed with a stop at GLENBURY
+(``track_feed.GREEN_STATION_STOP``). G1 moves once an engineer sets
+its gains in the Train Controller's console (D024). ``--stubs-only``
+runs a stub for every module instead, as in Phase 0.
 
 The event log goes to ``--log-dir``, by default the user's local
 application data folder (``TrackOverflow/logs``), never into the
@@ -25,11 +32,16 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication, QStandardPaths, QTimer
 
 from common.harness.core import Harness
-from common.harness.modules import CTC_OFFICE, stub_specs
+from common.harness.edges import SystemEdges
+from common.harness.modules import CTC_OFFICE, stub_specs, system_specs
 from common.harness.supervisor import HarnessStartError
+from common.harness.track_feed import GREEN_STATION_STOP, FixedTrackFeed
 from utils.event_log import EventLog, log_file_name
 
 APPLICATION_NAME = "TrackOverflow"
+
+#: The train the CTC Office's stub releases on the first tick.
+FIRST_TRAIN = "G1"
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -58,8 +70,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ctc_options = ["--run-on-ready"]
     if options.speedup:
         ctc_options += ["--speedup-at-tick", "0"]
+    if options.stubs_only:
+        specs = stub_specs({CTC_OFFICE: ctc_options})
+        edges = None
+    else:
+        ctc_options += ["--release-train", f"{FIRST_TRAIN}:Green@1"]
+        specs = system_specs({CTC_OFFICE: ctc_options})
+        edges = SystemEdges(FixedTrackFeed(GREEN_STATION_STOP))
     with EventLog(log_path) as log:
-        harness = Harness(stub_specs({CTC_OFFICE: ctc_options}), log)
+        harness = Harness(specs, log, edges)
         status = _StatusLine(harness)
         harness.eventLogged.connect(status.print_event)
         harness.tickCompleted.connect(status.count_tick)
@@ -166,6 +185,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--speedup",
         action="store_true",
         help="run at 10x from the start",
+    )
+    parser.add_argument(
+        "--stubs-only",
+        action="store_true",
+        help="run a stub for every module, as in Phase 0",
     )
     return parser.parse_args(argv)
 

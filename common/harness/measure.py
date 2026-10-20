@@ -1,17 +1,24 @@
-"""Measure the harness's real-time budget with stub modules (G-CLK-6).
+"""Measure the harness's real-time budget (G-CLK-6).
 
-Runs the harness with a stub for each of the seven modules, the clock
-at 1x or 10x, for a set number of real seconds, and reports how long
-the modules took to be ready (G-LIFE-2) and whether the run kept up:
-ticks completed against the ticks due, the speed
-achieved, the round trip of each tick from the first ``STEP`` sent to
-the last reply, ticks slipped behind real time, late replies, and the
-harness's share of one CPU core. At 10x a tick falls due every 10 ms,
-so the round trip must stay well under that.
+Runs the harness with a stub for each of the seven modules, or with
+``--system`` the system as wired so far, the clock at 1x or 10x, for a
+set number of real seconds. It reports how long the modules took to be
+ready (G-LIFE-2) and whether the run kept up: ticks completed against
+the ticks due, the speed achieved, the round trip of each tick from
+the first ``STEP`` sent to the last reply, ticks slipped behind real
+time, late replies, and the harness's share of one CPU core. At 10x a
+tick falls due every 10 ms, so the round trip must stay well under
+that.
+
+With ``--system`` the wired modules run as themselves, with their
+windows: in Phase 1 the Train Model and the Train Controller SW,
+driving one train over the fixed track feed. The Train Controller
+plays the engineer (``--engineer-gains``) so the train moves.
 
 Run from the repository root::
 
     python -m common.harness.measure --seconds 10 --payload-bytes 1000
+    python -m common.harness.measure --system
 """
 
 from __future__ import annotations
@@ -29,7 +36,16 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication, Qt, QTimer
 
 from common.harness.core import Harness
-from common.harness.modules import CTC_OFFICE, MODULE_NAMES, stub_specs
+from common.harness.edges import SystemEdges
+from common.harness.modules import (
+    CTC_OFFICE,
+    MODULE_NAMES,
+    TRAIN_CONTROLLER_SW,
+    WIRED_MODULES,
+    stub_specs,
+    system_specs,
+)
+from common.harness.track_feed import GREEN_STATION_STOP, FixedTrackFeed
 from utils.event_log import EventLog
 from utils.system_clock import ALLOWED_SPEEDS, DEFAULT_TICK_S
 
@@ -41,6 +57,10 @@ EXIT_FAILED = 1
 STARTUP_LIMIT_S = 60.0
 MILLISECONDS_PER_SECOND = 1000
 PERCENT = 100
+
+# Kp and Ki the Train Controller sets on the measured train, standing
+# in for the engineer (D024).
+ENGINEER_GAINS = ("400000", "8000")
 
 
 class _Meter:
@@ -128,9 +148,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     stub_options[CTC_OFFICE] += ["--run-on-ready"]
     if options.speed != 1:
         stub_options[CTC_OFFICE] += ["--speedup-at-tick", "0"]
+    if options.system:
+        stub_options[CTC_OFFICE] += ["--release-train", "G1:Green@1"]
+        module_options = {
+            name: values
+            for name, values in stub_options.items()
+            if name not in WIRED_MODULES
+        }
+        module_options[TRAIN_CONTROLLER_SW] = [
+            "--engineer-gains", *ENGINEER_GAINS
+        ]
+        specs = system_specs(module_options)
+        edges = SystemEdges(FixedTrackFeed(GREEN_STATION_STOP))
+    else:
+        specs = stub_specs(stub_options)
+        edges = None
     with tempfile.TemporaryDirectory() as folder:
         with EventLog(Path(folder) / "events.csv") as log:
-            harness = Harness(stub_specs(stub_options), log)
+            harness = Harness(specs, log, edges)
             meter = _Meter(harness, options.seconds)
             meter.launched_s = time.perf_counter()
             harness.start()
@@ -164,9 +199,13 @@ def _report(
         value * MILLISECONDS_PER_SECOND for value in meter.round_trips_s
     )
     startup_s = (meter.ready_s or meter.launched_s) - meter.launched_s
+    what = (
+        "The system as wired, one train," if options.system
+        else "Seven stub modules"
+    )
     lines = [
-        f"Seven stub modules at {options.speed}x, "
-        f"{options.payload_bytes} bytes of filler per reply",
+        f"{what} at {options.speed}x, "
+        f"{options.payload_bytes} bytes of filler per stub reply",
         f"  startup:         {startup_s:.2f} s until every module was ready",
         f"  measured:        {meter.wall_s:.2f} s real time",
         f"  ticks:           {meter.ticks} of {due_ticks:.0f} due",
@@ -203,7 +242,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     # How long, how fast, and how big the replies are.
     parser = argparse.ArgumentParser(
         prog="python -m common.harness.measure",
-        description="Measure the harness's real-time budget with stubs.",
+        description="Measure the harness's real-time budget.",
     )
     parser.add_argument(
         "--seconds",
@@ -223,6 +262,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         type=int,
         default=0,
         help="filler added to every stub's reply (default: 0)",
+    )
+    parser.add_argument(
+        "--system",
+        action="store_true",
+        help="run the modules wired so far as themselves",
     )
     return parser.parse_args(argv)
 
