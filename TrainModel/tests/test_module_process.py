@@ -157,3 +157,31 @@ def test_release_command_clears_a_passenger_pull() -> None:
                           passenger_brake_release=True),
     }})
     assert reply["trains"]["G1"]["controller"]["emergency_brake_active"]
+
+
+def test_overlength_beacon_rejects_only_its_train_before_mutation() -> None:
+    process, fleet = make_process()
+    process.step(1, DT_S, SIM_TIME_S, {"trains": {
+        "G1": wire_inputs(), "G2": wire_inputs(),
+    }})
+    state = fleet.get("G1")
+    state.applyEmergencyBrake()
+    before = state.outputs()
+    elapsed = state.elapsed_s
+    invalid = wire_inputs(passenger_brake_release=True, door_left_open=True)
+    invalid["track"]["beacon"] = {
+        "station_name": "S" * 115, "platform_side": "L",
+        "underground": False,
+    }
+    invalid["track"]["passengers_boarded"] = 100
+    reply = process.step(2, DT_S, SIM_TIME_S + DT_S, {"trains": {
+        "G1": invalid, "G2": wire_inputs(),
+    }})
+    assert set(reply["rejected"]) == {"G1"}
+    assert "129" in reply["rejected"]["G1"]
+    assert state.outputs() == before
+    assert state.elapsed_s == elapsed
+    assert state.snapshot["passenger_ebrake_pulled"]
+    assert not state.snapshot["left_door"]
+    assert state.snapshot["passengers"] == 0
+    assert fleet.get("G2").elapsed_s == 2 * DT_S

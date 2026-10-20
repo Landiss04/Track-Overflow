@@ -15,6 +15,8 @@ from __future__ import annotations
 import math
 import random
 
+from utils.beacon_codec import encode_beacon
+
 from train_model.interface import (
     ControllerOutputs,
     FailureState,
@@ -54,11 +56,6 @@ class InvalidTimeStepError(TrainModelError):
 
 class InvalidInputError(TrainModelError, ValueError):
     """Raised for invalid numeric inputs, before state is changed."""
-
-
-#: The most characters a beacon's station name may have: the serialized
-#: beacon is limited to 128 (``truth/signals/beacon.md``).
-MAX_BEACON_CHARS = 128
 
 
 def _is_number(value: object) -> bool:
@@ -104,9 +101,7 @@ def _brakes_engaged(
     # Brake failure blocks the service brake only; the emergency brake,
     # commanded or pulled by a passenger, still works.
     emergency = emergency_cmd or passenger_pulled
-    # OPEN(5.8): the emergency brake supersedes the service brake, so
-    # the service brake is not engaged while the emergency brake is.
-    service = service_cmd and not emergency and not brake_failed
+    service = service_cmd and not brake_failed
     return emergency, service
 
 
@@ -263,16 +258,13 @@ class TrainModel:
             if not isinstance(text, str):
                 raise InvalidInputError(f"{name} must be text, got {text!r}")
         if track.beacon is not None:
-            if track.beacon.platform_side not in ("L", "R", "LR"):
-                raise InvalidInputError(
-                    "beacon platform_side must be L, R or LR, got "
-                    f"{track.beacon.platform_side!r}"
+            try:
+                encode_beacon(
+                    track.beacon.station_name, track.beacon.platform_side,
+                    track.beacon.underground,
                 )
-            if len(track.beacon.station_name) > MAX_BEACON_CHARS:
-                raise InvalidInputError(
-                    "beacon station_name must be at most "
-                    f"{MAX_BEACON_CHARS} characters"
-                )
+            except ValueError as error:
+                raise InvalidInputError(str(error)) from error
         if cmd.power_cmd_w < 0.0:
             raise InvalidInputError("power_cmd_w must be nonnegative")
         # Values with no physical meaning (Kevin 2026-10-06).
@@ -382,11 +374,8 @@ class TrainModel:
             service, emergency,
             self._passenger_ebrake_pulled, self._failures.brake,
         )
-        if emergency_on:
-            return cfg.f_emergency_n
-        if service_on:
-            return cfg.f_service_n
-        return 0.0
+        return ((cfg.f_emergency_n if emergency_on else 0.0)
+                + (cfg.f_service_n if service_on else 0.0))
 
     def _integrate(
         self, dt: float, inputs: TrainModelInputs, grade_rad: float

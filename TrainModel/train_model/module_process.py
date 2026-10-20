@@ -30,6 +30,7 @@ __all__ = ["TrainModelProcess", "main"]
 
 import argparse
 import signal
+import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -71,6 +72,7 @@ class TrainModelProcess(QObject):
         """
         super().__init__(parent)
         self._fleet = fleet
+        self._epochs: dict[str, float] = {}
         self._link = ModuleLink(MODULE_NAME, server_name, self.step, self)
         self._link.quitRequested.connect(
             lambda: self.finished.emit(EXIT_QUIT)
@@ -100,10 +102,14 @@ class TrainModelProcess(QObject):
         if not isinstance(trains, Mapping):
             raise TickRejectedError("inputs must hold a trains object")
         self._follow_roster(trains)
+        self._fleet.set_harness_time(sim_time_s)
         outputs: dict[str, Any] = {}
         rejected: dict[str, str] = {}
         for train_id in self._fleet.ids():
             state = self._fleet.get(train_id)
+            # First roster appearance, including a rejected first step.
+            # Never realign this epoch to hide a missed physical tick.
+            self._epochs.setdefault(train_id, sim_time_s - dt)
             try:
                 train_inputs = decode_inputs(trains[train_id])
                 state.validate_inputs(dt, train_inputs)
@@ -112,6 +118,19 @@ class TrainModelProcess(QObject):
                 outputs[train_id] = encode_outputs(state.outputs())
                 continue
             outputs[train_id] = encode_outputs(state.step(dt, train_inputs))
+        if tick % 15 == 0:
+            for train_id in self._fleet.ids():
+                state = self._fleet.get(train_id)
+                drift_s = (
+                    self._epochs[train_id] + state.elapsed_s - sim_time_s
+                )
+                if state.set_clock_drift(drift_s, tick):
+                    # Normal process diagnostics; the harness owns the log.
+                    print(
+                        f"[{MODULE_NAME}] train {train_id!r} clock drift "
+                        f"{drift_s:+.9f} s at tick {tick}",
+                        file=sys.stderr, flush=True,
+                    )
         reply: dict[str, Any] = {"trains": outputs}
         if rejected:
             reply["rejected"] = rejected
@@ -122,6 +141,7 @@ class TrainModelProcess(QObject):
         for train_id in self._fleet.ids():
             if train_id not in trains:
                 self._fleet.remove(train_id)
+                self._epochs.pop(train_id, None)
         for train_id, entry in trains.items():
             if train_id not in self._fleet:
                 line = entry.get("line", "") if isinstance(
