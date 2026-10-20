@@ -6,14 +6,20 @@ the time limit, or a confirmed window close. The CTC Office's stub
 presses Run when ready; the harness window has no clock controls.
 
 The modules wired in so far run as themselves, each in its window
-(Phase 2: the Track Model, the Train Model and the Train Controller
-SW); the rest are stubs. The CTC Office's stub presses Run as soon as
-it is ready and releases train G1 onto the Green Line on the first
-tick. G1 enters at the yard exit block, and a scripted wayside,
-standing in for the Track Controller, takes it to DORMONT with a stop
-at GLENBURY (``wayside_script.GREEN_YARD_TO_DORMONT``). G1 moves once
-an engineer sets its gains in the Train Controller's console (D024).
-``--stubs-only`` runs a stub for every module instead, as in Phase 0.
+(Phase 3: the Track Controller SW, the Track Model, the Train Model and
+the Train Controller SW); the rest are stubs. The CTC Office's stub
+presses Run as soon as it is ready. A scripted CTC Office, standing in
+for its dispatch and suggestions, waits for every Green Line wayside to
+be ready, then releases train G1 at the yard exit block and takes it
+to DORMONT with a stop at GLENBURY
+(``ctc_script.GREEN_YARD_TO_DORMONT``). The clock runs meanwhile.
+
+Two people start the run, as in the system itself. One loads a PLC
+program on every wayside in the Track Controller's window (R44): RUN
+then COMMIT on each, or Load starters. ``--load-starters`` commits the
+starter programs at launch instead. And G1 moves once an engineer sets
+its gains in the Train Controller's console (D024). ``--stubs-only``
+runs a stub for every module instead, as in Phase 0.
 
 The CSV goes to ``--log-dir``, defaulting to the user's application
 data folder (``TrackOverflow/logs``), never the installation.
@@ -34,18 +40,17 @@ from PySide6.QtCore import QCoreApplication, QStandardPaths, QTimer
 
 from common.harness.core import Harness
 from common.harness.edges import SystemEdges
-from common.harness.modules import CTC_OFFICE, stub_specs, system_specs
-from common.harness.supervisor import HarnessStartError
-from common.harness.wayside_script import (
-    GREEN_YARD_TO_DORMONT,
-    ScriptedWayside,
+from common.harness.ctc_script import GREEN_YARD_TO_DORMONT, ScriptedCtc
+from common.harness.modules import (
+    CTC_OFFICE,
+    TRACK_CONTROLLER_SW,
+    stub_specs,
+    system_specs,
 )
+from common.harness.supervisor import HarnessStartError
 from utils.event_log import EventLog, log_file_name
 
 APPLICATION_NAME = "TrackOverflow"
-
-#: The train the CTC Office's stub releases on the first tick.
-FIRST_TRAIN = "G1"
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -83,9 +88,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         specs = stub_specs({CTC_OFFICE: ctc_options})
         edges = None
     else:
-        ctc_options += ["--release-train", f"{FIRST_TRAIN}:Green@1"]
-        specs = system_specs({CTC_OFFICE: ctc_options})
-        edges = SystemEdges(ScriptedWayside(GREEN_YARD_TO_DORMONT))
+        wayside_options = ["--load-starters"] if options.load_starters else []
+        specs = system_specs({
+            CTC_OFFICE: ctc_options,
+            TRACK_CONTROLLER_SW: wayside_options,
+        })
+        edges = SystemEdges(ScriptedCtc(GREEN_YARD_TO_DORMONT))
     with EventLog(log_path) as log:
         harness = Harness(specs, log, edges)
         window = None
@@ -204,6 +212,12 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--headless",
         action="store_true",
         help="use console output without opening a window",
+    )
+    parser.add_argument(
+        "--load-starters",
+        action="store_true",
+        help="commit the Track Controller's starter PLC programs at "
+        "launch, instead of loading them in its window",
     )
     parser.add_argument(
         "--log-dir",

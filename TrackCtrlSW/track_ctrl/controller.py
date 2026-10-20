@@ -690,15 +690,28 @@ def default_program_source(controller: TrackController) -> str:
             f"{crossing.output_signal} := {occupied(near)}",
         ]
 
-    lines += ["", "// Separation: hold a train whose neighbour is occupied."]
+    # Only a block with a train in it is held. A block with no train
+    # that still has a suggestion is the next block of the train beside
+    # it, preloaded by the CTC Office so the train finds its values
+    # there as it enters (truth signals/track-signal, suggested-speed).
+    # Holding it for that train's own occupancy would send it speed 0
+    # and authority 0 at every block it enters.
+    lines += [
+        "",
+        "// Separation: hold a train whose neighbour is occupied. A block "
+        "with no train",
+        "// in it passes its suggestion: it is the next block of the train "
+        "beside it.",
+    ]
     switch_blocks = {s.block_id: s.switch_id for s in config.switches}
     for number in numbers:
         beside = [n for n in (number - 1, number + 1) if n in owned]
         if beside:
-            body = "NOT " + (
+            others = (
                 f"OCC_{beside[0]}" if len(beside) == 1
                 else "(" + " OR ".join(f"OCC_{n}" for n in beside) + ")"
             )
+            body = f"NOT (OCC_{number} AND {others})"
         else:
             body = "1"
         on_block = switch_blocks.get(str(number))

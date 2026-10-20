@@ -3,11 +3,21 @@
 ``SystemEdges`` gives the modules wired in their real edges (D005), and
 gives every module still a stub its producers' outputs whole
 (``stub_edges``). Phase 1 wired in the Train Model and the Train
-Controller SW; Phase 2 adds the Track Model:
+Controller SW, Phase 2 the Track Model, and Phase 3 the Track
+Controller SW, which runs the Green Line (R77):
 
-- The CTC Office's ``new_trains`` and ``retired_trains`` keep the
-  roster (``roster``, D022). Until Phase 4 the CTC Office is a stub
-  that releases trains on cue.
+- A scripted CTC Office (``ctc_script``) stands in for the CTC
+  Office's dispatch and suggestions until Phase 4. It reads what the
+  CTC Office reads from the Track Controller (occupancy and each
+  wayside's readiness), and answers in the CTC Office's form. The CTC
+  Office's stub still runs the clock.
+- Nothing runs until a person has loaded a PLC program on every
+  wayside (R44, R70): until each line's waysides are ready, the
+  stand-in releases no train and sends nothing. The clock runs on. The
+  harness logs each line's readiness as it changes.
+- The trains in service are a roster (``roster``, D022) that the CTC
+  Office's ``new_trains`` and ``retired_trains`` keep: the stand-in's,
+  and its stub's.
 - A released train enters at its line's yard exit block (D022). It
   joins the Track Model first, which places it there from a stand-in
   report (``track_edges.placement_report``) until its Train Model
@@ -16,15 +26,17 @@ Controller SW; Phase 2 adds the Track Model:
   Model reports it: each needs that input on every tick. Until its
   first commands arrive, the Train Model holds the train
   (``train_edges.INERT_COMMANDS``).
-- The Track Model takes each train's Train Model report, and per-block
-  commands from a scripted wayside (``wayside_script``), which stands
-  in for the Track Controller until Phase 3. Each train's Train Model
-  takes its Track Model feed and its Train Controller's commands; each
-  Train Controller takes its Train Model's outputs and the light the
-  Track Model showed it (``track_edges``, ``train_edges``).
-- The wayside steps once per tick on the Track Model's outputs of the
-  tick before, and its commands reach the Track Model on the next
-  tick, just as a module's would (R1).
+- The Track Controller takes the stand-in's suggestions and the Track
+  Model's occupancy and device read-back; the Track Model takes the
+  Track Controller's per-block commands, switches, crossings and
+  lights, and each train's Train Model report (``wayside_edges``,
+  ``track_edges``). Each train's Train Model takes its Track Model
+  feed and its Train Controller's commands; each Train Controller
+  takes its Train Model's outputs and the light the Track Model showed
+  it (``track_edges``, ``train_edges``).
+- The stand-in steps once per tick on the Track Controller's outputs
+  of the tick before, and its outputs reach the Track Controller on
+  the next tick, just as a module's would (R1).
 - A train the Track Model stops feeding has left the track: it ran
   into the yard. It leaves every input, and the harness logs it, but
   it stays on the roster until the CTC Office retires it.
@@ -34,18 +46,22 @@ Controller SW; Phase 2 adds the Track Model:
 Every train's inputs to the Train Model and the Train Controller are
 keyed by train ID under ``trains``, with its line, as their processes
 expect (``train_model.module_process``, ``train_ctrl.module_process``).
-The Track Model's are its own (``track_model.wire``).
+The Track Model's and the Track Controller's are their own
+(``track_model.wire``, ``track_ctrl.wire``).
 """
 
 from __future__ import annotations
 
-__all__ = ["CONTROLLER_FOR_LINE", "SystemEdges"]
+__all__ = ["CONTROLLER_FOR_LINE", "TRACK_CONTROLLER_FOR_LINE", "SystemEdges"]
 
 from collections.abc import Collection, Mapping
 from typing import Any
 
+from common.harness.ctc_script import ScriptedCtc
 from common.harness.modules import (
     CTC_OFFICE,
+    TRACK_CONTROLLER_HW,
+    TRACK_CONTROLLER_SW,
     TRACK_MODEL,
     TRAIN_CONTROLLER_HW,
     TRAIN_CONTROLLER_SW,
@@ -54,10 +70,10 @@ from common.harness.modules import (
 )
 from common.harness.roster import Event, Roster
 from common.harness.stub_edges import stub_inputs
+from common.harness.track_devices import TrackDevices
 from common.harness.track_edges import (
     YARD_EXIT_BLOCKS,
     BlockNames,
-    block_commands_to_track_model,
     placement_report,
     track_model_to_train_model,
     train_model_to_track_model,
@@ -68,7 +84,13 @@ from common.harness.train_edges import (
     train_controller_to_train_model,
     train_model_to_train_controller,
 )
-from common.harness.wayside_script import ScriptedWayside
+from common.harness.wayside_edges import (
+    ctc_to_track_controller,
+    line_ready,
+    track_controller_to_ctc,
+    track_controller_to_track_model,
+    track_model_to_track_controller,
+)
 
 #: The Train Controller each line's trains run on (D021).
 CONTROLLER_FOR_LINE: Mapping[str, str] = {
@@ -76,7 +98,22 @@ CONTROLLER_FOR_LINE: Mapping[str, str] = {
     "Red": TRAIN_CONTROLLER_HW,
 }
 
+#: The Track Controller that runs each line (R77, D021).
+TRACK_CONTROLLER_FOR_LINE: Mapping[str, str] = {
+    "Green": TRACK_CONTROLLER_SW,
+    "Red": TRACK_CONTROLLER_HW,
+}
+
 HARNESS = "harness"
+
+# A Track Controller's inputs before its producers have replied.
+_NO_CTC: Mapping[str, Any] = {
+    "closed_blocks": [], "switch_commands": [], "suggestions": [],
+}
+_NO_TRACK_MODEL: Mapping[str, Any] = {
+    "occupied_blocks": [], "switch_positions": [], "crossings_active": [],
+    "signal_aspects": [],
+}
 
 
 class SystemEdges:
@@ -84,24 +121,29 @@ class SystemEdges:
 
     def __init__(
         self,
-        wayside: ScriptedWayside,
+        ctc: ScriptedCtc,
         wired: Collection[str] = WIRED_MODULES,
+        devices: TrackDevices | None = None,
     ) -> None:
         """Prepare the edges, with no train in service.
 
         Args:
-            wayside: The Track Controller's stand-in.
+            ctc: The CTC Office's stand-in.
             wired: The modules that are real, not stubs.
+            devices: Where each switch and light stands; read from the
+                layout files if None.
         """
-        self._wayside = wayside
+        self._ctc = ctc
         self._wired = frozenset(wired)
+        self._devices = TrackDevices.load() if devices is None else devices
         self._roster = Roster(CTC_OFFICE)
         self._names = BlockNames()
-        # The Track Model's outputs as of the tick before, which the
-        # wayside steps on.
-        self._track_model: Mapping[str, Any] = {}
-        # The wayside's last commands, in the Track Model's form.
-        self._wayside_commands: dict[str, dict[str, Any]] = {}
+        # The Track Controllers' outputs as of the tick before, which
+        # the stand-in steps on, and its outputs, for the next tick.
+        self._track_controllers: dict[str, Mapping[str, Any]] = {}
+        self._ctc_outputs: Mapping[str, Any] = {}
+        # Each line's readiness as last logged.
+        self._ready: dict[str, bool] = {}
         # Trains the Track Model has fed, and those it fed and then
         # stopped feeding: they left the track.
         self._on_track: set[str] = set()
@@ -125,8 +167,9 @@ class SystemEdges:
     ) -> list[Event]:
         """Act on a tick's new outputs, once each.
 
-        Applies the CTC Office's train events, steps the wayside, and
-        follows the trains on the track.
+        Applies the CTC Office's train events, steps the CTC Office's
+        stand-in and applies its own, and follows the trains on the
+        track.
 
         Args:
             tick: The tick that is over.
@@ -139,22 +182,25 @@ class SystemEdges:
         events: list[Event] = []
         if CTC_OFFICE in fresh:
             events += self._roster.apply(fresh[CTC_OFFICE], sim_time_s)
-            in_service = {entry.train_id for entry in self._roster}
-            self._on_track &= in_service
-            self._off_track &= in_service
         rejected = fresh.get(TRAIN_MODEL, {}).get("rejected", {})
         if TRAIN_MODEL in self._wired and isinstance(rejected, Mapping):
             events += [
                 (TRAIN_MODEL, "TICK_REJECTED", f"{train_id}: {reason}")
                 for train_id, reason in rejected.items()
             ]
-        # The wayside steps on what the Track Model reported the tick
-        # before, as the Track Controller would.
-        self._wayside_commands = self._step_wayside(sim_time_s)
+        # The stand-in steps on what the Track Controller reported the
+        # tick before, as the CTC Office would.
+        events += self._step_ctc(sim_time_s)
+        in_service = {entry.train_id for entry in self._roster}
+        self._on_track &= in_service
+        self._off_track &= in_service
+        for name in TRACK_CONTROLLER_FOR_LINE.values():
+            if name in fresh and name in self._wired:
+                self._track_controllers[name] = fresh[name]
         if TRACK_MODEL in fresh:
-            self._track_model = fresh[TRACK_MODEL]
-            self._names.learn(_occupancy(self._track_model))
-            events += self._follow_trains(_feeds(self._track_model))
+            track_model = fresh[TRACK_MODEL]
+            self._names.learn(_occupancy(track_model))
+            events += self._follow_trains(_feeds(track_model))
         return events
 
     def inputs_for(
@@ -174,34 +220,58 @@ class SystemEdges:
             return stub_inputs(consumer, outputs)
         if consumer == TRACK_MODEL:
             return self._track_model_inputs(outputs)
+        if consumer in TRACK_CONTROLLER_FOR_LINE.values():
+            return self._track_controller_inputs(consumer, outputs)
         if consumer == TRAIN_MODEL:
             return self._train_model_inputs(outputs)
         if consumer in CONTROLLER_FOR_LINE.values():
             return self._train_controller_inputs(consumer, outputs)
         raise KeyError(f"no edges into {consumer} yet")
 
-    def _step_wayside(self, sim_time_s: float) -> dict[str, dict[str, Any]]:
-        # The wayside's commands for its line, in the Track Model's
-        # names; none until the Track Model's blocks are known.
-        if not self._names:
-            return {}
-        line = self._wayside.line
-        occupied = []
-        for name, is_occupied in _occupancy(self._track_model).items():
-            if not is_occupied:
-                continue
-            block = self._block(name)
-            if block is not None and block[0] == line:
-                occupied.append(block[1])
-        commands = self._wayside.step(sim_time_s, occupied)
-        return block_commands_to_track_model(commands, line, self._names)
+    def _step_ctc(self, sim_time_s: float) -> list[Event]:
+        # The stand-in's outputs for the next tick, from what its line's
+        # Track Controller reported: its readiness, logged as it
+        # changes, and its occupancy. A train it releases joins the
+        # roster now, as one the CTC Office released on this tick.
+        line = self._ctc.line
+        reported = self._track_controllers.get(
+            TRACK_CONTROLLER_FOR_LINE[line]
+        )
+        inputs = {} if reported is None else track_controller_to_ctc(
+            reported
+        )
+        events = self._readiness(line, inputs.get("waysides", []))
+        self._ctc_outputs = self._ctc.step(sim_time_s, inputs)
+        events += self._roster.apply(
+            {"new_trains": self._ctc_outputs["new_trains"]}, sim_time_s
+        )
+        return events
 
-    def _block(self, name: str) -> tuple[str, str] | None:
-        # A Track Model block's line and number; None if not known.
-        try:
-            return self._names.block(name)
-        except KeyError:
-            return None
+    def _readiness(
+        self, line: str, waysides: list[Mapping[str, Any]]
+    ) -> list[Event]:
+        # One event when a line's readiness changes, once its waysides
+        # have reported: which are not ready, and why.
+        if not any(each["line"] == line for each in waysides):
+            return []
+        ready = line_ready(waysides, line)
+        if self._ready.get(line) == ready:
+            return []
+        self._ready[line] = ready
+        source = TRACK_CONTROLLER_FOR_LINE[line]
+        if ready:
+            return [(source, "WAYSIDES_READY", line)]
+        reasons: dict[str, list[str]] = {}
+        for each in waysides:
+            if each["line"] == line and not each["ready"]:
+                reasons.setdefault(each["reason"], []).append(
+                    each["wayside_id"]
+                )
+        detail = "; ".join(
+            f"{', '.join(ids)}: {reason or 'not ready'}"
+            for reason, ids in reasons.items()
+        )
+        return [(source, "WAYSIDES_NOT_READY", f"{line}: {detail}")]
 
     def _follow_trains(self, feeds: Mapping[str, Any]) -> list[Event]:
         # Note each train the Track Model feeds; one it fed before and
@@ -217,12 +287,47 @@ class SystemEdges:
                 events.append((HARNESS, "TRAIN_LEFT_TRACK", train_id))
         return events
 
+    def _track_controller_inputs(
+        self, consumer: str, outputs: Mapping[str, Mapping[str, Any]]
+    ) -> dict[str, Any]:
+        # The stand-in's suggestions for this Track Controller's line,
+        # and what the Track Model reported of it.
+        line = next(
+            line for line, name in TRACK_CONTROLLER_FOR_LINE.items()
+            if name == consumer
+        )
+        track_model = outputs.get(TRACK_MODEL)
+        return {
+            "ctc": (
+                ctc_to_track_controller(self._ctc_outputs, line)
+                if self._ctc_outputs else dict(_NO_CTC)
+            ),
+            "track_model": (
+                track_model_to_track_controller(
+                    track_model, line, self._names, self._devices
+                )
+                if track_model and TRACK_MODEL in self._wired
+                else dict(_NO_TRACK_MODEL)
+            ),
+        }
+
     def _track_model_inputs(
         self, outputs: Mapping[str, Mapping[str, Any]]
     ) -> dict[str, Any]:
-        # The wayside's commands, and every train on the track: its
-        # Train Model's report, or, until the Train Model reports a
-        # block for it, the stand-in that places it at the yard exit.
+        # Every wired Track Controller's commands, and every train on
+        # the track: its Train Model's report, or, until the Train
+        # Model reports a block for it, the stand-in that places it at
+        # the yard exit.
+        controller: dict[str, dict[str, Any]] = {}
+        for name in TRACK_CONTROLLER_FOR_LINE.values():
+            commands = outputs.get(name)
+            if name not in self._wired or not commands or not self._names:
+                continue
+            mapped = track_controller_to_track_model(
+                commands, self._names, self._devices
+            )
+            for field, values in mapped.items():
+                controller.setdefault(field, {}).update(values)
         reports = _trains(outputs.get(TRAIN_MODEL))
         trains = {}
         for entry in self._roster:
@@ -240,7 +345,7 @@ class SystemEdges:
                 trains[train_id] = train_model_to_track_model(
                     report, entry.line, self._names
                 )
-        return {"controller": self._wayside_commands, "trains": trains}
+        return {"controller": controller, "trains": trains}
 
     def _train_model_inputs(
         self, outputs: Mapping[str, Mapping[str, Any]]

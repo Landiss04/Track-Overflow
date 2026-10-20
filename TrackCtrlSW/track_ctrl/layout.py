@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -496,7 +497,14 @@ def build_line(parsed: ParsedLayout, controller_count: int) -> LineLayout:
 # --- the layouts the system starts with ------------------------------------
 
 def default_layout_dir() -> Path:
-    """The repository's ``TrackModel`` folder, which holds the layouts."""
+    """The ``TrackModel`` folder, which holds the layouts.
+
+    In the repository, or in a built executable's bundle, which lays the
+    folders out the same way (``track_overflow.py``).
+    """
+    root = getattr(sys, "_MEIPASS", None)
+    if root is not None:
+        return Path(root) / "TrackModel"
     return Path(__file__).resolve().parents[2] / "TrackModel"
 
 

@@ -28,10 +28,8 @@ beacon passes unchanged, checked or not: the Train Model checks its
 payload (``utils.beacon_codec``) and rejects a train whose beacon is
 malformed, so only that train misses the tick (R60).
 
-Track Controller -> Track Model, ``block_commands_to_track_model``:
-per-block commands keyed by block number on one line, keyed instead by
-the Track Model's names. In Phase 2 they come from the scripted
-wayside that stands in for the Track Controller (``wayside_script``).
+The edges between the Track Model and the Track Controller are in
+``wayside_edges``; they use ``BlockNames`` too.
 
 A train the CTC Office releases enters at its line's yard exit block
 (D022). Until its Train Model first reports it, ``placement_report``
@@ -51,7 +49,6 @@ __all__ = [
     "TRACK_MODEL_LINES",
     "YARD_EXIT_BLOCKS",
     "BlockNames",
-    "block_commands_to_track_model",
     "placement_report",
     "track_model_to_train_model",
     "train_model_to_track_model",
@@ -120,29 +117,6 @@ class BlockNames:
             KeyError: If the Track Model has no such block.
         """
         return self._by_name[name]
-
-
-def block_commands_to_track_model(
-    commands: Mapping[str, Mapping[str, Any]], line: str, names: BlockNames
-) -> dict[str, dict[str, Any]]:
-    """Key per-block commands by the Track Model's block names.
-
-    Args:
-        commands: Command maps by field, such as
-            ``commanded_speed_mps``, each keyed by block number.
-        line: The line the blocks are on.
-        names: The Track Model's block names.
-
-    Raises:
-        KeyError: If a block is unknown.
-    """
-    return {
-        field: {
-            names.track_model_name(line, number): value
-            for number, value in values.items()
-        }
-        for field, values in commands.items()
-    }
 
 
 def placement_report(name: str) -> dict[str, Any]:

@@ -14,6 +14,7 @@ anything on the track that they have not just watched execute.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from track_ctrl.interface import (
 )
 from track_ctrl.layout import (
     LayoutError,
+    LineLayout,
     build_default_system,
     build_line,
     default_layout_dir,
@@ -57,17 +59,28 @@ class TrackControllerState(QObject):
     tabChanged = Signal()
     externalChanged = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        lines: Sequence[LineLayout] | None = None,
+    ) -> None:
         """Build the module's UI state.
 
         The module has no clock and no world of its own. Whatever drives
         it, the central harness or the test UI, calls :meth:`step` once
         per tick of the shared clock (D017), with the tick's inputs.
         Until the first tick every wayside idles at its starter program.
+
+        Args:
+            parent: Optional Qt parent.
+            lines: The lines to start with, each divided among its
+                waysides; the default Green and Red when None. Under the
+                central harness this variant runs the Green Line only
+                (R77, ``track_ctrl.module_process``).
         """
         super().__init__(parent)
         self._system = SwTrackController()
-        for line in build_default_system():
+        for line in build_default_system() if lines is None else lines:
             self._system.load_track(line)
 
         #: Only for the header badges: whether the sender's clock is held

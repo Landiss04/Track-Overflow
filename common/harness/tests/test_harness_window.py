@@ -39,7 +39,11 @@ class HarnessWindowTest(unittest.TestCase):
                             "--speedup", "--run-seconds",
                             "2" if mode == "system" else "1",
                             "--log-dir", str(log_dir)]
-                    if mode != "system":
+                    if mode == "system":
+                        # A person loads the PLC programs (R44); here
+                        # the Track Controller commits its starters.
+                        args.append("--load-starters")
+                    else:
                         args.append("--stubs-only")
                     if mode == "headless":
                         args.append("--headless")
@@ -58,9 +62,9 @@ class HarnessWindowTest(unittest.TestCase):
                     self.assertEqual(rows[-1]["event"], "HARNESS_STOPPED")
                     self.assertGreater(int(rows[-1]["tick"]), 0)
                     if mode == "system":
-                        self.assertTrue(any(
-                            row["event"] == "TRAIN_ADDED" for row in rows
-                        ))
+                        events = [row["event"] for row in rows]
+                        self.assertIn("WAYSIDES_READY", events)
+                        self.assertIn("TRAIN_ADDED", events)
                     exits = [row for row in rows
                              if row["event"] == "MODULE_EXITED"]
                     self.assertEqual(len(exits), 7)
