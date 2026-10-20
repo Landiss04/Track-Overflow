@@ -202,6 +202,11 @@ runtime verification is claimed.
   outputs contain door state; adding the Track Model consumer/direct edge remains
   distinct integration work, not an implemented `TrackOutputs` field.
 
+## Known bugs
+
+[`BUGS.md`](BUGS.md) lists them. B1: the light ahead reaches a train only as it enters a
+signal block, not on every tick as truth `signal-aspect-ahead` asks.
+
 ## Provisional, pending decisions
 
 1. Block ID format `"<LINE> <section>-<number>"`, e.g. `GREEN D-13`.
