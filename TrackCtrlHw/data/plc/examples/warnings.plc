@@ -1,7 +1,7 @@
 // Compile warnings: load into wayside 1 and it loads, with every
 // warning listed under the i button (PLC program details).
 
-VAR_IN  OCC_1 OCC_2 OCC_3 CLOSED_1
+VAR_IN  OCC_1 OCC_2 OCC_3 MAINT
 VAR_IN  OCC_2                       // declared twice
 VAR_OUT AUTH_1 AUTH_2 AUTH_3        // AUTH_3 is never assigned: stays 0
 
