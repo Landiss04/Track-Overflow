@@ -7,6 +7,10 @@ the path for ``common``.
 
 from __future__ import annotations
 
+import dataclasses
+
+import pytest
+
 from common.harness.track_model_edges import (
     build_track_model_inputs,
     track_model_to_ctc_office,
@@ -22,7 +26,7 @@ from common.interfaces import (
     TrainTrackReport,
     WaysideCommands,
 )
-from track_model.interface import TrackFailure
+from track_model.interface import Beacon, TrackFailure
 from tests.helpers import DT_S, make_model
 
 FAR_M = 10_000.0
@@ -121,3 +125,42 @@ def test_beacon_maps_to_the_catalog_beacon() -> None:
     assert feed is not None and feed.beacon is not None
     assert (feed.beacon.next_station, feed.beacon.platform_side) == (
         "PIONEER", "L")
+
+
+@pytest.mark.parametrize("side", ["L", "R", "LR"])
+def test_beacon_edge_checks_the_complete_payload(side: str) -> None:
+    """Producer-owned types stay intact while the edge enforces the bound."""
+    out = make_model().step(DT_S, build_track_model_inputs(
+        WaysideCommands(), at("GREEN A-3", 1.0), ambient_temp_c=0.0))
+    original = out.train_feeds["T1"]
+    # False costs 14 characters of punctuation, side and boolean for L/R.
+    name = '"\\é🚆' + "S" * (93 - len(side))
+    beacon = Beacon(name, side, False)
+    changed = dataclasses.replace(out, train_feeds={
+        "T1": dataclasses.replace(original, beacon=beacon),
+    })
+    feed = track_model_to_train_model(changed, "T1")
+    assert feed is not None and feed.beacon is not None
+    assert feed.beacon.next_station == name
+    overlong = dataclasses.replace(beacon, station_name=name + "S")
+    invalid = dataclasses.replace(out, train_feeds={
+        "T1": dataclasses.replace(original, beacon=overlong),
+    })
+    before = dataclasses.asdict(invalid)
+    with pytest.raises(ValueError, match="129"):
+        track_model_to_train_model(invalid, "T1")
+    assert dataclasses.asdict(invalid) == before
+
+
+@pytest.mark.parametrize("beacon", [
+    Beacon("S", None, False), Beacon("S", "Q", False),
+    Beacon(5, "L", False), Beacon("S", "L", "false"),
+])
+def test_malformed_beacon_is_rejected_at_the_edge(beacon: Beacon) -> None:
+    out = make_model().step(DT_S, build_track_model_inputs(
+        WaysideCommands(), at("GREEN A-3", 1.0), ambient_temp_c=0.0))
+    invalid = dataclasses.replace(out, train_feeds={
+        "T1": dataclasses.replace(out.train_feeds["T1"], beacon=beacon),
+    })
+    with pytest.raises(ValueError, match="beacon"):
+        track_model_to_train_model(invalid, "T1")

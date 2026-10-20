@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from utils.beacon_codec import encode_beacon
+
 from common.interfaces import (
     Beacon as CatalogBeacon,
     FailureMode,
@@ -182,11 +184,12 @@ def track_model_to_train_controller(
 
 
 def _beacon(beacon: Beacon | None) -> CatalogBeacon | None:
-    # Station fields carry over unchanged. "LR" is a two-sided platform;
-    # "" is a station the layout gives no side for (the Blue line).
-    # OPEN: the Train Model accepts only "L" or "R" so far.
+    # Check the logical payload at the edge without sharing boundary types.
     if beacon is None:
         return None
+    encode_beacon(
+        beacon.station_name, beacon.platform_side, beacon.underground,
+    )
     return CatalogBeacon(
         next_station=beacon.station_name,
         platform_side=beacon.platform_side or "",

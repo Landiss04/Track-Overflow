@@ -32,6 +32,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from utils.beacon_codec import encode_beacon
+
 #: The light ahead, as the Track Model spells it
 #: (``signals/signal-aspect-ahead``).
 ASPECTS = ("RED", "YELLOW", "GREEN", "SUPER_GREEN")
@@ -50,6 +52,9 @@ class FeedBeacon:
     station_name: str
     platform_side: str
     underground: bool = False
+
+    def __post_init__(self) -> None:
+        encode_beacon(self.station_name, self.platform_side, self.underground)
 
 
 @dataclass(frozen=True)
