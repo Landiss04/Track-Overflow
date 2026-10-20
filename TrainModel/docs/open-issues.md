@@ -19,8 +19,8 @@ presence is source-inspection evidence, not a claim that local checks passed.
 ## Remaining integration dependencies
 
 - Phase 2 wires the Track Model process with direct harness edges
-  (`common/harness/track_edges.py`), which check every beacon with
-  `utils/beacon_codec.py`; the fixed feed is gone. A scripted wayside still stands
+  (`common/harness/track_edges.py`), which pass each beacon on unchanged for the
+  Train Model to check and reject per train; the fixed feed is gone. A scripted wayside still stands
   in for the Track Controller, so the commanded speed and authority the Train Model
   passes on are scripted until Phase 3. `track_model_edges.py` retains legacy
   catalog conversions, off the running path.

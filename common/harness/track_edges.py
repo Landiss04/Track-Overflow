@@ -24,9 +24,9 @@ train's report::
 Track Model -> Train Model, ``track_model_to_train_model``: one
 train's feed becomes its ``track`` input, field for field, with the
 block named by its number; the Train Model knows the train's line. A
-beacon passes unchanged once its logical payload checks out
-(``utils.beacon_codec``: platform side ``L``, ``R`` or ``LR``, and at
-most 128 characters in all, never truncated).
+beacon passes unchanged, checked or not: the Train Model checks its
+payload (``utils.beacon_codec``) and rejects a train whose beacon is
+malformed, so only that train misses the tick (R60).
 
 Track Controller -> Track Model, ``block_commands_to_track_model``:
 per-block commands keyed by block number on one line, keyed instead by
@@ -60,8 +60,6 @@ __all__ = [
 import re
 from collections.abc import Iterable, Mapping
 from typing import Any
-
-from utils.beacon_codec import encode_beacon
 
 #: The Track Model's spelling of each line in the system (D023: the
 #: Blue Line is out of scope).
@@ -200,17 +198,11 @@ def track_model_to_train_model(
 
     Raises:
         KeyError: If a field is missing, or the block is unknown.
-        ValueError: If the beacon's payload is malformed or too long.
     """
     info = feed["track_info"]
     signal = feed["track_signal"]
     beacon = feed["beacon"]
     _, number = names.block(info["block_id"])
-    if beacon is not None:
-        encode_beacon(
-            beacon["station_name"], beacon["platform_side"],
-            beacon["underground"],
-        )
     return {
         "track_info": {
             "block_id": number,

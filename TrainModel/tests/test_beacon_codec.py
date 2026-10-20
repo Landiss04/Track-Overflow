@@ -101,7 +101,7 @@ def test_rejection_preserves_state_latch_and_random_sequence() -> None:
 
 def _edge_beacon(name: str) -> dict:
     # The harness's Track Model -> Train Model edge, on a feed whose
-    # beacon carries ``name``; the edge checks the payload.
+    # beacon carries ``name``. The edge passes it on unchecked.
     names = BlockNames()
     names.learn(["GREEN K-64"])
     feed = {
@@ -117,12 +117,22 @@ def _edge_beacon(name: str) -> dict:
     return track_model_to_train_model(feed, names)["beacon"]
 
 
+def test_the_harness_passes_a_beacon_for_the_model_to_check() -> None:
+    # Kevin Schillinger, 2026-10-20: the harness passes the beacon on
+    # and the Train Model rejects it, so only that train misses a tick.
+    name = "S" * 115  # One past the bound: 129 characters in all.
+    passed = _edge_beacon(name)
+    assert passed["station_name"] == name
+    model = TrainModel(TrainConfig())
+    data = dataclasses.asdict(inp())
+    data["track"]["beacon"] = passed
+    with pytest.raises(InvalidInputError, match="129"):
+        model.step(DT_S, decode_inputs(data))
+
+
 def test_stand_ins_validate_without_importing_model_types() -> None:
     name = "S" * 114  # [name,"L",false] has 14 characters of overhead.
-    assert _edge_beacon(name)["station_name"] == name
     assert TrackBlock("1", 50, 0, 0, 10, "", name).beacon_station == name
-    with pytest.raises(ValueError, match="129"):
-        _edge_beacon(name + "S")
     with pytest.raises(ValueError, match="129"):
         TrackBlock("1", 50, 0, 0, 10, "", name + "S")
     values = {}

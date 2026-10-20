@@ -328,23 +328,17 @@ class TrackEdgesTest(unittest.TestCase):
                 "beacon"]
         )
 
-    def test_a_beacon_is_checked_and_passed_unchanged(self) -> None:
-        for side in ("L", "R", "LR"):
-            beacon = {"station_name": "MT LEBANON", "platform_side": side,
-                      "underground": True}
+    def test_a_beacon_passes_unchanged_even_when_malformed(self) -> None:
+        # The Train Model checks it, and rejects only that train.
+        for changes in (
+            {}, {"platform_side": "LR"}, {"platform_side": None},
+            {"underground": "false"}, {"station_name": "S" * 120},
+        ):
+            beacon = {"station_name": "GLENBURY", "platform_side": "R",
+                      "underground": False, **changes}
             mapped = track_model_to_train_model(feed(beacon=beacon),
                                                 self.names)
             self.assertEqual(mapped["beacon"], beacon)
-        for bad in (
-            {"platform_side": None},
-            {"platform_side": "Q"},
-            {"underground": "false"},
-            {"station_name": "S" * 120},
-        ):
-            beacon = {"station_name": "GLENBURY", "platform_side": "R",
-                      "underground": False, **bad}
-            with self.assertRaises(ValueError):
-                track_model_to_train_model(feed(beacon=beacon), self.names)
 
     def test_a_new_train_is_placed_at_rest(self) -> None:
         placed = placement_report("GREEN K-63")
