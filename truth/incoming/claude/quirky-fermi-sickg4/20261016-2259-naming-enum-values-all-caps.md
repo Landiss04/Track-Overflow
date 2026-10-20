@@ -1,0 +1,103 @@
+**Target:** truth/conventions/naming.md
+**Action:** replace
+**Proposed by:** Claude on claude/quirky-fermi-sickg4
+**Provenance:** asserted by Kevin Schillinger 2026-10-16, the entry's owner, in the team's review of `documents/system-integration-design.md` (§4.4, answering the doc's note that the Track Model spells `NORMAL` and `RED` where the Track Controllers send `"normal"` and `"red"`): "All enums should be all caps".
+
+---
+
+# naming
+
+**Status:** current
+**Owner:** Kevin
+**Provenance:** `documents/Coding Standards (Group).docx` §1; `documents/PYTHON_STYLE_GUIDE.md` §5, §8; `documents/requirements-matrix.md` §1–2 (module names); unit-suffix examples asserted by Kevin 2026-09-30; enumerated values all caps asserted by Kevin Schillinger 2026-10-16 in the team review of `documents/system-integration-design.md`
+**Aliases:** naming conventions, style guide naming, PEP 8 naming
+**Last updated:** 2026-10-16
+
+The baseline is PEP 8. `Coding Standards (Group).docx` is the graded group standard
+and wins where it is specific. `PYTHON_STYLE_GUIDE.md` extends PEP 8 for this
+codebase and wins over bare PEP 8 where the two differ. Where all three are silent,
+PEP 8 applies.
+
+## Module names
+
+The system has five modules. These spellings are canonical in prose, UI headers, and
+documentation.
+
+| Module | Aliases |
+|--------|---------|
+| CTC Office | CTC |
+| Track Controller | Wayside Controller |
+| Train Controller | none |
+| Track Model | none |
+| Train Model | none |
+
+Track Controller and Train Controller each exist as a software and a hardware
+instance; the instance is named alongside the module, not as a separate module.
+
+The Moving Block Overlay (MBO Controller, MBO Scheduler) is out of scope and is not a
+module of this system.
+
+## Python names
+
+| Element | Convention | Example |
+|---|---|---|
+| Module / package | lowercase, short; underscores only where they help | `track_layout.py`, `signals/` |
+| Class | CapWords, no underscores | `TrainController`, `TrackBlock` |
+| Acronym in a class name | all letters capitalized | `CTCOffice`, `HTTPServerError` |
+| Exception | CapWords + `Error` suffix | `InvalidBlockError` |
+| Function / method | lowercase_with_underscores | `set_speed_limit()` |
+| Instance attribute | lowercase_with_underscores | `current_speed` |
+| Non-public attribute / method | one leading underscore | `_authority`, `_check_switch()` |
+| Name-mangled attribute | two leading underscores, only to avoid a subclass clash | `__speed` |
+| Local / global variable | lowercase_with_underscores | `block_number` |
+| Constant | UPPER_CASE_WITH_UNDERSCORES, module level, after imports | `MAX_SPEED_MPS` |
+| Enum class / members | CapWords class, UPPER_CASE members | `SignalAspect.STOP` |
+| Type variable | CapWords, short; `_co` / `_contra` for variance | `T`, `RollingStockT` |
+| First arg | `self` on instance methods, `cls` on class methods | `def stop(self):` |
+
+Rules that apply on top of the table:
+
+- Identifiers are ASCII, English words.
+- Every enumerated value is all caps. This covers enum members and also enumerated
+  string values that cross a module boundary, such as the switch positions `NORMAL`
+  and `REVERSE` and the light state `RED`.
+- Never `l`, `O`, or `I` as a single-character name. Use `L` if you want `l`.
+- A name that clashes with a keyword takes a single trailing underscore: `class_`,
+  `from_`. Never a misspelling.
+- Method names start with a verb: `set_speed_limit`, `calculate_braking_distance`,
+  `is_block_occupied`.
+- A quantity with units carries the unit in the name, and the unit is the one for the
+  side of the display boundary the value is on. Backend: `speed_mps`, `distance_m`,
+  `mass_kg`, `grade_deg`. Display layer: `speed_mph`. A bare `speed` or `distance` is
+  not acceptable where the unit is not obvious. See [units.md](units.md) for which unit
+  belongs on which side.
+- No magic numbers. A literal with meaning becomes a named constant.
+- Short names (`i`, `x`, `dt`, `v0`) are for loop counters and short-lived locals
+  inside a single function. Public APIs are descriptive.
+- Properties are named like the attribute they represent — `speed`, never
+  `get_speed`. The backing attribute takes a leading underscore: `_speed`.
+- Prefer plain public attributes over getter/setter pairs. Convert to `@property`
+  later if validation is needed; the caller-facing name does not change.
+- `mixedCase` appears in new code only to match an external library's callback names.
+- Do not invent `__dunder__` names.
+
+## Docstrings and comments
+
+- Docstrings on every public module, class, function, and method. Triple double
+  quotes. Non-public helpers take a short comment after the `def` line instead.
+- One-line docstring: imperative phrase ending in a period — "Return the speed limit
+  for a block.", not "Returns ...". Closing `"""` on the same line.
+- Multi-line docstring: one-line summary, blank line, detail. Closing `"""` on its
+  own line.
+- Args / Returns / Raises use **Google style** project-wide.
+- Comments are complete sentences in English, capitalized, and explain *why*, not
+  *what*. A comment that contradicts the code is worse than no comment.
+- Block comments are indented to the code they describe; `#` then one space; `#`
+  alone separates paragraphs.
+- Inline comments are used sparingly, at least two spaces after the statement.
+
+## Supersedes
+
+- Unit-suffix examples: previously `speed_mph`, `distance_m`, `mass_kg`, `grade_percent`,
+  which mixed display, backend and layout-file units; now split by side of the display
+  boundary (Kevin 2026-09-30).
