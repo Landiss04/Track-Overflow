@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.5, revised after the second round of answers on 2026-10-20. Not normative. |
+| **Status** | Draft v0.6. Every question in section 1.5 is answered. Not normative. |
 | **Date** | 2026-10-20 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
@@ -13,24 +13,24 @@ The `truth` branch is the authoritative record. This document cites it by shard 
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
 
-**Changes since v0.4**
+**Changes since v0.5**
 
-- Section 1.4 adds the second round of answers (R65 to R78): scheduled stops only, a
-  "return to yard" action, no Blue Line in the Track Model, the D019 renumbering, and
-  the Track Controller owners' answers to TC-1 to TC-10 (section 1.6).
-- Q6, Q20, Q21, Q22, Q24 and Q25 are answered. Q7, Q19 and Q23 stay open.
-- Section 7 adds nine proposals, five of them replacing this branch's earlier versions,
-  and updates the promote-or-deny lists.
+- Section 1.4 adds R79 to R81: the door interlock is adopted, the event logger stays, and
+  the USB link to the Pis is chosen (section 4.5).
+- Q7, Q19 and Q23 are answered, so no question in section 1.5 is open. What remains is
+  building and measuring.
+- Section 7 adds five proposals, three of them replacing this branch's earlier versions.
 
-v0.4 recorded the first answers of 2026-10-20 (R44 to R64), v0.3 those of 2026-10-17 (R33
-to R43), and v0.2 the review of v0.1 (R1 to R32). Git history holds the earlier text.
+v0.5 recorded the second round of answers of 2026-10-20 (R65 to R78), v0.4 the first
+(R44 to R64), v0.3 those of 2026-10-17 (R33 to R43), and v0.2 the review of v0.1 (R1 to
+R32). Git history holds the earlier text.
 
 **Tags**
 
 | Tag | Meaning |
 |---|---|
 | [T] | Normative fact on `truth`. |
-| [R*n*] | Decision *n*: R1 to R32 from the team's review of v0.1 on 2026-10-16, R33 to R43 from the answers of 2026-10-17, and R44 to R78 from the answers of 2026-10-20 (section 1). Statements new to `truth` were filed as proposals (section 7). |
+| [R*n*] | Decision *n*: R1 to R32 from the team's review of v0.1 on 2026-10-16, R33 to R43 from the answers of 2026-10-17, and R44 to R81 from the answers of 2026-10-20 (section 1). Statements new to `truth` were filed as proposals (section 7). |
 | [U] | Stated by Kevin Schillinger on 2026-10-16 when requesting this design. |
 | [P] | Pending proposal under `truth/_inbox/`. Not a fact. |
 | [C] | Observed in code at `1aaa9a8`, unless another ref is named. Current behaviour, not a decision. |
@@ -148,6 +148,9 @@ are as written.
 | R76 | TC-8 | "Leave the test UI just don't call it." | The HW test UI stays, and the harness never starts it ([P] D005; pending D018). |
 | R77 | TC-9 | "SW: Green line only, HW: Red line only. HW dependd just on the database file you feed it" | As D021; the HW variant's line follows the databases it is given. |
 | R78 | TC-10 | "Yes" | The HW sample wayside files get `next_blocks`. |
+| R79 | Q23 | "Adopt the door interlock." | The Train Controller opens doors only when stopped, on the platform side, and commands zero power while a door is open ([P] `door-command`). |
+| R80 | Q19 | "keep the logger it is useful" | The harness writes one CSV event log ([P] `files-and-paths`, D005). This reverses R13. |
+| R81 | Q7 | "choose whatever usb protocol makes the most sense given that this will fucntion on a strangers windows machine as an exe" | Chosen: USB serial in the standard communications class (CDC-ACM), from the Pi's device mode; the Pis are peripherals of the one computer; one Pi per hardware module ([P] D027; section 4.5). |
 
 ### 1.5 Questions
 
@@ -162,7 +165,7 @@ is the first train run, graded on 2026-11-12, and "Full" is the complete system.
 | Q4 | Train ID format. | Answered (R47). | G-SIG-6 | none |
 | Q5 | The emergency brake at block changes. | Answered (R49, R64): the CTC Office preloads the next block, and a block not commanded on the latest tick reads zero. | G-NEW-1 | none |
 | Q6 | Is a failed block reported to the CTC Office as occupied or as a closure? | Answered (R69): as occupied, with no separate closure. | G-SIG-8 | none |
-| Q7 | The USB link: protocol, who builds it, what runs on a Pi; whether the Pis count as "one computer"; how many Pis serve the Red-line trains. | Open (R41). | G-HW-1, G-RUN-3 | Full |
+| Q7 | The USB link to the Pis, and whether they count as "one computer". | Answered (R81): USB serial (CDC-ACM) in the Pi's device mode; the Pis are peripherals of the one computer; one Pi per hardware module. | G-HW-1, G-RUN-3 | none |
 | Q8 | Brake commands as `bool[2]` or two booleans? | Answered (R54): two booleans. | G-SIG-19 | none |
 | Q9–Q11 | Float reach, next light, Blue Line. | Answered (R38–R40). | | none |
 | Q12 | Edge mappings without the catalog. | Answered (R64): straight from producer to consumer types. | G-SIG-13 | none |
@@ -172,11 +175,11 @@ is the first train run, graded on 2026-11-12, and "Full" is the complete system.
 | Q16 | Who holds the dwell. | Answered (R43, R56). | G-SIG-15 | none |
 | Q17 | Who needs the train ID. | Answered (R48). | G-SIG-3 | none |
 | Q18 | Fleet-wide rejection. | Answered (R60). | G-NEW-3 | none |
-| Q19 | The event logger: amend the SRS, or keep one CSV file written by the harness? | Open. Kevin is the resolution owner of the filed conflict. | G-RUN-4 | Full |
+| Q19 | The event logger. | Answered (R80): keep it; the harness writes one CSV file. | G-RUN-4 | none |
 | Q20 | Should each line have a roster of its waysides, so it cannot read ready before all are loaded? | Answered (R70): every wayside is reported from startup, not ready until loaded. | G-NEW-2 | none |
 | Q21 | Should the CTC Office get a "return to yard" action for manual trains? | Answered (R66): yes. | G-SIG-6 | none |
 | Q22 | How to keep Blue Line stations from reaching the CTC Office. | Answered (R67): the Track Model does not load the Blue Line. | G-SIG-7 | none |
-| Q23 | Door interlock: "no power while a door is open" means the Train Controller commands zero traction power whenever a door is open, so a train can never be driven with a door open. Doors still open only when stopped, on the platform side. Adopt it? | Open (new) | G-SIG-16 | Iter 3 |
+| Q23 | The door interlock. | Answered (R79): adopted. | G-SIG-16 | none |
 | Q24 | Which stations does a train stop at? | Answered (R65): its scheduled stations only. | G-SIG-15 | none |
 | Q25 | The D019 ID clash. | Answered (R68): the re-filed CTC proposal becomes D025. | G-TR-3 | none |
 
@@ -261,9 +264,10 @@ From `documents/srs-filled.md` (line numbers in parentheses):
 - Variants: REQ-INTF-009 and -010 (199-201): the HW and SW variants expose equivalent
   external interfaces. R32 says they are identical.
 - Event log: REQ-NFR-008 (466), REQ-INTF-015 (215) and REQ-DSN-005 (512) require one, in
-  CSV. R13 drops it, and the conflict is filed (Q19).
+  CSV. R80 keeps it: the harness writes one CSV file.
 - Delivery: REQ-DSN-001, -002 and -003 (496-504): a standalone, pre-compiled executable on
-  a single machine with no network. R5 adds Raspberry Pis on USB (Q7).
+  a single machine with no network. R5 adds Raspberry Pis, attached by USB as peripherals
+  of that one machine (R81).
 
 Schedule (`documents/Track_Overflow_Schedule.gan`): Design Review on 2026-10-22; Iteration 3,
 the System Group Review, on 2026-11-12; Iteration 4, the final, on 2026-12-10. The
@@ -515,8 +519,8 @@ flowchart LR
         TKM["Track Model process"]
         TRM["Train Model process<br/>one model per train"]
         TCS["Train Controller SW process<br/>Green-line trains"]
-        TKHU["Track Controller HW UI"]
-        TCHU["Train Controller HW UI"]
+        TKHU["Track Controller HW process<br/>window and USB relay"]
+        TCHU["Train Controller HW process<br/>window and USB relay"]
     end
     subgraph PI["Raspberry Pis"]
         TKH["Track Controller HW<br/>Red"]
@@ -528,16 +532,16 @@ flowchart LR
     HUB <--> TKM
     HUB <--> TRM
     HUB <--> TCS
-    HUB <-->|"USB (Q7)"| TKH
-    HUB <-->|"USB (Q7)"| TCH
+    HUB <--> TKHU
+    HUB <--> TCHU
     CTC -.->|"clock_speedup, clock_paused"| CLK
-    TKHU -.-|"(Q7)"| TKH
-    TCHU -.-|"(Q7)"| TCH
+    TKHU <-->|"USB serial"| TKH
+    TCHU <-->|"USB serial"| TCH
 ```
 
 All module-to-module data passes through the harness's edge mappings (D005). Appendix A
-lists what each edge carries. A HW variant's UI runs on the host PC (R42). How it reaches
-its Pi is part of Q7.
+lists what each edge carries. A HW variant's process on the host shows its window and
+relays the harness's messages to its Pi over USB serial (R42, R81).
 
 ### 4.2 Clock
 
@@ -692,7 +696,7 @@ Existing links, measured against what a harness channel needs [C] (Appendix B):
 Decided on 2026-10-20 (R64; [P] D005 and `files-and-paths`):
 
 - **G-RUN-6, protocol.** One protocol for all seven modules: newline-delimited JSON, over
-  local sockets on the PC and over USB to the Pis. Every message carries an integer
+  local sockets on the PC and over USB serial to the Pis. Every message carries an integer
   request ID and the tick number. A module accepts one driver, the harness, and the
   harness side never blocks.
 - **G-RUN-7, liveness.** Each module tells the harness when it is ready. A module's window
@@ -705,14 +709,44 @@ Decided on 2026-10-20 (R64; [P] D005 and `files-and-paths`):
   executable again. One path helper finds data files both from source and from the built
   executable. Try the frozen build on Windows early.
 
+**USB link to the Pis (R81, [P] D027).** Chosen for a stranger's Windows machine running
+the built executable:
+
+- **What:** each Pi runs in USB device ("gadget") mode and presents itself as a USB
+  serial device of the standard communications class (CDC-ACM). The host sees a COM port.
+- **Why this one:**
+  - Windows 10 and 11 drive it with their built-in serial driver, so nothing is
+    installed, nothing is downloaded, and no administrator rights are needed.
+  - It is not a network, so it keeps REQ-DSN-003.
+  - Qt's serial-port module (`QSerialPort`, `QSerialPortInfo`) is part of PySide6,
+    already pinned at 6.11.2, so the executable gains no dependency. Its event-driven
+    reads match the harness's non-blocking design.
+- **Finding the Pi:** the host never assumes a COM number, since that differs on every
+  machine. It picks the port by the Pi's USB identity (a product name or serial number
+  set on the Pi), and the Pi states which module it runs when it connects.
+- **Messages:** the same newline-delimited JSON as the local links.
+- **Who talks to the Pi:** the HW variant's process on the host owns the port, shows the
+  window, and relays the harness's messages and the Pi's replies. The harness drives it
+  like any other module.
+- **Hardware:** one Pi per hardware module, with USB device mode: a Pi Zero 2 W on its
+  data port (it can also draw its power through that cable), or a Pi 4 on its USB-C
+  port. A Pi 3 Model B cannot act as a USB device.
+- **Rejected:**
+  - USB networking: Windows sees a network adapter, which can bring firewall prompts,
+    and it is a network.
+  - USB HID: small reports, and a HID library to package.
+  - Raw USB: needs a driver bound on each machine.
+  - USB-to-UART adapter cables: their vendor drivers usually come from Windows Update,
+    which an offline machine cannot reach.
+
 ### 4.6 Lifecycle
 
 1. **Launch.** The executable starts the harness, which creates the clock, paused at
    05:00:00 (R29).
 2. **Modules.** The harness spawns each module process and chooses variants by line (R5):
    the Track Controller SW for Green, the HW on a Pi for Red, and for each train the Train
-   Controller of its line. A HW variant's UI runs on the host (R42). How a Pi is started is
-   open (Q7).
+   Controller of its line. A HW variant's process on the host finds its Pi by USB
+   identity, and the Pi states which module it runs (R81).
 3. **Layouts.** Each module loads the line JSON files by default at startup (R18). The CTC
    Office, the Track Controller SW and the Track Model already read them. The Track
    Controller HW reads its own wayside files, Green only for now (R34), and only from its
@@ -734,7 +768,7 @@ Decided on 2026-10-20 (R64; [P] D005 and `files-and-paths`):
    be revisited (G-LIFE-4).
 9. **Shutdown.** The harness tells every module to quit, and ends any that do not (R64).
 
-There is no event logger (R13).
+The harness writes the event log, one CSV file (R80).
 
 ## 5. Integration plan
 
@@ -745,11 +779,11 @@ integrating everything at once.
 | Phase | Content | Needs first |
 |---|---|---|
 | 0 | Harness process: `SystemClock` and `ClockDriver`; spawning and watching the child processes; the protocol and wire format; tick fan-out to stub module processes; reading the CTC Office's speed and pause; an end-to-end tick test with stubs. | Measure the budget (G-CLK-6) |
-| 1 | Train Model and one Train Controller on a fixed track feed, for one Green train: fleet `add`, the commands, the release command. | Q23 |
+| 1 | Train Model and one Train Controller on a fixed track feed, for one Green train: fleet `add`, the commands, the release command, the door interlock. | none |
 | 2 | Track Model: track feeds, position reports, doors open, clearing after delivery (R10), and zero for blocks not commanded. | none |
 | 3 | Track Controller SW on Green: commanded speed and authority per block, switches, signals, readiness, failures. | none |
 | 4 | CTC Office: dispatch from the yard, suggestions, occupancy, ticket sales and clock control. The Iteration 3 scenario on Green: dispatch a train from the yard to a station (2026-11-12). | none |
-| 5 | Red: Track Controller HW and Train Controller HW on Pis over USB, with the Red wayside data loaded (R34); packaging as one executable. | Q7 |
+| 5 | Red: Track Controller HW and Train Controller HW on Pis over USB serial, with the Red wayside data loaded (R34); packaging as one executable. | Measure the USB round trip (G-CLK-6) |
 
 The missing integration guides (section 3.1) should be written as each module joins.
 
@@ -794,7 +828,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). | D008 owner Kevin |
 | G-SIG-14 | Open | Edge coverage: only CTC Office → Track Controller SW is mapped end to end. Nothing maps Track Controller → CTC Office, Train Model ↔ Train Controller, or the clock. | unassigned |
 | G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Left: the Train Controller has no dwell logic yet. | D007 owner Kevin |
-| G-SIG-16 | Partly (R61) | The Train Controller releases a passenger pull with a one-shot command ([P] `passenger-brake-release`). Open: the door interlock (Q23). | Train Controller; Train Model |
+| G-SIG-16 | Resolved (R61, R79) | The Train Controller releases a passenger pull with a one-shot command ([P] `passenger-brake-release`), and enforces the door interlock: doors open only when stopped, on the platform side, and no power while a door is open ([P] `door-command`). | Train Controller |
 | G-SIG-17 | Resolved (R27, R72) | Maintenance is `closed-blocks`, with no boolean. The SW variant's maintenance state follows the CTC Office's commands, as it already does. Left: SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
 | G-SIG-18 | Resolved (R28, R64, R73) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Left: the Track Model's switching rule. | Track Model owner |
 | G-SIG-19 | Resolved (R37, R54) | The brake commands stay two separate booleans, as on [T] and in the Train Model. The announcement keeps the Train Model's field name, and both brakes may be applied at once ([P] `brakes-apply-together`). | Train Controller |
@@ -806,7 +840,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-LIFE-1 | Resolved (R18, R44) | Layout files load by default at startup; PLC programs and wayside databases are loaded by hand. Left: Red's HW data, later (R34). | unassigned |
 | G-LIFE-2 | Resolved (R64), to measure | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Left: measure it against 20 s. | unassigned |
 | G-LIFE-3 | Resolved (R64) | On exit the harness tells every module to quit, and ends any that do not ([P] D005). | unassigned |
-| G-LIFE-4 | Partly (R19, R64) | A rejected tick is skipped, the run continues, and the harness shows the rejection in its window. The team will return to what can break. | unassigned |
+| G-LIFE-4 | Partly (R19, R64, R80) | A rejected tick is skipped, the run continues, and the harness shows it in its window and writes it to the event log. The team will return to what can break. | unassigned |
 | G-LIFE-5 | Resolved (R12, R76) | Every test UI goes at integration except the Track Controller HW test UI, which stays and is never started by the harness ([P] D005; pending D018). | D010 owner Kevin Schillinger |
 
 ### 6.4 Process, packaging and runtime
@@ -815,8 +849,8 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 |---|---|---|---|
 | G-RUN-1 | Resolved (R4) | Process model 2. The work it creates is G-RUN-6, -7 and -8. | none |
 | G-RUN-2 | Resolved (R29, R64), to test | One executable: no arguments starts the harness, `--module <name>` a module, and the harness re-runs it once per module ([P] `files-and-paths`). Left: try the frozen build on Windows early; the course deck's per-subsystem installables. | unassigned |
-| G-RUN-3 | Open (R30, R41) | One computer in the final iteration; how the Pis fit is Q7. | unassigned |
-| G-RUN-4 | Closed (R13) | No event logger. The conflict with the SRS is filed (Q19). | files-and-paths owner Kevin |
+| G-RUN-3 | Resolved (R30, R81) | Everything runs on one computer, with the Pis as USB peripherals of it ([P] D027). | unassigned |
+| G-RUN-4 | Resolved (R80) | The event logger stays: the harness writes one CSV file ([P] `files-and-paths`, D005). This reverses R13, so no conflict with the SRS remains. | files-and-paths owner Kevin |
 | G-RUN-5 | Resolved (R31) | PySide6 6.11 or later. Left: `TrackCtrlSW/README.md` still installs 6.8. | toolchain owner Kevin |
 | G-RUN-6 | Resolved (R64), to build | Newline-delimited JSON, each message with a request ID and the tick number; one driver per module ([P] D005). | unassigned |
 | G-RUN-7 | Resolved (R64), to build | Each module says when it is ready; windows hide rather than close; only the harness ends a module ([P] D005). | unassigned |
@@ -826,7 +860,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-HW-1 | Open (R41) | Pis on USB with the UI on the host ([P] D021). The USB protocol, what runs on a Pi, and whether the Pis count as "one computer" are still open (Q7). | unassigned |
+| G-HW-1 | Resolved (R5, R32, R42, R81) | Pis on USB serial in the standard communications class, driven by Windows' built-in driver, found by USB identity; the HW variant's host process relays the messages; one Pi per hardware module ([P] D021, D027). Left: build the relay and the Pi side, and measure the round trip. | unassigned |
 | G-HW-2 | Resolved (R5, R40, R77) | Track Controller HW on Red and SW on Green, the HW variant's line set by the databases it is given; Train Controller by the train's line ([P] D021). The Blue Line is out of scope ([P] D023). Left: the HW variant's Red data, later (R34); the SW variant's code still loads both lines. | D021 owner Kevin |
 | G-HW-3 | Resolved (R32, R75) | The interfaces are to be identical, and Harry Tye owns the Track Controller contract shard ([P]). Both variants already name blocks to the CTC Office by line and number. | Harry Tye |
 
@@ -853,7 +887,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 ### 7.1 Filed from this work (under `truth/_inbox/claude/quirky-fermi-sickg4/`)
 
-Fifty-one proposals, each a complete entry. Promote these twenty-nine:
+Fifty-six proposals, each a complete entry. Promote these thirty-one:
 
 | File | Target | Records |
 |---|---|---|
@@ -861,12 +895,12 @@ Fifty-one proposals, each a complete entry. Promote these twenty-nine:
 | `20261016-2254-track-info-six-fields.md` | `signals/track-info.md` | Six fields (R24) |
 | `20261016-2254-door-state-to-track-model.md` | `signals/door-state.md` | Also sent to the Track Model (R24) |
 | `20261016-2259-naming-enum-values-all-caps.md` | `conventions/naming.md` | Enumerated values all caps (R17) |
-| `20261017-1433-D021-hardware-ui-on-host.md` | `decisions/D021-…` (new) | HW variants on Pis over USB, UI on the host, variant by line (R5, R32, R42) |
+| `20261020-0255-D021-usb-link-settled.md` | `decisions/D021-…` (new) | HW variants on Pis over USB, UI on the host, variant by line; the USB link in D027 (R5, R32, R42, R81) |
 | `20261017-1433-brakes-apply-together.md` | `arbitration/brakes-apply-together.md` (new) | Neither brake supersedes the other (R37) |
 | `20261020-0039-D017-unwrapped-time-and-wait.md` | `decisions/D017-shared-simulation-clock.md` | dt and unwrapped time to every module; wait with a timeout; no reset; the tick deviation (R1, R2, R64) |
 | `20261020-0039-D020-automatic-dispatch-scheduled-stations-only.md` | `decisions/D020-…` (new) | Scheduled stations only, in track order (re-filed; R65) |
 | `20261020-0039-D024-train-gains-set-by-engineer.md` | `decisions/D024-…` (new) | Gains set by an engineer; defaults never auto-applied (R55) |
-| `20261020-0039-files-and-paths-executable-modes.md` | `conventions/files-and-paths.md` | The executable's harness and module modes (R64); the event logger as a Conflict (R13) |
+| `20261020-0255-files-and-paths-logger-kept.md` | `conventions/files-and-paths.md` | The executable's harness and module modes (R64); the event log as one CSV file written by the harness (R80) |
 | `20261020-0039-identifiers-train-ids-and-names.md` | `conventions/identifiers.md` | Train IDs, exact line names, station names (R47, R50) |
 | `20261020-0039-no-authority-into-inferred-failure.md` | `arbitration/no-authority-into-unusable-block.md` | No authority into an inferred failure (re-filed) |
 | `20261020-0039-passenger-brake-release.md` | `signals/passenger-brake-release.md` (new) | One-shot release command (R61) |
@@ -877,7 +911,7 @@ Fifty-one proposals, each a complete entry. Promote these twenty-nine:
 | `20261020-0039-track-signal-uncommanded-reads-zero.md` | `signals/track-signal.md` | Per block; cleared after delivery; uncommanded reads zero (R10, R24, R64) |
 | `20261020-0039-train-model-per-train-rejection.md` | `modules/train-model.md` | Per-train rejection; consumes the release command (R60, R61) |
 | `20261020-0039-train-tracking-from-occupancy.md` | `arbitration/train-tracking-from-occupancy.md` (new) | Tracking from occupancy, yard rule updated for release (re-filed) |
-| `20261020-0234-D005-hw-test-ui-kept.md` | `decisions/D005-central-harness.md` | Process per module, single driver, protocol, readiness, shutdown, exactly once; the HW test UI kept but never started (R4, R12, R29, R46, R64, R76) |
+| `20261020-0255-D005-harness-writes-event-log.md` | `decisions/D005-central-harness.md` | Process per module, single driver, protocol, readiness, shutdown, exactly once; the HW test UI kept but never started; the harness writes the event log (R4, R12, R29, R46, R64, R76, R80) |
 | `20261020-0234-D007-scheduled-stops-only.md` | `decisions/D007-station-dwell.md` | 45 s, held by the Train Controller; departure on commanded speed; scheduled stops only (R26, R43, R56, R65) |
 | `20261020-0234-D022-return-to-yard.md` | `decisions/D022-yard-black-box.md` (new) | Creation on release; retirement at the yard entry; return to yard for manual trains (R9, R35, R46, R66) |
 | `20261020-0234-D023-track-model-skips-blue-line.md` | `decisions/D023-…` (new) | The Blue Line is out of scope; the Track Model does not load it (R40, R67) |
@@ -885,29 +919,34 @@ Fifty-one proposals, each a complete entry. Promote these twenty-nine:
 | `20261020-0234-D026-track-model-switches-heaters.md` | `decisions/D026-…` (new) | The Track Model switches the heaters (R73) |
 | `20261020-0234-block-occupancy-confirmed.md` | `signals/block-occupancy.md` | Occupancy is all the CTC Office learns; failures reported as occupied (re-filed; R69) |
 | `20261020-0234-track-controller-contract-owner.md` | `modules/track-controller/track-controller.md` | Owner Harry Tye (R75) |
+| `20261020-0255-D027-usb-link-to-the-pis.md` | `decisions/D027-usb-link-to-the-pis.md` (new) | USB serial (CDC-ACM) to the Pis; ports found by USB identity; host-side relay; one Pi per hardware module (R81) |
+| `20261020-0255-door-command-interlock-in-train-controller.md` | `signals/door-command.md` | The door interlock is the Train Controller's (R79) |
 | `20261020-0234-track-controller-ready-roster.md` | `signals/track-controller-ready.md` (new) | Gated per line; loaded by hand; ready when database and program are loaded; every wayside reported from startup (R8, R44, R70, R71) |
 
-Deny these twenty-two, each overtaken by a later proposal on this branch:
+Deny these twenty-five, each overtaken by a later proposal on this branch:
 
 | File | Superseded by |
 |---|---|
 | `20261016-1828-D017-clock-to-every-module-in-parallel.md` | `20261020-0039-D017-…` |
 | `20261016-1844-track-signal-from-track-controller.md` | `20261020-0039-track-signal-…` |
 | `20261016-2155-D017-fan-out-dt-and-sim-time.md` | `20261020-0039-D017-…` |
-| `20261016-2155-D005-harness-process-per-module.md` | `20261020-0234-D005-…` |
+| `20261016-2155-D005-harness-process-per-module.md` | `20261020-0255-D005-…` |
 | `20261016-2155-track-signal-per-block-cleared-after-delivery.md` | `20261020-0039-track-signal-…` |
-| `20261016-2254-D021-hardware-variants-and-selection.md` | `20261017-1433-D021-…` |
+| `20261016-2254-D021-hardware-variants-and-selection.md` | `20261020-0255-D021-…` |
 | `20261016-2254-D022-yard-black-box.md` | `20261020-0234-D022-…` |
 | `20261016-2254-D007-dwell-conflict-resolved.md` | `20261020-0234-D007-…` |
 | `20261016-2254-suggested-speed-with-block.md` | `20261020-0039-suggested-speed-…` |
 | `20261016-2254-suggested-authority-with-block.md` | `20261020-0039-suggested-authority-…` |
 | `20261016-2254-track-controller-ready-per-line.md` | `20261020-0234-track-controller-ready-…` |
-| `20261016-2259-files-and-paths-event-logger-conflict.md` | `20261020-0039-files-and-paths-…` |
+| `20261016-2259-files-and-paths-event-logger-conflict.md` | `20261020-0255-files-and-paths-…` |
 | `20261017-1433-D022-ctc-creates-trains.md` | `20261020-0234-D022-…` |
 | `20261017-1433-D007-train-controller-holds-dwell.md` | `20261020-0234-D007-…` |
 | `20261017-1433-D023-blue-line-out-of-scope.md` | `20261020-0234-D023-…` |
 | `20261017-1433-signal-aspect-ahead.md` | `20261020-0039-signal-aspect-ahead-…` |
-| `20261020-0039-D005-protocol-and-liveness.md` | `20261020-0234-D005-…` |
+| `20261020-0039-D005-protocol-and-liveness.md` | `20261020-0255-D005-…` |
+| `20261017-1433-D021-hardware-ui-on-host.md` | `20261020-0255-D021-…` |
+| `20261020-0039-files-and-paths-executable-modes.md` | `20261020-0255-files-and-paths-…` |
+| `20261020-0234-D005-hw-test-ui-kept.md` | `20261020-0255-D005-…` |
 | `20261020-0039-D007-depart-on-commanded-speed.md` | `20261020-0234-D007-…` |
 | `20261020-0039-D019-ctc-test-ui-boundary.md` | `20261020-0234-D025-…` (renumbered) |
 | `20261020-0039-D022-release-and-retire.md` | `20261020-0234-D022-…` |
@@ -950,8 +989,8 @@ Also for the humans who promote:
 - PR #43's `20261016-1430-D019-wayside-runs-only-its-program.md` keeps D019. The re-filed
   CTC decision moved to D025 (R68).
 
-Not filed: the door interlock, which waits on Q23, and `truth` entries for the Track
-Controller ↔ Track Model signals, which the Track Controller owners declined (R74).
+Not filed: `truth` entries for the Track Controller ↔ Track Model signals, which the Track
+Controller owners declined (R74).
 
 ## Appendix A: Edge map
 
@@ -969,7 +1008,7 @@ Signals are named by their `truth` key (`signals/<key>.md`).
 | Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | one-sided, to the old catalog |
 | Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | one-sided, to the old catalog |
 | Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; pass-through of `track-signal`, `beacon` and the speed limit | none; the next light does not pass through here [R39] | none |
-| Train Controller → Train Model | `power-command`, `service-brake-command`, `emergency-brake-command`, `door-command`, `light-command`, `temperature-setpoint`, `announcement` | The brake commands stay two booleans [R54]; `announcement` keeps its name [R37]; both brakes may apply together [P, R37]; `passenger-brake-release` [P, R61] | none |
+| Train Controller → Train Model | `power-command`, `service-brake-command`, `emergency-brake-command`, `door-command`, `light-command`, `temperature-setpoint`, `announcement` | The brake commands stay two booleans [R54]; `announcement` keeps its name [R37]; both brakes may apply together [P, R37]; `passenger-brake-release` [P, R61]; the door interlock in the Train Controller [P, R79] | none |
 | Track Model → Train Controller | none | `signal-aspect-ahead`, the next light [P, R25, R39] | one-sided, to the old catalog |
 
 `failure-status` and `maintenance-mode` are superseded on `truth`.
