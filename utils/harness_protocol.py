@@ -64,7 +64,7 @@ __all__ = [
 import json
 import math
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, TypeGuard
 
 #: Bumped whenever a message changes shape; READY carries it.
 PROTOCOL_VERSION = 1
@@ -285,7 +285,7 @@ class LineBuffer:
         return lines
 
 
-def _is_integer(value: Any) -> bool:
+def _is_integer(value: Any) -> TypeGuard[int]:
     # bool is an int in Python but never a valid ID or tick.
     return isinstance(value, int) and not isinstance(value, bool)
 

@@ -28,7 +28,7 @@ import sys
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtNetwork import QLocalSocket
 
 from utils.harness_protocol import (
@@ -124,8 +124,15 @@ class ModuleLink(QObject):
         return self._last_reply
 
     def connect_to_harness(self) -> None:
-        """Open the link. ``harnessLost`` fires if it cannot."""
-        self._socket.connectToServer(self._server_name)
+        """Open the link once the event loop runs.
+
+        ``harnessLost`` fires if it cannot. Connecting from the event
+        loop matters: a failure signalled before the loop starts would
+        come too early for a handler that ends the loop.
+        """
+        QTimer.singleShot(
+            0, lambda: self._socket.connectToServer(self._server_name)
+        )
 
     def announce_ready(self) -> None:
         """Tell the harness the module can step.
