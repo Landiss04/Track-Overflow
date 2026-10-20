@@ -1,0 +1,47 @@
+**Target:** truth/decisions/D022-yard-black-box.md
+**Action:** create
+**Proposed by:** Claude on claude/quirky-fermi-sickg4
+**Provenance:** as `20261017-1433-D022-ctc-creates-trains.md` on this branch, which this proposal supersedes (deny that one), plus the CTC Office's answers of 2026-10-20, relayed by Kevin Schillinger: send the new train "when it releases a train from the yard", with the release conditions above; retire a train "when a train sent back to the yard reaches the yard entry block (Green 57, Red 9) and stops there, with authority 0 at its destination"; events rather than a full list of trains each tick.
+
+---
+
+# D022-yard-black-box
+
+**Status:** current
+**Owner:** Kevin
+**Provenance:** asserted by Kevin Schillinger 2026-10-16; the CTC Office creating the trains asserted by Kevin Schillinger 2026-10-17; creation on release from the yard, the release conditions, and retirement at the yard entry block, agreed in the CTC Office's answers of 2026-10-20, relayed by Kevin Schillinger
+**Aliases:** yard, train yard, yard black box, dispatch from the yard, train creation, spawn, release from the yard, new_trains, retired_trains
+**Last updated:** 2026-10-20
+
+## Context
+
+Each line's layout joins the yard (`next_blocks` lists `"yard"`, per
+`conventions/files-and-paths.md`). No entry said what the yard is or who moves trains
+into and out of it.
+
+## Decision
+
+- The yard is a black box with unlimited capacity.
+- The CTC Office pulls trains from the yard and sends them back into the yard.
+- The CTC Office creates each train when it releases it from the yard, not when it is
+  dispatched. A dispatch only creates an order, and the train waits in the yard.
+- It releases one train per line at a time, the waiting train most behind schedule
+  first, and only when all of these hold: the line's yard exit block is clear, no train
+  is authorized into that block, every wayside on the line is ready, and the scheduler
+  is not holding that run.
+- A released train enters the track at its line's yard exit block: Green 63, Red 9.
+- A train sent back to the yard is retired when it reaches its line's yard entry block
+  (Green 57, Red 9) and stops there, with authority 0 at its destination. The yard is
+  not a block, so no authority is given into it. The harness removes the train, which
+  clears the block. The CTC Office then sees the block clear, marks the run done and
+  drops its order.
+- The CTC Office reports both as one-time events in its outputs: each train it released
+  on that tick, with its ID and line (`new_trains`), and each train it retired
+  (`retired_trains`). The harness applies every tick's events exactly once.
+
+## Consequences
+
+- The CTC Office knows which train enters a yard exit block, so it does not have to
+  infer that from occupancy.
+- Open: only scheduled runs are sent back to the yard. Whether a manual train can be
+  retired, through a "return to yard" action in the CTC Office, is not decided.
