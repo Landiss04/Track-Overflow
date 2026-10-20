@@ -9,11 +9,15 @@ Each row holds the real time it was written, the simulation time and
 tick it belongs to, who it is about, what happened, and any detail.
 Event names are capitals, like every enumerated value. A row is
 flushed as soon as it is written, so the log survives a crash.
+
+Each run's log is a file of its own, named for the second the run
+started, ``events-YYYYMMDD-HHMMSS.csv``; a run started in the same
+second as another adds ``-2``, ``-3`` and so on (``EventLog.create``).
 """
 
 from __future__ import annotations
 
-__all__ = ["COLUMNS", "EventLog", "log_file_name"]
+__all__ = ["COLUMNS", "MAX_SAME_SECOND_LOGS", "EventLog", "log_file_name"]
 
 import csv
 from datetime import datetime
@@ -37,19 +41,36 @@ COLUMNS = (
 )
 
 
-def log_file_name(started: datetime) -> str:
-    """Return the file name for a log started at ``started``."""
-    return f"events-{started:%Y%m%d-%H%M%S}.csv"
+#: Runs started in the same second that ``EventLog.create`` tells
+#: apart before giving up.
+MAX_SAME_SECOND_LOGS = 1000
+
+
+def log_file_name(started: datetime, attempt: int = 1) -> str:
+    """Return the file name for a log started at ``started``.
+
+    Args:
+        started: When the run started.
+        attempt: 1 for the usual name. Another run started in the same
+            second takes 2, 3 and so on, which adds ``-2``, ``-3``.
+    """
+    suffix = "" if attempt == 1 else f"-{attempt}"
+    return f"events-{started:%Y%m%d-%H%M%S}{suffix}.csv"
 
 
 class EventLog:
     """Append significant events to one CSV file."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, exclusive: bool = False) -> None:
         """Create the file and its folder, and write the header.
 
         Args:
-            path: Where to write. An existing file is replaced.
+            path: Where to write. An existing file is replaced, unless
+                ``exclusive``.
+            exclusive: Refuse a file that already exists.
+
+        Raises:
+            FileExistsError: If ``exclusive`` and the file exists.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
         self._path = path
@@ -57,11 +78,41 @@ class EventLog:
         # block releases it. Text that is not valid Unicode is escaped,
         # never raised: a row must not stop the caller mid-tick.
         self._file = path.open(
-            "w", newline="", encoding="utf-8", errors="backslashreplace"
+            "x" if exclusive else "w",
+            newline="",
+            encoding="utf-8",
+            errors="backslashreplace",
         )
         self._writer = csv.writer(self._file)
         self._writer.writerow(COLUMNS)
         self._file.flush()
+
+    @classmethod
+    def create(cls, folder: Path, started: datetime) -> EventLog:
+        """Start a new log in ``folder``, never replacing another's.
+
+        The file is named by ``log_file_name``. Runs started in the
+        same second, even at once from separate processes, each get a
+        file of their own: the file is created only if it does not
+        exist yet, and otherwise the next attempt's name is tried.
+
+        Args:
+            folder: Where the log goes; created if missing.
+            started: When the run started.
+
+        Raises:
+            FileExistsError: If every name for that second is taken.
+        """
+        for attempt in range(1, MAX_SAME_SECOND_LOGS + 1):
+            try:
+                return cls(
+                    folder / log_file_name(started, attempt), exclusive=True
+                )
+            except FileExistsError:
+                continue
+        raise FileExistsError(
+            f"{MAX_SAME_SECOND_LOGS} logs already started at {started}"
+        )
 
     @property
     def path(self) -> Path:

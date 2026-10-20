@@ -47,7 +47,7 @@ from common.harness.modules import (
     system_specs,
 )
 from common.harness.supervisor import HarnessStartError
-from utils.event_log import EventLog, log_file_name
+from utils.event_log import EventLog
 
 APPLICATION_NAME = "TrackOverflow"
 
@@ -79,7 +79,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])
     app.setApplicationName(APPLICATION_NAME)
     log_dir = options.log_dir or _default_log_dir()
-    log_path = log_dir / log_file_name(datetime.now())
     ctc_options = ["--run-on-ready"]
     if options.speedup:
         ctc_options += ["--speedup-at-tick", "0"]
@@ -95,7 +94,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             TRACK_CONTROLLER_SW: wayside_options,
         })
         edges = SystemEdges()
-    with EventLog(log_path) as log:
+    # A file of its own, even beside a run started in the same second.
+    with EventLog.create(log_dir, datetime.now()) as log:
         harness = Harness(specs, log, edges)
         window = None
         if options.headless:
@@ -113,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             except RuntimeError as error:
                 print(str(error), file=sys.stderr)
                 return EXIT_FAILED
-        print(f"Event log: {log_path}", flush=True)
+        print(f"Event log: {log.path}", flush=True)
         try:
             harness.start()
         except HarnessStartError as error:
