@@ -142,10 +142,16 @@ Shared.ScaledWindow {
                             id: moduleRows
                             width: moduleScroll.availableWidth
                             spacing: theme.space_3
+                            // Rows are kept by index, as in DataTable: a
+                            // status update changes a row in place. A
+                            // Repeater over the list itself rebuilt every
+                            // row, and a focused Show window button with it.
                             Repeater {
-                                model: backend.modules
+                                model: backend.modules.length
                                 delegate: ColumnLayout {
-                                    required property var modelData
+                                    required property int index
+                                    readonly property var modelData:
+                                        backend.modules[index] ?? ({})
                                     Layout.fillWidth: true
                                     spacing: theme.space_1
                                     RowLayout {

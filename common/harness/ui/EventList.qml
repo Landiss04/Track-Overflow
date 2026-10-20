@@ -140,6 +140,17 @@ ColumnLayout {
                 if (root.following)
                     events.positionViewAtEnd()
             }
+            // Rollover drops the oldest events. The view keeps a later
+            // selection on its event; a selected event that is dropped
+            // clears the selection, rather than letting it fall to
+            // whichever event takes its index.
+            function onRowsAboutToBeRemoved(parent, first, last) {
+                if (events.currentIndex >= first
+                        && events.currentIndex <= last) {
+                    events.currentIndex = -1
+                    root.inspecting = false
+                }
+            }
         }
     }
     ScrollView {
