@@ -29,6 +29,8 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QGuiApplication
 
+import train_ctrl as mod
+
 
 # ========================================================== contract
 def check_snapshot_contract(backend: Any, ui_dir: Path) -> bool:
@@ -97,7 +99,6 @@ def run_check(
     Exits non-zero if QML logged a warning or the console let an
     operator do something the rules forbid.
     """
-    mod = sys.modules[type(backend).__module__]
     problems: list[str] = []
 
     def expect(condition: bool, what: str) -> None:
@@ -122,10 +123,14 @@ def run_check(
     expect(backend.snapshot["train_id"] == "T-114",
            "the spawned train did not take the number asked for")
     expect(not backend.core.armed, "controller armed before commissioning")
+    expect(backend.snapshot["clock"] == "05:00:00",
+           "the clock does not start at D017's 05:00:00")
     # The toy plant spends a block of authority every 100 m, and the
     # drives below cover kilometres, so give them room; the countdown
-    # has its own check further on.
-    backend.apply_bench_inputs({"authority_blocks": 200})
+    # has its own check further on. Commanded speed is the driver's
+    # ceiling (REQUIREMENTS.md M1), so give that room too.
+    backend.apply_bench_inputs({"authority_blocks": 200,
+                                "commanded_speed": 43})
     if shots:
         window.grabWindow().save(str(shots / "01-signed-out.png"))
 
@@ -151,11 +156,16 @@ def run_check(
     bar_before = bar_geometry()
     expect(backend.snapshot["operator"] == "engineer",
            "engineer sign-in failed")
+    # Only the driver touches the emergency brake (REQUIREMENTS.md M2).
+    backend.toggle_emergency_brake()
+    expect(not backend.core.state.emergency_brake,
+           "the engineer engaged the emergency brake")
     if shots:
         window.grabWindow().save(str(shots / "02-gains.png"))
-    # The bench commissions by sending its inputs, with no separate
-    # button for it.
-    backend.apply_bench_inputs({"kp": 400000, "ki": 8000})
+    # The engineer's pop-up commissions the gains; the bench cannot.
+    backend.apply_bench_inputs({"kp": 1000, "ki": 10})
+    expect(not backend.core.armed, "the bench commissioned the gains")
+    backend.commission_gains(400000, 8000)
     expect(backend.core.armed, "commissioning did not arm the controller")
     _settle(app, mod.GAINS_HANDOVER_MS + 400)
     expect(backend.snapshot["operator"] == "driver",
@@ -185,6 +195,19 @@ def run_check(
            "acceleration")
     if shots:
         window.grabWindow().save(str(shots / "03-driving.png"))
+
+    # Pause holds everything: no train moves and the clock stops
+    # (REQUIREMENTS.md M11). The bench's button drives this slot.
+    backend.set_paused(True)
+    held = (backend.core.state.actual_mps, backend.snapshot["clock"])
+    _settle(app, 600)
+    expect(backend.snapshot["paused"]
+           and (backend.core.state.actual_mps,
+                backend.snapshot["clock"]) == held,
+           "the train or the clock moved while paused")
+    backend.set_paused(False)
+    expect(_until(app, lambda: backend.core.state.actual_mps > held[0], 5),
+           "the train did not move on after resuming")
 
     # The emergency brake stops the train and latches until it is
     # stopped.
@@ -238,14 +261,17 @@ def run_check(
     backend.set_manual(False)
     backend.apply_inputs({"commanded_speed": 12.0})
     backend.set_sim_rate(mod.SIM_RATES.index(10))
-    expect(abs(backend.core.dt - 10 / mod.CONTROL_HZ) < 1e-9,
-           "the simulation rate did not reach the plant")
+    # 10x ticks ten times as often; the step stays truth's 0.1 s
+    # (REQUIREMENTS.md M11).
+    expect(backend.core.dt == mod.TICK_S == 0.1
+           and backend._control.interval() == 10,
+           "10x changed the step instead of the tick rate")
     pulling = _until(app, lambda: backend.core.state.actual_mps > 1.0, 20)
     expect(pulling, "the train did not pull away under power")
     # Wait on the gain rather than a stopwatch: offscreen rendering
-    # can starve the control timer. At 10x a tick adds 0.25 m/s, so
-    # 1 m/s takes about five ticks; at 1x it takes forty, two
-    # seconds, so a one-second deadline still tells the rates apart.
+    # can starve the control timer. A tick adds at most 0.05 m/s, so
+    # 1 m/s takes twenty ticks: 0.2 s at 10x, 2 s at 1x, so a
+    # one-second deadline still tells the rates apart.
     fast = backend.core.state.actual_mps
     faster = _until(
         app, lambda: backend.core.state.actual_mps - fast > 1.0, 1.0)
@@ -260,10 +286,14 @@ def run_check(
     expect(settled, "the train never settled on its commanded speed")
     expect(not backend.core.state.service_brake,
            "the service brake is fighting the speed law at target")
+    # Automatic locks the console but never the driver's e-brake.
+    expect(backend.can_ebrake and not backend.can_drive,
+           "Automatic took the emergency brake from the driver")
     backend.set_manual(True)
 
     # Slowing to a lower target ends on it, not a mile an hour above
     # it: the brake lets go within the narrow band.
+    backend.apply_bench_inputs({"commanded_speed": 43})
     backend.set_sim_rate(mod.SIM_RATES.index(10))
     backend.set_target_mph(35)
     _until(app, lambda: backend.snapshot["actual_mph"] > 34.8, 60)
@@ -275,6 +305,43 @@ def run_check(
     expect(slowed, "slowing to a lower target did not settle on it")
 
     # The numbers drawer renders and closes again.
+    # The dial's dead zone (45 to 135 degrees, bottom of the face) is
+    # zero across all of it, and the face itself still reaches the top.
+    dial = window.findChild(QObject, "speedDial")
+    expect(dial is not None, "speed dial missing")
+    if dial is not None:
+        def dial_value(degrees: float) -> float:
+            got = QMetaObject.invokeMethod(
+                dial, "valueFor", Q_RETURN_ARG("QVariant"),
+                Q_ARG("QVariant", degrees))
+            return got.toVariant() if hasattr(got, "toVariant") else got
+        top = dial.property("limit")
+        expect(dial_value(60) == 0 and dial_value(120) == 0,
+               "part of the dial's dead zone asks for speed")
+        expect(abs(dial_value(44) - top) < 0.01 * top,
+               "the end of the dial's face does not reach its top")
+
+        # A drag past the top stays at the top, through the whole dead
+        # zone, rather than wrapping round to 0.
+        def drag_value(degrees: float) -> float:
+            got = QMetaObject.invokeMethod(
+                dial, "valueAt", Q_RETURN_ARG("QVariant"),
+                Q_ARG("QVariant", degrees), Q_ARG("QVariant", True))
+            return got.toVariant() if hasattr(got, "toVariant") else got
+        dial_value(30)
+        expect(drag_value(60) == top and drag_value(120) == top,
+               "dragging past the top of the dial wrapped to 0")
+
+        # The scale is the car's 70 km/h whatever is commanded; only
+        # the target is capped at the commanded speed.
+        expect(abs(top - 70 / 3.6 * mod.MPS_TO_MPH) < 0.01,
+               "the dial's full scale is not the car's 70 km/h")
+        backend.apply_bench_inputs({"commanded_speed": 20})
+        _settle(app, 100)
+        expect(dial.property("limit") == top,
+               "the dial's scale moved with the commanded speed")
+        backend.apply_bench_inputs({"commanded_speed": 43})
+
     drawer = window.findChild(QObject, "numbersDrawer")
     expect(drawer is not None, "numbers drawer missing")
     if drawer is not None:
@@ -301,10 +368,6 @@ def run_check(
            < 1e-6, "the bench's mph did not convert to m/s")
     expect(abs(backend.snapshot["commanded_mph"] - 42.5) < 1e-3,
            "commanded speed did not come back as it was typed")
-    backend.apply_bench_inputs({"speed_limit": 60.0})
-    expect(abs(backend.core.state.speed_limit_mps - 60.0 / mod.MPS_TO_MPH)
-           < 1e-6, "the bench could not set the speed limit")
-    backend.apply_bench_inputs({"speed_limit": 43.5})
     backend.apply_bench_inputs({"cabin_temperature": 68})
     expect(abs(backend.core.state.cabin_temp_c - 20.0) < 0.01,
            "the bench's Fahrenheit did not convert to Celsius")
@@ -383,20 +446,20 @@ def run_check(
     backend.spawn_train(301, "RED LINE", "f")
     second = backend.selected
     expect(second == "R-301", "spawning did not add the train asked for")
-    expect(backend.cores[second].state.authority_target == "F",
+    expect(backend.fleet.get(second).state.authority_target == "F",
            "a block typed in lower case did not come back capitalised")
     expect(backend.snapshot["train_count"] == 2, "roster did not grow")
     backend.spawn_train(301, "RED LINE", "RED F")
     expect(backend.snapshot["train_count"] == 2,
            "spawning the same id twice added a second copy")
     expect(not backend.core.armed, "a new train came up commissioned")
-    expect(backend.cores[first].armed, "spawning disarmed the first train")
+    expect(backend.fleet.get(first).armed, "spawning disarmed the first train")
     # A new train is stopped, so this engages and releases cleanly,
     # and the train beside it is not touched either way.
     backend.toggle_emergency_brake()
     expect(backend.core.state.emergency_brake,
            "the new train has no e-brake")
-    expect(not backend.cores[first].state.emergency_brake,
+    expect(not backend.fleet.get(first).state.emergency_brake,
            "one train's emergency brake reached another train")
     backend.toggle_emergency_brake()
     expect(not backend.core.state.emergency_brake,
@@ -440,17 +503,19 @@ def run_check(
     expect(backend.core.state.commanded_mps == commanded,
            "a set with a bad value was half applied")
     backend.select_train(second)
-    backend.select_operator(1)
-    try:
-        backend.apply_bench_inputs({"kp": 1000, "ki": 10,
-                                    "door_state_left": True,
-                                    "failure_status": "x",
-                                    "speed_limit": "fast"})
-    except mod.InvalidInputError:
-        pass
-    expect(not backend.core.armed,
-           "a bad bench set commissioned the gains anyway")
-    backend.select_operator(0)
+    doors = backend.core.state.fb_doors_left
+    backend.apply_bench_inputs({"door_state_left": not doors,
+                                "failure_status": "x",
+                                "commanded_speed": "fast"})
+    expect(backend.core.state.fb_doors_left == doors,
+           "a bad bench set was half applied")
+    # Refused on the bench, with the reason, never raised from a slot;
+    # the next good send clears it.
+    expect("commanded_speed" in backend.snapshot["bench_error"],
+           "the bench did not say why its set was refused")
+    backend.apply_bench_inputs({"cabin_temperature": 70})
+    expect(backend.snapshot["bench_error"] == "",
+           "the bench's refusal outlived a good send")
     backend.select_train(first)
 
     # The bench sends only the rows that were edited, never the
@@ -589,6 +654,7 @@ def run_check(
     cruise.armed = True
     cruise.state.manual = True
     cruise.state.authority_blocks = 999
+    cruise.state.commanded_mps = 43 / mod.MPS_TO_MPH
     cruise.set_target_mps(20 / mod.MPS_TO_MPH)
     for _ in range(round(60 / cruise.dt)):
         cruise.step()
@@ -603,6 +669,97 @@ def run_check(
     expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
            "an engine failure at cruise was not found once speed was "
            "asked for")
+
+    # Doors are the controller's (REQUIREMENTS.md M6): never opened
+    # while moving; in Automatic, opened on the platform side at a new
+    # station once stopped, closed when the Track Signal resumes, and
+    # the train leaves only once Door State reports them closed.
+    door = mod.ControllerCore()
+    door.armed = True
+    door.apply_staged(mod.read_inputs({"commanded_speed": 10.0,
+                                       "authority_blocks": 999,
+                                       "actual_speed": 10.0}))
+    door.state.beacon_side = "R"
+    door.command_door("right", True)
+    expect(not door.state.doors_right,
+           "a door was commanded open while moving")
+
+    def stopped() -> bool:
+        return abs(door.state.actual_mps) < mod.STANDSTILL_MPS
+    door.apply_staged(mod.read_inputs({"beacon_station": "DORMONT",
+                                       "beacon_side": "R",
+                                       "commanded_speed": 0.0,
+                                       "authority_blocks": 0}))
+    for _ in range(round(30 / door.dt)):
+        door.step()
+    expect(stopped() and door.state.fb_doors_right
+           and not door.state.fb_doors_left,
+           "Automatic did not open the platform side at the station")
+    door.apply_staged(mod.read_inputs({"commanded_speed": 10.0,
+                                       "authority_blocks": 3}))
+    door.step(plant=False)
+    expect(not door.state.doors_right,
+           "the doors were not closed when the Track Signal resumed")
+    door.step(plant=False)
+    expect(door.state.target_mps == 0.0,
+           "the train left before Door State reported the doors closed")
+    door.apply_staged(mod.read_inputs({"door_state": [False, False]}))
+    door.step(plant=False)
+    expect(door.state.target_mps > 0.0,
+           "the train did not leave once the doors reported closed")
+    door.apply_staged(mod.read_inputs({"actual_speed": 5.0}))
+    door.apply_staged(mod.read_inputs({"commanded_speed": 0.0,
+                                       "authority_blocks": 0}))
+    for _ in range(round(30 / door.dt)):
+        door.step()
+    expect(stopped() and not door.state.doors_right,
+           "the doors opened at a stop with no new station")
+
+    # The harness must send every train the full set each tick: one
+    # missing signal refuses the whole tick and no train steps, so a
+    # stale Brake State can never trip a false brake failure.
+    fleet = mod.TrainControllerFleet()
+    fleet.add("T-1").armed = True
+    full = {"actual_speed": 5.0, "commanded_speed": 10.0,
+            "authority_blocks": 5, "brake_state": [False, False],
+            "door_state": [False, False], "light_state": [True, True],
+            "cabin_temperature": 21.0}
+    fleet.step_all(0.1, {"T-1": full})
+    before = fleet.get("T-1").state.actual_mps
+    short = {k: v for k, v in full.items() if k != "brake_state"}
+    short["actual_speed"] = 9.0
+    try:
+        fleet.step_all(0.1, {"T-1": short})
+        expect(False, "a tick without Brake State was accepted")
+    except mod.InvalidInputError:
+        pass
+    expect(fleet.get("T-1").state.actual_mps == before,
+           "a refused tick still changed the train")
+    # The step is truth's fixed 0.1 s; any other dt is refused whole.
+    try:
+        fleet.step_all(0.05, {"T-1": dict(full, actual_speed=9.0)})
+        expect(False, "a step other than 0.1 s was accepted")
+    except mod.InvalidInputError:
+        pass
+    expect(fleet.get("T-1").state.actual_mps == before,
+           "a refused dt still changed the train")
+    fleet.step_all(0.1, {"T-1": full})
+
+    # Announcements are commands (REQUIREMENTS.md M7): in Automatic a
+    # new station beacon sends one on the approach, for the lockout,
+    # and in Manual only the driver's press does.
+    talk = mod.ControllerCore()
+    talk.apply_staged(mod.read_inputs({"beacon_station": "GLENBURY"}))
+    expect(talk.commands().announcement == "GLENBURY",
+           "Automatic sent no announcement on the approach")
+    for _ in range(round(mod.ANNOUNCE_LOCKOUT_MS / 1000 / talk.dt) + 1):
+        talk.step(plant=False)
+    expect(talk.commands().announcement == "",
+           "the automatic announcement never cleared")
+    talk.state.manual = True
+    talk.apply_staged(mod.read_inputs({"beacon_station": "DORMONT"}))
+    expect(talk.commands().announcement == "",
+           "Manual announced without the driver's press")
 
     # Until the Track Model sends the count, the toy plant spends one
     # block of authority per BLOCK_LENGTH_M travelled, part-blocks
@@ -633,24 +790,38 @@ def run_check(
     backend.set_target_mph(30)
     expect(backend.core.state.target_mps == 0.0,
            "the driver could set a target with no authority left")
-    backend.apply_bench_inputs({"authority_blocks": 6, "speed_limit": 40})
-    expect(abs(backend.core.state.speed_limit_mps - 40 / mod.MPS_TO_MPH)
-           < 1e-6, "the bench could not set the speed limit")
-
-    # The line limit binds the target, and it may be above the car's
-    # data-sheet 70 km/h if the line says so.
+    # Commanded speed is the speed limit, never above the car's 70 km/h
+    # (REQUIREMENTS.md M1): it caps the driver's target when set, and in
+    # Automatic it is the target.
+    car_max_mph = mod.MAX_SPEED_MPS * mod.MPS_TO_MPH
+    backend.apply_bench_inputs({"authority_blocks": 6,
+                                "commanded_speed": 40})
     backend.set_manual(True)
-    backend.apply_bench_inputs({"speed_limit": 60})
     backend.set_target_mph(55)
-    expect(abs(backend.snapshot["target_mph"] - 55) < 0.5,
-           "the target was capped below the line limit")
+    expect(abs(backend.snapshot["target_mph"] - 40) < 0.5,
+           "the driver's target was not capped at the commanded speed")
+    backend.apply_bench_inputs({"commanded_speed": 60})
+    backend.set_target_mph(55)
+    expect(abs(backend.snapshot["target_mph"] - car_max_mph) < 0.01,
+           "the driver's target went above the car's 70 km/h")
+    backend.set_manual(False)
+    backend.apply_bench_inputs({"commanded_speed": 30})
+    backend.core.step(plant=False)
+    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 30) < 0.5,
+           "Automatic did not take the commanded speed as its target")
+    backend.apply_bench_inputs({"commanded_speed": 60})
+    backend.core.step(plant=False)
+    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH
+               - car_max_mph) < 0.01,
+           "Automatic targeted more than the car's 70 km/h")
+    backend.set_manual(True)
     _settle(app, 300)
 
     # Removing a train takes everything of it out and moves the
     # selection on; removing it twice changes nothing.
     backend.select_train(second)
     backend.remove_train(second)
-    expect(second not in backend.cores and second not in backend.order,
+    expect(second not in backend.fleet,
            "removing a train left it in the simulation")
     expect(backend.selected == first,
            "the selection did not move to the remaining train")

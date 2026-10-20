@@ -28,7 +28,13 @@ Significant events go to the event log (R80), each also signalled as
 - ``CLOCK_PAUSED``, ``CLOCK_RESUMED``, ``SPEED_CHANGED``,
   ``TIME_SLIPPED``;
 - ``TICK_REJECTED``, ``INPUTS_FAILED``, ``REPLY_LATE``,
-  ``LATE_REPLY_RECEIVED``, ``UNEXPECTED_REPLY``, ``PROTOCOL_ERROR``.
+  ``LATE_REPLY_RECEIVED``, ``UNEXPECTED_REPLY``, ``PROTOCOL_ERROR``;
+- ``EDGES_FAILED``, and whatever the edges report, such as
+  ``TRAIN_ADDED`` and ``TRAIN_REMOVED`` (``common.harness.edges``).
+
+The edges decide each module's inputs (D005). They see every tick's
+new outputs once, when the tick is over, and build each module's
+inputs from the outputs every module last gave.
 """
 
 from __future__ import annotations
@@ -37,19 +43,19 @@ __all__ = [
     "PAUSED_KEY",
     "REPLY_TIMEOUT_S",
     "SPEEDUP_KEY",
+    "Edges",
     "Harness",
-    "InputMapper",
 ]
 
 import time
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from collections.abc import Mapping, Sequence
+from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from common.harness.modules import CTC_OFFICE, ModuleSpec
 from common.harness.pacer import TickPacer
-from common.harness.stub_edges import stub_inputs
+from common.harness.stub_edges import StubEdges
 from common.harness.supervisor import (
     QUIT_TIMEOUT_S,
     STARTUP_TIMEOUT_S,
@@ -73,11 +79,44 @@ MILLISECONDS_PER_SECOND = 1000
 
 HARNESS = "harness"
 
-#: Maps every module's last outputs to one module's inputs:
-#: ``(consumer, outputs_by_module) -> inputs``.
-InputMapper = Callable[
-    [str, Mapping[str, Mapping[str, Any]]], Mapping[str, Any]
-]
+
+class Edges(Protocol):
+    """How the harness builds each module's inputs (D005)."""
+
+    def tick_completed(
+        self,
+        tick: int,
+        sim_time_s: float,
+        fresh: Mapping[str, Mapping[str, Any]],
+    ) -> Sequence[tuple[str, str, str]]:
+        """Take the outputs that came in on one tick, once.
+
+        Args:
+            tick: The tick that is over.
+            sim_time_s: Its simulation time.
+            fresh: The outputs each module replied with on that tick;
+                a module that rejected the tick is absent.
+
+        Returns:
+            Events to log, as ``(source, event, detail)``.
+        """
+
+    def inputs_for(
+        self,
+        consumer: str,
+        tick: int,
+        sim_time_s: float,
+        outputs: Mapping[str, Mapping[str, Any]],
+    ) -> Mapping[str, Any]:
+        """Return one module's inputs for a tick.
+
+        Args:
+            consumer: The module about to step.
+            tick: The tick it steps.
+            sim_time_s: Simulation time at the end of the step.
+            outputs: Every module's outputs from the last tick it
+                completed.
+        """
 
 
 class Harness(QObject):
@@ -99,7 +138,7 @@ class Harness(QObject):
         self,
         specs: Sequence[ModuleSpec],
         log: EventLog,
-        map_inputs: InputMapper = stub_inputs,
+        edges: Edges | None = None,
         *,
         reply_timeout_s: float = REPLY_TIMEOUT_S,
         startup_timeout_s: float = STARTUP_TIMEOUT_S,
@@ -110,8 +149,9 @@ class Harness(QObject):
         Args:
             specs: One per module.
             log: Where significant events go. The caller closes it.
-            map_inputs: Builds each module's inputs from every
-                module's last outputs.
+            edges: Builds each module's inputs; by default each
+                module gets its producers' outputs whole, as stubs
+                expect.
             reply_timeout_s: Real seconds before a missing reply
                 pauses the clock.
             startup_timeout_s: Real seconds before modules that are
@@ -121,7 +161,7 @@ class Harness(QObject):
         super().__init__(parent)
         self._log = log
         self._log_path = str(log.path.resolve())
-        self._map_inputs = map_inputs
+        self._edges: Edges = edges if edges is not None else StubEdges()
         self._reply_timeout_s = reply_timeout_s
         self._clock = SystemClock()
         self._pacer = TickPacer(self._clock, parent=self)
@@ -319,7 +359,9 @@ class Harness(QObject):
         self._tick_started_s = time.perf_counter()
         for name in self._supervisor.ready_modules:
             try:
-                inputs = self._map_inputs(name, self._outputs)
+                inputs = self._edges.inputs_for(
+                    name, tick, sim_time_s, self._outputs
+                )
             except Exception as error:  # noqa: BLE001 - logged, run goes on
                 # Like a rejection: the module skips the tick and keeps
                 # its outputs.
@@ -371,15 +413,31 @@ class Harness(QObject):
             self._finish_tick()
 
     def _finish_tick(self) -> None:
-        # Every reply is in: keep the outputs for the next tick, apply
-        # the CTC Office's clock controls, and let the next tick come.
+        # Every reply is in: keep the outputs for the next tick, hand
+        # the new ones to the edges once, apply the CTC Office's clock
+        # controls, and let the next tick come.
         self._reply_timer.stop()
-        self._outputs.update(self._tick_outputs)
-        self._tick_outputs = {}
+        fresh, self._tick_outputs = self._tick_outputs, {}
+        self._outputs.update(fresh)
         round_trip_s = time.perf_counter() - self._tick_started_s
+        self._hand_to_edges(fresh)
         self._apply_clock_state()
         self.tickCompleted.emit(self._clock.tick_count, round_trip_s)
         self._pacer.tick_finished()
+
+    def _hand_to_edges(self, fresh: Mapping[str, Mapping[str, Any]]) -> None:
+        # The edges see each tick's outputs exactly once, and say what
+        # to log about them.
+        try:
+            events = self._edges.tick_completed(
+                self._clock.tick_count, self._clock.sim_time_s, fresh
+            )
+        except Exception as error:  # noqa: BLE001 - logged, run goes on
+            events = [
+                (HARNESS, "EDGES_FAILED", f"{type(error).__name__}: {error}")
+            ]
+        for source, event, detail in events:
+            self._log_event(source, event, detail)
 
     def _on_reply_timeout(self) -> None:
         # Pause the clock and name every module not yet replied.

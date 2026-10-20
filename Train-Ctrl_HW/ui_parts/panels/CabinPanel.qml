@@ -23,29 +23,34 @@ Panel {
         }
     ]
 
-    // Only the platform side opens; an open door can always be closed,
-    // so a door left open when the platform side changes is not stuck.
+    // Only the platform side opens, and only at a stand; an open door
+    // can always be closed, so a door left open when the platform side
+    // changes is not stuck. A moving train says why it will not open.
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive
-                && (root.s.platform_left || root.s.fb_doors_left)
+            enabled: root.s.can_drive && (root.s.fb_doors_left
+                || (root.s.platform_left && root.s.at_stand))
             on: root.s.fb_doors_left
             tone: "info"
-            text: root.s.fb_doors_left ? qsTr("Close left") : qsTr("Open left")
+            text: root.s.fb_doors_left ? qsTr("Close left")
+                : root.s.at_stand ? qsTr("Open left")
+                : qsTr("Left: stop first")
             onClicked: controller.set_door("left", !root.s.fb_doors_left)
         }
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive
-                && (root.s.platform_right || root.s.fb_doors_right)
+            enabled: root.s.can_drive && (root.s.fb_doors_right
+                || (root.s.platform_right && root.s.at_stand))
             on: root.s.fb_doors_right
             tone: "info"
-            text: root.s.fb_doors_right ? qsTr("Close right") : qsTr("Open right")
+            text: root.s.fb_doors_right ? qsTr("Close right")
+                : root.s.at_stand ? qsTr("Open right")
+                : qsTr("Right: stop first")
             onClicked: controller.set_door("right", !root.s.fb_doors_right)
         }
     }

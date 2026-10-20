@@ -79,7 +79,7 @@ Train Model UI action happens (failure, passenger pull).
 |---|---|
 | `set_failures(FailureState)` / `TrainModelState.setFailure(name, active)` | Murphy fault injection from the Train Model window. Shown at once in `snapshot().failures`, never output; physical effect from the next step. |
 | `pull_passenger_emergency_brake()` / `TrainModelState.applyEmergencyBrake()` | A passenger pull. Latches; reported at once; force from the next step. |
-| `TrainModelState.releaseEmergencyBrake()` | Does nothing. The Train Model window offers no release (D011); how the Train Controller releases a pull is not settled. |
+| `TrainModelState.releaseEmergencyBrake()` | Does nothing. The Train Model window offers no release (D011); the Train Controller releases a pull with `controller.passenger_brake_release`. |
 | `clear_passenger_brake_for_test()` | **Test only.** Clears the latch. |
 | `TrainModelState.reset()` | **Test only.** Replaces the train with a fresh one. |
 
@@ -104,10 +104,11 @@ TrainModelInputs
 | `emergency_brake` | bool | | Emergency brake command (controller path only; a passenger pull is internal). |
 | `interior_lights` | bool | | Light Command, interior. |
 | `exterior_lights` | bool | | Light Command, exterior. |
-| `door_left_open` | bool | | Door Command, left. Obeyed only at 0 mph. |
-| `door_right_open` | bool | | Door Command, right. Obeyed only at 0 mph. |
+| `door_left_open` | bool | | Door Command, left. Obeyed at any speed: the door interlock is the Train Controller's (truth `door-command`). |
+| `door_right_open` | bool | | Door Command, right. Obeyed at any speed, as the left. |
 | `temp_setpoint_c` | float | °C | Cabin temperature setpoint. |
 | `announcement` | str | | Passed in; not used by the physics. |
+| `passenger_brake_release` | bool | | One-shot: true on the tick the Train Controller releases a passenger pull. The model clears the pull before it steps; the controller's own emergency brake follows `emergency_brake`. Optional, false by default. |
 
 ### `TrackInfo` (Track Model, every tick)
 
@@ -211,6 +212,7 @@ for the rest of the system (section 3 of [integration.md](integration.md)).
 | `door-command` | in | `controller.door_left_open`, `door_right_open` |
 | `temperature-setpoint` | in | `controller.temp_setpoint_c` |
 | `announcement` | in | `controller.announcement` |
+| `passenger-brake-release` | in | `controller.passenger_brake_release` |
 | `track-info` | in | `track.track_info` |
 | `track-signal` | in, passed out | `track.track_signal` → `commanded_speed_mps`, `authority_blocks` |
 | `beacon` | in, passed out | `track.beacon` → `controller.beacon` |

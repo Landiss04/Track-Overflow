@@ -18,6 +18,9 @@ Messages sent before the link opens wait for it and go in order; once
 the link is lost, nothing more is sent.
 
 Messages are defined in ``utils.harness_protocol``.
+
+GUI modules reopen their main windows on ``showRequested`` through
+the shared ``utils.module_window`` policy. Core-only stubs ignore it.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ import sys
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QTimer, Signal
 from PySide6.QtNetwork import QLocalSocket
 
 from utils.harness_protocol import (
@@ -87,6 +90,7 @@ class ModuleLink(QObject):
             parent: Optional Qt parent.
         """
         super().__init__(parent)
+        self.showRequested.connect(_show_module_windows)
         self._module = module
         self._server_name = server_name
         self._step = step
@@ -127,8 +131,15 @@ class ModuleLink(QObject):
         return self._last_reply
 
     def connect_to_harness(self) -> None:
-        """Open the link. ``harnessLost`` fires if it cannot."""
-        self._socket.connectToServer(self._server_name)
+        """Open the link once the event loop runs.
+
+        ``harnessLost`` fires if it cannot. Connecting from the event
+        loop matters: a failure signalled before the loop starts would
+        come too early for a handler that ends the loop.
+        """
+        QTimer.singleShot(
+            0, lambda: self._socket.connectToServer(self._server_name)
+        )
 
     def announce_ready(self) -> None:
         """Tell the harness the module can step.
@@ -251,3 +262,13 @@ class ModuleLink(QObject):
         # Module processes have no log of their own; the console keeps
         # the trail. The harness logs what reaches it.
         print(f"[{self._module}] {text}", file=sys.stderr, flush=True)
+
+
+def _show_module_windows() -> None:
+    # GUI modules share one window policy. Core-only stubs do nothing,
+    # and do not import GUI bindings just to ignore a SHOW.
+    app = QCoreApplication.instance()
+    if app is not None and app.inherits("QGuiApplication"):
+        from utils.module_window import show_module_windows
+
+        show_module_windows()

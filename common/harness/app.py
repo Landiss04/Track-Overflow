@@ -5,6 +5,15 @@ and prints a status line every five seconds. Both run until Ctrl+C,
 the time limit, or a confirmed window close. The CTC Office's stub
 presses Run when ready; the harness window has no clock controls.
 
+The modules wired in so far run as themselves (Phase 1: the Train
+Model and the Train Controller SW, each in its window); the rest are
+stubs. The CTC Office's stub presses Run as soon as it is ready and
+releases train G1 onto the Green Line on the first tick. The Train
+Model runs G1 over a fixed track feed with a stop at GLENBURY
+(``track_feed.GREEN_STATION_STOP``). G1 moves once an engineer sets
+its gains in the Train Controller's console (D024). ``--stubs-only``
+runs a stub for every module instead, as in Phase 0.
+
 The CSV goes to ``--log-dir``, defaulting to the user's application
 data folder (``TrackOverflow/logs``), never the installation.
 """
@@ -23,11 +32,16 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication, QStandardPaths, QTimer
 
 from common.harness.core import Harness
-from common.harness.modules import CTC_OFFICE, stub_specs
+from common.harness.edges import SystemEdges
+from common.harness.modules import CTC_OFFICE, stub_specs, system_specs
 from common.harness.supervisor import HarnessStartError
+from common.harness.track_feed import GREEN_STATION_STOP, FixedTrackFeed
 from utils.event_log import EventLog, log_file_name
 
 APPLICATION_NAME = "TrackOverflow"
+
+#: The train the CTC Office's stub releases on the first tick.
+FIRST_TRAIN = "G1"
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -61,8 +75,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ctc_options = ["--run-on-ready"]
     if options.speedup:
         ctc_options += ["--speedup-at-tick", "0"]
+    if options.stubs_only:
+        specs = stub_specs({CTC_OFFICE: ctc_options})
+        edges = None
+    else:
+        ctc_options += ["--release-train", f"{FIRST_TRAIN}:Green@1"]
+        specs = system_specs({CTC_OFFICE: ctc_options})
+        edges = SystemEdges(FixedTrackFeed(GREEN_STATION_STOP))
     with EventLog(log_path) as log:
-        harness = Harness(stub_specs({CTC_OFFICE: ctc_options}), log)
+        harness = Harness(specs, log, edges)
         window = None
         if options.headless:
             status = _StatusLine(harness)
@@ -195,6 +216,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--speedup",
         action="store_true",
         help="run at 10x from the start",
+    )
+    parser.add_argument(
+        "--stubs-only",
+        action="store_true",
+        help="run a stub for every module, as in Phase 0",
     )
     return parser.parse_args(argv)
 

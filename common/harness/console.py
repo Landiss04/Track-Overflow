@@ -26,6 +26,7 @@ from PySide6.QtCore import (
 from common.harness.core import Harness
 
 REFRESH_MS = 100
+MILLISECONDS_PER_SECOND = 1000
 OUTPUT_INTERVAL_S = 0.5
 RECENT_INTERVAL_S = 5.0
 MAX_EVENTS = 3000
@@ -49,6 +50,7 @@ FAULT_EVENTS = frozenset({
     "PROTOCOL_ERROR",
     "TIME_SLIPPED",
     "INPUTS_FAILED",
+    "EDGES_FAILED",
     "MODULE_KILLED",
 })
 
@@ -237,9 +239,14 @@ class HarnessConsole(QObject):
                 MODULE_LABELS.get(name, name)
                 for name in self._harness.startup_timed_out_modules
             ),
-            "mean_ms": f"{sum(trips) / len(trips) * 1000:.2f}"
-            if trips else EMPTY,
-            "max_ms": f"{max(trips) * 1000:.2f}" if trips else EMPTY,
+            "mean_ms": (
+                f"{sum(trips) / len(trips) * MILLISECONDS_PER_SECOND:.2f}"
+                if trips else EMPTY
+            ),
+            "max_ms": (
+                f"{max(trips) * MILLISECONDS_PER_SECOND:.2f}"
+                if trips else EMPTY
+            ),
             "slipped": str(self._harness.dropped_ticks),
             "log_path": self._harness.log_path,
         }

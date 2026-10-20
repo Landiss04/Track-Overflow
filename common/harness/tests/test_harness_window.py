@@ -32,12 +32,15 @@ class HarnessWindowTest(unittest.TestCase):
         """Honor log, speed and time-limit options in both modes."""
         repo = Path(__file__).resolve().parents[3]
         with tempfile.TemporaryDirectory() as folder:
-            for mode in ("window", "headless"):
+            for mode in ("window", "headless", "system"):
                 with self.subTest(mode=mode):
                     log_dir = Path(folder) / mode
                     args = [sys.executable, "track_overflow.py",
-                            "--speedup", "--run-seconds", "1",
+                            "--speedup", "--run-seconds",
+                            "2" if mode == "system" else "1",
                             "--log-dir", str(log_dir)]
+                    if mode != "system":
+                        args.append("--stubs-only")
                     if mode == "headless":
                         args.append("--headless")
                     result = subprocess.run(
@@ -54,6 +57,10 @@ class HarnessWindowTest(unittest.TestCase):
                         rows = list(csv.DictReader(file))
                     self.assertEqual(rows[-1]["event"], "HARNESS_STOPPED")
                     self.assertGreater(int(rows[-1]["tick"]), 0)
+                    if mode == "system":
+                        self.assertTrue(any(
+                            row["event"] == "TRAIN_ADDED" for row in rows
+                        ))
                     exits = [row for row in rows
                              if row["event"] == "MODULE_EXITED"]
                     self.assertEqual(len(exits), 7)

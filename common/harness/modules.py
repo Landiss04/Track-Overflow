@@ -11,7 +11,10 @@ value that crosses a module boundary is in capitals
 ``documents/system-integration-design.md``): for each module, the
 modules whose outputs become its inputs.
 
-In Phase 0 every module is a stub (``common.harness.stub_module``).
+``WIRED_MODULES`` are the modules wired in so far, which run as
+themselves; every other module runs as a stub
+(``common.harness.stub_module``). Phase 1 wires in the Train Model and
+the Train Controller SW.
 """
 
 from __future__ import annotations
@@ -26,15 +29,18 @@ __all__ = [
     "TRAIN_CONTROLLER_HW",
     "TRAIN_CONTROLLER_SW",
     "TRAIN_MODEL",
+    "WIRED_MODULES",
     "ModuleSpec",
     "module_command",
+    "module_spec",
     "stub_spec",
     "stub_specs",
+    "system_specs",
     "working_directory",
 ]
 
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +62,9 @@ MODULE_NAMES = (
     TRAIN_CONTROLLER_SW,
     TRAIN_CONTROLLER_HW,
 )
+
+#: The modules wired in so far (Phase 1); the rest are stubs.
+WIRED_MODULES = frozenset({TRAIN_MODEL, TRAIN_CONTROLLER_SW})
 
 #: For each module, the modules whose outputs it reads.
 PRODUCERS: Mapping[str, tuple[str, ...]] = {
@@ -116,6 +125,16 @@ def working_directory() -> Path:
     return _REPO_ROOT
 
 
+def module_spec(name: str, *options: str) -> ModuleSpec:
+    """Return the spec that runs module ``name`` as itself.
+
+    Args:
+        name: One of ``WIRED_MODULES``.
+        *options: Further options for that module's process.
+    """
+    return ModuleSpec(name, ("--module", name, *options))
+
+
 def stub_spec(name: str, *options: str) -> ModuleSpec:
     """Return the spec of a stub standing in for module ``name``.
 
@@ -141,3 +160,26 @@ def stub_specs(
     if unknown:
         raise ValueError(f"no such module: {', '.join(sorted(unknown))}")
     return [stub_spec(name, *options.get(name, ())) for name in MODULE_NAMES]
+
+
+def system_specs(
+    options: Mapping[str, Sequence[str]] | None = None,
+    wired: Collection[str] = WIRED_MODULES,
+) -> list[ModuleSpec]:
+    """Return a spec for every module, wired or stub.
+
+    Args:
+        options: Options per module name: stub options for a stub,
+            the module's own options for a wired module.
+        wired: The modules to run as themselves.
+    """
+    options = options or {}
+    unknown = set(options) - set(MODULE_NAMES)
+    if unknown:
+        raise ValueError(f"no such module: {', '.join(sorted(unknown))}")
+    return [
+        (module_spec if name in wired else stub_spec)(
+            name, *options.get(name, ())
+        )
+        for name in MODULE_NAMES
+    ]
