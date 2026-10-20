@@ -96,3 +96,24 @@ One line per promoted or denied proposal, appended at promotion time. See
 | 2026-10-08 | ctc-interfacing | 20261006-1702-authority-stops-before-obstruction.md | arbitration/authority-stops-before-obstruction.md | denied — superseded by 20261006-2250-authority-stops-before-obstruction-direction.md |
 | 2026-10-08 | ctc-interfacing | 20261006-2250-layout-direction-of-travel.md | conventions/files-and-paths.md | denied — superseded by 20261007-1249-layout-next-blocks.md (next_blocks replaces the direction field) |
 | 2026-10-08 | ctc-interfacing | 20261006-2331-layout-direction-red-a-g-two-way.md | conventions/files-and-paths.md | denied — superseded by 20261007-1249-layout-next-blocks.md |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2155-D005-harness-process-per-module.md | decisions/D005-central-harness.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2155-D017-fan-out-dt-and-sim-time.md | decisions/D017-shared-simulation-clock.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2155-track-signal-per-block-cleared-after-delivery.md | signals/track-signal.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-D008-catalog-superseded.md | decisions/D008-interfaces-harness-catalog.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-door-state-to-track-model.md | signals/door-state.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-suggested-authority-with-block.md | signals/suggested-authority.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-suggested-speed-with-block.md | signals/suggested-speed.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-track-info-six-fields.md | signals/track-info.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2259-files-and-paths-event-logger-conflict.md | conventions/files-and-paths.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2259-naming-enum-values-all-caps.md | conventions/naming.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261017-1433-D007-train-controller-holds-dwell.md | decisions/D007-station-dwell.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261017-1433-D021-hardware-ui-on-host.md | decisions/D021-hardware-variants-and-selection.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261017-1433-D022-ctc-creates-trains.md | decisions/D022-yard-black-box.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261017-1433-D023-blue-line-out-of-scope.md | decisions/D023-blue-line-out-of-scope.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261017-1433-brakes-apply-together.md | arbitration/brakes-apply-together.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261017-1433-signal-aspect-ahead.md | signals/signal-aspect-ahead.md | promoted |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-1828-D017-clock-to-every-module-in-parallel.md | decisions/D017-shared-simulation-clock.md | denied — superseded by 20261016-2155-D017-fan-out-dt-and-sim-time.md |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-1844-track-signal-from-track-controller.md | signals/track-signal.md | denied — superseded by 20261016-2155-track-signal-per-block-cleared-after-delivery.md |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-D007-dwell-conflict-resolved.md | decisions/D007-station-dwell.md | denied — superseded by 20261017-1433-D007-train-controller-holds-dwell.md |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-D021-hardware-variants-and-selection.md | decisions/D021-hardware-variants-and-selection.md | denied — superseded by 20261017-1433-D021-hardware-ui-on-host.md |
+| 2026-10-19 | claude/quirky-fermi-sickg4 | 20261016-2254-D022-yard-black-box.md | decisions/D022-yard-black-box.md | denied — superseded by 20261017-1433-D022-ctc-creates-trains.md |
