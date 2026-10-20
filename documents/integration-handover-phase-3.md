@@ -2,14 +2,14 @@
 
 Written 2026-10-20 at the end of the session that built Phase 3, on branch
 `claude/quirky-fermi-sickg4`. It is for whoever picks the work up next, person or agent.
-It says what Phase 3 built, what validation is left and how to finish it, the open
-questions, and how to begin Phase 4. The plan and the history are in
-`documents/system-integration-design.md` (v0.9, which does not describe Phase 3 yet);
-how a module joins the harness is in `common/harness/README.md`.
+It says what Phase 3 built, how it was validated, the open questions, and how to begin
+Phase 4. The plan and the history are in `documents/system-integration-design.md`
+(v0.10; Phase 3 is section 5.4); how a module joins the harness is in
+`common/harness/README.md`.
 
-The work stopped partway through validation, at Kevin Schillinger's request, before the
-measurement runs and the document updates were done. Everything in section 1 is
-committed with this file.
+The first session stopped partway through validation, at Kevin Schillinger's request.
+A second session on the same day finished it: the measurement runs, the frozen build
+and the document updates (section 2).
 
 ## 1. Phase 3 as built
 
@@ -83,7 +83,7 @@ Train Controller HW.
 
 ## 2. Validation: done, and left to finish
 
-### Done in this session
+### Done in the first session
 
 | Check | Result |
 |---|---|
@@ -97,58 +97,29 @@ Train Controller HW.
 | flake8 `--max-line-length=79`, every new or changed Python file | clean. Older lines in `TrackCtrlSW` tests and `state.py` still have pre-existing hits; that module runs only mypy (its D3). |
 | Budget, `measure --system --seconds 15 --speed 10`, headless | 10.00x, 1,510 of 1,509 ticks, round trip mean 4.76 ms, median 3.59, p95 12.79, p99 19.85, max 94.65; 0 slipped, 0 late; ready after 1.03 s; harness CPU 25% (Phase 2: 3.5 to 3.8 ms mean, 17%) |
 
-### Left to finish, in this order
+### Finished in the second session
 
-Use the scratch venv (Python with PySide6 6.11.2, pytest, mypy, flake8), or any with
-the toolchain minimums of truth `conventions/toolchain.md`. Run from the repository root
-with `QT_QPA_PLATFORM=offscreen` set when headless.
+Run on 2026-10-20 in a Linux cloud container (`vm`, Ubuntu 24.04.5, four-core 2.1 GHz
+Xeon), Python 3.13.16, PySide6 6.11.2, PyInstaller 6.22.2, with
+`QT_QPA_PLATFORM=offscreen`, against commit `1a9ce27`. No code was changed.
 
-1. **The whole harness suite in one run:**
-   `python -m pytest -q common/harness/tests`. Expect 141 passed. If the utils
-   clock-driver test is run alongside, it can fail under load and pass on a rerun
-   (wall clock; known).
-2. **The other modules' suites**, untouched by Phase 3 but run to be sure:
-   - `TrainModel`: expect 855 passed, 13 skipped.
-   - `Train-Ctrl_HW`: `python check.py` (0 QML warnings, 0 problems) and its tests (10).
-   - `CTC-Office`: expect 208.
-   - `TrackCtrlHw`: expect its one known sample-wayside failure only.
-3. **The rest of the budget** (G-CLK-6). The 10x headless run is done. Still to run:
-   ```sh
-   python -m common.harness.measure --system --seconds 15 --speed 1
-   python -m common.harness.measure --system --seconds 15 --speed 10 --window
-   python -m common.harness.measure --system --seconds 15 --speed 10   # repeat
-   ```
-   Pass: the speed reached is the speed asked, with 0 slipped and 0 late. Watch the
-   Track Controller window's own refresh (`state.UI_REFRESH_MS`, 200 ms) at 10x with
-   the window; it is the new process with a window. Record the table in the design
-   document's new section 5.4, beside Phase 2's.
-4. **Frozen build** (G-RUN-2). To the recipe in `common/harness/README.md`, add
-   `--paths "$PWD/TrackCtrlSW"` and `--add-data "$PWD/TrackCtrlSW/ui:TrackCtrlSW/ui"`.
-   The layouts are bundled already. Check:
-   - alone, the bundled `--module track-controller-sw` finds its window
-     (`_MEIPASS/TrackCtrlSW/ui/Main.qml`) and the Green layout
-     (`default_layout_dir()`);
-   - `track-overflow --headless --speedup --load-starters --run-seconds 12`, run from
-     outside the checkout with an empty `PYTHONPATH`, logs `WAYSIDES_READY` and
-     `TRAIN_ADDED` and ends with seven exits of code 0.
-5. **Documents.** These still describe the Phase 2 scripted wayside:
-   - `documents/system-integration-design.md`: add §5.4 "Phase 3 as built", following
-     §5.3's form; update the G-SIG gaps on Track Controller edges, readiness and
-     failures, Appendix A (edge map), and §7.1 if a proposal is filed; v0.10.
-   - `common/harness/README.md`: the module table (`ctc_script.py`, `track_devices.py`,
-     `wayside_edges.py` in; `wayside_script.py` out), how a run starts (two people:
-     programs, then gains), `--load-starters`, the readiness events, the frozen-build
-     additions.
-   - `TrackCtrlSW/README.md`: running under the harness. `INTEGRATION_DISCREPANCIES.md`:
-     - A3: the harness edge exists (`wayside_edges`, not the typed `ctc_edges.py`, which
-       stays for this module's tests);
-     - C6: the harness maps lights through the switch;
-     - E1: readiness is mapped and gates the stand-in;
-     - E2: settled at the harness, without the section letter;
-     - new items for the starter rule and the dialog rename.
-   - `TrackModel/README.md` and `INTEGRATION.md`, `TrainModel/docs/open-issues.md`: each
-     says a scripted wayside stands in for the Track Controller "until Phase 3".
-6. **Commit and push** on `claude/quirky-fermi-sickg4`, then report.
+| Step | Check | Result |
+|---|---|---|
+| 1 | `python -m pytest -q common/harness/tests`, in one run | 140 tests, not 141: edges 55, loop 21, system 11, window 2, and 51 from earlier phases. All passed in 4 of 8 runs. The other 4 failed one test, `test_harness_console.py::ConsoleFaultRunTest::test_startup_timeout_names_the_loading_module` (Q15). Older than Phase 3: the commit before (`c311800`) failed it in 4 of 12 runs. The file alone passed 10 of 10 at both. |
+| 2 | `TrainModel`: `python -m pytest -q` | 855 passed, 13 skipped |
+| 2 | `Train-Ctrl_HW`: `python main.py --check`, and `python -m pytest -q tests` | 0 QML warnings, 0 behaviour problems; 10 passed. (`python check.py` alone prints nothing and exits 0; the self-check runs through `main.py --check`.) |
+| 2 | `CTC-Office`: `python -m pytest -q` | 208 passed, 251 subtests |
+| 2 | `TrackCtrlHw`: `python -m unittest discover -s tests -t .` | 62 run, 1 failure: the known sample-wayside test (`test_territory.SampleWaysides.test_samples_match_the_course_layout_file`, `next_blocks`) |
+| 2 | Also: `TrackCtrlSW` unittest, `TrackModel` pytest, `utils` pytest | 194 OK; 309 passed; utils 64 passed on the second and third runs, 1 failure on the first (not captured; the clock-driver test is the known one) |
+| 3 | `measure --system --seconds 15 --speed 1` | 1.01x, 151 of 150 ticks, round trip mean 4.77 ms, median 4.53, p95 6.91, p99 8.28, max 10.21; 0 slipped, 0 late; ready after 1.36 s; CPU 3% |
+| 3 | `measure --system --seconds 15 --speed 10 --window` | 10.00x, 1,508 of 1,508, mean 5.24 ms, median 4.22, p95 12.31, p99 18.62, max 82.53; 0 slipped, 0 late; ready after 1.38 s; CPU 26% |
+| 3 | `measure --system --seconds 15 --speed 10`, repeat | 10.00x, 1,504 of 1,504, mean 4.35 ms, median 3.35, p95 11.97, p99 16.91, max 36.48; 0 slipped, 0 late; ready after 1.12 s; CPU 22% |
+| 4 | Frozen build, with `--paths "$PWD/TrackCtrlSW"` and `--add-data "$PWD/TrackCtrlSW/ui:TrackCtrlSW/ui"`, output outside the checkout | Built, 483 MB. Alone, `--module track-controller-sw --harness <none>` loaded the Green layout and `_MEIPASS/TrackCtrlSW/ui/Main.qml`, then exited 2 (harness lost; 1 would mean no window). `--headless --speedup --load-starters --run-seconds 12` from outside the checkout, empty `PYTHONPATH`: `WAYSIDES_READY` and `TRAIN_ADDED` at tick 2, 974 ticks, no fault events, seven exits of code 0. |
+| 5 | Documents | `documents/system-integration-design.md` v0.10 (section 5.4; G-CLK-6, G-LIFE-2, G-RUN-2, G-RUN-7, G-HW-2, G-SIG-1, -2, -3, -5, -8, -14, -18, G-NEW-1; Appendix A); `common/harness/README.md`; `TrackCtrlSW/README.md`; `TrackCtrlSW/INTEGRATION_DISCREPANCIES.md` (A3, C6, E1, E2; new E5 starter rule, E6 dialog rename); `TrackModel/README.md`; `TrackModel/INTEGRATION.md`; `TrainModel/docs/open-issues.md`. No truth proposal: nothing new was decided. |
+| 6 | Commit and push | On `claude/quirky-fermi-sickg4`. |
+
+The Track Controller's window ran offscreen in every measurement, with its 200 ms
+refresh; no tick slipped at 10x with it.
 
 ## 3. Open questions
 
@@ -171,6 +142,7 @@ comes first.
 | Q12 | Under the starter program, two trains in adjacent blocks hold each other forever. The CTC Office's exclusive authority should keep them apart; the starter cannot tell direction. | Harry Tye | Note it in the Track Controller's README; no change now. |
 | Q13 | The CTC Office sends one suggestion per train, its head block only. R49 and truth `suggested-speed` need the next block too while authority is at least 1. Fix it in the CTC Office, as R82 was fixed in the Train Controller? | Landis, Kevin | Yes: it blocks Phase 4 (section 4). |
 | Q14 | The CTC Office's outputs have no `new_trains` or `retired_trains`, which the roster needs (R35, R46, D022). Add them to its boundary? | Landis, Kevin | Yes: it blocks Phase 4. |
+| Q15 | `test_harness_console.py`'s fault run fails now and then in the full harness suite: its 0.3 s startup timeout is meant to catch only the Train Model stub (600 ms delay), but the stubs take 0.13 to 0.27 s to be ready, so the Train Controller SW stub sometimes misses it too. Once that stub crashes at tick 8 by script it is not ready again, and `startup_timed_out_modules` still names it. Older than Phase 3 (section 2). | Kevin (harness) | None yet. The test needs a margin that does not depend on process start time. |
 
 No truth proposal was filed in Phase 3: no new normative fact came from a decision or a
 direct statement. `truth/_inbox/claude/quirky-fermi-sickg4/` holds 16 proposals from

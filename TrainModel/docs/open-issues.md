@@ -20,10 +20,11 @@ presence is source-inspection evidence, not a claim that local checks passed.
 
 - Phase 2 wires the Track Model process with direct harness edges
   (`common/harness/track_edges.py`), which pass each beacon on unchanged for the
-  Train Model to check and reject per train; the fixed feed is gone. A scripted wayside still stands
-  in for the Track Controller, so the commanded speed and authority the Train Model
-  passes on are scripted until Phase 3. `track_model_edges.py` retains legacy
-  catalog conversions, off the running path.
+  Train Model to check and reject per train; the fixed feed is gone. Since Phase 3
+  the Track Controller SW commands the Green Line's speed and authority per block.
+  Its suggestions come from a scripted CTC Office in the harness until the CTC Office
+  joins in Phase 4. `track_model_edges.py` retains legacy catalog conversions, off
+  the running path.
 - Production boarding events must respect Track Model station ownership, and all
   beacon producers must apply the complete canonical payload bound.
 - Backend/UI work has local verification sources, including `test_beacon_codec.py`

@@ -41,6 +41,28 @@ Offscreen smoke test (no display needed; clean = no output):
 QT_QPA_PLATFORM=offscreen .venv/Scripts/python main.py
 ```
 
+### Under the central harness
+
+`python track_overflow.py`, from the repository root, starts the harness and this
+module with the others (`common/harness/README.md`). The harness runs
+`track_overflow.py --module track-controller-sw`, which is
+`track_ctrl/module_process.py`:
+
+- It holds the Green Line only, six waysides, `GTC-01` to `GTC-06` (R77; the HW
+  variant runs the Red).
+- It starts not ready. A person loads a PLC program on every wayside in the window:
+  RUN then COMMIT on each, or **Load starters**. `--load-starters` on the harness
+  command line commits the starter programs at launch instead, for tests and
+  demonstrations. Until every wayside is ready, nothing is released, and the harness
+  logs `WAYSIDES_NOT_READY` with the waysides and the reason.
+- It steps once per `STEP`, on its own JSON forms (`track_ctrl/wire.py`). Bad input
+  refuses the tick and changes nothing.
+- The test link is not opened: the harness is the one driver.
+- The header shows the harness's time. It shows the clock paused once no step has
+  come for 1 s. The 10x badge stays hidden, since the harness does not send the speed.
+- A scripted CTC Office in the harness sends the suggestions until the CTC Office is
+  wired in (Phase 4).
+
 ## Test
 
 ```bash
@@ -51,8 +73,9 @@ QT_QPA_PLATFORM=offscreen .venv/Scripts/python -m unittest discover -s tests -v
 The suites in `tests/`: the module boundary (`test_boundary`), the stand-in
 world driving a controller through the real PLC and safety layer
 (`test_world`), the programmer's inputs, the commit gate and the clock display
-(`test_stimulus`), and the link between the two processes over a real named
-pipe (one test UI at a time, refusals, malformed input) (`test_link`).
+(`test_stimulus`), the link between the two processes over a real named
+pipe (one test UI at a time, refusals, malformed input) (`test_link`), and the
+process the harness starts (`test_module_process`).
 
 ## Type-check
 
@@ -362,8 +385,10 @@ come, never how long each is. The module shows the time of the last tick and
 stamps its terminal and commits with it; before the first tick it shows
 `--:--:--`.
 
-- **Integrated**, the central harness owns the clock and calls
-  `TrackControllerState.step(dt, inputs)` (or `SwTrackController.step`).
+- **Integrated**, the central harness owns the clock, and
+  `track_ctrl/module_process.py` steps the controller once per `STEP` with the
+  harness's time. The harness does not send the speed or the pause, so the
+  header shows **Paused** once no step has come for 1 s, and never **10×**.
 - **Standalone**, the test UI owns a `SystemClock` and a `ClockDriver`, ticks
   them in real time at 1x or 10x, and steps the controller over the link.
 
@@ -523,8 +548,12 @@ recorded here.
 - Only the light theme of the style guide is implemented.
 - The controller has no hardware variation yet; this is the software one.
 - Committed programs live in memory, so history does not survive a restart.
-- Integration with the CTC Office, HW Track Controller and Track Model is not
-  done; see `INTEGRATION_DISCREPANCIES.md` for every known mismatch.
+- Under the harness the module runs with the Track Model and a scripted CTC Office
+  (Phase 3). The CTC Office joins in Phase 4 and the HW Track Controller in Phase 5;
+  see `INTEGRATION_DISCREPANCIES.md` for every known mismatch.
+- Under the starter program, two trains in adjacent blocks hold each other for good.
+  The starter cannot tell direction; the CTC Office's authority is
+  to keep trains apart.
 18. **Lists reach QML as `{"rows": [...]}`.** A list property read from QML is a
     live reference: every `.length` or element access inside `filter` calls the
     Python getter again, once per element. A view that filtered a 30-row list in

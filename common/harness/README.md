@@ -7,17 +7,21 @@ before the next tick. The design, and the R and G numbers cited in the code, are
 [`documents/system-integration-design.md`](../../documents/system-integration-design.md).
 
 Phase 0 built the harness, its protocol, and a stub process standing in for each of the
-seven modules. Phase 1 wired in the Train Model and the Train Controller SW, and Phase 2
-the Track Model. One Green Line train runs on the commands of a scripted wayside that
-stands in for the Track Controller. The other four modules are still stubs.
+seven modules. Phase 1 wired in the Train Model and the Train Controller SW, Phase 2 the
+Track Model, and Phase 3 the Track Controller SW, on the Green Line only (R77). One Green
+Line train runs on the Track Controller's commands. A scripted CTC Office in the harness
+stands in for the CTC Office's dispatch and suggestions until Phase 4. The other three
+modules are still stubs: the CTC Office, the Track Controller HW and the Train
+Controller HW.
 
 ## Run it
 
 From the repository root, in the project's virtual environment:
 
 ```
-python track_overflow.py                     # Phase 2 system, 1x
+python track_overflow.py                     # Phase 3 system, 1x
 python track_overflow.py --speedup           # 10x
+python track_overflow.py --load-starters     # commit the starter PLC programs at launch
 python track_overflow.py --run-seconds 30    # stop by itself
 python track_overflow.py --log-dir logs      # event log folder
 python track_overflow.py --stubs-only        # a stub for every module, as in Phase 0
@@ -27,21 +31,30 @@ No arguments open the operator window. Add `--headless` to echo every event to t
 console, with a status line every 5 s. Ctrl+C ends the run in either mode. The CTC
 Office's stub presses Run as soon as it is ready.
 
-What a run does:
+A run needs two people, or the options that stand in for them: one loads the PLC
+programs, and one sets the train's gains.
 
-1. The harness starts seven module processes: the Track Model, the Train Model and the
-   Train Controller SW as themselves, each in its window, and stubs for the rest.
-2. The CTC Office's stub presses Run as soon as it is ready, since its window is not wired
-   in yet, and releases train G1 onto the Green Line on the first tick.
-3. The Track Model places G1 on the yard exit block (63) on the next tick. G1 joins the
-   Train Model a tick later, and the Train Controller a tick after that.
-4. G1 waits there until an engineer sets its gains in the Train Controller's console
+1. The harness starts seven module processes: the Track Controller SW, the Track Model,
+   the Train Model and the Train Controller SW as themselves, each in its window, and
+   stubs for the rest.
+2. The Track Controller runs the Green Line's six waysides, `GTC-01` to `GTC-06`. It
+   starts not ready (R44, R70). A person loads a PLC program on every wayside in its
+   window: RUN then COMMIT on each, or **Load starters**. `--load-starters` commits the
+   generated starter programs at launch instead, for tests and demonstrations.
+3. Until then the clock runs and nothing is released. The harness logs
+   `WAYSIDES_NOT_READY` with the waysides and the reason, and `WAYSIDES_READY` once every
+   wayside on the line is ready.
+4. The scripted CTC Office (`ctc_script.GREEN_YARD_TO_DORMONT`) then releases G1, once
+   the yard exit block (63) is clear. The Track Model places G1 there a tick later. G1
+   joins the Train Model a tick after that, and the Train Controller a tick after that.
+5. G1 waits there until an engineer sets its gains in the Train Controller's console
    (D024).
-5. Then the scripted wayside `wayside_script.GREEN_YARD_TO_DORMONT` takes it out of block
-   63 at 45 km/h to a stop at GLENBURY (block 65, platform on the right). The right-hand
-   doors open at a stand. About 60 s after the train entered the block, the wayside gives
-   it authority again: the doors close, and it goes on at 40 km/h to DORMONT (block 73),
-   where it stops and opens its doors at the end of its route.
+6. The stand-in suggests a speed and an authority for G1's block, and for the next block
+   with one block less (R49). The Track Controller passes them down each block's track
+   circuit through its PLC program. G1 stops at GLENBURY (block 65, platform on the
+   right) for the 45 s dwell, which the Train Controller enforces (D007). About 60 s after
+   it entered the block, the stand-in gives it authority again, and it goes on to
+   DORMONT (block 73), where its route ends.
 
 A module window that is closed only hides; the process ends when the harness does.
 
@@ -60,7 +73,9 @@ A module window that is closed only hides; the process ends when the harness doe
 | `roster.py` | The trains in service, from the CTC Office's `new_trains` and `retired_trains` (D022). |
 | `train_edges.py` | The edges between the Train Model and the Train Controller. |
 | `track_edges.py` | The edges between the Track Model and the trains, and the Track Model's block names. |
-| `wayside_script.py` | The scripted wayside that stands in for the Track Controller until Phase 3. |
+| `wayside_edges.py` | The edges into and out of the Track Controller: from the CTC Office, from and to the Track Model, and to the CTC Office. Also `line_ready`. |
+| `track_devices.py` | Each switch's ID (the Track Controller's name), its point (the Track Model's name), and the block of its light, read from the layout files. |
+| `ctc_script.py` | The scripted CTC Office that stands in for the CTC Office's dispatch and suggestions until Phase 4. |
 | `stub_module.py` | The stand-in module process, with scripted faults. The CTC Office's stub also releases and retires trains on cue. |
 | `stub_edges.py` | Inputs for a stub: its producers' outputs whole. |
 | `measure.py` | The real-time budget measurement (G-CLK-6). |
@@ -69,6 +84,7 @@ A module window that is closed only hides; the process ends when the harness doe
 | `../../utils/module_link.py` | `ModuleLink`: a module's end of the link. |
 | `../../utils/module_window.py` | Makes a module process's windows hide instead of closing. |
 | `../../utils/event_log.py` | The CSV event log. |
+| `../../TrackCtrlSW/track_ctrl/module_process.py` | The Track Controller SW process the harness starts, with `wire.py`, its types as JSON. |
 | `../../TrackModel/track_model/module_process.py` | The Track Model process the harness starts, with `wire.py`, its types as JSON. |
 | `../../TrainModel/train_model/module_process.py` | The Train Model process the harness starts, with `wire.py`, its types as JSON. |
 | `../../Train-Ctrl_HW/train_ctrl/module_process.py` | The Train Controller process the harness starts. |
@@ -150,16 +166,37 @@ exactly once.
 - **Train Controller ↔ Train Model.** As in Phase 1 (`train_edges.py`). Until a train's
   first commands arrive, the Train Model gets `INERT_COMMANDS`: no power, the service
   brake on, doors shut.
-- **The wayside.** `wayside_script.ScriptedWayside` stands in for the Track Controller,
-  and for the CTC Office's suggestions, until Phases 3 and 4. From the Track Model's
-  occupancy alone, it commands per block the speed and authority of a scripted route:
-  authority to the next stop not yet served, or to the destination, and the next block
-  preloaded with one block less (R49), so a train never enters a block that reads zero.
-  A stop holds the train for 60 s after it enters the stop's block, as the CTC Office's
-  schedule would: braking, then the 45 s dwell, which the Train Controller enforces
-  (D007). The wayside steps on the
-  Track Model's outputs of the tick before, so its commands reach the Track Model a tick
-  later, as a module's would. It serves one train, once.
+- **The scripted CTC Office.** `ctc_script.ScriptedCtc` stands in for the CTC Office's
+  dispatch and suggestions until Phase 4. It answers in the CTC Office's own output
+  form, so its suggestions reach the Track Controller over the edge the CTC Office will
+  use. It reads what the CTC Office reads: occupancy and each wayside's readiness. Once
+  the line is ready and the yard exit block is clear, it releases the train, once. It
+  follows the train from occupancy, and suggests for the train's block an authority to
+  the next stop not yet served, or to the destination, stopping short of any occupied
+  block ahead; and while that is at least 1, the next block with one block less (R49),
+  so a train never enters a block that reads zero. A stop holds the train for 60 s after
+  it enters the stop's block, as the CTC Office's schedule would: braking, then the 45 s
+  dwell, which the Train Controller enforces (D007). The stand-in steps on the Track
+  Controller's outputs of the tick before, as a module would (R1). It closes no block and
+  sends no switch command. The CTC Office's stub still presses Run and sets the speed.
+- **CTC Office → Track Controller.** `wayside_edges.ctc_to_track_controller`. The train
+  ID stops here (R48). Of two suggestions for one block, the lower speed and the lower
+  authority win, each on its own.
+- **Track Controller ↔ Track Model.** `track_controller_to_track_model` and
+  `track_model_to_track_controller`. Commanded speed and authority go per block. A
+  switch changes names on the way (`track_devices`): the Track Controller names it by the
+  block it is listed on (truth `identifiers`), the Track Model by its point. A light goes
+  through its switch: the Track Controller names it by the switch, the Track Model by the
+  block it stands on. Green: 12/13/14, 28/28/27, 58/57/56, 62/63/64, 76/77/78, 85/85/84
+  (switch/point/light). A failed block reads occupied on the way back (R33). No heater
+  commands go to the Track Model (D026).
+- **Track Controller → CTC Office.** `track_controller_to_ctc` makes the CTC Office's
+  `track_controller` input: occupancy, switches, crossings and each wayside's readiness.
+  A failed block reaches it as occupied, with nothing else said (R69). The stand-in reads
+  it now; the CTC Office will in Phase 4.
+- **Readiness.** A line is ready once a wayside on it has reported and every wayside on it
+  is ready (`line_ready`). The harness logs `WAYSIDES_NOT_READY` and `WAYSIDES_READY` when
+  a line's readiness changes. Readiness never holds the clock (R71).
 - **Left the track.** A train the Track Model stops feeding has run into the yard. The
   harness logs `TRAIN_LEFT_TRACK` and drops it from every input, but leaves it on the
   roster: retiring trains is the CTC Office's (D022).
@@ -220,8 +257,8 @@ Every row is flushed as it is written. The events are listed in the docstring of
 ## Wiring in a real module
 
 A module joins the harness in place of its stub, as the Train Model and the Train
-Controller did in Phase 1 and the Track Model in Phase 2 (their `module_process.py` files
-are worked examples). Its process:
+Controller did in Phase 1, the Track Model in Phase 2 and the Track Controller SW in
+Phase 3 (their `module_process.py` files are worked examples). Its process:
 
 1. Runs under `track_overflow.py --module <name>`. `<name>` is the module's name in
    `modules.py`. Add a runner for it to `_MODULES` in `track_overflow.py`.
@@ -254,25 +291,33 @@ each. They check ticks, time, the one-tick input latency, readiness, speed, paus
 resume, rejection, a duplicate reply, refused connections, a late reply, a crash, and
 stopping while a module is still loading. They take about 5 s.
 
-Phases 1 and 2 add three layers of tests:
+Phases 1 to 3 add three layers of tests:
 
-- `test_harness_edges.py`: the roster, the edges, the Track Model's block names and the
-  scripted wayside, as plain objects.
-- `test_harness_train_loop.py`: the three module processes' step functions, in one
+- `test_harness_edges.py`: the roster, the edges, the Track Model's block names, the
+  switch places, and the scripted CTC Office, as plain objects. The switch places are
+  checked against both modules' own layout readers on Green and Red, and each edge's
+  output is fed to the receiving module's own decoder (`track_ctrl.wire`,
+  `track_model.wire`, `ctc.wire`).
+- `test_harness_train_loop.py`: the four module processes' step functions, in one
   process, wired through `SystemEdges` with the harness's one-tick delay, every message
-  through JSON. It runs the whole default route: the order the modules take the train,
-  block by block, the GLENBURY stop behind the door interlock, boarding, the light on
-  block 64, and the stop at DORMONT; and the driver's release of the emergency brake,
-  with and without a passenger pull. It takes a few seconds.
-- `test_harness_system.py`: the real Track Model, Train Model and Train Controller
-  processes and four stubs. It covers the order the modules take the train, its
-  placement at the yard exit, the blocks in order, a stop at GLENBURY behind the door
-  interlock, and a clean shutdown, in about 10 s.
+  through JSON. It runs the whole default route: readiness, the order the modules take
+  the train, block by block, the GLENBURY stop and the dwell behind the door interlock,
+  boarding, switch and light read-back by both names, crossings, a broken rail ahead,
+  and the stop at DORMONT; and the driver's release of the emergency brake, with and
+  without a passenger pull. It takes a few seconds.
+- `test_harness_system.py`: the real Track Controller SW, Track Model, Train Model and
+  Train Controller processes and three stubs, with the starter programs loaded. It
+  covers readiness before release, the order the modules take the train, its placement
+  at the yard exit, the blocks in order, a stop at GLENBURY behind the door interlock,
+  and a clean shutdown; and a run with no programs loaded, in which nothing is
+  released. About 15 s.
 
 `--engineer-gains KP KI` on the Train Controller's process plays the engineer in these
-tests. A real run never passes it.
+tests, and `--load-starters` on the Track Controller's loads the programs. A real run
+passes neither, unless `--load-starters` is given on the harness command line.
 
-The modules' own sides are tested in `TrackModel/tests/test_module_process.py`,
+The modules' own sides are tested in `TrackCtrlSW/tests/test_module_process.py`,
+`TrackModel/tests/test_module_process.py`,
 `TrainModel/tests/test_module_process.py` and `Train-Ctrl_HW/tests/test_harness_driven.py`.
 
 ## Measuring the budget
@@ -282,8 +327,9 @@ python -m common.harness.measure --seconds 10 --payload-bytes 10000
 ```
 
 This runs seven stubs at 10x and reports the round trip of each tick against the 10 ms
-budget. `--system` runs the system as wired instead, with the Train Controller playing
-the engineer so the train moves. The results are in section 5 of the design document.
+budget. `--system` runs the system as wired instead, with the Track Controller's
+starter programs loaded and the Train Controller playing the engineer, so the train is
+released and moves. The results are in section 5 of the design document.
 
 ## Operator window
 
@@ -298,7 +344,8 @@ python track_overflow.py --headless --speedup --run-seconds 30
 python track_overflow.py --headless --stubs-only --run-seconds 30
 ```
 
-The default is now the Phase 2 system: three real modules and four stubs.
+The default is now the Phase 3 system: four real modules and three stubs. Add
+`--load-starters` to commit the Track Controller's starter programs at launch.
 `--stubs-only` restores seven stubs. `--headless` suppresses the harness window;
 the real modules retain their own windows. For local verification without a display, set `QT_QPA_PLATFORM=offscreen`.
 
@@ -394,11 +441,13 @@ python -m PyInstaller --noconfirm --onedir --name track-overflow \
   --distpath /tmp/harness-build/dist --workpath /tmp/harness-build/work \
   --specpath /tmp/harness-build \
   --paths "$PWD/TrackModel" --paths "$PWD/TrainModel" --paths "$PWD/Train-Ctrl_HW" \
+  --paths "$PWD/TrackCtrlSW" \
   --add-data "$PWD/common/harness/ui:common/harness/ui" \
   --add-data "$PWD/ui:ui" \
   --add-data "$PWD/TrackModel/ui:TrackModel/ui" \
   --add-data "$PWD/TrackModel/green_line.json:TrackModel" \
   --add-data "$PWD/TrackModel/red_line.json:TrackModel" \
+  --add-data "$PWD/TrackCtrlSW/ui:TrackCtrlSW/ui" \
   --add-data "$PWD/TrainModel/ui:TrainModel/ui" \
   --add-data "$PWD/TrainModel/pics:TrainModel/pics" \
   --add-data "$PWD/Train-Ctrl_HW/ui_parts:Train-Ctrl_HW/ui_parts" \
@@ -476,6 +525,16 @@ container (PyInstaller 6.22.2, about 483 MB), the executable ran headless at 10x
 faults, seven exits with code 0. The Track Model process found its layouts and window
 in the bundle.
 
+Phase 3 adds the Track Controller SW's package (`--paths "$PWD/TrackCtrlSW"`) and its
+window (`--add-data "$PWD/TrackCtrlSW/ui:TrackCtrlSW/ui"`). It reads its layouts from the
+Track Model's files, which the recipe bundles already (`default_layout_dir()`). Built on
+2026-10-20 in a Linux cloud container (PyInstaller 6.22.2, 483 MB). Alone, the bundled
+`--module track-controller-sw` loaded the Green layout and its window, then ended with
+code 2 because no harness was there. `track-overflow --headless --speedup --load-starters
+--run-seconds 12`, run from outside the checkout with an empty `PYTHONPATH`, logged
+`WAYSIDES_READY` and `TRAIN_ADDED` at tick 2, ran 974 ticks with no faults, and ended
+with seven exits of code 0.
+
 ### Integration design document handoff
 
 The Phase 1 session owns `documents/system-integration-design.md`. Its next update
@@ -488,7 +547,8 @@ Windows packaging/timing and USB timing still require their own measurements.
 
 Done in v0.9 of the design document: section 5.1 records the window, and G-LIFE-2,
 G-LIFE-4, G-RUN-2, G-RUN-7 and G-CLK-8 are updated; section 5.3 has the Phase 2
-measurements, with and without the window.
+measurements, with and without the window. v0.10 adds section 5.4, with Phase 3's
+measurements and frozen build.
 
 ### Phase 1 merge
 

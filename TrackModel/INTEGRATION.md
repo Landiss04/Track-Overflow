@@ -12,7 +12,7 @@ The code in section 5 was run against the current code on `track-model`.
 
 ---
 
-## 0. Under the central harness (Phase 2)
+## 0. Under the central harness (Phases 2 and 3)
 
 The harness built on `claude/quirky-fermi-sickg4` runs each module as a process of its
 own (R4), not in the harness's process as sections 4 to 6 describe. Those sections
@@ -36,9 +36,19 @@ on that path.
   its line's yard exit block (D022) by a first report the harness sends for it, until
   its Train Model reports it. The light a train saw on entering a signal block goes to
   its Train Controller.
-- **Commands.** Until the Track Controller joins (Phase 3), a scripted wayside in the
-  harness (`common/harness/wayside_script.py`) sends commanded speed and authority for
-  the occupied block and the next one, every tick: they last one tick (section 3.1).
+- **Commands.** Since Phase 3 the Track Controller SW commands the Green Line through
+  `common/harness/wayside_edges.py`: commanded speed and authority per block, every
+  tick, which last one tick (section 3.1); switches, lights and crossings. A scripted
+  CTC Office in the harness (`common/harness/ctc_script.py`) gives it suggestions for
+  the occupied block and the next one until the CTC Office joins (Phase 4). The Track
+  Controller names a switch by the block it is listed on (truth `identifiers`); this
+  module names it by its point (`GREEN D-13`). The harness maps the one to the other,
+  and each light through its switch, from the layout files
+  (`common/harness/track_devices.py`). No heater commands are sent (D026), so heaters
+  never run while this module runs them only when commanded.
+- **Read-back.** `controller.block_occupancy`, `switch_states`, `crossing_states` and
+  `signal_states` go back to the Track Controller, with the names mapped the same way.
+  A failed block reads as occupied (R33).
 
 ---
 

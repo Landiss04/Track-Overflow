@@ -193,9 +193,13 @@ runtime verification is claimed.
   tick outputs forming each tick’s input snapshot. `common/interfaces.py` is stale.
 - Phase 2 runs the Track Model as its own process under the harness, with direct
   edges to and from the Train Model and the Train Controller
-  (`common/harness/track_edges.py`); a scripted wayside stands in for the Track
-  Controller until Phase 3. The legacy `track_model_edges.py` catalog conversions
-  are not on that path; they remain for this module's own tests.
+  (`common/harness/track_edges.py`). Since Phase 3 the Track Controller SW sends its
+  commands on the Green Line, and reads back occupancy and device states
+  (`common/harness/wayside_edges.py`). The harness maps a switch from the Track
+  Controller's name (the block it is listed on) to this module's (its point), and a
+  light through its switch (`common/harness/track_devices.py`). It sends no heater
+  commands (D026). The legacy `track_model_edges.py` catalog conversions are not on
+  that path; they remain for this module's own tests.
 - The CTC Office creates/retires trains; the harness routes the roster and identity.
   Avoid treating legacy yard/no-feed handling as the current lifecycle contract.
 - D013 already defines authority as a count of blocks. Train Model’s controller

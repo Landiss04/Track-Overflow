@@ -43,8 +43,11 @@ someone else's work says what is left for them.
     with `load_track(LineLayout)`, which takes this module's own layout type, so
     it is not in the Protocol. If REQ-INTF-009 needs the two variants to expose
     the same interface, a shared territory type is needed.
-  - The harness has no CTC ↔ Track Controller edge yet
-    (`common/harness/` has only `track_model_edges.py`).
+  - The harness's edges are `common/harness/wayside_edges.py`, on each
+    module's JSON form: CTC Office → Track Controller, Track Model ↔ Track
+    Controller, and Track Controller → CTC Office (Phase 3). The typed
+    `common/harness/ctc_edges.py` is off the running path and stays for this
+    module's tests.
 
 - [x] **A4. PLC gating.** Numbers never enter the program; `AUTH_n` per block
   passes block *n*'s suggestion or sends 0, as in HW (**proposed** D016).
@@ -156,7 +159,12 @@ someone else's work says what is left for them.
 
 - [ ] **C6. Signal placement.** Ours and HW: one signal at every switch, named
   after the block it is on. Track Model: signals stand on the block **before**
-  each switch. HW and the Track Model disagree with each other too.
+  each switch. HW and the Track Model disagree with each other too. The harness
+  maps each light through its switch (`common/harness/track_devices.py`): ours by
+  the switch's block, the Track Model's by the block the light stands on. Whether
+  that mapping is right is open with both owners. Under the starter program a
+  train leaving the yard sees the yard switch's light YELLOW, from a light that
+  faces away from it (`TrackModel/BUGS.md` B1).
 
 - [x] **C7. Commanded speed** is a whole number of m/s.
 
@@ -202,10 +210,18 @@ someone else's work says what is left for them.
   - Truth proposal: `signals/track-controller-ready`.
   - Needs the CTC to wait, HW to report it too, and the harness to map it. Whether
     the harness also holds the clock until every module is ready is open.
+  - Since Phase 3 the harness maps it: `wayside_edges.track_controller_to_ctc`
+    puts each wayside's readiness in the CTC Office's input, and the harness logs
+    `WAYSIDES_NOT_READY` and `WAYSIDES_READY`. It gates the harness's scripted
+    CTC Office, which releases no train and sends nothing for a line until the
+    line is ready. Readiness does not hold the clock (R71). Left: HW.
 
 - [ ] **E2. Section letter in the block key.** Ours leaves it out (**decided**,
   still disputed). HW's `BlockKey` has `(line, section, block_id)`; the CTC and
-  truth use `(line, block_id)`. The harness has to add or drop it per edge.
+  truth use `(line, block_id)`. The harness has to add or drop it per edge. For
+  this module it is settled at the harness: the edges use `(line, block_id)`,
+  without the section letter, as the CTC Office does. Left: HW's section keys
+  (Phase 5).
 
 - [ ] **E3. The shared catalog is stale for this module.**
   `common/interfaces.py` still has `ISwTrackController` in the old
@@ -219,6 +235,22 @@ someone else's work says what is left for them.
   overlap `arbitration/` entries already on truth (`no-switch-under-train`,
   `block-closure`, `suggested-speed-under-block-limit`); the proposal links them
   instead of restating them.
+
+- [ ] **E5. Starter program separation rule (for the owners to review).** The
+  starter held every block beside an occupied one, including the empty next
+  block the CTC Office preloads for the train about to enter it (R49, truth
+  `track-signal`). A train then read speed 0 and authority 0 at every block it
+  entered, and the Train Controller latched a pickup failure. Changed in Phase 3
+  in `track_ctrl/controller.py`: only a block with a train in it is held,
+  `AUTH_n := NOT (OCC_n AND (OCC_n-1 OR OCC_n+1))`. Two trains side by side are
+  still both held, and stay held: the starter cannot tell direction.
+
+- [ ] **E6. Switch dialog signals renamed (for the owners to review).**
+  `SwitchDialog.qml`'s `applied` signal clashed with `Dialog.applied()`, and
+  PySide6 6.11 warned on every launch. The harness's tests need an empty stderr.
+  Renamed in Phase 3 to `switchApplied`, and `released` to `switchReleased`, with
+  `ProgramView.qml` and `StatusView.qml`. The warning did not stop the signal
+  working.
 
 ---
 
