@@ -6,6 +6,10 @@ change to the module's physics or its interface.
 
 Read [module-interface.md](module-interface.md) first; this guide assumes it.
 
+The system runs one process per module. The central harness spawns the Train
+Model as its own process and drives it over the harness protocol (D005, as
+proposed; `documents/system-integration-design.md` §4.5).
+
 At the time of writing there is no central harness in the repository yet.
 Section 4 describes what it must do for the Train Model; the code there is a
 sketch, not existing code.
@@ -21,7 +25,7 @@ sketch, not existing code.
 | | `train_model/track_stub.py`: stand-in Track Model; Blue Line by default, Red or Green by flag |
 | | `train_model/speed_limiter.py`: stand-in Train Controller speed limiter |
 | `ui/Main.qml`, `ui/MainView.qml`: Train Model window | |
-| `main.py`: standalone Train Model window (optional after integration) | |
+| `main.py`: the Train Model process the harness starts | |
 
 Shared code outside `TrainModel/` stays: `utils/system_clock.py` and
 `utils/clock_driver.py` (the system clock), `ui/` (theme, components,
@@ -39,16 +43,17 @@ test_ui.py process                      main.py process
 └──────────────────────────┘            └──────────────────────────────┘
 ```
 
-After integration:
+After integration, one process per module:
 
 ```
-system process
-┌──────────────────────────────────────────────────────────────────┐
-│ SystemClock ─tick─► central harness ─step(dt, inputs)─► TrainModelState ── TrainModel
-│                      ▲   │ edge mappings (D005/D008)         │
-│  Train Controller ───┘   └──► Train Controller, Track Model ◄┘ outputs
-│  Track Model                                     Main.qml / MainView.qml
-└──────────────────────────────────────────────────────────────────┘
+harness process                           Train Model process (main.py)
+┌────────────────────────────────┐        ┌───────────────────────────────┐
+│ SystemClock ─tick─► harness    │  step  │ TrainModelFleet               │
+│ edge mappings (D005)           │ ─────► │  └ TrainModelState            │
+│                                │ ◄───── │ Main.qml / MainView.qml       │
+└────────────────────────────────┘ outputs└───────────────────────────────┘
+   ▲ outputs          │ inputs
+   Train Controller and Track Model processes
 ```
 
 ## 2. Removing the test UI
@@ -121,8 +126,9 @@ def main() -> int:
     )
 ```
 
-Once the system process hosts the window (section 5), `main.py` is only a
-standalone viewer and can be deleted.
+`main.py` stays: it is the Train Model process the harness starts (section 5).
+It will also take the harness's messages once that protocol is written
+(design doc G-RUN-6).
 
 ### 2.4 Test-only hooks left in the module (optional cleanup)
 
@@ -147,9 +153,10 @@ exists.
 
 A passenger pull latches. Today only the test-only override clears it. Truth
 (`arbitration/passenger-emergency-brake.md`, D011) says the **Train
-Controller** releases it, but does not yet settle the signal or mechanism.
-Until that is decided and implemented, removing the test UI leaves no way to
-release a passenger pull. Settle this before integration.
+Controller** releases it. The mechanism was decided on 2026-10-20: a one-shot
+`passenger-brake-release` command from the Train Controller (proposed on
+`truth`). Until the Train Model takes that command, removing the test UI
+leaves no way to release a passenger pull.
 
 ### 2.5 Update the README
 
@@ -159,13 +166,16 @@ test UI rows of the layout table, and the "Passenger brake override" section.
 
 ## 3. What the system must do for each Train Model
 
-Every train runs in the system process, as one `TrainModelState` in one
-`TrainModelFleet` (`train_model/fleet.py`). There is no process per train
-and no IPC. The central harness (D005) holds the fleet and:
+The Train Model is one process, one of those the central harness spawns (one
+process per module, D005). Inside it, every train is one `TrainModelState` in
+one `TrainModelFleet` (`train_model/fleet.py`); there is no process per train.
+The fleet lives in the Train Model process, and the harness asks it, over the
+harness protocol, to do the following:
 
-1. **Adds** a train with `fleet.add(train_id, line)` when it is dispatched,
-   and calls `fleet.remove(train_id)` when it leaves service. Train IDs are
-   opaque strings. Each train gets its own seed, derived from its ID, so
+1. **Adds** a train with `fleet.add(train_id, line)` when the CTC Office
+   releases it from the yard, and calls `fleet.remove(train_id)` when the CTC
+   Office retires it (D022, proposed). Train IDs are the CTC Office's, used
+   unchanged as opaque strings. Each train gets its own seed, derived from its ID, so
    trains draw different disembark counts and a run repeats; pass a
    `TrainConfig` to choose the seed instead. Adding an ID twice raises
    `DuplicateTrainError`, and an unknown ID raises `UnknownTrainError`.
@@ -182,9 +192,10 @@ and no IPC. The central harness (D005) holds the fleet and:
 5. **Handles rejection.** `step_all` validates every train's inputs before
    any train steps, so `InvalidTimeStepError` or `InvalidInputError` leaves
    the whole fleet unchanged, the test UI's "hold the clock" choice applied
-   to every train. Decide what that means system-wide. A harness that wants a
-   different policy can step trains one at a time with
-   `fleet.get(train_id).step(...)`, checking first with
+   to every train. Decided on 2026-10-20: only the train whose input is
+   invalid misses the tick; the other trains step, and the rejection names
+   that train. `step_all` does not do that yet. Until it does, step trains one
+   at a time with `fleet.get(train_id).step(...)`, checking first with
    `validate_inputs`.
 6. **Runs on the Qt thread.** The fleet and every `TrainModelState` are
    `QObject`s whose signals drive the window; call them from the thread
@@ -198,8 +209,9 @@ calls the harness. Everything arrives through `step`.
 
 ## 4. Edge mappings
 
-Per D008 the harness maps producer → catalog type (`common/interfaces.py`) →
-consumer type. The Train Model's side of each edge:
+The harness maps each producer's types straight to the consumer's. The
+catalog in `common/interfaces.py` is superseded (D008, as proposed on
+2026-10-16). The Train Model's side of each edge:
 
 ### Train Controller → Train Model (`ControllerCommands`)
 
@@ -221,7 +233,7 @@ consumer type. The Train Model's side of each edge:
 | `track_info.elevation_m` | block elevation | |
 | `track_info.speed_limit_mps` | block speed limit | m/s. |
 | `track_info.polarity` | track-circuit polarity | Must flip on each block entry; that flip is the block change. |
-| `track_info.station_name` | the block's station, else `None` | Needed for boarding. **No catalog field yet**: add one to the Track Model edge. |
+| `track_info.station_name` | the block's station, else `None` | Needed for boarding. The Track Model sends it: `track-info` has six fields. |
 | `track_signal.commanded_speed_mps`, `authority_blocks` | track circuit | Authority is an `int` count of blocks, ≥ 0. |
 | `beacon` | beacon under the train this tick, else `None` | |
 | `passengers_boarded` | boarding count | Send once per boarding event, at rest with a door open, ≤ last `passenger_capacity`. Otherwise 0. |
@@ -238,14 +250,16 @@ Block ID, offset (signed), actual speed, block-change flag, passenger
 capacity. The Track Model uses position for occupancy and capacity for the
 next boarding count.
 
-The catalog's `ITrainModel` (`common/interfaces.py`) is setter-shaped
-(`set_power_command`, `update(dt)`, `get_state`). Per D008 the module does
-not implement or import it; if the harness wants that shape, it wraps
-`TrainModelState` in an adapter on the harness side.
+The catalog's setter-shaped `ITrainModel` (`common/interfaces.py`) is
+superseded with the catalog. The module does not implement or import it, and
+nothing needs that shape.
 
 ### Sketch
 
-Illustrative only; names on the harness side are placeholders.
+Illustrative only; names on the harness side are placeholders. With one
+process per module, the fleet lives in the Train Model process and
+`step_all` runs there at the harness's request; the mappings run in the
+harness.
 
 ```python
 from train_model.fleet import TrainModelFleet
@@ -288,20 +302,17 @@ class TrainModelEdge:
 # clock = SystemClock(); clock.add_tick_listener(edge.on_tick)
 ```
 
-Order within a tick matters for latency only: if the Train Controller steps
-before the Train Model, it acts on the Train Model's previous outputs, one
-tick behind. Pick one order and keep it fixed.
+Every module steps on the same tick, each on the other modules' outputs from
+the tick before: a module sees its inputs only on the rising clock edge
+(D017, as proposed on 2026-10-16). The order of steps therefore does not
+matter.
 
 ## 5. Showing the Train Model window
 
 `train_model/app.py`'s `run_window` creates its own `QGuiApplication` and runs
-the event loop, so it suits a standalone process only. Inside the system's
-own application, load the window with the system's engine instead:
-
-1. Expose `theme` (from `ui/theme.py`, `build_theme()`) and `fleet` (the
-   harness's `TrainModelFleet`) as context properties.
-2. Load `TrainModel/ui/Main.qml`.
-3. Optionally apply `ui.aspect_lock.install_window_scaling` to the window.
+the event loop. That is what the system needs: the Train Model runs as its own
+process, so `main.py` keeps calling `run_window`, with the fleet the harness
+drives.
 
 `Main.qml` and `MainView.qml` read only `fleet` and `theme`, and contain no
 reference to the test UI. One window shows every train: a train selector
