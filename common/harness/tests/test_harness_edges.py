@@ -1,4 +1,4 @@
-"""Tests for the harness's Phase 1 edges, roster and track feed.
+"""Tests for the harness's edges, roster and scripted wayside.
 
 No process runs here: the edges are pure functions and plain objects,
 fed the JSON forms the modules send.
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -27,11 +28,12 @@ from common.harness.modules import (  # noqa: E402
     TRAIN_MODEL,
 )
 from common.harness.roster import Roster  # noqa: E402
-from common.harness.track_feed import (  # noqa: E402
-    GREEN_STATION_STOP,
-    FeedBeacon,
-    FeedSegment,
-    FixedTrackFeed,
+from common.harness.track_edges import (  # noqa: E402
+    BlockNames,
+    block_commands_to_track_model,
+    placement_report,
+    track_model_to_train_model,
+    train_model_to_track_model,
 )
 from common.harness.train_edges import (  # noqa: E402
     INERT_COMMANDS,
@@ -39,8 +41,22 @@ from common.harness.train_edges import (  # noqa: E402
     train_controller_to_train_model,
     train_model_to_train_controller,
 )
+from common.harness.wayside_script import (  # noqa: E402
+    GREEN_YARD_TO_DORMONT,
+    STOP_HOLD_S,
+    RouteBlock,
+    ScriptedWayside,
+    WaysideRoute,
+)
 
 SIM_TIME_S = 18_000.0
+DT_S = 0.1
+
+#: Some of the Track Model's block names, as its outputs list them.
+TRACK_MODEL_BLOCKS = (
+    "GREEN K-63", "GREEN K-64", "GREEN K-65", "GREEN K-66",
+    "RED C-9", "BLUE A-1",
+)
 
 
 def commands(**changes: Any) -> dict[str, Any]:
@@ -147,7 +163,11 @@ class RosterTest(unittest.TestCase):
     def setUp(self) -> None:
         self.roster = Roster(CTC_OFFICE)
 
-    def apply(self, released=(), retired=()) -> list[tuple[str, str, str]]:
+    def apply(
+        self,
+        released: Sequence[tuple[str, str]] = (),
+        retired: Sequence[str] = (),
+    ) -> list[tuple[str, str, str]]:
         """Apply one tick's events."""
         return self.roster.apply(
             {
@@ -200,94 +220,238 @@ class RosterTest(unittest.TestCase):
         self.assertEqual(self.roster.apply({}, SIM_TIME_S), [])
 
 
-class TrackFeedTest(unittest.TestCase):
-    """The script gives each train its track by time in service."""
-
-    def setUp(self) -> None:
-        self.feed = FixedTrackFeed([
-            FeedSegment(0.0, "63", 10.0, 3, 19.4),
-            FeedSegment(5.0, "64", 10.0, 2, 19.4),
-            FeedSegment(
-                8.0, "65", 0.0, 0, 19.4, station_name="GLENBURY",
-                beacon=FeedBeacon("GLENBURY", "R"), aspect_ahead="RED",
-            ),
-            FeedSegment(9.0, "65", 10.0, 3, 19.4),
-        ])
-
-    def test_segments_by_time(self) -> None:
-        self.assertEqual(self.feed.segment(0.0).block_id, "63")
-        self.assertEqual(self.feed.segment(4.9).block_id, "63")
-        # A sum of ticks a hair short of a start still reaches it.
-        self.assertEqual(self.feed.segment(5.0 - 1e-9).block_id, "64")
-        self.assertEqual(self.feed.aspect_ahead(8.5), "RED")
-        self.assertEqual(self.feed.segment(100.0).authority_blocks, 3)
-
-    def test_polarity_flips_at_each_block_change(self) -> None:
-        polarity = [
-            self.feed.track_inputs(t)["track_info"]["polarity"]
-            for t in (0.0, 5.0, 8.0, 9.0)
-        ]
-        self.assertEqual(polarity, [False, True, False, False])
-
-    def test_track_inputs_in_the_train_models_form(self) -> None:
-        inputs = self.feed.track_inputs(8.0)
-        self.assertEqual(inputs["track_signal"], {
-            "commanded_speed_mps": 0.0, "authority_blocks": 0,
-        })
-        self.assertEqual(inputs["beacon"], {
+def feed(block_id: str = "GREEN K-64", **changes: Any) -> dict[str, Any]:
+    """The Track Model's feed for one train."""
+    return {
+        "track_info": {
+            "block_id": block_id,
+            "grade_deg": 0.0,
+            "elevation_m": 0.0,
+            "speed_limit_mps": 19.4,
+            "polarity": True,
+            "station_name": None,
+        },
+        "track_signal": {"commanded_speed_mps": 12.5, "authority_blocks": 1},
+        "beacon": {
             "station_name": "GLENBURY",
             "platform_side": "R",
             "underground": False,
+        },
+        "passengers_boarded": 0,
+        **changes,
+    }
+
+
+def track_outputs(**changes: Any) -> dict[str, Any]:
+    """A Train Model's ``track`` outputs for one train."""
+    return {
+        "block_id": "64",
+        "offset_m": 12.0,
+        "actual_speed_mps": 4.5,
+        "block_changed": False,
+        "passenger_capacity": 200,
+        **changes,
+    }
+
+
+def track_model_outputs(
+    occupied: tuple[str, ...] = (),
+    feeds: dict[str, Any] | None = None,
+    seen: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """The Track Model's outputs, with the blocks it lists."""
+    return {
+        "controller": {"block_occupancy": {
+            name: name in occupied for name in TRACK_MODEL_BLOCKS
+        }},
+        "train_feeds": feeds or {},
+        "signal_seen": seen or {},
+    }
+
+
+class TrackEdgesTest(unittest.TestCase):
+    """Blocks are renamed, and each field lands where it is read."""
+
+    def setUp(self) -> None:
+        self.names = BlockNames()
+        self.names.learn(TRACK_MODEL_BLOCKS)
+
+    def test_block_names_both_ways(self) -> None:
+        self.assertEqual(
+            self.names.track_model_name("Green", "63"), "GREEN K-63"
+        )
+        self.assertEqual(self.names.block("RED C-9"), ("Red", "9"))
+        # The Blue Line is out of scope (D023).
+        with self.assertRaises(KeyError):
+            self.names.block("BLUE A-1")
+        with self.assertRaises(KeyError):
+            self.names.track_model_name("Green", "1")
+
+    def test_no_names_before_the_track_model_reports(self) -> None:
+        self.assertFalse(BlockNames())
+        self.assertTrue(self.names)
+
+    def test_report_to_the_track_model(self) -> None:
+        mapped = train_model_to_track_model(
+            {"track": track_outputs(), "controller": report()},
+            "Green", self.names,
+        )
+        self.assertEqual(mapped, {
+            "block_id": "GREEN K-64",
+            "offset_m": 12.0,
+            "actual_speed_mps": 4.5,
+            "block_changed": False,
+            "passenger_capacity": 200,
+            "doors_open": True,
         })
-        self.assertEqual(inputs["track_info"]["station_name"], "GLENBURY")
-        self.assertEqual(inputs["passengers_boarded"], 0)
-        self.assertIsNone(self.feed.track_inputs(0.0)["beacon"])
 
-    def test_bad_scripts_are_refused(self) -> None:
-        with self.assertRaises(ValueError):
-            FixedTrackFeed([])
-        with self.assertRaises(ValueError):
-            FixedTrackFeed([FeedSegment(1.0, "63", 0.0, 0, 19.4)])
-        with self.assertRaises(ValueError):
-            FixedTrackFeed([
-                FeedSegment(0.0, "63", 0.0, 0, 19.4),
-                FeedSegment(0.0, "64", 0.0, 0, 19.4),
-            ])
-        with self.assertRaises(ValueError):
-            FixedTrackFeed([
-                FeedSegment(0.0, "63", 0.0, 0, 19.4, aspect_ahead="BLUE")
-            ])
+    def test_doors_open_means_either_door(self) -> None:
+        for left, right, either in (
+            (False, False, False), (True, False, True), (False, True, True),
+        ):
+            mapped = train_model_to_track_model(
+                {"track": track_outputs(), "controller": report(
+                    door_left_open=left, door_right_open=right)},
+                "Green", self.names,
+            )
+            self.assertIs(mapped["doors_open"], either)
 
-    def test_default_script_never_drops_authority_from_two_to_none(
+    def test_feed_to_the_train_model(self) -> None:
+        mapped = track_model_to_train_model(feed(), self.names)
+        self.assertEqual(mapped["track_info"]["block_id"], "64")
+        self.assertEqual(mapped["track_signal"], {
+            "commanded_speed_mps": 12.5, "authority_blocks": 1,
+        })
+        self.assertEqual(mapped["beacon"]["platform_side"], "R")
+        self.assertIsNone(
+            track_model_to_train_model(feed(beacon=None), self.names)[
+                "beacon"]
+        )
+
+    def test_a_new_train_is_placed_at_rest(self) -> None:
+        placed = placement_report("GREEN K-63")
+        self.assertEqual(placed["block_id"], "GREEN K-63")
+        self.assertEqual(placed["offset_m"], 0.0)
+        self.assertFalse(placed["doors_open"])
+
+    def test_block_commands_renamed(self) -> None:
+        mapped = block_commands_to_track_model(
+            {"commanded_authority": {"63": 2}, "signal_commands": {}},
+            "Green", self.names,
+        )
+        self.assertEqual(mapped, {
+            "commanded_authority": {"GREEN K-63": 2},
+            "signal_commands": {},
+        })
+
+
+class WaysideScriptTest(unittest.TestCase):
+    """Authority counts down to each stop, and the next block is ready."""
+
+    def setUp(self) -> None:
+        self.wayside = ScriptedWayside(WaysideRoute(
+            line="Green",
+            blocks=(
+                RouteBlock("63", 10.0),
+                RouteBlock("64", 10.0),
+                RouteBlock("65", 10.0, hold_s=30.0),
+                RouteBlock("66", 8.0),
+                RouteBlock("67", 8.0),
+            ),
+            signals={"64": "GREEN"},
+        ))
+
+    def values(
+        self, block: str, at_s: float = 0.0
+    ) -> dict[str, tuple[float, int]]:
+        """Each commanded block's speed and authority, train in one."""
+        commands = self.wayside.step(SIM_TIME_S + at_s, [block])
+        return {
+            number: (speed, commands["commanded_authority"][number])
+            for number, speed in commands["commanded_speed_mps"].items()
+        }
+
+    def test_nothing_commanded_without_a_train(self) -> None:
+        commands = self.wayside.step(SIM_TIME_S, [])
+        self.assertEqual(commands["commanded_speed_mps"], {})
+        self.assertEqual(commands["commanded_authority"], {})
+        self.assertEqual(commands["signal_commands"], {"64": "GREEN"})
+
+    def test_authority_counts_down_to_the_stop(self) -> None:
+        self.assertEqual(
+            self.values("63"), {"63": (10.0, 2), "64": (10.0, 1)}
+        )
+        self.assertEqual(self.values("64"), {"64": (10.0, 1), "65": (0.0, 0)})
+        self.assertEqual(self.values("65"), {"65": (0.0, 0)})
+
+    def test_the_stop_holds_then_releases_to_the_destination(self) -> None:
+        self.assertEqual(self.values("65", 0.0), {"65": (0.0, 0)})
+        self.assertEqual(self.values("65", 29.9), {"65": (0.0, 0)})
+        self.assertEqual(
+            self.values("65", 30.0), {"65": (10.0, 2), "66": (8.0, 1)}
+        )
+        self.assertEqual(
+            self.values("66", 40.0), {"66": (8.0, 1), "67": (0.0, 0)}
+        )
+        self.assertEqual(self.values("67", 50.0), {"67": (0.0, 0)})
+
+    def test_blocks_off_the_route_are_left_alone(self) -> None:
+        self.assertEqual(self.values("12"), {})
+
+    def test_bad_routes_are_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            ScriptedWayside(WaysideRoute("Green", ()))
+        with self.assertRaises(ValueError):
+            ScriptedWayside(WaysideRoute(
+                "Green", (RouteBlock("63", 1.0), RouteBlock("63", 1.0))
+            ))
+
+    def test_default_route_never_drops_two_blocks_of_authority_at_once(
         self,
     ) -> None:
-        # A drop from 2 or more blocks straight to none reads as a
-        # signal pickup failure in the Train Controller.
-        for before, after in zip(GREEN_STATION_STOP, GREEN_STATION_STOP[1:]):
-            dropped = after.authority_blocks == 0 and (
-                after.commanded_speed_mps == 0.0
-            )
-            if dropped:
-                self.assertLess(before.authority_blocks, 2)
+        # The Train Controller reads a fall from 2 or more blocks
+        # straight to none as a signal pickup failure.
+        wayside = ScriptedWayside(GREEN_YARD_TO_DORMONT)
+        blocks = [block.block_id for block in GREEN_YARD_TO_DORMONT.blocks]
+        last: int | None = None
+        for at_s, number in enumerate(blocks):
+            # One block a second, past the stop's hold where it is.
+            time_s = at_s + (STOP_HOLD_S if at_s > 2 else 0.0)
+            authority = wayside.step(SIM_TIME_S + time_s, [number])[
+                "commanded_authority"][number]
+            if last is not None and authority == 0:
+                self.assertLess(last, 2)
+            last = authority
+        self.assertEqual(last, 0)
 
 
 class SystemEdgesTest(unittest.TestCase):
     """Real edges for the wired modules, stub edges for the rest."""
 
     def setUp(self) -> None:
-        self.edges = SystemEdges(FixedTrackFeed([
-            FeedSegment(0.0, "63", 10.0, 3, 19.4, aspect_ahead="SUPER_GREEN"),
-        ]))
-        self.events = self.edges.tick_completed(1, SIM_TIME_S, {
+        self.edges = SystemEdges(ScriptedWayside(GREEN_YARD_TO_DORMONT))
+        self.tick = 1
+        self.events = self.complete({
             CTC_OFFICE: {"new_trains": [
                 {"train_id": "G1", "line": "Green"},
                 {"train_id": "R1", "line": "Red"},
             ]},
+            TRACK_MODEL: track_model_outputs(),
         })
 
+    def complete(self, fresh: dict[str, Any]) -> list[Any]:
+        """End the current tick with these new outputs."""
+        events = self.edges.tick_completed(
+            self.tick, SIM_TIME_S + self.tick * DT_S, fresh
+        )
+        self.tick += 1
+        return events
+
     def inputs(self, consumer: str, outputs: dict) -> dict[str, Any]:
-        """``consumer``'s inputs a tick after the release."""
-        return self.edges.inputs_for(consumer, 2, SIM_TIME_S + 0.1, outputs)
+        """``consumer``'s inputs for the next tick."""
+        return self.edges.inputs_for(
+            consumer, self.tick, SIM_TIME_S + self.tick * DT_S, outputs
+        )
 
     def test_release_is_logged(self) -> None:
         self.assertEqual(
@@ -295,21 +459,58 @@ class SystemEdgesTest(unittest.TestCase):
             [("TRAIN_ADDED", "G1 on Green"), ("TRAIN_ADDED", "R1 on Red")],
         )
 
-    def test_train_model_gets_every_train_held_until_commanded(self) -> None:
-        trains = self.inputs(TRAIN_MODEL, {})["trains"]
-        self.assertEqual(set(trains), {"G1", "R1"})
+    def test_track_model_places_each_train_at_its_yard_exit(self) -> None:
+        inputs = self.inputs(TRACK_MODEL, {})
+        self.assertEqual(inputs["trains"], {
+            "G1": placement_report("GREEN K-63"),
+            "R1": placement_report("RED C-9"),
+        })
+        # The wayside commands nothing before it knows the blocks.
+        self.assertEqual(inputs["controller"], {})
+
+    def test_track_model_takes_the_train_models_report(self) -> None:
+        trains = self.inputs(TRACK_MODEL, {TRAIN_MODEL: {"trains": {
+            "G1": {"track": track_outputs(), "controller": report()},
+            "R1": {"track": track_outputs(block_id=""),
+                   "controller": report()},
+        }}})["trains"]
+        self.assertEqual(trains["G1"]["block_id"], "GREEN K-64")
+        self.assertTrue(trains["G1"]["doors_open"])
+        # No block reported yet: still waiting where it was placed.
+        self.assertEqual(trains["R1"], placement_report("RED C-9"))
+
+    def test_wayside_commands_arrive_a_tick_after_the_occupancy(
+        self,
+    ) -> None:
+        self.complete({TRACK_MODEL: track_model_outputs(("GREEN K-63",))})
+        commands = self.inputs(TRACK_MODEL, {})["controller"]
+        self.assertEqual(commands["commanded_authority"], {})
+        self.complete({})
+        commands = self.inputs(TRACK_MODEL, {})["controller"]
+        self.assertEqual(
+            commands["commanded_authority"],
+            {"GREEN K-63": 2, "GREEN K-64": 1},
+        )
+        self.assertEqual(commands["signal_commands"], {"GREEN K-64": "GREEN"})
+
+    def test_train_model_takes_a_train_once_fed(self) -> None:
+        self.assertEqual(self.inputs(TRAIN_MODEL, {})["trains"], {})
+        trains = self.inputs(TRAIN_MODEL, {
+            TRACK_MODEL: track_model_outputs(feeds={"G1": feed()}),
+            TRAIN_CONTROLLER_SW: {"trains": {"G2": commands()}},
+        })["trains"]
+        self.assertEqual(set(trains), {"G1"})
         self.assertEqual(trains["G1"]["line"], "Green")
         self.assertEqual(trains["G1"]["controller"], dict(INERT_COMMANDS))
-        self.assertEqual(
-            trains["G1"]["track"]["track_info"]["block_id"], "63"
-        )
+        self.assertEqual(trains["G1"]["track"]["track_info"]["block_id"],
+                         "64")
 
     def test_train_model_gets_each_trains_commands(self) -> None:
         trains = self.inputs(TRAIN_MODEL, {
+            TRACK_MODEL: track_model_outputs(feeds={"G1": feed()}),
             TRAIN_CONTROLLER_SW: {"trains": {"G1": commands()}},
         })["trains"]
         self.assertEqual(trains["G1"]["controller"]["power_cmd_w"], 1200.0)
-        self.assertEqual(trains["R1"]["controller"], dict(INERT_COMMANDS))
 
     def test_controller_takes_a_train_once_reported(self) -> None:
         self.assertEqual(
@@ -320,6 +521,7 @@ class SystemEdgesTest(unittest.TestCase):
                 "G1": {"controller": report(), "track": {}},
                 "R1": {"controller": report(), "track": {}},
             }},
+            TRACK_MODEL: track_model_outputs(seen={"G1": "SUPER_GREEN"}),
         })["trains"]
         # Only the Green Line's train: the Red Line's goes to the HW.
         self.assertEqual(set(trains), {"G1"})
@@ -329,18 +531,42 @@ class SystemEdgesTest(unittest.TestCase):
         )
         self.assertEqual(trains["G1"]["inputs"]["actual_speed"], 4.5)
 
+    def test_no_light_is_sent_on_a_tick_none_is_seen(self) -> None:
+        trains = self.inputs(TRAIN_CONTROLLER_SW, {
+            TRAIN_MODEL: {"trains": {"G1": {"controller": report()}}},
+            TRACK_MODEL: track_model_outputs(seen={"G1": None}),
+        })["trains"]
+        self.assertNotIn("signal_light_ahead", trains["G1"]["inputs"])
+
+    def test_a_train_that_leaves_the_track_leaves_every_input(
+        self,
+    ) -> None:
+        self.complete({TRACK_MODEL: track_model_outputs(
+            ("GREEN K-63",), feeds={"G1": feed()})})
+        events = self.complete({TRACK_MODEL: track_model_outputs()})
+        self.assertEqual(events, [("harness", "TRAIN_LEFT_TRACK", "G1")])
+        self.assertEqual(self.complete({TRACK_MODEL: track_model_outputs()}),
+                         [])
+        outputs = {
+            TRAIN_MODEL: {"trains": {"G1": {"controller": report(),
+                                            "track": track_outputs()}}},
+            TRACK_MODEL: track_model_outputs(feeds={"G1": feed()}),
+        }
+        self.assertNotIn("G1", self.inputs(TRACK_MODEL, outputs)["trains"])
+        self.assertNotIn("G1", self.inputs(TRAIN_MODEL, outputs)["trains"])
+        self.assertNotIn(
+            "G1", self.inputs(TRAIN_CONTROLLER_SW, outputs)["trains"]
+        )
+
     def test_stubs_get_their_producers_outputs_whole(self) -> None:
         outputs = {TRAIN_MODEL: {"tick": 1}, CTC_OFFICE: {"tick": 1}}
-        self.assertEqual(
-            self.inputs(TRACK_MODEL, outputs), {TRAIN_MODEL: {"tick": 1}}
-        )
         self.assertEqual(
             self.inputs(TRAIN_CONTROLLER_HW, outputs),
             {TRAIN_MODEL: {"tick": 1}},
         )
 
     def test_one_trains_rejection_is_logged_by_name(self) -> None:
-        events = self.edges.tick_completed(2, SIM_TIME_S + 0.1, {
+        events = self.complete({
             TRAIN_MODEL: {"trains": {}, "rejected": {"G1": "too fast"}},
         })
         self.assertEqual(
@@ -348,11 +574,11 @@ class SystemEdgesTest(unittest.TestCase):
         )
 
     def test_retired_trains_leave_every_input(self) -> None:
-        self.edges.tick_completed(2, SIM_TIME_S + 0.1, {
+        self.complete({
             CTC_OFFICE: {"retired_trains": [{"train_id": "G1"}]},
         })
         self.assertEqual(
-            set(self.inputs(TRAIN_MODEL, {})["trains"]), {"R1"}
+            set(self.inputs(TRACK_MODEL, {})["trains"]), {"R1"}
         )
 
 

@@ -13,8 +13,8 @@ modules whose outputs become its inputs.
 
 ``WIRED_MODULES`` are the modules wired in so far, which run as
 themselves; every other module runs as a stub
-(``common.harness.stub_module``). Phase 1 wires in the Train Model and
-the Train Controller SW.
+(``common.harness.stub_module``). Phase 1 wired in the Train Model and
+the Train Controller SW, and Phase 2 the Track Model.
 """
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ MODULE_NAMES = (
     TRAIN_CONTROLLER_HW,
 )
 
-#: The modules wired in so far (Phase 1); the rest are stubs.
-WIRED_MODULES = frozenset({TRAIN_MODEL, TRAIN_CONTROLLER_SW})
+#: The modules wired in so far (Phase 2); the rest are stubs.
+WIRED_MODULES = frozenset({TRACK_MODEL, TRAIN_MODEL, TRAIN_CONTROLLER_SW})
 
 #: For each module, the modules whose outputs it reads.
 PRODUCERS: Mapping[str, tuple[str, ...]] = {

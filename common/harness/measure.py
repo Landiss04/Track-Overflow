@@ -11,9 +11,10 @@ tick falls due every 10 ms, so the round trip must stay well under
 that.
 
 With ``--system`` the wired modules run as themselves, with their
-windows: in Phase 1 the Train Model and the Train Controller SW,
-driving one train over the fixed track feed. The Train Controller
-plays the engineer (``--engineer-gains``) so the train moves.
+windows: in Phase 2 the Track Model, the Train Model and the Train
+Controller SW, driving one train along the scripted wayside's route.
+The Train Controller plays the engineer (``--engineer-gains``) so the
+train moves.
 
 Run from the repository root::
 
@@ -45,7 +46,10 @@ from common.harness.modules import (
     stub_specs,
     system_specs,
 )
-from common.harness.track_feed import GREEN_STATION_STOP, FixedTrackFeed
+from common.harness.wayside_script import (
+    GREEN_YARD_TO_DORMONT,
+    ScriptedWayside,
+)
 from utils.event_log import EventLog
 from utils.system_clock import ALLOWED_SPEEDS, DEFAULT_TICK_S
 
@@ -159,7 +163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "--engineer-gains", *ENGINEER_GAINS
         ]
         specs = system_specs(module_options)
-        edges = SystemEdges(FixedTrackFeed(GREEN_STATION_STOP))
+        edges = SystemEdges(ScriptedWayside(GREEN_YARD_TO_DORMONT))
     else:
         specs = stub_specs(stub_options)
         edges = None

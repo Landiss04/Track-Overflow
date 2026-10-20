@@ -3,14 +3,15 @@
 ``python track_overflow.py`` lands here. The harness starts every
 module and runs until Ctrl+C or ``--run-seconds``.
 
-The modules wired in so far run as themselves (Phase 1: the Train
-Model and the Train Controller SW, each in its window); the rest are
-stubs. The CTC Office's stub presses Run as soon as it is ready and
-releases train G1 onto the Green Line on the first tick. The Train
-Model runs G1 over a fixed track feed with a stop at GLENBURY
-(``track_feed.GREEN_STATION_STOP``). G1 moves once an engineer sets
-its gains in the Train Controller's console (D024). ``--stubs-only``
-runs a stub for every module instead, as in Phase 0.
+The modules wired in so far run as themselves, each in its window
+(Phase 2: the Track Model, the Train Model and the Train Controller
+SW); the rest are stubs. The CTC Office's stub presses Run as soon as
+it is ready and releases train G1 onto the Green Line on the first
+tick. G1 enters at the yard exit block, and a scripted wayside,
+standing in for the Track Controller, takes it to DORMONT with a stop
+at GLENBURY (``wayside_script.GREEN_YARD_TO_DORMONT``). G1 moves once
+an engineer sets its gains in the Train Controller's console (D024).
+``--stubs-only`` runs a stub for every module instead, as in Phase 0.
 
 The event log goes to ``--log-dir``, by default the user's local
 application data folder (``TrackOverflow/logs``), never into the
@@ -35,7 +36,10 @@ from common.harness.core import Harness
 from common.harness.edges import SystemEdges
 from common.harness.modules import CTC_OFFICE, stub_specs, system_specs
 from common.harness.supervisor import HarnessStartError
-from common.harness.track_feed import GREEN_STATION_STOP, FixedTrackFeed
+from common.harness.wayside_script import (
+    GREEN_YARD_TO_DORMONT,
+    ScriptedWayside,
+)
 from utils.event_log import EventLog, log_file_name
 
 APPLICATION_NAME = "TrackOverflow"
@@ -76,7 +80,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         ctc_options += ["--release-train", f"{FIRST_TRAIN}:Green@1"]
         specs = system_specs({CTC_OFFICE: ctc_options})
-        edges = SystemEdges(FixedTrackFeed(GREEN_STATION_STOP))
+        edges = SystemEdges(ScriptedWayside(GREEN_YARD_TO_DORMONT))
     with EventLog(log_path) as log:
         harness = Harness(specs, log, edges)
         status = _StatusLine(harness)
