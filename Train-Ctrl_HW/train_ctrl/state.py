@@ -88,8 +88,9 @@ class TrainModelCommands:
 
     One field per truth signal: power-command, service-brake-command,
     emergency-brake-command, door-command, light-command,
-    temperature-setpoint and announcement. The central harness (D005)
-    maps these onto the Train Model's own boundary types.
+    temperature-setpoint, announcement and passenger-brake-release.
+    The central harness (D005) maps these onto the Train Model's own
+    boundary types.
     """
 
     power_w: float
@@ -99,3 +100,6 @@ class TrainModelCommands:
     light_command: tuple[bool, bool]        # (interior, exterior)
     temperature_setpoint_c: float
     announcement: str
+    # One-shot: true on the tick after the driver releases the
+    # emergency brake, which releases a passenger pull with it.
+    passenger_brake_release: bool = False

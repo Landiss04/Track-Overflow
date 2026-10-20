@@ -22,15 +22,22 @@ class TrainControllerFleet:
     of its users. Train IDs are opaque strings (identifiers.md).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, echo_ticks: int = 0) -> None:
+        """Start with no trains.
+
+        ``echo_ticks`` is passed to every train's ControllerCore: 0
+        for the console's own fleet, ECHO_TICKS when the central
+        harness steps the fleet.
+        """
         # Insertion order is the roster order.
         self._cores: dict[str, ControllerCore] = {}
+        self._echo_ticks = echo_ticks
 
     def add(self, train_id: str, line: str = "") -> ControllerCore:
         """Put a train's controller in service and return it."""
         if train_id in self._cores:
             raise DuplicateTrainError(f"train {train_id!r} already exists")
-        core = ControllerCore()
+        core = ControllerCore(self._echo_ticks)
         core.state.train_id = train_id
         core.state.line = line
         self._cores[train_id] = core

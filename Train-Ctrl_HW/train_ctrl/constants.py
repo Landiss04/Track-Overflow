@@ -59,6 +59,13 @@ GRAVITY_MPS2 = 9.81
 ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
 # Below this the emergency brake may be released (D011).
 STANDSTILL_MPS = 0.1
+# Ticks between a command and the Train Model's report of it under the
+# central harness: each module reads the others' outputs from the tick
+# before (truth D017), so a command sent on one tick is acted on the
+# next, and its report arrives the tick after that. A reported
+# emergency brake this controller commanded within these ticks is its
+# own command coming back, not a passenger pull.
+ECHO_TICKS = 2
 # Below this, with nothing asked of it, the toy plant settles to an
 # exact stand instead of creeping.
 SETTLE_MPS = 0.12

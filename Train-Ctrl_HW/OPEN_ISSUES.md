@@ -118,7 +118,26 @@ Item 3 (half of the speed dial's dead zone asked for full speed) is fixed
     `harness_sim.py` no longer sets `armed`, so its trains sit at 0 W
     until an engineer commissions the gains on the console, one train at
     a time. How a harness-dispatched train gets its gains (defaults on
-    dispatch, or the engineer each time) is undecided.
+    dispatch, or the engineer each time) is undecided. Decided
+    2026-10-20 (truth D024): the engineer, for every new train; the
+    console may offer default gains but never applies them by itself.
+
+## Added 2026-10-20 (Phase 1 of the central harness)
+
+23. **The dwell belongs to the controller now.** Rule M6 says "the dwell
+    is the Train Model's", and the Automatic station stop holds the
+    train until the Track Signal resumes. Truth D007 has since given the
+    dwell to the Train Controller: open the platform-side doors, hold
+    the train for the 45 s dwell, close the doors, and depart only once
+    the commanded speed is above zero. The controller does not time the
+    dwell yet; under the harness's fixed track feed the Track Signal
+    resumes after about 50 s, so Phase 1 does not show the gap.
+
+24. **The fourth light is spelled with a space.** `ASPECTS` holds
+    `"SUPER GREEN"`; truth `signals/signal-aspect-ahead` spells it
+    `SUPER_GREEN`, as every enumerated value is in capitals with
+    underscores. The harness maps it on the way in for now
+    (`common/harness/train_edges.py`).
 
 ## Carried over
 

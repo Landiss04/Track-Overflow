@@ -7,6 +7,7 @@ central harness.
 from __future__ import annotations
 
 import math
+from collections import deque
 from typing import Any
 
 from .constants import (
@@ -42,7 +43,14 @@ class ControllerCore:
     correct, and it runs unchanged whether or not a console is open.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, echo_ticks: int = 0) -> None:
+        """Start a train's controller, inert until commissioned.
+
+        ``echo_ticks`` is how many steps a command takes to come back
+        in a Train Model report: 0 when the reports answer this step,
+        as the toy plant and the bench do, and ECHO_TICKS under the
+        central harness.
+        """
         self.state = State()
         self.dt = TICK_S                    # seconds of simulation
         self.integral = 0.0
@@ -61,6 +69,14 @@ class ControllerCore:
         self._closing = False
         # Seconds left on an automatic announcement command.
         self._announce_left_s = 0.0
+        # The emergency brake as commanded on the last echo_ticks
+        # steps, newest last, so its echo in a Train Model report is
+        # not taken for a passenger pull (apply_staged).
+        self._sent_emergency: deque[bool] = deque(maxlen=echo_ticks)
+        # A driver's release waiting for the next step, and the
+        # passenger-brake-release that step sends: true for one step.
+        self._release_pending = False
+        self._release_out = False
         self._clear_detection()
 
     def _clear_detection(self) -> None:
@@ -161,15 +177,23 @@ class ControllerCore:
 
         self.respond_to_failures()
         self.enforce_safety()
+        # What this step sends: the brake as now commanded, and the
+        # release once after the driver lets the brake go.
+        self._sent_emergency.append(s.emergency_brake)
+        self._release_out, self._release_pending = (
+            self._release_pending, False)
         if plant:
             self._plant()
 
     def apply_staged(self, staged: dict[str, Any]) -> None:
         """Apply a set of Train Model signals read by read_inputs().
 
-        A reported emergency brake that this controller did not
-        command is a passenger pull: latch it and cut power. A report
-        of false never releases it; only the driver does (D011,
+        A reported emergency brake that this controller has not
+        commanded within the last echo_ticks steps is a passenger
+        pull: latch it and cut power. One it commanded that recently
+        is its own command coming back, so a driver's release is not
+        undone by the report of the brake from before it. A report of
+        false never releases the brake; only the driver does (D011,
         arbitration/passenger-emergency-brake).
         """
         s = self.state
@@ -189,7 +213,8 @@ class ControllerCore:
             setattr(s, attr, value)
         if brakes is not None:
             emergency, service = brakes
-            if emergency and not s.emergency_brake:
+            echo = any(self._sent_emergency)
+            if emergency and not s.emergency_brake and not echo:
                 self.engage_emergency()
             s.fb_emergency_brake, s.fb_service_brake = emergency, service
 
@@ -339,7 +364,11 @@ class ControllerCore:
         """Release the latched brake, at a stand with no failure.
 
         Asking a released brake to release is not a refusal: it is
-        already where the caller wants it.
+        already where the caller wants it. A release also releases a
+        passenger pull, since only the driver releases the emergency
+        brake (REQUIREMENTS.md M2): the next step sends the one-shot
+        passenger-brake-release, and the Train Model clears the pull
+        (truth arbitration/passenger-emergency-brake).
         """
         s = self.state
         if not s.emergency_brake:
@@ -347,6 +376,7 @@ class ControllerCore:
         if self.failed or abs(s.actual_mps) >= STANDSTILL_MPS:
             return False
         s.emergency_brake = False
+        self._release_pending = True
         return True
 
     @property
@@ -453,6 +483,7 @@ class ControllerCore:
             light_command=(s.interior_lights, s.exterior_lights),
             temperature_setpoint_c=s.target_temp_c,
             announcement=s.announcement,
+            passenger_brake_release=self._release_out,
         )
 
     def _plant(self) -> None:

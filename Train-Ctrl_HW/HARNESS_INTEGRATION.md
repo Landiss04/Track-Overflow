@@ -125,11 +125,26 @@ Rules:
 | `light_command` | `(interior, exterior)` | light-command |
 | `temperature_setpoint_c` | °C | temperature-setpoint |
 | `announcement` | str | announcement: a command for the Train Model to play, otherwise empty |
+| `passenger_brake_release` | bool, one-shot | passenger-brake-release: true on the step after the driver releases the emergency brake, which releases a passenger pull with it; false otherwise |
 
 - **Speed.** The target is the commanded speed, never above the car's 70 km/h (43.5 mph). The Train Model has no governor (D009), so the controller holds the cap (M1).
 - **Traction** is 0 while either brake is commanded, and while an Automatic station stop holds the train. A train that is not commissioned commands 0 W (see Commissioning).
 - **Doors** (M6). A door opens only when `actual_speed` reports the train stopped (under 0.1 m/s), and only on the platform side the last beacon gave. In Automatic, when a new `beacon_station` has arrived and the train stops, the controller opens the platform side and holds the train. When the Track Signal resumes (commanded speed and authority both above 0), it closes the doors, and it moves off only once `door_state` reports both closed. The dwell itself is the Train Model's.
 - **Announcements** (M7). The controller only sends the command; the Train Model makes the announcement. In Automatic, a new `beacon_station` sends that station's name for 5 s. In Manual, the driver's press does.
+
+## Under the central harness
+
+Added 2026-10-20 for Phase 1 of the central harness (`documents/system-integration-design.md` §5). The harness runs every module in its own process (D005), so it does not import this package. `python track_overflow.py --module train-controller-sw` runs [`train_ctrl/module_process.py`](train_ctrl/module_process.py), which:
+
+- holds one `TrainControllerFleet(echo_ticks=ECHO_TICKS)` and shows the console for it, without the bench;
+- steps the fleet once per harness tick, on the inputs the harness sends for every train in service, keyed by train ID, as the Inputs section describes;
+- adds a train the first time the harness names it, and removes it when the harness stops naming it (D022: the CTC Office releases and retires trains);
+- replies with each train's `TrainModelCommands`, field by field, and rejects the tick whole when `step_all` raises.
+
+Two things differ from the in-process use described above:
+
+- **Reports come back two ticks late.** Each module reads the others' outputs from the tick before (truth D017), so a command this controller sends on one tick reaches the Train Model on the next, and its report arrives the tick after that. `echo_ticks` tells the fleet so: a reported emergency brake that the controller itself commanded within the last `echo_ticks` steps is its own command coming back, not a passenger pull. The console's own fleet keeps the default, 0, since the toy plant and the bench answer on the same step.
+- **Tests can stand in for the engineer.** `--engineer-gains KP KI` sets those gains on each train as it joins, the way `commission_gains` does. It exists for automated tests only; a real run never passes it, and every train waits for an engineer (truth D024).
 
 ## Showing the console
 
@@ -219,7 +234,7 @@ A detected failure latches until cleared; the harness has no call to clear one.
 
 Open issues:
 
-- [ ] **Emergency echo re-latches the brake.** `brake_state[0]` true while the controller isn't commanding it reads as a passenger pull. If the Train Model reports last tick's brake, the driver's release is undone a tick later. What Brake State carries, and when, is unsettled.
+- [x] **Emergency echo re-latches the brake.** Fixed 2026-10-20 for the central harness: see Under the central harness. `brake_state[0]` true while the controller has not commanded the brake within the last `echo_ticks` steps reads as a passenger pull; within them it is the controller's own command coming back. The driver's release also sends the one-shot `passenger_brake_release`, so the Train Model clears a passenger pull with it.
 - [ ] **The bench breaks a harness fleet.** A train spawned from the bench is unknown to the harness, so the next `step_all` raises. Open the console only.
 - [ ] **No harness commissioning.** See Commissioning.
 - [ ] **Exception classes differ from `TrainModelFleet`'s.** See the comparison above.
