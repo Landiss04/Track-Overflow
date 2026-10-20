@@ -1,28 +1,35 @@
-"""The four wired modules in a loop, with the CTC Office's stand-in.
+"""The five wired modules in a loop: the Iteration 3 scenario.
 
 The harness's tick, in one process and without sockets: on each tick
-the Track Controller SW, the Track Model, the Train Model and the Train
-Controller SW step on the outputs every module gave on the tick before,
-mapped by ``SystemEdges``, just as the harness does it across
-processes. Every input and output goes through JSON on the way, as it
-would between processes. This runs each module's own code, so it
-checks the loop itself:
+the CTC Office, the Track Controller SW, the Track Model, the Train
+Model and the Train Controller SW step on the outputs every module gave
+on the tick before, mapped by ``SystemEdges``, just as the harness does
+it across processes. Every input and output goes through JSON on the
+way, as it would between processes. This runs each module's own code,
+the CTC Office's included, so it checks the loop itself:
 
 - nothing is released while a Green wayside has no PLC program (R44),
   and the clock runs on;
-- once every wayside has one, the scripted CTC Office releases G1, the
-  Track Model places it at the yard exit block, and the Track
-  Controller passes the stand-in's suggestions down each block's track
-  circuit, the next block preloaded (R49). G1 runs block by block,
-  stops at GLENBURY behind the door interlock and the dwell, and at
-  DORMONT at the end of its route;
-- a switch the CTC Office commands moves the Track Model's switch, and
-  its read-back, and each light's, reaches the Track Controller and the
-  CTC Office;
+- the dispatcher sends G1 from the yard to GLENBURY (the Iteration 3
+  scenario). Once every wayside has a program, the CTC Office releases
+  it (D022), the Track Model places it at the yard exit block, and the
+  CTC Office finds it there and follows it from occupancy, block by
+  block, never taking it for a failure. Its suggestions reach the
+  train through the Track Controller, the next block preloaded (R49),
+  so authority never falls from two blocks or more to none. G1 stops
+  at GLENBURY behind the door interlock and holds the dwell; the
+  dispatcher sends it on, and it stops at DORMONT;
+- every ticket the Track Model sells reaches the CTC Office once (R52);
+- a switch the CTC Office commands in maintenance mode moves the Track
+  Model's switch, and its read-back, and each light's, reaches the
+  Track Controller and the CTC Office;
 - a failed block reads occupied to the Track Controller and to the CTC
   Office (R33, R69), and the train stops short of it;
 - the driver releases the emergency brake, with and without a
   passenger pull.
+
+The dispatcher's actions are the CTC Office module's own, taken
+between ticks as its window would take them.
 
 Run from the repository root with
 ``python -m unittest discover -s common/harness/tests``.
@@ -33,28 +40,23 @@ from __future__ import annotations
 import json
 import sys
 import unittest
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 _REPO = Path(__file__).resolve().parents[3]
 for _folder in (
     _REPO, _REPO / "TrackModel", _REPO / "TrainModel", _REPO / "Train-Ctrl_HW",
-    _REPO / "TrackCtrlSW",
+    _REPO / "TrackCtrlSW", _REPO / "CTC-Office",
 ):
     if str(_folder) not in sys.path:
         sys.path.insert(0, str(_folder))
 
 from PySide6.QtCore import QCoreApplication  # noqa: E402
 
-from common.harness.ctc_script import (  # noqa: E402
-    GREEN_YARD_TO_DORMONT,
-    CtcRoute,
-    RouteBlock,
-    ScriptedCtc,
-)
 from common.harness.edges import SystemEdges  # noqa: E402
 from common.harness.modules import (  # noqa: E402
+    CTC_OFFICE,
     TRACK_CONTROLLER_SW,
     TRACK_MODEL,
     TRAIN_CONTROLLER_SW,
@@ -62,6 +64,13 @@ from common.harness.modules import (  # noqa: E402
 )
 from common.harness.roster import Event  # noqa: E402
 from common.harness.wayside_edges import track_controller_to_ctc  # noqa: E402
+from ctc.module_process import (  # noqa: E402
+    CtcOfficeProcess,
+    Dispatch,
+    layout_files,
+)
+from ctc.track_layout import load_layout  # noqa: E402
+from ctc_ui.ctc_host import CtcHost  # noqa: E402
 from track_ctrl.module_process import (  # noqa: E402
     TrackControllerProcess,
     green_line,
@@ -85,30 +94,21 @@ DT_S = 0.1
 START_S = 18_000.0
 KP, KI = 400_000.0, 8_000.0
 STANDSTILL_MPS = 0.1
+KMH_PER_MPS = 3.6
 
-#: The default route's blocks, in order.
-ROUTE = [block.block_id for block in GREEN_YARD_TO_DORMONT.blocks]
+#: Out of the yard exit block, GLENBURY (platform on the right), and
+#: on to DORMONT (platform on the right).
+ROUTE = [str(number) for number in range(63, 74)]
 GLENBURY, DORMONT = "65", "73"
 
-#: Eleven blocks at 10 m/s with no stop before the last.
-OPEN_LINE = CtcRoute(
-    "G1", "Green", tuple(RouteBlock(str(n), 10) for n in range(63, 74))
-)
-
-#: A stop at GLENBURY whose authority comes back 15 s after the train
-#: enters: once it stands, but well before the dwell is over, which the
-#: Train Controller enforces.
-EARLY_RESUME = CtcRoute("G1", "Green", (
-    RouteBlock("63", 10),
-    RouteBlock("64", 10),
-    RouteBlock(GLENBURY, 10, hold_s=15.0),
-    RouteBlock("66", 10),
-    RouteBlock("67", 10),
-))
+#: The Iteration 3 scenario: G1 from the yard to a Green station.
+TO_GLENBURY = Dispatch("G1", "Green", GLENBURY)
 
 #: Truth D007: the CTC Office schedules the dwell; the Train Controller
 #: enforces it.
 DWELL_S = 45.0
+
+_LAYOUT = load_layout(layout_files())
 
 
 def _wire(value: Any) -> Any:
@@ -117,17 +117,28 @@ def _wire(value: Any) -> Any:
 
 
 class _Loop:
-    """The harness's tick for the four wired modules, in one process."""
+    """The harness's tick for the five wired modules, in one process."""
 
-    def __init__(self, route: CtcRoute, starters: bool = True) -> None:
+    def __init__(
+        self,
+        dispatches: Sequence[Dispatch] = (TO_GLENBURY,),
+        starters: bool = True,
+    ) -> None:
         """Wire the modules, the Track Controller started up or not.
 
         Args:
-            route: The stand-in's run.
+            dispatches: What the dispatcher orders, given once the
+                line is ready (the CTC Office process's test option).
             starters: Commit the starter PLC programs before the first
                 tick, as a person would load them.
         """
-        self.edges = SystemEdges(ScriptedCtc(route))
+        self.edges = SystemEdges()
+        self.ctc_host = CtcHost(layout=_LAYOUT, serve_test_ui=False)
+        self.ctc = self.ctc_host.module
+        self.ctc_process = CtcOfficeProcess(
+            self.ctc_host, "unused", dispatches=dispatches,
+            parent=self.ctc_host,
+        )
         self.wayside_state = TrackControllerState(lines=(green_line(),))
         if starters:
             self.wayside_state.loadStarterPrograms()
@@ -151,9 +162,8 @@ class _Loop:
         self.outputs: dict[str, Any] = {}
         self.events: list[Event] = []
         self.tick = 0
-        # Switch commands added to the Track Controller's inputs, as
-        # the CTC Office sends them in maintenance mode.
-        self.switch_commands: list[dict[str, Any]] = []
+        # Tickets the Track Model sold, summed over every tick.
+        self.tickets_sold = 0
 
     def step(self) -> None:
         """One tick: every module steps on the last tick's outputs."""
@@ -161,6 +171,7 @@ class _Loop:
         sim_time_s = START_S + self.tick * DT_S
         fresh = {}
         for name, process in (
+            (CTC_OFFICE, self.ctc_process),
             (TRACK_CONTROLLER_SW, self.wayside),
             (TRACK_MODEL, self.track_model),
             (TRAIN_MODEL, self.model),
@@ -169,12 +180,13 @@ class _Loop:
             inputs = self.edges.inputs_for(
                 name, self.tick, sim_time_s, self.outputs
             )
-            if name == TRACK_CONTROLLER_SW:
-                inputs["ctc"]["switch_commands"] += self.switch_commands
             fresh[name] = _wire(
                 process.step(self.tick, DT_S, sim_time_s, _wire(inputs))
             )
         self.outputs.update(fresh)
+        self.tickets_sold += sum(
+            fresh[TRACK_MODEL]["ctc"]["tickets_sold_now"].values()
+        )
         self.events += self.edges.tick_completed(
             self.tick, sim_time_s, fresh
         )
@@ -227,6 +239,23 @@ class _Loop:
         return self.report["actual_speed_mps"]
 
     @property
+    def at_rest_with_doors_open(self) -> bool:
+        """Whether G1 stands with its right-hand doors open."""
+        return (
+            self.has(TRAIN_MODEL)
+            and abs(self.speed_mps) < STANDSTILL_MPS
+            and self.report["door_right_open"]
+        )
+
+    @property
+    def followed(self) -> tuple[str, ...]:
+        """The blocks the CTC Office follows G1 in; none if it does not."""
+        for train in self.ctc.snapshot().trains:
+            if train.train_id == "G1":
+                return train.blocks
+        return ()
+
+    @property
     def ctc_view(self) -> dict[str, Any]:
         """What the CTC Office reads from the Track Controller now."""
         return track_controller_to_ctc(self.outputs[TRACK_CONTROLLER_SW])
@@ -240,7 +269,7 @@ class _Loop:
 
 
 class StationStopTest(unittest.TestCase):
-    """The default route: out of the yard, GLENBURY, then DORMONT."""
+    """Out of the yard to GLENBURY, then sent on to DORMONT."""
 
     loop: _Loop
     core: Any
@@ -251,32 +280,56 @@ class StationStopTest(unittest.TestCase):
     # the feed.
     trace: list[tuple[int, str, dict[str, Any], dict[str, Any],
                       dict[str, Any]]]
+    # The blocks the CTC Office followed G1 in, as they changed.
+    followed: list[tuple[str, ...]]
+    # The tick G1 stood at GLENBURY with its doors open.
+    at_glenbury: int
 
     @classmethod
     def setUpClass(cls) -> None:
-        loop = _Loop(GREEN_YARD_TO_DORMONT)
+        loop = _Loop()
         cls.loop = loop
         cls.joined = {}
         cls.trace = []
+        cls.followed = []
 
-        def at_rest_at_dormont() -> bool:
-            for module in (TRACK_MODEL, TRAIN_MODEL, TRAIN_CONTROLLER_SW):
-                if loop.has(module):
+        def watch() -> None:
+            for module in (CTC_OFFICE, TRACK_MODEL, TRAIN_MODEL,
+                           TRAIN_CONTROLLER_SW):
+                if module == CTC_OFFICE:
+                    named = bool(loop.ctc.snapshot().orders)
+                else:
+                    named = loop.has(module)
+                if named:
                     cls.joined.setdefault(module, loop.tick)
-            if len(cls.joined) < 3:
-                return False
-            cls.trace.append((loop.tick, loop.block, loop.report,
-                              loop.commands, loop.feed))
-            return (
-                loop.block == DORMONT
-                and abs(loop.speed_mps) < STANDSTILL_MPS
-                and loop.report["door_right_open"]
-            )
+            followed = loop.followed
+            if followed and (not cls.followed
+                             or cls.followed[-1] != followed):
+                cls.followed.append(followed)
+            if len(cls.joined) == 4:
+                cls.trace.append((loop.tick, loop.block, loop.report,
+                                  loop.commands, loop.feed))
 
-        if not loop.run_until(at_rest_at_dormont, limit_s=400.0):
+        def at(block: str) -> Callable[[], bool]:
+            def condition() -> bool:
+                watch()
+                return (len(cls.joined) == 4 and loop.block == block
+                        and loop.at_rest_with_doors_open)
+            return condition
+
+        if not loop.run_until(at(GLENBURY), limit_s=200.0):
             raise AssertionError(
-                f"G1 never came to rest at DORMONT: at tick {loop.tick} "
-                f"it was in block {loop.block}"
+                f"G1 never stood at GLENBURY: at tick {loop.tick}, "
+                f"{loop.events}"
+            )
+        cls.at_glenbury = loop.tick
+        # The dispatcher sends it on, as its window would, between
+        # ticks; the Train Controller holds the dwell.
+        loop.ctc.dispatch("G1", "Green", DORMONT)
+        if not loop.run_until(at(DORMONT), limit_s=300.0):
+            raise AssertionError(
+                f"G1 never stood at DORMONT: at tick {loop.tick} it was "
+                f"in block {loop.block}"
             )
         cls.core = loop.controller_fleet.get("G1")
 
@@ -298,15 +351,28 @@ class StationStopTest(unittest.TestCase):
         self.assertEqual(self.loop.first("TRAIN_ADDED")[1], "G1 on Green")
 
     def test_each_module_takes_the_train_in_turn(self) -> None:
-        # Released on the tick the stand-in first reads the waysides
-        # ready; then placed by the Track Model, fed to the Train Model
-        # and reported to the Train Controller, a tick apart each.
-        released = self.joined[TRACK_MODEL] - 1
+        # Ordered once the CTC Office reads the line ready, released on
+        # its next step, then placed by the Track Model, fed to the
+        # Train Model and reported to the Train Controller, a tick
+        # apart each.
+        ordered = self.joined[CTC_OFFICE]
         self.assertEqual(self.joined, {
-            TRACK_MODEL: released + 1,
-            TRAIN_MODEL: released + 2,
-            TRAIN_CONTROLLER_SW: released + 3,
+            CTC_OFFICE: ordered,
+            TRACK_MODEL: ordered + 2,
+            TRAIN_MODEL: ordered + 3,
+            TRAIN_CONTROLLER_SW: ordered + 4,
         })
+
+    def test_the_ctc_office_follows_the_train_block_by_block(self) -> None:
+        # Found leaving the yard at the exit block where the harness
+        # placed it, then never taken for a failure, so never lost.
+        self.assertEqual(self.followed[0], ("63",))
+        heads: list[str] = []
+        for blocks in self.followed:
+            if not heads or heads[-1] != blocks[-1]:
+                heads.append(blocks[-1])
+        self.assertEqual(heads, ROUTE)
+        self.assertEqual(self.loop.ctc.snapshot().lost_trains, ())
 
     def test_the_train_runs_block_by_block(self) -> None:
         blocks: list[str] = []
@@ -318,7 +384,7 @@ class StationStopTest(unittest.TestCase):
     def test_authority_never_falls_from_two_blocks_to_none(self) -> None:
         # The preloaded next block carries the train's values as it
         # enters; without it the Train Controller would read a pickup
-        # failure at every block.
+        # failure at every block (R49).
         authority = [report["authority_blocks"]
                      for _, _, report, _, _ in self.trace]
         for before, after in zip(authority, authority[1:]):
@@ -327,10 +393,16 @@ class StationStopTest(unittest.TestCase):
         self.assertFalse(self.core.state.failures["signal_pickup"])
         self.assertFalse(self.core.state.emergency_brake)
 
-    def test_the_train_reaches_its_suggested_speed(self) -> None:
+    def test_the_commanded_speed_keeps_under_each_block_limit(
+        self,
+    ) -> None:
+        green = _LAYOUT["Green"]
+        for _, here, report, _, _ in self.trace:
+            limit_mps = green.block(here).speed_limit_kmh / KMH_PER_MPS
+            self.assertLessEqual(report["commanded_speed_mps"], limit_mps)
         top = max(report["actual_speed_mps"] for _, _, report, _, _ in
                   self.trace)
-        self.assertAlmostEqual(top, 12.0, delta=0.3)
+        self.assertGreater(top, 10.0)
 
     def test_doors_open_only_at_a_stand_on_the_platform_side(self) -> None:
         opened = [
@@ -347,15 +419,21 @@ class StationStopTest(unittest.TestCase):
             if report["door_left_open"] or report["door_right_open"]:
                 self.assertEqual(commands["power_w"], 0.0)
 
-    def test_doors_close_before_the_train_leaves_glenbury(self) -> None:
-        at_station = self.at(GLENBURY)
-        first_open = next(
-            tick for tick, report, _ in at_station
+    def test_the_doors_stay_open_for_the_dwell(self) -> None:
+        # Sent on as soon as it stood there: the Train Controller still
+        # holds the doors open for the dwell (D007).
+        open_ticks = [
+            tick for tick, report, _ in self.at(GLENBURY)
             if report["door_right_open"]
-        )
+        ]
+        self.assertGreaterEqual(len(open_ticks) * DT_S, DWELL_S)
+        self.assertLess(len(open_ticks) * DT_S, DWELL_S + 1.0)
+        self.assertEqual(open_ticks[-1] - open_ticks[0] + 1, len(open_ticks))
+
+    def test_doors_close_before_the_train_leaves_glenbury(self) -> None:
         departing = [
-            report for tick, report, _ in at_station
-            if tick > first_open and report["actual_speed_mps"] > 0.0
+            report for tick, report, _ in self.at(GLENBURY)
+            if tick > self.at_glenbury and report["actual_speed_mps"] > 0.0
         ]
         self.assertTrue(departing, "the train never moved off")
         self.assertFalse(departing[0]["door_right_open"])
@@ -373,11 +451,20 @@ class StationStopTest(unittest.TestCase):
         # and 64, are occupied, as they are while G1 enters 64.
         self.assertEqual(self.core.state.next_signal, "YELLOW")
 
+    def test_every_ticket_sold_reaches_the_ctc_office_once(self) -> None:
+        # The last tick's sales are still on their way.
+        sold = sum(self.loop.ctc.snapshot().tickets_sold.values())
+        pending = sum(self.loop.edges._sales.pending.values())
+        self.assertGreater(sold, 0)
+        self.assertEqual(sold + pending, self.loop.tickets_sold)
+
     def test_the_route_ends_at_a_stand_with_no_authority(self) -> None:
         _, here, report, _, _ = self.trace[-1]
         self.assertEqual(here, DORMONT)
         self.assertEqual(report["authority_blocks"], 0)
         self.assertEqual(report["commanded_speed_mps"], 0.0)
+        (limit,) = self.loop.ctc.snapshot().authorities
+        self.assertEqual((limit.blocks, limit.reason), (0, "destination"))
 
     def test_the_track_model_followed_the_train(self) -> None:
         trains = self.loop.track.snapshot().trains
@@ -388,12 +475,12 @@ class StationStopTest(unittest.TestCase):
         )
 
     def test_the_ctc_office_reads_the_train_where_it_is(self) -> None:
-        self.assertTrue(self.loop.occupied_to_ctc(DORMONT))
         occupied = [
             each["block_id"] for each in self.loop.ctc_view["occupancy"]
             if each["occupied"]
         ]
         self.assertEqual(occupied, [DORMONT])
+        self.assertEqual(self.loop.followed, (DORMONT,))
 
 
 class ReadinessTest(unittest.TestCase):
@@ -402,12 +489,19 @@ class ReadinessTest(unittest.TestCase):
     def test_the_clock_runs_and_nothing_is_released_until_ready(
         self,
     ) -> None:
-        loop = _Loop(GREEN_YARD_TO_DORMONT, starters=False)
+        loop = _Loop(starters=False)
         for _ in range(50):
             loop.step()
         self.assertEqual(loop.tick, 50)
         self.assertEqual(len(loop.edges.roster), 0)
         self.assertFalse(loop.has(TRACK_MODEL))
+        # The dispatcher's order waits: the CTC Office refuses it.
+        self.assertEqual(loop.ctc.snapshot().orders, ())
+        self.assertEqual(loop.ctc_process.pending_dispatches,
+                         (TO_GLENBURY,))
+        self.assertEqual(
+            loop.outputs[CTC_OFFICE]["track_controller"]["suggestions"], []
+        )
         source, detail = loop.first("WAYSIDES_NOT_READY")
         self.assertEqual(source, TRACK_CONTROLLER_SW)
         self.assertTrue(detail.startswith("Green: GTC-01, GTC-02"))
@@ -428,35 +522,11 @@ class ReadinessTest(unittest.TestCase):
         self.assertTrue(loop.run_until(lambda: loop.block == "64"))
 
 
-class DwellTest(unittest.TestCase):
-    """The Train Controller holds the dwell, however soon it may go."""
-
-    def test_the_doors_stay_open_for_the_dwell(self) -> None:
-        loop = _Loop(EARLY_RESUME)
-        ticks: dict[str, int] = {}
-
-        def doors_closed_again() -> bool:
-            if not loop.has(TRAIN_MODEL):
-                return False
-            if loop.report["door_right_open"]:
-                ticks.setdefault("opened", loop.tick)
-            elif "opened" in ticks:
-                ticks["closed"] = loop.tick
-                return True
-            return False
-
-        self.assertTrue(loop.run_until(doors_closed_again, limit_s=150.0))
-        open_s = (ticks["closed"] - ticks["opened"]) * DT_S
-        self.assertGreaterEqual(open_s, DWELL_S)
-        self.assertLess(open_s, DWELL_S + 1.0)
-        self.assertTrue(loop.run_until(lambda: loop.speed_mps > 1.0))
-
-
 class SwitchAndLightTest(unittest.TestCase):
     """Switch and light commands and read-back, through both names."""
 
     def setUp(self) -> None:
-        self.loop = _Loop(GREEN_YARD_TO_DORMONT)
+        self.loop = _Loop(dispatches=())
         for _ in range(10):
             self.loop.step()
 
@@ -480,14 +550,13 @@ class SwitchAndLightTest(unittest.TestCase):
         }
 
     def test_a_commanded_switch_moves_and_reads_back(self) -> None:
-        # Green 12 (12-13; 1-13) is the Track Model's switch D-13.
+        # Green 12 (12-13; 1-13) is the Track Model's switch D-13. The
+        # dispatcher sets it in maintenance mode.
         self.assertEqual(self.track_model()["switch_states"]["GREEN D-13"],
                          "NORMAL")
-        self.loop.switch_commands = [{
-            "block": {"line": "Green", "block_id": "12"},
-            "value": "reverse",
-        }]
-        for _ in range(4):
+        self.loop.ctc.set_maintenance_mode(True)
+        self.loop.ctc.set_switch("Green", "12", "reverse")
+        for _ in range(5):
             self.loop.step()
         self.assertEqual(self.track_model()["switch_states"]["GREEN D-13"],
                          "REVERSE")
@@ -497,6 +566,14 @@ class SwitchAndLightTest(unittest.TestCase):
             self.loop.ctc_view["switches"],
         )
         self.assertTrue(self.loop.wayside_state.system.maintenance)
+        self.loop.step()
+        reported = self.loop.ctc.snapshot().inputs
+        assert reported is not None
+        self.assertIn(
+            ("12", "reverse"),
+            {(each.switch_id, each.position)
+             for each in reported.track_controller.switches},
+        )
 
     def test_each_light_shows_what_its_wayside_commands(self) -> None:
         # The Track Controller names a light by its switch's block, the
@@ -509,8 +586,10 @@ class SwitchAndLightTest(unittest.TestCase):
             for entry in self.loop.outputs[TRACK_CONTROLLER_SW][
                 "track_model"]["signal_commands"]
         }
-        # Every light starts RED in the Track Model; these are not.
-        self.assertEqual(set(commands.values()), {"green", "yellow"})
+        # Every light starts RED in the Track Model; with no train on
+        # the line, the starter program shows them all GREEN.
+        self.assertEqual(set(commands), set(lights))
+        self.assertEqual(set(commands.values()), {"green"})
         self.loop.step()
         for switch, light in lights.items():
             self.assertEqual(
@@ -526,7 +605,7 @@ class SwitchAndLightTest(unittest.TestCase):
     def test_crossings_follow_their_wayside(self) -> None:
         # Not ready, every wayside holds its crossings down: fail-safe.
         # The Red Line's have no Track Controller yet, and stay up.
-        loop = _Loop(GREEN_YARD_TO_DORMONT, starters=False)
+        loop = _Loop(dispatches=(), starters=False)
         for _ in range(3):
             loop.step()
 
@@ -558,7 +637,7 @@ class FailureTest(unittest.TestCase):
     """A failed block reads occupied, and the train stops short of it."""
 
     def test_a_broken_rail_ahead_stops_the_train_before_it(self) -> None:
-        loop = _Loop(OPEN_LINE)
+        loop = _Loop(dispatches=(Dispatch("G1", "Green", DORMONT),))
         self.assertTrue(loop.run_until(
             lambda: loop.has(TRAIN_MODEL) and loop.block == "64"
         ))
@@ -579,20 +658,28 @@ class FailureTest(unittest.TestCase):
             limit_s=120.0,
         )
         self.assertTrue(stopped, f"G1 is in block {loop.block}")
+        (limit,) = loop.ctc.snapshot().authorities
+        self.assertEqual((limit.reason, limit.at), ("occupied", "68"))
         for _ in range(100):
             loop.step()
             self.assertEqual(loop.block, "67")
+        core = loop.controller_fleet.get("G1")
+        self.assertFalse(core.state.emergency_brake)
 
         # Repaired, the block clears and the train goes on.
         loop.track.set_block_failure("GREEN K-68", TrackFailure.NONE)
         self.assertTrue(loop.run_until(lambda: loop.block == "69"))
+        # The CTC Office follows it there, a few ticks behind.
+        self.assertTrue(loop.run_until(
+            lambda: loop.followed[-1:] == ("69",), limit_s=1.0
+        ))
 
 
 class EmergencyBrakeTest(unittest.TestCase):
     """The driver's release holds, and releases a passenger pull."""
 
     def setUp(self) -> None:
-        self.loop = _Loop(OPEN_LINE)
+        self.loop = _Loop(dispatches=(Dispatch("G1", "Green", DORMONT),))
         self.assertTrue(self.loop.run_until(
             lambda: self.loop.has(TRAIN_MODEL) and self.loop.speed_mps > 5
         ))

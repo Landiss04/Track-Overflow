@@ -40,9 +40,12 @@ class HarnessWindowTest(unittest.TestCase):
                             "2" if mode == "system" else "1",
                             "--log-dir", str(log_dir)]
                     if mode == "system":
-                        # A person loads the PLC programs (R44); here
-                        # the Track Controller commits its starters.
-                        args.append("--load-starters")
+                        # A person loads the PLC programs (R44) and the
+                        # dispatcher sends a train; here the Track
+                        # Controller commits its starters and the CTC
+                        # Office dispatches G1.
+                        args += ["--load-starters",
+                                 "--dispatch", "G1:Green:65"]
                     else:
                         args.append("--stubs-only")
                     if mode == "headless":

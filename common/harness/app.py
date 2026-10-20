@@ -2,24 +2,24 @@
 
 No arguments open the operator window. ``--headless`` echoes events
 and prints a status line every five seconds. Both run until Ctrl+C,
-the time limit, or a confirmed window close. The CTC Office's stub
+the time limit, or a confirmed window close. The CTC Office
 presses Run when ready; the harness window has no clock controls.
 
 The modules wired in so far run as themselves, each in its window
-(Phase 3: the Track Controller SW, the Track Model, the Train Model and
-the Train Controller SW); the rest are stubs. The CTC Office's stub
-presses Run as soon as it is ready. A scripted CTC Office, standing in
-for its dispatch and suggestions, waits for every Green Line wayside to
-be ready, then releases train G1 at the yard exit block and takes it
-to DORMONT with a stop at GLENBURY
-(``ctc_script.GREEN_YARD_TO_DORMONT``). The clock runs meanwhile.
+(Phase 4: the CTC Office, the Track Controller SW, the Track Model, the
+Train Model and the Train Controller SW); the rest are stubs. The CTC
+Office presses Run as soon as it is ready (``--run-on-ready``), as its
+stub did before; the dispatcher can pause it in its window.
 
-Two people start the run, as in the system itself. One loads a PLC
-program on every wayside in the Track Controller's window (R44): RUN
-then COMMIT on each, or Load starters. ``--load-starters`` commits the
-starter programs at launch instead. And G1 moves once an engineer sets
-its gains in the Train Controller's console (D024). ``--stubs-only``
-runs a stub for every module instead, as in Phase 0.
+People start the run, as in the system itself. One loads a PLC program
+on every wayside in the Track Controller's window (R44): RUN then
+COMMIT on each, or Load starters. ``--load-starters`` commits the
+starter programs at launch instead. The dispatcher dispatches a train
+from the yard in the CTC Office's window; ``--dispatch
+TRAIN:LINE:BLOCK`` gives that dispatch for a demonstration, once the
+line is ready. And the train moves once an engineer sets its gains in
+the Train Controller's console (D024). ``--stubs-only`` runs a stub for
+every module instead, as in Phase 0.
 
 The CSV goes to ``--log-dir``, defaulting to the user's application
 data folder (``TrackOverflow/logs``), never the installation.
@@ -40,7 +40,6 @@ from PySide6.QtCore import QCoreApplication, QStandardPaths, QTimer
 
 from common.harness.core import Harness
 from common.harness.edges import SystemEdges
-from common.harness.ctc_script import GREEN_YARD_TO_DORMONT, ScriptedCtc
 from common.harness.modules import (
     CTC_OFFICE,
     TRACK_CONTROLLER_SW,
@@ -89,11 +88,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         edges = None
     else:
         wayside_options = ["--load-starters"] if options.load_starters else []
+        for order in options.dispatch:
+            ctc_options += ["--dispatch", order]
         specs = system_specs({
             CTC_OFFICE: ctc_options,
             TRACK_CONTROLLER_SW: wayside_options,
         })
-        edges = SystemEdges(ScriptedCtc(GREEN_YARD_TO_DORMONT))
+        edges = SystemEdges()
     with EventLog(log_path) as log:
         harness = Harness(specs, log, edges)
         window = None
@@ -212,6 +213,15 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--headless",
         action="store_true",
         help="use console output without opening a window",
+    )
+    parser.add_argument(
+        "--dispatch",
+        action="append",
+        default=[],
+        metavar="TRAIN:LINE:BLOCK",
+        help="dispatch a train from the yard to a block in the CTC "
+        "Office once its line is ready, for a demonstration; may be "
+        "repeated",
     )
     parser.add_argument(
         "--load-starters",

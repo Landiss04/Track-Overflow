@@ -3,21 +3,22 @@
 ``SystemEdges`` gives the modules wired in their real edges (D005), and
 gives every module still a stub its producers' outputs whole
 (``stub_edges``). Phase 1 wired in the Train Model and the Train
-Controller SW, Phase 2 the Track Model, and Phase 3 the Track
-Controller SW, which runs the Green Line (R77):
+Controller SW, Phase 2 the Track Model, Phase 3 the Track Controller
+SW, which runs the Green Line (R77), and Phase 4 the CTC Office:
 
-- A scripted CTC Office (``ctc_script``) stands in for the CTC
-  Office's dispatch and suggestions until Phase 4. It reads what the
-  CTC Office reads from the Track Controller (occupancy and each
-  wayside's readiness), and answers in the CTC Office's form. The CTC
-  Office's stub still runs the clock.
+- The CTC Office takes what every wired Track Controller reports of its
+  line, joined into one input (occupancy, switches, crossings and each
+  wayside's readiness; ``wayside_edges``), and the Track Model's ticket
+  sales, each sale exactly once (R52, ``track_edges.TicketSales``).
+  It runs the clock: the harness reads its ``clock_paused`` and
+  ``clock_speedup`` (``core``).
 - Nothing runs until a person has loaded a PLC program on every
-  wayside (R44, R70): until each line's waysides are ready, the
-  stand-in releases no train and sends nothing. The clock runs on. The
-  harness logs each line's readiness as it changes.
+  wayside (R44, R70): until each line's waysides are ready, the CTC
+  Office releases no train and sends nothing for the line. The clock
+  runs on. The harness logs each line's readiness as it changes.
 - The trains in service are a roster (``roster``, D022) that the CTC
-  Office's ``new_trains`` and ``retired_trains`` keep: the stand-in's,
-  and its stub's.
+  Office's ``new_trains`` and ``retired_trains`` keep, each event
+  applied exactly once.
 - A released train enters at its line's yard exit block (D022). It
   joins the Track Model first, which places it there from a stand-in
   report (``track_edges.placement_report``) until its Train Model
@@ -26,28 +27,31 @@ Controller SW, which runs the Green Line (R77):
   Model reports it: each needs that input on every tick. Until its
   first commands arrive, the Train Model holds the train
   (``train_edges.INERT_COMMANDS``).
-- The Track Controller takes the stand-in's suggestions and the Track
-  Model's occupancy and device read-back; the Track Model takes the
-  Track Controller's per-block commands, switches, crossings and
-  lights, and each train's Train Model report (``wayside_edges``,
-  ``track_edges``). Each train's Train Model takes its Track Model
-  feed and its Train Controller's commands; each Train Controller
-  takes its Train Model's outputs and the light the Track Model showed
-  it (``track_edges``, ``train_edges``).
-- The stand-in steps once per tick on the Track Controller's outputs
-  of the tick before, and its outputs reach the Track Controller on
-  the next tick, just as a module's would (R1).
+- Each Track Controller takes the CTC Office's suggestions, closures
+  and switch commands for its line, and the Track Model's occupancy
+  and device read-back; the Track Model takes the Track Controllers'
+  per-block commands, switches, crossings and lights, and each train's
+  Train Model report (``wayside_edges``, ``track_edges``). Each train's
+  Train Model takes its Track Model feed and its Train Controller's
+  commands; each Train Controller takes its Train Model's outputs and
+  the light the Track Model showed it (``track_edges``,
+  ``train_edges``).
 - A train the Track Model stops feeding has left the track: it ran
   into the yard. It leaves every input, and the harness logs it, but
   it stays on the roster until the CTC Office retires it.
 - A train the Train Model rejects on a tick is logged as the Train
   Model's ``TICK_REJECTED``, naming the train.
 
+Every module steps on the outputs every module gave on the tick
+before (R1), the CTC Office too: a report reaches it a tick after the
+Track Controller makes it, and its suggestions reach the Track
+Controller a tick later.
+
 Every train's inputs to the Train Model and the Train Controller are
 keyed by train ID under ``trains``, with its line, as their processes
 expect (``train_model.module_process``, ``train_ctrl.module_process``).
-The Track Model's and the Track Controller's are their own
-(``track_model.wire``, ``track_ctrl.wire``).
+The CTC Office's, the Track Model's and the Track Controller's are
+their own (``ctc.wire``, ``track_model.wire``, ``track_ctrl.wire``).
 """
 
 from __future__ import annotations
@@ -57,7 +61,6 @@ __all__ = ["CONTROLLER_FOR_LINE", "TRACK_CONTROLLER_FOR_LINE", "SystemEdges"]
 from collections.abc import Collection, Mapping
 from typing import Any
 
-from common.harness.ctc_script import ScriptedCtc
 from common.harness.modules import (
     CTC_OFFICE,
     TRACK_CONTROLLER_HW,
@@ -74,6 +77,7 @@ from common.harness.track_devices import TrackDevices
 from common.harness.track_edges import (
     YARD_EXIT_BLOCKS,
     BlockNames,
+    TicketSales,
     placement_report,
     track_model_to_train_model,
     train_model_to_track_model,
@@ -87,6 +91,7 @@ from common.harness.train_edges import (
 from common.harness.wayside_edges import (
     ctc_to_track_controller,
     line_ready,
+    merge_ctc_inputs,
     track_controller_to_ctc,
     track_controller_to_track_model,
     track_model_to_track_controller,
@@ -121,27 +126,21 @@ class SystemEdges:
 
     def __init__(
         self,
-        ctc: ScriptedCtc,
         wired: Collection[str] = WIRED_MODULES,
         devices: TrackDevices | None = None,
     ) -> None:
         """Prepare the edges, with no train in service.
 
         Args:
-            ctc: The CTC Office's stand-in.
             wired: The modules that are real, not stubs.
             devices: Where each switch and light stands; read from the
                 layout files if None.
         """
-        self._ctc = ctc
         self._wired = frozenset(wired)
         self._devices = TrackDevices.load() if devices is None else devices
         self._roster = Roster(CTC_OFFICE)
         self._names = BlockNames()
-        # The Track Controllers' outputs as of the tick before, which
-        # the stand-in steps on, and its outputs, for the next tick.
-        self._track_controllers: dict[str, Mapping[str, Any]] = {}
-        self._ctc_outputs: Mapping[str, Any] = {}
+        self._sales = TicketSales()
         # Each line's readiness as last logged.
         self._ready: dict[str, bool] = {}
         # Trains the Track Model has fed, and those it fed and then
@@ -167,9 +166,9 @@ class SystemEdges:
     ) -> list[Event]:
         """Act on a tick's new outputs, once each.
 
-        Applies the CTC Office's train events, steps the CTC Office's
-        stand-in and applies its own, and follows the trains on the
-        track.
+        Applies the CTC Office's train events, logs each line's
+        readiness as it changes, passes the Track Model's ticket sales
+        on, and follows the trains on the track.
 
         Args:
             tick: The tick that is over.
@@ -188,19 +187,22 @@ class SystemEdges:
                 (TRAIN_MODEL, "TICK_REJECTED", f"{train_id}: {reason}")
                 for train_id, reason in rejected.items()
             ]
-        # The stand-in steps on what the Track Controller reported the
-        # tick before, as the CTC Office would.
-        events += self._step_ctc(sim_time_s)
+        for line, name in TRACK_CONTROLLER_FOR_LINE.items():
+            if name in fresh and name in self._wired:
+                reported = track_controller_to_ctc(fresh[name])
+                events += self._readiness(line, reported["waysides"])
+        # Sales the CTC Office stepped on are done with; this tick's
+        # go to it on the next.
+        self._sales.delivered(CTC_OFFICE in fresh)
         in_service = {entry.train_id for entry in self._roster}
         self._on_track &= in_service
         self._off_track &= in_service
-        for name in TRACK_CONTROLLER_FOR_LINE.values():
-            if name in fresh and name in self._wired:
-                self._track_controllers[name] = fresh[name]
         if TRACK_MODEL in fresh:
             track_model = fresh[TRACK_MODEL]
             self._names.learn(_occupancy(track_model))
             events += self._follow_trains(_feeds(track_model))
+            if CTC_OFFICE in self._wired:
+                self._sales.add(track_model)
         return events
 
     def inputs_for(
@@ -218,6 +220,8 @@ class SystemEdges:
         """
         if consumer not in self._wired:
             return stub_inputs(consumer, outputs)
+        if consumer == CTC_OFFICE:
+            return self._ctc_inputs(outputs)
         if consumer == TRACK_MODEL:
             return self._track_model_inputs(outputs)
         if consumer in TRACK_CONTROLLER_FOR_LINE.values():
@@ -228,24 +232,20 @@ class SystemEdges:
             return self._train_controller_inputs(consumer, outputs)
         raise KeyError(f"no edges into {consumer} yet")
 
-    def _step_ctc(self, sim_time_s: float) -> list[Event]:
-        # The stand-in's outputs for the next tick, from what its line's
-        # Track Controller reported: its readiness, logged as it
-        # changes, and its occupancy. A train it releases joins the
-        # roster now, as one the CTC Office released on this tick.
-        line = self._ctc.line
-        reported = self._track_controllers.get(
-            TRACK_CONTROLLER_FOR_LINE[line]
-        )
-        inputs = {} if reported is None else track_controller_to_ctc(
-            reported
-        )
-        events = self._readiness(line, inputs.get("waysides", []))
-        self._ctc_outputs = self._ctc.step(sim_time_s, inputs)
-        events += self._roster.apply(
-            {"new_trains": self._ctc_outputs["new_trains"]}, sim_time_s
-        )
-        return events
+    def _ctc_inputs(
+        self, outputs: Mapping[str, Mapping[str, Any]]
+    ) -> dict[str, Any]:
+        # What every wired Track Controller reported, joined, and the
+        # ticket sales the CTC Office has not stepped on.
+        reports = [
+            track_controller_to_ctc(outputs[name])
+            for name in TRACK_CONTROLLER_FOR_LINE.values()
+            if name in self._wired and outputs.get(name)
+        ]
+        return {
+            "track_controller": merge_ctc_inputs(reports),
+            "track_model": {"ticket_sales": self._sales.send()},
+        }
 
     def _readiness(
         self, line: str, waysides: list[Mapping[str, Any]]
@@ -290,17 +290,18 @@ class SystemEdges:
     def _track_controller_inputs(
         self, consumer: str, outputs: Mapping[str, Mapping[str, Any]]
     ) -> dict[str, Any]:
-        # The stand-in's suggestions for this Track Controller's line,
-        # and what the Track Model reported of it.
+        # The CTC Office's suggestions for this Track Controller's
+        # line, and what the Track Model reported of it.
         line = next(
             line for line, name in TRACK_CONTROLLER_FOR_LINE.items()
             if name == consumer
         )
+        ctc = outputs.get(CTC_OFFICE)
         track_model = outputs.get(TRACK_MODEL)
         return {
             "ctc": (
-                ctc_to_track_controller(self._ctc_outputs, line)
-                if self._ctc_outputs else dict(_NO_CTC)
+                ctc_to_track_controller(ctc, line)
+                if ctc and CTC_OFFICE in self._wired else dict(_NO_CTC)
             ),
             "track_model": (
                 track_model_to_track_controller(

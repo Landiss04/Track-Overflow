@@ -41,6 +41,20 @@ a block with a signal (the Track Model's ``signal_seen``, on that tick
 only), in the Train Controller's spelling
 (``train_edges.aspect_to_train_controller``). The Train Controller
 keeps the last light it was given.
+
+Track Model -> CTC Office, ``track_model_to_ctc``, the CTC Office's
+``track_model`` input::
+
+    ctc.tickets_sold_now  -> ticket_sales: by station name, as written
+                             in the layout files (R50); stations that
+                             sold none are left out
+
+The Track Model reports each tick's sales once, as events; the CTC
+Office takes them as sales since its last step (R52). ``TicketSales``
+holds the sales the CTC Office has not yet stepped on, so each sale
+reaches it exactly once: a tick the CTC Office refuses, or misses, is
+sent again with the next tick's sales added. Only Green and Red
+stations reach it: the Track Model loads no Blue Line (R67).
 """
 
 from __future__ import annotations
@@ -49,7 +63,9 @@ __all__ = [
     "TRACK_MODEL_LINES",
     "YARD_EXIT_BLOCKS",
     "BlockNames",
+    "TicketSales",
     "placement_report",
+    "track_model_to_ctc",
     "track_model_to_train_model",
     "train_model_to_track_model",
 ]
@@ -197,3 +213,78 @@ def track_model_to_train_model(
         },
         "passengers_boarded": feed["passengers_boarded"],
     }
+
+
+def track_model_to_ctc(outputs: Mapping[str, Any]) -> dict[str, Any]:
+    """Map the Track Model's outputs to the CTC Office's ``track_model``.
+
+    Args:
+        outputs: The Track Model's outputs, with ``ctc``.
+
+    Raises:
+        KeyError: If an output is missing.
+        ValueError: If a count is not a whole number of tickets.
+    """
+    sold = outputs["ctc"]["tickets_sold_now"]
+    sales = {}
+    for station, tickets in sold.items():
+        if isinstance(tickets, bool) or not isinstance(tickets, int) \
+                or tickets < 0:
+            raise ValueError(
+                f"tickets sold at {station} must be a whole number, "
+                f"got {tickets!r}"
+            )
+        if tickets:
+            sales[station] = tickets
+    return {"ticket_sales": sales}
+
+
+class TicketSales:
+    """Ticket sales on their way to the CTC Office, each exactly once.
+
+    ``add`` takes the sales of each tick the Track Model completes.
+    ``send`` gives the CTC Office every sale it has not stepped on, and
+    ``delivered`` says whether it stepped on them (R52).
+    """
+
+    def __init__(self) -> None:
+        """Start with nothing sold."""
+        self._pending: dict[str, int] = {}
+        self._sent: dict[str, int] = {}
+
+    @property
+    def pending(self) -> dict[str, int]:
+        """Sales the CTC Office has not stepped on yet, by station."""
+        return dict(self._pending)
+
+    def add(self, outputs: Mapping[str, Any]) -> None:
+        """Add one tick's sales from the Track Model's outputs.
+
+        Raises:
+            KeyError: If an output is missing.
+            ValueError: If a count is not a whole number of tickets.
+        """
+        for station, tickets in track_model_to_ctc(outputs)[
+                "ticket_sales"].items():
+            self._pending[station] = self._pending.get(station, 0) + tickets
+
+    def send(self) -> dict[str, int]:
+        """Return the sales to send the CTC Office on this tick."""
+        self._sent = dict(self._pending)
+        return dict(self._sent)
+
+    def delivered(self, stepped: bool) -> None:
+        """Close the tick: drop what was sent if the CTC stepped on it.
+
+        Args:
+            stepped: Whether the CTC Office replied with outputs to
+                the tick the sales were sent on.
+        """
+        if stepped:
+            for station, tickets in self._sent.items():
+                left = self._pending.get(station, 0) - tickets
+                if left > 0:
+                    self._pending[station] = left
+                else:
+                    self._pending.pop(station, None)
+        self._sent = {}

@@ -11,11 +11,13 @@ tick falls due every 10 ms, so the round trip must stay well under
 that.
 
 With ``--system`` the wired modules run as themselves, with their
-windows: in Phase 3 the Track Controller SW, the Track Model, the Train
-Model and the Train Controller SW, driving one train along the scripted
-CTC Office's route. The Track Controller loads its starter programs
-(``--load-starters``) and the Train Controller plays the engineer
-(``--engineer-gains``), so the train is released and moves.
+windows: in Phase 4 the CTC Office, the Track Controller SW, the Track
+Model, the Train Model and the Train Controller SW, running the
+Iteration 3 scenario. The Track Controller loads its starter programs
+(``--load-starters``), the CTC Office presses Run (and 10x) and
+dispatches G1 from the yard to DORMONT (``--dispatch``), and the Train
+Controller plays the engineer (``--engineer-gains``), so the train is
+released and moves for the whole measurement.
 
 Run from the repository root::
 
@@ -39,7 +41,6 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication, Qt, QTimer
 
 from common.harness.core import Harness
-from common.harness.ctc_script import GREEN_YARD_TO_DORMONT, ScriptedCtc
 from common.harness.edges import SystemEdges
 from common.harness.modules import (
     CTC_OFFICE,
@@ -62,6 +63,10 @@ EXIT_FAILED = 1
 STARTUP_LIMIT_S = 60.0
 MILLISECONDS_PER_SECOND = 1000
 PERCENT = 100
+
+# Where the CTC Office sends the measured train, standing in for the
+# dispatcher: far enough that it runs for the whole measurement.
+DISPATCH = "G1:Green:73"
 
 # Kp and Ki the Train Controller sets on the measured train, standing
 # in for the engineer (D024).
@@ -165,12 +170,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             for name, values in stub_options.items()
             if name not in WIRED_MODULES
         }
+        module_options[CTC_OFFICE] = [
+            "--run-on-ready", "--dispatch", DISPATCH,
+        ]
+        if options.speed != 1:
+            module_options[CTC_OFFICE] += ["--speedup-at-tick", "0"]
         module_options[TRACK_CONTROLLER_SW] = ["--load-starters"]
         module_options[TRAIN_CONTROLLER_SW] = [
             "--engineer-gains", *ENGINEER_GAINS
         ]
         specs = system_specs(module_options)
-        edges = SystemEdges(ScriptedCtc(GREEN_YARD_TO_DORMONT))
+        edges = SystemEdges()
     else:
         specs = stub_specs(stub_options)
         edges = None

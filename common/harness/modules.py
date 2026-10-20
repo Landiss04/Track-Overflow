@@ -14,8 +14,8 @@ modules whose outputs become its inputs.
 ``WIRED_MODULES`` are the modules wired in so far, which run as
 themselves; every other module runs as a stub
 (``common.harness.stub_module``). Phase 1 wired in the Train Model and
-the Train Controller SW, Phase 2 the Track Model, and Phase 3 the Track
-Controller SW.
+the Train Controller SW, Phase 2 the Track Model, Phase 3 the Track
+Controller SW, and Phase 4 the CTC Office.
 """
 
 from __future__ import annotations
@@ -64,8 +64,9 @@ MODULE_NAMES = (
     TRAIN_CONTROLLER_HW,
 )
 
-#: The modules wired in so far (Phase 3); the rest are stubs.
+#: The modules wired in so far (Phase 4); the rest are stubs.
 WIRED_MODULES = frozenset({
+    CTC_OFFICE,
     TRACK_CONTROLLER_SW,
     TRACK_MODEL,
     TRAIN_MODEL,

@@ -63,6 +63,12 @@ Office's ``track_controller`` input, from every wayside's report::
 A failed block reaches the CTC Office as occupied, with nothing else
 said of it (R69). The signal aspects and the report's time stop here:
 the CTC Office has no field for them.
+
+The CTC Office has one ``track_controller`` input for both lines.
+``merge_ctc_inputs`` joins the reports of each Track Controller, the SW
+variant's for the Green Line and, from Phase 5, the HW variant's for the
+Red (R77), list by list. Each names its blocks, switches, crossings and
+waysides by line, so nothing is lost or doubled.
 """
 
 from __future__ import annotations
@@ -70,6 +76,7 @@ from __future__ import annotations
 __all__ = [
     "ctc_to_track_controller",
     "line_ready",
+    "merge_ctc_inputs",
     "track_controller_to_ctc",
     "track_controller_to_track_model",
     "track_model_to_track_controller",
@@ -287,6 +294,28 @@ def track_controller_to_ctc(outputs: Mapping[str, Any]) -> dict[str, Any]:
         "crossings": crossings,
         "waysides": waysides,
     }
+
+
+def merge_ctc_inputs(
+    reports: Iterable[Mapping[str, Any]],
+) -> dict[str, list[Any]]:
+    """Join Track Controllers' reports into the CTC Office's one input.
+
+    Args:
+        reports: Each Track Controller's ``track_controller_to_ctc``.
+
+    Returns:
+        The CTC Office's ``track_controller`` input: every report's
+        occupancy, switches, crossings and waysides, in report order.
+        Empty lists when there is no report.
+    """
+    merged: dict[str, list[Any]] = {
+        "occupancy": [], "switches": [], "crossings": [], "waysides": [],
+    }
+    for report in reports:
+        for field, values in merged.items():
+            values.extend(report[field])
+    return merged
 
 
 def line_ready(waysides: Iterable[Mapping[str, Any]], line: str) -> bool:

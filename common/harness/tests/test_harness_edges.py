@@ -1,4 +1,4 @@
-"""Tests for the harness's edges, roster, switch places and CTC stand-in.
+"""Tests for the harness's edges, roster and switch places.
 
 No process runs here: the edges are pure functions and plain objects,
 fed the JSON forms the modules send. The switch places are checked
@@ -22,13 +22,6 @@ for _folder in (_REPO, _REPO / "TrackModel", _REPO / "TrackCtrlSW"):
     if str(_folder) not in sys.path:
         sys.path.insert(0, str(_folder))
 
-from common.harness.ctc_script import (  # noqa: E402
-    GREEN_YARD_TO_DORMONT,
-    STOP_HOLD_S,
-    CtcRoute,
-    RouteBlock,
-    ScriptedCtc,
-)
 from common.harness.edges import SystemEdges  # noqa: E402
 from common.harness.modules import (  # noqa: E402
     CTC_OFFICE,
@@ -48,7 +41,9 @@ from common.harness.track_devices import (  # noqa: E402
 )
 from common.harness.track_edges import (  # noqa: E402
     BlockNames,
+    TicketSales,
     placement_report,
+    track_model_to_ctc,
     track_model_to_train_model,
     train_model_to_track_model,
 )
@@ -61,6 +56,7 @@ from common.harness.train_edges import (  # noqa: E402
 from common.harness.wayside_edges import (  # noqa: E402
     ctc_to_track_controller,
     line_ready,
+    merge_ctc_inputs,
     track_controller_to_ctc,
     track_controller_to_track_model,
     track_model_to_track_controller,
@@ -286,6 +282,7 @@ def track_model_outputs(
             "crossing_states": {},
             "signal_states": {},
         },
+        "ctc": {"tickets_sold_now": {}},
         "train_feeds": feeds or {},
         "signal_seen": seen or {},
     }
@@ -425,25 +422,6 @@ def wayside_outputs(
                 }}
                 for number in ("62", "63", "64", "65", "66")
             ],
-        }],
-    }
-
-
-def ctc_inputs(
-    occupied: tuple[str, ...] = (), ready: bool = True
-) -> dict[str, Any]:
-    """What the CTC Office reads from the Track Controller: Green 60-74."""
-    return {
-        "occupancy": [
-            {"line": "Green", "block_id": str(number),
-             "occupied": str(number) in occupied}
-            for number in range(60, 75)
-        ],
-        "switches": [],
-        "crossings": [],
-        "waysides": [{
-            "wayside_id": "GTC-03", "line": "Green", "ready": ready,
-            "reason": "" if ready else "no PLC program",
         }],
     }
 
@@ -668,6 +646,60 @@ class WaysideEdgesTest(unittest.TestCase):
         ))
 
 
+class CtcEdgesTest(unittest.TestCase):
+    """Into the CTC Office: every Track Controller, and ticket sales."""
+
+    def test_reports_of_both_track_controllers_are_joined(self) -> None:
+        green = track_controller_to_ctc(wayside_outputs(occupied=("64",)))
+        red = {
+            "occupancy": [{"line": "Red", "block_id": "9",
+                           "occupied": True}],
+            "switches": [],
+            "crossings": [{"line": "Red", "crossing_id": "11",
+                           "state": "inactive"}],
+            "waysides": [{"wayside_id": "RTC-01", "line": "Red",
+                          "ready": False, "reason": "no PLC program"}],
+        }
+        merged = merge_ctc_inputs([green, red])
+        for field in ("occupancy", "switches", "crossings", "waysides"):
+            self.assertEqual(merged[field], green[field] + red[field])
+        self.assertTrue(line_ready(merged["waysides"], "Green"))
+        self.assertFalse(line_ready(merged["waysides"], "Red"))
+        self.assertEqual(merge_ctc_inputs([]), {
+            "occupancy": [], "switches": [], "crossings": [],
+            "waysides": [],
+        })
+
+    def test_ticket_sales_leave_out_stations_that_sold_none(self) -> None:
+        self.assertEqual(
+            track_model_to_ctc({"ctc": {"tickets_sold_now": {
+                "GLENBURY": 0, "DORMONT": 4,
+            }}}),
+            {"ticket_sales": {"DORMONT": 4}},
+        )
+        for bad in (-1, 1.5, True, "2"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                track_model_to_ctc(
+                    {"ctc": {"tickets_sold_now": {"DORMONT": bad}}}
+                )
+        with self.assertRaises(KeyError):
+            track_model_to_ctc({})
+
+    def test_unsent_sales_wait_and_add_up(self) -> None:
+        sales = TicketSales()
+        sales.add({"ctc": {"tickets_sold_now": {"DORMONT": 1}}})
+        self.assertEqual(sales.send(), {"DORMONT": 1})
+        # More sold while the CTC Office steps: they wait their turn.
+        sales.add({"ctc": {"tickets_sold_now": {"DORMONT": 2}}})
+        sales.delivered(True)
+        self.assertEqual(sales.pending, {"DORMONT": 2})
+        self.assertEqual(sales.send(), {"DORMONT": 2})
+        sales.delivered(False)
+        self.assertEqual(sales.send(), {"DORMONT": 2})
+        sales.delivered(True)
+        self.assertEqual(sales.send(), {})
+
+
 class EdgeContractTest(unittest.TestCase):
     """What each edge makes, each module's own decoder accepts."""
 
@@ -730,144 +762,41 @@ class EdgeContractTest(unittest.TestCase):
         self.assertEqual(inputs.track_controller.crossings[0].state,
                          "active")
 
+    def test_the_ctc_office_takes_the_track_models_sales(self) -> None:
+        # Every station the Track Model sells at is one the CTC Office
+        # knows: it refuses any other (R52), and no Blue Line station
+        # reaches it (R67).
+        from track_model.interface import TrackConfig
+        from track_model.model import TrackModel
+        from track_model.module_process import layout_paths
+        from track_model.wire import decode_inputs, encode_outputs
 
-class ScriptedCtcTest(unittest.TestCase):
-    """Released once ready; authority to each stop, the next preloaded."""
-
-    def setUp(self) -> None:
-        self.ctc = ScriptedCtc(CtcRoute("G1", "Green", (
-            RouteBlock("63", 10),
-            RouteBlock("64", 10),
-            RouteBlock("65", 10, hold_s=30.0),
-            RouteBlock("66", 8),
-            RouteBlock("67", 8),
+        sys.path.insert(0, str(_REPO / "CTC-Office"))
+        try:
+            from ctc.model import StubCtcOffice
+            from ctc.wire import inputs_from_wire
+        finally:
+            sys.path.remove(str(_REPO / "CTC-Office"))
+        model = TrackModel(TrackConfig(layout_paths(),
+                                       ticket_probability=1.0))
+        outputs = encode_outputs(model.step(DT_S, decode_inputs(
+            {"controller": {}, "trains": {}}, SIM_TIME_S
         )))
-
-    def step(
-        self, occupied: tuple[str, ...] = (), at_s: float = 0.0
-    ) -> dict[str, Any]:
-        """The stand-in's outputs for one tick."""
-        return self.ctc.step(SIM_TIME_S + at_s, ctc_inputs(occupied))
-
-    def values(
-        self, *occupied: str, at_s: float = 0.0
-    ) -> dict[str, tuple[int, int]]:
-        """Each suggested block's speed and authority."""
-        sent = self.step(occupied, at_s)["track_controller"]["suggestions"]
-        for each in sent:
-            self.assertEqual((each["train_id"], each["line"]),
-                             ("G1", "Green"))
-        return {
-            each["block_id"]: (each["suggested_speed_mps"],
-                               each["authority_blocks"])
-            for each in sent
-        }
-
-    def release(self) -> None:
-        """Release G1 onto a clear yard exit block."""
-        self.assertEqual(self.step()["new_trains"],
-                         [{"train_id": "G1", "line": "Green"}])
-
-    def test_nothing_until_the_line_is_ready(self) -> None:
-        for inputs in ({}, ctc_inputs(ready=False)):
-            out = self.ctc.step(SIM_TIME_S, inputs)
-            self.assertEqual(out["new_trains"], [])
-            self.assertEqual(out["track_controller"], {
-                "suggestions": [], "closed_blocks": [],
-                "switch_commands": [],
-            })
-        self.assertFalse(self.ctc.released)
-
-    def test_released_once_when_the_exit_block_is_clear(self) -> None:
-        self.assertEqual(self.step(("63",))["new_trains"], [])
-        self.release()
-        self.assertTrue(self.ctc.released)
-        self.assertEqual(self.step()["new_trains"], [])
-
-    def test_authority_counts_down_to_the_stop(self) -> None:
-        self.release()
-        self.assertEqual(self.values("63"), {"63": (10, 2), "64": (10, 1)})
-        self.assertEqual(self.values("64"), {"64": (10, 1), "65": (0, 0)})
-        self.assertEqual(self.values("65"), {"65": (0, 0)})
-
-    def test_the_stop_holds_then_releases_to_the_destination(self) -> None:
-        self.release()
-        self.values("63")
-        self.values("64")
-        self.assertEqual(self.values("65", at_s=0.0), {"65": (0, 0)})
-        self.assertEqual(self.values("65", at_s=29.9), {"65": (0, 0)})
-        self.assertEqual(
-            self.values("65", at_s=30.0), {"65": (10, 2), "66": (8, 1)}
-        )
-        self.assertEqual(
-            self.values("66", at_s=40.0), {"66": (8, 1), "67": (0, 0)}
-        )
-        self.assertEqual(self.values("67", at_s=50.0), {"67": (0, 0)})
-
-    def test_authority_stops_short_of_an_occupied_block(self) -> None:
-        # A failed block reads occupied (R33): it is not taken for the
-        # train, and the train's authority stops before it.
-        self.release()
-        self.values("63")
-        self.assertEqual(self.values("63", "65"), {"63": (10, 1),
-                                                   "64": (0, 0)})
-        self.assertEqual(self.values("64", "65"), {"64": (0, 0)})
-        self.assertEqual(self.values("64"), {"64": (10, 1), "65": (0, 0)})
-
-    def test_nothing_suggested_until_the_train_is_seen(self) -> None:
-        self.release()
-        self.assertEqual(self.values(), {})
-        self.assertEqual(self.values("12"), {})
-
-    def test_bad_routes_are_refused(self) -> None:
-        with self.assertRaises(ValueError):
-            ScriptedCtc(CtcRoute("G1", "Green", ()))
-        with self.assertRaises(ValueError):
-            ScriptedCtc(CtcRoute(
-                "G1", "Green", (RouteBlock("63", 1), RouteBlock("63", 1))
-            ))
-
-    def test_default_route_never_drops_two_blocks_of_authority_at_once(
-        self,
-    ) -> None:
-        # The Train Controller reads a fall from 2 or more blocks
-        # straight to none as a signal pickup failure.
-        ctc = ScriptedCtc(GREEN_YARD_TO_DORMONT)
-        ctc.step(SIM_TIME_S, ctc_inputs())
-        last: int | None = None
-        for at_s, block in enumerate(GREEN_YARD_TO_DORMONT.blocks):
-            # One block a second, past the stop's hold where it is.
-            time_s = at_s + (STOP_HOLD_S if at_s > 2 else 0.0)
-            sent = ctc.step(
-                SIM_TIME_S + time_s, ctc_inputs((block.block_id,))
-            )["track_controller"]["suggestions"]
-            authority = next(
-                each["authority_blocks"] for each in sent
-                if each["block_id"] == block.block_id
-            )
-            if last is not None and authority == 0:
-                self.assertLess(last, 2)
-            last = authority
-        self.assertEqual(last, 0)
-
-    def test_default_speeds_are_whole_and_within_each_limit(self) -> None:
-        # R38, arbitration/suggested-speed-under-block-limit.
-        with open(layout_dir() / LAYOUT_FILES["Green"],
-                  encoding="utf-8") as handle:
-            limits = {
-                str(row["block_number"]): row["speed_limit_kmh"] / 3.6
-                for row in json.load(handle)["blocks"]
-            }
-        for block in GREEN_YARD_TO_DORMONT.blocks:
-            self.assertIsInstance(block.speed_mps, int)
-            self.assertLessEqual(block.speed_mps, limits[block.block_id])
+        sales = TicketSales()
+        sales.add(json.loads(json.dumps(outputs)))
+        sold = sales.send()
+        self.assertGreater(len(sold), 10)
+        inputs = inputs_from_wire(json.loads(json.dumps({
+            "track_model": {"ticket_sales": sold},
+        })))
+        StubCtcOffice().validate_inputs(inputs)
 
 
 class SystemEdgesTest(unittest.TestCase):
     """Real edges for the wired modules, stub edges for the rest."""
 
     def setUp(self) -> None:
-        self.edges = SystemEdges(ScriptedCtc(GREEN_YARD_TO_DORMONT))
+        self.edges = SystemEdges()
         self.tick = 1
         self.events = self.complete({
             CTC_OFFICE: {"new_trains": [
@@ -946,47 +875,91 @@ class SystemEdgesTest(unittest.TestCase):
         self.assertEqual(inputs["track_model"]["occupied_blocks"],
                          [_green("64")])
 
-    def test_the_stand_in_waits_for_the_waysides_then_suggests(
-        self,
-    ) -> None:
-        # Fresh edges: no release from the CTC Office's stub. The
-        # stand-in steps on the Track Controller's outputs of the tick
-        # before, so each answer comes a tick after what it answers.
-        edges = SystemEdges(ScriptedCtc(GREEN_YARD_TO_DORMONT))
+    def test_readiness_is_logged_as_it_changes(self) -> None:
+        edges = SystemEdges()
 
         def complete(tick: int, fresh: dict[str, Any]) -> list[Any]:
             return edges.tick_completed(tick, SIM_TIME_S + tick * DT_S,
                                         fresh)
 
-        self.assertEqual(complete(1, {
-            TRACK_MODEL: track_model_outputs(),
-            TRACK_CONTROLLER_SW: wayside_outputs(ready=False),
-        }), [])
+        self.assertEqual(complete(1, {TRACK_MODEL: track_model_outputs()}),
+                         [])
         self.assertEqual(
-            complete(2, {TRACK_CONTROLLER_SW: wayside_outputs()}),
+            complete(2, {TRACK_CONTROLLER_SW: wayside_outputs(
+                ready=False)}),
             [(TRACK_CONTROLLER_SW, "WAYSIDES_NOT_READY",
               "Green: GTC-03: no PLC program")],
         )
         self.assertEqual(
             complete(3, {TRACK_CONTROLLER_SW: wayside_outputs(
-                occupied=("63",))}),
-            [(TRACK_CONTROLLER_SW, "WAYSIDES_READY", "Green"),
-             ("harness", "TRAIN_ADDED", "G1 on Green")],
-        )
-        self.assertEqual(
-            edges.inputs_for(TRACK_CONTROLLER_SW, 4, SIM_TIME_S, {})[
-                "ctc"]["suggestions"],
+                ready=False)}),
             [],
         )
-        self.assertEqual(complete(4, {}), [])
         self.assertEqual(
-            edges.inputs_for(TRACK_CONTROLLER_SW, 5, SIM_TIME_S, {})[
-                "ctc"]["suggestions"],
-            [{"block": _green("63"),
-              "value": {"speed_mps": 12, "authority_blocks": 2}},
-             {"block": _green("64"),
-              "value": {"speed_mps": 12, "authority_blocks": 1}}],
+            complete(4, {TRACK_CONTROLLER_SW: wayside_outputs()}),
+            [(TRACK_CONTROLLER_SW, "WAYSIDES_READY", "Green")],
         )
+
+    def test_the_ctc_office_takes_the_track_controllers_reports(
+        self,
+    ) -> None:
+        self.assertEqual(self.inputs(CTC_OFFICE, {}), {
+            "track_controller": {"occupancy": [], "switches": [],
+                                 "crossings": [], "waysides": []},
+            "track_model": {"ticket_sales": {}},
+        })
+        sent = wayside_outputs(occupied=("64",))
+        inputs = self.inputs(CTC_OFFICE, {
+            TRACK_CONTROLLER_SW: sent,
+            # A stub's outputs carry no reports, and are left out.
+            "track-controller-hw": {"tick": 1},
+        })
+        self.assertEqual(inputs["track_controller"],
+                         track_controller_to_ctc(sent))
+
+    def test_the_track_controller_takes_the_ctc_offices_suggestions(
+        self,
+    ) -> None:
+        inputs = self.inputs(TRACK_CONTROLLER_SW, {CTC_OFFICE: {
+            "track_controller": {
+                "suggestions": [suggestion("63", 12, 2),
+                                suggestion("64", 12, 1)],
+                "closed_blocks": [],
+                "switch_commands": [],
+            },
+            "clock_paused": False,
+            "clock_speedup": True,
+            "new_trains": [],
+            "retired_trains": [],
+        }})
+        self.assertEqual(inputs["ctc"]["suggestions"], [
+            {"block": _green("63"),
+             "value": {"speed_mps": 12, "authority_blocks": 2}},
+            {"block": _green("64"),
+             "value": {"speed_mps": 12, "authority_blocks": 1}},
+        ])
+
+    def test_each_ticket_sale_reaches_the_ctc_office_once(self) -> None:
+        def sold(**sales: int) -> dict[str, Any]:
+            return {**track_model_outputs(),
+                    "ctc": {"tickets_sold_now": sales}}
+
+        def sent() -> dict[str, int]:
+            return self.inputs(CTC_OFFICE, {})["track_model"][
+                "ticket_sales"]
+
+        self.complete({TRACK_MODEL: sold(GLENBURY=2, DORMONT=0)})
+        self.assertEqual(sent(), {"GLENBURY": 2})
+        # The CTC Office stepped on them: gone.
+        self.complete({CTC_OFFICE: {}, TRACK_MODEL: sold(DORMONT=1)})
+        self.assertEqual(sent(), {"DORMONT": 1})
+        # It refused that tick: sent again, with the next tick's.
+        self.complete({TRACK_MODEL: sold(DORMONT=2, GLENBURY=1)})
+        self.assertEqual(sent(), {"DORMONT": 3, "GLENBURY": 1})
+        # A Track Model that misses a tick sells nothing on it, and
+        # its last outputs are never counted twice.
+        self.complete({CTC_OFFICE: {}})
+        self.assertEqual(sent(), {})
 
     def test_train_model_takes_a_train_once_fed(self) -> None:
         self.assertEqual(self.inputs(TRAIN_MODEL, {})["trains"], {})
