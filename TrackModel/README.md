@@ -140,9 +140,15 @@ through the Track Controller.
   the block's switch where it is, shows its light RED, drops its
   crossing gates, and stops its section's heaters. Commands sent during
   a power failure are kept and take effect when power returns.
-- **Commands persist:** a key absent from a tick's commands keeps its last
-  value. Devices start safe: switches NORMAL, gates up, lights RED,
-  heaters off.
+- **Commanded speed and authority last one tick** (truth
+  `signals/track-signal.md`). Each tick's values replace the last: a
+  block not commanded on the latest tick reads zero, so a value is
+  delivered on the tick it is commanded and is gone the tick after.
+  The Track Controller sends them again on every tick. Commanded speed
+  is a float in m/s; authority is a whole count of blocks.
+- **Device commands persist:** a switch, crossing, signal or heater key
+  absent from a tick's commands keeps its last value. Devices start
+  safe: switches NORMAL, gates up, lights RED, heaters off.
 - **Invalid input is rejected whole**, before any state changes.
 - **The window shows each block's track circuit** (commanded speed in mph
   and authority in blocks): the **Cmd mph** and **Auth** columns, and the
@@ -150,7 +156,8 @@ through the Track Controller.
 - **Ambient temperature is set in the Track Model window** (Conditions,
   in °F). Once set it replaces the temperature the test UI sends, until
   the module restarts (Reset module or Load track…). Until then the test
-  UI's `ambient` row applies.
+  UI's `ambient` row applies. The input is optional: the central harness
+  sends none, so there the window is the only source.
 - **Load track…** (Track Model window) loads a layout JSON. The file
   replaces the loaded line of the same name, or adds a new line, and the
   module restarts (no trains, devices at rest). A bad file changes

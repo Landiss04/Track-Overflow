@@ -55,8 +55,10 @@ def test_round_trip_through_every_edge() -> None:
     model.step(DT_S, build_track_model_inputs(commands, at("BLUE A-3", 1.0),
                                               ambient_temp_c=-2.0))
     model.set_block_failure("BLUE A-2", TrackFailure.POWER)
+    # Commanded speed and authority last one tick, so the Track
+    # Controller sends them again on every tick.
     out = model.step(DT_S, build_track_model_inputs(
-        WaysideCommands(), at("BLUE A-3", FAR_M), ambient_temp_c=-2.0))
+        commands, at("BLUE A-3", FAR_M), ambient_temp_c=-2.0))
 
     readback = track_model_to_track_controller(out)
     assert readback.block_occupancy["BLUE A-4"]

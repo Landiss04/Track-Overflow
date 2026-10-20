@@ -94,16 +94,20 @@ the input by hand.
 
 | Field | Meaning |
 |---|---|
-| `commanded_speed_mps` | Whole m/s (`int`), per block. |
+| `commanded_speed_mps` | m/s (a float), per block. |
 | `authority_blocks` | Blocks the train may still enter past its own; 0 = stop (D013). |
 | `switch_positions` | Keyed by the switch's point block. |
 | `crossing_gates_closed` | Keyed by the crossing's block. |
 | `signal_aspects` | Keyed by the block the light stands on. |
 | `heaters_on` | Keyed by section. |
 
-A key you leave out **keeps its last value**. Devices start safe: switches
-NORMAL, gates up, lights RED, heaters off. So send only what changed, or
-resend everything; both work.
+Commanded speed and authority **last one tick** (truth
+`signals/track-signal.md`): a block not commanded on the latest tick reads
+zero, so the Track Model delivers each value once and then clears it.
+Send them for every block that needs them, on every tick. For the device
+commands, a key you leave out **keeps its last value**. Devices start
+safe: switches NORMAL, gates up, lights RED, heaters off. So for those,
+send only what changed, or resend everything; both work.
 
 Speed and authority are **per block**, not per train: the Track
 Controller knows which blocks are occupied, not which train is in them.
@@ -125,10 +129,10 @@ from the map to mean "no report this tick"; send its last report.
 
 **Ambient temperature** (°C) is set by a person in the Track Model
 window (Conditions, in °F). That value is the source and replaces whatever
-the harness sends until the module is reset (**Reset module** or **Load
-track…**). `ambient_temp_c` is still a required input, so the harness
-passes a fixed default (the example uses 15 °C) that applies only until
-someone sets it in the window. After a reset the default applies again.
+a sender gives until the module is reset (**Reset module** or **Load
+track…**). `ambient_temp_c` is optional: `None` leaves the temperature as
+it is, and the central harness sends none. A sender that gives one, such
+as the test UI, sets it until someone sets it in the window.
 
 ### 3.2 Out of the Track Model
 
@@ -362,4 +366,4 @@ Track Model owner's reading as of this branch; none is a decision.
 | Authority as block count | all | D013 is on `truth`; the module's boundary types follow it. |
 | Offset restarts at 0 per block | Train Model | Holds in the Train Model's code but is not recorded in `truth`. |
 | Clock speed command | CTC Office | `clock-speedup` is a boolean to the harness. The harness maps it to `SystemClock.set_speed(1 or 10)`. |
-| Ambient temperature source | Track Model owner | Set in the Track Model window; the harness passes a default until then. |
+| Ambient temperature source | Track Model owner | Set in the Track Model window; the harness sends none. |

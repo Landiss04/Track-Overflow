@@ -120,8 +120,9 @@ Defined in `track_model/interface.py`. Every value is in backend units
 **In (`TrackModelInputs`), every tick:**
 
 - `controller` (`TrackControllerCommands`), keyed by block unless noted:
-  - commanded speed (whole m/s) and authority (a whole count of blocks,
-    0 = stop), per block;
+  - commanded speed (m/s, a float) and authority (a whole count of
+    blocks, 0 = stop), per block, for this tick only: a block not
+    commanded on a tick reads zero;
   - switch positions, signal colours and crossing gates, each keyed by
     the block the device is on;
   - heaters on/off, keyed by section (`"GREEN B"`).
@@ -129,7 +130,8 @@ Defined in `track_model/interface.py`. Every value is in backend units
   entering the block (the Train Model restarts it at 0 in each block),
   speed, a block-changed flag, passenger capacity and whether a door is
   open. Block `""` means the train isn't on the track yet.
-- `ambient_temp_c`.
+- `ambient_temp_c` (optional): the window's value wins once set; none
+  leaves the temperature as it is.
 - `sim_time_s` (optional): the central clock's time, for the window's
   time of day only. Behaviour never depends on it.
 
