@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/brakes-apply-together.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-17, on whether one brake supersedes the other: "nothing should prevent both from being applied simultaneously".
-
----
-
 # brakes-apply-together
 
 **Status:** current

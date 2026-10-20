@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3 (REQ-INTF-012), §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `.gitattributes`; delivery as a prebuilt binary asserted by Kevin 2026-09-29; branch model per D003; `next_blocks` from `20572b1` (SeeingEyeTree, PR #24), adopted as the direction-of-travel format by Landis 2026-10-07
+**Provenance:** `documents/srs-filled.md` §2.4, §3.1.3 (REQ-INTF-012), §3.5.1–3.5.6 (development, `c058082`); `documents/Coding Standards (Group).docx` §1.1, §2.1; `documents/PYTHON_STYLE_GUIDE.md` §1; `.gitattributes`; delivery as a prebuilt binary asserted by Kevin 2026-09-29; branch model per D003; `next_blocks` from `20572b1` (SeeingEyeTree, PR #24), adopted as the direction-of-travel format by Landis 2026-10-07; the executable's harness and module modes proposed in `documents/system-integration-design.md` and accepted by Kevin Schillinger 2026-10-20; the event logger kept, as one CSV file written by the harness, asserted by Kevin Schillinger 2026-10-20
 **Aliases:** File and path conventions, file layout, paths, repo layout, project structure
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-20
 
 ## Paths
 
@@ -35,6 +35,9 @@
 - Python, PySide6, and PyInstaller minimum versions are in [toolchain.md](toolchain.md).
 - The whole system is submittable as one runnable executable; each subsystem is also
   independently installable.
+- The executable starts the central harness when run without arguments, and one module
+  when run with `--module <name>`. The harness starts each module by running the same
+  executable again with that flag.
 - No external services or network connections are required at runtime.
 
 ## Module boundaries
@@ -43,6 +46,8 @@
   module's internal state.
 - Shared utilities — the simulation clock and the event logger — are standalone
   modules usable by any part of the system.
+- The event log is one CSV file, written by the central harness, which sees every
+  message between modules (REQ-NFR-008, REQ-INTF-015).
 - All components share a single simulation clock supporting real-time and
   fast-forward operation.
 

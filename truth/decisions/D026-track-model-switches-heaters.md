@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D026-track-model-switches-heaters.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** the Track Controller answers relayed by Kevin Schillinger 2026-10-20, on who switches the track heaters: "track model switches automatically". ID D026 because D019 to D025 are taken by pending proposals.
-
----
-
 # D026-track-model-switches-heaters
 
 **Status:** current

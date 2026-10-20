@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin Schillinger
-**Provenance:** ownership asserted by Kevin Schillinger 2026-09-30; `Train_Model_Backend_Design.pdf` §1, §5.1 to §5.95 (Locked) and Constants table; Train Model `interface.py` boundary contract as amended by Kevin 2026-09-30; separate Train Model and test UI processes asserted by Kevin Schillinger 2026-10-01 (D010); brake failure blocking only the service brake, brake forces of 61,720 N and 140,413 N from a 51,433 kg reference load, and maximum speed not enforced by the Train Model, clarified by the course instructor and relayed by Kevin Schillinger 2026-10-02; reference mass of 51,433 kg as 2/3 of the datasheet load (empty 40.9 t, loaded 56.7 t at 4 pass./m²), used for traction as well as braking, asserted by Kevin Schillinger 2026-10-02; failure status no longer sent to the Train Controller, asserted by Kevin Schillinger 2026-10-05; the current Train Model UI and test UI superseding the wireframes, asserted by Kevin Schillinger 2026-10-05; failure injection from the Train Model UI only, the test UI's failure controls removed as redundant, asserted by Kevin Schillinger 2026-10-05; traction while rolling back, the Power command readout, and rejecting track inputs with no physical meaning, asserted by Kevin Schillinger 2026-10-06; rejecting a negative boarding count, asserted by Kevin Schillinger 2026-10-06; one disembark draw per stop, and counts bounded to 2³¹ − 1, asserted by Kevin Schillinger 2026-10-06; a 60 s ceiling on dt and on/off inputs that must be booleans, accepted by Kevin Schillinger 2026-10-06; the door interlock not the Train Model's, pending the course instructor, the announcement popup and the red active-failure button, a Train Model exception to the style guide, asserted by Kevin Schillinger 2026-10-06
+**Provenance:** ownership asserted by Kevin Schillinger 2026-09-30; `Train_Model_Backend_Design.pdf` §1, §5.1 to §5.95 (Locked) and Constants table; Train Model `interface.py` boundary contract as amended by Kevin 2026-09-30; separate Train Model and test UI processes asserted by Kevin Schillinger 2026-10-01 (D010); brake failure blocking only the service brake, brake forces of 61,720 N and 140,413 N from a 51,433 kg reference load, and maximum speed not enforced by the Train Model, clarified by the course instructor and relayed by Kevin Schillinger 2026-10-02; reference mass of 51,433 kg as 2/3 of the datasheet load (empty 40.9 t, loaded 56.7 t at 4 pass./m²), used for traction as well as braking, asserted by Kevin Schillinger 2026-10-02; failure status no longer sent to the Train Controller, asserted by Kevin Schillinger 2026-10-05; the current Train Model UI and test UI superseding the wireframes, asserted by Kevin Schillinger 2026-10-05; failure injection from the Train Model UI only, the test UI's failure controls removed as redundant, asserted by Kevin Schillinger 2026-10-05; traction while rolling back, the Power command readout, and rejecting track inputs with no physical meaning, asserted by Kevin Schillinger 2026-10-06; rejecting a negative boarding count, asserted by Kevin Schillinger 2026-10-06; one disembark draw per stop, and counts bounded to 2³¹ − 1, asserted by Kevin Schillinger 2026-10-06; a 60 s ceiling on dt and on/off inputs that must be booleans, accepted by Kevin Schillinger 2026-10-06; the door interlock not the Train Model's, pending the course instructor, the announcement popup and the red active-failure button, a Train Model exception to the style guide, asserted by Kevin Schillinger 2026-10-06; per-train rejection in a fleet proposed in the design doc's per-module questions and accepted by Kevin Schillinger 2026-10-20 ("good"), and the passenger-brake-release command ("add"), 2026-10-20
 **Aliases:** Train Model, train model module
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-20
 
 ## Purpose
 
@@ -54,7 +54,7 @@ The last two are UI actions, not cross-module inputs.
 
 - From the Train Controller: `power-command`, `service-brake-command`,
   `emergency-brake-command`, `light-command`, `door-command`, `temperature-setpoint`,
-  and `announcement`.
+  `announcement`, and `passenger-brake-release`.
 - From the Track Model: `track-info` (every tick), `track-signal`, `beacon`, and
   `passengers-boarded`.
 - A step is rejected, before any state changes, if its grade is not strictly between
@@ -65,6 +65,8 @@ The last two are UI actions, not cross-module inputs.
   largest count the UIs carry.
 - A step is also rejected if dt exceeds 60 s, or if an on/off input (the brake, light
   and door commands, polarity, or the beacon's underground flag) is not a boolean.
+- With several trains, a rejected step affects only the train whose input was invalid.
+  The other trains step, and the rejection names that train.
 
 ## Enforced parameters
 

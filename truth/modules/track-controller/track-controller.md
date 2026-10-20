@@ -4,21 +4,21 @@
 conform to.*
 
 **Status:** placeholder
-**Owner:** unassigned
-**Provenance:** none — this shard asserts no facts yet
+**Owner:** Harry Tye
+**Provenance:** owner only, relayed by Kevin Schillinger 2026-10-20 from the Track Controller answers; the shard asserts no other fact yet
 **Aliases:** Wayside Controller
 **Variants:** `truth/modules/track-controller/track-controller-sw.md`, `truth/modules/track-controller/track-controller-hw.md`
-**Last updated:** 2026-09-29
+**Last updated:** 2026-10-20
 
 > ## ⚠ PLACEHOLDER — NOT TRUTH
 >
-> This shard is a stub. It asserts **nothing**. Every line below is a pointer to a
+> This shard is a stub. It asserts **nothing** except its owner. Every line below is a pointer to a
 > source that has not been read into the truth store yet, not a normative fact.
 > Do not cite this file. Do not treat any value here as decided.
 >
 > An entry without provenance is unverified and must not be treated as truth
-> (`AGENTS.md`, Entry rules). This shard has no provenance by design, until someone
-> populates it.
+> (`AGENTS.md`, Entry rules). Apart from its owner, this shard has no provenance by
+> design, until its owner populates it.
 
 ## Purpose
 

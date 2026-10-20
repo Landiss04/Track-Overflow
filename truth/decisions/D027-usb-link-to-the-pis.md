@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D027-usb-link-to-the-pis.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** chosen by Claude at Kevin Schillinger's request, 2026-10-20: "choose whatever usb protocol makes the most sense given that this will fucntion on a strangers windows machine as an exe". The link is USB serial in the standard communications class, because Windows 10 and later drive it with their own built-in driver, so a strange machine needs no driver install, no network and no administrator rights; Qt's serial-port module, part of PySide6, reaches it from the built executable. ID D027 because D019 to D026 are taken by pending proposals.
-
----
-
 # D027-usb-link-to-the-pis
 
 **Status:** current

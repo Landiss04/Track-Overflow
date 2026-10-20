@@ -2,15 +2,15 @@
 
 **Status:** current
 **Owner:** Track Model
-**Provenance:** `Train_Model_Backend_Design.pdf` §1 and §5.3 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; grade unit per `conventions/units.md` as resolved by Kevin 2026-09-30
+**Provenance:** `Train_Model_Backend_Design.pdf` §1 and §5.3 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; grade unit per `conventions/units.md` as resolved by Kevin 2026-09-30; station name as a sixth field asserted by Kevin Schillinger 2026-10-16
 **Aliases:** Track Info, block info, terrain info
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-16
 
 ## Definition
 
 Terrain data for the block the train occupies, sent from the Track Model to the Train
-Model on every tick. It has five fields: grade (deg), elevation (m), speed limit (m/s),
-block polarity (`bool`), and block ID.
+Model on every tick. It has six fields: grade (deg), elevation (m), speed limit (m/s),
+block polarity (`bool`), block ID, and station name.
 
 ## Notes
 
@@ -27,3 +27,9 @@ block polarity (`bool`), and block ID.
   `conventions/identifiers.md`.
 - The source lists carrying grade in Track Info rather than the Beacon as needing the
   Track Model's agreement. The Track Model owner has not confirmed any of this entry.
+- Open: the station name's value for a block with no station is not stated.
+
+## Supersedes
+
+- Fields: previously five, without the station name; now six (Kevin Schillinger
+  2026-10-16).

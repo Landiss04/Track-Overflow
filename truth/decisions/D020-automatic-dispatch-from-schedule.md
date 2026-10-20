@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D020-automatic-dispatch-from-schedule.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4 (re-filed; first proposed by Claude on ctc-deployment)
-**Provenance:** re-filed at the CTC Office's request in the CTC Office's answers of 2026-10-20, relayed by Kevin Schillinger. First proposed as `ctc-deployment/20261014-1937-automatic-dispatch-scheduled-stations-only.md`. Commit `201708b` removed it from the inbox as promoted, but `truth/_promotions.md` has no record of it and `truth` does not hold it. The entry is unchanged. It has the CTC Office hold a train at a station for the dwell, while the proposed D007 has the Train Controller hold it; under both, a train leaves once both have let it go.
-
----
-
 # D020-automatic-dispatch-from-schedule
 
 **Status:** current

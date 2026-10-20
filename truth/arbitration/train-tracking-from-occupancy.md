@@ -1,10 +1,3 @@
-**Target:** truth/arbitration/train-tracking-from-occupancy.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4 (re-filed; first proposed by Claude on ctc-deployment)
-**Provenance:** re-filed at the CTC Office's request in the CTC Office's answers of 2026-10-20, relayed by Kevin Schillinger. First proposed as `ctc-deployment/20261012-2127-train-tracking-from-occupancy-settled.md`. Commit `61f4a28` removed it from the inbox as promoted, but `truth/_promotions.md` has no record of it and `truth` does not hold it. The entry is unchanged except the "Leaving the yard" rule, which now follows the CTC Office's release of trains (D022, proposed alongside), its provenance and its date. Before, the CTC Office inferred which waiting train had left the yard from occupancy.
-
----
-
 # train-tracking-from-occupancy
 
 **Status:** current

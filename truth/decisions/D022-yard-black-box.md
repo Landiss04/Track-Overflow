@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D022-yard-black-box.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** as `20261020-0039-D022-release-and-retire.md` on this branch, which this proposal supersedes (deny that one), plus Kevin Schillinger 2026-10-20, on whether manual trains can be retired: "add return to yard".
-
----
-
 # D022-yard-black-box
 
 **Status:** current

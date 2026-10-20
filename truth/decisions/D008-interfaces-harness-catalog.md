@@ -1,10 +1,10 @@
 # D008-interfaces-harness-catalog
 
-**Status:** current
+**Status:** superseded
 **Owner:** Kevin
-**Provenance:** asserted by Kevin Schillinger 2026-09-30
+**Provenance:** asserted by Kevin Schillinger 2026-09-30; superseded by Kevin Schillinger 2026-10-16
 **Aliases:** common/interfaces.py, interfaces.py, signal catalog, shared interface contracts
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-16
 
 ## Context
 
@@ -17,19 +17,17 @@ harness can use.
 
 ## Decision
 
-`common/interfaces.py` is kept as the system-level signal catalog on the harness side.
-
-- It holds one canonical type per cross-module signal, in backend units per
-  `conventions/units.md`.
-- The central harness maps through it: each edge mapping translates the producer's
-  boundary types into the catalog type and the catalog type into the consumer's.
-- Modules never import it. A module's boundary types stay its own.
+`common/interfaces.py` is stale. It is not treated as true and is no longer the
+system-level signal catalog. Modules never import it.
 
 ## Consequences
 
-- Compatible with the central-harness decision (D005): no module's interface contains
-  another module's struct layouts, including the catalog's.
-- The catalog must agree with truth. When a `signals/` entry or a unit convention
-  changes, the catalog changes with it.
-- A module's boundary types can still change without touching the catalog. Only that
-  module's edge mappings change.
+- The central harness's edge mappings (D005) do not map through
+  `common/interfaces.py`.
+- Open: whether another catalog replaces it is not stated.
+
+## Supersedes
+
+- Previously `common/interfaces.py` was kept as the system-level signal catalog on the
+  harness side, and each edge mapping translated through it (Kevin Schillinger
+  2026-09-30). Superseded because the file is stale (Kevin Schillinger 2026-10-16).

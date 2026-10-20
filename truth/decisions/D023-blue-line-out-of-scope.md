@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D023-blue-line-out-of-scope.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** as `20261017-1433-D023-blue-line-out-of-scope.md` on this branch, which this proposal supersedes (deny that one), plus Kevin Schillinger 2026-10-20: "track model will not load blue line". The CTC Office rejects a station name it does not know, so Blue Line ticket sales must not reach it.
-
----
-
 # D023-blue-line-out-of-scope
 
 **Status:** current

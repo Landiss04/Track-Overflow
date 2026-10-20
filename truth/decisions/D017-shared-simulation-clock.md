@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Landis
-**Provenance:** asserted by Landis 2026-10-01 (generic-clock-config proposal `20261001-1658-shared-simulation-clock.md`), including the 05:00:00 start time and 24-hour display; adoption by every module once integrated asserted by Kevin Schillinger 2026-10-02; speed command per `signals/clock-speedup.md`
+**Provenance:** asserted by Landis 2026-10-01 (generic-clock-config proposal `20261001-1658-shared-simulation-clock.md`), including the 05:00:00 start time and 24-hour display; adoption by every module once integrated asserted by Kevin Schillinger 2026-10-02; speed command per `signals/clock-speedup.md`; direct fan-out of dt and simulation time to every module, and inputs seen only on the rising clock edge, asserted by Kevin Schillinger 2026-10-16; unwrapped simulation time, waiting for every module's reply with a timeout, no reset during a run, and the 0.1 s tick as a recorded deviation, proposed in the design doc's per-module questions and accepted by Kevin Schillinger 2026-10-20
 **Aliases:** system clock, simulation clock, shared clock, SystemClock, sim time, D009-shared-simulation-clock, D012-shared-simulation-clock
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-20
 
 ## Context
 
@@ -26,8 +26,17 @@ who controls it.
   `HH:MM:SS`, hours 00 to 23: 1:05 PM is `13:05:00`.
 - The default tick length is 0.1 s. It is configurable per clock and does not change
   while the clock runs (D006).
-- The central harness (D005) owns the clock and passes simulation time to every
-  module. Modules do not run clocks of their own.
+- The central harness (D005) owns the clock. On every tick it sends both dt and the
+  simulation time directly to every module; no module relays the clock to another.
+  Modules do not run clocks of their own.
+- A module sees its inputs only on the rising edge of the clock.
+- The simulation time sent is unwrapped: `SystemClock.sim_time_s`, which starts at
+  18 000 s (05:00:00) and keeps counting past midnight. Each module works out the time
+  of day from it.
+- The harness waits for every module's reply to a tick before it sends the next one.
+  If a reply takes longer than a set limit, about 1 s, the harness pauses the clock and
+  names the late module.
+- The clock is not reset during a run. Resetting means restarting the system.
 - The CTC Office sets the speed and pauses or resumes the clock, through the harness.
 
 ## Consequences
@@ -37,5 +46,16 @@ who controls it.
 - The CTC Office's speed and pause controls act on the shared clock. They do not
   change any module's time step.
 - Time crosses module boundaries in seconds (`conventions/units.md`).
+- No tick is skipped. When the harness falls behind, simulated time runs slower than
+  real time instead, which is how REQ-NFR-001.2 ("shall not drop any ticks") is met.
+- The 0.1 s tick departs from REQ-NFR-001.1, under which the simulation should advance
+  in 1 ms ticks. This is a recorded deviation.
 - The CTC Office's speed command reaches the clock as the clock-speedup signal
   (`signals/clock-speedup.md`).
+
+## Supersedes
+
+- Clock propagation: previously the harness passed simulation time to every module
+  without saying how; now it fans out both dt and the simulation time directly to
+  every module on each tick, and a module sees its inputs only on the rising clock edge
+  (Kevin Schillinger 2026-10-16).

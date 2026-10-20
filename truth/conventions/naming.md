@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/Coding Standards (Group).docx` §1; `documents/PYTHON_STYLE_GUIDE.md` §5, §8; `documents/requirements-matrix.md` §1–2 (module names); unit-suffix examples asserted by Kevin 2026-09-30
+**Provenance:** `documents/Coding Standards (Group).docx` §1; `documents/PYTHON_STYLE_GUIDE.md` §5, §8; `documents/requirements-matrix.md` §1–2 (module names); unit-suffix examples asserted by Kevin 2026-09-30; enumerated values all caps asserted by Kevin Schillinger 2026-10-16 in the team review of `documents/system-integration-design.md`
 **Aliases:** naming conventions, style guide naming, PEP 8 naming
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-16
 
 The baseline is PEP 8. `Coding Standards (Group).docx` is the graded group standard
 and wins where it is specific. `PYTHON_STYLE_GUIDE.md` extends PEP 8 for this
@@ -51,6 +51,9 @@ module of this system.
 Rules that apply on top of the table:
 
 - Identifiers are ASCII, English words.
+- Every enumerated value is all caps. This covers enum members and also enumerated
+  string values that cross a module boundary, such as the switch positions `NORMAL`
+  and `REVERSE` and the light state `RED`.
 - Never `l`, `O`, or `I` as a single-character name. Use `L` if you want `l`.
 - A name that clashes with a keyword takes a single trailing underscore: `class_`,
   `from_`. Never a misspelling.

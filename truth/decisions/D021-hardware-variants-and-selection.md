@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D021-hardware-variants-and-selection.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** as `20261017-1433-D021-hardware-ui-on-host.md` on this branch, which this proposal supersedes (deny that one), with its open item settled by the proposed D027 (`20261020-0255-D027-usb-link-to-the-pis.md`), chosen at Kevin Schillinger's request 2026-10-20: "choose whatever usb protocol makes the most sense given that this will fucntion on a strangers windows machine as an exe".
-
----
-
 # D021-hardware-variants-and-selection
 
 **Status:** current

@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D024-train-gains-set-by-engineer.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-20: "Trains must wait for engineer to set gains, can be a default value but aren't auto applied"; the UI on the host PC per the proposed D021. ID D024 because D019 to D023 are taken by pending proposals.
-
----
-
 # D024-train-gains-set-by-engineer
 
 **Status:** current

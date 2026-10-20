@@ -2,9 +2,9 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `truth/ui/style-guide.md` §3, §6.7; the design token mapping asserted by Kevin 2026-09-30; block references by line and block number, and switch IDs, asserted by Landis 2026-10-03; authority is not an identifier per D013 (2026-10-06)
+**Provenance:** `documents/PYTHON_STYLE_GUIDE.md` §8; `documents/Coding Standards (Group).docx` §1.1, §2.2; `documents/srs-filled.md` §1.3, §5 Appendix A; `truth/ui/style-guide.md` §3, §6.7; the design token mapping asserted by Kevin 2026-09-30; block references by line and block number, and switch IDs, asserted by Landis 2026-10-03; authority is not an identifier per D013 (2026-10-06); train IDs from the CTC Office, exact line names, and station names as written in the layout files, agreed in the CTC Office's answers of 2026-10-20, relayed by Kevin Schillinger
 **Aliases:** IDs, ID formats, key formats
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-20
 
 ## ID values
 
@@ -20,6 +20,16 @@
 - **A switch is identified by its line and the block it is listed on** in the track
   layout file. Green block 12 lists the switch `12-13; 1-13`, so its ID is line
   `"Green"`, switch ID `"12"`.
+- **Train IDs come from the CTC Office**, which creates every train
+  ([D022](../decisions/D022-yard-black-box.md)). A scheduled run's ID is its line's
+  initial and its run number: `G1` to `G10` and `R1` to `R10` in the current schedule.
+  A manual train's ID is what the dispatcher enters; the CTC window suggests `T1`, `T2`
+  and so on. A train ID is a plain string, trimmed and printable, at most 32
+  characters. Every module that handles a train uses that ID unchanged.
+- **Line names match exactly, case included:** `"Green"` and `"Red"`. A module that
+  spells a line otherwise, such as the Track Model's `GREEN`, is mapped at the harness.
+- **Station names are written exactly as in the track layout files**, in upper case:
+  `GLENBURY`. The line-name mapping does not apply to them.
 - **Authority is not an identifier.** It is a count of blocks, an integer; see
   [units.md](units.md) and D013.
 - How IDs and timestamps render in a UI is set by `truth/ui/style-guide.md` §3.
@@ -56,15 +66,14 @@ with `_`, then
 
 No token takes a spelling that does not follow from its canonical name.
 
-## Pending
+## Notes
 
-The only train ID format appearing in a normative document is `TRN-014`, as an
-example in `truth/ui/style-guide.md` §6.7 (`Train Controller — TRN-014`). It is an
-illustration, not a stated format. Block and station ID formats are not stated
-anywhere. Owner: Kevin — decide and record, or record that IDs are opaque strings
-with no enforced shape.
+- `truth/ui/style-guide.md` §6.7 shows `TRN-014` as an illustration of a train ID in a
+  UI header. It is not the train ID format.
 
 ## Supersedes
 
 - Authority: previously listed here as a block ID string (Kevin 2026-09-30); now a
   count of blocks and no longer an identifier, per D013 (2026-10-06).
+- Train ID format: previously pending, with only the style guide's `TRN-014` example; now
+  set by the CTC Office (2026-10-20).

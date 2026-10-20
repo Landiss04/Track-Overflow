@@ -1,10 +1,3 @@
-**Target:** truth/decisions/D025-ctc-test-ui-boundary.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4 (re-filed; first proposed by Claude on ctc-deployment)
-**Provenance:** as `20261020-0039-D019-ctc-test-ui-boundary.md` on this branch, which this proposal supersedes (deny that one), renumbered from D019 to D025 because the pending `feature/TrackCtrl-Showcase-Feedback/20261016-1430-D019-wayside-runs-only-its-program.md` (PR #43) also uses D019; Kevin Schillinger 2026-10-20: "renumber as needed". First proposed as `ctc-deployment/20261014-1042-ctc-test-ui-boundary.md`. The entry is unchanged except its key, heading and aliases.
-
----
-
 # D025-ctc-test-ui-boundary
 
 **Status:** current

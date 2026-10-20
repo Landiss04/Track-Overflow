@@ -1,10 +1,3 @@
-**Target:** truth/signals/signal-aspect-ahead.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** as `20261017-1433-signal-aspect-ahead.md` on this branch, which this proposal supersedes (deny that one), plus the Track Controller answers relayed by Kevin Schillinger 2026-10-20: "Will change orange to yellow". That settles the second aspect, the YELLOW-or-ORANGE conflict in the pending `feature/TrackCtrl-Module-Implementation/20261007-0110-signal-light-command.md`.
-
----
-
 # signal-aspect-ahead
 
 **Status:** current

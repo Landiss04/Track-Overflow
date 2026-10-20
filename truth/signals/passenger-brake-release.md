@@ -1,10 +1,3 @@
-**Target:** truth/signals/passenger-brake-release.md
-**Action:** create
-**Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-20, accepting a one-shot release command from the Train Controller to the Train Model ("add"). Settles the mechanism that `arbitration/passenger-emergency-brake.md` leaves open.
-
----
-
 # passenger-brake-release
 
 **Status:** current
