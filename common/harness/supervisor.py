@@ -62,9 +62,9 @@ class HarnessStartError(RuntimeError):
 class _Connection(QObject):
     """The harness's end of one module's socket.
 
-    Lines are decoded as they arrive. A line that does not decode is
-    reported and skipped; a line past the length limit closes the
-    connection, since the stream can no longer be trusted.
+    Lines are decoded as they arrive. A line that does not decode, or
+    runs past the length limit, is reported and skipped; the lines
+    after it are still read.
     """
 
     messageReceived = Signal(object, object)
@@ -109,17 +109,13 @@ class _Connection(QObject):
     def _on_ready_read(self) -> None:
         # Report every complete line; a partial one waits for the rest.
         data = bytes(self._socket.readAll().data())
-        try:
-            lines = self._buffer.feed(data)
-        except ProtocolError as error:
-            self.protocolError.emit(self, f"connection closed: {error}")
-            self._socket.abort()
-            return
-        for line in lines:
+        for line in self._buffer.feed(data):
             if self._closed:
                 # Refused part-way through; the rest is not read.
                 return
             try:
+                if isinstance(line, ProtocolError):
+                    raise line
                 message = decode(line)
             except ProtocolError as error:
                 self.protocolError.emit(self, f"line ignored: {error}")

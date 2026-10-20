@@ -14,6 +14,10 @@ carries:
   it answers. A message nobody asked for carries 0;
 - ``tick``: the tick it belongs to, 0 before the first tick.
 
+Numbers are finite and within the range of a double, and text is valid
+Unicode, sent as UTF-8. A line that breaks either is refused, at either
+end: ``1e999`` is valid JSON text, but would come out as infinity.
+
 Harness to module:
 
 - ``STEP``: step once. ``{"op": "STEP", "id": 41, "tick": 12, "dt": 0.1,
@@ -66,6 +70,8 @@ __all__ = [
 
 import json
 import math
+import re
+import sys
 from collections.abc import Mapping
 from typing import Any, TypeGuard
 
@@ -75,6 +81,13 @@ PROTOCOL_VERSION = 1
 #: Longest line accepted. A module's outputs for one tick stay far
 #: below this; a longer line means a broken sender.
 MAX_LINE_BYTES = 8 * 1024 * 1024
+
+# An escaped UTF-16 surrogate. Only these let JSON text carry a string
+# that is not valid Unicode, so only a line holding one is checked.
+_SURROGATE_ESCAPE = re.compile(r"\\u[dD][89a-fA-F]")
+
+# Digits in the largest double; a shorter integer always fits one.
+_MAX_FLOAT_DIGITS = len(str(int(sys.float_info.max)))
 
 STEP = "STEP"
 QUIT = "QUIT"
@@ -126,14 +139,27 @@ def encode(message: Mapping[str, Any]) -> bytes:
 
     Raises:
         ProtocolError: If the message is not valid, or holds a value
-            JSON cannot carry, such as NaN.
+            JSON cannot carry, such as NaN or text that is not valid
+            Unicode.
     """
     validate(message)
     try:
-        text = json.dumps(message, allow_nan=False, separators=(",", ":"))
+        text = json.dumps(
+            message,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        # Raw UTF-8, so text that is not valid Unicode, such as a lone
+        # surrogate from undecodable bytes, fails here, not at the
+        # receiver.
+        return (text + "\n").encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ProtocolError(
+            "cannot encode message: text is not valid Unicode"
+        ) from error
     except (TypeError, ValueError) as error:
         raise ProtocolError(f"cannot encode message: {error}") from error
-    return (text + "\n").encode("utf-8")
 
 
 def decode(line: bytes) -> dict[str, Any]:
@@ -147,20 +173,31 @@ def decode(line: bytes) -> dict[str, Any]:
 
     Raises:
         ProtocolError: If the line is not UTF-8 JSON, not an object, or
-            not a valid message.
+            not a valid message; if it holds a number past the range of
+            a double, which other ends would read as infinite; or if it
+            holds text that is not valid Unicode.
     """
     try:
         text = line.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ProtocolError("line is not UTF-8") from error
     try:
-        message = json.loads(text, parse_constant=_reject_constant)
+        message = json.loads(
+            text,
+            parse_constant=_reject_constant,
+            parse_float=_parse_float,
+            parse_int=_parse_int,
+        )
+    except ProtocolError:
+        raise
     except RecursionError as error:
         raise ProtocolError("line is nested too deeply") from error
     except ValueError as error:
         raise ProtocolError(f"line is not JSON: {error}") from error
     if not isinstance(message, dict):
         raise ProtocolError("line is not a JSON object")
+    if _SURROGATE_ESCAPE.search(text):
+        _check_unicode(message)
     validate(message)
     return message
 
@@ -256,7 +293,9 @@ class LineBuffer:
     """Split a byte stream into wire lines.
 
     Bytes arrive in arbitrary pieces; ``feed`` returns every line that
-    is complete so far and keeps the rest for the next call.
+    is complete so far and keeps the rest for the next call. A line
+    past the size limit is dropped up to its newline and reported in
+    its place, so the lines around it still arrive.
     """
 
     def __init__(self, max_line_bytes: int = MAX_LINE_BYTES) -> None:
@@ -267,32 +306,45 @@ class LineBuffer:
         """
         self._max_line_bytes = max_line_bytes
         self._pending = bytearray()
+        # Dropping the rest of a line already reported as too long.
+        self._discarding = False
 
-    def feed(self, data: bytes) -> list[bytes]:
+    def feed(self, data: bytes) -> list[bytes | ProtocolError]:
         """Add ``data`` and return the complete, non-blank lines.
 
-        Raises:
-            ProtocolError: If a line grows past the size limit. The
-                buffer is cleared, since the stream can no longer be
-                trusted.
+        Returns:
+            The lines in order. A line past the size limit is a
+            ``ProtocolError`` in its place, once, however many pieces
+            it came in; reading goes on from its newline.
         """
         self._pending.extend(data)
-        lines = []
+        lines: list[bytes | ProtocolError] = []
         while True:
             end = self._pending.find(b"\n")
             if end < 0:
                 break
             line = bytes(self._pending[:end]).strip()
             del self._pending[: end + 1]
-            if len(line) > self._max_line_bytes:
-                self._pending.clear()
-                raise ProtocolError("line is longer than the limit")
-            if line:
+            if self._discarding:
+                # The end of a line already reported.
+                self._discarding = False
+            elif len(line) > self._max_line_bytes:
+                lines.append(_line_too_long())
+            elif line:
                 lines.append(line)
         if len(self._pending) > self._max_line_bytes:
+            # No newline yet, and already too long: report it now and
+            # drop the rest of it as it comes.
             self._pending.clear()
-            raise ProtocolError("line is longer than the limit")
+            if not self._discarding:
+                self._discarding = True
+                lines.append(_line_too_long())
         return lines
+
+
+def _line_too_long() -> ProtocolError:
+    # One wording wherever a line is too long.
+    return ProtocolError("line is longer than the limit")
 
 
 def _is_integer(value: Any) -> TypeGuard[int]:
@@ -321,3 +373,32 @@ def _has_kind(value: Any, kind: str) -> bool:
 def _reject_constant(name: str) -> Any:
     # json accepts NaN and Infinity by default; the protocol does not.
     raise ValueError(f"{name} is not allowed")
+
+
+def _parse_float(text: str) -> float:
+    # 1e999 is valid JSON text, but Python reads it as infinity, which
+    # the harness could not send on.
+    value = float(text)
+    if not math.isfinite(value):
+        raise ProtocolError(f"number {text[:40]} is out of range")
+    return value
+
+
+def _parse_int(text: str) -> int:
+    # Python reads any integer, but past the largest double no other
+    # end can use it as a number. Over 4300 digits ``int`` refuses.
+    value = int(text)
+    if len(text) > _MAX_FLOAT_DIGITS and abs(value) > sys.float_info.max:
+        raise ProtocolError(f"number {text[:40]}... is out of range")
+    return value
+
+
+def _check_unicode(message: Mapping[str, Any]) -> None:
+    # An escaped lone surrogate decodes to a str that cannot be written
+    # out again, to the event log or anywhere else.
+    try:
+        json.dumps(message, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ProtocolError(
+            "line holds text that is not valid Unicode"
+        ) from error

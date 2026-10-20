@@ -54,8 +54,11 @@ class EventLog:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._path = path
         # Kept open for the life of the log; ``close`` or a ``with``
-        # block releases it.
-        self._file = path.open("w", newline="", encoding="utf-8")
+        # block releases it. Text that is not valid Unicode is escaped,
+        # never raised: a row must not stop the caller mid-tick.
+        self._file = path.open(
+            "w", newline="", encoding="utf-8", errors="backslashreplace"
+        )
         self._writer = csv.writer(self._file)
         self._writer.writerow(COLUMNS)
         self._file.flush()

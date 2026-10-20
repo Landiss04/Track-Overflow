@@ -197,15 +197,12 @@ class ModuleLink(QObject):
 
     def _on_ready_read(self) -> None:
         # Handle every complete line; a partial one waits for the rest.
+        # A bad line is skipped; the lines after it still count.
         data = bytes(self._socket.readAll().data())
-        try:
-            lines = self._buffer.feed(data)
-        except ProtocolError as error:
-            self._complain(f"harness stream broken: {error}")
-            self._on_lost()
-            return
-        for line in lines:
+        for line in self._buffer.feed(data):
             try:
+                if isinstance(line, ProtocolError):
+                    raise line
                 message = decode(line)
             except ProtocolError as error:
                 self._complain(f"ignored a line from the harness: {error}")
@@ -237,10 +234,12 @@ class ModuleLink(QObject):
             reply = outputs_message(request_id, tick, outputs)
             line = encode(reply)
         except TickRejectedError as error:
-            reply = rejected_message(request_id, tick, str(error) or "refused")
+            reason = _sendable(str(error) or "refused")
+            reply = rejected_message(request_id, tick, reason)
             line = encode(reply)
         except Exception as error:  # noqa: BLE001 - reported, not hidden
-            reason = f"{type(error).__name__}: {error}"
+            # Outputs JSON cannot carry land here too, as a ProtocolError.
+            reason = _sendable(f"{type(error).__name__}: {error}")
             reply = rejected_message(request_id, tick, reason)
             line = encode(reply)
         self._last_reply = reply
@@ -262,6 +261,13 @@ class ModuleLink(QObject):
         # Module processes have no log of their own; the console keeps
         # the trail. The harness logs what reaches it.
         print(f"[{self._module}] {text}", file=sys.stderr, flush=True)
+
+
+def _sendable(reason: str) -> str:
+    # A reason must reach the harness whatever it holds: text that is
+    # not valid Unicode, such as undecodable bytes in a file name, is
+    # escaped instead of failing the reply and leaving the tick hanging.
+    return reason.encode("utf-8", "backslashreplace").decode("utf-8")
 
 
 def _show_module_windows() -> None:

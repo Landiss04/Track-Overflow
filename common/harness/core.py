@@ -4,12 +4,15 @@ The harness owns the system's one ``SystemClock`` (D017). On each tick
 it sends every module ``dt``, the unwrapped simulation time and its
 inputs, mapped from the outputs every module gave on the tick before,
 and waits for every reply before the next tick (R1, R64). Each request
-is answered once: a reply nobody is waiting for is logged and ignored.
+is answered once: a reply nobody is waiting for, or one that carries
+the awaited request ID with another tick, is logged and ignored.
 
 - A module that rejects a tick keeps its previous outputs, and the run
   goes on (R19).
 - A module that has not replied after ``REPLY_TIMEOUT_S`` pauses the
-  clock and is named. The clock resumes once the reply comes.
+  clock and is named. The clock resumes once the reply comes. A reply
+  that does not decode, or is ignored, leaves the module waited on, so
+  it too pauses the clock and names the module.
 - A module that ends or drops its link holds the clock for the rest of
   the run, since modules are never restarted mid-run.
 
@@ -62,7 +65,13 @@ from common.harness.supervisor import (
     ModuleSupervisor,
 )
 from utils.event_log import EventLog
-from utils.harness_protocol import OUTPUTS, STATE, show_message, step_message
+from utils.harness_protocol import (
+    OUTPUTS,
+    STATE,
+    ProtocolError,
+    show_message,
+    step_message,
+)
 from utils.system_clock import SystemClock
 
 #: Real seconds to wait for a reply before the clock pauses.
@@ -374,7 +383,15 @@ class Harness(QObject):
             message = step_message(
                 request_id, tick, tick_s, sim_time_s, inputs
             )
-            if self._supervisor.send(name, message):
+            try:
+                sent = self._supervisor.send(name, message)
+            except ProtocolError as error:
+                # Inputs JSON cannot carry, such as an infinity the
+                # edges computed: as above, the module skips the tick,
+                # and the modules after it still get theirs.
+                self._log_event(name, "INPUTS_FAILED", str(error))
+                continue
+            if sent:
                 self._pending[name] = request_id
         if self._pending:
             self._reply_timer.start()
@@ -382,13 +399,17 @@ class Harness(QObject):
             self._finish_tick()
 
     def _on_message(self, name: str, message: Mapping[str, Any]) -> None:
-        # A reply to the tick in flight, or the CTC Office's STATE.
+        # A reply to the tick in flight, or the CTC Office's STATE. A
+        # reply must carry both the request ID and the tick it answers.
         if message["op"] == STATE:
             if name == CTC_OFFICE:
                 self._read_clock_controls(message["state"])
                 self._apply_clock_state()
             return
-        if self._pending.get(name) != message["id"]:
+        if (
+            self._pending.get(name) != message["id"]
+            or message["tick"] != self._clock.tick_count
+        ):
             self._log_event(
                 name,
                 "UNEXPECTED_REPLY",

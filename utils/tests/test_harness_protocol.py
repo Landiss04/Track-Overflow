@@ -139,14 +139,15 @@ class LineBufferTest(unittest.TestCase):
         self.assertEqual(LineBuffer().feed(b"\n\r\n  \n{}\n"), [b"{}"])
 
     def test_overlong_line_is_refused_and_cleared(self) -> None:
+        # Reported once, and dropped up to its newline.
         buffer = LineBuffer(max_line_bytes=8)
-        with self.assertRaises(ProtocolError):
-            buffer.feed(b"0123456789")
-        self.assertEqual(buffer.feed(b"{}\n"), [b"{}"])
+        (error,) = buffer.feed(b"0123456789")
+        self.assertIsInstance(error, ProtocolError)
+        self.assertEqual(buffer.feed(b"rest\n{}\n"), [b"{}"])
 
     def test_overlong_complete_line_is_refused(self) -> None:
-        with self.assertRaises(ProtocolError):
-            LineBuffer(max_line_bytes=4).feed(b"0123456789\n")
+        (error,) = LineBuffer(max_line_bytes=4).feed(b"0123456789\n")
+        self.assertIsInstance(error, ProtocolError)
 
 
 if __name__ == "__main__":
