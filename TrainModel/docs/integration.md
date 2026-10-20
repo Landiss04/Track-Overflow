@@ -10,9 +10,10 @@ The system runs one process per module. The central harness spawns the Train
 Model as its own process and drives it over the harness protocol (D005, as
 proposed; `documents/system-integration-design.md` §4.5).
 
-At the time of writing there is no central harness in the repository yet.
-Section 4 describes what it must do for the Train Model; the code there is a
-sketch, not existing code.
+The central harness exists (`common/harness/`, Phase 1 of the design). It
+starts the Train Model with `track_overflow.py --module train-model`, which
+runs `train_model/module_process.py`: the fleet, the window, and the harness's
+steps. Sections 3 to 5 say what that process and the harness each do.
 
 ## 1. What is module and what is test scaffolding
 
@@ -22,6 +23,8 @@ sketch, not existing code.
 | `train_model/model.py`: physics | `train_model/harness.py`: test UI state, stand-in producers, clock driving |
 | `train_model/state.py`: module wrapper the window binds to | `train_model/link.py`: socket link, wire format, `TestLinkServer` |
 | `train_model/app.py`: window bootstrap | `ui/TestMain.qml`, `ui/TestView.qml`: test UI window |
+| `train_model/module_process.py`: the process the harness starts | |
+| `train_model/wire.py`: the boundary types as JSON, for the harness protocol | |
 | | `train_model/track_stub.py`: stand-in Track Model; Blue Line by default, Red or Green by flag |
 | | `train_model/speed_limiter.py`: stand-in Train Controller speed limiter |
 | `ui/Main.qml`, `ui/MainView.qml`: Train Model window | |
@@ -126,9 +129,8 @@ def main() -> int:
     )
 ```
 
-`main.py` stays: it is the Train Model process the harness starts (section 5).
-It will also take the harness's messages once that protocol is written
-(design doc G-RUN-6).
+`main.py` stays as the standalone entry point. The harness does not run it:
+it runs `train_model/module_process.py` (section 5).
 
 ### 2.4 Test-only hooks left in the module (optional cleanup)
 
@@ -151,12 +153,12 @@ exists.
 
 ### Passenger brake release
 
-A passenger pull latches. Today only the test-only override clears it. Truth
-(`arbitration/passenger-emergency-brake.md`, D011) says the **Train
-Controller** releases it. The mechanism was decided on 2026-10-20: a one-shot
-`passenger-brake-release` command from the Train Controller (proposed on
-`truth`). Until the Train Model takes that command, removing the test UI
-leaves no way to release a passenger pull.
+A passenger pull latches. Truth (`arbitration/passenger-emergency-brake.md`,
+D011) says the **Train Controller** releases it, with the one-shot
+`passenger-brake-release` command. The Train Model takes it as
+`ControllerCommands.passenger_brake_release` (2026-10-20), and the Train
+Controller sends it on the tick after the driver releases the emergency
+brake. Once the test UI is gone, nothing calls the test-only override.
 
 ### 2.5 Update the README
 
@@ -169,12 +171,13 @@ test UI rows of the layout table, and the "Passenger brake override" section.
 The Train Model is one process, one of those the central harness spawns (one
 process per module, D005). Inside it, every train is one `TrainModelState` in
 one `TrainModelFleet` (`train_model/fleet.py`); there is no process per train.
-The fleet lives in the Train Model process, and the harness asks it, over the
-harness protocol, to do the following:
+The fleet lives in the Train Model process, and `module_process.py` does the
+following on each of the harness's steps:
 
-1. **Adds** a train with `fleet.add(train_id, line)` when the CTC Office
-   releases it from the yard, and calls `fleet.remove(train_id)` when the CTC
-   Office retires it (D022, proposed). Train IDs are the CTC Office's, used
+1. **Adds** a train with `fleet.add(train_id, line)` the first time the
+   harness names it, which is the tick after the CTC Office releases it from
+   the yard, and calls `fleet.remove(train_id)` once the harness stops naming
+   it, after the CTC Office retires it (D022). Train IDs are the CTC Office's, used
    unchanged as opaque strings. Each train gets its own seed, derived from its ID, so
    trains draw different disembark counts and a run repeats; pass a
    `TrainConfig` to choose the seed instead. Adding an ID twice raises
@@ -189,14 +192,12 @@ harness protocol, to do the following:
 4. **Routes outputs** each tick: `step_all` returns each train's outputs by
    ID. Send `outputs.controller` to that train's Train Controller and
    `outputs.track` to the Track Model.
-5. **Handles rejection.** `step_all` validates every train's inputs before
-   any train steps, so `InvalidTimeStepError` or `InvalidInputError` leaves
-   the whole fleet unchanged, the test UI's "hold the clock" choice applied
-   to every train. Decided on 2026-10-20: only the train whose input is
-   invalid misses the tick; the other trains step, and the rejection names
-   that train. `step_all` does not do that yet. Until it does, step trains one
-   at a time with `fleet.get(train_id).step(...)`, checking first with
-   `validate_inputs`.
+5. **Handles rejection.** Only the train whose input is invalid misses the
+   tick; the other trains step, and the rejection names that train
+   (`modules/train-model.md`). `step_all` is all or nothing, so the process
+   does not use it: it checks each train with `validate_inputs` and steps it
+   with `fleet.get(train_id).step(...)`. A rejected train's reply holds its
+   unchanged outputs, and the harness logs the rejection.
 6. **Runs on the Qt thread.** The fleet and every `TrainModelState` are
    `QObject`s whose signals drive the window; call them from the thread
    that owns them.
@@ -209,9 +210,12 @@ calls the harness. Everything arrives through `step`.
 
 ## 4. Edge mappings
 
-The harness maps each producer's types straight to the consumer's. The
-catalog in `common/interfaces.py` is superseded (D008, as proposed on
-2026-10-16). The Train Model's side of each edge:
+The harness maps each producer's types straight to the consumer's, on their
+JSON form (`train_model/wire.py`). The catalog in `common/interfaces.py` is
+superseded (D008). The Train Controller edges are in
+`common/harness/train_edges.py`. Until the Track Model joins (Phase 2),
+`common/harness/track_feed.py` stands in for it with a fixed script. The
+Train Model's side of each edge:
 
 ### Train Controller → Train Model (`ControllerCommands`)
 
@@ -220,9 +224,10 @@ catalog in `common/interfaces.py` is superseded (D008, as proposed on
 | `power_cmd_w` | power command | W, ≥ 0; a negative value is rejected. |
 | `service_brake`, `emergency_brake` | brake commands | |
 | `interior_lights`, `exterior_lights` | light command | |
-| `door_left_open`, `door_right_open` | door command | The model no longer enforces a 0 mph interlock; see open-issues.md. |
+| `door_left_open`, `door_right_open` | door command | The model enforces no interlock; the Train Controller holds it (truth `door-command`). |
 | `temp_setpoint_c` | temperature setpoint | °C. |
 | `announcement` | announcement | `""` if none. |
+| `passenger_brake_release` | passenger brake release | One-shot; clears a passenger pull. |
 
 ### Track Model → Train Model (`TrackInputs`)
 
@@ -254,65 +259,30 @@ The catalog's setter-shaped `ITrainModel` (`common/interfaces.py`) is
 superseded with the catalog. The module does not implement or import it, and
 nothing needs that shape.
 
-### Sketch
+### On each tick
 
-Illustrative only; names on the harness side are placeholders. With one
-process per module, the fleet lives in the Train Model process and
-`step_all` runs there at the harness's request; the mappings run in the
-harness.
-
-```python
-from train_model.fleet import TrainModelFleet
-from train_model.interface import TrainModelInputs
-from train_model.model import TrainModelError
-
-
-class TrainModelEdge:
-    """Harness-side owner of every train's Train Model."""
-
-    def __init__(self) -> None:
-        self.fleet = TrainModelFleet()
-
-    def on_dispatch(self, train_id: str, line: str) -> None:
-        self.fleet.add(train_id, line)
-
-    def on_retire(self, train_id: str) -> None:
-        self.fleet.remove(train_id)
-
-    def on_tick(self, _sim_time_s: float, tick_s: float) -> None:
-        inputs = {
-            train_id: TrainModelInputs(
-                controller=map_controller_to_train_model(
-                    controller_outputs(train_id)),
-                track=map_track_to_train_model(track_outputs(train_id)),
-            )
-            for train_id in self.fleet.ids()
-        }
-        try:
-            outputs = self.fleet.step_all(tick_s, inputs)
-        except TrainModelError as exc:
-            report_rejection(exc)   # system policy, step 5
-            return
-        for train_id, out in outputs.items():
-            deliver_to_controller(train_id,
-                                  map_to_controller(out.controller))
-            deliver_to_track_model(train_id, map_to_track(out.track))
-
-
-# clock = SystemClock(); clock.add_tick_listener(edge.on_tick)
-```
+The harness builds the Train Model's inputs in `common/harness/edges.py`:
+every train in service, keyed by train ID under `trains`, with its line, the
+Train Controller's last commands for it mapped onto `controller`, and its
+`track` inputs. A train the Train Controller has not commanded yet gets
+inert commands (no power, service brake on). The process steps each train
+and replies with each train's outputs under `trains`, and a `rejected`
+object naming any train it refused. The harness hands each train's
+`controller` outputs to that train's Train Controller on the next tick.
 
 Every module steps on the same tick, each on the other modules' outputs from
 the tick before: a module sees its inputs only on the rising clock edge
-(D017, as proposed on 2026-10-16). The order of steps therefore does not
-matter.
+(D017). The order of steps therefore does not matter. A command therefore
+comes back in a report two ticks after it is sent, which the Train
+Controller allows for.
 
 ## 5. Showing the Train Model window
 
 `train_model/app.py`'s `run_window` creates its own `QGuiApplication` and runs
 the event loop. That is what the system needs: the Train Model runs as its own
-process, so `main.py` keeps calling `run_window`, with the fleet the harness
-drives.
+process, so `module_process.py` calls `run_window` with the fleet the harness
+drives. Closing the window hides it; only the harness ends the process
+(`utils/module_window.py`, D005).
 
 `Main.qml` and `MainView.qml` read only `fleet` and `theme`, and contain no
 reference to the test UI. One window shows every train: a train selector

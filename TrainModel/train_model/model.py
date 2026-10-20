@@ -163,6 +163,11 @@ class TrainModel:
         self.validate_inputs(dt, inputs)
         cmd = inputs.controller
         track = inputs.track
+        if cmd.passenger_brake_release:
+            # The Train Controller releases a passenger pull
+            # (arbitration/passenger-emergency-brake). Its own
+            # emergency brake follows emergency_brake.
+            self._passenger_ebrake_pulled = False
 
         # The door interlock is commented out, not deleted: whether the
         # Train Model enforces it is with the course instructor, and
@@ -224,6 +229,7 @@ class TrainModel:
             "exterior_lights": cmd.exterior_lights,
             "door_left_open": cmd.door_left_open,
             "door_right_open": cmd.door_right_open,
+            "passenger_brake_release": cmd.passenger_brake_release,
             "polarity": track.track_info.polarity,
         }
         if track.beacon is not None:
