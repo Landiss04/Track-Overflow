@@ -148,6 +148,30 @@ on the next tick, and its report reaches the Train Controller the tick after. Th
 Controller allows for that (`echo_ticks`). Otherwise the report of its own emergency
 brake would read as a passenger pull and undo the driver's release.
 
+### Train Model review reconciliation (2026-10-20)
+
+The [Train Model SDD v0.2](../../documents/Railway_Sim_SDD_Train_Model.md) records
+accepted design; [module follow-up](../../TrainModel/docs/open-issues.md) records
+source-inspected status. The working tree now includes independent brake states
+and summed forces, complete beacon payload validation, harness-time display and
+15-tick per-train drift checks, and next-station/platform display without arrival.
+These are concurrent implementation edits, not test results from this doc review.
+
+Each supplied timestamp is unwrapped end-of-tick time. A train’s epoch is its first
+timestamp minus dt; on harness ticks divisible by 15 compare epoch plus accepted
+model elapsed time with supplied time, including rejected trains, using `1e-6 s`
+absolute tolerance. Display follows harness time independently. Never reset physics
+time or the epoch to hide drift. The standalone utility’s 30-tick check is separate.
+
+The harness maps module-owned types directly (D005/D008); `common/interfaces.py`
+is stale. Track Model process/edge integration remains separate from Phase 1’s
+fixed feed. Track Model owns station eligibility for boarding; Train Model checks
+rest, doors, valid count and capacity without a station gate. Position offset
+references the train’s front. Controller one-shot `passenger_brake_release` clears
+only the passenger latch; a held controller emergency command remains active.
+
+Existing tests are local developer verification utilities.
+
 ## Event log
 
 One CSV file per run, written by the harness (R80). Its columns are `wall_time`,
@@ -238,7 +262,7 @@ python track_overflow.py --headless --stubs-only --run-seconds 30
 
 The default is now the merged Phase 1 system: two real modules and five stubs.
 `--stubs-only` restores seven stubs. `--headless` suppresses the harness window;
-the real modules retain their own windows. For CI, set `QT_QPA_PLATFORM=offscreen`.
+the real modules retain their own windows. For local verification without a display, set `QT_QPA_PLATFORM=offscreen`.
 
 Both modes accept the same log, speed and duration options. The harness window has
 no clock controls: the CTC Office owns Run, Pause and speed. It shows 24-hour simulated

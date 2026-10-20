@@ -146,9 +146,13 @@ Item 3 (half of the speed dial's dead zone asked for full speed) is fixed
   overshoot it once fixed is now fixed by the 0.05 m/s service band instead
   (35 → 30 mph settles at 30.08 mph at 480 kW).
 - **Toy plant parameters differ from truth's Train Model**
-  (`truth/modules/train-model.md`): Euler vs trapezoidal integration,
+  (`truth/modules/train-model.md`, October 20 review proposal): Euler vs exact
+  constant-force segments and midpoint power-limited integration,
   rolling resistance only under a brake failure (C_rr 0.002). Mass
-  (51,433 kg reference) and power (480 kW, provisional in truth) match.
+  (51,433 kg reference) and power (480 kW, confirmed by Kevin’s October 20
+  SDD review) match. Rolling resistance is the only passive resistance term in
+  Train Model scope; no aerodynamic-drag/wheel-slip/brake-build-up prerequisite
+  or real-world calibration study is implied.
 - **The controller simulates the train itself** (truth D009 gives physics to the
   Train Model). `ControllerCore._plant()` is the stand-in until the Train Model
   is connected.

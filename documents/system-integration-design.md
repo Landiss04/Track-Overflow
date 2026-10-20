@@ -469,7 +469,7 @@ branch, and no document says what runs on a Pi (G-HW-1).
   - The only build recipe is in `TrainModel/README.md` (lines 226-263): two separate
     `--onedir` executables.
   - Only the Train Model handles `sys._MEIPASS`.
-  - There is no `.spec` file, no `freeze_support`, no build script and no packaging CI.
+  - There is no `.spec` file, no `freeze_support`, no build script.
   - `TrackCtrlHw/launch.py` is the only code that spawns processes. It runs
     `[sys.executable, <script>.py]`, which assumes a Python interpreter and `.py` files on
     disk.
@@ -1031,13 +1031,13 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-CLK-1 | Resolved (R1, R4) | Meaning of "in parallel": direct fan-out, concurrent steps, inputs on the rising edge. The barrier question moved to G-CLK-11. | D017 owner Landis |
-| G-CLK-2 | Resolved (R2, R64) | Every module gets dt and the unwrapped simulation time, `sim_time_s`, and works out the time of day itself ([P] D017). Left: the CTC Office, Track Model, Train Model and Train Controller need the new input, and the Track Controllers' `time_s` gives way to it (R14). | D017 owner Landis; module owners |
+| G-CLK-2 | Resolved (R2, R64); partial integration | D017 fans out dt and unwrapped end-of-tick time. Phase 1 sends both through `ModuleLink`; Train Model now uses supplied time for display and independent diagnostics. Remaining modules must adopt the process boundary; Track Controllers’ `time_s` gives way to shared simulation time (R14). | D017 owner Landis; module owners |
 | G-CLK-3 | Resolved (R3, R51) | `clock_paused` is one boolean, true while paused, starting paused. While paused the harness reads it from the CTC Office's `snapshot()` ([P] `ctc-deployment/20261016-1517-clock-pause.md`, form confirmed). Left: the CTC header must drive the module's value, not the window's own clock. Phase 0 has the module push the value as a `STATE` message; the CTC Office owner to confirm (section 5.1). | signal owner CTC Office |
 | G-CLK-4 | Resolved (R64) | The 0.1 s tick is a recorded deviation from REQ-NFR-001.1's 1 ms "should" ([P] D017). | D017 owner Landis |
 | G-CLK-5 | Resolved (R64) | No tick is skipped: when the harness falls behind, simulated time runs slower than real time ([P] D017). | D017 owner Landis |
 | G-CLK-6 | Measured with stubs and with Phase 1 (R64) | Seven stub processes at 10x: a mean round trip of 1 to 3 ms against the 10 ms budget for replies up to 30 KB, and no tick slipped (section 5.1). The Train Model and the Train Controller as themselves, with one train: under 2 ms mean, no tick slipped (section 5.2). Left: the modules still stubs, the Windows lab machines, and the USB round trip (Phase 5). | unassigned |
 | G-CLK-7 | Resolved (R15, R16, R57) | The test-UI clocks and the CTC window's clock go. The Train Controller's gains hand-over moves to simulation time; its announcement lockout and the Train Model's ads and popups stay on wall-clock time. | module owners |
-| G-CLK-8 | Resolved (R58, R63, R64) | Every window shows the harness's time of day. Left: the code in the Train Model, Track Model and Train Controller windows. | module owners |
+| G-CLK-8 | Resolved design; Train Model code inspected 2026-10-20 | Train Model now displays harness time and checks independent per-train time every 15 harness ticks, including rejections, using fixed creation epochs and 1e-6 s tolerance. Track Model/Train Controller display adoption remains separate integration work. | module owners |
 | G-CLK-9 | Resolved (R64) | The `SystemClock` code stays in `utils/system_clock.py`, and the harness owns the instance. | D017 owner Landis |
 | G-CLK-10 | Resolved (R64) | No reset during a run; resetting means restarting the system ([P] D017). | D017 owner Landis |
 | G-CLK-11 | Resolved (R64) | The harness waits for every reply, with a timeout of about 1 s that pauses the clock and names the late module ([P] D017). | D017 owner Landis |
@@ -1059,12 +1059,12 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Left: the harness maps the Track Model's `GREEN` and the HW variant's section keys. | identifiers owner Kevin |
 | G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Left: the Track Model code still keeps the last value. | Track Model owner |
 | G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). | D008 owner Kevin |
-| G-SIG-14 | Open | Edge coverage: only CTC Office → Track Controller SW is mapped end to end. Nothing maps Track Controller → CTC Office, Train Model ↔ Train Controller, or the clock. | unassigned |
+| G-SIG-14 | Partial; Phase 1 inspected 2026-10-20 | `train_edges.py` maps Train Model ↔ Train Controller directly; `ModuleLink` supplies shared time. `SystemEdges` uses the roster and `FixedTrackFeed`. Production Track Model and remaining module processes/edges still need integration; legacy catalog conversions are not the intended design. | module owners |
 | G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Left: the Train Controller has no dwell logic yet. | D007 owner Kevin |
 | G-SIG-16 | Resolved (R61, R79) | The Train Controller releases a passenger pull with a one-shot command ([P] `passenger-brake-release`), and enforces the door interlock: doors open only when stopped, on the platform side, and no power while a door is open ([P] `door-command`). | Train Controller |
 | G-SIG-17 | Resolved (R27, R72) | Maintenance is `closed-blocks`, with no boolean. The SW variant's maintenance state follows the CTC Office's commands, as it already does. Left: SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
 | G-SIG-18 | Resolved (R28, R64, R73) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Left: the Track Model's switching rule. | Track Model owner |
-| G-SIG-19 | Resolved (R37, R54) | The brake commands stay two separate booleans, as on [T] and in the Train Model. The announcement keeps the Train Model's field name, and both brakes may be applied at once ([P] `brakes-apply-together`). | Train Controller |
+| G-SIG-19 | Resolved (R37, R54), clarified by October 20 SDD review | Brake commands remain separate booleans; independent engaged states may both be true and their configured forces sum. Service failure blocks service only. The inspected working-tree `model.py` implements that rule. `announcement` keeps the Train Model field name. | Train Controller / Train Model |
 
 ### 6.3 Lifecycle
 
@@ -1104,7 +1104,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-TR-1 | Resolved (R53) | Commits `61f4a28` and `201708b` removed eleven `ctc-deployment` proposals without promotion. Seven are re-filed on this branch (section 7.1). Three should be logged as denied, and `20261014-1702` is replaced by the pending `20261016-1354` (section 7.2). | humans who promote |
 | G-TR-2 | Open, action agreed (R64) | Eight of nine module shards are placeholders; each owner fills in their own. | module owners |
 | G-TR-3 | Partly | Section 7.2 recommends what to promote and what to deny. The D019 clash is settled by renumbering the CTC one (R68). | humans who promote |
-| G-TR-4 | Partly (R62, R64, R76) | The Train Model guide now assumes one process per module, and the Track Controller HW README's kept test UI now fits R76. Left, for their owners: the Track Model guide (in-process) and the Track Controller SW README (PySide6 6.8). | module owners |
+| G-TR-4 | Documentation aligned for Train/Track Model (2026-10-20) | Both guides now describe separate processes, module-owned types, direct edge mappings and a shared harness clock. Legacy Track Model adapters still need replacement; Track Controller SW toolchain documentation remains its owner’s follow-up. | module owners |
 
 ### 6.7 Risks found while checking the decisions against the code
 
@@ -1231,14 +1231,54 @@ Also for the humans who promote:
 Not filed: `truth` entries for the Track Controller ↔ Track Model signals, which the Track
 Controller owners declined (R74).
 
+## October 20 Train Model SDD review reconciliation
+
+[SDD v0.2](Railway_Sim_SDD_Train_Model.md) supplies the intended design; new
+full-entry proposals in `truth/_inbox/claude/quirky-fermi-sickg4/` await human
+promotion. Older evidence sections retain their dated baselines. Current source
+inspection shows concurrent edits for summed brakes, canonical beacon validation,
+harness-time display/drift diagnostics and arrival removal. This documentation
+review did not implement those edits or run their tests.
+
+- Retain exact constant-force segments and midpoint power-limited integration.
+  Stop/traction-regime boundaries and stability segments total fixed external dt;
+  midpoint commanded-work accounting avoids artificial energy gain. D006 correction
+  is proposed; speed/pause continue to change tick frequency only.
+- Both brakes engage independently and sum configured forces; service failure
+  blocks only service. Controller one-shot release clears only the passenger latch.
+- Track Model owns station eligibility; Train Model checks rest, doors, count and
+  capacity without a station gate. Station metadata supports display.
+- Canonical beacon array order is `[station_name, platform_side, underground]`.
+  [Exact serialization and bound](../TrainModel/docs/module-interface.md#beacon-payload-encoding)
+  use compact ASCII-escaped JSON, at most 128 characters including syntax/escapes,
+  rejected without truncation. Keep typed/named envelopes, None between ticks and
+  controller retention. The current working tree uses `utils/beacon_codec.py`.
+- Pickup failure outputs 0 m/s commanded speed and 0 blocks authority; terrain is
+  unaffected. Train Controller owns door interlock. Power is confirmed at 480 kW;
+  rolling resistance with configured coefficient is the only passive resistance
+  term. Grade and commanded brake forces remain. Offset references the front.
+- Supplied time is unwrapped end-of-tick time. A train’s epoch is its first timestamp
+  minus dt; on harness ticks divisible by 15 compare epoch plus accepted elapsed
+  model time to supplied time, including rejected trains, with absolute tolerance
+  1e-6 s. Display follows harness time independently; never reset elapsed time or
+  epochs to hide discrepancies. Standalone utility 30-tick checks are separate.
+- Fleet identity/line already have a source; retain next station/platform and omit
+  arrival. The developer utility is excluded from product actors/use cases.
+- D005/D008 require direct mappings between module-owned types, separate module
+  processes and one shared clock. Legacy `track_model_edges.py` catalog conversions
+  remain to be replaced on the production Track Model path; Phase 1 uses a fixed
+  feed. Older CTC PDF integration statements are historical, not current requirements.
+- Existing tests are local developer verification utilities. No workflow or
+  enforcement policy is introduced.
+
 ## Appendix A: Edge map
 
 Signals are named by their `truth` key (`signals/<key>.md`).
 
 | Edge | On `truth` [T] | Pending [P] or decided [R] | Mapping today [C] |
 |---|---|---|---|
-| Harness → every module | D017: simulation time | dt and simulation time, direct [P, R1, R2] | none |
-| CTC Office → harness | `clock-speedup` | `clock-pause` [P, R3, R51]; `new_trains` and `retired_trains` events [P, R46] | none |
+| Harness → every module | D017: dt and unwrapped simulation time | End-of-tick semantics and Train Model per-train display/drift rules in October 20 proposals | Implemented process protocol / `ModuleLink`; Train Model consumes supplied time |
+| CTC Office → harness | `clock-speedup` | `clock-pause`; roster events under D022 | `SystemEdges`/`Roster` consume release/retirement from the current CTC stub; production CTC process remains integration work |
 | CTC Office → Track Controller | `suggested-speed`, `suggested-authority`, `closed-blocks`, `switch-command` | Suggestions carry the block, up to two per train with the second for the next block [P, R7, R49]; the speed stays an int [R38] | `ctc_to_track_controller`, SW only |
 | Track Controller → CTC Office | `block-occupancy` | A failed block reads occupied [P, R69]; `track-controller-ready` [P, R8, R70, R71] | none |
 | Track Controller → Track Model | none (`track-signal` runs Track Model → Train Model) | `track-signal` values come from the Track Controller, per block, cleared after delivery, zero when not commanded [P, R10, R64]; `signal-light-command` [P] | one-sided, to the old catalog |
@@ -1246,8 +1286,8 @@ Signals are named by their `truth` key (`signals/<key>.md`).
 | Track Model → CTC Office | `ticket-sales` (per line) | Per station, as a mapping [P, R22, R52] | one-sided, to the old catalog |
 | Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | one-sided, to the old catalog |
 | Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | one-sided, to the old catalog |
-| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; pass-through of `track-signal`, `beacon` and the speed limit | none; the next light does not pass through here [R39] | none |
-| Train Controller → Train Model | `power-command`, `service-brake-command`, `emergency-brake-command`, `door-command`, `light-command`, `temperature-setpoint`, `announcement` | The brake commands stay two booleans [R54]; `announcement` keeps its name [R37]; both brakes may apply together [P, R37]; `passenger-brake-release` [P, R61]; the door interlock in the Train Controller [P, R79] | none |
+| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; circuit/beacon passthrough | Independent brake states, pickup-failure zeros and canonical logical beacon payload in October 20 proposals | `train_edges.train_model_to_train_controller`; current edge drops separate speed limit per controller boundary; controller retains prior beacon data |
+| Train Controller → Train Model | Power, separate brake commands, doors, lights, setpoint, announcement, `passenger-brake-release` | Independent brake engagement and summed forces in October 20 proposal; controller owns door interlock | `train_edges.train_controller_to_train_model`; one-shot release clears passenger latch without canceling held controller emergency |
 | Track Model → Train Controller | none | `signal-aspect-ahead`, the next light [P, R25, R39] | one-sided, to the old catalog |
 
 `failure-status` and `maintenance-mode` are superseded on `truth`.
