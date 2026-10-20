@@ -15,6 +15,7 @@ from utils.harness_protocol import (
     READY,
     REJECTED,
     STATE,
+    SHOW,
     STEP,
     LineBuffer,
     ProtocolError,
@@ -25,6 +26,7 @@ from utils.harness_protocol import (
     ready_message,
     rejected_message,
     state_message,
+    show_message,
     step_message,
 )
 
@@ -36,6 +38,7 @@ class RoundTripTest(unittest.TestCase):
         messages = [
             step_message(41, 12, 0.1, 18001.2, {"ctc-office": {"tick": 11}}),
             quit_message(12),
+            show_message(12),
             ready_message("track-model"),
             outputs_message(41, 12, {"clock_paused": False}),
             rejected_message(41, 12, "grade out of range"),
@@ -51,7 +54,7 @@ class RoundTripTest(unittest.TestCase):
         self.assertEqual(line.count(b"\n"), 1)
 
     def test_ops_are_capitals(self) -> None:
-        for op in (STEP, QUIT, READY, OUTPUTS, REJECTED, STATE):
+        for op in (STEP, QUIT, SHOW, READY, OUTPUTS, REJECTED, STATE):
             self.assertEqual(op, op.upper())
 
     def test_ready_carries_the_protocol_version(self) -> None:

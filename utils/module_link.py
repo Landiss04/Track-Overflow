@@ -33,6 +33,7 @@ from PySide6.QtNetwork import QLocalSocket
 
 from utils.harness_protocol import (
     QUIT,
+    SHOW,
     STEP,
     LineBuffer,
     ProtocolError,
@@ -64,6 +65,8 @@ class ModuleLink(QObject):
 
     #: The harness sent ``QUIT``.
     quitRequested = Signal()
+    #: The harness asked to reopen this module's window.
+    showRequested = Signal()
     #: The harness could not be reached, or the connection closed.
     harnessLost = Signal()
 
@@ -199,12 +202,14 @@ class ModuleLink(QObject):
             self._handle(message)
 
     def _handle(self, message: Mapping[str, Any]) -> None:
-        # STEP and QUIT are the only messages a module receives.
+        # SHOW has no reply and leaves the stepping state alone.
         op = message["op"]
         if op == STEP:
             self._answer_step(message)
         elif op == QUIT:
             self.quitRequested.emit()
+        elif op == SHOW:
+            self.showRequested.emit()
         else:
             self._complain(f"ignored an unexpected {op} from the harness")
 

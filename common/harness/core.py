@@ -56,7 +56,7 @@ from common.harness.supervisor import (
     ModuleSupervisor,
 )
 from utils.event_log import EventLog
-from utils.harness_protocol import OUTPUTS, STATE, step_message
+from utils.harness_protocol import OUTPUTS, STATE, show_message, step_message
 from utils.system_clock import SystemClock
 
 #: Real seconds to wait for a reply before the clock pauses.
@@ -120,6 +120,7 @@ class Harness(QObject):
         """
         super().__init__(parent)
         self._log = log
+        self._log_path = str(log.path.resolve())
         self._map_inputs = map_inputs
         self._reply_timeout_s = reply_timeout_s
         self._clock = SystemClock()
@@ -144,6 +145,9 @@ class Harness(QObject):
         self._tick_started_s = 0.0
         self._stopping = False
         self._exit_codes: dict[str, int | None] = {}
+        self._pids: dict[str, int] = {}
+        self._module_exits: dict[str, str] = {}
+        self._startup_timed_out: tuple[str, ...] = ()
         self._reply_timer = QTimer(self)
         self._reply_timer.setSingleShot(True)
         self._reply_timer.setInterval(
@@ -202,6 +206,60 @@ class Harness(QObject):
         instead.
         """
         return self._pacer.dropped_ticks
+
+    @property
+    def log_path(self) -> str:
+        """Return the CSV log's path."""
+        return self._log_path
+
+    @property
+    def hold_reason(self) -> str | None:
+        """Return why the clock is held, or None if it may run."""
+        return self._hold_reason()
+
+    @property
+    def startup_timed_out_modules(self) -> tuple[str, ...]:
+        """Return timed-out modules that are still not ready."""
+        ready = self.ready_modules
+        return tuple(n for n in self._startup_timed_out if n not in ready)
+
+    @property
+    def module_statuses(self) -> tuple[dict[str, Any], ...]:
+        """Return independent rows describing each process and link.
+
+        States are STARTING, READY, LATE, DOWN or EXITED. An exit
+        description retains the code, or explains why none exists.
+        """
+        ready = self.ready_modules
+        rows = []
+        for name in self._supervisor.module_names:
+            state = "STARTING"
+            if name in self._module_exits:
+                state = "EXITED"
+            elif name in self._down:
+                state = "DOWN"
+            elif name in self._late:
+                state = "LATE"
+            elif name in ready:
+                state = "READY"
+            rows.append({
+                "name": name,
+                "state": state,
+                "pid": self._pids.get(name),
+                "exit": self._module_exits.get(name),
+            })
+        return tuple(rows)
+
+    def show_window(self, module: str) -> bool:
+        """Ask a connected module to reopen its window, without a tick.
+
+        Return False if the run is stopping or the module is absent.
+        """
+        if self._stopping or module in self._down:
+            return False
+        return self._supervisor.send(
+            module, show_message(self._clock.tick_count)
+        )
 
     def start(self) -> None:
         """Start every module process; the clock waits for them.
@@ -403,6 +461,7 @@ class Harness(QObject):
 
     def _on_module_started(self, name: str, pid: int) -> None:
         # The process is up; READY comes once it can step.
+        self._pids[name] = pid
         self._log_event(name, "MODULE_STARTED", f"pid {pid}")
 
     def _on_module_ready(self, name: str) -> None:
@@ -418,6 +477,7 @@ class Harness(QObject):
 
     def _on_startup_timed_out(self, names: list[str]) -> None:
         # Name the stragglers; the harness keeps waiting for them.
+        self._startup_timed_out = tuple(names)
         self._log_event(
             HARNESS, "STARTUP_TIMEOUT", "not ready: " + ", ".join(names)
         )
@@ -436,6 +496,7 @@ class Harness(QObject):
 
     def _on_module_exited(self, name: str, how: str) -> None:
         # Logged during shutdown too, for the exit code.
+        self._module_exits[name] = how
         self._log_event(name, "MODULE_EXITED", how)
         self._mark_down(name)
 

@@ -12,6 +12,7 @@ so the round trip must stay well under that.
 Run from the repository root::
 
     python -m common.harness.measure --seconds 10 --payload-bytes 1000
+    python -m common.harness.measure --window --seconds 10
 """
 
 from __future__ import annotations
@@ -109,7 +110,7 @@ class _Meter:
         # Close the measured while and leave the event loop.
         self.ended_s = time.perf_counter()
         self.cpu_s = time.process_time() - self._cpu_started_s
-        QCoreApplication.quit()
+        QCoreApplication.exit(EXIT_OK)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -120,7 +121,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.
     """
     options = _parse_args(argv)
-    app = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
+    if options.window:
+        from PySide6.QtGui import QGuiApplication
+
+        app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])
+    else:
+        app = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
+    app.setApplicationName("TrackOverflow")
     stub_options = {
         name: ["--payload-bytes", str(options.payload_bytes)]
         for name in MODULE_NAMES
@@ -131,6 +138,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     with tempfile.TemporaryDirectory() as folder:
         with EventLog(Path(folder) / "events.csv") as log:
             harness = Harness(stub_specs(stub_options), log)
+            window = None
+            if options.window:
+                from common.harness.console import HarnessConsole
+                from common.harness.window import HarnessWindow
+
+                console = HarnessConsole(harness)
+                console.select_module(CTC_OFFICE)
+                console.endRunRequested.connect(lambda: app.exit(EXIT_OK))
+                window = HarnessWindow(app, console)
             meter = _Meter(harness, options.seconds)
             meter.launched_s = time.perf_counter()
             harness.start()
@@ -140,11 +156,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                     (STARTUP_LIMIT_S + options.seconds)
                     * MILLISECONDS_PER_SECOND
                 ),
-                app.quit,
+                lambda: app.exit(EXIT_FAILED),
             )
             app.exec()
             dropped_ticks = harness.dropped_ticks
             exit_codes = harness.stop()
+            if window is not None:
+                window.close()
     if not meter.done:
         print("The modules never started ticking.", file=sys.stderr)
         return EXIT_FAILED
@@ -164,11 +182,17 @@ def _report(
         value * MILLISECONDS_PER_SECOND for value in meter.round_trips_s
     )
     startup_s = (meter.ready_s or meter.launched_s) - meter.launched_s
+    first_step_ms = (
+        (meter.started_s or meter.launched_s)
+        - (meter.ready_s or meter.launched_s)
+    ) * MILLISECONDS_PER_SECOND
     lines = [
         f"Seven stub modules at {options.speed}x, "
         f"{options.payload_bytes} bytes of filler per reply",
+        f"  front end:       {'window' if options.window else 'headless'}",
         f"  startup:         {startup_s:.2f} s until every module was ready",
         f"  measured:        {meter.wall_s:.2f} s real time",
+        f"  ready to step:   {first_step_ms:.2f} ms until first STEP",
         f"  ticks:           {meter.ticks} of {due_ticks:.0f} due",
         f"  speed achieved:  {achieved_speed:.2f}x",
         "  round trip (ms): "
@@ -204,6 +228,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m common.harness.measure",
         description="Measure the harness's real-time budget with stubs.",
+    )
+    parser.add_argument(
+        "--window",
+        action="store_true",
+        help="include the operator window in the measured process",
     )
     parser.add_argument(
         "--seconds",

@@ -28,6 +28,7 @@ from utils.harness_protocol import (
     encode,
     quit_message,
     step_message,
+    show_message,
 )
 from utils.module_link import ModuleLink, TickRejectedError
 
@@ -179,6 +180,17 @@ class ModuleLinkTest(unittest.TestCase):
         self.harness.send(quit_message(3))
         self.assertTrue(wait_until(lambda: self.quits == [True]))
         self.assertEqual(self.losses, [])
+
+    def test_show_signals_without_a_reply_or_a_step(self) -> None:
+        self.connect_ready()
+        shown = []
+        self.link.showRequested.connect(lambda: shown.append(True))
+        self.harness.send(show_message(15))
+        self.assertTrue(wait_until(lambda: shown == [True]))
+        self.assertEqual(self.steps, [])
+        self.assertEqual(self.link.tick, 0)
+        self.assertIsNone(self.link.last_reply)
+        self.assertEqual(len(self.harness.received), 1)
 
     def test_losing_the_harness_is_signalled_once(self) -> None:
         self.connect_ready()

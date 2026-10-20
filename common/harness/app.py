@@ -1,14 +1,12 @@
-"""Run the central harness from the command line.
+"""Run the central harness with a window, or a headless console.
 
-``python track_overflow.py`` lands here. The harness starts every
-module (in Phase 0, a stub for each), and runs until Ctrl+C or
-``--run-seconds``. The CTC Office's stub presses Run as soon as it is
-ready, since no window exists yet to press it in.
+No arguments open the operator window. ``--headless`` echoes events
+and prints a status line every five seconds. Both run until Ctrl+C,
+the time limit, or a confirmed window close. The CTC Office's stub
+presses Run when ready; the harness window has no clock controls.
 
-The event log goes to ``--log-dir``, by default the user's local
-application data folder (``TrackOverflow/logs``), never into the
-installation. Every logged event is echoed to the console, with a line
-of status every few seconds.
+The CSV goes to ``--log-dir``, defaulting to the user's application
+data folder (``TrackOverflow/logs``), never the installation.
 """
 
 from __future__ import annotations
@@ -42,7 +40,7 @@ MILLISECONDS_PER_SECOND = 1000
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the harness until Ctrl+C or ``--run-seconds``.
+    """Run until a confirmed close, Ctrl+C or ``--run-seconds``.
 
     Args:
         argv: Options; defaults to the command line.
@@ -51,7 +49,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         0 if every module ended cleanly, 1 otherwise.
     """
     options = _parse_args(argv)
-    app = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
+    if options.headless:
+        app = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
+    else:
+        from PySide6.QtGui import QGuiApplication
+
+        app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])
     app.setApplicationName(APPLICATION_NAME)
     log_dir = options.log_dir or _default_log_dir()
     log_path = log_dir / log_file_name(datetime.now())
@@ -60,20 +63,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         ctc_options += ["--speedup-at-tick", "0"]
     with EventLog(log_path) as log:
         harness = Harness(stub_specs({CTC_OFFICE: ctc_options}), log)
-        status = _StatusLine(harness)
-        harness.eventLogged.connect(status.print_event)
-        harness.tickCompleted.connect(status.count_tick)
+        window = None
+        if options.headless:
+            status = _StatusLine(harness)
+            harness.eventLogged.connect(status.print_event)
+            harness.tickCompleted.connect(status.count_tick)
+        else:
+            from common.harness.console import HarnessConsole
+            from common.harness.window import HarnessWindow
+
+            console = HarnessConsole(harness)
+            console.endRunRequested.connect(lambda: app.exit(EXIT_OK))
+            try:
+                window = HarnessWindow(app, console)
+            except RuntimeError as error:
+                print(str(error), file=sys.stderr)
+                return EXIT_FAILED
         print(f"Event log: {log_path}", flush=True)
         try:
             harness.start()
         except HarnessStartError as error:
             print(f"Cannot start the harness: {error}", file=sys.stderr)
+            if window is not None:
+                window.close()
             return EXIT_FAILED
 
         def stop_and_quit() -> None:
             # From Ctrl+C or the run limit. Stopping twice is harmless.
-            harness.stop()
-            app.quit()
+            # Shutdown runs after leaving the UI loop, using the same
+            # QUIT/wait/kill behavior as the headless console.
+            app.exit(EXIT_OK)
 
         signal.signal(
             signal.SIGINT, lambda *_: QTimer.singleShot(0, stop_and_quit)
@@ -82,8 +101,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         signal_timer.timeout.connect(lambda: None)
         signal_timer.start(SIGNAL_POLL_MS)
         status_timer = QTimer()
-        status_timer.timeout.connect(status.print_status)
-        status_timer.start(round(STATUS_INTERVAL_S * MILLISECONDS_PER_SECOND))
+        if options.headless:
+            status_timer.timeout.connect(status.print_status)
+            status_timer.start(
+                round(STATUS_INTERVAL_S * MILLISECONDS_PER_SECOND)
+            )
         if options.run_seconds is not None:
             QTimer.singleShot(
                 round(options.run_seconds * MILLISECONDS_PER_SECOND),
@@ -91,6 +113,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         app.exec()
         exit_codes = harness.stop()
+        if window is not None:
+            window.close()
     clean = all(code == 0 for code in exit_codes.values())
     return EXIT_OK if clean else EXIT_FAILED
 
@@ -150,6 +174,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="track_overflow.py",
         description="Run the Track Overflow harness and its modules.",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="use console output without opening a window",
     )
     parser.add_argument(
         "--log-dir",
