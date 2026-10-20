@@ -2,28 +2,32 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.6. Every question in section 1.5 is answered. Not normative. |
+| **Status** | Draft v0.7. Every question in section 1.5 is answered, and Phase 0 is built (section 5.1). Not normative. |
 | **Date** | 2026-10-20 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
-| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16 |
+| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1) |
 
 The `truth` branch is the authoritative record. This document cites it by shard path
 (`origin/truth:truth/<path>`, shortened below to the shard name) and does not override it.
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
 
-**Changes since v0.5**
+**Changes since v0.6**
 
-- Section 1.4 adds R79 to R81: the door interlock is adopted, the event logger stays, and
-  the USB link to the Pis is chosen (section 4.5).
-- Q7, Q19 and Q23 are answered, so no question in section 1.5 is open. What remains is
-  building and measuring.
-- Section 7 adds five proposals, three of them replacing this branch's earlier versions.
+- Phase 0 is built: the harness, its wire protocol, stub modules and their tests. Section
+  5.1 records what was built, what was measured, and where it departs from the plan.
+- The real-time budget is measured with seven stub processes (G-CLK-6): at 10x the mean
+  round trip of a tick is 1 to 3 ms against a 10 ms budget, for replies up to 30 KB.
+- Sections 4.2, 4.3 and 5 and the gaps G-CLK-3, G-CLK-6, G-LIFE-2 to G-LIFE-4, G-RUN-2
+  and G-RUN-6 to G-RUN-8 are updated to match.
+- No proposals are added. The wire messages implement R64, but their names and fields are
+  this build's, not a team decision (section 5.1).
 
-v0.5 recorded the second round of answers of 2026-10-20 (R65 to R78), v0.4 the first
-(R44 to R64), v0.3 those of 2026-10-17 (R33 to R43), and v0.2 the review of v0.1 (R1 to
-R32). Git history holds the earlier text.
+v0.6 recorded R79 to R81 and answered the last questions, v0.5 the second round of
+answers of 2026-10-20 (R65 to R78), v0.4 the first (R44 to R64), v0.3 those of 2026-10-17
+(R33 to R43), and v0.2 the review of v0.1 (R1 to R32). Git history holds the earlier
+text.
 
 **Tags**
 
@@ -554,7 +558,7 @@ relays the harness's messages to its Pi over USB serial (R42, R81).
 | Pause and resume | `clock_paused` true makes the harness call `pause()`, and false `resume()`. While paused nothing is stepped, so the CTC Office cannot report a resume as a step output. The harness has to read `clock_paused` outside a step, for example from a state message the CTC Office's process sends when the value changes. [P] `ctc-deployment/20261016-1517-clock-pause.md` proposes exactly that. | [R3, R51]; [P] | none |
 | Start | Paused at 05:00:00. | [T] D017 | none |
 | Display | Every window shows the time the harness sends. | [T] D017 | G-CLK-8 |
-| Pacing | `ClockDriver` on the harness's Qt event loop. The harness waits for every reply before the next tick. | [C]; [R64] | none |
+| Pacing | `TickPacer` on the harness's Qt event loop. It keeps `ClockDriver`'s real-time accounting, but starts no tick until every reply to the last one is in. | [C] section 5.1; [R64] | none |
 
 **Wrapped or unwrapped simulation time (Q2).** `SystemClock.sim_time_s` starts at 18 000 s
 (05:00:00) and keeps counting. One simulated day later it reads 104 400 s, not 18 000 s.
@@ -642,7 +646,9 @@ the table:
   that block's own values arrive. This changes R10's clearing to zero.
 
 Budget: at 10x a tick comes every 10 ms of real time. Seven module processes make 700 step
-messages a second, two of them over USB. Nothing has been measured (G-CLK-6).
+messages a second, two of them over USB. Measured with seven stub processes (section 5.1),
+a tick's round trip averages 1 to 3 ms for replies up to 30 KB, and 8 ms at 100 KB. The real
+modules and the USB hops are still to measure (G-CLK-6).
 
 ### 4.4 Data exchange
 
@@ -778,7 +784,7 @@ integrating everything at once.
 
 | Phase | Content | Needs first |
 |---|---|---|
-| 0 | Harness process: `SystemClock` and `ClockDriver`; spawning and watching the child processes; the protocol and wire format; tick fan-out to stub module processes; reading the CTC Office's speed and pause; an end-to-end tick test with stubs. | Measure the budget (G-CLK-6) |
+| 0 | **Built (section 5.1).** Harness process: `SystemClock` and a pacer that waits for every reply; spawning and watching the child processes; the protocol and wire format; tick fan-out to stub module processes; reading the CTC Office's speed and pause; an end-to-end tick test with stubs. | Done: the budget is measured with stubs (G-CLK-6) |
 | 1 | Train Model and one Train Controller on a fixed track feed, for one Green train: fleet `add`, the commands, the release command, the door interlock. | none |
 | 2 | Track Model: track feeds, position reports, doors open, clearing after delivery (R10), and zero for blocks not commanded. | none |
 | 3 | Track Controller SW on Green: commanded speed and authority per block, switches, signals, readiness, failures. | none |
@@ -786,6 +792,113 @@ integrating everything at once.
 | 5 | Red: Track Controller HW and Train Controller HW on Pis over USB serial, with the Red wayside data loaded (R34); packaging as one executable. | Measure the USB round trip (G-CLK-6) |
 
 The missing integration guides (section 3.1) should be written as each module joins.
+`common/harness/README.md` says how a module joins the harness.
+
+### 5.1 Phase 0 as built [C]
+
+Built on this branch on 2026-10-20. `common/harness/README.md` is the guide. This section
+records what was built and measured, and where it departs from the plan.
+
+`python track_overflow.py` starts the harness. The harness starts seven module processes
+by running the same program again with `--module stub --as <module>`, and drives them
+over local sockets. Each stub answers every step with outputs that echo what it was given,
+so the tests can check the harness without any real module.
+
+| Part | Where |
+|---|---|
+| Entry point: no arguments for the harness, `--module <name>` for one module | `track_overflow.py` |
+| Wire protocol, shared by both ends | `utils/harness_protocol.py` |
+| A module's end of the link | `utils/module_link.py` |
+| CSV event log (R80) | `utils/event_log.py` |
+| Tick loop, timeouts, rejections, the CTC Office's clock controls | `common/harness/core.py` |
+| Real-time pacing, one tick in flight at a time | `common/harness/pacer.py` |
+| Module processes and their links | `common/harness/supervisor.py` |
+| Module names, and the edge map of Appendix A | `common/harness/modules.py` |
+| Stub modules with scripted faults, and their inputs | `common/harness/stub_module.py`, `stub_edges.py` |
+| Budget measurement | `common/harness/measure.py` |
+
+**Protocol (G-RUN-6).**
+
+- Every message is one JSON object on one line, with `op`, an integer `id` and the `tick`.
+- The harness sends `STEP`, with `dt`, `sim_time_s` and `inputs`, and `QUIT`.
+- A module sends:
+  - `READY`, with its name and the protocol version;
+  - `OUTPUTS`, or `REJECTED` with a reason, in answer to a `STEP`;
+  - `STATE` for a change between ticks.
+- The harness's server is open only to the same user. A connection must name an expected
+  module in its first message. A second connection for the same module is refused.
+
+**Behaviour, as tested.**
+
+- Every module gets every tick, in order, with `dt` 0.1 s and the unwrapped time at the
+  end of the step. Its inputs are the outputs of the tick before (R1, R2).
+- The clock runs only while every module is ready, none is late or down, and the CTC Office
+  asks it to. The CTC Office's `clock_paused` and `clock_speedup` come from its outputs,
+  and while paused from its `STATE` (R3, R51).
+- A rejected tick is logged. The module keeps its previous outputs, and the run goes on
+  (R19).
+- A reply later than 1 s pauses the clock and names the module. The clock resumes when
+  the reply comes (R64).
+- A reply nobody is waiting for is logged and ignored, so each request is answered once.
+- A module that exits or drops its link holds the clock for the rest of the run, since
+  there is no reset mid-run (R64).
+- Shutdown sends `QUIT`, waits up to 5 s, and kills what is left (R64).
+- When the run falls more than 100 ticks behind real time, the backlog is dropped and
+  logged as `TIME_SLIPPED`. No module misses a tick; simulation time runs slow (G-CLK-5).
+
+There are 41 tests in `common/harness/tests`, among them four end-to-end runs of seven
+stub processes each, about 5 s in all. Another 30 in `utils/tests` cover the protocol,
+the event log and the module's link.
+
+**Budget (G-CLK-6).** Seven stub processes at 10x for 10 s each, on a four-core 2.8 GHz
+Xeon under Linux. The reply size is filler added to every stub's outputs. Each module's
+inputs carry its producers' outputs whole, so a tick moves about 24 times that size.
+
+| Reply size | Speed reached | Round trip, mean | p95 | p99 | Max | Harness CPU |
+|---|---|---|---|---|---|---|
+| none | 10.00x | 1.1 ms | 1.6 ms | 2.4 ms | 8.7 ms | 9% |
+| 1 KB | 10.01x | 1.2 ms | 1.9 ms | 3.1 ms | 6.4 ms | 10% |
+| 10 KB | 10.00x | 1.8 ms | 2.7 ms | 3.9 ms | 9.4 ms | 18% |
+| 30 KB | 10.00x | 2.8 ms | 4.3 ms | 6.1 ms | 10.8 ms | 27% |
+| 100 KB | 9.99x | 8.4 ms | 11.9 ms | 14.0 ms | 19.2 ms | 75% |
+
+- No run slipped a tick or had a late reply. A round trip over 10 ms is made up by the
+  ticks after it, which run back to back.
+- 100 KB is the limit: the harness spends most of a core on JSON. An earlier 100 KB run,
+  with other work on the machine, fell to 8.9x.
+- At 1x the mean round trip is 1.5 ms against a 100 ms budget.
+- Every stub is ready about 0.25 s after launch, against G-LIFE-2's 20 s.
+- Still to measure: the real modules, the Windows lab machines, and the two USB hops
+  (Phase 5).
+
+**Frozen build (G-RUN-2).** A one-folder PyInstaller 6.22.2 build on Linux, with no
+options, ran the harness at 10x. It re-ran itself as each of the seven modules, and every
+module quit cleanly. The build is 91 MB. The Windows build is still to try.
+
+**Departures from the plan.**
+
+- **Pacing:** `TickPacer`, not `ClockDriver`. `ClockDriver` runs owed ticks back to back
+  inside one timer fire, so it cannot wait for replies that come later. `TickPacer` keeps
+  its accounting: owed ticks run back to back, up to 100, and past that the backlog is
+  dropped. It starts no tick while one is in flight. A pause keeps at most the next tick
+  owed, so a run resumes without a burst.
+- **Module names:** on the command line and in the protocol they are the `truth` shard
+  keys: `ctc-office`, `track-controller-sw`, `track-controller-hw`, `track-model`,
+  `train-model`, `train-controller-sw` and `train-controller-hw`.
+- **The CTC Office's state while paused:** R51 and the pending clock-pause proposal have
+  the harness read it from the CTC Office's snapshot. In this build the module pushes the
+  changed values as a `STATE` message, rather than the harness asking for them. The CTC
+  Office owner should confirm that.
+- **Ctrl+C:** module processes ignore it, since it reaches every process in a console.
+  The harness alone ends them, with `QUIT` (G-RUN-7).
+- **Not decided:** the op names and message fields are this build's, not a team decision.
+  They can go to `truth` as an interface entry once the team accepts them.
+
+**Not built yet:**
+
+- the real modules (Phase 1 on);
+- the harness's window, which is to show rejections (G-LIFE-4);
+- the USB relay and the Pi side (Phase 5).
 
 ## 6. Gaps and open questions
 
@@ -799,10 +912,10 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 |---|---|---|---|
 | G-CLK-1 | Resolved (R1, R4) | Meaning of "in parallel": direct fan-out, concurrent steps, inputs on the rising edge. The barrier question moved to G-CLK-11. | D017 owner Landis |
 | G-CLK-2 | Resolved (R2, R64) | Every module gets dt and the unwrapped simulation time, `sim_time_s`, and works out the time of day itself ([P] D017). Left: the CTC Office, Track Model, Train Model and Train Controller need the new input, and the Track Controllers' `time_s` gives way to it (R14). | D017 owner Landis; module owners |
-| G-CLK-3 | Resolved (R3, R51) | `clock_paused` is one boolean, true while paused, starting paused. While paused the harness reads it from the CTC Office's `snapshot()` ([P] `ctc-deployment/20261016-1517-clock-pause.md`, form confirmed). Left: the CTC header must drive the module's value, not the window's own clock. | signal owner CTC Office |
+| G-CLK-3 | Resolved (R3, R51) | `clock_paused` is one boolean, true while paused, starting paused. While paused the harness reads it from the CTC Office's `snapshot()` ([P] `ctc-deployment/20261016-1517-clock-pause.md`, form confirmed). Left: the CTC header must drive the module's value, not the window's own clock. Phase 0 has the module push the value as a `STATE` message; the CTC Office owner to confirm (section 5.1). | signal owner CTC Office |
 | G-CLK-4 | Resolved (R64) | The 0.1 s tick is a recorded deviation from REQ-NFR-001.1's 1 ms "should" ([P] D017). | D017 owner Landis |
 | G-CLK-5 | Resolved (R64) | No tick is skipped: when the harness falls behind, simulated time runs slower than real time ([P] D017). | D017 owner Landis |
-| G-CLK-6 | Open, action agreed (R64) | Real-time budget: measure seven stub processes at 10x before the real modules are wired in. The wall-clock driver test fails intermittently on this machine (section 3.5). | unassigned |
+| G-CLK-6 | Measured with stubs (R64) | Seven stub processes at 10x: a mean round trip of 1 to 3 ms against the 10 ms budget for replies up to 30 KB, and no tick slipped (section 5.1). Left: the real modules, the Windows lab machines, and the USB round trip (Phase 5). | unassigned |
 | G-CLK-7 | Resolved (R15, R16, R57) | The test-UI clocks and the CTC window's clock go. The Train Controller's gains hand-over moves to simulation time; its announcement lockout and the Train Model's ads and popups stay on wall-clock time. | module owners |
 | G-CLK-8 | Resolved (R58, R63, R64) | Every window shows the harness's time of day. Left: the code in the Train Model, Track Model and Train Controller windows. | module owners |
 | G-CLK-9 | Resolved (R64) | The `SystemClock` code stays in `utils/system_clock.py`, and the harness owns the instance. | D017 owner Landis |
@@ -838,9 +951,9 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-LIFE-1 | Resolved (R18, R44) | Layout files load by default at startup; PLC programs and wayside databases are loaded by hand. Left: Red's HW data, later (R34). | unassigned |
-| G-LIFE-2 | Resolved (R64), to measure | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Left: measure it against 20 s. | unassigned |
-| G-LIFE-3 | Resolved (R64) | On exit the harness tells every module to quit, and ends any that do not ([P] D005). | unassigned |
-| G-LIFE-4 | Partly (R19, R64, R80) | A rejected tick is skipped, the run continues, and the harness shows it in its window and writes it to the event log. The team will return to what can break. | unassigned |
+| G-LIFE-2 | Resolved (R64), built | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Seven stubs are ready in about 0.25 s (section 5.1). Left: the real modules, with their windows and files, against 20 s. | unassigned |
+| G-LIFE-3 | Resolved (R64), built | On exit the harness tells every module to quit, and ends any that do not ([P] D005). Built: `QUIT`, up to 5 s, then kill (section 5.1). | unassigned |
+| G-LIFE-4 | Partly (R19, R64, R80) | A rejected tick is skipped, the run continues, and the harness shows it in its window and writes it to the event log. The team will return to what can break. Built: the skip and the log; the harness has no window yet. | unassigned |
 | G-LIFE-5 | Resolved (R12, R76) | Every test UI goes at integration except the Track Controller HW test UI, which stays and is never started by the harness ([P] D005; pending D018). | D010 owner Kevin Schillinger |
 
 ### 6.4 Process, packaging and runtime
@@ -848,13 +961,13 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-RUN-1 | Resolved (R4) | Process model 2. The work it creates is G-RUN-6, -7 and -8. | none |
-| G-RUN-2 | Resolved (R29, R64), to test | One executable: no arguments starts the harness, `--module <name>` a module, and the harness re-runs it once per module ([P] `files-and-paths`). Left: try the frozen build on Windows early; the course deck's per-subsystem installables. | unassigned |
+| G-RUN-2 | Resolved (R29, R64), built | One executable: no arguments starts the harness, `--module <name>` a module, and the harness re-runs it once per module ([P] `files-and-paths`). A frozen one-folder build on Linux works (section 5.1). Left: try the frozen build on Windows early; the course deck's per-subsystem installables. | unassigned |
 | G-RUN-3 | Resolved (R30, R81) | Everything runs on one computer, with the Pis as USB peripherals of it ([P] D027). | unassigned |
 | G-RUN-4 | Resolved (R80) | The event logger stays: the harness writes one CSV file ([P] `files-and-paths`, D005). This reverses R13, so no conflict with the SRS remains. | files-and-paths owner Kevin |
 | G-RUN-5 | Resolved (R31) | PySide6 6.11 or later. Left: `TrackCtrlSW/README.md` still installs 6.8. | toolchain owner Kevin |
-| G-RUN-6 | Resolved (R64), to build | Newline-delimited JSON, each message with a request ID and the tick number; one driver per module ([P] D005). | unassigned |
-| G-RUN-7 | Resolved (R64), to build | Each module says when it is ready; windows hide rather than close; only the harness ends a module ([P] D005). | unassigned |
-| G-RUN-8 | Resolved (R64) | Window changes show up in the module's next outputs; pause is read from the CTC Office's state ([P] D005). | unassigned |
+| G-RUN-6 | Resolved (R64), built | Newline-delimited JSON, each message with a request ID and the tick number; one driver per module ([P] D005). Built in `utils/harness_protocol.py` (section 5.1). | unassigned |
+| G-RUN-7 | Resolved (R64), harness side built | Each module says when it is ready; windows hide rather than close; only the harness ends a module ([P] D005). Left: each module's side, hiding its window and announcing it is ready, as it joins. | unassigned |
+| G-RUN-8 | Resolved (R64), harness side built | Window changes show up in the module's next outputs; pause is read from the CTC Office's state ([P] D005). Built: the harness reads the CTC Office's `STATE` (section 5.1). | unassigned |
 
 ### 6.5 Hardware variants and variant selection
 
