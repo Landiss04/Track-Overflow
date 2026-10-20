@@ -7,7 +7,7 @@ starts every module by running this same program again with
 
 ``stub`` stands in for any of the seven modules. The real modules are
 wired in one phase at a time: Phase 1 adds the Train Model and the
-Train Controller SW.
+Train Controller SW, and Phase 2 the Track Model.
 """
 
 from __future__ import annotations
@@ -61,6 +61,15 @@ def _run_stub(args: list[str]) -> int:
     return stub_module.main(args)
 
 
+def _run_track_model(args: list[str]) -> int:
+    # The Track Model's package sits in its own folder, beside its
+    # layout files and its window's QML.
+    _import_from("TrackModel")
+    from track_model import module_process
+
+    return module_process.main(args)
+
+
 def _run_train_model(args: list[str]) -> int:
     # The Train Model's package sits in its own folder.
     _import_from("TrainModel")
@@ -86,6 +95,7 @@ def _import_from(folder: str) -> None:
 # Every module this executable can run, by its --module name.
 _MODULES: dict[str, Callable[[list[str]], int]] = {
     "stub": _run_stub,
+    "track-model": _run_track_model,
     "train-model": _run_train_model,
     "train-controller-sw": _run_train_controller_sw,
 }
