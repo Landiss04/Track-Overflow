@@ -672,8 +672,9 @@ def run_check(
 
     # Doors are the controller's (REQUIREMENTS.md M6): never opened
     # while moving; in Automatic, opened on the platform side at a new
-    # station once stopped, closed when the Track Signal resumes, and
-    # the train leaves only once Door State reports them closed.
+    # station once stopped, held open for the 45 s dwell however soon
+    # the Track Signal resumes (truth D007), then closed, and the train
+    # leaves only once Door State reports them closed.
     door = mod.ControllerCore()
     door.armed = True
     door.apply_staged(mod.read_inputs({"commanded_speed": 10.0,
@@ -698,8 +699,13 @@ def run_check(
     door.apply_staged(mod.read_inputs({"commanded_speed": 10.0,
                                        "authority_blocks": 3}))
     door.step(plant=False)
+    expect(door.state.doors_right and door.state.target_mps == 0.0,
+           "the train left before the 45 s dwell was over")
+    for _ in range(round(mod.DWELL_S / door.dt)):
+        door.step(plant=False)
     expect(not door.state.doors_right,
-           "the doors were not closed when the Track Signal resumed")
+           "the doors were not closed once the dwell was over and the "
+           "Track Signal had resumed")
     door.step(plant=False)
     expect(door.state.target_mps == 0.0,
            "the train left before Door State reported the doors closed")

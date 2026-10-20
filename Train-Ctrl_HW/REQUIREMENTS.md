@@ -22,7 +22,7 @@ module documentation is to be updated later (see §6).
 | M3 | **Failures are detected, not reported.** The Train Model no longer sends failure status; the controller infers engine, brake and signal pickup failures from the signals it gets back (§4). |
 | M4 | **A brake failure disables the service brake only.** On detection the controller applies and latches the emergency brake. |
 | M5 | **Clearing a failure:** when the test UI drives the system, the bench clears it, and there is no driver reset. Once integrated this is undecided (`OPEN_ISSUES.md` #14). |
-| M6 | **Doors are the controller's.** Door-open commands go out only when the Train Model reports speed 0. Automatic: at a station (beacon), once stopped, open the platform side; when a non-zero Track Signal resumes, close the doors, then depart. The dwell is the Train Model's. |
+| M6 | **Doors are the controller's.** Door-open commands go out only when the Train Model reports speed 0. Automatic: at a station (beacon), once stopped, open the platform side; hold the 45 s dwell; once it is over and a non-zero Track Signal has resumed, close the doors, then depart. The CTC Office schedules the dwell and the controller enforces it (truth D007; Kevin Schillinger 2026-10-20). |
 | M7 | **Announcements are commands.** The controller sends an announcement command; the Train Model makes the announcement. Automatic sends it on the approach to a station (beacon); Manual on the driver's press. |
 | M8 | **Lights in Automatic:** on in a tunnel (beacon underground) and at dusk. Nothing tells the train when it is dark yet, so this is documented for later. |
 | M9 | **Kp/Ki** are set in an Engineer-only pop-up, not in the driver's cab. |
@@ -48,7 +48,7 @@ module documentation is to be updated later (see §6).
 | FUNC-033 | 4.7 (1) | Lights on and off | Partial | Driver toggles only; automatic lights deferred (M8) |
 | FUNC-034 | 4.8 (1) | Doors open and close | Met | M6 |
 | FUNC-035 | 4.9 (1) | Announce stations | Met | M7 |
-| FUNC-036 | 4.9 | Stop correctly at each station | Partial | Stops where authority and commanded speed end, then serves the station (M6); where that is depends on the wayside. Dwell is the Train Model's |
+| FUNC-036 | 4.9 | Stop correctly at each station | Partial | Stops where authority and commanded speed end, then serves the station and holds the 45 s dwell (M6); where that is depends on the wayside. A station run through stays pending (`OPEN_ISSUES.md` #25) |
 | FUNC-037.1 | 4.10 (1) | Stop when authority is exhausted | Partial | Brakes at a count of 0 only; overruns above 34.6 mph with 100 m blocks (`OPEN_ISSUES.md` #11). Left open. |
 | FUNC-037.2 | 4.10 | Stop when a failure is detected | Met | M4 |
 | FUNC-038 | — | Detect engine, signal pickup and brake failures | Met | From returned signals (M3). The SRS wording "reported by the Train Model" is out of date (§6). |

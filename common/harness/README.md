@@ -139,9 +139,9 @@ exactly once.
   open (`signals/door-state`). Until the Train Model reports a block for a new train,
   the harness sends `placement_report`: at rest at the start of the yard exit block.
 - **Track Model → Train Model.** Each train's feed becomes its `track` input, field for
-  field, with the block named by its number. A beacon passes unchanged once
-  `utils.beacon_codec.encode_beacon` has checked its payload; a malformed one fails the
-  Train Model's inputs for that tick.
+  field, with the block named by its number. A beacon passes unchanged: the Train Model
+  checks its payload (`utils/beacon_codec.py`) and rejects a train whose beacon is
+  malformed, so only that train misses the tick.
 - **Track Model → Train Controller.** The light a train saw as it entered a block with a
   signal (`signal_seen`), sent on that tick only, with `SUPER_GREEN` spelled the Train
   Controller's way. The Train Controller keeps the last light it was given. Truth's
@@ -155,8 +155,9 @@ exactly once.
   occupancy alone, it commands per block the speed and authority of a scripted route:
   authority to the next stop not yet served, or to the destination, and the next block
   preloaded with one block less (R49), so a train never enters a block that reads zero.
-  A stop holds the train for 60 s after it enters the stop's block: braking, then D007's
-  45 s dwell, which the Train Controller does not time yet. The wayside steps on the
+  A stop holds the train for 60 s after it enters the stop's block, as the CTC Office's
+  schedule would: braking, then the 45 s dwell, which the Train Controller enforces
+  (D007). The wayside steps on the
   Track Model's outputs of the tick before, so its commands reach the Track Model a tick
   later, as a module's would. It serves one train, once.
 - **Left the track.** A train the Track Model stops feeding has run into the yard. The

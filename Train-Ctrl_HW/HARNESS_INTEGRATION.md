@@ -129,7 +129,7 @@ Rules:
 
 - **Speed.** The target is the commanded speed, never above the car's 70 km/h (43.5 mph). The Train Model has no governor (D009), so the controller holds the cap (M1).
 - **Traction** is 0 while either brake is commanded, and while an Automatic station stop holds the train. A train that is not commissioned commands 0 W (see Commissioning).
-- **Doors** (M6). A door opens only when `actual_speed` reports the train stopped (under 0.1 m/s), and only on the platform side the last beacon gave. In Automatic, when a new `beacon_station` has arrived and the train stops, the controller opens the platform side and holds the train. When the Track Signal resumes (commanded speed and authority both above 0), it closes the doors, and it moves off only once `door_state` reports both closed. The dwell itself is the Train Model's.
+- **Doors** (M6). A door opens only when `actual_speed` reports the train stopped (under 0.1 m/s), and only on the platform side the last beacon gave. In Automatic, when a new `beacon_station` has arrived and the train stops, the controller opens the platform side and holds the train for the 45 s dwell, which the CTC Office schedules and the controller enforces (truth D007). Once the dwell is over and the Track Signal has resumed (commanded speed and authority both above 0), it closes the doors, and it moves off only once `door_state` reports both closed. A station the train runs through stays pending until its next stop (`OPEN_ISSUES.md` #25).
 - **Announcements** (M7). The controller only sends the command; the Train Model makes the announcement. In Automatic, a new `beacon_station` sends that station's name for 5 s. In Manual, the driver's press does.
 
 ## Under the central harness

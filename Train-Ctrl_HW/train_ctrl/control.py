@@ -16,6 +16,7 @@ from .constants import (
     BRAKE_DETECT_S,
     CABIN_DRIFT_FRACTION,
     CABIN_DRIFT_MAX_C,
+    DWELL_S,
     EBRAKE_DECEL_MPS2,
     ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
@@ -63,10 +64,12 @@ class ControllerCore:
         self._acted_lights: tuple[bool, bool] | None = (True, True)
         # Automatic station stop (REQUIREMENTS.md M6): a new beacon
         # station not yet served, and whether the train is held at
-        # it, first with the doors open and then while they close.
+        # it, first with the doors open and then while they close;
+        # and the steps of the 45 s dwell still to run (truth D007).
         self._station_pending = False
         self._dwelling = False
         self._closing = False
+        self._dwell_steps_left = 0
         # Seconds left on an automatic announcement command.
         self._announce_left_s = 0.0
         # The emergency brake as commanded on the last echo_ticks
@@ -415,10 +418,13 @@ class ControllerCore:
 
     def _station_stop(self) -> None:
         # Automatic only (REQUIREMENTS.md M6). Stopped at a new
-        # station: open the platform side and hold. The dwell is the
-        # Train Model's; the controller holds until the Track Signal
-        # resumes, then closes the doors and departs only once Door
-        # State reports them closed.
+        # station: open the platform side and hold for the dwell. The
+        # CTC Office schedules the dwell and the controller enforces
+        # it (truth D007): it leaves once 45 s have passed with the
+        # doors open and the Track Signal has resumed, whichever comes
+        # last, closing the doors first and departing only once Door
+        # State reports them closed. The dwell is counted in steps of
+        # the fixed 0.1 s, so it never runs short on rounding.
         s = self.state
         if s.manual:
             self._dwelling = self._closing = False
@@ -426,11 +432,14 @@ class ControllerCore:
         if self._station_pending and self.at_stand:
             self._station_pending = False
             self._dwelling = True
+            self._dwell_steps_left = round(DWELL_S / self.dt)
             for side in ("left", "right"):
                 if self.platform_on(side):
                     self.command_door(side, True)
+        elif self._dwelling and self._dwell_steps_left > 0:
+            self._dwell_steps_left -= 1
         resumed = self.commanded_mps > 0.0 and self.authority_blocks > 0
-        if self._dwelling and resumed:
+        if self._dwelling and resumed and self._dwell_steps_left == 0:
             self._dwelling = False
             self._closing = True
             for side in ("left", "right"):

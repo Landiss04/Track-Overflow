@@ -124,20 +124,32 @@ Item 3 (half of the speed dial's dead zone asked for full speed) is fixed
 
 ## Added 2026-10-20 (Phase 1 of the central harness)
 
-23. **The dwell belongs to the controller now.** Rule M6 says "the dwell
-    is the Train Model's", and the Automatic station stop holds the
-    train until the Track Signal resumes. Truth D007 has since given the
-    dwell to the Train Controller: open the platform-side doors, hold
-    the train for the 45 s dwell, close the doors, and depart only once
-    the commanded speed is above zero. The controller does not time the
-    dwell yet; under the harness's fixed track feed the Track Signal
-    resumes after about 50 s, so Phase 1 does not show the gap.
+23. **The dwell belongs to the controller now.** Fixed 2026-10-20, for
+    the owners to review (`CHANGELOG.md`): Kevin Schillinger set that the
+    CTC Office schedules the 45 s dwell and the controller enforces it
+    (truth D007 and its pending update). The Automatic station stop now
+    holds the doors open at least 45 s (`DWELL_S`, counted in 0.1 s
+    steps), however soon the Track Signal resumes, then closes them and
+    departs once Door State reports them closed. `check.py` checks it.
 
 24. **The fourth light is spelled with a space.** `ASPECTS` holds
     `"SUPER GREEN"`; truth `signals/signal-aspect-ahead` spells it
     `SUPER_GREEN`, as every enumerated value is in capitals with
     underscores. The harness maps it on the way in for now
     (`common/harness/train_edges.py`).
+
+25. **A station run through stays pending until the next stop.** A new
+    beacon station marks a stop pending (`apply_staged`), served once the
+    train stands. A train that runs through the station without stopping,
+    as it does through every station not on its schedule (truth D020),
+    keeps it pending: the beacon after the station names the same station,
+    so nothing clears it. At its next stand, wherever that is, Automatic
+    opens the platform-side doors and holds the dwell there. Found under
+    the central harness on 2026-10-20: with authority back before the
+    train had stopped at GLENBURY, it ran through, stopped at the end of
+    its route in block 67, and opened its doors there. A fix could clear
+    the pending stop when a beacon for the same station arrives while the
+    train is moving, as it leaves the station.
 
 ## Carried over
 

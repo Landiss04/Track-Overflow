@@ -11,6 +11,10 @@ CLOCK_START = (5, 0, 0)         # D017's clock starts at 05:00:00
 UI_HZ = 10
 ANNOUNCE_LOCKOUT_MS = 5000
 GAINS_HANDOVER_MS = 1500
+# Station dwell, truth D007: the CTC Office schedules it, and the
+# controller enforces it, holding a station stop at least this long
+# with the doors open, whatever the Track Signal says meanwhile.
+DWELL_S = 45.0
 
 # Truth modules/train-model.md: 4 x 120 kW, the data sheet's 120 kW
 # per motor rather than for the whole car (provisional, pending the

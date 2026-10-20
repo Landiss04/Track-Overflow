@@ -10,9 +10,11 @@ which reach the Track Controller from Phase 4.
 
 The script is a route of blocks on one line, the first the line's yard
 exit block (D022), the last the train's destination. Some blocks are
-stops, where the train is held for a while after it enters: braking to
-a stand, then D007's 45 s dwell, which the Train Controller does not
-time yet (``Train-Ctrl_HW/OPEN_ISSUES.md`` #23). For each occupied
+stops, where the wayside holds the train for a while after it enters,
+as the CTC Office's schedule would: braking to a stand, then the 45 s
+dwell. The CTC Office schedules the dwell and the Train Controller
+enforces it (D007), so a train leaves no sooner than 45 s after its
+doors open, however soon its authority comes back. For each occupied
 block on the route the wayside commands:
 
 - authority: the blocks left to the next stop not yet served, or to

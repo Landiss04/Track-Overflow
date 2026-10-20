@@ -76,6 +76,21 @@ OPEN_LINE = WaysideRoute(
     "Green", tuple(RouteBlock(str(n), 10.0) for n in range(63, 74))
 )
 
+#: A stop at GLENBURY whose authority comes back 15 s after the train
+#: enters: once it stands, but well before the dwell is over, which the
+#: Train Controller enforces.
+EARLY_RESUME = WaysideRoute("Green", (
+    RouteBlock("63", 10.0),
+    RouteBlock("64", 10.0),
+    RouteBlock(GLENBURY, 10.0, hold_s=15.0),
+    RouteBlock("66", 10.0),
+    RouteBlock("67", 10.0),
+))
+
+#: Truth D007: the CTC Office schedules the dwell; the Train Controller
+#: enforces it.
+DWELL_S = 45.0
+
 
 def _wire(value: Any) -> Any:
     # Through JSON and back, as across a process boundary.
@@ -301,6 +316,30 @@ class StationStopTest(unittest.TestCase):
         self.assertNotIn(
             "TRAIN_LEFT_TRACK", [event[1] for event in self.loop.events]
         )
+
+
+class DwellTest(unittest.TestCase):
+    """The Train Controller holds the dwell, however soon it may go."""
+
+    def test_the_doors_stay_open_for_the_dwell(self) -> None:
+        loop = _Loop(EARLY_RESUME)
+        ticks: dict[str, int] = {}
+
+        def doors_closed_again() -> bool:
+            if not loop.has(TRAIN_MODEL):
+                return False
+            if loop.report["door_right_open"]:
+                ticks.setdefault("opened", loop.tick)
+            elif "opened" in ticks:
+                ticks["closed"] = loop.tick
+                return True
+            return False
+
+        self.assertTrue(loop.run_until(doors_closed_again, limit_s=150.0))
+        open_s = (ticks["closed"] - ticks["opened"]) * DT_S
+        self.assertGreaterEqual(open_s, DWELL_S)
+        self.assertLess(open_s, DWELL_S + 1.0)
+        self.assertTrue(loop.run_until(lambda: loop.speed_mps > 1.0))
 
 
 class EmergencyBrakeTest(unittest.TestCase):

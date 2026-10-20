@@ -5,12 +5,14 @@ Train Model and the Train Controller SW as themselves, and stubs for
 the rest. The CTC Office's stub releases G1 onto the Green Line on the
 first tick. The Track Model places it on the yard exit block, and a
 scripted wayside, standing in for the Track Controller, takes it to a
-short stop at GLENBURY and on. The Train Controller process plays the
-engineer (``--engineer-gains``), so the train moves without a person.
+stop at GLENBURY and on. The wayside gives authority back 15 s after
+the train enters the station's block, once it stands, and the Train
+Controller still holds the 45 s dwell (truth D007). The Train
+Controller process plays the engineer (``--engineer-gains``), so the
+train moves without a person.
 The run checks the order the modules take the train, the blocks it
-runs through, the station stop behind the door interlock, and a clean
-shutdown. It takes about fifteen real seconds, much of it the windows
-starting offscreen.
+runs through, the station stop behind the door interlock and its dwell,
+and a clean shutdown. It takes about fifteen real seconds.
 
 Run from the repository root with
 ``python -m unittest discover -s common/harness/tests``.
@@ -53,18 +55,20 @@ _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
 # Generous: seven processes start at once, three of them with windows.
 WAIT_S = 120.0
-LAST_TICK = 850
+LAST_TICK = 1150
 STANDSTILL_MPS = 0.1
 GLENBURY = "65"
+DWELL_S = 45.0
 
-#: Out of the yard exit block at 10 m/s, a short stop at GLENBURY
-#: (platform on the right), and on to block 67.
+#: Out of the yard exit block at 10 m/s, a stop at GLENBURY (platform
+#: on the right) whose authority comes back 15 s after the train
+#: enters, and on to block 67.
 ROUTE = WaysideRoute(
     line="Green",
     blocks=(
         RouteBlock("63", 10.0),
         RouteBlock("64", 10.0),
-        RouteBlock(GLENBURY, 10.0, hold_s=25.0),
+        RouteBlock(GLENBURY, 10.0, hold_s=15.0),
         RouteBlock("66", 10.0),
         RouteBlock("67", 10.0),
     ),
@@ -213,6 +217,14 @@ class SystemTest(unittest.TestCase):
         for _, _, report, commands in self.driven():
             if report["door_left_open"] or report["door_right_open"]:
                 self.assertEqual(commands["power_w"], 0.0)
+
+    def test_the_doors_stay_open_for_the_dwell(self) -> None:
+        open_ticks = [
+            tick for tick, _, report, _ in self.driven()
+            if report["door_right_open"]
+        ]
+        self.assertGreaterEqual(len(open_ticks) * 0.1, DWELL_S)
+        self.assertEqual(open_ticks[-1] - open_ticks[0] + 1, len(open_ticks))
 
     def test_the_train_moves_off_with_its_doors_shut(self) -> None:
         driven = self.driven()

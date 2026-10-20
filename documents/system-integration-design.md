@@ -911,18 +911,21 @@ Alone, the bundled Track Model process found its layouts and window.
 
 - **Wayside:** a stand-in for the Track Controller and for the CTC Office's suggestions.
   It reads occupancy only, serves one train once, and holds a stop for a fixed 60 s
-  from the train's entry rather than timing D007's dwell from the stand. The Track
+  from the train's entry, as a schedule would. The Train Controller enforces the 45 s
+  dwell itself since 2026-10-20 (D007). The Track
   Controller replaces it in Phase 3, and the CTC Office's suggestions in Phase 4.
 - **Light ahead:** the Track Model sends the light a train sees only on the tick it
   enters a block with a signal, and the Train Controller keeps the last one. `truth`'s
   `signal-aspect-ahead` asks for the next light ahead on every tick (G-SIG-10). The
   Track Model shows a train the light of any signal block it enters, whichever way it
-  runs: block 64's light guards the switch at 63 for trains heading toward it.
+  runs: block 64's light guards the switch at 63 for trains heading toward it. Logged
+  as a Track Model bug (`TrackModel/BUGS.md` B1).
 - **Ambient temperature:** the harness sends none, so it starts at 0 °C until someone
   sets it in the Track Model window (R28).
-- **Beacons:** the edge checks each one with `utils/beacon_codec.py`, as the October 20
-  review asks. A malformed one fails the Train Model's inputs for that tick, for every
-  train, not only its own.
+- **Beacons:** the edge passes each one unchanged, and the Train Model checks it
+  (`utils/beacon_codec.py`): a malformed one makes only its own train miss the tick
+  (R60). Kevin Schillinger chose this on 2026-10-20 over checking at the edge, which
+  would have failed the Train Model's inputs for every train.
 - **Old edges:** `common/harness/track_model_edges.py` and the catalog it maps through
   are off the running path. They remain for the Track Model's own tests.
 - **Red Line:** the harness would place a Red train on block 9, but its Train
@@ -1205,12 +1208,12 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-SIG-7 | Resolved (R22, R52, R67) | A mapping from station to count, zeros optional, as sales since the last report, passed on exactly once. The Track Model does not load the Blue Line, so no unknown station reaches the CTC Office ([P] D023). | signal owner Track Model |
 | G-SIG-8 | Resolved (R33, R69) | A failed block reads as occupied, and the Track Controller reports it to the CTC Office as occupied, with no closure ([P] `block-occupancy`; pending D015). | Track Controller owners |
 | G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Built in Phase 2: the Track Model's commanded speed is a float, and the harness maps doors open from the Train Model's door state, either door, without a new Train Model output (section 5.3). | signal owner Track Model; Train Model owner Kevin Schillinger |
-| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN` (the harness maps it meanwhile), and the Track Model must produce the light ahead of each train on every tick; it sends the light only as a train enters a signal block (section 5.3). | signal owner Track Model |
+| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN` (the harness maps it meanwhile), and the Track Model must produce the light ahead of each train on every tick; it sends the light only as a train enters a signal block (section 5.3), logged as a bug on 2026-10-20 (`TrackModel/BUGS.md` B1). | signal owner Track Model |
 | G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Built in Phase 2: the harness maps the Track Model's block names, `GREEN K-63`, both ways (section 5.3). Left: the HW variant's section keys (Phase 5). | identifiers owner Kevin |
 | G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Built in Phase 2: each tick's commands replace the last (section 5.3). | Track Model owner |
 | G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). Phase 2 maps the Track Model's edges to the trains directly (`track_edges.py`); the legacy `track_model_edges.py` stays for the Track Model's own tests, and other modules still import `common/interfaces.py`. | D008 owner Kevin |
 | G-SIG-14 | Partial: Phases 1 and 2 built | Mapped directly: Train Model ↔ Train Controller (Phase 1), and Track Model ↔ Train Model and Track Model → Train Controller (Phase 2). `ModuleLink` supplies the shared time, and the roster comes from the CTC Office. A scripted wayside stands in for the Track Controller. Left: Track Controller ↔ Track Model, Track Controller ↔ CTC Office and Track Model → CTC Office (Phases 3 and 4). | module owners |
-| G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Left: the Train Controller has no dwell logic yet. | D007 owner Kevin |
+| G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Kevin Schillinger set on 2026-10-20 that the CTC Office schedules the dwell and the Train Controller enforces it ([P] D007 update, section 7.1). Built: the Train Controller holds the doors open at least 45 s, however soon its authority comes back (`Train-Ctrl_HW/CHANGELOG.md`). Left: a station the train runs through stays pending until its next stop (`Train-Ctrl_HW/OPEN_ISSUES.md` #25). | D007 owner Kevin |
 | G-SIG-16 | Resolved (R61, R79) | The Train Controller releases a passenger pull with a one-shot command ([P] `passenger-brake-release`), and enforces the door interlock: doors open only when stopped, on the platform side, and no power while a door is open ([P] `door-command`). | Train Controller |
 | G-SIG-17 | Resolved (R27, R72) | Maintenance is `closed-blocks`, with no boolean. The SW variant's maintenance state follows the CTC Office's commands, as it already does. Left: SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
 | G-SIG-18 | Resolved (R28, R64, R73) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Built in Phase 2: the input is optional, and the harness sends none. Left: the Track Model's switching rule. | Track Model owner |
@@ -1276,9 +1279,12 @@ the inbox. One is held: `20261020-0234-track-controller-ready-roster.md`, which 
 the Track Controller owners. Where this document tags a promoted proposal [P], read [T].
 The lists below are kept as the record of what was proposed.
 
-**In the inbox now (2026-10-20), fifteen proposals await review:**
+**In the inbox now (2026-10-20), sixteen proposals await review:**
 
 - the held `20261020-0234-track-controller-ready-roster.md`;
+- `20261020-1858-D007-dwell-scheduled-by-ctc-enforced-by-train-controller.md`: D007
+  updated for Kevin Schillinger's statement of 2026-10-20, "station dwell is scheduled
+  by the ctc but enforced by the train controller. 45s";
 - four for the harness window, from its session (`20261020-0927-harness-output-inspector`,
   `-show-window`, `-window-close`, `-window-title`; section 5.1);
 - ten from the October 20 Train Model review (`20261020-134*-*-sdd-review.md`: D006,
