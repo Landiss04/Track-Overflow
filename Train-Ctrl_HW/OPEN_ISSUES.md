@@ -1,49 +1,19 @@
 # Train-Ctrl_HW — open issues for review
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
-picked up later. Last reviewed 2026-10-15 (requirements check against the SRS).
+picked up later. Last reviewed 2026-10-16 (requirements review,
+`REQUIREMENTS.md`).
 
 ## From the 2026-10-07 code review
 
-1. **Driver target is not re-capped when the speed limit drops.**
-   `main.py` — `ControllerCore.set_target_mps` caps the Manual target only when
-   the driver sets it; `step()` and `enforce_safety()` never re-cap it. Manual,
-   limit 43 mph, target 43 mph, then the limit drops to 25 mph: the train keeps
-   holding 43 mph until the driver touches the dial.
-
-3. **Half of the speed dial's dead zone requests full speed.**
-   `ui_parts/components/SpeedDial.qml` — `valueFor` maps only the left half of the
-   90° gap at the bottom to zero; the right half (270–315°) clamps to the limit.
-   A press just right of bottom-centre in Manual commands line speed, not 0,
-   contradicting the file's own header comment.
-
-4. **The engineer hand-over can sign a driver in unasked.**
-   `main.py` — `_retire_engineer` runs 1.5 s after commissioning and sets
-   `operator = "driver"` unconditionally. Sign the console out (for example from
-   the bench Operator row) inside that window and a driver is signed in anyway,
-   unlocking Manual controls.
-
-10. **The branch carries shared-file deletions and committed bytecode.**
-    Commit `eb84435` (before this module work) deletes
-    `documents/meeting_logs/*`, `WorkPackageTracking/WP1/deliverables-checklist.html`
-    and `Utils/Track_Overlow_Logo.png`, moves `TrackModel/*.json` to
-    `Track_layout/`, and commits `ui/__pycache__/*.pyc`, which every run
-    rewrites. Merging the branch whole would apply all of that; take the module
-    folder only (the merge guide's "rescue a folder" route) instead.
-
-Items 5–8 from the same review are fixed (bench sends only edited rows;
-inputs validated before any is applied; door and light tiles re-send; roster
-signals only on change). Item 2 is fixed (2026-10-15): the console's commanded
-speed and "Stop in N blocks" now show what the controller reads, so a lost
-Track Signal shows as 0. Item 9 no longer applies: the signal head is back to
-Ivan's sizing and the failure banners that squeezed it were removed
-(2026-10-07).
+Item 3 (half of the speed dial's dead zone asked for full speed) is fixed
+(2026-10-16): the whole gap reads 0, with a check.
 
 ## Added 2026-10-08
 
 11. **Block lengths are unknown, so how fast the train moves through each
     block is unknown.**
-    `main.py` — until the Track Model sends the authority count, the toy plant
+    `train_ctrl/control.py` — until the Track Model sends the authority count, the toy plant
     spends one block per `BLOCK_LENGTH_M` travelled, so the console shows the
     train making progress. Every block is taken as 100 m, an arbitrary stand-in:
     the real lengths vary block by block and are not known to this module. The
@@ -80,51 +50,10 @@ Ivan's sizing and the failure banners that squeezed it were removed
     signal and stops on: correct, the failure propagates from the track
     circuit through the Train Model.
 
+    Resolution: train model will need a block change event. This causes authority
+    decrement. Should be already implemented as a dumby function currently
+
 ## Added 2026-10-15
-
-12. **Failure detection rules are this team's own design, for review.**
-    Truth's Train Model no longer reports its failures (`modules/train-model.md`;
-    `signals/failure-status.md` withdrawn 2026-10-05), so `detect_failures()`
-    infers them from what comes back (REQ-FUNC-038):
-
-    | Failure | Detected when | Constant |
-    |---|---|---|
-    | Brake | service brake commanded, e-brake off, Brake State never shows the service brake applied | `BRAKE_DETECT_S` 0.5 s |
-    | Engine | commanded power should pull ≥ 0.1 m/s², no brake on, speed has not risen 0.05 m/s | `ENGINE_DETECT_S` 2 s |
-    | Signal pickup | commanded speed and authority fall to 0 in one update, from ≥ 2 blocks | `PICKUP_DETECT_MIN_BLOCKS` 2 |
-
-    - A brake failure is only seen when the service brake is asked for.
-    - Pickup assumes a lost signal reads as zeros. Truth leaves zeros or stale
-      values open; stale values would go undetected.
-    - A Track Signal update cutting authority from ≥ 2 straight to 0 with speed 0
-      would read as a pickup failure.
-    - Engine detection could false-trip on a steep up-grade once the real Train
-      Model, with grade, is connected.
-    - An engine failure at a steady cruise is not seen on the toy plant until
-      the train is asked to speed up: with no resistance, holding speed takes
-      0 kW, so a dead engine changes nothing measurable. With rolling
-      resistance (as the real Train Model has) the same rule finds it in about
-      9 s at 30 mph (measured 8.6 s). Kept as is by decision (2026-10-15);
-      `check.py` covers both halves.
-
-13. **Requirements not met by this module** (SRS `documents/srs-filled.md`,
-    checked 2026-10-15; documented only, by decision):
-    - **REQ-FUNC-036 / D007 — stop at each station, 45 s dwell.** Not
-      implemented. `Train-Ctrl_SW` has one (`_update_station_stop`), built on
-      route and block tracking that this module dropped; a port would key off
-      the beacon (station, side) and authority instead. Truth does not say
-      which module owns the dwell.
-    - **REQ-NFR-008 / REQ-INTF-015 — CSV event log.** None here, in
-      `Train-Ctrl_SW` or on `development`.
-    - **REQ-FUNC-003 / REQ-INTF-013 / D017 — pause and one shared clock.**
-      D017 puts the clock (`utils/system_clock.py`, on `development` only) in
-      the central harness, paused and sped up by the CTC. This module runs its
-      own timers: its clock starts at 00:00:00, not D017's 05:00:00, and
-      steps at 20 Hz, not the 0.1 s default tick. The 1× / 10× control is the
-      bench's stand-in.
-    - **REQ-INTF-010 — HW and SW expose equivalent interfaces.** Not checked
-      against `Train-Ctrl_SW`, which still has route tracking and no failure
-      detection.
 
 14. **How a failure clears once integrated — undecided.**
     Today only the test bench clears a latched failure (`clear_failure`, called
@@ -146,25 +75,71 @@ Ivan's sizing and the failure banners that squeezed it were removed
     - The toy plant's Brake State during a failed service brake (reads false) is
       the plant's own stand-in, not taken from truth `brake-state.md`.
 
+## Added 2026-10-16 (requirements review, `REQUIREMENTS.md`)
+
+16. **The engineer hand-over can still sign a driver in unasked.**
+    `train_ctrl/backend.py` — `_retire_engineer` runs 1.5 s after
+    commissioning and sets `operator = "driver"` unconditionally. Sign the
+    console out inside that window and a driver is signed in anyway,
+    unlocking Manual controls. (Was item 4; dropped from this list but not
+    fixed.)
+
+17. **No block-change dummy exists yet.** Item 11's resolution expects
+    one; nothing in `train_ctrl/` handles a block-change event, and the toy
+    plant still counts authority down every 100 m.
+
+18. **Automatic lights at dusk have no input.** In Automatic the lights
+    should come on in a tunnel (beacon underground) and at dusk.
+    Nothing tells the train when it is dark, so neither is built yet.
+
+19. **Module rules are not recorded outside this folder.** Rules M1–M14
+    in `REQUIREMENTS.md` (commanded speed as the limit, driver-only
+    e-brake release, failure detection, door and announcement ownership)
+    are in neither truth's Train Controller contract (still a
+    placeholder) nor the SRS. Update the documentation later.
+
+20. **Leftovers on this branch.** `old_main.py` is an unused copy of the
+    pre-split `main.py`; `ui/__pycache__/theme.cpython-314.pyc` is
+    committed again (`d444312`); flake8 reports about 30 issues in the
+    split files (unused re-exports in `__init__.py`, missing final
+    newlines, blank-line spacing).
+
+21. **The self-check is timing-sensitive.** Several `check.py` sections
+    wait on wall-clock deadlines (`_until`) while the control timer runs.
+    On a loaded machine the timer is starved and checks fail that pass
+    alone: on 2026-10-16 a run started straight after another reported 9
+    failures in the failure-handling section ("the driver set a target
+    during an engine failure", "the brake would not release once the
+    engine failure cleared", ...), and the same code then passed with 0 in
+    34 s. Run `--check` on its own; a fix would step the controller
+    directly instead of waiting on the timer.
+
+22. **Harness-spawned trains are never armed.** Since `b9e3f6a`,
+    `harness_sim.py` no longer sets `armed`, so its trains sit at 0 W
+    until an engineer commissions the gains on the console, one train at
+    a time. How a harness-dispatched train gets its gains (defaults on
+    dispatch, or the engineer each time) is undecided.
+
 ## Carried over
 
 - **Rolling resistance outside a brake failure** is open. It (C_rr 0.002)
   applies under an injected brake failure only, as a trial. The slow-down
   overshoot it once fixed is now fixed by the 0.05 m/s service band instead
-  (35 → 30 mph settles at 30.09 mph at 480 kW).
+  (35 → 30 mph settles at 30.08 mph at 480 kW).
 - **Toy plant parameters differ from truth's Train Model**
-  (`truth/modules/train-model.md`): 51,433 kg vs about 52,312 kg reference
-  mass, Euler vs trapezoidal integration, rolling resistance only under a
-  brake failure (C_rr 0.002). Power now matches (480 kW, provisional in truth).
+  (`truth/modules/train-model.md`): Euler vs trapezoidal integration,
+  rolling resistance only under a brake failure (C_rr 0.002). Mass
+  (51,433 kg reference) and power (480 kW, provisional in truth) match.
 - **The controller simulates the train itself** (truth D009 gives physics to the
   Train Model). `ControllerCore._plant()` is the stand-in until the Train Model
   is connected.
 - **Signal aspect has no truth entry** (truth's Track Signal carries only
-  commanded speed and authority); a proposal exists on `Train-Ctrl_SW` only.
+  commanded speed and authority). The console shows it but never acts on
+  it.
 - **Service-brake amber and the 72 px hero readouts** (`brake_service` and
-  `size_hero` in `main.py` `PENDING_TOKENS`) are pending one style-guide
-  proposal, `truth/_inbox/Train-Ctrl_HW/20261007-2059-style-guide-size-hero-token.md`,
-  which carries both tokens. Authority as a block count is no longer open:
+  `size_hero` in `train_ctrl/console_theme.py` `PENDING_TOKENS`) are outside
+  the style guide; the proposal that carried both was removed from the
+  inbox (`69b5cc9`). Authority as a block count is no longer open:
   truth D013 (2026-10-06) adopted it, so the three authority proposals and
   the separate brake-service one were withdrawn (2026-10-15).
 - **Other sizes kept to Ivan's design but outside the style guide** (restored
