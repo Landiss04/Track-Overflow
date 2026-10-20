@@ -18,10 +18,12 @@ presence is source-inspection evidence, not a claim that local checks passed.
 
 ## Remaining integration dependencies
 
-- The production Track Model path still needs direct harness edge mappings and its
-  process integration. `track_model_edges.py` retains legacy catalog conversions;
-  the active Phase 1 system uses `FixedTrackFeed`. Do not describe that feed as
-  complete Track Model integration.
+- Phase 2 wires the Track Model process with direct harness edges
+  (`common/harness/track_edges.py`), which check every beacon with
+  `utils/beacon_codec.py`; the fixed feed is gone. A scripted wayside still stands
+  in for the Track Controller, so the commanded speed and authority the Train Model
+  passes on are scripted until Phase 3. `track_model_edges.py` retains legacy
+  catalog conversions, off the running path.
 - Production boarding events must respect Track Model station ownership, and all
   beacon producers must apply the complete canonical payload bound.
 - Backend/UI work has local verification sources, including `test_beacon_codec.py`

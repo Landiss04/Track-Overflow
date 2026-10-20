@@ -12,6 +12,36 @@ The code in section 5 was run against the current code on `track-model`.
 
 ---
 
+## 0. Under the central harness (Phase 2)
+
+The harness built on `claude/quirky-fermi-sickg4` runs each module as a process of its
+own (R4), not in the harness's process as sections 4 to 6 describe. Those sections
+still hold for the module's Python API; this one says how the harness actually drives
+it. Section 5's in-process loop and the catalog edges in `track_model_edges.py` are not
+on that path.
+
+- **The process.** `track_overflow.py --module track-model --harness <server>` runs
+  `track_model/module_process.py`. It loads the Green and Red Lines only (D023), shows
+  the Track Model window, and steps the model once per `STEP`. Invalid inputs refuse the
+  whole tick, and the model is unchanged. The step's simulation time goes to the window
+  as the time of day. The window redraws at most every 100 ms, after the reply.
+  Closing it hides it; only the harness ends the process.
+- **The form.** Inputs and outputs travel as JSON, field for field as in
+  `track_model/interface.py`, with enumerated values by name (`track_model/wire.py`).
+  The harness sends no ambient temperature: the window is its source.
+- **The edges.** `common/harness/track_edges.py` maps the Train Model's outputs to each
+  train's report (`doors_open` is either door open) and each train's feed to the Train
+  Model's track inputs. It translates the Track Model's block names (`GREEN K-63`) to
+  line and number (`Green`, `63`) for every other module. A released train is placed at
+  its line's yard exit block (D022) by a first report the harness sends for it, until
+  its Train Model reports it. The light a train saw on entering a signal block goes to
+  its Train Controller.
+- **Commands.** Until the Track Controller joins (Phase 3), a scripted wayside in the
+  harness (`common/harness/wayside_script.py`) sends commanded speed and authority for
+  the occupied block and the next one, every tick: they last one tick (section 3.1).
+
+---
+
 ## 1. The rules that shape everything
 
 | Rule | Source | Consequence for you |

@@ -217,9 +217,10 @@ harness `STEP` message; clock reconciliation is described below.
 The harness maps each producer's types straight to the consumer's, on their
 JSON form (`train_model/wire.py`). The catalog in `common/interfaces.py` is
 superseded (D008). The Train Controller edges are in
-`common/harness/train_edges.py`. Until the Track Model joins (Phase 2),
-`common/harness/track_feed.py` stands in for it with a fixed script. The
-Train Model's side of each edge:
+`common/harness/train_edges.py`, and the Track Model edges, since Phase 2, in
+`common/harness/track_edges.py`. A train joins the Train Model once the Track
+Model feeds it, and its block arrives by number (`"63"`); the Train Model knows
+the train's line. The Train Model's side of each edge:
 
 ### Train Controller → Train Model (`ControllerCommands`)
 

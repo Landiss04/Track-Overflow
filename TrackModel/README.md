@@ -65,7 +65,12 @@ tests/                     pytest suite
 
 ## How other modules reach the Track Model
 
-Through the central harness (D005), never by importing `track_model`.
+Through the central harness (D005), never by importing `track_model`. The
+harness runs the Track Model as a process of its own
+(`track_model/module_process.py`, `track_overflow.py --module track-model`) and
+maps its inputs and outputs, in their JSON form (`track_model/wire.py`), with the
+direct edges in `common/harness/track_edges.py` (Phase 2).
+
 `common/harness/track_model_edges.py` contains legacy one-sided helpers that
 still convert through stale `common/interfaces.py` types. D008 supersedes that
 catalog: intended integration maps producer types directly to consumer types,
@@ -186,9 +191,11 @@ runtime verification is claimed.
 - Intended integration uses separate module processes and one harness-owned clock.
   The harness maps module-owned boundary types directly (D005/D008), with previous
   tick outputs forming each tick’s input snapshot. `common/interfaces.py` is stale.
-- The active Phase 1 system still uses `FixedTrackFeed`; production Track Model
-  process wiring and direct edge mappings remain integration work. Legacy
-  `track_model_edges.py` catalog conversions do not satisfy that design.
+- Phase 2 runs the Track Model as its own process under the harness, with direct
+  edges to and from the Train Model and the Train Controller
+  (`common/harness/track_edges.py`); a scripted wayside stands in for the Track
+  Controller until Phase 3. The legacy `track_model_edges.py` catalog conversions
+  are not on that path; they remain for this module's own tests.
 - The CTC Office creates/retires trains; the harness routes the roster and identity.
   Avoid treating legacy yard/no-feed handling as the current lifecycle contract.
 - D013 already defines authority as a count of blocks. Train Model’s controller

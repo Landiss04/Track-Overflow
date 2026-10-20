@@ -2,32 +2,35 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.8. Every question in section 1.5 is answered. Phases 0 and 1 are built (sections 5.1 and 5.2). Not normative. |
+| **Status** | Draft v0.9. Every question in section 1.5 is answered. Phases 0, 1 and 2 are built (sections 5.1 to 5.3). Not normative. |
 | **Date** | 2026-10-20 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
-| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1); Phase 1 on the same branch, with the Train Controller of PR #44 (section 5.2); `truth` after the promotion of 2026-10-19 (`84c7d44`) |
+| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1); Phase 1 on the same branch, with the Train Controller of PR #44 (section 5.2); Phase 2 on the same branch, with the `track-model` branch merged, and Kevin Schillinger's operator window and Train Model review merged from the same branch (sections 5.1 and 5.3); `truth` after the promotion of 2026-10-19 (`84c7d44`) |
 
 The `truth` branch is the authoritative record. This document cites it by shard path
 (`origin/truth:truth/<path>`, shortened below to the shard name) and does not override it.
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
 
-**Changes since v0.7**
+**Changes since v0.8**
 
-- Phase 1 is built (section 5.2). The real Train Model and Train Controller SW run under
-  the harness with one Green Line train on a fixed track feed. The CTC Office's train
-  release, the commands both ways, the release command and the door interlock work end
-  to end. The other modules are still stubs.
-- The Train Controller comes from PR #44, merged into this branch. Kevin Schillinger
-  approved a fix to it on 2026-10-20 (R82). Under the harness the driver could never
-  release the emergency brake, and the release command was never sent.
-- The system as wired keeps 10x with a mean tick round trip under 2 ms (G-CLK-6).
-- Kevin Schillinger promoted 30 of this branch's proposals to `truth` and denied 25 on
-  2026-10-19 (`truth/_promotions.md`). One is held: `track-controller-ready-roster`.
-  Where this document still tags a promoted proposal [P], read [T] (section 7.1).
+- Phase 2 is built (section 5.3). The Track Model runs under the harness as itself, with
+  the Train Model and the Train Controller SW. It places a released train at the yard
+  exit block, follows it block by block, and feeds it each block's track circuit, which
+  now lasts one tick (R10, R64). A scripted wayside stands in for the Track Controller.
+  The other four modules are still stubs.
+- The Track Model's commanded speed is a float, and its ambient temperature input
+  optional. Its owner should review these changes (section 5.3).
+- A shared table (`ui/DataTable.qml`) rebuilt every row on any change, which stalled the
+  Track Model for up to a second. It now updates rows in place.
+- The system as wired keeps 10x with a mean tick round trip under 4 ms (G-CLK-6).
+- Section 5.1 records the harness's operator window, which Kevin Schillinger added on
+  2026-10-20. Gaps G-LIFE-2, G-LIFE-4, G-RUN-2, G-RUN-7 and G-CLK-8 are updated for it.
+- Kevin Schillinger's October 20 Train Model review is merged: its reconciliation is
+  the section before Appendix A, and its ten proposals are in the inbox (section 7.1).
 
-v0.7 recorded Phase 0 as built, v0.6 R79 to R81 and the last answers, v0.5 the second round of
+v0.8 recorded Phase 1 as built and the promotion of 2026-10-19, v0.7 Phase 0 as built, v0.6 R79 to R81 and the last answers, v0.5 the second round of
 answers of 2026-10-20 (R65 to R78), v0.4 the first (R44 to R64), v0.3 those of 2026-10-17
 (R33 to R43), and v0.2 the review of v0.1 (R1 to R32). Git history holds the earlier
 text.
@@ -790,13 +793,141 @@ integrating everything at once.
 |---|---|---|
 | 0 | **Built (section 5.1).** Harness process: `SystemClock` and a pacer that waits for every reply; spawning and watching the child processes; the protocol and wire format; tick fan-out to stub module processes; reading the CTC Office's speed and pause; an end-to-end tick test with stubs. | Done: the budget is measured with stubs (G-CLK-6) |
 | 1 | **Built (section 5.2).** Train Model and one Train Controller on a fixed track feed, for one Green train: fleet `add`, the commands, the release command, the door interlock. | none |
-| 2 | Track Model: track feeds, position reports, doors open, clearing after delivery (R10), and zero for blocks not commanded. | none |
+| 2 | **Built (section 5.3).** Track Model: track feeds, position reports, doors open, clearing after delivery (R10), and zero for blocks not commanded. | none |
 | 3 | Track Controller SW on Green: commanded speed and authority per block, switches, signals, readiness, failures. | none |
 | 4 | CTC Office: dispatch from the yard, suggestions, occupancy, ticket sales and clock control. The Iteration 3 scenario on Green: dispatch a train from the yard to a station (2026-11-12). | none |
 | 5 | Red: Track Controller HW and Train Controller HW on Pis over USB serial, with the Red wayside data loaded (R34); packaging as one executable. | Measure the USB round trip (G-CLK-6) |
 
 The missing integration guides (section 3.1) should be written as each module joins.
 `common/harness/README.md` says how a module joins the harness.
+
+### 5.3 Phase 2 as built [C]
+
+Built on this branch on 2026-10-20. `common/harness/README.md` describes the edges, the
+Track Model's block names and the scripted wayside, and how a module joins.
+
+**What runs.** `python track_overflow.py` starts the harness, with its operator window
+(section 5.1), and seven module processes. Three run as themselves, each in its window:
+
+- the Track Model, `--module track-model`, which runs `TrackModel/track_model/module_process.py`;
+- the Train Model and the Train Controller SW, as in Phase 1.
+
+The other four are stubs. In order:
+
+1. The CTC Office's stub releases G1 onto the Green Line on the first tick.
+2. The Track Model places G1 on the yard exit block (63, D022) on the next tick. G1 joins
+   the Train Model a tick later, and the Train Controller a tick after that.
+3. It waits for an engineer to set its gains (D024).
+4. A scripted wayside, standing in for the Track Controller, takes it out of block 63,
+   through a stop at GLENBURY (65, platform on the right), to DORMONT (73), where its
+   route ends.
+
+**Built:**
+
+| Part | Where |
+|---|---|
+| The `track-model` branch's two commits, merged: the integration guide (`4b31f39`) and the window's time of day from the harness (`3e7c15f`) | `TrackModel/` |
+| The track circuit: commanded speed and authority last one tick (R10, R64); commanded speed a float (R24); the ambient temperature optional (R28) | `TrackModel/track_model/interface.py`, `model.py` |
+| The Track Model process the harness starts, and its types as JSON | `TrackModel/track_model/module_process.py`, `wire.py` |
+| The edges between the Track Model and the trains, and the Track Model's block names | `common/harness/track_edges.py` |
+| The scripted wayside that stands in for the Track Controller | `common/harness/wayside_script.py` |
+| The order trains join the modules, the wayside's timing, and trains that leave the track | `common/harness/edges.py` |
+| Shared tables that update their rows in place | `ui/DataTable.qml` |
+
+**How it behaves, as tested:**
+
+- A released train joins the modules a tick apart, each once the module it needs input
+  from has it: the Track Model at tick 2, from a report the harness sends that places it
+  at rest on the yard exit block; the Train Model at tick 3, once the Track Model feeds
+  it; the Train Controller at tick 4, once the Train Model reports it.
+- The Track Model names blocks `GREEN K-63`. The harness learns those names from its
+  outputs and gives every other module line and number (R6, R50).
+- The Track Model moves the train block by block from the Train Model's reports, 63 to
+  73 in order, and feeds it each block's track info, track signal and beacon.
+- A block's track circuit carries only the commands of the latest tick; a block not
+  commanded reads zero (R10, R64). The wayside commands the occupied block and preloads
+  the next one, as the CTC Office will (R49). Authority counts down to each stop and
+  never falls from 2 or more blocks to none, so the Train Controller never latches a
+  signal pickup failure (G-NEW-1).
+- At GLENBURY the train stops on the service brake. The right-hand doors open at a
+  stand, and passengers board from the Track Model's waiting count. The doors close and
+  the train moves off once the wayside gives authority again, 60 s after the train
+  entered the block.
+- The light on block 64, commanded GREEN, reaches the driver as the train enters it.
+- The train ends at a stand at DORMONT with its doors open and no authority.
+- The driver's release of the emergency brake, and a passenger pull and its release,
+  work as in Phase 1, now on the Track Model's feed.
+
+**Changed in the Track Model, for its owner to review.** The three changes in the
+second row above, which `truth` and the decisions call for. The test UI and the test
+link follow. `TrackModel/INTEGRATION.md` gains a section on the harness as built.
+
+**Fixed in the shared table (`ui/DataTable.qml`).** Its rows were a Repeater over the
+rows array, so any change to a row's content rebuilt every row. For the Track Model's
+150-block table that took 0.4 to 1.2 s per window refresh, every time a train changed
+block or a command changed. Under the harness that stalled the Track Model process and
+its replies. Rows are now kept by index and updated in place: 6 to 16 ms per refresh.
+The CTC Office and the Track Controller HW use the same component and pass their
+suites. The Track Model's process also redraws its window at most every 100 ms, after
+the reply.
+
+**Tests:**
+
+- `common/harness/tests` has 110 tests, the window's among them. Phase 2 brings:
+  - 36 for the edges, the roster, the block names and the wayside;
+  - 13 that loop the three modules' own code through the edges in one process, every
+    message through JSON, over the whole route;
+  - 8 end to end, with the real processes (about 10 s).
+- `TrackModel/tests` has 309: 23 new for the process and its JSON form, 5 for the track
+  circuit and the ambient temperature, and 7 for the beacon checks of the October 20
+  review.
+- The Train Model has 854 passing and 13 skipped, the Train Controller 10, utils 64, the
+  CTC Office 208. The Track Controller HW keeps its one known failure (section 3.5).
+  The utils clock-driver test, which measures wall-clock time, fails now and then under
+  load and passes on a rerun.
+
+**Budget (G-CLK-6).** `python -m common.harness.measure --system`, 15 s each, on a
+four-core 2.1 GHz Xeon under Linux, every window offscreen: the Track Model, the Train
+Model and the Train Controller as themselves, one train running, four stubs.
+
+| Front end | Speed | Speed reached | Round trip, mean | p95 | p99 | Max | Ready after | Harness CPU |
+|---|---|---|---|---|---|---|---|---|
+| Headless | 10x | 10.00x | 3.5 ms | 11.7 ms | 18.6 ms | 32.6 ms | 1.15 s | 17% |
+| Headless | 10x | 10.00x | 3.8 ms | 12.3 ms | 19.2 ms | 145.9 ms | 1.02 s | 17% |
+| Headless | 1x | 1.01x | 3.5 ms | 4.7 ms | 6.2 ms | 7.2 ms | 0.87 s | 2% |
+| Window | 10x | 10.01x | 3.6 ms | 11.4 ms | 19.5 ms | 49.4 ms | 1.07 s | 20% |
+
+- No tick slipped and no reply was late.
+- At 10x about one tick in ten runs over 10 ms: the Track Model redrawing its window.
+  The ticks after it make the time up.
+
+**Frozen build (G-RUN-2).** Kevin Schillinger's one-folder recipe, with the Track Model's
+package, window and two layout files added (`common/harness/README.md`), built with
+PyInstaller 6.22.2 (483 MB). It ran headless at 10x from outside the checkout, with an
+empty `PYTHONPATH`: G1 released, 1,075 ticks in 12 s, no fault, seven exits with code 0.
+Alone, the bundled Track Model process found its layouts and window.
+
+**Departures and limits:**
+
+- **Wayside:** a stand-in for the Track Controller and for the CTC Office's suggestions.
+  It reads occupancy only, serves one train once, and holds a stop for a fixed 60 s
+  from the train's entry rather than timing D007's dwell from the stand. The Track
+  Controller replaces it in Phase 3, and the CTC Office's suggestions in Phase 4.
+- **Light ahead:** the Track Model sends the light a train sees only on the tick it
+  enters a block with a signal, and the Train Controller keeps the last one. `truth`'s
+  `signal-aspect-ahead` asks for the next light ahead on every tick (G-SIG-10). The
+  Track Model shows a train the light of any signal block it enters, whichever way it
+  runs: block 64's light guards the switch at 63 for trains heading toward it.
+- **Ambient temperature:** the harness sends none, so it starts at 0 °C until someone
+  sets it in the Track Model window (R28).
+- **Beacons:** the edge checks each one with `utils/beacon_codec.py`, as the October 20
+  review asks. A malformed one fails the Train Model's inputs for that tick, for every
+  train, not only its own.
+- **Old edges:** `common/harness/track_model_edges.py` and the catalog it maps through
+  are off the running path. They remain for the Track Model's own tests.
+- **Red Line:** the harness would place a Red train on block 9, but its Train
+  Controller, the HW variant, is still a stub, so the train would wait on inert
+  commands.
 
 ### 5.2 Phase 1 as built [C]
 
@@ -896,8 +1027,8 @@ with their windows offscreen, one train running, five stubs, 15 s each.
 **Departures and limits:**
 
 - **Track feed:** it runs on time since release, not on where the train is. The blocks
-  it names are the train's as far as the Train Model is told. The Track Model replaces
-  it in Phase 2.
+  it names are the train's as far as the Train Model is told. The Track Model replaced
+  it in Phase 2 (section 5.3).
 - **CTC Office:** its stub's `new_trains` and `retired_trains` are lists of objects with
   `train_id`, and `line` for a release. The real CTC Office's form is mapped when it joins
   (Phase 4).
@@ -911,8 +1042,8 @@ with their windows offscreen, one train running, five stubs, 15 s each.
   so Phase 1 does not show the gap (`Train-Ctrl_HW/OPEN_ISSUES.md` #23).
 - **Speed limit:** the Train Model passes the speed limit through. The Train Controller
   takes commanded speed as its limit (its rule M1), so the edge drops the speed limit.
-- **Hidden windows:** a module window, once closed, hides with no way back yet. That
-  waits on the harness window (G-LIFE-4).
+- **Hidden windows:** a module window, once closed, hides. The harness window's **Show
+  window** brings it back (section 5.1).
 
 ### 5.1 Phase 0 as built [C]
 
@@ -1014,10 +1145,29 @@ module quit cleanly. The build is 91 MB. The Windows build is still to try.
 - **Not decided:** the op names and message fields are this build's, not a team decision.
   They can go to `truth` as an interface entry once the team accepts them.
 
+**Operator window.** Added by Kevin Schillinger on 2026-10-20 (`b8e63b9`), and merged
+with Phase 1. `python track_overflow.py` opens it, titled "Track Overflow — Central
+Harness"; `--headless` keeps the console instead. It has no clock controls, since the
+CTC Office owns them. It shows:
+
+- the 24-hour simulation time, the tick, the speed, whether the clock runs, and why
+  it is held;
+- startup progress, and the modules a startup timeout names;
+- each module's process ID, state and exit;
+- the event history, with faults labelled, and the selected module's outputs as
+  read-only JSON;
+- the mean and longest round trip of the last five seconds.
+
+**Show window** sends a module the additive `SHOW` message, which reopens its main
+window (`utils/module_window.py`). Closing the harness window asks first, then ends the
+run as Ctrl+C does. The four decisions behind it are proposals in the inbox (section
+7.1). Kevin's measurements (`common/harness/README.md`), at 10x: seven stubs headless,
+2.1 ms mean; seven stubs with the window, 2.2 ms; the Phase 1 system with the window,
+3.2 ms; none slipped a tick. His frozen build carries the window's QML and the logo.
+
 **Not built yet:**
 
 - the real modules (Phase 1 on);
-- the harness's window, which is to show rejections (G-LIFE-4);
 - the USB relay and the Pi side (Phase 5).
 
 ## 6. Gaps and open questions
@@ -1035,9 +1185,9 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-CLK-3 | Resolved (R3, R51) | `clock_paused` is one boolean, true while paused, starting paused. While paused the harness reads it from the CTC Office's `snapshot()` ([P] `ctc-deployment/20261016-1517-clock-pause.md`, form confirmed). Left: the CTC header must drive the module's value, not the window's own clock. Phase 0 has the module push the value as a `STATE` message; the CTC Office owner to confirm (section 5.1). | signal owner CTC Office |
 | G-CLK-4 | Resolved (R64) | The 0.1 s tick is a recorded deviation from REQ-NFR-001.1's 1 ms "should" ([P] D017). | D017 owner Landis |
 | G-CLK-5 | Resolved (R64) | No tick is skipped: when the harness falls behind, simulated time runs slower than real time ([P] D017). | D017 owner Landis |
-| G-CLK-6 | Measured with stubs and with Phase 1 (R64) | Seven stub processes at 10x: a mean round trip of 1 to 3 ms against the 10 ms budget for replies up to 30 KB, and no tick slipped (section 5.1). The Train Model and the Train Controller as themselves, with one train: under 2 ms mean, no tick slipped (section 5.2). Left: the modules still stubs, the Windows lab machines, and the USB round trip (Phase 5). | unassigned |
+| G-CLK-6 | Measured with stubs and with Phase 1 (R64) | Seven stub processes at 10x: a mean round trip of 1 to 3 ms against the 10 ms budget for replies up to 30 KB, and no tick slipped (section 5.1). The Train Model and the Train Controller as themselves, with one train: under 2 ms mean, no tick slipped (section 5.2). The Phase 2 system, with the Track Model too: 3.5 to 3.8 ms mean, no tick slipped, headless or with the window (section 5.3). Left: the modules still stubs, the Windows lab machines, and the USB round trip (Phase 5). | unassigned |
 | G-CLK-7 | Resolved (R15, R16, R57) | The test-UI clocks and the CTC window's clock go. The Train Controller's gains hand-over moves to simulation time; its announcement lockout and the Train Model's ads and popups stay on wall-clock time. | module owners |
-| G-CLK-8 | Resolved design; Train Model code inspected 2026-10-20 | Train Model now displays harness time and checks independent per-train time every 15 harness ticks, including rejections, using fixed creation epochs and 1e-6 s tolerance. Track Model/Train Controller display adoption remains separate integration work. | module owners |
+| G-CLK-8 | Resolved design; Train Model code inspected 2026-10-20 | Train Model now displays harness time and checks independent per-train time every 15 harness ticks, including rejections, using fixed creation epochs and 1e-6 s tolerance. The harness window shows the 24-hour time (section 5.1), and the Track Model window the harness's time of day (`3e7c15f`, merged in Phase 2). Train Controller display adoption remains separate integration work. | module owners |
 | G-CLK-9 | Resolved (R64) | The `SystemClock` code stays in `utils/system_clock.py`, and the harness owns the instance. | D017 owner Landis |
 | G-CLK-10 | Resolved (R64) | No reset during a run; resetting means restarting the system ([P] D017). | D017 owner Landis |
 | G-CLK-11 | Resolved (R64) | The harness waits for every reply, with a timeout of about 1 s that pauses the clock and names the late module ([P] D017). | D017 owner Landis |
@@ -1054,16 +1204,16 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-SIG-6 | Resolved (R9, R35, R46, R47, R66) | The CTC Office creates a train when it releases it from the yard and retires it at the yard entry block; a "return to yard" action covers manual trains. Both go out as one-time events, applied exactly once, and the CTC Office's IDs are the train IDs ([P] D022, `identifiers`). | identifiers owner Kevin |
 | G-SIG-7 | Resolved (R22, R52, R67) | A mapping from station to count, zeros optional, as sales since the last report, passed on exactly once. The Track Model does not load the Blue Line, so no unknown station reaches the CTC Office ([P] D023). | signal owner Track Model |
 | G-SIG-8 | Resolved (R33, R69) | A failed block reads as occupied, and the Track Controller reports it to the CTC Office as occupied, with no closure ([P] `block-occupancy`; pending D015). | Track Controller owners |
-| G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Left in code: the Track Model's commanded speed is an int; the Train Model has no doors-open output. | signal owner Track Model; Train Model owner Kevin Schillinger |
-| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN`, and the Track Model must produce the light ahead of each train. | signal owner Track Model |
-| G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Left: the harness maps the Track Model's `GREEN` and the HW variant's section keys. | identifiers owner Kevin |
-| G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Left: the Track Model code still keeps the last value. | Track Model owner |
-| G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). | D008 owner Kevin |
-| G-SIG-14 | Partial; Phase 1 inspected 2026-10-20 | `train_edges.py` maps Train Model ↔ Train Controller directly; `ModuleLink` supplies shared time. `SystemEdges` uses the roster and `FixedTrackFeed`. Production Track Model and remaining module processes/edges still need integration; legacy catalog conversions are not the intended design. | module owners |
+| G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Built in Phase 2: the Track Model's commanded speed is a float, and the harness maps doors open from the Train Model's door state, either door, without a new Train Model output (section 5.3). | signal owner Track Model; Train Model owner Kevin Schillinger |
+| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN` (the harness maps it meanwhile), and the Track Model must produce the light ahead of each train on every tick; it sends the light only as a train enters a signal block (section 5.3). | signal owner Track Model |
+| G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Built in Phase 2: the harness maps the Track Model's block names, `GREEN K-63`, both ways (section 5.3). Left: the HW variant's section keys (Phase 5). | identifiers owner Kevin |
+| G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Built in Phase 2: each tick's commands replace the last (section 5.3). | Track Model owner |
+| G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). Phase 2 maps the Track Model's edges to the trains directly (`track_edges.py`); the legacy `track_model_edges.py` stays for the Track Model's own tests, and other modules still import `common/interfaces.py`. | D008 owner Kevin |
+| G-SIG-14 | Partial: Phases 1 and 2 built | Mapped directly: Train Model ↔ Train Controller (Phase 1), and Track Model ↔ Train Model and Track Model → Train Controller (Phase 2). `ModuleLink` supplies the shared time, and the roster comes from the CTC Office. A scripted wayside stands in for the Track Controller. Left: Track Controller ↔ Track Model, Track Controller ↔ CTC Office and Track Model → CTC Office (Phases 3 and 4). | module owners |
 | G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Left: the Train Controller has no dwell logic yet. | D007 owner Kevin |
 | G-SIG-16 | Resolved (R61, R79) | The Train Controller releases a passenger pull with a one-shot command ([P] `passenger-brake-release`), and enforces the door interlock: doors open only when stopped, on the platform side, and no power while a door is open ([P] `door-command`). | Train Controller |
 | G-SIG-17 | Resolved (R27, R72) | Maintenance is `closed-blocks`, with no boolean. The SW variant's maintenance state follows the CTC Office's commands, as it already does. Left: SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
-| G-SIG-18 | Resolved (R28, R64, R73) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Left: the Track Model's switching rule. | Track Model owner |
+| G-SIG-18 | Resolved (R28, R64, R73) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Built in Phase 2: the input is optional, and the harness sends none. Left: the Track Model's switching rule. | Track Model owner |
 | G-SIG-19 | Resolved (R37, R54), clarified by October 20 SDD review | Brake commands remain separate booleans; independent engaged states may both be true and their configured forces sum. Service failure blocks service only. The inspected working-tree `model.py` implements that rule. `announcement` keeps the Train Model field name. | Train Controller / Train Model |
 
 ### 6.3 Lifecycle
@@ -1071,9 +1221,9 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-LIFE-1 | Resolved (R18, R44) | Layout files load by default at startup; PLC programs and wayside databases are loaded by hand. Left: Red's HW data, later (R34). | unassigned |
-| G-LIFE-2 | Resolved (R64), built | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Seven stubs are ready in about 0.25 s (section 5.1), and the Phase 1 system, two of them with windows, in about 0.5 s (section 5.2). Left: the modules still stubs, with their windows and files, against 20 s. | unassigned |
+| G-LIFE-2 | Resolved (R64), built | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Seven stubs are ready in about 0.25 s (section 5.1), the Phase 1 system, two of them with windows, in about 0.5 s (section 5.2), and the Phase 2 system, three with windows, in about 1 s (section 5.3). The harness window shows startup progress and names the modules a startup timeout catches (section 5.1). Left: the modules still stubs, with their windows and files, against 20 s. | unassigned |
 | G-LIFE-3 | Resolved (R64), built | On exit the harness tells every module to quit, and ends any that do not ([P] D005). Built: `QUIT`, up to 5 s, then kill (section 5.1). | unassigned |
-| G-LIFE-4 | Partly (R19, R64, R80) | A rejected tick is skipped, the run continues, and the harness shows it in its window and writes it to the event log. The team will return to what can break. Built: the skip and the log; the harness has no window yet. | unassigned |
+| G-LIFE-4 | Partly (R19, R64, R80) | A rejected tick is skipped, the run continues, and the harness shows it in its window and writes it to the event log. The team will return to what can break. Built: the skip, the log, and the harness window, which lists every event with faults labelled (section 5.1). | unassigned |
 | G-LIFE-5 | Resolved (R12, R76) | Every test UI goes at integration except the Track Controller HW test UI, which stays and is never started by the harness ([P] D005; pending D018). | D010 owner Kevin Schillinger |
 
 ### 6.4 Process, packaging and runtime
@@ -1081,12 +1231,12 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-RUN-1 | Resolved (R4) | Process model 2. The work it creates is G-RUN-6, -7 and -8. | none |
-| G-RUN-2 | Resolved (R29, R64), built | One executable: no arguments starts the harness, `--module <name>` a module, and the harness re-runs it once per module ([P] `files-and-paths`). A frozen one-folder build on Linux works (section 5.1). Left: try the frozen build on Windows early; the course deck's per-subsystem installables. | unassigned |
+| G-RUN-2 | Resolved (R29, R64), built | One executable: no arguments starts the harness, `--module <name>` a module, and the harness re-runs it once per module ([P] `files-and-paths`). A frozen one-folder build on Linux works (section 5.1); Kevin Schillinger's carries the harness window's QML and logo, and Phase 2's the Track Model's window and layouts (section 5.3). Left: try the frozen build on Windows early; the course deck's per-subsystem installables. | unassigned |
 | G-RUN-3 | Resolved (R30, R81) | Everything runs on one computer, with the Pis as USB peripherals of it ([P] D027). | unassigned |
 | G-RUN-4 | Resolved (R80) | The event logger stays: the harness writes one CSV file ([P] `files-and-paths`, D005). This reverses R13, so no conflict with the SRS remains. | files-and-paths owner Kevin |
 | G-RUN-5 | Resolved (R31) | PySide6 6.11 or later. Left: `TrackCtrlSW/README.md` still installs 6.8. | toolchain owner Kevin |
 | G-RUN-6 | Resolved (R64), built | Newline-delimited JSON, each message with a request ID and the tick number; one driver per module ([P] D005). Built in `utils/harness_protocol.py` (section 5.1). | unassigned |
-| G-RUN-7 | Resolved (R64), built for two modules | Each module says when it is ready; windows hide rather than close; only the harness ends a module ([P] D005). The Train Model and the Train Controller do (`utils/module_window.py`, section 5.2). Left: each module's side as it joins, and a way to show a hidden window again. | unassigned |
+| G-RUN-7 | Resolved (R64), built for three modules | Each module says when it is ready; windows hide rather than close; only the harness ends a module ([P] D005). The Train Model, the Train Controller and the Track Model do (`utils/module_window.py`, sections 5.2 and 5.3). Closing the harness window asks first, and **Show window** sends `SHOW`, which reopens a module's main windows (section 5.1). Left: each module's side as it joins. | unassigned |
 | G-RUN-8 | Resolved (R64), harness side built | Window changes show up in the module's next outputs; pause is read from the CTC Office's state ([P] D005). Built: the harness reads the CTC Office's `STATE` (section 5.1). | unassigned |
 
 ### 6.5 Hardware variants and variant selection
@@ -1104,13 +1254,13 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-TR-1 | Resolved (R53) | Commits `61f4a28` and `201708b` removed eleven `ctc-deployment` proposals without promotion. Seven are re-filed on this branch (section 7.1). Three should be logged as denied, and `20261014-1702` is replaced by the pending `20261016-1354` (section 7.2). | humans who promote |
 | G-TR-2 | Open, action agreed (R64) | Eight of nine module shards are placeholders; each owner fills in their own. | module owners |
 | G-TR-3 | Partly | Section 7.2 recommends what to promote and what to deny. The D019 clash is settled by renumbering the CTC one (R68). | humans who promote |
-| G-TR-4 | Documentation aligned for Train/Track Model (2026-10-20) | Both guides now describe separate processes, module-owned types, direct edge mappings and a shared harness clock. Legacy Track Model adapters still need replacement; Track Controller SW toolchain documentation remains its owner’s follow-up. | module owners |
+| G-TR-4 | Documentation aligned for Train/Track Model (2026-10-20) | Both guides now describe separate processes, module-owned types, direct edge mappings and a shared harness clock. The running path no longer uses the legacy Track Model adapters: Phase 2 maps the Track Model directly, and its guide has a section on the harness as built. Track Controller SW toolchain documentation remains its owner’s follow-up. | module owners |
 
 ### 6.7 Risks found while checking the decisions against the code
 
 | ID | Risk | Evidence | Owner |
 |---|---|---|---|
-| G-NEW-1 | Resolved (R49, R64). The CTC Office also suggests values for the next block on the train's route, and a block not commanded on the latest tick reads zero ([P] `suggested-speed`, `suggested-authority`, `track-signal`). | Section 4.3 | CTC Office; Track Model |
+| G-NEW-1 | Resolved (R49, R64). The CTC Office also suggests values for the next block on the train's route, and a block not commanded on the latest tick reads zero ([P] `suggested-speed`, `suggested-authority`, `track-signal`). Built in Phase 2's stand-in wayside: no block change reads zero, and no pickup failure latches (section 5.3). | Section 4.3 | CTC Office; Track Model |
 | G-NEW-2 | Resolved (R70). Every wayside is reported from startup and is not ready until loaded, so a line cannot read ready early ([P] `track-controller-ready`). | `ctc/model.py:346-351`; `track_ctrl_hw/controller.py:67-76` on PR #43 | Track Controller |
 | G-NEW-3 | Resolved (R60), built. Only the train whose input is invalid misses the tick ([P] `modules/train-model.md`). The Train Model's process steps each train on its own and names a rejected one (section 5.2). | `TrainModel/train_model/module_process.py` | Train Model owner Kevin Schillinger |
 | G-NEW-4 | Closed (R42). Gains are set in the UI, which runs on the host PC for the HW variant too. Each new train still waits for an engineer to set its gains before it moves. | Section 3.3 | Train Controller |
@@ -1125,6 +1275,21 @@ denied twenty-five (`truth/_promotions.md`, `truth` at `84c7d44`), and removed t
 the inbox. One is held: `20261020-0234-track-controller-ready-roster.md`, which waits on
 the Track Controller owners. Where this document tags a promoted proposal [P], read [T].
 The lists below are kept as the record of what was proposed.
+
+**In the inbox now (2026-10-20), fifteen proposals await review:**
+
+- the held `20261020-0234-track-controller-ready-roster.md`;
+- four for the harness window, from its session (`20261020-0927-harness-output-inspector`,
+  `-show-window`, `-window-close`, `-window-title`; section 5.1);
+- ten from the October 20 Train Model review (`20261020-134*-*-sdd-review.md`: D006,
+  D010, D017, `beacon`, `brake-state`, `brakes-apply-together`, `passengers-boarded`,
+  `track-signal`, `train-position`, and `modules/train-model.md`).
+
+Phase 2 is consistent with the three of those that bear on it. The Track Model clears
+its track circuit as `track-signal` says, sends boarding events only at stations
+within the reported capacity (`passengers-boarded`), and takes the Train Model's
+offset as its position (`train-position`). Phase 2 files no proposal of its own: it
+implements decisions already on `truth`.
 
 Fifty-six proposals, each a complete entry. Promote these thirty-one:
 
@@ -1266,8 +1431,8 @@ review did not implement those edits or run their tests.
   arrival. The developer utility is excluded from product actors/use cases.
 - D005/D008 require direct mappings between module-owned types, separate module
   processes and one shared clock. Legacy `track_model_edges.py` catalog conversions
-  remain to be replaced on the production Track Model path; Phase 1 uses a fixed
-  feed. Older CTC PDF integration statements are historical, not current requirements.
+  are off the running path, which Phase 2 maps directly (section 5.3); Phase 1
+  used a fixed feed. Older CTC PDF integration statements are historical, not current requirements.
 - Existing tests are local developer verification utilities. No workflow or
   enforcement policy is introduced.
 
@@ -1281,14 +1446,14 @@ Signals are named by their `truth` key (`signals/<key>.md`).
 | CTC Office → harness | `clock-speedup` | `clock-pause`; roster events under D022 | `SystemEdges`/`Roster` consume release/retirement from the current CTC stub; production CTC process remains integration work |
 | CTC Office → Track Controller | `suggested-speed`, `suggested-authority`, `closed-blocks`, `switch-command` | Suggestions carry the block, up to two per train with the second for the next block [P, R7, R49]; the speed stays an int [R38] | `ctc_to_track_controller`, SW only |
 | Track Controller → CTC Office | `block-occupancy` | A failed block reads occupied [P, R69]; `track-controller-ready` [P, R8, R70, R71] | none |
-| Track Controller → Track Model | none (`track-signal` runs Track Model → Train Model) | `track-signal` values come from the Track Controller, per block, cleared after delivery, zero when not commanded [P, R10, R64]; `signal-light-command` [P] | one-sided, to the old catalog |
+| Track Controller → Track Model | none (`track-signal` runs Track Model → Train Model) | `track-signal` values come from the Track Controller, per block, cleared after delivery, zero when not commanded [P, R10, R64]; `signal-light-command` [P] | Phase 2: a scripted wayside in the harness stands in (`wayside_script.py`, `track_edges.block_commands_to_track_model`) |
 | Track Model → Track Controller | none | Failures arrive as occupancy [R33, R69]; no heater commands the other way [P, R73]; no `truth` entries planned [R74] | one-sided, to the old catalog |
 | Track Model → CTC Office | `ticket-sales` (per line) | Per station, as a mapping [P, R22, R52] | one-sided, to the old catalog |
-| Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | one-sided, to the old catalog |
-| Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | one-sided, to the old catalog |
+| Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | `track_edges.track_model_to_train_model` (Phase 2) |
+| Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | `track_edges.train_model_to_track_model`, with doors open from the door state (Phase 2) |
 | Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; circuit/beacon passthrough | Independent brake states, pickup-failure zeros and canonical logical beacon payload in October 20 proposals | `train_edges.train_model_to_train_controller`; current edge drops separate speed limit per controller boundary; controller retains prior beacon data |
 | Train Controller → Train Model | Power, separate brake commands, doors, lights, setpoint, announcement, `passenger-brake-release` | Independent brake engagement and summed forces in October 20 proposal; controller owns door interlock | `train_edges.train_controller_to_train_model`; one-shot release clears passenger latch without canceling held controller emergency |
-| Track Model → Train Controller | none | `signal-aspect-ahead`, the next light [P, R25, R39] | one-sided, to the old catalog |
+| Track Model → Train Controller | none | `signal-aspect-ahead`, the next light [P, R25, R39] | `signal_seen` through `train_edges.aspect_to_train_controller`, on entry to a signal block only (Phase 2) |
 
 `failure-status` and `maintenance-mode` are superseded on `truth`.
 
