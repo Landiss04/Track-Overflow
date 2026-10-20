@@ -64,7 +64,10 @@ EXIT_NO_WINDOW = 1
 #: Real milliseconds between window redraws while steps arrive.
 WINDOW_REFRESH_MS = 100
 
-_MODULE_DIR = Path(__file__).resolve().parents[1]
+# The module's folder, holding its layout files and its window: in
+# the repository, or in a built executable's bundle, laid out the same.
+_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+_MODULE_DIR = _ROOT / "TrackModel"
 _ENTRY_QML = _MODULE_DIR / "ui" / "Main.qml"
 
 
