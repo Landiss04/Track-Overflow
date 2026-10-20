@@ -225,6 +225,10 @@ class TrackModelInputs:
     # A train absent from this mapping has left the track.
     trains: Mapping[str, TrainReport]
     ambient_temp_c: float
+    # Simulated seconds since midnight of the first day, from the central
+    # clock. None when the sender has no clock; the Track Model UI then
+    # shows the sum of the dt values it has been stepped by.
+    sim_time_s: float | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -309,8 +313,9 @@ class TrackModelSnapshot:
     waiting_passengers: Mapping[str, int]
     track_circuit: Mapping[str, TrackSignal]     # by block ID
     ambient_temp_c: float
-    elapsed_s: float
+    elapsed_s: float                             # sum of dt since reset
     outputs: TrackModelOutputs
+    sim_time_s: float | None = None              # central clock, if sent
 
 
 @dataclass(frozen=True, slots=True)
