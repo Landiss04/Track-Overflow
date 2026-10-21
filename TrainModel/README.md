@@ -248,6 +248,19 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 Set `TRAIN_MODEL_LINK` to run a pair on a private link name, for example
 beside a Train Model that is already open.
 
+For native Windows startup sizing, run the following from the repository
+root in the signed-in desktop session. Repeat at the presentation's display
+resolution and DPI settings; the check opens each real launcher and checks
+that its frame fits above the taskbar, with the shared icon installed:
+
+```powershell
+TrainModel\.venv\Scripts\python TrainModel\tests\windows_startup_check.py
+```
+
+Use `--shots DIR` to save startup screenshots. The offscreen Windows test
+runner can use `QT_QPA_FONTDIR=C:\Windows\Fonts` so Qt can find its fonts;
+native desktop runs use the Windows font system directly.
+
 ## Type-check
 
 ```bash
@@ -260,7 +273,7 @@ PySide6 ships its own type stubs, so no local stubs are needed.
 ## Build an executable
 
 PyInstaller builds each window as its own executable. Run from the
-repository root, not `TrainModel/`. The four data folders keep their
+repository root, not `TrainModel/`. The data folders and logo keep their
 source paths inside the bundle: the code finds them under the bundle's
 root (`sys._MEIPASS`) at the same paths as under the repository root,
 and the QML reaches the shared `ui/` and `pics/` by relative paths.
@@ -273,6 +286,7 @@ or loads with a blank ad or no track.
 | `TrainModel/pics` | the header ads |
 | `ui` | the shared QML components |
 | `TrackModel` | the line layouts the test UI loads |
+| `utils/Track_Overlow_Logo.png` | the shared window and taskbar icon |
 
 On Windows (PowerShell; `;` separates an `--add-data` source from its
 destination, `:` on Linux):
@@ -285,6 +299,7 @@ foreach ($app in 'main', 'test_ui') {
         --add-data "TrainModel\pics;TrainModel\pics" `
         --add-data "ui;ui" `
         --add-data "TrackModel;TrackModel" `
+        --add-data "utils\Track_Overlow_Logo.png;utils" `
         --hidden-import ui.theme --hidden-import ui.aspect_lock `
         "TrainModel\$app.py"
 }
