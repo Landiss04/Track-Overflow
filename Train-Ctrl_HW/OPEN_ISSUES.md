@@ -162,7 +162,10 @@ Item 3 (half of the speed dial's dead zone asked for full speed) is fixed
     round trip. Read literally, "fell by more than the band over the window"
     also trips running onto Green 7's 5 % grade, where the speed sags about
     0.5 m/s before the PI catches it; so the fall must also be steady (a dead
-    engine's fall is a straight line, a sag curves out). Still open: a train
+    engine's fall is a straight line, a sag curves out). Kevin Schillinger directly
+    accepted the steady-fall check as built on 2026-10-21: half-second speed means
+    within 10% of the total fall of a straight line over the 6 s window (design R91).
+    Acceptance is resolved; the two known limits remain. Still open: a train
     at a stand with a dead engine is not flagged (it never falls), and a
     train that cannot hold its speed up a grade at full power is.
 

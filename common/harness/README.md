@@ -33,7 +33,9 @@ console, with a status line every 5 s. Ctrl+C ends the run in either mode. The c
 starts paused. In a window run the dispatcher presses Run in the CTC Office's window
 (D017; R83, Kevin Schillinger's decision of 2026-10-21 on Q-P4-1). A headless run has
 the CTC Office press Run as soon as it is ready (`--run-on-ready`, below), and so does a
-`--stubs-only` run, whose stub CTC Office has no window. `--auto-run` does the same in a
+`--stubs-only` run, whose stub CTC Office has no window. Kevin Schillinger explicitly
+accepted this stubs-only automatic Run exception on 2026-10-21 (design R92).
+`--auto-run` does the same in a
 window run, for tests and demonstrations only, as `--load-starters` and `--dispatch`
 are. The dispatcher can pause the run in the CTC Office's window either way.
 
@@ -357,9 +359,9 @@ Phases 1 to 4 add three layers of tests:
   a false engine-failure latch at Green 93 (Q-P4-8), fixed in `460579b`. The full
   round trip now passes with the detector enabled: five tests passed in 38.95 s in
   the orchestrator's targeted check of 2026-10-21 (the earlier environment took about
-  140 s). The extra steady-fall detector criterion still awaits Kevin's acceptance;
-  its known limits are recorded in `documents/integration-handover-phase-4.md`
-  section 6. This is not a whole-suite rerun or a new timing-budget measurement.
+  140 s). Kevin Schillinger accepted the extra steady-fall detector criterion as
+  built on 2026-10-21 (design R91); its known limits remain recorded in
+  `documents/integration-handover-phase-4.md` section 6. This is not a whole-suite rerun or a new timing-budget measurement.
 - `test_harness_system.py`: the real CTC Office, Track Controller SW, Track Model, Train
   Model and Train Controller processes and two stubs, with the starter programs loaded.
   It runs the Iteration 3 scenario: G1 dispatched from the yard to GLENBURY, placed at

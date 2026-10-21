@@ -2,7 +2,7 @@
 
 **Scope:** `c311800` exclusive through `cf4edf582cea499eae8e5f9e8f7fcae53d5474a1` inclusive, on `claude/quirky-fermi-sickg4`: 23 commits and 83 net changed paths. Prepared 2026-10-21. This is a review of implementation and recorded decisions, not a truth entry.
 
-Phases 3 and 4 replace the scripted wayside and then the scripted CTC Office with the real Green Track Controller SW and CTC Office. The system runs five real module processes and two hardware stubs. The Green dispatch-to-GLENBURY scenario works, and the later engine-detector repair in `460579b` unblocks the complete Green round trip and retirement at block 57. The rule's additional steady-fall criterion still needs Kevin's acceptance; successful implementation does not settle that decision.
+Phases 3 and 4 replace the scripted wayside and then the scripted CTC Office with the real Green Track Controller SW and CTC Office. The system runs five real module processes and two hardware stubs. The Green dispatch-to-GLENBURY scenario works, and the later engine-detector repair in `460579b` unblocks the complete Green round trip and retirement at block 57. At the baseline endpoint the rule's additional steady-fall criterion still needed Kevin's acceptance. He subsequently accepted it as built on 2026-10-21; the post-summary decisions below record that later decision separately from the audited range.
 
 The baseline itself already enforced the 45 s dwell (`c311800`); that implementation and Phases 0–2 are context, not new changes in this range. Existing UI changes are documented below for review. This summary changes no UI, truth entry, module code, handover, design document, or test docstring.
 
@@ -39,7 +39,7 @@ The CTC/Track audit agent also attempted their full unittest suites: CTC ran 259
 | Historical operator-window fixes retain module-row identity so Show window keeps keyboard focus during status changes; clear selected event and close inspector when that event rolls out of the bounded list. | Repair existing focus/selection bugs; no new user ruling recorded. | `bab5599` | `test_harness_window_state.py::HarnessWindowStateTest::test_focus_and_selection_probe` launches `window_state_probe.py`. |
 | Make startup-timeout fault test deterministic: 2 s timeout, deliberately delayed Train Model 4 s, assert only it is named. Extend real-system CLI/window run from 2 s to 8 s, retain 1 s stubs run, allow run duration +30 s timeout. | Remove test races: ordinary child startup could exceed the old 0.3 s threshold or consume the whole 2 s run. Implementation/test rationale only. | `428852b`, `ed3fd91` | `test_harness_console.py::ConsoleFaultRunTest::test_startup_timeout_names_the_loading_module`; `test_harness_window.py::HarnessWindowTest::test_cli_modes_keep_options_and_exit_cleanly`. Commit `428852b` records four parallel and five sequential passes (historical). |
 | Add opt-in complete Green round-trip tests: scheduled stop, whole route, switch setting/holding, retirement at 57, no emergency/pickup failure. Initially exposed engine-detector failure at Green 93; later passes after detector repair. | R86/Phase 3 Q7 starter routing repair plus D022 end-to-end lifecycle coverage. | `234c353`; unblocked by `460579b` | `test_harness_train_loop.py::ReturnToYardTest` (five tests), enabled by `TRACK_OVERFLOW_ROUND_TRIP=1`; see verification and Train Controller section. |
-| Ordinary window runs wait for dispatcher Run; add `--auto-run`. Headless, stubs-only, and explicit auto-run pass `--run-on-ready`; measure remains automatic. Suppress shutdown-only `TIME_SLIPPED` events while preserving actual dropped-backlog accounting. | R83 Kevin's answer to Q-P4-1; shutdown backlog is not a runtime timing fault. Whether stubs-only window mode should be an exception remains Kevin's decision. | `68fcfa7` | `test_harness_window.py::AutoRunTest` (five cases: normal window, auto-run, headless, stubs, passthrough); `test_harness_faults.py::StopWithTicksOwedTest::test_stopping_logs_no_time_slipped`. Historical harness result 156 passed, five opt-in skips. |
+| Ordinary window runs wait for dispatcher Run; add `--auto-run`. Headless, stubs-only, and explicit auto-run pass `--run-on-ready`; measure remains automatic. Suppress shutdown-only `TIME_SLIPPED` events while preserving actual dropped-backlog accounting. | R83 Kevin's answer to Q-P4-1; shutdown backlog is not a runtime timing fault. The exception was still undecided at the baseline endpoint; Kevin subsequently explicitly kept it on 2026-10-21 (post-summary R92). | `68fcfa7` | `test_harness_window.py::AutoRunTest` (five cases: normal window, auto-run, headless, stubs, passthrough); `test_harness_faults.py::StopWithTicksOwedTest::test_stopping_logs_no_time_slipped`. Historical harness result 156 passed, five opt-in skips. |
 
 Historical Phase 3 validation recorded edges 55, loop 21, system 11 and Track Controller SW 194 tests. Phase 4 at `b65fd26` recorded harness 150 passed with 495 subtests, utils 82 with 37 subtests, CTC 244 and Track Controller SW 194. Later handover records CTC 259, Track Controller SW 213, and Train Controller harness suite 12. These counts refer to different historical revisions, not one current aggregate.
 
@@ -88,12 +88,12 @@ The active logical Green `train-controller-sw` process imports **`Train-Ctrl_HW/
 | Change and effect | Why / ruling | Commits | Covering tests |
 | --- | --- | --- | --- |
 | Add two tests of existing behavior on entering a slower block: power zero and service brake on the first tick, held until under the new limit, without emergency brake. No controller logic change in this commit. | Kevin's Oct 21 R87/Q-P4-4: CTC does not cap ahead; controller slows after entering block. Historical example enters Green 67 at 17.9 m/s and falls below 11.1 m/s after 4.8 s/about 70 m. | `0305d05` | `tests/test_harness_driven.py::LowerLimitAheadTest::{test_brakes_on_the_first_tick_in_the_slower_block,test_holds_the_service_brake_until_under_the_limit}`. |
-| Replace failure inference from “speed not rising for 2 s” with falling-speed detection. Never latch within 0.05 m/s target band. Require commanded power and no service/emergency brake commanded or reported anywhere in the 6 s window, and fall >0.05 m/s. Reset window on no power/braking and clear_failure. Use half-second means and require each mean within 10% of total fall of the straight first-to-last line. | Kevin's three rules: never flag holding target; flag falling speed with power and no brake throughout; use longer than 2 s. Exact 6 s/0.05 thresholds are implementation choices. **The extra straight-line/steady-fall check is an unaccepted implementation choice**, avoiding a healthy Green 7 grade-entry sag (~0.51 m/s recovering in ~3 s). | `460579b` | `tests/test_engine_detection.py::EngineDetectionTest` 11 cases: longer window, steady uphill target, entering grade, failed engine flat/uphill/accelerating, any brake in window, brake then pulling, driver release, noise, steady below-target. `ReturnToYardTest` five route cases now pass (historical source and fresh status in verification). |
+| Replace failure inference from “speed not rising for 2 s” with falling-speed detection. Never latch within 0.05 m/s target band. Require commanded power and no service/emergency brake commanded or reported anywhere in the 6 s window, and fall >0.05 m/s. Reset window on no power/braking and clear_failure. Use half-second means and require each mean within 10% of total fall of the straight first-to-last line. | Kevin's three rules: never flag holding target; flag falling speed with power and no brake throughout; use longer than 2 s. Exact 6 s/0.05 thresholds are implementation choices. **At the baseline endpoint, the extra straight-line/steady-fall check was an unaccepted implementation choice** (subsequently accepted by Kevin on 2026-10-21, R91), avoiding a healthy Green 7 grade-entry sag (~0.51 m/s recovering in ~3 s). | `460579b` | `tests/test_engine_detection.py::EngineDetectionTest` 11 cases: longer window, steady uphill target, entering grade, failed engine flat/uphill/accelerating, any brake in window, brake then pulling, driver release, noise, steady below-target. `ReturnToYardTest` five route cases now pass (historical source and fresh status in verification). |
 | Toy plant `ControllerCore._plant()` in `control.py` applies rolling resistance when engine or brake failure is injected; `constants.py` supplies its resistance constant. Update self-check cruise to expect eventual engine detection under resistance; revise CHANGELOG, HARNESS_INTEGRATION, OPEN_ISSUES and REQUIREMENTS. This does not change Train Model physics. | Dead engine must visibly slow in the toy plant, consistent with Train Model's documented rolling resistance. Implementation/test realism, not a new physics decision. | `460579b` | Engine detector tests use their own custom Plant, not `ControllerCore._plant()`. The historical self-check covers the actual toy plant; entrypoint is `main.py --check` from `Train-Ctrl_HW` (running `check.py` directly does not execute it). No fresh self-check result claimed here. |
 
-**Q-P4-8/G-NEW-6 is resolved by `460579b`:** healthy steady speed at Green 93 no longer latches, and the full Green round trip retires at 57. Design v0.12, Phase 4 handover, harness README and `ReturnToYardTest` docstring still saying it fails are stale and need the subsequent authorized cleanup, after this summary is delivered.
+**Q-P4-8/G-NEW-6 is resolved by `460579b`:** healthy steady speed at Green 93 no longer latches, and the full Green round trip retires at 57. At the baseline endpoint, design v0.12, the Phase 4 handover, harness README and `ReturnToYardTest` docstring still said it failed. The subsequent authorized cleanup is now complete in `55dac4f` and `b6c6eb2`, outside this summary's audited range.
 
-Two known limits remain: a dead-engine train at a stand is not flagged because speed does not fall; a heavily loaded train physically unable to hold speed on Green 7's 5% grade is flagged. These are recorded limits in OPEN_ISSUES #26 and the handoff, not separately proven by dedicated assertions in `EngineDetectionTest`. **Train Controller owners (unassigned)** review the detector; **Kevin** must accept or reject the additional steady-fall criterion. The pending proposal deliberately leaves the exact window/threshold/band/shape unspecified.
+Two known limits remain: a dead-engine train at a stand is not flagged because speed does not fall; a heavily loaded train physically unable to hold speed on Green 7's 5% grade is flagged. These are recorded limits in OPEN_ISSUES #26 and the handoff, not separately proven by dedicated assertions in `EngineDetectionTest`. **Train Controller owners (unassigned)** review the detector; **Kevin accepted the additional steady-fall criterion as built on 2026-10-21 (post-summary R91)**. The earlier proposal deliberately leaves the exact window/threshold/band/shape unspecified; a new full-entry proposal records his later acceptance without editing that earlier file.
 
 ## Utils
 
@@ -110,12 +110,12 @@ Two known limits remain: a dead-engine train at a stand is not flagged because s
 | Create Phase 3 handover with per-file integration, validation, departures and owner questions; complete validation and promote design's Phase 3 as-built section/gaps/edge map; note CTC Q13/Q14 commit. Update harness README, Track Controller SW README/discrepancies, Track Model integration/readme and Train Model open issues. | Phase 3 handoff/status evidence; `1a9ce27`, `91a5afd`, `af6abf6`. No new truth inferred from implementation. | Source/diff audit and underlying tests above; historical Phase 3 budget/frozen smoke only. |
 | Create Phase 4 handover and expand design/README with CTC process/edges, scenario, validation, faults, frozen recipe, questions and historical metrics. Mark Phase 3 CTC blockers resolved and startup race fixed. | Preserve integration review evidence; `b65fd26`, `a55b8b9`; CTC README also `97a2fd1`. | Linux offscreen frozen smoke reported in committed handover; Windows and visible UI performance remain unverified. No code test uniquely validates prose. |
 | Record Kevin's Oct 21 R83–R90 rulings, return-to-yard/shared clock/starter implementation, lower-limit test and remaining questions; mark auto-run decision implemented and shutdown slip fixed. | Keep design v0.12 and handovers aligned with then-current work; `f32d81e`, `9f9b644`. | Cross-check cited commits/tests, not a new execution result. Later `460579b` makes round-trip failure status stale. |
-| Update Train Controller change/requirements/open-issue/integration documents with new detector, toy plant and acceptance/limits. | Explain changed owner behavior; `460579b`. | Audit against constants/control/tests; rule acceptance remains open. |
+| Update Train Controller change/requirements/open-issue/integration documents with new detector, toy plant and acceptance/limits. | Explain changed owner behavior; `460579b`. | Audit against constants/control/tests; rule acceptance was open at the baseline, then resolved by Kevin on 2026-10-21 (R91). |
 | Add next-session prompt: summary first, then stale-status/docstring cleanup, ask Kevin about steady-fall and stubs auto-run, owner relay questions, and plan Phase 5 before implementation. | User-directed continuation instructions; `cf4edf5`. | Audited as source of task order. This summary does not perform later cleanup or authorize Phase 5. |
 
 ## Truth proposals
 
-Exactly **18 existing proposals** await human review in this branch's inbox. Sixteen were already present at baseline; only `66aa348` and `91e8c0a` add proposals in this range. Nothing was promoted, deleted, edited or pushed to `truth`. The target paths below describe proposed destinations, not authoritative facts. Each link is relative to this summary; provenance is summarized from its wrapper/entry.
+The **baseline inventory contains 18 proposals**, still awaiting human review. Sixteen were already present at baseline; only `66aa348` and `91e8c0a` add proposals in this range. Nothing was promoted, deleted, edited or pushed to `truth`. The target paths below describe proposed destinations, not authoritative facts. Each link is relative to this summary; provenance is summarized from its wrapper/entry.
 
 | Proposal / heading | Target | Provenance | Present before exclusive baseline? / in-range commit |
 | --- | --- | --- | --- |
@@ -138,7 +138,7 @@ Exactly **18 existing proposals** await human review in this branch's inbox. Six
 | [lower-limit-ahead](../truth/_inbox/claude/quirky-fermi-sickg4/20261021-1445-lower-limit-ahead-train-controller-slows.md) (`20261021-1445-lower-limit-ahead-train-controller-slows.md`) | `truth/arbitration/lower-limit-ahead.md` | Kevin direct Oct 21/Q-P4-4: controller slows after entering lower-limit block; CTC does not cap ahead. | No; `66aa348` |
 | [engine-failure-detection](../truth/_inbox/claude/quirky-fermi-sickg4/20261021-1536-engine-failure-detection.md) (`20261021-1536-engine-failure-detection.md`) | `truth/arbitration/engine-failure-detection.md` | Kevin direct Oct 21 three detector rules after Green 93 false latch; exact constants and shape deliberately unspecified. | No; `91e8c0a` |
 
-Proposal validation in this session is inventory/metadata/provenance comparison only; no promotion or claim that all proposed choices are approved. Lower-limit proposal records R87 and engine proposal records Kevin's three rules, not the unaccepted extra shape test. Promotion remains Kevin's/human-only work.
+Proposal validation in this session is inventory/metadata/provenance comparison only; no promotion or claim that all proposed choices are approved. Lower-limit proposal records R87 and earlier engine proposal records Kevin's three rules, not his later acceptance of the extra shape test. The post-summary section records two later proposals, bringing the current inbox to 20 while preserving this 18-entry baseline table. Promotion remains Kevin's/human-only work.
 
 ## Owner review and questions to relay
 
@@ -150,13 +150,13 @@ These are review requests, not messages sent to owners and not decisions made by
 | Track Controller SW owners | Dialog `switchApplied`/`switchReleased` rename and handlers | `1a9ce27`; Phase 3 Q2 |
 | Landis / CTC Office | Current+next-block suggestion, explicit new/retired events, release/tracker/scheduler semantics | `9c440d6`; Phase 3 Q13/Q14 now implemented |
 | Landis / CTC Office | Process/clock bridge, immediate STATE push; return-to-yard and harness-time schedule | `97a2fd1`, `4cc873b`; G-CLK-3, R85/R88 |
-| Train Controller owners (unassigned), Kevin | Falling-speed detector, target band/window/brake guards, additional straight-line criterion and limits; package also serves logical Green SW | `460579b`, OPEN_ISSUES #26; Q-P4-8 implementation resolved, acceptance still open |
+| Train Controller owners (unassigned), Kevin | Falling-speed detector, target band/window/brake guards, additional straight-line criterion and limits; package also serves logical Green SW | `460579b`, OPEN_ISSUES #26; Q-P4-8 implementation resolved; Kevin subsequently accepted the check as built (R91); known limits remain |
 
-### Kevin's pending decisions
+### Kevin's decisions and remaining actions
 
-1. **Accept the extra steady-fall test?** Kevin's three rules do not explicitly approve the straight-line shape check. As built, half-second speed means must remain within 10% of total fall of a straight line across 6 s; it avoids the recoverable Green 7 grade sag. Decide rather than infer acceptance from successful tests. OPEN_ISSUES #26 and engine proposal preserve this distinction and the two limits above.
-2. **Should a stubs-only window run automatically Run?** Current `--stubs-only` bypasses dispatcher Run because the stub CTC has no window. Keep that exception or require `--auto-run` too? R83 normal-window/headless policy alone does not settle this edge case.
-3. **Review the 18 proposals** above; promotion is human-only. No agent changes truth or inbox files during this summary.
+1. **Steady-fall check accepted as built:** Kevin directly said "Accept the steady-fall check as built" on 2026-10-21 (post-summary R91), including half-second speed means within 10% of the total fall of a straight line across the 6 s window. The two known limits remain.
+2. **Stubs-only automatic Run retained:** Kevin directly said "Keep automatic Run for --stubs-only" on 2026-10-21 (post-summary R92). A stubs-only window run requires no `--auto-run`; a real window run still waits for the dispatcher unless `--auto-run` is given.
+3. **Review the proposals:** 18 appear in the baseline table above and two later proposals appear below, for 20 currently. Promotion is human-only; the earlier inbox files remain unchanged.
 4. **Plan Phase 5 together before giving go.** No hardware build starts from this summary alone.
 
 ### Remaining open questions and owners
@@ -178,22 +178,45 @@ These are review requests, not messages sent to owners and not decisions made by
 | Phase 3 Q12 | Adjacent occupied trains hold each other under starter; ownership/direction behavior remains | Harry Tye |
 | Q-P4-7 / R90 | Intended ticket probability/rate: Track Model 0.02 per station per tick, about 12 tickets per simulated minute? | Track Model owner |
 | G-CLK-3 | Confirm CTC process's immediate STATE push on Run/Pause/speed | Landis / CTC Office |
-| OPEN_ISSUES #26 | Engine extra shape acceptance and known-limit disposition | Kevin; Train Controller owners (unassigned) |
-| R83 stubs exception | Auto-Run semantics for stubs-only window | Kevin |
+| OPEN_ISSUES #26 | Known-limit disposition; shape acceptance is resolved by Kevin's later R91 decision | Train Controller owners (unassigned); Kevin |
 | G-CLK-6 | Visible windows, multiple trains, USB hardware, lab-machine load within budget | Module owners; hardware/integration owner not assigned in handovers |
 | G-LIFE-2 / G-RUN-7 | Remaining HW module startup/readiness, files and windows against 20 s; lifecycle/show/quit integration | HW module owners; integration owner unassigned in design |
 | G-RUN-2 / Phase 5 | Windows executable/build and course per-subsystem installable expectation | Integration/packaging owner unassigned in design; Kevin to plan |
 | Truth backlog / contract ownership | Human review/promotion and still-placeholder contracts/variant/interface reconciliation | Kevin for promotion; named module owners for their contracts; Train Controller contract owner unassigned |
 
-Resolved questions are not silently left open: Phase 3 Q13/Q14 are implemented by `9c440d6`, Q15 by `428852b`; Q7 routing repair by `234c353` retains the owner choices above. Phase 4 Q-P4-1 normal Run by `68fcfa7`; Q-P4-2 both dispatch methods supported; Q-P4-3 return/retirement path works with later detector fix; Q-P4-4 decided R87; Q-P4-5 `4cc873b` shared time; Q-P4-6 no further UI changes R89. Q-P4-8 is resolved by `460579b`, with separate detector acceptance pending.
+Resolved questions are not silently left open: Phase 3 Q13/Q14 are implemented by `9c440d6`, Q15 by `428852b`; Q7 routing repair by `234c353` retains the owner choices above. Phase 4 Q-P4-1 normal Run by `68fcfa7`; Q-P4-2 both dispatch methods supported; Q-P4-3 return/retirement path works with later detector fix; Q-P4-4 decided R87; Q-P4-5 `4cc873b` shared time; Q-P4-6 no further UI changes R89. Q-P4-8 is resolved by `460579b`, with detector acceptance subsequently resolved by Kevin on 2026-10-21 (R91).
 
 ## Next work, after summary delivery
 
-First fix the stale `ReturnToYardTest` docstring and design/Phase 4 handover status: round trip unblocked, Q-P4-8 resolved, as-built detector and two limits. These are subsequent authorized loose ends, not changes included in this summary commit. Then obtain Kevin's answers and relay owner questions. Preserve current prohibition on further UI changes unless named by the user.
+The subsequent authorized loose ends were completed in `55dac4f` (test docstring) and `b6c6eb2` (design/Phase 4 handover/README status, detector and limits), outside the baseline range. Kevin has now answered the detector and stubs-only Run questions below; the other owner questions remain open. Preserve the prohibition on further UI changes unless named by the user.
 
 The successful one-train round trip does not validate the unresolved follower case: if the CTC Office admits a follower onto 75/76 while the leader stands at 77 bound for 101, the controller-side switch/lock may leave it waiting. Whether the CTC two-way zone prevents that entry remains Landis’s question, with Harry reviewing the controller side. No full-system follower entry is claimed verified.
 
 **Phase 5 requires planning with Kevin and an explicit go.** Scope: Red Track Controller HW and Train Controller HW on Raspberry Pis over USB CDC-ACM, one Pi per hardware module with UIs on host (D021/D027); Red wayside data with `next_blocks` (R34/R78); measure USB round trip; one executable and Windows build. Red blocks are all two-way, so current generated starters leave switches normal there; the `75-yard` normal leg must be settled. `merge_ctc_inputs` already prepares the second Track Controller path but proves no hardware behavior.
+
+## Post-summary decisions (2026-10-21; outside the baseline range)
+
+Kevin Schillinger directly accepted the steady-fall check as built and retained
+automatic Run for `--stubs-only` (design v0.14 R91/R92). These resolve the two user
+decisions that were pending at `cf4edf5`; they require no runtime, UI or test-logic
+change. Acceptance concerns the detector under review as built, without imposing
+identical numerical constants on every independent variant. The decisions do not
+settle the detector's two known limits or other owner questions,
+and they do not authorize Phase 5.
+
+Two new full-entry proposals record the direct decisions:
+
+- [20261021-1220-engine-failure-steady-fall-accepted.md](../truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-engine-failure-steady-fall-accepted.md)
+  targets `truth/arbitration/engine-failure-detection.md`, including the accepted
+  half-second means / 10% straight-line check across the 6 s window.
+- [20261021-1220-harness-stubs-only-auto-run.md](../truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-harness-stubs-only-auto-run.md)
+  targets `truth/decisions/harness-stubs-only-auto-run.md`, preserving automatic Run
+  in stubs-only window mode without `--auto-run`.
+
+The current inbox contains **20 proposals**. The 18-entry table, 23-commit ledger and
+258-pass / 66-subtest verification above remain the original baseline snapshot, not
+an audit of these later proposals or a claim of new tests. Earlier proposal files
+remain unchanged; review and promotion are human-only.
 
 ## Exhaustive commit ledger
 

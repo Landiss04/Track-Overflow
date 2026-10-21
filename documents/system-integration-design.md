@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.13. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5). Not normative. |
+| **Status** | Draft v0.14. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5). Not normative. |
 | **Date** | 2026-10-21 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
@@ -13,11 +13,19 @@ The `truth` branch is the authoritative record. This document cites it by shard 
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
 
-**Changes since v0.12**
+**Changes since v0.13**
+
+- Kevin Schillinger directly accepted the steady-fall engine check as built and
+  automatic Run for `--stubs-only` on 2026-10-21 (R91/R92). Neither decision changes
+  runtime code. The detector's two known limits and other owners' questions remain.
+- Two new proposals record these decisions; promotion remains human-only (section 7).
+
+**Changes in v0.13**
 
 - The engine-detector repair `460579b` unblocks the complete Green round trip and
   retirement at 57. Q-P4-8 and G-NEW-6 are resolved as implementation defects; Kevin's
-  acceptance of the extra steady-fall criterion remains pending (section 5.5).
+  acceptance of the extra steady-fall criterion was still pending at v0.13 and is now
+  recorded in R91 (section 5.5).
 - Section 5.5 records the detector as built, its two known limits and the fresh
   targeted checks of 2026-10-21. These checks are not a whole-suite rerun or a new
   timing-budget measurement.
@@ -158,7 +166,9 @@ Quotes are as written.
 
 Relayed by Kevin Schillinger, with the CTC Office's answers in its owner's words. Quotes
 are as written. R83 to R90 are Kevin Schillinger's answers of 2026-10-21 to the Phase 4
-handover's questions and to Phase 3 handover Q7.
+handover's questions and to Phase 3 handover Q7. R91/R92 are his later direct
+decisions of the same date, accepting the steady-fall check as built and keeping
+automatic Run for `--stubs-only`.
 
 | # | Answers | Ruling | Effect |
 |---|---|---|---|
@@ -209,6 +219,8 @@ handover's questions and to Phase 3 handover Q7.
 | R88 | Q-P4-5 | "use the harness clock" | The CTC Office takes its time from the step's `sim_time_s` (D017; `4cc873b`). |
 | R89 | Q-P4-6 | "do not make any changes to uis" | No further UI changes. The test UI's `next_...` rows and the keying by train stay as they are. |
 | R90 | Q-P4-7 | "add this to open questions" | The ticket sales rate stays open, for the Track Model owner. |
+| R91 | Engine detector / OPEN_ISSUES #26 | "Accept the steady-fall check as built" | Kevin Schillinger, direct statement 2026-10-21: accept the implementation in `460579b`, including half-second speed means within 10% of the total fall of a straight line across the 6 s window (section 5.5). The two known limits remain. |
+| R92 | R83 stubs-only exception | "Keep automatic Run for --stubs-only" | Kevin Schillinger, direct statement 2026-10-21: a `--stubs-only` run presses Run automatically, including window mode, because the stub CTC Office has no window. A real window run still waits for the dispatcher unless `--auto-run` is given. |
 
 ### 1.5 Questions
 
@@ -254,8 +266,8 @@ settled; Q1 to Q6 and Q8 to Q12 stay open there.
 
 The Phase 4 handover's questions (`documents/integration-handover-phase-4.md`, section
 4) were answered by Kevin Schillinger on 2026-10-21 (R83 to R90). Q-P4-7 stays open,
-and Q-P4-8 is resolved by `460579b`; the extra detector criterion awaits Kevin's
-acceptance.
+and Q-P4-8 is resolved by `460579b`. Kevin accepted the extra detector criterion and
+the stubs-only automatic Run exception on 2026-10-21 (R91/R92).
 
 | # | Question | Who | Status | Blocks |
 |---|---|---|---|---|
@@ -266,7 +278,7 @@ acceptance.
 | Q-P4-5 | The CTC Office keeps its own elapsed time and does not read the step's `sim_time_s`; a refused tick puts its schedule a tick behind for good. | Landis | Answered (R88): it uses the harness's clock, in `4cc873b`. | none |
 | Q-P4-6 | The test UI and `ctc_host._suggestions` key suggestions by train; the test UI names the next block's rows `next_...`. | Landis | Answered (R89): no further UI changes; the naming stays. | none |
 | Q-P4-7 | The Track Model sells tickets with probability 0.02 per station per tick, about 12 a simulated minute per station. Is that the intended rate? | Track Model owner | Open (R90). | none |
-| Q-P4-8 | The old detector falsely latched an engine failure at steady 5 m/s on Green 93, blocking the full round trip. | Train Controller owners (unassigned); Kevin for acceptance | Resolved by `460579b` (G-NEW-6): the full Green round trip and retirement at 57 pass. The extra steady-fall criterion is built but awaits Kevin's acceptance; see section 5.5 and `Train-Ctrl_HW/OPEN_ISSUES.md` #26. | none |
+| Q-P4-8 | The old detector falsely latched an engine failure at steady 5 m/s on Green 93, blocking the full round trip. | Train Controller owners (unassigned) | Resolved by `460579b` (G-NEW-6): the full Green round trip and retirement at 57 pass. Kevin accepted the extra steady-fall criterion as built on 2026-10-21 (R91); see section 5.5 and `Train-Ctrl_HW/OPEN_ISSUES.md` #26. | none |
 
 ### 1.6 Questions for the Track Controller owners
 
@@ -1021,15 +1033,16 @@ same events and seven exits of code 0.
   Manual dispatch and the schedule are both supported (R84).
 - **Run on ready:** `app.py` passes `--run-on-ready` only for a headless run, a
   `--stubs-only` run (its stub CTC Office has no window) and a run with `--auto-run`, a
-  test and demonstration option. A window run waits for the dispatcher's Run (R83;
+  test and demonstration option. Kevin explicitly kept the stubs-only automatic Run
+  exception on 2026-10-21 (R92). A real window run waits for the dispatcher's Run (R83;
   `68fcfa7`).
 - **The CTC window's header** shows the dispatcher's Run/Pause and speed, not whether
   the harness clock is running; it also waits for every module and for a late reply.
   The harness window gives the hold reason.
 - **The full Green round trip and retirement at 57 pass.** The "return to yard"
   action and starter switches (R85, R86), followed by the engine-detector repair
-  `460579b`, unblock Q-P4-8. The extra steady-fall criterion still awaits Kevin's
-  acceptance; the successful one-train run does not settle the starter's follower
+  `460579b`, unblock Q-P4-8. Kevin accepted the extra steady-fall criterion as built
+  on 2026-10-21 (R91); the successful one-train run does not settle the starter's follower
   or vital-lock questions.
 - **Speed at a lower limit ahead:** G1 enters block 67 (40 km/h) at 18 m/s, and the
   Train Controller slows it there (R87).
@@ -1117,9 +1130,12 @@ of more than 0.05 m/s over a 6 s simulation-time window, with power commanded ab
 zero and no service or emergency brake commanded or reported throughout. It compares
 half-second speed means: every mean must be within 10% of the total fall of the
 straight line from the first to the last. This extra shape check prevents the
-recoverable Green 7 grade sag from latching; it is an implementation choice awaiting
-Kevin's acceptance, not an approved rule. See `Train-Ctrl_HW/OPEN_ISSUES.md` #26 and
-`truth/_inbox/claude/quirky-fermi-sickg4/20261021-1536-engine-failure-detection.md`.
+recoverable Green 7 grade sag from latching. Kevin Schillinger directly accepted the
+steady-fall check as built on 2026-10-21 (R91). This accepts the implementation
+under review; it does not require every independent variant to adopt identical
+numerical constants. See `Train-Ctrl_HW/OPEN_ISSUES.md` #26 and
+[the accepted-check proposal](../truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-engine-failure-steady-fall-accepted.md).
+The earlier `20261021-1536-engine-failure-detection.md` proposal remains unchanged.
 
 Two known limits remain: a train at a stand with a dead engine is not flagged because
 its speed never falls; a heavily loaded train that cannot hold speed on Green 7's
@@ -1769,7 +1785,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-NEW-3 | Resolved (R60), built. Only the train whose input is invalid misses the tick ([P] `modules/train-model.md`). The Train Model's process steps each train on its own and names a rejected one (section 5.2). | `TrainModel/train_model/module_process.py` | Train Model owner Kevin Schillinger |
 | G-NEW-4 | Closed (R42). Gains are set in the UI, which runs on the host PC for the HW variant too. Each new train still waits for an engineer to set its gains before it moves. | Section 3.3 | Train Controller |
 | G-NEW-5 | Closed (R34). Red data for the Track Controller HW will be loaded later. | `TrackCtrlHw/data/` | Track Controller HW |
-| G-NEW-6 | Resolved by `460579b` (Q-P4-8). The old detector falsely latched at steady speed on Green 93. The full Green round trip now completes and retires at 57 (five opt-in tests pass). The extra steady-fall criterion awaits Kevin's acceptance, and the dead-engine-at-stand and heavily-loaded-grade limits remain (section 5.5). | `Train-Ctrl_HW/train_ctrl/constants.py`, `control.py`; `ReturnToYardTest` in `common/harness/tests/test_harness_train_loop.py` | Train Controller (unassigned) |
+| G-NEW-6 | Resolved by `460579b` (Q-P4-8). The old detector falsely latched at steady speed on Green 93. The full Green round trip now completes and retires at 57 (five opt-in tests pass). Kevin accepted the extra steady-fall criterion as built on 2026-10-21 (R91); the dead-engine-at-stand and heavily-loaded-grade limits remain (section 5.5). | `Train-Ctrl_HW/train_ctrl/constants.py`, `control.py`; `ReturnToYardTest` in `common/harness/tests/test_harness_train_loop.py` | Train Controller (unassigned) |
 
 ## 7. Truth proposals
 
@@ -1781,7 +1797,7 @@ the inbox. One is held: `20261020-0234-track-controller-ready-roster.md`, which 
 the Track Controller owners. Where this document tags a promoted proposal [P], read [T].
 The lists below are kept as the record of what was proposed.
 
-**In the inbox now (2026-10-21), eighteen proposals await review:**
+**In the inbox now (2026-10-21), twenty proposals await review:**
 
 - `20261021-1445-lower-limit-ahead-train-controller-slows.md`, for
   `arbitration/lower-limit-ahead.md` (new): the CTC Office does not cap ahead of a
@@ -1793,7 +1809,15 @@ The lists below are kept as the record of what was proposed.
   after the false latch at Green 93 (`91e8c0a`), covering target holding, falling
   speed with power and no brake, and a longer detection window. Exact constants and
   whether a recoverable sag may be distinguished by its shape are not specified;
-  this proposal does not approve the extra steady-fall criterion;
+  that earlier proposal does not record the later R91 acceptance; the new full
+  entry below does;
+- [20261021-1220-engine-failure-steady-fall-accepted.md](../truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-engine-failure-steady-fall-accepted.md), for
+  `arbitration/engine-failure-detection.md`: Kevin's later direct acceptance of the
+  steady-fall check as built (R91), a full replacement proposal preserving the
+  earlier proposal unchanged;
+- [20261021-1220-harness-stubs-only-auto-run.md](../truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-harness-stubs-only-auto-run.md), for
+  `decisions/harness-stubs-only-auto-run.md`: Kevin's direct acceptance of automatic
+  Run for `--stubs-only`, including window runs (R92);
 - the held `20261020-0234-track-controller-ready-roster.md`;
 - `20261020-1858-D007-dwell-scheduled-by-ctc-enforced-by-train-controller.md`: D007
   updated for Kevin Schillinger's statement of 2026-10-20, "station dwell is scheduled
