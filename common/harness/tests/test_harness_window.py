@@ -10,6 +10,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+STUB_RUN_SECONDS = 1
+SYSTEM_RUN_SECONDS = 8
+
 
 class HarnessWindowTest(unittest.TestCase):
     """Exercise the real window without QCore singleton clashes."""
@@ -35,9 +38,14 @@ class HarnessWindowTest(unittest.TestCase):
             for mode in ("window", "headless", "system"):
                 with self.subTest(mode=mode):
                     log_dir = Path(folder) / mode
+                    # The time limit counts from launch. Seven real
+                    # modules take about two seconds to be ready, so
+                    # the system run gets several more for its first
+                    # ticks; stubs are ready at once.
+                    run_seconds = (SYSTEM_RUN_SECONDS if mode == "system"
+                                   else STUB_RUN_SECONDS)
                     args = [sys.executable, "track_overflow.py",
-                            "--speedup", "--run-seconds",
-                            "2" if mode == "system" else "1",
+                            "--speedup", "--run-seconds", str(run_seconds),
                             "--log-dir", str(log_dir)]
                     if mode == "system":
                         # A person loads the PLC programs (R44) and the
@@ -53,7 +61,7 @@ class HarnessWindowTest(unittest.TestCase):
                     result = subprocess.run(
                         args, cwd=repo, capture_output=True, text=True,
                         env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
-                        timeout=20, check=False,
+                        timeout=run_seconds + 30, check=False,
                     )
                     self.assertEqual(result.returncode, 0,
                                      result.stdout + result.stderr)
