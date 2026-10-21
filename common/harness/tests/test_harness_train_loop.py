@@ -531,12 +531,11 @@ class ReturnToYardTest(unittest.TestCase):
     up to a switch not set for the route. Stopped at 57 with no
     authority, G1 is retired, once.
 
-    About 2,100 s of simulated time, 21,000 ticks: some 140 s, so it
-    runs only when asked (``TRACK_OVERFLOW_ROUND_TRIP=1``). It fails
-    today at block 93, before any of those switches: on that grade the
-    Train Controller latches an engine failure at a steady 5 m/s and
-    applies the emergency brake (its engine detector, not the track).
-    With that detector held off, all five tests pass.
+    About 2,100 s of simulated time, 21,000 ticks: historically some
+    140 s of real time, so these five tests run only when asked
+    (``TRACK_OVERFLOW_ROUND_TRIP=1``). Since the engine-detector fix
+    in 460579b, all five pass with the detector enabled: G1 completes
+    the round trip and is retired at Green 57.
     """
 
     loop: _Loop
