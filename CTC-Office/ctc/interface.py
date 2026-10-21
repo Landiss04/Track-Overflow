@@ -334,6 +334,8 @@ class CtcSnapshot:
 
     outputs: CtcOutputs
     inputs: CtcInputs | None = None
+    # Simulated seconds since the simulation started (05:00:00, D017):
+    # under the harness, the last step's time less the start.
     elapsed_s: float = 0.0
     # Tickets sold at each named station since the simulation started,
     # by station name.
@@ -380,11 +382,18 @@ class CtcSnapshot:
 class CtcOffice(Protocol):
     """The CTC Office module, stepped by the harness."""
 
-    def step(self, dt: float, inputs: CtcInputs) -> CtcOutputs:
+    def step(self, dt: float, inputs: CtcInputs,
+             sim_time_s: float | None = None) -> CtcOutputs:
         """Advance one tick.
 
         dt is fixed by the harness and must be finite and positive.
-        Invalid inputs are rejected before any state is changed.
+        ``sim_time_s`` is the harness's simulation time at the end of
+        the tick (D017: unwrapped seconds, 05:00:00 is 18 000): given,
+        it is the module's time from then on, so a tick the module
+        refused or never got does not put it behind; it must be finite
+        and after the module's time. Left out (the standalone window and
+        tests), the module's time moves on by dt. Invalid inputs are
+        rejected before any state is changed.
         """
         ...
 
@@ -418,6 +427,14 @@ class CtcOffice(Protocol):
 
     def cancel_dispatch(self, train_id: str) -> None:
         """Drop a train's dispatch order, if it has one."""
+        ...
+
+    def return_to_yard(self, train_id: str) -> None:
+        """Send a manual train on the track back to the yard (R66,
+        D022): an order to its line's yard entry block (Green 57, Red
+        9), where it is retired once it has stopped. Refused for a train
+        not on the track and for a run of the loaded schedule, and
+        (safety) as ``dispatch`` refuses."""
         ...
 
     def set_block_closed(self, line: str, block_id: str,

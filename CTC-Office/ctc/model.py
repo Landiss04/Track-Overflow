@@ -21,12 +21,20 @@ The stub releases ordered trains from the yard and retires them there
   clear and no train is authorized into it, and the schedule is not
   holding the run. A released train holds its exit block until it is
   found there (``ctc.tracking``).
-- **Retirement** (``retired_trains``): a train sent back to the yard,
-  once it has stopped at its line's yard entry block (Green 57, Red 9)
-  with authority 0 at its destination. The CTC sees only occupancy, so
-  "stopped" means the train holds that block alone and the fastest it
-  could still be going, braking at ``SERVICE_DECEL_MPS2`` since it was
-  told 0 there, is 0. Its order is dropped with it.
+- **Retirement** (``retired_trains``): a train sent back to the yard
+  (a run of the schedule after its last stop, or a manual train by the
+  dispatcher's "return to yard", R66), once it has stopped at its
+  line's yard entry block (Green 57, Red 9) with authority 0 at its
+  destination. The CTC sees only occupancy, so "stopped" means the
+  train holds that block alone and the fastest it could still be going,
+  braking at ``SERVICE_DECEL_MPS2`` since it was told 0 there, is 0.
+  Its order is dropped with it.
+
+Under the central harness each step brings the simulation time
+(D017), and the stub's time is that time: a tick it refused or never
+got does not put its schedule behind. On its own it counts the time of
+the steps it took.
+
 The blocks closed in maintenance mode (closing ones included) and
 switch commands pass through. Nothing is sent to a line's Track
 Controller, and no train is dispatched on the line, until it reports
@@ -464,6 +472,9 @@ class StubCtcOffice:
         # train already in service that went back into the yard
         # without being retired leaves it again with no second event.
         self._in_service: set[str] = set()
+        # Manual trains the dispatcher sent back to the yard ("return to
+        # yard", R66) whose order to the yard entry block still stands.
+        self._returning: set[str] = set()
         # This step's one-time events (D022); empty after a step with
         # none.
         self._new_trains: tuple[NewTrain, ...] = ()
@@ -471,19 +482,29 @@ class StubCtcOffice:
 
     # -- Stepping -----------------------------------------------------
 
-    def step(self, dt: float, inputs: CtcInputs) -> CtcOutputs:
-        """Advance one tick; see ``CtcOffice.step``."""
+    def step(self, dt: float, inputs: CtcInputs,
+             sim_time_s: float | None = None) -> CtcOutputs:
+        """Advance one tick; see ``CtcOffice.step``.
+
+        With ``sim_time_s`` (the harness's time at the end of the step,
+        D017) the module's time becomes that time; without it, the
+        module's time moves on by ``dt``.
+        """
         if not _is_finite_number(dt) or dt <= 0:
             raise InvalidTimeStepError(
                 f"dt must be finite and positive, got {_short(dt)}")
-        if not math.isfinite(self._elapsed_s + dt):
-            raise InvalidTimeStepError(
-                f"dt {dt:g} s would take the elapsed time past what can "
-                "be counted")
+        if sim_time_s is None:
+            elapsed_s = self._elapsed_s + dt
+            if not math.isfinite(elapsed_s):
+                raise InvalidTimeStepError(
+                    f"dt {dt:g} s would take the elapsed time past what "
+                    "can be counted")
+        else:
+            elapsed_s = self._elapsed_at(sim_time_s)
         inputs = _normalize(inputs)
         self._layout.validate_inputs(inputs)
 
-        self._elapsed_s += dt
+        self._elapsed_s = elapsed_s
         self._new_trains, self._retired_trains = (), ()
         # Follow the trains (and infer failures) from the new occupancy,
         # against the last step's plans. Only a train the CTC released
@@ -518,6 +539,20 @@ class StubCtcOffice:
         # Then, with this step's grants, a waiting train may be let out.
         self._release()
         return self._outputs()
+
+    def _elapsed_at(self, sim_time_s: float) -> float:
+        """The elapsed time at the harness's ``sim_time_s``: unwrapped
+        seconds since the first midnight (D017), finite and after the
+        module's own time, which never goes back."""
+        if not _is_finite_number(sim_time_s):
+            raise InvalidTimeStepError(
+                "sim_time_s must be a finite number of seconds, got "
+                f"{_short(sim_time_s)}")
+        if sim_time_s <= self._now_s():
+            raise InvalidTimeStepError(
+                f"sim_time_s {sim_time_s:g} s is not after the module's "
+                f"time, {self._now_s():g} s")
+        return float(sim_time_s) - SIMULATION_START_S
 
     def validate_inputs(self, inputs: CtcInputs) -> None:
         """Raise ``InvalidInputError`` if any input is malformed."""
@@ -605,13 +640,49 @@ class StubCtcOffice:
                 f"to a {line} block.")
         self._orders[train_id] = DispatchOrder(
             train_id, line, destination_block_id, arrival_s)
+        # A new order withdraws a "return to yard".
+        self._returning.discard(train_id)
 
     def cancel_dispatch(self, train_id: str) -> None:
         """Drop a train's dispatch order, if it has one. A train the CTC
         had lost track of is forgotten with it."""
         train_id = _trim(train_id)
         self._orders.pop(train_id, None)
+        self._returning.discard(train_id)
         self._tracker.lost.discard(train_id)
+
+    def return_to_yard(self, train_id: str) -> None:
+        """Send a manual train back to the yard (R66, D022).
+
+        The train is ordered to its line's yard entry block (Green 57,
+        Red 9), with no arrival time, in place of any order it had. Once
+        it has stopped there with authority 0 it is retired as a run of
+        the schedule is (``retired_trains``). A later order or a cancel
+        withdraws it.
+
+        Refused (``InvalidInputError``) for a train the CTC is not
+        following on the track (one waiting in the yard has nothing to
+        return from; cancel its order instead), and for a run of the
+        loaded schedule, which the schedule sends back itself. Refused
+        (safety) as ``dispatch`` refuses: the yard entry block closed or
+        closing, or the line's Track Controller not ready.
+        """
+        train_id = _trim(train_id)
+        train = self._tracker.trains.get(train_id)
+        if train is None:
+            raise InvalidInputError(
+                f"{train_id} is not on the track; only a train on the "
+                "track can be sent back to the yard.")
+        if self._auto is not None and train_id in self._auto.progress:
+            raise InvalidInputError(
+                f"{train_id} is a run of the loaded schedule; the "
+                "schedule sends it back to the yard itself.")
+        entries = sorted(YARD_ENTRIES.get(train.line, ()))
+        if not entries:
+            raise InvalidInputError(
+                f"The {train.line} line has no yard entry block.")
+        self.dispatch(train_id, train.line, entries[0])
+        self._returning.add(train_id)
 
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
@@ -809,9 +880,10 @@ class StubCtcOffice:
 
     def _sent_to_yard(self, train_id: str) -> bool:
         """Whether a train has been sent back to the yard: a run of the
-        loaded schedule on its way back after its last stop. (A
-        "return to yard" action for manual trains (D022) would send one
-        too; the CTC window has none yet.)"""
+        loaded schedule on its way back after its last stop, or a manual
+        train the dispatcher returned to the yard (``return_to_yard``)."""
+        if train_id in self._returning:
+            return True
         return (self._auto is not None
                 and train_id in self._auto.progress
                 and self._auto.progress[train_id].status == TO_YARD)
@@ -880,6 +952,7 @@ class StubCtcOffice:
                 continue
             del self._orders[limit.train_id]
             self._in_service.discard(limit.train_id)
+            self._returning.discard(limit.train_id)
             retired.append(RetiredTrain(limit.train_id))
         self._retired_trains = tuple(retired)
 
@@ -888,13 +961,15 @@ class StubCtcOffice:
             if (order.line, order.destination_block_id) == (
                     block.line, block.block_id):
                 del self._orders[train_id]
+                self._returning.discard(train_id)
                 self._cancelled.append(CancelledOrder(
                     train_id, block.line, block.block_id, reason))
         del self._cancelled[:-_CANCELLED_KEPT]
 
     def _now_s(self) -> float:
-        """Simulated time of day: the module is stepped from the
-        simulation start (D017)."""
+        """Simulated time, unwrapped seconds since the first midnight:
+        the simulation starts at 05:00:00 (D017). Under the harness it
+        is the last step's ``sim_time_s``."""
         return SIMULATION_START_S + self._elapsed_s
 
     def _run_schedule(self) -> None:

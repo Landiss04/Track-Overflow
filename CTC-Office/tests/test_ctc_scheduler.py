@@ -5,6 +5,7 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 
 from __future__ import annotations
 
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -13,7 +14,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import ScheduledRun, SwitchReport  # noqa: E402
-from ctc.model import StubCtcOffice  # noqa: E402
+from ctc.model import (  # noqa: E402
+    InvalidInputError,
+    InvalidTimeStepError,
+    StubCtcOffice,
+)
 from ctc.routing import build_graphs  # noqa: E402
 from ctc.schedule import (  # noqa: E402
     Schedule,
@@ -277,6 +282,55 @@ class DispatchTest(unittest.TestCase):
                          ("done", 8, 8))
         self.assertIsNone(_order(ctc, "R1"))
         self.assertEqual(ctc.snapshot().lost_trains, ())
+
+
+class HarnessTimeTest(unittest.TestCase):
+    """Under the harness each step brings the simulation time (D017:
+    unwrapped seconds, at the end of the step), and the CTC Office's
+    time is that time. A tick it refused or never got does not put its
+    schedule behind the harness's."""
+
+    def test_its_time_is_the_harness_time(self) -> None:
+        ctc = _loaded()
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 0.1)
+        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 0.1)
+        # Three ticks it never saw: its time is the harness's still.
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 0.5)
+        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 0.5)
+        # Past midnight, unwrapped.
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 86_400)
+        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 86_400)
+
+    def test_a_refused_tick_does_not_put_the_schedule_behind(self) -> None:
+        # G2 is due out of the yard at 05:03:00.
+        ctc = _loaded()
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 179.9)
+        self.assertEqual(_run(ctc, "G2").status, "queued")
+        with self.assertRaises(InvalidInputError):
+            ctc.step(0.1, reports(occupied=[("Green", "999")]),
+                     sim_time_s=SIMULATION_START_S + 180.0)
+        self.assertEqual(_run(ctc, "G2").status, "queued")
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 180.1)
+        self.assertEqual(_run(ctc, "G2").status, "in yard")
+
+    def test_a_bad_time_is_refused_and_changes_nothing(self) -> None:
+        ctc = _loaded()
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 10)
+        before = ctc.snapshot()
+        for bad in (math.nan, math.inf, -math.inf, True, "18010.1",
+                    SIMULATION_START_S + 10, SIMULATION_START_S + 5):
+            with self.subTest(bad=bad):
+                with self.assertRaises(InvalidTimeStepError):
+                    ctc.step(0.1, reports(),
+                             sim_time_s=bad)  # type: ignore[arg-type]
+        self.assertEqual(ctc.snapshot(), before)
+
+    def test_on_its_own_it_counts_its_steps(self) -> None:
+        # The standalone window and the tests: no harness time.
+        ctc = _loaded()
+        ctc.step(1.0, reports())
+        ctc.step(2.0, reports())
+        self.assertEqual(ctc.snapshot().elapsed_s, 3.0)
 
 
 class _Railway:

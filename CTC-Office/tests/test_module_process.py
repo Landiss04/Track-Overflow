@@ -36,6 +36,7 @@ from ctc.module_process import (  # noqa: E402
     _parse_args,
     layout_files,
 )
+from ctc.schedule import load_schedule  # noqa: E402
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
 from ctc_ui.harness_clock import time_of_day_text  # noqa: E402
@@ -47,6 +48,9 @@ DT_S = 0.1
 FIVE_AM_S = 18_000.0
 SECONDS_PER_DAY = 86_400.0
 _LAYOUT = load_layout(layout_files())
+SCHEDULE_FILE = (
+    Path(__file__).resolve().parents[2] / "utils" / "schedule_v4.json"
+)
 
 
 def waysides(ready: bool = True) -> list[dict[str, Any]]:
@@ -262,6 +266,37 @@ class TestOptionsTest(_ProcessCase):
             with self.subTest(bad=bad), mock.patch("sys.stderr"), \
                     self.assertRaises(SystemExit):
                 _parse_args(["--harness", "server", *bad])
+
+
+class HarnessTimeTest(_ProcessCase):
+    """The module's time is the time of each ``STEP`` (D017), so a tick
+    it refused or never got does not shift its schedule."""
+
+    def test_a_refused_or_missed_tick_does_not_shift_the_time(self) -> None:
+        module = self.host.module
+        self.step()
+        with self.assertRaises(TickRejectedError):
+            self.process.step(2, DT_S, FIVE_AM_S + 0.2, {"bad": 1})
+        # Tick 3 never reached it; tick 4 does.
+        self.process.step(4, DT_S, FIVE_AM_S + 0.4, wire_inputs())
+        self.assertAlmostEqual(module.snapshot().elapsed_s, 0.4)
+        self.assertEqual(self.process.clock.property("timeText"),
+                         "05:00:00")
+        self.process.step(5, DT_S, FIVE_AM_S + 3_725.0, wire_inputs())
+        self.assertAlmostEqual(module.snapshot().elapsed_s, 3_725.0)
+        self.assertEqual(self.process.clock.property("timeText"),
+                         "06:02:05")
+
+    def test_the_schedule_runs_on_the_harness_time(self) -> None:
+        # G2 is due out of the yard at 05:03:00.
+        module = self.host.module
+        module.load_schedule(load_schedule(SCHEDULE_FILE))
+        module.set_automatic_mode(True)
+        self.step()
+        self.process.step(1_800, DT_S, FIVE_AM_S + 180.0, wire_inputs())
+        (g2,) = [run for run in module.snapshot().scheduled_runs
+                 if run.train_id == "G2"]
+        self.assertEqual(g2.status, "in yard")
 
 
 if __name__ == "__main__":

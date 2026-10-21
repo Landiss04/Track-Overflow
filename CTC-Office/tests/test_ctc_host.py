@@ -247,6 +247,15 @@ class PanelDataTest(unittest.TestCase):
                          "")
         self.assertEqual(module.snapshot().orders[0].arrival_s, 30600.0)
 
+    def test_return_to_yard(self) -> None:
+        # Selected train's Return to yard: an order to the yard entry.
+        host, module, _ = _host()
+        self.assertIn("not on the track", host.returnToYard("T1"))
+        _report(host, module, at("T1", "56"))
+        self.assertEqual(host.dispatchTrain("T1", "Green", "65", ""), "")
+        self.assertEqual(host.returnToYard("T1"), "")
+        self.assertEqual(host.trainDetail("T1")["destinationBlock"], "57")
+
     def test_trains_merge_tracking_and_orders(self) -> None:
         host, module, clock = _host()
         _report(host, module, at("T1", "9"))

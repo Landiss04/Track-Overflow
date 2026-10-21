@@ -163,7 +163,8 @@ yet) through `ctc_ui/ctc_host.py`:
   sends to the Track Controller.
 - **Selected train** shows the train's live readouts, including why its
   authority ends where it does; in Manual mode it also reroutes the
-  train or cancels its order.
+  train or cancels its order, and **Return to yard** sends a train on
+  the track back to the yard, where it is retired.
 - **Close block** and **Active closures** (Maintenance only) close a
   block (with a confirmation step, style guide 7) and reopen it. A block
   with a train in it is listed as "Closing — train in block" and closes

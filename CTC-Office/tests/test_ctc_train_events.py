@@ -1,7 +1,9 @@
 """Tests for the train events in the CTC Office's outputs (D022; R35,
 R46, R47): ``new_trains`` when it releases a train from the yard, and
 ``retired_trains`` when a train sent back to the yard has stopped at the
-yard entry block. Each event is in the outputs of exactly one step.
+yard entry block. Each event is in the outputs of exactly one step. A
+manual train is sent back by the dispatcher's "return to yard" action
+(R66).
 
 Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 """
@@ -17,13 +19,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import (  # noqa: E402
+    CtcOffice,
     CtcOutputs,
     NewTrain,
     RetiredTrain,
     TrackControllerOutputs,
     TrainSuggestion,
 )
-from ctc.model import StubCtcOffice  # noqa: E402
+from ctc.model import (  # noqa: E402
+    InvalidInputError,
+    StubCtcOffice,
+    UnsafeActionError,
+)
 from ctc.schedule import Schedule, load_schedule  # noqa: E402
 from ctc.scheduler import TO_YARD, Progress  # noqa: E402
 from ctc.wire import outputs_from_wire, to_wire  # noqa: E402
@@ -245,6 +252,122 @@ class RetireTest(unittest.TestCase):
             self.assertEqual(_retired(_step(ctc, "57")), [])
         self.assertEqual([t.train_id for t in ctc.snapshot().trains],
                          ["T1"])
+
+
+class ReturnToYardTest(unittest.TestCase):
+    """The dispatcher's "return to yard" action (R66, D022) sends a
+    manual train to its line's yard entry block, where it is retired
+    the same way as a scheduled run: once, when it has stopped there
+    with authority 0 at its destination."""
+
+    def _manual(self, block: str = "56", line: str = "Green",
+                train_id: str = "T1") -> StubCtcOffice:
+        # A manual train on the track, with an order elsewhere.
+        ctc = ready_office()
+        ctc.place_train(train_id, line, block)
+        ctc.dispatch(train_id, line, "65" if line == "Green" else "16")
+        return ctc
+
+    def _orders(self, ctc: StubCtcOffice) -> dict[str, str]:
+        return {o.train_id: o.destination_block_id
+                for o in ctc.snapshot().orders}
+
+    def test_part_of_the_module_contract(self) -> None:
+        self.assertTrue(callable(getattr(CtcOffice, "return_to_yard")))
+
+    def test_ordered_to_the_yard_entry_and_retired_once(self) -> None:
+        ctc = self._manual()
+        ctc.return_to_yard("T1")
+        (order,) = ctc.snapshot().orders
+        self.assertEqual((order.line, order.destination_block_id,
+                          order.arrival_s), ("Green", "57", None))
+        for _ in range(5):
+            self.assertEqual(_retired(_step(ctc, "56")), [])
+        self.assertEqual(_retired(_step(ctc, "56", "57")), [])
+        events = _retired(_step(ctc, "57", dt=0.5))
+        for _ in range(20):
+            events += _retired(_step(ctc, "57", dt=0.5))
+        self.assertEqual(events, ["T1"])
+        snap = ctc.snapshot()
+        self.assertEqual(snap.outputs.track_controller.suggestions, ())
+        self.assertEqual(snap.orders, ())
+        # The harness removes it; 57 clears. It is not lost, and nothing
+        # is released or retired again.
+        for _ in range(3):
+            out = _step(ctc)
+            self.assertEqual((_retired(out), _released(out)), ([], []))
+        snap = ctc.snapshot()
+        self.assertEqual((snap.trains, snap.lost_trains), ((), ()))
+
+    def test_red_goes_back_to_block_9(self) -> None:
+        ctc = self._manual("7", "Red", "R7")
+        ctc.return_to_yard(" R7 ")
+        self.assertEqual(self._orders(ctc), {"R7": "9"})
+        ctc.place_train("R7", "Red", "9")
+        events: list[str] = []
+        for _ in range(20):
+            events += _retired(_step(ctc, "9", line="Red", dt=0.5))
+        self.assertEqual(events, ["R7"])
+
+    def test_a_train_not_on_the_track_is_refused(self) -> None:
+        ctc = ready_office()
+        # Waiting in the yard with an order, or never seen at all.
+        ctc.dispatch("T2", "Green", "70")
+        for train_id in ("T2", "T9", "", "   "):
+            with self.subTest(train=train_id):
+                with self.assertRaises(InvalidInputError):
+                    ctc.return_to_yard(train_id)
+        self.assertEqual(self._orders(ctc), {"T2": "70"})
+
+    def test_safety_refusals_change_nothing(self) -> None:
+        # The yard entry block closed, or closing (a train still in it).
+        ctc = self._manual()
+        ctc.set_maintenance_mode(True)
+        ctc.set_block_closed("Green", "57", True)
+        with self.assertRaisesRegex(UnsafeActionError, "closed"):
+            ctc.return_to_yard("T1")
+        self.assertEqual(self._orders(ctc), {"T1": "65"})
+        ctc.set_block_closed("Green", "57", False)
+        ctc.place_train("T3", "Green", "57")
+        ctc.stage_inputs(reports(occupied=[("Green", "56"),
+                                           ("Green", "57")]))
+        ctc.set_block_closed("Green", "57", True)
+        with self.assertRaisesRegex(UnsafeActionError, "closing"):
+            ctc.return_to_yard("T1")
+        self.assertEqual(self._orders(ctc), {"T1": "65"})
+
+    def test_refused_while_the_line_is_not_ready(self) -> None:
+        ctc = self._manual()
+        ctc.stage_inputs(reports(occupied=[("Green", "56")], ready=False))
+        with self.assertRaisesRegex(UnsafeActionError, "not ready"):
+            ctc.return_to_yard("T1")
+        self.assertEqual(self._orders(ctc), {"T1": "65"})
+
+    def test_a_run_of_the_schedule_is_refused(self) -> None:
+        # The schedule sends its own runs back to the yard.
+        runs = tuple(t for t in SCHEDULE.trains
+                     if t.line == "Green" and t.train_id == "1")
+        ctc = ready_office()
+        ctc.load_schedule(Schedule("G1 only", runs))
+        ctc.place_train("G1", "Green", "56")
+        with self.assertRaisesRegex(InvalidInputError, "schedule"):
+            ctc.return_to_yard("G1")
+        self.assertEqual(self._orders(ctc), {})
+
+    def test_a_new_order_withdraws_the_return(self) -> None:
+        # Sent back, then given an order of its own (here, to 57 too):
+        # it stops there like any manual train, and is not retired.
+        for withdraw in ("dispatch", "cancel"):
+            with self.subTest(withdraw=withdraw):
+                ctc = self._manual()
+                ctc.return_to_yard("T1")
+                if withdraw == "cancel":
+                    ctc.cancel_dispatch("T1")
+                ctc.dispatch("T1", "Green", "57")
+                ctc.place_train("T1", "Green", "57")
+                for _ in range(30):
+                    self.assertEqual(_retired(_step(ctc, "57")), [])
+                self.assertEqual(self._orders(ctc), {"T1": "57"})
 
 
 class WireTest(unittest.TestCase):

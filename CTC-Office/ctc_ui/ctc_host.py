@@ -277,13 +277,15 @@ class CtcHost(QObject):
                 inputs: CtcInputs) -> CtcOutputs:
         """Step the module once for the harness, at its time.
 
-        Each step's ticket sales are counted once, in the hour of
+        The module takes ``sim_time_s`` as its time (D017), so a tick
+        it refused or never got does not put its schedule behind. Each
+        step's ticket sales are counted once, in the hour of
         ``sim_time_s``. The window is not redrawn: call ``refresh``.
 
         Raises:
             CtcError: If the module rejects the step; nothing changed.
         """
-        outputs = self._module.step(dt, inputs)
+        outputs = self._module.step(dt, inputs, sim_time_s)
         self._inputs = inputs
         self._count_sales(sim_time_s, inputs)
         return outputs
@@ -808,6 +810,12 @@ class CtcHost(QObject):
     @Slot(str, result=str)
     def cancelDispatch(self, train_id: str) -> str:  # noqa: N802
         return self._act(self._module.cancel_dispatch, train_id)
+
+    @Slot(str, result=str)
+    def returnToYard(self, train_id: str) -> str:  # noqa: N802
+        """Send a manual train back to the yard, where it is retired
+        (R66, D022); return the refusal's text, or ""."""
+        return self._act(self._module.return_to_yard, train_id)
 
     @Slot(str, str, result=str)
     def closeBlock(self, line: str, block_id: str) -> str:  # noqa: N802

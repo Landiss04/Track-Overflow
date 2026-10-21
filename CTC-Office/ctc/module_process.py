@@ -32,9 +32,9 @@ starts paused (D017).
 
 Invalid inputs refuse the whole tick and change nothing
 (``CtcOffice.step``); the harness logs the refusal and keeps the
-module's last outputs. A refused tick is not counted in the module's
-own elapsed time, so its schedule falls that tick behind the harness's
-time (the window shows the harness's).
+module's last outputs. The module's time is each ``STEP``'s
+``sim_time_s`` (D017), so a refused or missed tick does not put its
+schedule behind the harness's time.
 
 The reply goes out before the window redraws, and the window redraws
 at most every ``WINDOW_REFRESH_MS`` while steps arrive. A dispatcher's
