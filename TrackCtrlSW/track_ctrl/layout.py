@@ -352,7 +352,9 @@ def parse_layout(data: Any, source: str = "layout") -> ParsedLayout:
 
     blocks.sort(key=lambda block: block.index)
     switches = tuple(
-        _parse_switch(block_id, text, source)
+        _parse_switch(block_id, text, source, next(
+            b.next_blocks for b in blocks if b.block_id == block_id
+        ))
         for block_id, text in switch_text
     )
     return ParsedLayout(
@@ -410,7 +412,9 @@ def _connection(part: str, where: str) -> tuple[str, str]:
     return cleaned[0], cleaned[1]
 
 
-def _parse_switch(block_id: str, text: str, source: str) -> Switch:
+def _parse_switch(
+    block_id: str, text: str, source: str, next_blocks: tuple[str, ...] = ()
+) -> Switch:
     """Read the switch string listed on ``block_id``."""
     where = f"{source}: switch on block {block_id} ({text.strip()!r})"
     parts = [part for part in text.split(";") if part.strip()]
@@ -433,10 +437,20 @@ def _parse_switch(block_id: str, text: str, source: str) -> Switch:
             raise LayoutError(f"{where}: a single connection must lead to "
                               "the yard.")
         point = only[1] if only[0] == YARD else only[0]
-        if point == block_id:
+        if (
+            block_id == "9" and text.strip() == "75-yard"
+            and YARD in next_blocks
+        ):
+            # K2: row adjacency locates the yard; source text stays unresolved.
+            point = block_id
+            normal_end, reverse_end = str(int(point) + 1), YARD
+            if normal_end not in next_blocks:
+                raise LayoutError(f"{where}: normal main-line leg is missing.")
+        elif point == block_id:
             raise LayoutError(f"{where}: its normal route is not listed and "
                               "cannot be inferred.")
-        normal_end, reverse_end = block_id, YARD
+        else:
+            normal_end, reverse_end = block_id, YARD
 
     return Switch(
         switch_id=block_id,

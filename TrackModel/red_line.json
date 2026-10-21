@@ -96,7 +96,7 @@
       "infrastructure": {
         "switch": "75-yard"
       },
-      "next_blocks": [8, 10]
+      "next_blocks": [8, 10, "yard"]
     },
     {
       "block_number": 10,
@@ -890,7 +890,7 @@
       "infrastructure": {
         "underground": true
       },
-      "next_blocks": [74, 76, "yard"]
+      "next_blocks": [74, 76]
     },
     {
       "block_number": 76,

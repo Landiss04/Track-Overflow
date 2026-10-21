@@ -112,6 +112,7 @@ def parse_territory(data: Any) -> Territory:
                 key=key,
                 length_m=length_m,
                 speed_limit_mps=limit_kmh / _KMH_PER_MPS,
+                next_blocks=_next_blocks(raw.get("next_blocks", []), block_id),
             )
         )
         infrastructure = raw.get("infrastructure") or {}
@@ -136,7 +137,9 @@ def parse_territory(data: Any) -> Territory:
             crossings.append(key)
 
     switches = tuple(
-        parse_switch(key, text, seen) for key, text in switch_text
+        parse_switch(key, text, seen, next(
+            b.next_blocks for b in blocks if b.key == key
+        )) for key, text in switch_text
     )
     return Territory(
         line=line,
@@ -148,7 +151,8 @@ def parse_territory(data: Any) -> Territory:
 
 
 def parse_switch(
-    key: BlockKey, text: str, territory_ids: set[str] | frozenset[str]
+    key: BlockKey, text: str, territory_ids: set[str] | frozenset[str],
+    next_blocks: tuple[str, ...] = (),
 ) -> Switch:
     """Read one switch string listed on ``key``.
 
@@ -180,13 +184,24 @@ def parse_switch(
                 f"{where}: a single connection must lead to the yard."
             )
         point = only[1] if only[0] == YARD else only[0]
-        if point == key.block_id:
+        if key.line == "Red" and key.block_id == "9" and YARD in next_blocks:
+            # The row adjacency is authoritative for the Red yard (K2).
+            # Keep the stale source text for its owners to resolve.
+            point = key.block_id
+            normal_end = str(int(point) + 1)
+            if normal_end not in next_blocks:
+                raise TerritoryError(
+                    f"{where}: normal main-line leg is missing."
+                )
+            reverse_end = YARD
+        elif point == key.block_id:
             raise TerritoryError(
                 f"{where}: its normal route is not listed and cannot be "
                 "inferred."
             )
-        normal_end = key.block_id
-        reverse_end = YARD
+        else:
+            normal_end = key.block_id
+            reverse_end = YARD
 
     if point not in territory_ids:
         raise TerritoryError(
@@ -250,3 +265,21 @@ def _positive(value: Any, name: str, block_id: str) -> float:
             f"Block {block_id}: \"{name}\" must be a positive number."
         )
     return float(value)
+
+
+def _next_blocks(value: Any, block_id: str) -> tuple[str, ...]:
+    """Validate declared neighbors used for read-only PLC occupancy inputs."""
+    if not isinstance(value, list):
+        raise TerritoryError(f"Block {block_id}: next_blocks must be a list.")
+    result = []
+    for neighbor in value:
+        if isinstance(neighbor, bool) or not (
+            isinstance(neighbor, int) and neighbor > 0
+            or isinstance(neighbor, str)
+            and (neighbor.isdigit() or neighbor == YARD)
+        ):
+            raise TerritoryError(
+                f"Block {block_id}: invalid next_blocks entry."
+            )
+        result.append(str(neighbor))
+    return tuple(result)

@@ -125,6 +125,13 @@ def switch_places(layout: Mapping[str, Any]) -> tuple[SwitchPlace, ...]:
         if not text:
             continue
         point, legs = _point_and_legs(str(text))
+        if (
+            line == "Red" and block == "9"
+            and "yard" in row.get("next_blocks", ())
+            and ";" not in str(text)
+        ):
+            # K2: row adjacency locates the yard; source text stays open.
+            point, legs = block, {str(int(block) + 1), YARD}
         beside = neighbours.get(point, set()) - legs
         if len(beside) != 1:
             raise ValueError(

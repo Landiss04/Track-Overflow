@@ -90,6 +90,7 @@ def input_names(territory: Territory) -> frozenset[str]:
     for block in territory.blocks:
         number = block.key.block_id
         names.update((f"OCC_{number}", f"CLOSED_{number}"))
+        names.update(f"OCC_{n}" for n in block.next_blocks if n != "yard")
         names.update(_speed_names("SPD", number))
     for switch in territory.switches:
         number = switch.switch_id
@@ -400,6 +401,14 @@ class Wayside:
             speed = 0 if suggestion is None else suggestion.speed_mps
             for bit, name in enumerate(_speed_names("SPD", number)):
                 image[name] = bool(speed >> bit & 1)
+        for block in self._territory.blocks:
+            for neighbor in block.next_blocks:
+                if neighbor != "yard":
+                    image[f"OCC_{neighbor}"] = any(
+                        k.line == self._territory.line
+                        and k.block_id == neighbor
+                        for k in track_model.occupied_blocks
+                    )
         for switch in self._territory.switches:
             number = switch.switch_id
             image[f"SWREV_{number}"] = (

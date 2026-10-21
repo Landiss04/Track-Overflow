@@ -419,7 +419,15 @@ def _read_switches(
         text = (raw.get("infrastructure") or {}).get("switch")
         if not text:
             continue
-        for point, leg in _parse_switch_text(str(text)):
+        interpreted = str(text)
+        if (
+            line == "RED" and raw["block_number"] == 9
+            and "yard" in raw.get("next_blocks", ())
+            and ";" not in interpreted
+        ):
+            # K2: preserve the owner's switch text; use the authoritative row.
+            interpreted = f"{raw['block_number']}-yard"
+        for point, leg in _parse_switch_text(interpreted):
             point_legs = legs.setdefault(point, [])
             if leg not in point_legs:
                 point_legs.append(leg)
