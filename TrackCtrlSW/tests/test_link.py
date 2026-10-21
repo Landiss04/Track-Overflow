@@ -229,7 +229,7 @@ class LinkTests(unittest.TestCase):
     def test_yellow_and_super_green_reach_the_test_ui_and_fail_safe(self) -> None:
         client = self.connect()
         controller = self.controller()
-        for suffix, aspect in (("_O", "YELLOW"), ("_SG", "SUPER GREEN")):
+        for suffix, aspect in (("_Y", "YELLOW"), ("_SG", "SUPER GREEN")):
             with self.subTest(aspect=aspect):
                 client.setOccupancy("12", False)
                 lines = []

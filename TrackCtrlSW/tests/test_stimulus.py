@@ -245,10 +245,10 @@ class CommitGateTests(unittest.TestCase):
     def test_a_program_for_another_wayside_is_flagged_against_this_one(self) -> None:
         controller = self.state.system.controller(CONTROLLER)
         foreign = compile_program(
-            "VAR_IN OCC_1..20 FAIL_13\nVAR_OUT AUTH_1..20 SW_99\n"
+            "VAR_IN OCC_1..20 FAULT_13\nVAR_OUT AUTH_1..20 SW_99\n"
         )
         messages = [d.message for d in controller.check_program(foreign)]
-        self.assertTrue(any("FAIL_13 is not an input" in m for m in messages))
+        self.assertTrue(any("FAULT_13 is not an input" in m for m in messages))
         self.assertTrue(any("SW_99 is not an output" in m for m in messages))
         # Blocks 21 to 25 were never given an AUTH.
         self.assertTrue(any("AUTH is not driven" in m for m in messages))

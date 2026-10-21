@@ -115,10 +115,10 @@ class WaysideSignal:
 
     @property
     def aspect_signals(self) -> tuple[str, str, str, str]:
-        """Red, yellow, green and super-green outputs; _O is legacy yellow."""
+        """Red, yellow, green and super-green outputs, named as HW names them."""
         return (
             f"SIG_{self.signal_id}_R",
-            f"SIG_{self.signal_id}_O",
+            f"SIG_{self.signal_id}_Y",
             f"SIG_{self.signal_id}_G",
             f"SIG_{self.signal_id}_SG",
         )

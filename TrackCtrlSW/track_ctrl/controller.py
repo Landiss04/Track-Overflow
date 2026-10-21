@@ -42,9 +42,9 @@ from track_ctrl.plc import (
 )
 from track_ctrl.vital import ControllerOutputs, Suggestion, TrackCircuit
 
-#: Per-switch input bits the OS decodes for the program and the vital
-#: code: the read-back, the CTC's command and the hand-set position.
-_SWITCH_INPUTS = ("SWREV", "CTCCMD", "CTCREV", "HAND", "HANDREV")
+#: Per-switch bits only the attached vital code reads: the CTC's command
+#: and the hand-set position. A program cannot declare them.
+VITAL_SWITCH_INPUTS = ("CTCCMD", "CTCREV", "HAND", "HANDREV")
 
 #: How many committed programs stay readable in the history pane.
 HISTORY_DEPTH = 5
@@ -177,9 +177,9 @@ class TrackController:
         for block in self.blocks:
             names.add(f"OCC_{block.block_id}")
             names.add(f"CLOSED_{block.block_id}")
+            names.add(f"FAIL_{block.block_id}")
         for switch in self.config.switches:
-            for prefix in _SWITCH_INPUTS:
-                names.add(f"{prefix}_{switch.switch_id}")
+            names.add(f"SWREV_{switch.switch_id}")
         return frozenset(names)
 
     def output_names(self) -> tuple[str, ...]:
@@ -327,6 +327,10 @@ class TrackController:
             image[f"CLOSED_{block.block_id}"] = inputs.closed.get(
                 block.block_id, False
             )
+            # HW's program language has FAIL_n so one program runs on
+            # both variants. This wayside is told of no failures (a
+            # failed block reads occupied), so it is always 0 here.
+            image[f"FAIL_{block.block_id}"] = False
         for switch in self.config.switches:
             sid = switch.switch_id
             image[f"SWREV_{sid}"] = inputs.switch_reverse.get(sid, False)
