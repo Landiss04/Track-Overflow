@@ -40,6 +40,7 @@ class PiLinkServer:
         self.log = log or (lambda text: None)
         self.boot = uuid.uuid4().hex
         self.session: str | None = None
+        self._hello_seen = False
         self.core = make_core(module)
         self.cache: dict[
             tuple[str, int, int], tuple[bytes, dict[str, Any]]
@@ -167,6 +168,7 @@ class PiLinkServer:
             resumed = self.session == request["session"]
             if not resumed:
                 self._start(request["session"])
+            self._hello_seen = True
             return [
                 p.message(
                     p.HELLO,
@@ -184,9 +186,10 @@ class PiLinkServer:
         if op == "QUIT":
             self._start("")
             self.session = None
+            self._hello_seen = False
             self.buffer = LineBuffer()
             return []
-        if not self.session:
+        if not self.session or not self._hello_seen:
             return [
                 p.message(
                     "REJECTED",
@@ -321,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
                 os.close(reader)
         # A gadget unplug is a lost transport, not a fresh core/session.
         server.buffer = LineBuffer()
+        server._hello_seen = False
         log("DEVICE_RECONNECT_WAIT")
         time.sleep(0.3)
 

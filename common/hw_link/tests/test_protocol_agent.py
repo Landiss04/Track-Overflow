@@ -131,6 +131,7 @@ def test_action_cache_restores_actual_train_state(tmp_path):
     first = server.handle(action)[0]
     rebooted = PiLinkServer("train-controller-hw", tmp_path / "journal")
     assert rebooted.core.fleet.get("R1").state.target_temp_c == 23
+    rebooted.handle(hello())
     assert rebooted.handle(action) == [first]
 
 
@@ -211,3 +212,16 @@ def test_view_messages_are_throttled_by_wall_time(monkeypatch):
         assert not any(r["op"] == p.VIEW for r in server.handle(step(tick)))
     now[0] = 10.11
     assert any(r["op"] == p.VIEW for r in server.handle(step(12)))
+
+
+def test_restored_session_requires_fresh_successful_hello(tmp_path):
+    journal = tmp_path / "journal"
+    server = PiLinkServer("train-controller-hw", journal)
+    server.handle(hello())
+    server.handle(step())
+    rebooted = PiLinkServer("train-controller-hw", journal)
+    assert rebooted.handle(step(2))[0]["reason"] == "HELLO required"
+    assert rebooted.handle(hello(version=999))[0]["op"] == "REJECTED"
+    assert rebooted.handle(step(2))[0]["reason"] == "HELLO required"
+    rebooted.handle(hello())
+    assert rebooted.handle(step(2))[0]["op"] == "OUTPUTS"

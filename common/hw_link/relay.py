@@ -125,6 +125,7 @@ class HardwareRelay(QObject):
                 or incoming["session"] != self.session
                 or not incoming.get("agent_version")
                 or not incoming.get("agent_hash")
+                or not incoming.get("boot")
             ):
                 self.event.emit(
                     "PI_HELLO_REJECTED identity or version mismatch"
