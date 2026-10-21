@@ -194,6 +194,22 @@ class SwTrackController:
             if wayside.controller.program is None
         )
 
+    def _waiting_lines(self) -> dict[str, str]:
+        """Each line that is not ready, with the first thing missing."""
+        waiting: dict[str, str] = {}
+        for wayside_id, wayside in self._waysides.items():
+            if wayside.controller.program is None:
+                waiting.setdefault(
+                    wayside.line, f"{wayside_id} has no PLC program"
+                )
+        return waiting
+
+    def line_ready(self, line: str) -> bool:
+        """Whether every wayside on one line has a program."""
+        return any(
+            wayside.line == line for wayside in self._waysides.values()
+        ) and line not in self._waiting_lines()
+
     @property
     def ready(self) -> bool:
         """Whether a line is loaded and every wayside has a program.
@@ -294,12 +310,16 @@ class SwTrackController:
             key in switch_keys for key in ctc.switch_commands
         )
 
-        reasons = self.not_ready_reasons()
+        # A line runs only once every wayside on it has a program; until
+        # then none of them runs, and a wayside running nothing
+        # transmits nothing. One line does not wait on another.
+        waiting = self._waiting_lines()
         for wayside in self._waysides.values():
             self._apply(wayside, inputs)
-            if reasons:
-                wayside.controller.hold(
-                    f"the module is not ready: {reasons[0]}"
+            if wayside.line in waiting:
+                wayside.controller.idle(
+                    f"line {wayside.line} is not ready: "
+                    f"{waiting[wayside.line]}"
                 )
             else:
                 wayside.controller.scan()
@@ -382,15 +402,12 @@ class SwTrackController:
                 switch.switch_id,
                 None if command is None else command == "reverse",
             )
-            # A switch whose machine is not where the last scan put it
-            # is mid-throw. No report means nothing to compare.
+            # Where the machine actually is: the vital code compares it
+            # with the command to tell a switch that is still moving.
             actual = readback.switch_positions.get(key)
-            commanded = controller.outputs.switches.get(
-                switch.switch_id, False
-            )
-            controller.set_switch_moving(
+            controller.set_switch_position(
                 switch.switch_id,
-                actual is not None and (actual == "reverse") != commanded,
+                None if actual is None else actual == "reverse",
             )
 
     # --- outputs -----------------------------------------------------------
@@ -410,18 +427,23 @@ class SwTrackController:
                 circuits[wayside.key(block_id)] = TrackCircuitCommand(
                     circuit.speed_mps, circuit.authority_blocks
                 )
+            # Only what the wayside actually drives: one running no
+            # program drives nothing, so nothing is listed for it.
             for switch in config.switches:
-                switches[wayside.key(switch.block_id)] = _position(
-                    driven.switches.get(switch.switch_id, False)
-                )
+                if switch.switch_id in driven.switches:
+                    switches[wayside.key(switch.block_id)] = _position(
+                        driven.switches[switch.switch_id]
+                    )
             for crossing in config.crossings:
-                crossings[wayside.key(crossing.block_id)] = (
-                    driven.crossings.get(crossing.crossing_id, False)
-                )
+                if crossing.crossing_id in driven.crossings:
+                    crossings[wayside.key(crossing.block_id)] = (
+                        driven.crossings[crossing.crossing_id]
+                    )
             for signal in config.signals:
-                signals[wayside.key(signal.block_id)] = _aspect_to_wire(
-                    driven.aspects.get(signal.signal_id, "RED")
-                )
+                if signal.signal_id in driven.aspects:
+                    signals[wayside.key(signal.block_id)] = _aspect_to_wire(
+                        driven.aspects[signal.signal_id]
+                    )
             report = self._report(wayside_id, wayside, time_s)
             self._reports[wayside_id] = report
             reports.append(report)
@@ -530,8 +552,9 @@ class SwTrackController:
             switches = tuple(
                 SwitchState(
                     switch=wayside.key(switch.block_id),
-                    commanded=_position(
-                        driven.switches.get(switch.switch_id, False)
+                    commanded=(
+                        _position(driven.switches[switch.switch_id])
+                        if switch.switch_id in driven.switches else None
                     ),
                     reported=readback.switch_positions.get(
                         wayside.key(switch.block_id)
@@ -556,9 +579,10 @@ class SwTrackController:
                     switches=switches,
                     signal_commands={
                         wayside.key(signal.block_id): _aspect_to_wire(
-                            driven.aspects.get(signal.signal_id, "RED")
+                            driven.aspects[signal.signal_id]
                         )
                         for signal in config.signals
+                        if signal.signal_id in driven.aspects
                     },
                     signal_reports={
                         key: readback.signal_aspects[key]
@@ -566,10 +590,11 @@ class SwTrackController:
                         if key in readback.signal_aspects
                     },
                     crossing_commands={
-                        wayside.key(crossing.block_id): driven.crossings.get(
-                            crossing.crossing_id, False
-                        )
+                        wayside.key(crossing.block_id): driven.crossings[
+                            crossing.crossing_id
+                        ]
                         for crossing in config.crossings
+                        if crossing.crossing_id in driven.crossings
                     },
                     crossing_reports={
                         key: readback.crossings_active[key]

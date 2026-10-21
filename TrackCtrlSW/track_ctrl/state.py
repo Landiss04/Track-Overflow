@@ -41,6 +41,9 @@ from track_ctrl.stimulus import output_rows, suggestion_rows
 #: How often the views are refreshed while the clock runs, in ms.
 UI_REFRESH_MS = 200
 
+#: Explorer entry number for the attached vital code.
+VITAL_ENTRY = -1
+
 #: Lines kept in the terminal scrollback.
 TERMINAL_DEPTH = 200
 
@@ -521,6 +524,17 @@ class TrackControllerState(QObject):
                     "readonly": True,
                 }
             )
+        # The vital code attached to every program on this wayside:
+        # shown so the programmer can read it, never edited.
+        entries.append(
+            {
+                "name": "vital.plc",
+                "detail": "ATTACHED TO EVERY PROGRAM",
+                "iteration": VITAL_ENTRY,
+                "current": self._open_iteration == VITAL_ENTRY,
+                "readonly": True,
+            }
+        )
         return entries
 
     @Property(bool, notify=bufferChanged)
@@ -563,6 +577,16 @@ class TrackControllerState(QObject):
         controller = self._controller
         if iteration == 0:
             self._load_buffer_from_controller()
+        elif iteration == VITAL_ENTRY:
+            self._buffer = controller.vital_source
+            self._buffer_file = "vital.plc"
+            self._verified_source = None
+            self._open_iteration = VITAL_ENTRY
+            self._log(
+                f"[{self._stamp()}] opened the vital code attached to "
+                f"every program on {controller.config.controller_id} "
+                "(read-only)"
+            )
         else:
             entry = next(
                 (item for item in controller.history

@@ -270,6 +270,7 @@ def _describe(
             {
                 "id": block.block_id,
                 "label": block.label,
+                "limit_mps": block.whole_speed_limit_mps,
                 "occupied": inputs.occupancy.get(block.block_id, False),
                 "closed": inputs.closed.get(block.block_id, False),
                 "suggested_speed": (
@@ -297,7 +298,9 @@ def _describe(
                 "block_id": switch.block_id,
                 "block": labels[switch.block_id],
                 "reverse": outputs.switches.get(switch.switch_id, False),
-                "moving": inputs.switch_moving.get(switch.switch_id, False),
+                "reported_reverse": inputs.switch_reverse.get(
+                    switch.switch_id
+                ),
                 "manual": switch.switch_id in controller.manual_switches,
                 "ctc_command": (
                     None if command is None

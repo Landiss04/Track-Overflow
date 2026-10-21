@@ -34,9 +34,8 @@ from track_ctrl.interface import (
     TrackModelInputs,
 )
 
-#: Speed the stand-in CTC suggests for every block, in whole m/s. It is
-#: deliberately above some posted limits, so the vital layer's clamp is
-#: visible in a running system.
+#: Speed the stand-in CTC suggests for every block, in whole m/s, or the
+#: block's posted limit where that is lower.
 DEFAULT_SUGGESTED_SPEED_MPS = 15
 
 #: Authority the stand-in CTC suggests for every block, in blocks.
@@ -114,6 +113,7 @@ class StandInWorld:
         again, and settings for blocks that no longer exist are dropped.
         """
         lines: dict[str, list[BlockKey]] = {}
+        limits: dict[BlockKey, int] = {}
         switches: list[BlockKey] = []
         crossings: list[BlockKey] = []
         signals: list[BlockKey] = []
@@ -121,6 +121,8 @@ class StandInWorld:
             line = entry["line_key"]
             blocks = lines.setdefault(line, [])
             blocks.extend(BlockKey(line, b["id"]) for b in entry["blocks"])
+            for b in entry["blocks"]:
+                limits[BlockKey(line, b["id"])] = int(b["limit_mps"])
             switches.extend(
                 BlockKey(line, item["block_id"]) for item in entry["switches"]
             )
@@ -151,11 +153,15 @@ class StandInWorld:
             key: value for key, value in self.suggestions.items()
             if key in known
         }
+        # Like the real CTC Office, never above the block's posted limit:
+        # keeping a speed under the limit is the CTC's, not the
+        # wayside's (truth suggested-speed-under-block-limit).
         for key in known:
             self.suggestions.setdefault(
                 key,
                 Suggestion(
-                    DEFAULT_SUGGESTED_SPEED_MPS, DEFAULT_SUGGESTED_AUTHORITY
+                    min(DEFAULT_SUGGESTED_SPEED_MPS, limits[key]),
+                    DEFAULT_SUGGESTED_AUTHORITY,
                 ),
             )
         self.switch_commands = {

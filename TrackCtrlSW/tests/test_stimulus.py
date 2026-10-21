@@ -153,6 +153,16 @@ class UserInputTests(unittest.TestCase):
         finally:
             path.unlink()
 
+    def test_the_attached_vital_code_can_be_read_not_edited(self) -> None:
+        entry = next(f for f in self.state.files["rows"]
+                     if f["name"] == "vital.plc")
+        self.assertTrue(entry["readonly"])
+        self.user("open_file", iteration=entry["iteration"])
+        self.assertTrue(self.state.bufferReadOnly)
+        self.assertIn("OUT_AUTH_1", self.state.buffer)
+        with self.assertRaises(StimulusError):
+            self.user("append_buffer", text="x")
+
     def test_oversized_append_is_refused(self) -> None:
         with self.assertRaises(StimulusError):
             self.user("append_buffer", text="x" * 5000)
@@ -163,7 +173,8 @@ class UserInputTests(unittest.TestCase):
         # 12 m/s is the posted limit of block 1 and 4 blocks of authority.
         self.assertEqual(rows["TC_1"], "26.8 MPH · 4 BLK")
         suggestions = {r["name"]: r["value"] for r in self.state.suggestionRows["rows"]}
-        self.assertEqual(suggestions["SUG_1"], "33.6 MPH · 4 BLK")
+        # The stand-in CTC suggests under the posted limit, as the CTC must.
+        self.assertEqual(suggestions["SUG_1"], "26.8 MPH · 4 BLK")
 
 
 class CommitGateTests(unittest.TestCase):
