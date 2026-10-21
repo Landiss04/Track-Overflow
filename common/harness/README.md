@@ -20,6 +20,7 @@ From the repository root, in the project's virtual environment:
 ```
 python track_overflow.py                     # Phase 4 system, 1x
 python track_overflow.py --speedup           # 10x
+python track_overflow.py --auto-run          # press Run by itself (tests, demonstrations)
 python track_overflow.py --load-starters     # commit the starter PLC programs at launch
 python track_overflow.py --dispatch G1:Green:65   # dispatch once the line is ready
 python track_overflow.py --run-seconds 30    # stop by itself
@@ -28,12 +29,13 @@ python track_overflow.py --stubs-only        # a stub for every module, as in Ph
 ```
 
 No arguments open the operator window. Add `--headless` to echo every event to the
-console, with a status line every 5 s. Ctrl+C ends the run in either mode. The CTC
-Office presses Run as soon as it is ready (`--run-on-ready`, below); the dispatcher can
-pause it in its window. Kevin Schillinger decided on 2026-10-21 that the harness presses
-Run automatically for headless and test runs only, and that otherwise the dispatcher
-presses Run in the CTC window (D017; Q-P4-1). `app.py` does not do that yet: it presses
-Run in window mode too.
+console, with a status line every 5 s. Ctrl+C ends the run in either mode. The clock
+starts paused. In a window run the dispatcher presses Run in the CTC Office's window
+(D017; R83, Kevin Schillinger's decision of 2026-10-21 on Q-P4-1). A headless run has
+the CTC Office press Run as soon as it is ready (`--run-on-ready`, below), and so does a
+`--stubs-only` run, whose stub CTC Office has no window. `--auto-run` does the same in a
+window run, for tests and demonstrations only, as `--load-starters` and `--dispatch`
+are. The dispatcher can pause the run in the CTC Office's window either way.
 
 A run needs three people, or the options that stand in for them: one loads the PLC
 programs, one dispatches a train, and one sets the train's gains.
@@ -41,8 +43,10 @@ programs, one dispatches a train, and one sets the train's gains.
 1. The harness starts seven module processes: the CTC Office, the Track Controller SW,
    the Track Model, the Train Model and the Train Controller SW as themselves, each in
    its window, and stubs for the two HW variants.
-2. The clock starts paused (D017). The CTC Office presses Run once it is ready, and the
-   harness reads Run, Pause and 1x / 10x from its outputs and its `STATE` (R3, R51).
+2. The clock starts paused (D017). The dispatcher presses Run in the CTC Office's
+   window, or the CTC Office presses it once ready in a headless or `--auto-run` run
+   (R83). The harness reads Run, Pause and 1x / 10x from its outputs and its `STATE`
+   (R3, R51).
 3. The Track Controller runs the Green Line's six waysides, `GTC-01` to `GTC-06`. It
    starts not ready (R44, R70). A person loads a PLC program on every wayside in its
    window: RUN then COMMIT on each, or **Load starters**. `--load-starters` commits the
@@ -117,7 +121,7 @@ What happens when something goes wrong:
 | A module ends or drops its link | It logs the exit and holds the clock for the rest of the run. Modules are never restarted mid-run. |
 | A reply comes twice, for no request, or with the awaited request ID but another tick | It logs `UNEXPECTED_REPLY` and ignores it. Every request is answered once. |
 | A module's inputs cannot be sent as JSON, such as an infinity an edge computed | It logs `INPUTS_FAILED` for that module, which misses the tick. The other modules still get theirs. |
-| The run falls behind real time | Owed ticks run back to back, up to 100. Past that the backlog is dropped and logged as `TIME_SLIPPED`. No module misses a tick; simulation time runs slower than real time. |
+| The run falls behind real time | Owed ticks run back to back, up to 100. Past that the backlog is dropped and logged as `TIME_SLIPPED`. No module misses a tick; simulation time runs slower than real time. Ticks still owed when the run ends are dropped without a `TIME_SLIPPED`. |
 | A pause with ticks owed | At most the next tick stays owed, so the run resumes without a burst. |
 
 The clock runs only while every module is ready, none is late or down, and the CTC
@@ -195,8 +199,9 @@ exactly once.
   it in `retired_trains` once it has stopped there with authority 0 (R66, D022).
 - **The CTC Office's test options.** They stand in for the dispatcher, as
   `--load-starters` stands in for the person who loads the PLC programs and
-  `--engineer-gains` for the engineer. `app.py` passes `--run-on-ready` on every run,
-  as it did to the stub, and the others only when asked:
+  `--engineer-gains` for the engineer. `app.py` passes `--run-on-ready` for a headless,
+  `--stubs-only` or `--auto-run` run (R83), never otherwise, and the others only when
+  asked:
   - `--run-on-ready` presses Run as soon as the process is ready;
   - `--speedup-at-tick N` presses 10x after step `N`, or before the first step with 0
     (`app.py --speedup` passes 0);
@@ -360,9 +365,13 @@ Phases 1 to 4 add three layers of tests:
 
 `--engineer-gains KP KI` on the Train Controller's process plays the engineer in these
 tests, `--load-starters` on the Track Controller's loads the programs, and the CTC
-Office's `--run-on-ready` and `--dispatch` play the dispatcher. A real run passes none
-of these but `--run-on-ready`, unless `--load-starters` or `--dispatch` is given on the
-harness command line.
+Office's `--run-on-ready` and `--dispatch` play the dispatcher. A real window run passes none
+of these unless `--auto-run`, `--load-starters` or `--dispatch` is given on the harness
+command line; a headless run passes `--run-on-ready`. `AutoRunTest` in
+`test_harness_window.py` checks the CTC Office's arguments for each kind of run. The
+CTC window's own Run reaches the harness as `STATE`:
+`CTC-Office/tests/test_module_process.py`,
+`test_run_pause_and_speed_go_to_the_harness_at_once`.
 
 Faults in the link have tests of their own. `test_harness_faults.py` drives the harness
 with fake modules in the same process that send raw bytes: a number that overflows,

@@ -25,8 +25,9 @@ integration built on them.
 themselves: the CTC Office (new), the Track Controller SW, the Track Model, the Train
 Model and the Train Controller SW. The two HW variants are stubs.
 
-1. The clock starts paused (D017). The CTC Office presses Run once it is ready
-   (`--run-on-ready`, as its stub did before; see Q-P4-1), and the harness reads Run,
+1. The clock starts paused (D017). The dispatcher presses Run in the CTC Office's
+   window; a headless, `--stubs-only` or `--auto-run` run has the CTC Office press it
+   once ready (`--run-on-ready`; Q-P4-1, R83). The harness reads Run,
    Pause and 1x / 10x from its outputs and its `STATE` (R3, R51).
 2. A person loads the PLC programs (R44), or `--load-starters` commits the starters.
    Until every Green wayside is ready, the CTC Office sends nothing for Green and
@@ -152,11 +153,10 @@ Train Controller's own `--engineer-gains`.
   dispatcher (`--dispatch`), given once the line is ready, as `--load-starters` plays
   the person loading programs. Manual dispatch to GLENBURY is the Iteration 3 scenario
   as stated; `--schedule` is there for automatic mode. See Q-P4-2.
-- **Run on ready in a normal run.** `app.py` still passes `--run-on-ready`, as it did to
-  the stub, so a run starts by itself. D017 says the clock starts paused and the CTC
-  Office runs it; the window now has a working Run. See Q-P4-1: since 2026-10-21 the
-  harness is to press Run only for headless and test runs, and `app.py` does not do
-  that yet.
+- **Run on ready in a normal run.** Done in `68fcfa7` (Q-P4-1, R83): a window run waits for
+  the dispatcher's Run in the CTC Office's window. `app.py` passes `--run-on-ready` only
+  for a headless run, a `--stubs-only` run and a run with `--auto-run` (tests and
+  demonstrations).
 - **`STATE` on every press**, not only while paused: the harness reads it either way,
   and a Pause takes effect without waiting for the next reply. A scripted 10x press is
   sent after the reply, never inside a step, so a `STATE` never arrives before the reply
@@ -173,7 +173,7 @@ Train Controller's own `--engineer-gains`.
 
 | # | Question | Who | Recommendation |
 |---|---|---|---|
-| Q-P4-1 | Should a normal run wait for the dispatcher's Run (D017), now that the CTC window has one? `app.py` presses Run automatically, as Phases 0 to 3 did. | Kevin, Landis | Keep `--run-on-ready` for headless and test runs; in window mode let the dispatcher press Run. A one-line change in `app.py`. **Decided:** Kevin Schillinger said "yes" on 2026-10-21: the harness presses Run automatically for headless and test runs only, and the dispatcher presses Run in the window otherwise (D017). Not yet done: `app.py` passes `--run-on-ready` in window mode too. |
+| Q-P4-1 | Should a normal run wait for the dispatcher's Run (D017), now that the CTC window has one? `app.py` presses Run automatically, as Phases 0 to 3 did. | Kevin, Landis | Keep `--run-on-ready` for headless and test runs; in window mode let the dispatcher press Run. A one-line change in `app.py`. **Decided:** Kevin Schillinger said "yes" on 2026-10-21: the harness presses Run automatically for headless and test runs only, and the dispatcher presses Run in the window otherwise (D017). Done in `68fcfa7`: `app.py` passes `--run-on-ready` only for a headless, `--stubs-only` or `--auto-run` run. |
 | Q-P4-2 | For the graded Iteration 3 run, manual dispatch (the dispatcher in the CTC window, or `--dispatch`) or the course schedule in automatic mode? | Landis, Kevin | Manual dispatch to GLENBURY: it is the scenario as stated and needs no schedule. Both are tested to work. **Closed:** Kevin Schillinger said on 2026-10-21 "this should not matter for implementation". Both are supported. |
 | Q-P4-3 | The "return to yard" action for manual trains (R66, D022) does not exist, and a scheduled run cannot reach the yard entry block in the full system: the starter program never throws switch 58 (Phase 3 Q7). So no train is ever retired in a real run. | Landis (CTC), Harry Tye (Track Controller) | Settle Q7 first, then add the action to the CTC Office. Not needed for Iteration 3, which ends at a station. **Done:** Kevin Schillinger said "yes add a button" on 2026-10-21; the action and a Return to yard button are in `4cc873b`. Phase 3 Q7 he answered "fix"; the starter sets each switch for the train coming in `234c353`, and retirement needs only a stop at 57 (D022). A full-system round trip still stops at Green 93 (Q-P4-8). |
 | Q-P4-4 | Speed at a lower limit ahead: G1 enters block 67 (40 km/h, 11 m/s) at 18 m/s. The CTC Office suggests for 66 a little under 66's own limit (70 km/h), and nothing slows the train before 67. The Train Controller only follows the block it is in. | Landis (CTC), Train Controller owners | **Decided:** Kevin Schillinger on 2026-10-21: "for overspeed the train controller will handle slowing down immediately after entering the blcok". The CTC Office does not cap ahead. Already true: G1 enters 67 at 17.9 m/s, the service brake is on from the first tick, and it is under 11.1 m/s in 4.8 s, about 70 m, with no emergency brake. Tested in `0305d05`; proposal `20261021-1445-lower-limit-ahead-train-controller-slows.md` (`66aa348`) awaits promotion. |
@@ -204,7 +204,7 @@ awaiting promotion by a person.
    and tables with a real display; raise `WINDOW_REFRESH_MS` if replies lag.
 4. **Phase 5**: the Track Controller HW's reports join the CTC Office's input through
    `merge_ctc_inputs` once its process returns `ctc_reports` in the SW variant's form.
-5. **Run in window mode** (Q-P4-1): `app.py` still presses Run in every mode.
+5. **Run in window mode** (Q-P4-1): done in `68fcfa7`.
 6. **The round trip** (Q-P4-8): the Train Controller's engine detector, for its owners.
 7. **The Track Controller owners' decisions** on the starter's switch rule (Phase 3
    Q7; `TrackCtrlSW/INTEGRATION_DISCREPANCIES.md` E7), for Harry Tye and Landis.
@@ -220,6 +220,7 @@ Kevin Schillinger's answers of 2026-10-21, and the work on them since `a55b8b9`:
 | `4cc873b` | Q-P4-3 (the CTC side) and Q-P4-5. The CTC Office's "return to yard" action, with one button, Return to yard, in the Selected train panel's Manual-mode row. It orders a manual train on the track to its line's yard entry block (Green 57, Red 9), through dispatch, and the existing path retires it once it has stopped there with authority 0. `CtcOffice.step` takes the step's `sim_time_s`, so a refused or missed tick no longer leaves its schedule behind. 15 new tests. |
 | `234c353` | Phase 3 Q7. The starter program sets each switch for the train coming to its points. Two new PLC inputs, `SUG_n` and `REV_s`; existing programs are unaffected, and the vital layer is unchanged. Tests: `test_starter_switches.py` (18), and the harness's `ReturnToYardTest` (5, about 140 s, with `TRACK_OVERFLOW_ROUND_TRIP=1`), which stops at Green 93 today (Q-P4-8). |
 | this update | `test_harness_window.py`: system mode runs for 8 s instead of 2. Seven real modules take about 2 s to be ready, so about one run in three stopped before `ALL_READY`. The `TIME_SLIPPED` in the short runs was logged at shutdown, as the pacer dropped the ticks it still owed, not at startup. |
+| `68fcfa7` | Q-P4-1 (R83). A window run waits for the dispatcher's Run in the CTC Office's window; headless and `--stubs-only` runs press Run by themselves, and the new harness option `--auto-run` does in a window run, for tests and demonstrations. `AutoRunTest` (5 tests) checks the CTC Office's arguments. Ticks owed at shutdown are no longer logged as `TIME_SLIPPED` (`StopWithTicksOwedTest`). Harness tests: 156 passed, 5 skipped. |
 
 Tests on 2026-10-21, scratch venv (Python 3.13, PySide6 6.11.2), offscreen:
 

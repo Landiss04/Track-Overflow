@@ -26,8 +26,9 @@ choosing a value. Nothing here is filled in silently.
   block 57. Its owners have decisions left (Phase 3 Q7, section 1.5).
 - A train entering a slower block is slowed by its Train Controller at once (R87). A
   test covers it (`0305d05`), and a proposal records it (`66aa348`, section 7.1).
-- `app.py` still presses Run in every run, window mode included, though R83 has the
-  dispatcher press it in the window (section 5.5).
+- A window run waits for the dispatcher's Run in the CTC Office's window (R83; `68fcfa7`).
+  Headless and `--stubs-only` runs press Run by themselves, and `--auto-run` does in a
+  window run, for tests and demonstrations (section 5.5).
 - A new open question, Q-P4-8: a full-system round trip stops at Green 93, where the
   Train Controller latches a false engine failure up the grade (G-NEW-6).
 - The harness window test gives system mode eight seconds, so its start no longer
@@ -191,7 +192,7 @@ handover's questions and to Phase 3 handover Q7.
 | R80 | Q19 | "keep the logger it is useful" | The harness writes one CSV event log ([P] `files-and-paths`, D005). This reverses R13. |
 | R81 | Q7 | "choose whatever usb protocol makes the most sense given that this will fucntion on a strangers windows machine as an exe" | Chosen: USB serial in the standard communications class (CDC-ACM), from the Pi's device mode; the Pis are peripherals of the one computer; one Pi per hardware module ([P] D027; section 4.5). |
 | R82 | Phase 1: the Train Controller's emergency brake | "Fix it here" | Under the harness the Train Controller took the echo of its own emergency brake for a passenger pull and never sent the release. Fixed in `Train-Ctrl_HW/train_ctrl` on this branch, for its owners to review (section 5.2). |
-| R83 | Q-P4-1 | "yes" | The harness presses Run automatically for headless and test runs only. Otherwise the dispatcher presses Run in the CTC window (D017). `app.py` does not do this yet: it passes `--run-on-ready` in window mode too (section 5.5). |
+| R83 | Q-P4-1 | "yes" | The harness presses Run automatically for headless and test runs only. Otherwise the dispatcher presses Run in the CTC window (D017). Done in `68fcfa7`: `app.py` passes `--run-on-ready` only for a headless, `--stubs-only` or `--auto-run` run (section 5.5). |
 | R84 | Q-P4-2 | "this should not matter for implementation" | Closed. Manual dispatch and the schedule in automatic mode are both supported. |
 | R85 | Q-P4-3 (CTC) | "yes add a button" | The CTC Office's "return to yard" action, with a Return to yard button in its window (R66; `4cc873b`). |
 | R86 | Phase 3 Q7 | "fix" | The starter program sets each switch for the train coming to it, so a train can reach the yard entry block 57 (`234c353`). Retirement needs only a stop at 57 (D022). The owners' decisions stay open (section 1.5). |
@@ -248,7 +249,7 @@ and Q-P4-8 is new.
 
 | # | Question | Who | Status | Blocks |
 |---|---|---|---|---|
-| Q-P4-1 | Should a normal run wait for the dispatcher's Run (D017), now that the CTC window has one? | Kevin, Landis | Answered (R83): the harness presses Run for headless and test runs only; the dispatcher presses it in the window otherwise. `app.py` still presses Run in window mode (section 5.5). | none |
+| Q-P4-1 | Should a normal run wait for the dispatcher's Run (D017), now that the CTC window has one? | Kevin, Landis | Answered (R83): the harness presses Run for headless and test runs only; the dispatcher presses it in the window otherwise. Done in `68fcfa7` (section 5.5). | none |
 | Q-P4-2 | For the graded Iteration 3 run, manual dispatch or the course schedule in automatic mode? | Landis, Kevin | Closed (R84): both are supported, and both are tested to work. | none |
 | Q-P4-3 | No train is ever retired in a real run: no "return to yard" action (R66), and the starter program never throws a switch onto the route to the yard (Phase 3 Q7). | Landis (CTC), Harry Tye (Track Controller) | Answered (R85, R86): the action and its button are in `4cc873b`; the starter sets each switch for the train coming in `234c353`. A full-system round trip still stops at Green 93 (Q-P4-8). | Full |
 | Q-P4-4 | Nothing slows a train before a block with a lower limit: G1 enters block 67 (40 km/h) at 18 m/s. | Landis (CTC), Train Controller owners | Answered (R87): the Train Controller slows the train once it is in the slower block; the CTC Office does not cap ahead. Already true (section 5.5). | none |
@@ -881,7 +882,8 @@ the next-block suggestion and the train events (Phase 3 handover Q13, Q14) were 
 
 The other two are stubs: the Track Controller HW and the Train Controller HW. In order:
 
-1. The clock starts paused (D017). The CTC Office presses Run once it is ready, and the
+1. The clock starts paused (D017). The dispatcher presses Run in the CTC Office's window,
+   or the CTC Office presses it once ready in a headless or `--auto-run` run (R83). The
    harness reads Run, Pause and 1x / 10x from its outputs and its `STATE` (R3, R51).
 2. A person loads the PLC programs (R44), or `--load-starters` commits the starters.
    Until every Green wayside is ready, the CTC Office sends nothing for Green and
@@ -1007,10 +1009,10 @@ same events and seven exits of code 0.
 - **Dispatch in the scenario:** a test option on the CTC Office process plays the
   dispatcher (`--dispatch`), as `--load-starters` plays the person loading programs.
   Manual dispatch and the schedule are both supported (R84).
-- **Run on ready:** `app.py` still passes `--run-on-ready` in every mode, as it did to
-  the stub, so a run starts by itself. R83 has the harness press Run for headless and
-  test runs only, and the dispatcher press it in the window. `app.py` has not been
-  changed to match.
+- **Run on ready:** `app.py` passes `--run-on-ready` only for a headless run, a
+  `--stubs-only` run (its stub CTC Office has no window) and a run with `--auto-run`, a
+  test and demonstration option. A window run waits for the dispatcher's Run (R83;
+  `68fcfa7`).
 - **The CTC window's header** shows the dispatcher's Run/Pause and speed, not whether
   the harness clock is running; it also waits for every module and for a late reply.
   The harness window gives the hold reason.
@@ -1088,6 +1090,15 @@ the Train Model is named.
   runs for eight seconds; the checks are unchanged. The `TIME_SLIPPED` in the short
   runs was logged at shutdown, not at startup: stopping the pacer drops the few ticks
   owed. It does not appear in the longer run.
+- **Run in window mode** (`68fcfa7`, R83). `app.py` passes `--run-on-ready` to the CTC Office
+  only for a headless run, a `--stubs-only` run and a run with `--auto-run`, a new
+  harness option for tests and demonstrations. A window run stays paused until the
+  dispatcher presses Run in the CTC Office's window, which reaches the harness as
+  `STATE`. `AutoRunTest` checks the CTC Office's arguments for each kind of run; the
+  window test's system run passes `--auto-run`.
+- **No `TIME_SLIPPED` at shutdown** (`68fcfa7`). Ticks still owed when the harness stops are
+  dropped but no longer logged as `TIME_SLIPPED`: nothing was behind. Tested in
+  `test_harness_faults.py` (`StopWithTicksOwedTest`).
 
 Tests on 2026-10-21, offscreen, in a Linux cloud container (Python 3.13, PySide6
 6.11.2): `common/harness/tests` 150 passed and 5 skipped (`ReturnToYardTest`), 495
