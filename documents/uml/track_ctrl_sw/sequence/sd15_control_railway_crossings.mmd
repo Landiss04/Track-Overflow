@@ -1,0 +1,16 @@
+sequenceDiagram
+    autonumber
+    participant W as TrackController (wayside)
+    participant V as attached vital code
+    participant M as SwTrackController
+    participant H as Central Harness
+    participant TM as Track Model
+    Note over W,V: Within a scan (UC-09), after the program has set XING_c.
+    W->>V: XING_c, OCC of the approach blocks
+    V->>V: OUT_XING_c := XING_c OR a train on the approach
+    V-->>W: OUT_XING_c
+    W->>W: OS encode
+    W-->>M: crossings
+    M-->>H: crossing_commands (line, block): active
+    H->>TM: lights and gates
+    TM-->>H: crossing state, next tick (UC-12)
