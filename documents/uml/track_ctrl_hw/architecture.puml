@@ -1,6 +1,5 @@
 @startuml architecture
 !include ../style.iuml
-title Track Controller (HW) — Software architecture
 skinparam componentStyle rectangle
 
 package "Host PC — Track Ctrl HW process (PySide6)" {

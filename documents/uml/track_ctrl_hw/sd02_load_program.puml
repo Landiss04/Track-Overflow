@@ -1,6 +1,5 @@
 @startuml sd02_load_program
 !include ../style.iuml
-title SD-02 Load PLC program (UC-02)
 autonumber
 
 actor Programmer as P

@@ -1,0 +1,60 @@
+@startuml class_host_link
+!include ../style.iuml
+hide empty members
+left to right direction
+
+package "track_ctrl_hw (host process): link to the Pi" {
+  class HarnessEndpoint <<planned>> {
+    -_controller: TrackController
+    +on_message(line: str): None
+    -_reply(id: int, tick: int, outputs): None
+  }
+
+  class RemoteTrackController <<planned>> {
+    -_link: PiSerialLink
+    +step(dt, inputs): TrackControllerOutputs
+    +snapshot(): TrackControllerSnapshot
+    +load_territory(territory): tuple[str]
+    +load_program(wayside_id, source, file_name): ProgramInfo
+    +reset(): None
+  }
+
+  class PiSerialLink <<planned>> {
+    -_port: QSerialPort
+    -_next_id: int
+    +open(): bool
+    +request(op: str, payload: dict): dict
+  }
+
+  class TrackControllerState
+}
+
+interface TrackController <<Protocol>> {
+  +step(dt, inputs): TrackControllerOutputs
+  +snapshot(): TrackControllerSnapshot
+  +load_territory(territory): tuple[str]
+  +load_program(wayside_id, source, file_name): ProgramInfo
+  +reset(): None
+}
+
+class QSerialPort
+
+package "Raspberry Pi 5" {
+  class PiLinkServer <<planned>>
+  class HwTrackController
+}
+
+note bottom of PiSerialLink
+  Finds the Pi by its USB identity,
+  never a fixed COM number (D027).
+end note
+
+HarnessEndpoint --> TrackController : step()
+TrackControllerState --> TrackController : load, snapshot
+RemoteTrackController ..|> TrackController
+HwTrackController ..|> TrackController
+RemoteTrackController --> PiSerialLink
+PiSerialLink --> QSerialPort
+PiSerialLink ..> PiLinkServer : USB serial,\nnewline JSON
+PiLinkServer --> HwTrackController
+@enduml

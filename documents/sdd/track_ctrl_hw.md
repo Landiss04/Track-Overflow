@@ -309,7 +309,9 @@ Design choices:
 
 ### 5.1 Core classes (Raspberry Pi)
 
-![Core classes](../uml/track_ctrl_hw/class_core.png)
+![Core classes: control](../uml/track_ctrl_hw/class_core_control.png)
+
+![Core classes: PLC engine](../uml/track_ctrl_hw/class_core_plc.png)
 
 - `HwTrackController` holds one `Wayside` per loaded database, all on one line, and scans each
   once per `step`. While any wayside is not ready, every wayside holds fail-safe.
@@ -323,7 +325,11 @@ Design choices:
 
 ### 5.2 Boundary types
 
-![Boundary types](../uml/track_ctrl_hw/class_boundary.png)
+![Boundary types: inputs and outputs](../uml/track_ctrl_hw/class_boundary_io.png)
+
+![Boundary types: territory](../uml/track_ctrl_hw/class_boundary_territory.png)
+
+![Boundary types: snapshot](../uml/track_ctrl_hw/class_boundary_snapshot.png)
 
 All are frozen dataclasses. The CTC Office names a block by `BlockRef` (line and number,
 `Red:15`); the Track Model by `BlockKey` (line, section, number). A switch, its signal and a
@@ -332,12 +338,15 @@ block counts (D013).
 
 ### 5.3 Host-side classes (PC)
 
-![Host-side classes](../uml/track_ctrl_hw/class_host.png)
+![Host-side classes: presentation](../uml/track_ctrl_hw/class_host_ui.png)
+
+![Host-side classes: link to the Pi](../uml/track_ctrl_hw/class_host_link.png)
 
 - `TrackControllerState` is the only object QML talks to. It reads a snapshot, turns it into
   rows through `views`, and pushes them into five `RowsModel`s that update in place.
 - `RemoteTrackController` (planned) replaces the in-process `HwTrackController`; it owns the
-  serial link to the Pi through `PiSerialLink`.
+  serial link to the Pi through `PiSerialLink`. It implements the same Protocol, so each
+  call becomes one request over USB (newline JSON via `wire.py`) and errors come back typed.
 - `HarnessEndpoint` (planned) answers the harness's tick messages.
 
 ---

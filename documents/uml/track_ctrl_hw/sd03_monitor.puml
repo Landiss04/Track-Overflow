@@ -1,6 +1,5 @@
 @startuml sd03_monitor
 !include ../style.iuml
-title SD-03 Select wayside and monitor its state (UC-03, UC-04)
 autonumber
 
 actor Programmer as P

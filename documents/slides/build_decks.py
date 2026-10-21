@@ -71,7 +71,7 @@ class Deck:
             run.font.name = font
         return box
 
-    def _chrome(self, title: str, section: str = ""):
+    def _chrome(self, title: str, section: str = "", footer: bool = True):
         self.number += 1
         slide = self.prs.slides.add_slide(self.blank)
         bar = slide.shapes.add_shape(
@@ -87,8 +87,9 @@ class Deck:
                        Inches(3.8), Inches(0.75), section, size=12,
                        color=LIGHT, align=PP_ALIGN.RIGHT,
                        anchor=MSO_ANCHOR.MIDDLE)
-        self._text(slide, MARGIN, SLIDE_H - FOOTER_H, Inches(9),
-                   FOOTER_H, self.footer, size=10, color=MUTED)
+        if footer:
+            self._text(slide, MARGIN, SLIDE_H - FOOTER_H, Inches(9),
+                       FOOTER_H, self.footer, size=10, color=MUTED)
         self._text(slide, SLIDE_W - Inches(1.5), SLIDE_H - FOOTER_H,
                    Inches(1.05), FOOTER_H, str(self.number), size=10,
                    color=MUTED, align=PP_ALIGN.RIGHT)
@@ -159,16 +160,37 @@ class Deck:
         return slide
 
     def diagram(self, title: str, image: Path, section: str = "",
-                caption: str = ""):
-        """One diagram, fitted; a tall one is split across slides."""
+                caption: str = "", crop: tuple | None = None,
+                full: bool = False, blank: tuple = ()):
+        """One diagram, fitted; a tall one is split across slides.
+
+        ``crop`` keeps a region given as (left, top, right, bottom)
+        fractions; ``blank`` whites out regions given the same way, to
+        hide fragments of neighbouring boxes. ``full`` fills the slide
+        below the title bar, with no footer or caption.
+        """
+        if crop is not None:
+            with Image.open(image) as picture:
+                w, h = picture.size
+                picture = picture.convert("RGB")
+                for region in blank:
+                    picture.paste((255, 255, 255), (
+                        int(region[0] * w), int(region[1] * h),
+                        int(region[2] * w), int(region[3] * h)))
+                box = (int(crop[0] * w), int(crop[1] * h),
+                       int(crop[2] * w), int(crop[3] * h))
+                path = self._scratch / (
+                    f"{image.stem}_{'_'.join(map(str, box))}.png")
+                picture.crop(box).save(path)
+            image = path
         with Image.open(image) as picture:
             w_px, h_px = picture.size
         parts = max(1, round(h_px / w_px / 0.9))
         if parts == 1:
-            return self._picture(title, image, section, caption)
+            return self._picture(title, image, section, caption, full)
         for index, piece in enumerate(self._slices(image, parts), start=1):
             self._picture(f"{title} ({index} of {parts})", piece, section,
-                          caption if index == parts else "")
+                          caption if index == parts else "", full)
 
     def _slices(self, image: Path, parts: int) -> list[Path]:
         # Cut where a row holds the least ink, so no message is split.
@@ -195,9 +217,15 @@ class Deck:
         return pieces
 
     def _picture(self, title: str, image: Path, section: str,
-                 caption: str):
-        slide = self._chrome(title, section)
-        left, top, width, height = self._body_box()
+                 caption: str, full: bool = False):
+        slide = self._chrome(title, section, footer=not full)
+        left, width = MARGIN, SLIDE_W - 2 * MARGIN
+        if full:
+            top, caption = TITLE_H, ""
+            height = SLIDE_H - top - Inches(0.12)
+        else:
+            top = TITLE_H + Inches(0.12)
+            height = SLIDE_H - top - FOOTER_H - Inches(0.1)
         if caption:
             height -= Inches(0.45)
         with Image.open(image) as picture:
@@ -369,6 +397,12 @@ def build_track_ctrl_hw() -> None:
     deck.section("Architecture")
     deck.diagram("Software architecture", UML / "architecture.png",
                  section="Architecture")
+    deck.diagram("Software architecture: host PC", UML / "architecture.png",
+                 section="Architecture", crop=(0, 0, 0.405, 0.59),
+                 blank=((0.336, 0.42, 1, 1),))
+    deck.diagram("Software architecture: Raspberry Pi and shared code",
+                 UML / "architecture.png", section="Architecture",
+                 crop=(0.336, 0.42, 1, 1))
     deck.bullets("Architecture: design choices", [
         "One interface, three users: harness, window and test UI call only "
         "the TrackController Protocol",
@@ -386,14 +420,27 @@ def build_track_ctrl_hw() -> None:
     ], section="Architecture")
 
     deck.section("Class diagrams")
-    deck.diagram("Core classes (Raspberry Pi)", UML / "class_core.png",
-                 section="Class diagrams")
-    deck.diagram("Boundary types", UML / "class_boundary.png",
-                 section="Class diagrams",
-                 caption="CTC Office names blocks by BlockRef (Red:15); "
-                 "Track Model by BlockKey (line, section, number)")
-    deck.diagram("Host-side classes (PC)", UML / "class_host.png",
-                 section="Class diagrams")
+    deck.diagram("Core classes (Raspberry Pi): control",
+                 UML / "class_core_control.png", section="Class diagrams")
+    deck.diagram("Core classes (Raspberry Pi): PLC engine",
+                 UML / "class_core_plc.png", section="Class diagrams")
+    deck.diagram("Boundary types: inputs and outputs",
+                 UML / "class_boundary_io.png", section="Class diagrams",
+                 full=True)
+    deck.diagram("Boundary types: territory",
+                 UML / "class_boundary_territory.png",
+                 section="Class diagrams", full=True)
+    deck.diagram("Boundary types: snapshot for the window",
+                 UML / "class_boundary_snapshot.png",
+                 section="Class diagrams", full=True)
+    deck.diagram("Host-side classes (PC): presentation",
+                 UML / "class_host_ui.png", section="Class diagrams",
+                 caption="QML only binds to TrackControllerState and calls "
+                 "its slots; rows update in place every 100 ms at most")
+    deck.diagram("Host-side classes (PC): link to the Pi",
+                 UML / "class_host_link.png", section="Class diagrams",
+                 caption="RemoteTrackController has the same Protocol as "
+                 "HwTrackController; each call is one request over USB")
 
     deck.section("Sequence diagrams")
     for name, title in (

@@ -1,6 +1,5 @@
 @startuml sd06_scan_cycle
 !include ../style.iuml
-title SD-06 Scan cycle of one wayside (UC-07, UC-11 to UC-16)
 autonumber
 
 participant "HwTrackController" as Ctrl

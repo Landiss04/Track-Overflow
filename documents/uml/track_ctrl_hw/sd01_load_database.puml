@@ -1,6 +1,5 @@
 @startuml sd01_load_database
 !include ../style.iuml
-title SD-01 Load wayside database (UC-01)
 autonumber
 
 actor Programmer as P

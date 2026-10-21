@@ -1,6 +1,5 @@
 @startuml sd05_tick
 !include ../style.iuml
-title SD-05 One tick through the central harness (UC-07, UC-08 to UC-10, UC-14, UC-15)
 autonumber
 
 participant "Central Harness\n(shared clock)" as H

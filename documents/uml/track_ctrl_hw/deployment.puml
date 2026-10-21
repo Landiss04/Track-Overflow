@@ -1,6 +1,5 @@
 @startuml deployment
 !include ../style.iuml
-title Track Controller (HW) — Deployment
 
 node "Host PC\nWindows 11, one machine, no network" as PC {
   artifact "TrackOverflow.exe\n(PyInstaller bundle)" as Exe
