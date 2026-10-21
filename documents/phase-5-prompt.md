@@ -92,6 +92,8 @@ handover. File one truth proposal for each fact that is normative and new.
 | K2 | Red yard (Phase 3 Q5) | "block 9 physically connects to the yard via a switch … note that block 9 is in section c" | Fix `red_line.json` so the yard joins block 9, section C, through the switch listed on block 9. Remove `"yard"` from block 75's `next_blocks` and add it to block 9's. Assume point 9, normal along the main line, reverse to the yard; record that as an assumption for the Track Model owner and Braden to confirm. The leftover `75` in the switch text also goes to them. All three readers (Track Model, harness `track_devices`, Track Controller HW `territory`) must agree, enforced by a test. File a proposal. |
 | K3 | PR #43 | "merge into this branch not devlopment leave the pr unmerged" | `git merge origin/feature/TrackCtrl-Showcase-Feedback` into this branch: a merge commit, never a rebase. Do not merge, close or comment on PR #43. |
 | K3b | Vital layer | "the vital layer has been removed. everything is done by the plc code." | The HW variant has no vital layer (PR #43, its D019 proposal). Every safety rule lives in the PLC programs, so the Red programs must carry the speed caps, separation and crossing rules themselves. The SW variant still has a vital layer: do not change it, and ask Kevin whether this decision covers SW too. |
+| K4 | The Red databases and programs (Braden's answers, relayed by Kevin 2026-10-21) | Who writes them: "use test only copies". The split: "it should be divided in any way that work, maybe 3 waysides. That's fine to keep 9 and 75 in the same wayside." Switches: leaving them normal for a first version is fine ("yes"). Crossings: "Yes", crossings 11 and 47 drop when either neighbouring block is occupied. Speed caps: "Check the wp2/ branch that braden made. Many updates are found there as well." | Integration writes the Red databases and PLC programs as test-only copies, clearly marked as not Braden's. Use about 3 waysides covering all 76 blocks, with blocks 9 and 75 in the same wayside. Leave switches NORMAL. Drop crossings 11 and 47 when the crossing block or either neighbour is occupied. Take the safety rules, speed caps included, from Braden's design on `origin/wp2/TrackCtrl-HW-design` (see the next row). |
+| K4b | Braden's WP2 design | The `wp2/` branch has "many updates" | `origin/wp2/TrackCtrl-HW-design` is one commit, `f590f41` (Braden, 2026-10-20), on history this branch already has: the Track Controller HW software design (`documents/sdd/track_ctrl_hw.md`), `documents/sdd/system_concepts.md`, UML under `documents/uml/track_ctrl_hw/` (architecture, boundary/core/host classes, deployment, sequences sd01–sd07 including the tick and the scan cycle) and design-review slides. It is documents only; its `TrackCtrlHw` code is the old version, older than PR #43. Merge it into this branch as well (a merge commit, never a rebase; leave the branch itself alone). **Follow this design for the Pi split**: core on the Pi (`HwTrackController`, `Wayside`, PLC engine, `PiLinkServer`); host process with the window plus `HarnessEndpoint`, `RemoteTrackController` and `PiSerialLink`; newline JSON over USB serial (D027). Where it and this plan differ, say so and follow Braden's design unless it contradicts a ruling; then ask. It also describes a dual-channel PLC (channels A and B must agree), speed entering the program as five bits `SPD_n_0..4`, and a planned generated read-only vital PLC block, which it marks as a design assumption until Harry Tye confirms it. Check which of these PR #43's code already has. Put the speed caps in PLC code, consistent with K3b and Braden's design (in the generated vital block if PR #43 has one, otherwise in the test programs), and report which. |
 | K5 | Pis and USB identity | "Pi 5 set up by module owners. assign the both usb ident strigns" | Raspberry Pi 5, USB device mode on its USB-C port. Assign one identity per module (manufacturer, product, serial number, VID:PID), find each Pi by it, document it, and file a proposal. Suggested: manufacturer `Track Overflow`; product `Track Overflow Track Controller HW` / `Track Overflow Train Controller HW`; serial `TO-TRACK-CTRL-HW-01` / `TO-TRAIN-CTRL-HW-01`; VID:PID `1d6b:0104`, the Linux composite-gadget default. Owners set up the Pis; you write and document the gadget and agent setup without running it on hardware. |
 | K6 | Pi-link additions | "accept" | `HELLO` (protocol, module, agent version/hash, session), `ACTION`/`ACK` (window actions applied before the next `STEP`) and `VIEW` (a display snapshot, at most every 100–200 ms), on the host-to-Pi link only. File a proposal as an additive extension of D027. |
 | K7 | Unplug or reboot recovery | "approved" | Hold the reply (the harness pauses and names the module after 1 s). Reconnect by USB identity, redo `HELLO`, replay the recorded loads, re-send the pending `STEP`, and log every step. The Pi answers a repeated `STEP` from its cache by (id, tick) and never steps twice. File a proposal. |
@@ -112,7 +114,9 @@ handover. File one truth proposal for each fact that is normative and new.
   and steps once per `STEP`. It never keeps time; the harness owns the clock (D017).
 - **Unchanged:** the harness core, the protocol to modules and the other modules.
 
-1. **Merge PR #43 into this branch (K3).**
+1. **Merge PR #43, then Braden's WP2 design, into this branch (K3, K4b).** Two merge
+   commits, never a rebase; leave both branches and PR #43 untouched.
+   - Read `documents/sdd/track_ctrl_hw.md` and the UML before designing steps 4–8.
    - Re-run the Track Controller HW suite.
    - Acceptance: it passes, apart from the known sample-wayside test; reports carry `line`,
      `ready` and `reason`; there is no vital layer.
@@ -122,10 +126,15 @@ handover. File one truth proposal for each fact that is normative and new.
 3. **Red data.**
    - Apply K2 to `red_line.json`, and update anything that read the old yard placement.
    - Add Red wayside databases covering all 76 blocks exactly once, with `next_blocks` (R34,
-     R78), and Red PLC programs that carry every safety rule (K3b). Every Red block is
-     two-way, so switches stay NORMAL unless a program routes them.
-   - The wayside split and the programs are Braden's (K4, not yet decided): mark these as
-     integration test copies for him to replace or approve.
+     R78), in about 3 waysides, with blocks 9 and 75 in the same wayside (K4).
+   - Add matching Red PLC programs that carry every safety rule (K3b, K4b):
+     - switches stay NORMAL;
+     - crossings 11 and 47 drop when the crossing block or either neighbour is occupied;
+     - separation as the SW starter does it;
+     - signals;
+     - speed caps.
+   - These are integration test copies (K4). Mark them in each file and in the README as
+     not Braden's, for him to replace or approve.
    - Acceptance: each file matches `red_line.json` block for block; each loads into the HW
      core; each program compiles with no errors; all three readers agree on every Red
      switch's NORMAL and REVERSE legs.
@@ -194,7 +203,9 @@ handover. File one truth proposal for each fact that is normative and new.
 - Does "the vital layer has been removed" cover the SW variant too?
 - The exact NORMAL leg of the block-9 switch, and the stray `75` in its text: confirm with
   the Track Model owner and Braden.
-- K4: the Red wayside split and who writes the final Red PLC programs (Braden).
+- Where Braden's WP2 design (K4b) and PR #43's code differ (for example the generated vital
+  PLC block, or the dual channels), which one the integration follows. Report what you
+  found; Harry Tye confirms the vital block.
 
 Owner questions that are still open are listed in `documents/integration-summary.md`.
 
