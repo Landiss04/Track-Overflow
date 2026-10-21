@@ -69,6 +69,7 @@ def encode_inputs(inputs: TrackModelInputs) -> Json:
             for train_id, r in inputs.trains.items()
         },
         "ambient_temp_c": inputs.ambient_temp_c,
+        "sim_time_s": inputs.sim_time_s,
     }
 
 
@@ -104,6 +105,10 @@ def decode_inputs(data: Json) -> TrackModelInputs:
             for train_id, r in data["trains"].items()
         },
         ambient_temp_c=float(data["ambient_temp_c"]),
+        sim_time_s=(
+            None if data.get("sim_time_s") is None
+            else float(data["sim_time_s"])
+        ),
     )
 
 

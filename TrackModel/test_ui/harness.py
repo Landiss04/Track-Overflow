@@ -39,6 +39,7 @@ from track_model.interface import (
     TrackModelOutputs,
     TrainReport,
 )
+from utils.system_clock import DEFAULT_START_TIME_S
 
 DT_S = 0.100
 REAL_TIME_MS = 100
@@ -711,6 +712,7 @@ class TrackModelTestHarness(QObject):
                 for train_id, t in self._trains.items()
             },
             ambient_temp_c=f_to_c(self._ambient_f),
+            sim_time_s=DEFAULT_START_TIME_S + self._tick * DT_S,
         )
 
     def _on_outputs(self, outputs: TrackModelOutputs) -> None:

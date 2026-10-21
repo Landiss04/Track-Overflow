@@ -29,13 +29,16 @@ PAUSED_AFTER_MS = 500
 FAILURE_MODES: tuple[str, ...] = tuple(f.name for f in TrackFailure)
 
 
+SECONDS_PER_DAY = 86_400.0
+
+
 def c_to_f(temp_c: float) -> float:
     """Convert degrees Celsius to Fahrenheit."""
     return temp_c * 9.0 / 5.0 + 32.0
 
 
 def _clock(seconds: float) -> str:
-    # Elapsed simulated time as hh:mm:ss.
+    # Simulated time as hh:mm:ss.
     total = int(seconds)
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
@@ -95,8 +98,12 @@ class TrackModelState(QObject):
 
     @Property(str, notify=changed)
     def elapsed(self) -> str:
-        """Simulated time since start or reset."""
-        return _clock(self._snap.elapsed_s)
+        """Central clock time of day, or time stepped since reset."""
+        sim_time_s = self._snap.sim_time_s
+        if sim_time_s is None:
+            return _clock(self._snap.elapsed_s)
+        # Central clock: 24-hour time of day (D017).
+        return _clock(sim_time_s % SECONDS_PER_DAY)
 
     @Property(str, notify=changed)
     def ambient(self) -> str:

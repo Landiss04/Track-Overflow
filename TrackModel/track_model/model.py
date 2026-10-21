@@ -130,6 +130,7 @@ class TrackModel:
     _ambient_temp_c: float
     _ambient_override_c: float | None   # set in the Track Model UI
     _elapsed_s: float
+    _sim_time_s: float | None           # central clock, last step
     _outputs: TrackModelOutputs
 
     def __init__(self, config: TrackConfig) -> None:
@@ -150,6 +151,7 @@ class TrackModel:
         """Advance one tick. Rejects invalid input before changing state."""
         self._validate(dt, inputs)
         self._elapsed_s += dt
+        self._sim_time_s = inputs.sim_time_s
         self._apply_commands(inputs.controller)
         # A temperature set in the Track Model window wins over the one
         # the test UI sends, until the module restarts.
@@ -202,6 +204,7 @@ class TrackModel:
             },
             ambient_temp_c=self._ambient_temp_c,
             elapsed_s=self._elapsed_s,
+            sim_time_s=self._sim_time_s,
             outputs=self._outputs,
         )
 
@@ -521,6 +524,13 @@ class TrackModel:
             raise InvalidInputError(f"dt must be finite and positive: {dt}")
         if not is_finite(inputs.ambient_temp_c):
             raise InvalidInputError("ambient temperature is not finite")
+        if inputs.sim_time_s is not None and (
+            not is_finite(inputs.sim_time_s) or inputs.sim_time_s < 0.0
+        ):
+            raise InvalidInputError(
+                "simulation time must be finite and not negative: "
+                f"{inputs.sim_time_s}"
+            )
         cmd = inputs.controller
         for block_id, speed in cmd.commanded_speed_mps.items():
             self._require_block(block_id)
@@ -610,6 +620,7 @@ class TrackModel:
         self._ambient_temp_c = 0.0
         self._ambient_override_c = None
         self._elapsed_s = 0.0
+        self._sim_time_s = None
         self._outputs = TrackModelOutputs(
             controller=self._controller_outputs(),
             ctc=self._ctc_outputs(),
