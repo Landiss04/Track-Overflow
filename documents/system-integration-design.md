@@ -2,18 +2,27 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.12. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5). Not normative. |
+| **Status** | Draft v0.13. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5). Not normative. |
 | **Date** | 2026-10-21 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
-| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1); Phase 1 on the same branch, with the Train Controller of PR #44 (section 5.2); Phase 2 on the same branch, with the `track-model` branch merged, and Kevin Schillinger's operator window and Train Model review merged from the same branch (sections 5.1 and 5.3); Phase 3 on the same branch, with its tests and measurements of 2026-10-20 (section 5.4); Phase 4 on the same branch, with its tests, measurements and frozen build of 2026-10-20 (section 5.5); the answers of 2026-10-21 and the work on the same branch since `a55b8b9` (`0305d05` to `234c353`), with its tests of 2026-10-21 (section 5.5); `truth` after the promotion of 2026-10-19 (`84c7d44`) |
+| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1); Phase 1 on the same branch, with the Train Controller of PR #44 (section 5.2); Phase 2 on the same branch, with the `track-model` branch merged, and Kevin Schillinger's operator window and Train Model review merged from the same branch (sections 5.1 and 5.3); Phase 3 on the same branch, with its tests and measurements of 2026-10-20 (section 5.4); Phase 4 on the same branch, with its tests, measurements and frozen build of 2026-10-20 (section 5.5); the answers of 2026-10-21 and the work on the same branch since `a55b8b9` (`0305d05` to `460579b`), with its tests of 2026-10-21 (section 5.5); `truth` after the promotion of 2026-10-19 (`84c7d44`) |
 
 The `truth` branch is the authoritative record. This document cites it by shard path
 (`origin/truth:truth/<path>`, shortened below to the shard name) and does not override it.
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
 
-**Changes since v0.11**
+**Changes since v0.12**
+
+- The engine-detector repair `460579b` unblocks the complete Green round trip and
+  retirement at 57. Q-P4-8 and G-NEW-6 are resolved as implementation defects; Kevin's
+  acceptance of the extra steady-fall criterion remains pending (section 5.5).
+- Section 5.5 records the detector as built, its two known limits and the fresh
+  targeted checks of 2026-10-21. These checks are not a whole-suite rerun or a new
+  timing-budget measurement.
+
+**Changes in v0.12**
 
 - Kevin Schillinger answered the Phase 4 handover's questions on 2026-10-21 (R83 to
   R90, section 1.4). Q-P4-1, -2, -4, -5 and -6 are closed. Q-P4-3 is closed for the
@@ -29,8 +38,8 @@ choosing a value. Nothing here is filled in silently.
 - A window run waits for the dispatcher's Run in the CTC Office's window (R83; `68fcfa7`).
   Headless and `--stubs-only` runs press Run by themselves, and `--auto-run` does in a
   window run, for tests and demonstrations (section 5.5).
-- A new open question, Q-P4-8: a full-system round trip stops at Green 93, where the
-  Train Controller latches a false engine failure up the grade (G-NEW-6).
+- Q-P4-8 originally recorded a full-system round trip blocked at Green 93 by a
+  false engine-failure latch up the grade (G-NEW-6); repaired later in `460579b`.
 - The harness window test gives system mode eight seconds, so its start no longer
   races the time limit (section 5.5).
 - Gaps G-CLK-2, G-SIG-6 and G-SIG-7 are updated, and G-NEW-6 is new.
@@ -245,18 +254,19 @@ settled; Q1 to Q6 and Q8 to Q12 stay open there.
 
 The Phase 4 handover's questions (`documents/integration-handover-phase-4.md`, section
 4) were answered by Kevin Schillinger on 2026-10-21 (R83 to R90). Q-P4-7 stays open,
-and Q-P4-8 is new.
+and Q-P4-8 is resolved by `460579b`; the extra detector criterion awaits Kevin's
+acceptance.
 
 | # | Question | Who | Status | Blocks |
 |---|---|---|---|---|
 | Q-P4-1 | Should a normal run wait for the dispatcher's Run (D017), now that the CTC window has one? | Kevin, Landis | Answered (R83): the harness presses Run for headless and test runs only; the dispatcher presses it in the window otherwise. Done in `68fcfa7` (section 5.5). | none |
 | Q-P4-2 | For the graded Iteration 3 run, manual dispatch or the course schedule in automatic mode? | Landis, Kevin | Closed (R84): both are supported, and both are tested to work. | none |
-| Q-P4-3 | No train is ever retired in a real run: no "return to yard" action (R66), and the starter program never throws a switch onto the route to the yard (Phase 3 Q7). | Landis (CTC), Harry Tye (Track Controller) | Answered (R85, R86): the action and its button are in `4cc873b`; the starter sets each switch for the train coming in `234c353`. A full-system round trip still stops at Green 93 (Q-P4-8). | Full |
+| Q-P4-3 | No train is ever retired in a real run: no "return to yard" action (R66), and the starter program never throws a switch onto the route to the yard (Phase 3 Q7). | Landis (CTC), Harry Tye (Track Controller) | Answered (R85, R86): the action and its button are in `4cc873b`; the starter sets each switch for the train coming in `234c353`. The full Green round trip and retirement at 57 now pass after `460579b` (Q-P4-8). | none |
 | Q-P4-4 | Nothing slows a train before a block with a lower limit: G1 enters block 67 (40 km/h) at 18 m/s. | Landis (CTC), Train Controller owners | Answered (R87): the Train Controller slows the train once it is in the slower block; the CTC Office does not cap ahead. Already true (section 5.5). | none |
 | Q-P4-5 | The CTC Office keeps its own elapsed time and does not read the step's `sim_time_s`; a refused tick puts its schedule a tick behind for good. | Landis | Answered (R88): it uses the harness's clock, in `4cc873b`. | none |
 | Q-P4-6 | The test UI and `ctc_host._suggestions` key suggestions by train; the test UI names the next block's rows `next_...`. | Landis | Answered (R89): no further UI changes; the naming stays. | none |
 | Q-P4-7 | The Track Model sells tickets with probability 0.02 per station per tick, about 12 a simulated minute per station. Is that the intended rate? | Track Model owner | Open (R90). | none |
-| Q-P4-8 | A full-system round trip stops at Green 93. The Train Controller latches an engine failure while holding a steady 5 m/s up the grade: its detector wants the speed to rise within `ENGINE_DETECT_S` (2 s) while power is on, then applies the emergency brake (`Train-Ctrl_HW/train_ctrl`). | Train Controller owners (unassigned) | Open (G-NEW-6). | Full |
+| Q-P4-8 | The old detector falsely latched an engine failure at steady 5 m/s on Green 93, blocking the full round trip. | Train Controller owners (unassigned); Kevin for acceptance | Resolved by `460579b` (G-NEW-6): the full Green round trip and retirement at 57 pass. The extra steady-fall criterion is built but awaits Kevin's acceptance; see section 5.5 and `Train-Ctrl_HW/OPEN_ISSUES.md` #26. | none |
 
 ### 1.6 Questions for the Track Controller owners
 
@@ -1016,10 +1026,11 @@ same events and seven exits of code 0.
 - **The CTC window's header** shows the dispatcher's Run/Pause and speed, not whether
   the harness clock is running; it also waits for every module and for a late reply.
   The harness window gives the hold reason.
-- **No train is retired in a full-system run yet.** The "return to yard" action and
-  the starter's switches are built (R85, R86), but a round trip stops at Green 93, where
-  the Train Controller latches a false engine failure (Q-P4-8). Iteration 3 ends at a
-  station.
+- **The full Green round trip and retirement at 57 pass.** The "return to yard"
+  action and starter switches (R85, R86), followed by the engine-detector repair
+  `460579b`, unblock Q-P4-8. The extra steady-fall criterion still awaits Kevin's
+  acceptance; the successful one-train run does not settle the starter's follower
+  or vital-lock questions.
 - **Speed at a lower limit ahead:** G1 enters block 67 (40 km/h) at 18 m/s, and the
   Train Controller slows it there (R87).
 - **Red Line:** waits for the Track Controller HW (Phase 5). Its reports will join the
@@ -1082,8 +1093,8 @@ the Train Model is named.
   The vital layer is unchanged. 58 and 62 stay normal: no route enters the yard. The
   harness's `ReturnToYardTest` (5 tests, about 140 s, run only with
   `TRACK_OVERFLOW_ROUND_TRIP=1`) runs a scheduled Green run round the line to 57. It
-  fails today at Green 93 (Q-P4-8); with the Train Controller's engine detector held
-  off, it passes.
+  initially failed at Green 93 (Q-P4-8); holding the old engine detector off isolated
+  that defect. With `460579b`, all five tests pass with the detector enabled.
 - **The harness window test** (`common/harness/tests/test_harness_window.py`). System
   mode ran for two seconds from launch, and seven real modules take about two seconds
   to be ready, so about one run in three stopped before `ALL_READY`. System mode now
@@ -1100,8 +1111,30 @@ the Train Model is named.
   dropped but no longer logged as `TIME_SLIPPED`: nothing was behind. Tested in
   `test_harness_faults.py` (`StopWithTicksOwedTest`).
 
-Tests on 2026-10-21, offscreen, in a Linux cloud container (Python 3.13, PySide6
-6.11.2): `common/harness/tests` 150 passed and 5 skipped (`ReturnToYardTest`), 495
+**Engine detection as built (`460579b`).** The detector never latches a new engine
+failure while speed is within 0.05 m/s of target. Otherwise it requires a steady fall
+of more than 0.05 m/s over a 6 s simulation-time window, with power commanded above
+zero and no service or emergency brake commanded or reported throughout. It compares
+half-second speed means: every mean must be within 10% of the total fall of the
+straight line from the first to the last. This extra shape check prevents the
+recoverable Green 7 grade sag from latching; it is an implementation choice awaiting
+Kevin's acceptance, not an approved rule. See `Train-Ctrl_HW/OPEN_ISSUES.md` #26 and
+`truth/_inbox/claude/quirky-fermi-sickg4/20261021-1536-engine-failure-detection.md`.
+
+Two known limits remain: a train at a stand with a dead engine is not flagged because
+its speed never falls; a heavily loaded train that cannot hold speed on Green 7's
+5 % grade is flagged. Neither limit is settled by completing the one-train round trip.
+
+Fresh targeted verification on 2026-10-21, independently rerun by the orchestrator in
+Python 3.14.4 / PySide6 6.11.2 with `QT_QPA_PLATFORM=offscreen`: 258 passed and 66
+subtests across CTC, Track Controller SW, engine/harness-drive, harness edges/faults/
+system and the opt-in round trip. `ReturnToYardTest` passed all five in 38.95 s with
+`TRACK_OVERFLOW_ROUND_TRIP=1`; the earlier environment took about 140 s. These are
+selected checks, not a whole-suite rerun or a new timing-budget measurement; targeted
+test files and results are in `documents/integration-summary.md`.
+
+Historical tests before `460579b`, on 2026-10-21, offscreen, in a Linux cloud container
+(Python 3.13, PySide6 6.11.2): `common/harness/tests` 150 passed and 5 skipped (`ReturnToYardTest`), 495
 subtests; `CTC-Office/tests` 259; `TrackCtrlSW/tests` 213; `Train-Ctrl_HW/tests` 12.
 
 ### 5.4 Phase 3 as built [C]
@@ -1672,7 +1705,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-SIG-3 | Resolved (R7, R20, R48) | One suggestion per train, naming the block. Only the per-train modules need the train ID, and they get it from the new-train event; the harness drops it on the way to the Track Controller. Built in Phase 3 (`wayside_edges.ctc_to_track_controller`), fed by a scripted CTC Office (section 5.4). Built in Phase 4: the CTC Office's own suggestions, for the train's block and the next one (R49; `9c440d6`), reach the Track Controller over that edge (section 5.5). | signal owner CTC Office |
 | G-SIG-4 | Closed (R21) | Track Controller → CTC Office reports. The team ruled it stale. The crossing spelling difference (`"active"` against a bool) falls under R17 and the mappings. | none |
 | G-SIG-5 | Resolved (R8, R44, R70, R71) | A 2-D array, gated per line. A wayside is ready when its database and PLC program are loaded by hand, every wayside is reported from startup, and readiness never holds the clock ([P] `track-controller-ready`). Built in Phase 3 for the SW variant: each wayside's readiness reaches the CTC Office's input, the harness logs `WAYSIDES_NOT_READY` and `WAYSIDES_READY`, and the scripted CTC Office releases nothing until the line is ready (section 5.4). In Phase 4 the CTC Office itself sends nothing for a line, and refuses a dispatch on it, until the line is ready; the readiness events come from the Track Controller's own outputs (section 5.5). Left: the HW variant (Phase 5). | Track Controller owners |
-| G-SIG-6 | Resolved (R9, R35, R46, R47, R66) | The CTC Office creates a train when it releases it from the yard and retires it at the yard entry block; a "return to yard" action covers manual trains. Both go out as one-time events, applied exactly once, and the CTC Office's IDs are the train IDs ([P] D022, `identifiers`). Built in Phase 4: the CTC Office reports each release once in `new_trains` and each retirement in `retired_trains` (`9c440d6`), and the harness's roster applies each once (section 5.5). The "return to yard" action and its button (`4cc873b`, R85), and a starter program that sets the switches round to the yard entry block (`234c353`, R86), are built. Left: a full-system round trip stops at Green 93 (Q-P4-8, G-NEW-6), so no train is retired in a real run yet. | identifiers owner Kevin |
+| G-SIG-6 | Resolved (R9, R35, R46, R47, R66) | The CTC Office creates a train when it releases it from the yard and retires it at the yard entry block; a "return to yard" action covers manual trains. Both go out as one-time events, applied exactly once, and the CTC Office's IDs are the train IDs ([P] D022, `identifiers`). Built in Phase 4: the CTC Office reports each release once in `new_trains` and each retirement in `retired_trains` (`9c440d6`), and the harness's roster applies each once (section 5.5). The "return to yard" action and its button (`4cc873b`, R85), and a starter program that sets the switches round to the yard entry block (`234c353`, R86), are built. The full Green round trip now completes and retires at 57 after `460579b` (Q-P4-8, G-NEW-6); the opt-in five-test check passes. | identifiers owner Kevin |
 | G-SIG-7 | Resolved (R22, R52, R67) | A mapping from station to count, zeros optional, as sales since the last report, passed on exactly once. The Track Model does not load the Blue Line, so no unknown station reaches the CTC Office ([P] D023). Built in Phase 4: `track_edges.TicketSales` passes each sale on exactly once, across refused and missed ticks (section 5.5). Left: whether the Track Model's sales rate is intended (Q-P4-7, open by R90). | signal owner Track Model |
 | G-SIG-8 | Resolved (R33, R69) | A failed block reads as occupied, and the Track Controller reports it to the CTC Office as occupied, with no closure ([P] `block-occupancy`; pending D015). Built in Phase 3: a broken rail ahead stops the train short on the service brake, with no latch (section 5.4). | Track Controller owners |
 | G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Built in Phase 2: the Track Model's commanded speed is a float, and the harness maps doors open from the Train Model's door state, either door, without a new Train Model output (section 5.3). | signal owner Track Model; Train Model owner Kevin Schillinger |
@@ -1736,7 +1769,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-NEW-3 | Resolved (R60), built. Only the train whose input is invalid misses the tick ([P] `modules/train-model.md`). The Train Model's process steps each train on its own and names a rejected one (section 5.2). | `TrainModel/train_model/module_process.py` | Train Model owner Kevin Schillinger |
 | G-NEW-4 | Closed (R42). Gains are set in the UI, which runs on the host PC for the HW variant too. Each new train still waits for an engineer to set its gains before it moves. | Section 3.3 | Train Controller |
 | G-NEW-5 | Closed (R34). Red data for the Track Controller HW will be loaded later. | `TrackCtrlHw/data/` | Track Controller HW |
-| G-NEW-6 | Open (Q-P4-8). The Train Controller latches an engine failure while holding a steady speed up a grade: its detector wants the speed to rise within `ENGINE_DETECT_S` (2 s) while power is on. At Green 93 it applies the emergency brake, so no train gets past 93 in the full system, and none is retired. | `Train-Ctrl_HW/train_ctrl/constants.py`, `control.py`; `ReturnToYardTest` in `common/harness/tests/test_harness_train_loop.py` | Train Controller (unassigned) |
+| G-NEW-6 | Resolved by `460579b` (Q-P4-8). The old detector falsely latched at steady speed on Green 93. The full Green round trip now completes and retires at 57 (five opt-in tests pass). The extra steady-fall criterion awaits Kevin's acceptance, and the dead-engine-at-stand and heavily-loaded-grade limits remain (section 5.5). | `Train-Ctrl_HW/train_ctrl/constants.py`, `control.py`; `ReturnToYardTest` in `common/harness/tests/test_harness_train_loop.py` | Train Controller (unassigned) |
 
 ## 7. Truth proposals
 
@@ -1748,13 +1781,19 @@ the inbox. One is held: `20261020-0234-track-controller-ready-roster.md`, which 
 the Track Controller owners. Where this document tags a promoted proposal [P], read [T].
 The lists below are kept as the record of what was proposed.
 
-**In the inbox now (2026-10-21), seventeen proposals await review:**
+**In the inbox now (2026-10-21), eighteen proposals await review:**
 
 - `20261021-1445-lower-limit-ahead-train-controller-slows.md`, for
   `arbitration/lower-limit-ahead.md` (new): the CTC Office does not cap ahead of a
   lower limit, and the Train Controller slows the train once it is in the slower block
   (R87; `66aa348`);
 
+- `20261021-1536-engine-failure-detection.md`, for
+  `arbitration/engine-failure-detection.md` (new): Kevin's three rules of 2026-10-21
+  after the false latch at Green 93 (`91e8c0a`), covering target holding, falling
+  speed with power and no brake, and a longer detection window. Exact constants and
+  whether a recoverable sag may be distinguished by its shape are not specified;
+  this proposal does not approve the extra steady-fall criterion;
 - the held `20261020-0234-track-controller-ready-roster.md`;
 - `20261020-1858-D007-dwell-scheduled-by-ctc-enforced-by-train-controller.md`: D007
   updated for Kevin Schillinger's statement of 2026-10-20, "station dwell is scheduled

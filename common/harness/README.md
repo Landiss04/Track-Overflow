@@ -353,9 +353,13 @@ Phases 1 to 4 add three layers of tests:
   broken rail ahead, and the stop at DORMONT; and the driver's release of the emergency
   brake, with and without a passenger pull. It takes about 13 s. `ReturnToYardTest` (5
   tests, about 140 s) runs a scheduled Green run round the line to the yard entry block
-  57 and its retirement, only with `TRACK_OVERFLOW_ROUND_TRIP=1`. It fails today at
-  Green 93, where the Train Controller latches an engine failure up the grade
-  (Q-P4-8).
+  57 and its retirement, only with `TRACK_OVERFLOW_ROUND_TRIP=1`. It initially exposed
+  a false engine-failure latch at Green 93 (Q-P4-8), fixed in `460579b`. The full
+  round trip now passes with the detector enabled: five tests passed in 38.95 s in
+  the orchestrator's targeted check of 2026-10-21 (the earlier environment took about
+  140 s). The extra steady-fall detector criterion still awaits Kevin's acceptance;
+  its known limits are recorded in `documents/integration-handover-phase-4.md`
+  section 6. This is not a whole-suite rerun or a new timing-budget measurement.
 - `test_harness_system.py`: the real CTC Office, Track Controller SW, Track Model, Train
   Model and Train Controller processes and two stubs, with the starter programs loaded.
   It runs the Iteration 3 scenario: G1 dispatched from the yard to GLENBURY, placed at
