@@ -252,6 +252,61 @@ someone else's work says what is left for them.
   `ProgramView.qml` and `StatusView.qml`. The warning did not stop the signal
   working.
 
+- [ ] **E7. Starter program switch rule: a train can get back to the yard (Q7;
+  for the owners to review).** The starter threw a switch reverse only while a
+  train stood on its reverse leg in the same wayside, and wrote `SW_n := 0`
+  otherwise. Green 28 (`28-29; 150-28`, reverse leg 150 in GTC-06) and 76
+  (`76-77;77-101`, reverse leg 101 in GTC-05) never left normal, and the CTC
+  Office counts authority only up to a switch not set for the route, trailing
+  moves included: a train coming back round the line waited at 77, then at 150,
+  for good, and never reached the yard entry block 57. Changed on 2026-10-21 in
+  `track_ctrl/controller.py`, `track_ctrl/layout.py`:
+  - **Two new PLC inputs.** `SUG_n`: the CTC Office sends a suggestion for block
+    `n` (with no train in it, it is the next block of the train about to enter
+    it, truth `track-signal`). `REV_s`: switch `s` stands reverse as this
+    controller last drove it. Neither crosses the boundary; both are read from
+    what the module already has. Existing programs are unaffected.
+  - **The direction of travel.** Every controller carries its line's
+    `next_blocks` from the layout file, for the starter only.
+  - **The rule** (see the README, design decision 6): set each switch for the
+    train coming to its points, facing (`SUG_p AND NOT OCC_p AND OCC_f`) or
+    trailing off a one-way leg (`OCC_l`; and `SUG_l` where the leg is the block
+    the switch is listed on); stand for a way in the wayside cannot see (Green
+    28 stands reverse); hold the switch where it stands while its points are
+    occupied or trains come for both positions; normal in maintenance unless
+    held. The vital layer is unchanged.
+  - **The Green route, yard exit 63 round to 57:** switch 76 normal for 76 to 77
+    and reverse for 78 to 101; 85 normal for 85 to 86 and reverse for 100 to 85;
+    28 reverse for 150 to 28 and normal for 28 to 29; 12 normal for 13 to 12 and
+    reverse for 1 to 13. 58 and 62 stay normal: retirement is a stop at 57 with
+    authority 0 (D022), and no route enters the yard.
+  - **Left for the owners** (Harry Tye):
+    - The vital switch lock is on the block a switch is listed on. For Green 12,
+      58, 62 and 76 that is a leg, not the points (13, 57, 63, 77). The starter
+      now holds a switch while its points are occupied, but a program that does
+      not is not stopped by the vital layer, and a train on 76 locks switch 76
+      though it is not on it. A train about to enter 76 while another stands on
+      77 bound for 101 enters 76 with the switch reverse and waits there for good.
+      Locking on the points block as well would be more restrictive, not less;
+      moving the lock off the listed block would be less restrictive and would
+      clear that case. Not changed here.
+    - A way in from another wayside's block is not seen. Green's default
+      division has only one (150 to 28), which switch 28 stands for. Another
+      division can have more; a cross-wayside input (the neighbour's occupancy
+      of the leg) would serve them and is a boundary change.
+    - The Red Line runs both ways, so the starter cannot tell a train's
+      direction from occupancy there, and its switches stay normal.
+  - Tests: `tests/test_starter_switches.py` (18), `tests/test_layout.py` (+2);
+    harness `test_harness_train_loop.py` `ReturnToYardTest` (5, about 140 s,
+    run with `TRACK_OVERFLOW_ROUND_TRIP=1`): a scheduled Green run to DORMONT
+    and on round the line, retired once at 57.
+  - **Not this module's, and blocking the round trip today:** at Green 93 the
+    Train Controller latches an engine failure while holding a steady 5 m/s up
+    the grade (its detector wants the speed to rise within 2 s while power is
+    on) and applies the emergency brake, so no train gets past 93 in the full
+    system, with or without this change. With that detector held off, the round
+    trip passes; with the old starter it then stops at 77 for good.
+
 ---
 
 ## Already consistent

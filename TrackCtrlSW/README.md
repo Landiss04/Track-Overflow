@@ -279,9 +279,14 @@ SIG_12_R := FAULT_12 OR OCC_12
 AUTH_20  := NOT (OCC_19 OR OCC_21)
 ```
 
-A program can only name what its own controller has. The inputs are `OCC_n` and
-`CLOSED_n` for each block it owns, `MAINT`, and `FAULT_s` / `MOVING_s` for each
-switch. The outputs are `AUTH_n` for each block, `SW_s` for each switch,
+A program can only name what its own controller has. The inputs are `OCC_n`,
+`CLOSED_n` and `SUG_n` for each block it owns, `MAINT`, and `FAULT_s` /
+`MOVING_s` / `REV_s` for each switch. `SUG_n` is set while the CTC Office sends
+a suggestion for block `n`, whatever its value: a block with a suggestion and no
+train in it is the next block of the train about to enter it. `REV_s` is set
+while switch `s` stands reverse as the controller last drove it, the position the
+vital layer locks a switch under a train at (the Track Model's read-back arrives a
+tick later, and only feeds `MOVING_s`). The outputs are `AUTH_n` for each block, `SW_s` for each switch,
 `SIG_s_R` / `_O` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
 each crossing. Block numbers are the track layout's own, and a switch, its signal
 and a crossing are named by the block they are listed on. A starter program for
@@ -480,6 +485,39 @@ recorded here.
    different blocks and devices, so `default_program_source()` writes a working
    program against that controller's own signal names rather than shipping one
    fixed sample that would not compile elsewhere.
+
+   **Switches** are set for the train coming to them, from the track chart
+   (each block's `next_blocks`, which every controller carries for its whole
+   line) and what the wayside sees. A train comes to a switch's points from its
+   fixed side (facing) and takes the one leg it may run on to, or comes off a
+   leg (trailing) and needs that leg. The CTC Office counts authority only up to
+   a switch not set for the route, trailing moves included, so the switch is set
+   first:
+
+   - facing: the train is on the fixed-side block and the points block is
+     preloaded (`SUG_p AND NOT OCC_p AND OCC_f`);
+   - trailing, off a one-way leg: the train is on the leg (`OCC_l`). Where the
+     leg is the block the switch is listed on, a train in it locks the switch,
+     so the train about to enter it counts too (`SUG_l`, with the block before
+     it occupied where that block is the wayside's own);
+   - a way in through another wayside's block cannot be seen, so the switch
+     stands for it while no train is seen: Green 28 stands reverse for a train
+     coming off 150, and goes normal for a train on 27 about to enter 28.
+
+   A switch is held where it stands (`REV_s`) while its points block is occupied,
+   whichever block the switch is listed on (Green 12's points are 13, Green 76's
+   are 77), and while trains come for both positions. In maintenance it is
+   normal unless held, as before; the CTC Office's command or a hand-set position
+   drives it then. The yard is not routed (D022): a train is retired stopped at
+   the yard entry block, so switches 58 and 62 stay normal. With these, a Green
+   train runs from the yard round the whole line back to 57
+   (`common/harness/tests/test_harness_train_loop.py`, `ReturnToYardTest`, run
+   with `TRACK_OVERFLOW_ROUND_TRIP=1`; today the Train Controller's engine
+   detector stops the train at 93 first, see `INTEGRATION_DISCREPANCIES.md` E7).
+   Where the layout gives no direction, or the points are another wayside's, the
+   switch is held where it stands. On the Red Line, which runs both ways, the
+   starter cannot tell a train's direction from occupancy, so its switches stay
+   normal.
 7. **The world and the clock live in the test UI.** The module is stepped from
    outside (D006), so the stand-in trains, the CTC's suggestions and the clock
    moved out of it into `track_ctrl_test/`. Integrating means the harness calls
@@ -554,6 +592,12 @@ recorded here.
 - Under the starter program, two trains in adjacent blocks hold each other for good.
   The starter cannot tell direction; the CTC Office's authority is
   to keep trains apart.
+- Under the starter program, a train about to enter Green 76 while another stands
+  on 77 bound for 101 enters 76 with switch 76 reverse, and the switch then locks
+  under it (the vital lock is on the block a switch is listed on, 76, not on its
+  points, 77): it waits for good. The train coming to 76 is on 75, another
+  wayside's block. The CTC Office's two-way zone (77 to 100) should keep
+  scheduled runs from meeting there; see `INTEGRATION_DISCREPANCIES.md` E7.
 18. **Lists reach QML as `{"rows": [...]}`.** A list property read from QML is a
     live reference: every `.length` or element access inside `filter` calls the
     Python getter again, once per element. A view that filtered a 30-row list in

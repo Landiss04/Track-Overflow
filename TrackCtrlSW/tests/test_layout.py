@@ -88,6 +88,19 @@ class RealLayoutTests(unittest.TestCase):
         self.assertEqual((yard.point, yard.normal_end, yard.reverse_end),
                          ("57", "58", "yard"))
 
+    def test_the_direction_of_travel_is_read_and_shared_by_the_line(
+        self,
+    ) -> None:
+        blocks = {b.block_id: b for b in load_layout_file(GREEN).blocks}
+        self.assertEqual(blocks["77"].next_blocks, ("78", "101"))
+        self.assertEqual(blocks["57"].next_blocks, ("58", "yard"))
+        green = build_default_system()[0]
+        # Every wayside carries the whole line's, for its starter.
+        first = green.controllers[0]
+        self.assertFalse(first.owns("150"))
+        self.assertEqual(first.next_blocks("150"), ("28",))
+        self.assertEqual(first.next_blocks("999"), ())
+
     def test_the_default_system_is_green_and_red_divided_into_waysides(self) -> None:
         green, red = build_default_system()
         self.assertEqual((green.name, red.name), ("Green Line", "Red Line"))
@@ -195,6 +208,8 @@ class RefusalTests(unittest.TestCase):
         self.refused(with_block(length_m=-5), "above zero")
         self.refused(with_block(section=""), "section")
         self.refused(with_block(infrastructure="oops"), "infrastructure")
+        self.refused(with_block(next_blocks=2), "next_blocks")
+        self.refused(with_block(next_blocks=["two"]), "next_blocks")
 
     def test_a_duplicate_block_is_refused(self) -> None:
         layout = copy.deepcopy(tiny())

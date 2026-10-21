@@ -22,6 +22,11 @@ as the layout does: ``"12-13; 1-13"`` joins 12 to 13 when normal and 1
 to 13 when reversed. A string with one connection, such as
 ``"57-yard"``, names only the diverging route to the yard; the normal
 route is the main line through the block the switch is listed on.
+
+Each block's ``next_blocks`` gives the direction of travel: the blocks
+a train in it may move on to. It is kept with the blocks, and every
+controller carries the whole line's, so a starter program can tell
+which way a train comes to a switch (``controller.default_program_source``).
 """
 
 from __future__ import annotations
@@ -70,6 +75,10 @@ class Block:
     #: The posted limit exactly as the layout gives it, in m/s.
     speed_limit_mps: float
     station: str | None = None
+    #: The blocks a train in this block may move on to, as the layout
+    #: file's ``next_blocks`` lists them (block numbers, or ``yard``).
+    #: Empty where the file gives no direction of travel.
+    next_blocks: tuple[str, ...] = ()
 
     @property
     def label(self) -> str:
@@ -151,10 +160,26 @@ class ControllerConfig:
     switches: tuple[Switch, ...] = ()
     signals: tuple[WaysideSignal, ...] = ()
     crossings: tuple[Crossing, ...] = ()
+    #: Every block of the line with the blocks a train in it may move
+    #: on to (``Block.next_blocks``), for the whole line and not only
+    #: this territory: the track chart a starter program is written
+    #: from. Fixed by the layout; never an input.
+    line_next_blocks: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     def owns(self, block_id: str) -> bool:
         """Return whether this controller is responsible for a block."""
         return block_id in self.block_ids
+
+    def next_blocks(self, block_id: str) -> tuple[str, ...]:
+        """Where a train in ``block_id`` may move on to, per the layout.
+
+        Empty for a block the layout gives no direction for, or one not
+        on this line.
+        """
+        for candidate, after in self.line_next_blocks:
+            if candidate == block_id:
+                return after
+        return ()
 
 
 @dataclass(frozen=True)
@@ -308,6 +333,8 @@ def parse_layout(data: Any, source: str = "layout") -> ParsedLayout:
                 grade_percent=float(grade),
                 speed_limit_mps=limit_kmh / _KMH_PER_MPS,
                 station=station if isinstance(station, str) else None,
+                next_blocks=_next_blocks(raw.get("next_blocks"),
+                                         block_id, source),
             )
         )
         if "switch" in infrastructure:
@@ -334,6 +361,26 @@ def parse_layout(data: Any, source: str = "layout") -> ParsedLayout:
         switches=switches,
         crossing_blocks=tuple(sorted(crossings, key=int)),
     )
+
+
+def _next_blocks(value: Any, block_id: str, source: str) -> tuple[str, ...]:
+    """Read a block's ``next_blocks``: block numbers, or the yard."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise LayoutError(f"{source}: block {block_id}: next_blocks must "
+                          "be a list.")
+    found: list[str] = []
+    for entry in value:
+        if isinstance(entry, str) and entry.strip().lower() == YARD:
+            found.append(YARD)
+        elif isinstance(entry, int) and not isinstance(entry, bool):
+            found.append(str(entry))
+        else:
+            raise LayoutError(f"{source}: block {block_id}: next_blocks "
+                              f"lists {entry!r}, neither a block number "
+                              "nor the yard.")
+    return tuple(found)
 
 
 def _positive(value: Any, name: str, block_id: str, source: str) -> float:
@@ -442,6 +489,9 @@ def build_line(parsed: ParsedLayout, controller_count: int) -> LineLayout:
         )
 
     prefix = parsed.key[:1].upper()
+    directions = tuple(
+        (block.block_id, block.next_blocks) for block in parsed.blocks
+    )
     switches = {switch.block_id: switch for switch in parsed.switches}
     crossing_blocks = set(parsed.crossing_blocks)
     configs: list[ControllerConfig] = []
@@ -483,6 +533,7 @@ def build_line(parsed: ParsedLayout, controller_count: int) -> LineLayout:
                     for block_id in owned_ids
                     if block_id in crossing_blocks
                 ),
+                line_next_blocks=directions,
             )
         )
     return LineLayout(

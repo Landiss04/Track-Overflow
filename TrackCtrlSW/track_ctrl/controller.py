@@ -26,7 +26,7 @@ from typing import Mapping
 
 from track_ctrl import vital
 from track_ctrl.display import format_mph
-from track_ctrl.layout import Block, ControllerConfig
+from track_ctrl.layout import YARD, Block, ControllerConfig, Switch
 from track_ctrl.plc import (
     SEVERITY_ERROR,
     SEVERITY_WARNING,
@@ -165,9 +165,11 @@ class TrackController:
         for block in self.blocks:
             names.add(f"OCC_{block.block_id}")
             names.add(f"CLOSED_{block.block_id}")
+            names.add(f"SUG_{block.block_id}")
         for switch in self.config.switches:
             names.add(f"FAULT_{switch.switch_id}")
             names.add(f"MOVING_{switch.switch_id}")
+            names.add(f"REV_{switch.switch_id}")
         return frozenset(names)
 
     def output_names(self) -> tuple[str, ...]:
@@ -306,6 +308,14 @@ class TrackController:
         the block number: ``OCC_12``, ``CLOSED_12``. Numbering the
         signals is what lets a declaration span a run of blocks as
         ``OCC_1..20``.
+
+        ``SUG_12`` is set while the CTC Office sends a suggestion for
+        block 12, whatever its value. A block with a suggestion and no
+        train in it is the next block of the train about to enter it
+        (truth ``signals/track-signal``). ``REV_s`` is set while switch
+        ``s`` stands reverse as this controller last drove it: the
+        position the vital layer locks a switch under a train at. It is
+        not the Track Model's read-back, which arrives a tick later.
         """
         image: dict[str, bool] = {}
         for block in self.blocks:
@@ -315,11 +325,17 @@ class TrackController:
             image[f"CLOSED_{block.block_id}"] = inputs.closed.get(
                 block.block_id, False
             )
+            image[f"SUG_{block.block_id}"] = (
+                block.block_id in inputs.suggestions
+            )
         for switch in self.config.switches:
             image[f"FAULT_{switch.switch_id}"] = inputs.switch_fault.get(
                 switch.switch_id, False
             )
             image[f"MOVING_{switch.switch_id}"] = inputs.switch_moving.get(
+                switch.switch_id, False
+            )
+            image[f"REV_{switch.switch_id}"] = self.outputs.switches.get(
                 switch.switch_id, False
             )
         image["MAINT"] = inputs.maintenance
@@ -594,6 +610,144 @@ def _declare(keyword: str, prefix: str, numbers: list[int]) -> list[str]:
     return [f"{keyword:<8} {name}" for name in names]
 
 
+def _switch_rule(
+    config: ControllerConfig, switch: Switch, owned: set[int]
+) -> list[str]:
+    """The starter's lines for one switch: set it for the train coming.
+
+    A train comes to a switch's points from its fixed side (facing) or
+    from one of its legs (trailing). From the track chart, each way in
+    needs one position: a facing train takes the one leg it may run on
+    to, a trailing train needs the leg it comes from. The CTC Office
+    counts authority only up to a switch not set for the route, trailing
+    moves included (``arbitration/authority-stops-before-obstruction``),
+    so the wayside sets it first, from what it sees of the train:
+
+    - facing, from the fixed side: the train is on that block and the
+      CTC Office has preloaded the points block, its next block
+      (``SUG_p AND NOT OCC_p AND OCC_f``);
+    - trailing, from a one-way leg: the train is on the leg (``OCC_l``).
+      Where the leg is the block the switch is listed on, a train in it
+      locks the switch, so the train about to enter it is seen too: the
+      leg is preloaded (``SUG_l``), and where the block before it is
+      this wayside's, that block is occupied.
+
+    A way in this wayside cannot see (its block is another wayside's)
+    is what the switch stands for while no train is seen. The switch is
+    held where it stands while its points are occupied and while trains
+    come for both positions. Otherwise it is normal in maintenance, as
+    before: the CTC Office's command or the programmer's hand-set
+    position drives it then (``vital.supervise``). The yard is not routed
+    (D022): a train is retired stopped at the yard entry block, so no
+    way in or out of it is set for.
+    """
+    sid = switch.switch_id
+    out = switch.output_signal
+    point = switch.point
+    held = [f"{out} := REV_{sid}"]
+    legs = {
+        end: position
+        for end, position in ((switch.normal_end, False),
+                              (switch.reverse_end, True))
+        if end != YARD
+    }
+
+    def after(block_id: str) -> set[str]:
+        return set(config.next_blocks(block_id)) - {YARD}
+
+    def mine(block_id: str) -> bool:
+        return block_id.isdigit() and int(block_id) in owned
+
+    title = (
+        f"// Switch {sid}: points at {point}, normal to "
+        f"{switch.normal_end}, reverse to {switch.reverse_end}."
+    )
+    if not mine(point):
+        return [title, f"// Block {point} is another wayside's, so a train "
+                       "on the points cannot be", "// seen: held where it "
+                       "stands."] + held
+    if not after(point):
+        return [title, "// The layout gives no direction of travel: held "
+                       "where it stands."] + held
+    beside = (
+        after(point)
+        | {b for b, nexts in config.line_next_blocks if point in nexts}
+    ) - set(legs)
+    if len(beside) != 1:
+        return [title, "// No one fixed side to the points: held where "
+                       "it stands."] + held
+    fixed = beside.pop()
+
+    wants: dict[bool, list[str]] = {False: [], True: []}
+    unseen: set[bool] = set()
+    if point in after(fixed):
+        exits = [leg for leg in legs if leg in after(point)]
+        if len(exits) == 1:
+            position = legs[exits[0]]
+            if mine(fixed):
+                wants[position].append(
+                    f"SUG_{point} AND NOT OCC_{point} AND OCC_{fixed}"
+                )
+            else:
+                unseen.add(position)
+    if fixed in after(point):
+        for leg, position in legs.items():
+            if point not in after(leg):
+                continue
+            if mine(leg) and after(leg) == {point}:
+                wants[position].append(_coming_off(config, switch, leg))
+            else:
+                unseen.add(position)
+    rest_reverse = unseen == {True}
+
+    def term(position: bool) -> str:
+        found = wants[position]
+        if not found:
+            return "0"
+        if len(found) == 1:
+            return found[0]
+        return " OR ".join(f"({each})" for each in found)
+
+    name = {False: "normal", True: "reverse"}
+    lines = [title]
+    lines.append(
+        f"// Stands {name[rest_reverse]} until a train is seen coming "
+        "for the other position;"
+    )
+    lines.append(
+        f"// held while {point} is occupied or trains come for both; "
+        "normal in maintenance."
+    )
+    if unseen - {rest_reverse}:
+        lines.append(
+            "// A train coming from another wayside's block for "
+            f"{name[not rest_reverse]} is not seen."
+        )
+    lines += [
+        f"WANT_N_{sid} := {term(False)}",
+        f"WANT_R_{sid} := {term(True)}",
+        f"HOLD_{sid} := OCC_{point} OR (WANT_N_{sid} AND WANT_R_{sid})",
+    ]
+    move = f"NOT WANT_N_{sid}" if rest_reverse else f"WANT_R_{sid}"
+    lines.append(
+        f"{out} := (HOLD_{sid} AND REV_{sid}) OR "
+        f"(NOT HOLD_{sid} AND NOT MAINT AND {move})"
+    )
+    return lines
+
+
+def _coming_off(config: ControllerConfig, switch: Switch, leg: str) -> str:
+    """The bits that show a train coming to the points off ``leg``."""
+    if leg != switch.block_id:
+        return f"OCC_{leg}"
+    before = [
+        block for block, nexts in config.line_next_blocks if leg in nexts
+    ]
+    if len(before) == 1 and config.owns(before[0]):
+        return f"OCC_{leg} OR (SUG_{leg} AND OCC_{before[0]})"
+    return f"OCC_{leg} OR SUG_{leg}"
+
+
 def default_program_source(controller: TrackController) -> str:
     """Write a starter program for a controller from its own layout.
 
@@ -621,10 +775,12 @@ def default_program_source(controller: TrackController) -> str:
     ]
     lines += _declare("VAR_IN", "OCC", numbers)
     lines += _declare("VAR_IN", "CLOSED", numbers)
+    if config.switches:
+        lines += _declare("VAR_IN", "SUG", numbers)
     lines.append("VAR_IN   MAINT")
     if config.switches:
         lines.append("VAR_IN   " + " ".join(
-            f"FAULT_{s.switch_id} MOVING_{s.switch_id}"
+            f"FAULT_{s.switch_id} MOVING_{s.switch_id} REV_{s.switch_id}"
             for s in config.switches
         ))
     lines += _declare("VAR_OUT", "AUTH", numbers)
@@ -640,30 +796,8 @@ def default_program_source(controller: TrackController) -> str:
         ))
 
     for switch in config.switches:
-        sid = switch.switch_id
-        point = int(switch.block_id)
-        lines += ["", f"// Switch {sid}: hold normal. Throw reverse only "
-                      "while a train waits on the"]
-        lines.append("// reverse leg and the main line is clear, and "
-                     "never in maintenance mode.")
-        leg = int(switch.reverse_end) if switch.reverse_end.isdigit() else -1
-        if leg in owned:
-            clear = [f"NOT OCC_{point}"]
-            if (
-                switch.normal_end.isdigit()
-                and int(switch.normal_end) in owned
-                and int(switch.normal_end) != point
-            ):
-                clear.append(f"NOT OCC_{switch.normal_end}")
-            lines.append(
-                f"{switch.output_signal} := OCC_{leg} AND "
-                + " AND ".join(clear) + " AND NOT MAINT"
-            )
-        else:
-            lines.append(
-                f"{switch.output_signal} := 0    // the reverse leg "
-                "leaves this wayside"
-            )
+        lines.append("")
+        lines += _switch_rule(config, switch, owned)
 
     for signal in config.signals:
         sid = signal.signal_id

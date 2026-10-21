@@ -38,6 +38,7 @@ Run from the repository root with
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
 from collections.abc import Callable, Mapping, Sequence
@@ -69,6 +70,7 @@ from ctc.module_process import (  # noqa: E402
     Dispatch,
     layout_files,
 )
+from ctc.schedule import parse_schedule  # noqa: E402
 from ctc.track_layout import load_layout  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
 from track_ctrl.module_process import (  # noqa: E402
@@ -481,6 +483,183 @@ class StationStopTest(unittest.TestCase):
         ]
         self.assertEqual(occupied, [DORMONT])
         self.assertEqual(self.loop.followed, (DORMONT,))
+
+
+#: The whole Green Line from the yard exit block round to the yard
+#: entry block, as the track runs it (``next_blocks``): out through the
+#: loop at 85, back over 85 to 77, on to 101 and round to 150, over 28
+#: down to 1, and over 13 up to 57.
+GREEN_ROUND = [str(number) for number in (
+    *range(63, 101), *range(85, 76, -1), *range(101, 151),
+    *range(28, 0, -1), *range(13, 58),
+)]
+
+#: Set to 1 to run the round trip back to the yard, which is slow.
+ROUND_TRIP_OPTION = "TRACK_OVERFLOW_ROUND_TRIP"
+
+#: Each switch G1 runs through, by its points block.
+POINTS = {"12": "13", "28": "28", "76": "77", "85": "85"}
+
+#: The yard entry block, where a train sent back to the yard is retired
+#: (truth D022).
+YARD_ENTRY = "57"
+
+#: One scheduled Green run, due at once, stopping at DORMONT only
+#: (``ctc.schedule``, the ``utils/schedule_v4.json`` form; D020).
+TO_DORMONT_AND_BACK = {
+    "time_unit": "s",
+    "lines": [{"line": "Green", "trains": [{
+        "train_id": "1",
+        "stops": [{"block_id": DORMONT, "station": "DORMONT",
+                   "arrival_s": 0}],
+    }]}],
+}
+
+
+@unittest.skipUnless(
+    os.environ.get(ROUND_TRIP_OPTION) == "1",
+    f"about 140 s of real time; set {ROUND_TRIP_OPTION}=1 to run",
+)
+class ReturnToYardTest(unittest.TestCase):
+    """A scheduled run to DORMONT, then round the line back to the yard.
+
+    The CTC Office runs the schedule in automatic mode (D020): it
+    releases G1 (D022), stops it at DORMONT for the dwell, then sends it
+    to the yard entry block, 57. The way there is the whole line, over
+    switches 85, 76, 28 and 12 in both positions, set by the Track
+    Controller's starter programs; the CTC Office counts authority only
+    up to a switch not set for the route. Stopped at 57 with no
+    authority, G1 is retired, once.
+
+    About 2,100 s of simulated time, 21,000 ticks: some 140 s, so it
+    runs only when asked (``TRACK_OVERFLOW_ROUND_TRIP=1``). It fails
+    today at block 93, before any of those switches: on that grade the
+    Train Controller latches an engine failure at a steady 5 m/s and
+    applies the emergency brake (its engine detector, not the track).
+    With that detector held off, all five tests pass.
+    """
+
+    loop: _Loop
+    # The blocks the Train Model reported G1 in, as they changed.
+    blocks: list[str]
+    # For each switch, each time G1 was on its points: every position
+    # the Track Controller commanded it to meanwhile.
+    on_points: dict[str, list[set[str]]]
+    # The yard switches' positions while G1 was on the line.
+    yard_switches: set[str]
+    # The tick G1 stood at DORMONT with its doors open, and was retired.
+    at_dormont: int
+    retired_at: int
+    # G1 as last reported before it was retired.
+    last_report: dict[str, Any]
+    # Whether the Train Controller ever latched these, while G1 ran.
+    emergency: bool
+    pickup_failure: bool
+    retired_events: list[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        loop = _Loop(dispatches=())
+        loop.ctc.load_schedule(parse_schedule(TO_DORMONT_AND_BACK))
+        loop.ctc_host.setAutomaticMode(True)
+        cls.loop = loop
+        cls.blocks = []
+        cls.on_points = {switch: [] for switch in POINTS}
+        cls.yard_switches = set()
+        cls.at_dormont = 0
+        cls.retired_events = []
+        cls.emergency = cls.pickup_failure = False
+        cls.last_report = {}
+
+        def removed() -> bool:
+            return any(name == "TRAIN_REMOVED" for _, name, _ in loop.events)
+
+        def watch() -> bool:
+            cls.retired_events += [
+                item["train_id"]
+                for item in loop.outputs[CTC_OFFICE].get("retired_trains", [])
+            ]
+            if removed():
+                return True
+            if not (loop.has(TRAIN_MODEL) and loop.has(TRAIN_CONTROLLER_SW)):
+                return False
+            here = loop.block
+            cls.last_report = loop.report
+            entered = not cls.blocks or cls.blocks[-1] != here
+            if entered:
+                cls.blocks.append(here)
+            if (not cls.at_dormont and here == DORMONT
+                    and loop.at_rest_with_doors_open):
+                cls.at_dormont = loop.tick
+            for entry in loop.outputs[TRACK_CONTROLLER_SW]["track_model"][
+                    "switch_commands"]:
+                switch = entry["block"]["block_id"]
+                if switch in ("58", "62"):
+                    cls.yard_switches.add(entry["value"])
+                elif POINTS.get(switch) == here:
+                    if entered:
+                        cls.on_points[switch].append(set())
+                    cls.on_points[switch][-1].add(entry["value"])
+            core = loop.controller_fleet.get("G1")
+            cls.emergency |= core.state.emergency_brake
+            cls.pickup_failure |= core.state.failures["signal_pickup"]
+            return False
+
+        if not loop.run_until(watch, limit_s=4_000.0):
+            raise AssertionError(
+                f"G1 was never retired: at tick {loop.tick} it was in "
+                f"block {cls.blocks[-1:]}, {loop.ctc.snapshot().authorities}"
+            )
+        cls.retired_at = loop.tick
+        # Long enough for any second retirement to show.
+        loop.run_until(lambda: bool(watch()) and False, limit_s=5.0)
+
+    def test_it_stops_at_its_scheduled_station(self) -> None:
+        self.assertGreater(self.at_dormont, 0)
+
+    def test_it_runs_the_whole_line_round_to_the_yard_entry(self) -> None:
+        self.assertEqual(self.blocks, GREEN_ROUND)
+
+    def test_each_switch_is_set_for_it_and_held_on_the_points(
+        self,
+    ) -> None:
+        # G1 is on each switch's points twice, once each way; the switch
+        # stands for its way through, and does not move while it is on
+        # them.
+        self.assertEqual(self.on_points, {
+            # 76 -> 77 -> 78, then 78 -> 77 -> 101.
+            "76": [{"normal"}, {"reverse"}],
+            # 84 -> 85 -> 86, then 100 -> 85 -> 84.
+            "85": [{"normal"}, {"reverse"}],
+            # 150 -> 28 -> 27, then 27 -> 28 -> 29.
+            "28": [{"reverse"}, {"normal"}],
+            # 14 -> 13 -> 12, then 1 -> 13 -> 14.
+            "12": [{"normal"}, {"reverse"}],
+        })
+        # The yard is never routed (D022).
+        self.assertEqual(self.yard_switches, {"normal"})
+
+    def test_it_is_retired_once_stopped_at_57(self) -> None:
+        self.assertEqual(self.blocks[-1], YARD_ENTRY)
+        self.assertLess(abs(self.last_report["actual_speed_mps"]),
+                        STANDSTILL_MPS)
+        self.assertEqual(self.last_report["authority_blocks"], 0)
+        self.assertEqual(self.retired_events, ["G1"])
+        removed = [detail for _, name, detail in self.loop.events
+                   if name == "TRAIN_REMOVED"]
+        self.assertEqual(removed, ["G1"])
+        self.assertEqual(self.loop.track.snapshot().trains, ())
+        self.assertNotIn(
+            "TRAIN_LEFT_TRACK", [event[1] for event in self.loop.events]
+        )
+        (run,) = self.loop.ctc.snapshot().scheduled_runs
+        self.assertEqual(run.status, "done")
+
+    def test_no_emergency_brake_and_no_pickup_failure(self) -> None:
+        self.assertFalse(self.emergency)
+        self.assertFalse(self.pickup_failure)
+        self.assertNotIn("PROTOCOL_ERROR",
+                         [event[1] for event in self.loop.events])
 
 
 class ReadinessTest(unittest.TestCase):
