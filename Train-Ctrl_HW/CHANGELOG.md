@@ -74,6 +74,9 @@ the 2026-10-21 changes.
   uncommissioned train can pick their way back (2026-10-21).
 - Light and door tiles always act when pressed: a state the bench
   published no longer locks them (2026-10-21).
+- Nothing is cut off (2026-10-21): the announcement button wraps to two
+  lines and reads "Sending automatically" in Automatic; the Stop panel's
+  badge reads "Brake fault", leaving its title room.
 - Style-guide fixes: signal-head, scrim and readout colours on tokens; bench bar
   on `radius_lg`. The service brake stays amber (`brake_service`, a pending
   token) by decision.
@@ -99,6 +102,9 @@ the 2026-10-21 changes.
 - **`at_station`** row (2026-10-21): at a station the beacon rows are heard
   every tick; otherwise once, when one of them is sent.
 - Spawning a train no longer switches the bench or the console to it.
+- `at_station` sits under `authority_blocks`; **Set time** beside the
+  bench clock sets it to a time of day (2026-10-21). The status line and
+  the announcement output wrap instead of being cut off.
 - Outputs panel adds the Announcement row; values at 18 px.
 
 ### Self-check (`check.py`)
@@ -109,6 +115,11 @@ interface and bench conversion, bad input leaving nothing applied, the bench
 sending only edited rows, the roster signalling only on change, and the train
 picker's search. The 10× check waits on the speed gain instead of a 300 ms
 stopwatch (it failed 4 of 4 runs on Windows before).
+
+2026-10-21 (late afternoon): every checkpoint scans both windows for
+text cut off (elided, or past the window edge) and fails on any; it found
+seven on `5b99075`. New checks for the bench time setter, including noon
+then 18:00 turning the lights on.
 
 2026-10-21 (afternoon): new checks for a light tile answering after a
 bench light edit, underground lights from the bench, the beacon heard
@@ -172,7 +183,8 @@ the dial-scale test) now send and tick first, and the climb is an
 | `4688cb4`, `d8b88ae` | 10-16 | Requirements review (`REQUIREMENTS.md`): commanded speed is the limit; e-brake for the driver only; dial on a fixed 70 km/h scale, gap press reads 0, drags past an end hold it, no dial keys; door logic and Automatic station stop in the controller; Automatic announcement command; 0.1 s step, 10× by tick rate, 05:00 clock; Pause holds the simulation; full input set per fleet tick; bench errors shown; bench cab column removed. Each rule has a check shown failing on the old code. |
 | `5a62ca7` | 10-21 | Authority used as given: the 100 m countdown removed, bench Block change button. `REQUIREMENTS.md` rules M0–M20 from the 2026-10-21 review, each marked with whether the code has it; `OPEN_ISSUES.md` #11, #14, #17, #22 resolved, #23–#30 added. |
 | `3dfdf09` | 10-21 | Bench simulation moved out of the controller (`bench_sim.py`); the bench steps the fleet like the harness; `apply_inputs` removed. Brake State split into two inputs. System time as a `step_all` input; the console shows it. A passenger pull is a turn on, so the driver's release overrides a held report. `harness_sim.py`, `HARNESS_INTEGRATION.md` and this file updated. |
-| (next) | 10-21 | Light tiles answer every press (fixes a lock after a bench light edit); door tiles back to Open/Close; automatic lights; automatic announcements in both modes and the bench `at_station` row; spawning keeps the selection; no driver before a train's gains. |
+| `5b99075` | 10-21 | Light tiles answer every press (fixes a lock after a bench light edit); door tiles back to Open/Close; automatic lights; automatic announcements in both modes and the bench `at_station` row; spawning keeps the selection; no driver before a train's gains. |
+| (next) | 10-21 | No text cut off (scan in the self-check; seven fixed); "Sending automatically"; bench announcement wraps; `at_station` under `authority_blocks`; bench Set time. |
 
 ---
 

@@ -238,6 +238,22 @@ Panel {
                     root.stage("authority_blocks", v);
                 }
             }
+            // At a station the beacon rows below are heard every tick;
+            // otherwise only once, when one of them is sent.
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "at_station"
+                kind: "bool"
+                value: root.draft.at_station
+                pending: root.touched["at_station"] === true
+                    && root.pending("at_station")
+                onEdited: function (v) { root.stage("at_station", v); }
+            }
             SignalEditRow {
                 Layout.fillWidth: true
                 editable: true
@@ -481,23 +497,6 @@ Panel {
                 pending: root.touched["signal_light_ahead"] === true
                     && root.pending("signal_light_ahead")
                 onEdited: function (v) { root.stage("signal_light_ahead", v); }
-            }
-            // At a station the beacon rows on the left are heard every
-            // tick; otherwise only once, when one of them is sent.
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                rule: false
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                name: "at_station"
-                kind: "bool"
-                value: root.draft.at_station
-                pending: root.touched["at_station"] === true
-                    && root.pending("at_station")
-                onEdited: function (v) { root.stage("at_station", v); }
             }
 
             // A refused send, in the shared format (REQ-INTF-004). It

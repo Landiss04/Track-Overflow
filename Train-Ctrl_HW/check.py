@@ -25,6 +25,7 @@ from PySide6.QtCore import (
     Q_RETURN_ARG,
     QMetaObject,
     QObject,
+    QPointF,
     QTime,
 )
 from PySide6.QtGui import QGuiApplication
@@ -106,6 +107,33 @@ def run_check(
         if not condition:
             problems.append(what)
 
+    # Every visible text the views had to cut short, by text, with where
+    # it was seen. Qt marks an elided Text as truncated.
+    cut: dict[str, list[str]] = {}
+
+    def scan(where: str) -> None:
+        _settle(app, 50)
+        for name, win in (("console", window), ("bench", bench)):
+            def walk(item: Any) -> None:
+                if not item.isVisible():
+                    return
+                text = item.property("text")
+                if item.property("truncated"):
+                    short = item.implicitWidth() - item.width()
+                    cut.setdefault(str(text), []).append(
+                        f"{name} {where}, {short:.0f} px short")
+                elif text and item.property("contentWidth") is not None:
+                    # Text drawn on past the right edge of its window,
+                    # which Qt does not count as truncated.
+                    edge = item.mapToScene(
+                        QPointF(item.property("contentWidth"), 0)).x()
+                    if edge > win.width() + 1:
+                        cut.setdefault(str(text), []).append(
+                            f"{name} {where}, past the window edge")
+                for child in item.childItems():
+                    walk(child)
+            walk(win.contentItem())
+
     def tick() -> None:
         # One bench tick now, rather than waiting on the control timer:
         # a bench edit reaches the controller on the next tick, as a
@@ -160,6 +188,7 @@ def run_check(
     # give that room too.
     backend.apply_bench_inputs({"authority_blocks": 200,
                                 "commanded_speed": 43})
+    scan("01-signed-out")
     if shots:
         window.grabWindow().save(str(shots / "01-signed-out.png"))
 
@@ -189,6 +218,7 @@ def run_check(
     backend.toggle_emergency_brake()
     expect(not backend.core.state.emergency_brake,
            "the engineer engaged the emergency brake")
+    scan("02-gains")
     if shots:
         window.grabWindow().save(str(shots / "02-gains.png"))
     # The engineer's pop-up commissions the gains; the bench cannot.
@@ -222,6 +252,7 @@ def run_check(
     expect(backend.sim.accel_mps2 > 0.3,
            "the train is not pulling anything like its rated "
            "acceleration")
+    scan("03-driving")
     if shots:
         window.grabWindow().save(str(shots / "03-driving.png"))
 
@@ -247,6 +278,7 @@ def run_check(
            "the emergency brake reported the service brake as applied "
            "too")
     _settle(app, 200)
+    scan("04-ebrake")
     if shots:
         window.grabWindow().save(str(shots / "04-ebrake.png"))
     backend.toggle_emergency_brake()
@@ -297,6 +329,7 @@ def run_check(
     held.apply_staged(mod.read_inputs({"emergency_brake_state": True}))
     expect(held.state.emergency_brake,
            "a new pull after the release did not latch the brake")
+    scan("04-stopped")
     if shots:
         window.grabWindow().save(str(shots / "04-stopped.png"))
 
@@ -305,6 +338,7 @@ def run_check(
     # time earns its keep here, because a train takes three quarters
     # of a minute to reach line speed.
     backend.set_manual(False)
+    scan("automatic")
     backend.sim.commanded_mps = 12.0
     backend.set_sim_rate(mod.SIM_RATES.index(10))
     # 10x ticks ten times as often; the step stays truth's 0.1 s
@@ -394,6 +428,7 @@ def run_check(
     if drawer is not None:
         drawer.setProperty("expanded", True)
         _settle(app, 300)
+        scan("05-numbers")
         if shots:
             window.grabWindow().save(str(shots / "05-numbers.png"))
         drawer.setProperty("expanded", False)
@@ -517,6 +552,7 @@ def run_check(
     backend.select_operator(0)
     expect(backend.snapshot["operator"] == "",
            "the driver signed in to a train with no gains")
+    scan("08-needs-gains")
     if shots:
         window.grabWindow().save(str(shots / "08-needs-gains.png"))
     backend.select_operator(1)
@@ -559,6 +595,27 @@ def run_check(
            and backend.snapshot["exterior_lights"],
            "an underground beacon from the bench did not turn the "
            "lights on")
+    # The bench sets its clock to a time of day, which the controller
+    # receives next tick: noon, then 18:00, turns the lights on.
+    backend.set_bench_time("12:00")
+    tick()
+    backend.set_interior_lights(False)
+    backend.set_exterior_lights(False)
+    tick()
+    backend.set_bench_time("18:00")
+    tick()
+    expect(backend.snapshot["clock"] == "18:00:00",
+           "the controller did not receive the time the bench set")
+    expect(backend.snapshot["interior_lights"]
+           and backend.snapshot["exterior_lights"],
+           "setting the bench clock to 18:00 did not turn the lights on")
+    before = backend.time_s
+    backend.set_bench_time("25:00")
+    expect(backend.time_s == before and "HH:MM" in
+           backend.snapshot["bench_error"],
+           "the bench took a time that is not one, or said nothing")
+    backend.set_bench_time("05:00")
+    tick()
     # The beacon is heard at a station, every tick; away from one,
     # only once, when the bench sends a beacon row.
     send({"at_station": False})
@@ -714,6 +771,7 @@ def run_check(
                        "a signal pickup failure")
         expect(_until(app, lambda: state.actual_mps == 0.0, 20),
                f"a detected {name} did not stop the train")
+        scan("06-failure")
         if key == "brake" and shots:
             window.grabWindow().save(str(shots / "06-failure.png"))
             bench.grabWindow().save(str(shots / "07-test.png"))
@@ -1028,12 +1086,28 @@ def run_check(
 
     # Announcements lock out for their duration, and carry the
     # beacon's station while they play.
+    # The longest announcement the controller sends, on screen.
+    longest = mod.ANNOUNCE_DEPARTING.format(train_id=backend.selected,
+                                            station="DORMONT")
+    backend.core._announce(longest)
+    backend._publish()
+    _settle(app, 300)
+    expect(backend.snapshot["announcement"] == longest,
+           "the long announcement was not on screen to check")
+    scan("long announcement")
+    if shots:
+        bench.grabWindow().save(str(shots / "09-announcement.png"))
+    backend.core.state.announcement = ""
     backend.announce()
+    scan("announcing")
     expect(backend.snapshot["announcing"], "announcement did not start")
     expect(backend.snapshot["announcement"] == "DORMONT",
            "the announcement did not carry the beacon's station")
     _settle(app, mod.ANNOUNCE_LOCKOUT_MS + 400)
     expect(not backend.snapshot["announcing"], "announcement never cleared")
+
+    for text, seen in sorted(cut.items()):
+        expect(False, f"text cut off: {text!r} ({', '.join(seen[:3])})")
 
     for message in warnings:
         print(f"QML warning: {message}", file=sys.stderr)

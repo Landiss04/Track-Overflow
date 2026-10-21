@@ -152,7 +152,11 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
     - The bench clock advances only while the selected train is
       commissioned (unchanged from before), yet it is now the time every
       train receives. A shared clock would run whenever the bench is not
-      paused.
+      paused. Set time works either way.
+    - Setting the bench clock is a jump: the lights act only if the jump
+      changes night to day or back. 05:00 (the start) to 18:00 is night
+      to night, so nothing changes; set a daytime first, or 17:59 and let
+      the clock run.
     - The numbers drawer's acceleration comes from the bench simulation
       and reads 0 under a harness: it is not a signal the controller
       receives (M12; the drawer is to be removed).
@@ -174,6 +178,12 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
     - With an uncommissioned train selected nobody is signed in, so
       nobody can reach its emergency brake from the console; it commands
       0 W and cannot move under its own power.
+
+33. **What the cut-off text scan cannot see** (R23). It catches text Qt
+    elides and text drawn past the window's edge, at the states the
+    self-check reaches. It does not catch text overlapping a neighbour
+    inside the window, or a state the check never reaches (a very long
+    station name, say).
 
 ## Carried over
 

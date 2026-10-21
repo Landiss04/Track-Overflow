@@ -326,6 +326,8 @@ class ConsoleBackend(QObject):
             "inject_brake": bool(sim and sim.injected["brake"]),
             "inject_pickup": bool(sim and sim.injected["signal_pickup"]),
             "bench_at_station": bool(sim and sim.at_station),
+            # Whether the bench keeps the clock (no harness).
+            "bench_clock": self._owns_fleet,
             "fb_doors_left": s.fb_doors_left,
             "fb_doors_right": s.fb_doors_right,
             "fb_interior_lights": s.fb_interior_lights,
@@ -394,7 +396,7 @@ class ConsoleBackend(QObject):
                 or self.core.state.announcement):
             return "Announcement sent"
         if self.operator == "driver" and not self.core.state.manual:
-            return "Sent automatically on approach"
+            return "Sending automatically"
         return "Send station announcement"
 
     # ------------------------------------------------------ write side
@@ -611,6 +613,33 @@ class ConsoleBackend(QObject):
     # The bench edits its simulation, never the controller: what it
     # sets reaches the controller on the next tick, through step_all,
     # as the harness's signals do (REQUIREMENTS.md M0).
+
+    @Slot(str)
+    def set_bench_time(self, text: str) -> None:
+        """Set the bench clock to a time of day, HH:MM or HH:MM:SS.
+
+        For testing what follows the time (REQUIREMENTS.md M8). Stays on
+        the current simulated day; the controllers receive it on the
+        next tick. Under a harness the harness's clock is the time, so
+        this does nothing.
+        """
+        if not self._owns_fleet:
+            return
+        parts = str(text).strip().split(":")
+        try:
+            numbers = [int(part) for part in parts]
+        except ValueError:
+            numbers = []
+        if (len(numbers) not in (2, 3) or not 0 <= numbers[0] < 24
+                or not all(0 <= n < 60 for n in numbers[1:])):
+            self.bench_error = f"time must be HH:MM or HH:MM:SS, not {text!r}"
+            self._publish()
+            return
+        hours, minutes, seconds = (numbers + [0])[:3]
+        day = int(self.time_s // 86400)
+        self.time_s = day * 86400 + hours * 3600 + minutes * 60 + seconds
+        self.bench_error = ""
+        self._publish()
 
     @Slot()
     def bench_block_change(self) -> None:
