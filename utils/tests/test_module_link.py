@@ -119,6 +119,41 @@ class ModuleLinkTest(unittest.TestCase):
         )
         return self.harness.received[-1]
 
+    def test_deferred_reply_waits_and_matches_request_once(self) -> None:
+        requests = []
+        self.link._deferred_handler = requests.append
+        self.connect_ready()
+        message = step_message(42, 3, 0.1, 18000.3, {"held": [1]})
+        self.harness.send(message)
+        self.assertTrue(wait_until(lambda: bool(requests)))
+        self.assertEqual(self.steps, [])
+        self.assertEqual(len(self.harness.received), 1)
+        copied = self.link.pending_request
+        copied["inputs"]["held"].append(2)
+        self.assertEqual(self.link.pending_request["inputs"]["held"], [1])
+        self.assertFalse(self.link.reply_outputs(42, 4, {}))
+        self.assertFalse(self.link.reply_outputs(41, 3, {}))
+        self.assertTrue(self.link.reply_outputs(42, 3, {"done": True}))
+        self.assertFalse(self.link.reply_outputs(42, 3, {}))
+        self.assertTrue(wait_until(lambda: len(self.harness.received) == 2))
+        self.assertEqual(self.harness.received[-1]["outputs"], {"done": True})
+        self.assertIsNone(self.link.pending_request)
+
+    def test_deferred_refusal_and_disconnect(self) -> None:
+        requests = []
+        self.link._deferred_handler = requests.append
+        self.connect_ready()
+        self.harness.send(step_message(43, 4, 0.1, 18000.4, {}))
+        self.assertTrue(wait_until(lambda: bool(requests)))
+        self.assertTrue(self.link.reply_rejected(43, 4, "not ready"))
+        self.assertTrue(wait_until(lambda: len(self.harness.received) == 2))
+        self.assertEqual(self.harness.received[-1]["reason"], "not ready")
+        self.harness.send(step_message(44, 5, 0.1, 18000.5, {}))
+        self.assertTrue(wait_until(lambda: len(requests) == 2))
+        self.link.close()
+        self.assertFalse(self.link.reply_outputs(44, 5, {}))
+        self.assertIsNone(self.link.pending_request)
+
     def test_ready_waits_for_the_link_then_goes_once(self) -> None:
         self.link.announce_ready()
         self.link.announce_ready()

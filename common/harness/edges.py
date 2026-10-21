@@ -61,6 +61,8 @@ __all__ = ["CONTROLLER_FOR_LINE", "TRACK_CONTROLLER_FOR_LINE", "SystemEdges"]
 from collections.abc import Collection, Mapping
 from typing import Any
 
+from common.harness import hw_wayside_edges
+from common.harness import wayside_edges
 from common.harness.modules import (
     CTC_OFFICE,
     TRACK_CONTROLLER_HW,
@@ -89,12 +91,8 @@ from common.harness.train_edges import (
     train_model_to_train_controller,
 )
 from common.harness.wayside_edges import (
-    ctc_to_track_controller,
     line_ready,
     merge_ctc_inputs,
-    track_controller_to_ctc,
-    track_controller_to_track_model,
-    track_model_to_track_controller,
 )
 
 #: The Train Controller each line's trains run on (D021).
@@ -189,7 +187,9 @@ class SystemEdges:
             ]
         for line, name in TRACK_CONTROLLER_FOR_LINE.items():
             if name in fresh and name in self._wired:
-                reported = track_controller_to_ctc(fresh[name])
+                reported = _wayside_mapping(name).track_controller_to_ctc(
+                    fresh[name]
+                )
                 events += self._readiness(line, reported["waysides"])
         # Sales the CTC Office stepped on are done with; this tick's
         # go to it on the next.
@@ -225,7 +225,10 @@ class SystemEdges:
         if consumer == TRACK_MODEL:
             return self._track_model_inputs(outputs)
         if consumer in TRACK_CONTROLLER_FOR_LINE.values():
-            return self._track_controller_inputs(consumer, outputs)
+            result = self._track_controller_inputs(consumer, outputs)
+            if consumer == TRACK_CONTROLLER_HW:
+                result["time_s"] = sim_time_s
+            return result
         if consumer == TRAIN_MODEL:
             return self._train_model_inputs(outputs)
         if consumer in CONTROLLER_FOR_LINE.values():
@@ -238,7 +241,7 @@ class SystemEdges:
         # What every wired Track Controller reported, joined, and the
         # ticket sales the CTC Office has not stepped on.
         reports = [
-            track_controller_to_ctc(outputs[name])
+            _wayside_mapping(name).track_controller_to_ctc(outputs[name])
             for name in TRACK_CONTROLLER_FOR_LINE.values()
             if name in self._wired and outputs.get(name)
         ]
@@ -300,11 +303,11 @@ class SystemEdges:
         track_model = outputs.get(TRACK_MODEL)
         return {
             "ctc": (
-                ctc_to_track_controller(ctc, line)
+                _wayside_mapping(consumer).ctc_to_track_controller(ctc, line)
                 if ctc and CTC_OFFICE in self._wired else dict(_NO_CTC)
             ),
             "track_model": (
-                track_model_to_track_controller(
+                _wayside_mapping(consumer).track_model_to_track_controller(
                     track_model, line, self._names, self._devices
                 )
                 if track_model and TRACK_MODEL in self._wired
@@ -324,7 +327,7 @@ class SystemEdges:
             commands = outputs.get(name)
             if name not in self._wired or not commands or not self._names:
                 continue
-            mapped = track_controller_to_track_model(
+            mapped = _wayside_mapping(name).track_controller_to_track_model(
                 commands, self._names, self._devices
             )
             for field, values in mapped.items():
@@ -400,6 +403,10 @@ class SystemEdges:
                 )
             trains[train_id] = {"line": entry.line, "inputs": inputs}
         return {"trains": trains}
+
+
+def _wayside_mapping(module: str) -> Any:
+    return hw_wayside_edges if module == TRACK_CONTROLLER_HW else wayside_edges
 
 
 def _trains(outputs: Mapping[str, Any] | None) -> Mapping[str, Any]:

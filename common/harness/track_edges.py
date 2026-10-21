@@ -126,6 +126,12 @@ class BlockNames:
         """
         return self._by_block[(line, number)]
 
+    def section(self, line: str, number: str) -> str:
+        """Return the section carried in the Track Model's block name."""
+        match = _NAME.fullmatch(self.track_model_name(line, number))
+        assert match is not None
+        return match["section"]
+
     def block(self, name: str) -> tuple[str, str]:
         """Return the line and number of a Track Model block name.
 

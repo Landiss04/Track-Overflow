@@ -90,6 +90,19 @@ class StubEdgesTest(unittest.TestCase):
 class CommandLineTest(unittest.TestCase):
     """Wrong command lines are refused before anything starts."""
 
+    def test_hw_launchers_are_registered_without_local_core_fallback(self) -> None:
+        self.assertIn("track-controller-hw", track_overflow._MODULES)
+        self.assertIn("train-controller-hw", track_overflow._MODULES)
+
+    def test_staged_hardware_and_stubs_only_specs(self) -> None:
+        from common.harness.app import _parse_args, _specs
+        for args, expected in (([], False), (["--with-hardware"], True),
+                               (["--with-hardware", "--stubs-only"], False)):
+            specs, _ = _specs(_parse_args(args))
+            for name in ("track-controller-hw", "train-controller-hw"):
+                spec = next(spec for spec in specs if spec.name == name)
+                self.assertEqual(spec.args[1] == name, expected)
+
     def test_unknown_module_is_refused(self) -> None:
         errors = io.StringIO()
         with contextlib.redirect_stderr(errors):

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 __all__ = ["ModuleLink", "StepHandler", "TickRejectedError"]
 
+import copy
 import sys
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -79,6 +80,8 @@ class ModuleLink(QObject):
         server_name: str,
         step: StepHandler,
         parent: QObject | None = None,
+        *,
+        deferred_handler: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> None:
         """Prepare a link; ``connect_to_harness`` opens it.
 
@@ -94,6 +97,8 @@ class ModuleLink(QObject):
         self._module = module
         self._server_name = server_name
         self._step = step
+        self._deferred_handler = deferred_handler
+        self._pending_request: dict[str, Any] | None = None
         self._buffer = LineBuffer()
         self._tick = 0
         self._ready_sent = False
@@ -129,6 +134,36 @@ class ModuleLink(QObject):
     def last_reply(self) -> dict[str, Any] | None:
         """The last ``OUTPUTS`` or ``REJECTED`` sent, if any."""
         return self._last_reply
+
+    @property
+    def pending_request(self) -> dict[str, Any] | None:
+        """The deferred STEP being answered, as an independent copy."""
+        return copy.deepcopy(self._pending_request)
+
+    def reply_outputs(self, request_id: int, tick: int,
+                      outputs: Mapping[str, Any]) -> bool:
+        """Complete the matching deferred request exactly once."""
+        return self._complete_deferred(
+            outputs_message(request_id, tick, outputs)
+        )
+
+    def reply_rejected(self, request_id: int, tick: int, reason: str) -> bool:
+        """Refuse the matching deferred request exactly once."""
+        return self._complete_deferred(
+            rejected_message(request_id, tick, _sendable(reason))
+        )
+
+    def _complete_deferred(self, reply: dict[str, Any]) -> bool:
+        pending = self._pending_request
+        if self._lost or pending is None or (
+            reply["id"], reply["tick"]
+        ) != (pending["id"], pending["tick"]):
+            return False
+        line = encode(reply)
+        self._pending_request = None
+        self._last_reply = reply
+        self._write(line)
+        return True
 
     def connect_to_harness(self) -> None:
         """Open the link once the event loop runs.
@@ -179,6 +214,7 @@ class ModuleLink(QObject):
     def close(self) -> None:
         """Close the link without signalling ``harnessLost``."""
         self._lost = True
+        self._pending_request = None
         self._queued.clear()
         self._socket.abort()
 
@@ -227,6 +263,17 @@ class ModuleLink(QObject):
         request_id = message["id"]
         tick = message["tick"]
         self._tick = tick
+        if self._deferred_handler is not None:
+            if self._pending_request is not None:
+                return
+            self._pending_request = copy.deepcopy(dict(message))
+            try:
+                self._deferred_handler(self.pending_request or {})
+            except Exception as error:
+                self.reply_rejected(
+                    request_id, tick, _sendable(str(error) or "refused")
+                )
+            return
         try:
             outputs = self._step(
                 tick, message["dt"], message["sim_time_s"], message["inputs"]
@@ -254,6 +301,7 @@ class ModuleLink(QObject):
         # Signal once, however the link was lost.
         if not self._lost:
             self._lost = True
+            self._pending_request = None
             self._queued.clear()
             self.harnessLost.emit()
 

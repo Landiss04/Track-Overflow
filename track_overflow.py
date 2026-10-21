@@ -106,6 +106,18 @@ def _run_train_controller_sw(args: list[str]) -> int:
     return module_process.main(["--as", "train-controller-sw", *args])
 
 
+def _run_track_controller_hw(args: list[str]) -> int:
+    from common.hw_link import host
+
+    return host.main(["--as", "track-controller-hw", *args])
+
+
+def _run_train_controller_hw(args: list[str]) -> int:
+    from common.hw_link import host
+
+    return host.main(["--as", "train-controller-hw", *args])
+
+
 def _import_from(folder: str) -> None:
     # Put one module's folder first on the import path.
     sys.path.insert(0, str(_ROOT / folder))
@@ -116,9 +128,11 @@ _MODULES: dict[str, Callable[[list[str]], int]] = {
     "stub": _run_stub,
     "ctc-office": _run_ctc_office,
     "track-controller-sw": _run_track_controller_sw,
+    "track-controller-hw": _run_track_controller_hw,
     "track-model": _run_track_model,
     "train-model": _run_train_model,
     "train-controller-sw": _run_train_controller_sw,
+    "train-controller-hw": _run_train_controller_hw,
 }
 
 

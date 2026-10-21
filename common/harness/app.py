@@ -47,6 +47,9 @@ from common.harness.edges import SystemEdges
 from common.harness.modules import (
     CTC_OFFICE,
     TRACK_CONTROLLER_SW,
+    TRACK_CONTROLLER_HW,
+    TRAIN_CONTROLLER_HW,
+    WIRED_MODULES,
     ModuleSpec,
     stub_specs,
     system_specs,
@@ -164,11 +167,14 @@ def _specs(
     wayside_options = ["--load-starters"] if options.load_starters else []
     for order in options.dispatch:
         ctc_options += ["--dispatch", order]
+    wired = WIRED_MODULES | ({TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW}
+                             if options.with_hardware else set())
     specs = system_specs({
         CTC_OFFICE: ctc_options,
         TRACK_CONTROLLER_SW: wayside_options,
-    })
-    return specs, SystemEdges()
+        TRACK_CONTROLLER_HW: wayside_options if options.with_hardware else [],
+    }, wired=wired)
+    return specs, SystemEdges(wired=wired)
 
 
 class _StatusLine:
@@ -270,6 +276,8 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="run at 10x from the start",
     )
+    parser.add_argument("--with-hardware", action="store_true",
+                        help="run both HW host relays; requires both Pis")
     parser.add_argument(
         "--stubs-only",
         action="store_true",
