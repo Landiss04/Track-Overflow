@@ -646,10 +646,12 @@ def run_check(
             backend.toggle_service_brake()
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
-    # An engine failure at a steady cruise shows only once traction is
-    # needed: the toy plant has no resistance, so holding speed takes
-    # no power and a dead engine changes nothing until the train is
-    # asked to speed up (OPEN_ISSUES.md).
+    # Engine detection flags a steady fall in speed with power on and
+    # no brake, never a train holding its target (Kevin Schillinger,
+    # 2026-10-21). Holding a cruise is never a failure; once the
+    # engine dies, rolling resistance (applied by the toy plant under
+    # an engine failure, as the Train Model always applies it) slows
+    # the train, and the failure is found within the window.
     cruise = mod.ControllerCore()
     cruise.armed = True
     cruise.state.manual = True
@@ -658,17 +660,16 @@ def run_check(
     cruise.set_target_mps(20 / mod.MPS_TO_MPH)
     for _ in range(round(60 / cruise.dt)):
         cruise.step()
-    cruise.state.injected["engine"] = True
-    for _ in range(round(10 / cruise.dt)):
-        cruise.step()
     expect(not cruise.failed,
-           "an engine failure was claimed at a cruise needing no power")
-    cruise.set_target_mps(30 / mod.MPS_TO_MPH)
-    for _ in range(round(5 / cruise.dt)):
+           "an engine failure was claimed while holding a cruise")
+    cruise.state.injected["engine"] = True
+    for _ in range(round((mod.ENGINE_DETECT_S + 1.0) / cruise.dt)):
         cruise.step()
+        if cruise.failed:
+            break
     expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
-           "an engine failure at cruise was not found once speed was "
-           "asked for")
+           "an engine failure at cruise was not found within the "
+           "detection window once the speed fell")
 
     # Doors are the controller's (REQUIREMENTS.md M6): never opened
     # while moving; in Automatic, opened on the platform side at a new

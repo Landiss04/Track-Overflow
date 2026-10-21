@@ -98,13 +98,14 @@ Rules are this module's own design (`control.py` `detect_failures`):
 | Failure | Detected when | Constant |
 |---|---|---|
 | Brake | Service brake commanded, e-brake off, Brake State never shows the service brake | 0.5 s |
-| Engine | Power that should pull ≥ 0.1 m/s², no brake on, speed not up 0.05 m/s | 2 s |
+| Engine | Over the last 6 s: power commanded on every tick, no brake commanded or reported on any tick, and the speed falling steadily by more than the 0.05 m/s control band (half-second means within 10 % of the fall of a straight line); never while within 0.05 m/s of target. Rules from Kevin Schillinger, 2026-10-21 | 6 s |
 | Signal pickup | Commanded speed and authority fall to 0 together from ≥ 2 blocks | — |
 
 Known limits:
 - A brake failure is only seen when the service brake is asked for.
-- An engine failure at a steady cruise is not seen on the toy plant (no resistance).
-- A steep up-grade could trip engine detection.
+- A train holding its target, on a grade or not, is never flagged. Speed that sags running onto a grade is caught by the PI within a few seconds, so it never falls steadily across 6 s and is not flagged either.
+- An engine failure is seen only once the speed falls: rolling resistance alone loses 0.0196 m/s² on the flat, and the toy plant applies it under an injected engine failure as the Train Model does. A train at a stand with a dead engine does not fall, so it is not flagged.
+- A train that cannot hold its speed up a grade at full power (a heavy load on Green 7's 5 %) does fall steadily, and is flagged.
 - A cut from ≥ 2 blocks straight to 0 reads as a pickup failure.
 
 ## 5. Revisions made (2026-10-16)

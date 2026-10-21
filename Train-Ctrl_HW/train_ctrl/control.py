@@ -18,9 +18,11 @@ from .constants import (
     CABIN_DRIFT_MAX_C,
     DWELL_S,
     EBRAKE_DECEL_MPS2,
-    ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
-    ENGINE_RISE_MPS,
+    ENGINE_FALL_MPS,
+    ENGINE_HOLD_BAND_MPS,
+    ENGINE_SMOOTH_S,
+    ENGINE_STRAIGHT_FRACTION,
     FAILURES,
     MASS_KG,
     MAX_FORCE_N,
@@ -85,8 +87,11 @@ class ControllerCore:
     def _clear_detection(self) -> None:
         # What detect_failures() carries from one tick to the next.
         self._brake_unanswered_s = 0.0
-        self._engine_stalled_s = 0.0
-        self._engine_ref_mps = 0.0
+        # The actual speed on each of the last ENGINE_DETECT_S of
+        # steps, oldest first, kept only while every one of them had
+        # power commanded and no brake commanded or reported.
+        self._engine_window: deque[float] = deque(
+            maxlen=round(ENGINE_DETECT_S / self.dt))
         self._last_signal: tuple[float, int] | None = None
 
     @property
@@ -233,10 +238,18 @@ class ControllerCore:
                            emergency brake was not, and Brake State
                            has not shown the service brake applied
                            for BRAKE_DETECT_S
-            engine         the power commanded should have pulled at
-                           least ENGINE_DETECT_ACCEL_MPS2, no brake is
-                           on, and the actual speed has not risen for
-                           ENGINE_DETECT_S
+            engine         over the last ENGINE_DETECT_S, power was
+                           commanded above zero on every step, no
+                           brake (service or emergency) was commanded
+                           or reported applied on any step, and the
+                           speed fell steadily by more than
+                           ENGINE_FALL_MPS (ENGINE_SMOOTH_S means, each
+                           within ENGINE_STRAIGHT_FRACTION of the fall
+                           of a straight line); and the train is not
+                           now within ENGINE_HOLD_BAND_MPS of its
+                           target. Speed that does not rise is not a
+                           failure: a train holding its target up a
+                           grade needs power and gains no speed.
             signal pickup  commanded speed and authority both fell to
                            zero in one update, from at least
                            PICKUP_DETECT_MIN_BLOCKS of authority
@@ -254,19 +267,7 @@ class ControllerCore:
         else:
             self._brake_unanswered_s = 0.0
 
-        v = s.actual_mps
-        force = min(MAX_FORCE_N, s.power_w / max(abs(v), V_FLOOR_MPS))
-        pulling = (force / MASS_KG >= ENGINE_DETECT_ACCEL_MPS2
-                   and not s.service_brake and not s.emergency_brake)
-        if not pulling or v > self._engine_ref_mps + ENGINE_RISE_MPS:
-            # Not asked to pull, or the speed is answering: start
-            # watching again from here.
-            self._engine_stalled_s = 0.0
-            self._engine_ref_mps = v
-        else:
-            self._engine_stalled_s += self.dt
-            if self._engine_stalled_s >= ENGINE_DETECT_S:
-                s.failures["engine"] = True
+        self._detect_engine()
 
         signal = self.received_signal
         last = self._last_signal
@@ -275,6 +276,40 @@ class ControllerCore:
                 and signal == (0.0, 0)):
             s.failures["signal_pickup"] = True
         self._last_signal = signal
+
+    def _detect_engine(self) -> None:
+        # Rules by Kevin Schillinger, 2026-10-21; see detect_failures.
+        # Counted in steps of simulated time, never wall clock.
+        s = self.state
+        v = s.actual_mps
+        braked = (s.service_brake or s.emergency_brake
+                  or s.fb_service_brake or s.fb_emergency_brake)
+        window = self._engine_window
+        if s.power_w <= 0.0 or braked:
+            # No power asked for, or a brake explains any fall: watch
+            # again from the next clean step.
+            window.clear()
+            return
+        window.append(v)
+        if len(window) < window.maxlen:
+            return
+        if abs(v - s.target_mps) <= ENGINE_HOLD_BAND_MPS:
+            return                  # holding its target, as told
+        # Half-second means, oldest first: down by more than the
+        # control band in all, and steadily, every mean close to the
+        # straight line from the first to the last.
+        k = round(ENGINE_SMOOTH_S / self.dt)
+        speeds = list(window)
+        means = [sum(speeds[i:i + k]) / k
+                 for i in range(0, len(speeds) - k + 1, k)]
+        fall = means[0] - means[-1]
+        if fall <= ENGINE_FALL_MPS:
+            return
+        last = len(means) - 1
+        if all(abs(m - (means[0] - fall * i / last))
+               <= ENGINE_STRAIGHT_FRACTION * fall
+               for i, m in enumerate(means)):
+            s.failures["engine"] = True
 
     def clear_failure(self, name: str) -> None:
         """Let go of one detected failure, once it has been resolved.
@@ -287,8 +322,7 @@ class ControllerCore:
         if name == "brake":
             self._brake_unanswered_s = 0.0
         elif name == "engine":
-            self._engine_stalled_s = 0.0
-            self._engine_ref_mps = self.state.actual_mps
+            self._engine_window.clear()
         else:
             self._last_signal = None
 
@@ -509,9 +543,11 @@ class ControllerCore:
         # here the way truth modules/train-model.md says the Train
         # Model applies them: an engine failure zeroes traction, and a
         # brake failure blocks the service brake only; the emergency
-        # brake still works. Under a brake failure, and only then for
-        # now, rolling resistance (same source) also acts on the
-        # train. Signal pickup is applied in received_signal.
+        # brake still works. Under an engine or a brake failure, and
+        # only then for now, rolling resistance (same source) also
+        # acts on the train, so a dead engine slows it as it would on
+        # the Train Model and can be detected by the fall.
+        # Signal pickup is applied in received_signal.
         s = self.state
         service_works = not s.injected["brake"]
         power = 0.0 if s.injected["engine"] else s.power_w
@@ -526,7 +562,7 @@ class ControllerCore:
         if decel:
             # A brake opposes the motion and never reverses it.
             a = -math.copysign(decel, v) if v else 0.0
-        elif not service_works:
+        elif not service_works or s.injected["engine"]:
             # Resistance opposes the motion, holds the train at rest,
             # and never reverses it.
             a = (a - math.copysign(ROLLING_DECEL_MPS2, v) if v

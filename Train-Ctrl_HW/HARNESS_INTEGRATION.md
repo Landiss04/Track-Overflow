@@ -225,7 +225,7 @@ The controller infers failures from what the harness sends back, so three inputs
 | Failure inferred | Trigger | What the harness must send |
 | --- | --- | --- |
 | Brake | Service brake commanded, and `brake_state[1]` false for 0.5 s (seen 0.6 s after the request, one 0.1 s tick later) | The service brake's real applied state |
-| Engine | Power that should pull 0.1 m/s² or more, and `actual_speed` up by less than 0.05 m/s for 2 s | The real `actual_speed` every tick |
+| Engine | Over the last 6 s: power commanded every tick, no brake commanded or shown in `brake_state` on any tick, and `actual_speed` falling steadily by more than 0.05 m/s; never within 0.05 m/s of target (Kevin Schillinger, 2026-10-21) | The real `actual_speed` and `brake_state` every tick |
 | Signal pickup | `commanded_speed` and `authority_blocks` both drop to 0 in one update, from 2 or more blocks | Authority counting down normally, not a jump to 0 |
 
 A detected failure latches until cleared; the harness has no call to clear one.

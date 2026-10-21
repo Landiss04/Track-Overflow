@@ -151,12 +151,29 @@ Item 3 (half of the speed dial's dead zone asked for full speed) is fixed
     the pending stop when a beacon for the same station arrives while the
     train is moving, as it leaves the station.
 
+## Added 2026-10-21
+
+26. **Engine detection tripped holding speed up a grade.** Fixed 2026-10-21,
+    for the owners to review (`CHANGELOG.md`), to rules set by Kevin
+    Schillinger: never flag a train within the control band of its target;
+    flag only a fall in speed with power commanded and no brake in the
+    window; use a window a few seconds longer than 2 s. The old rule (speed
+    not up 0.05 m/s for 2 s with power on) stopped G1 at Green 93 on the
+    round trip. Read literally, "fell by more than the band over the window"
+    also trips running onto Green 7's 5 % grade, where the speed sags about
+    0.5 m/s before the PI catches it; so the fall must also be steady (a dead
+    engine's fall is a straight line, a sag curves out). Still open: a train
+    at a stand with a dead engine is not flagged (it never falls), and a
+    train that cannot hold its speed up a grade at full power is.
+
 ## Carried over
 
-- **Rolling resistance outside a brake failure** is open. It (C_rr 0.002)
-  applies under an injected brake failure only, as a trial. The slow-down
-  overshoot it once fixed is now fixed by the 0.05 m/s service band instead
-  (35 → 30 mph settles at 30.08 mph at 480 kW).
+- **Rolling resistance outside a brake or engine failure** is open. It
+  (C_rr 0.002) applies under an injected brake or engine failure only, as
+  a trial; under an engine failure it lets the dead engine show as a
+  fall. The slow-down overshoot it once fixed is now fixed by the
+  0.05 m/s service band instead (35 → 30 mph settles at 30.08 mph at
+  480 kW).
 - **Toy plant parameters differ from truth's Train Model**
   (`truth/modules/train-model.md`, October 20 review proposal): Euler vs exact
   constant-force segments and midpoint power-limited integration,
