@@ -65,7 +65,7 @@ first legs.
 | `common/harness/wayside_edges.py` | `merge_ctc_inputs`: joins Track Controllers' reports list by list, for the HW variant's Red reports in Phase 5. |
 | `common/harness/track_edges.py` | `track_model_to_ctc` (stations that sold none left out; a count that is not a whole number is an error) and `TicketSales`: sales wait until the CTC Office replies with outputs to the tick they were sent on, so a refused or missed tick is sent again with the next, and a Track Model's repeated last outputs are never counted twice (R52). |
 | `common/harness/ctc_script.py` | Deleted, with its tests: the CTC Office's own code replaces it in the loop and end-to-end tests. |
-| `common/harness/app.py` | No stand-in; `--dispatch` passed to the CTC Office. (Minimal change; the bug-fix agent's uncommitted `EventLog.create` change in the same file was left uncommitted.) |
+| `common/harness/app.py` | No stand-in; `--dispatch` passed to the CTC Office. (Minimal change; the bug-fix agent's `EventLog.create` change in the same file was committed separately, in `122b279`.) |
 | `common/harness/measure.py` | `--system` runs the real CTC Office: Run (and 10x) and `--dispatch G1:Green:73`, so the train runs for the whole measurement. |
 | `common/harness/tests/` | `test_harness_edges.py` (53): readiness events, the CTC Office's inputs, the Track Controller's `ctc` from the CTC Office, ticket sales once across accepted and refused ticks, `merge_ctc_inputs`, and the real Track Model's stations accepted by the CTC Office's own validator. `test_harness_train_loop.py` (23): the five modules' own code in one process, CTC Office included. `test_harness_system.py` (11): the Iteration 3 scenario end to end. `test_harness_window.py`: system mode passes `--dispatch`. |
 
@@ -115,7 +115,33 @@ No tick slipped and no reply was late. The mean is about 1 ms above Phase 3's (4
 and p95 about 4 ms, from the CTC Office's step and its window redraw. One tick in about
 twenty runs over 10 ms; the ticks after it make the time up.
 
-Not done: the frozen build (see section 4).
+The same suites re-run at `b65fd26`, with every fault fix committed, gave the same
+counts: harness 150 (pytest, 495 subtests; unittest 150), utils 82 (37 subtests), CTC
+Office 244, Track Controller SW 194.
+
+**Frozen build** (G-RUN-2), done after this file was first written. The recipe in
+`common/harness/README.md` with `--paths "$PWD/CTC-Office"` and
+`--add-data "$PWD/CTC-Office/ctc_ui/ui:CTC-Office/ctc_ui/ui"` added, built outside the
+checkout with PyInstaller 6.22.2 and the same scratch venv (483 MB). Nothing else was
+needed: the window's QML imports the shared `ui/` folder and the layouts are the Track
+Model's files, both bundled already.
+
+| Check | Result |
+|---|---|
+| `track-overflow --module ctc-office --harness <none>`, alone | Loaded `_MEIPASS/CTC-Office/ctc_ui/ui/Main.qml`, then exited 2 (harness lost; 1 would mean no window). |
+| `track-overflow --headless --speedup --load-starters --dispatch G1:Green:65 --run-seconds 15`, from `/tmp`, empty `PYTHONPATH` | `WAYSIDES_READY` at tick 1, `TRAIN_ADDED` G1 on Green at tick 3, 1,381 ticks, round trip mean 5.4 to 6.1 ms per 5 s; no fault events; seven exits of code 0. |
+| The same, window mode, offscreen, `--run-seconds 8` | The same events, no faults, seven exits of code 0. |
+
+`ctc.track_layout.LAYOUT_DIR` and `TrackMapModel()` with no layout, found from their
+source files, are used only by the standalone window (`ctc_ui/__main__.py`), the test
+UI and the tests. The process passes the layout to `CtcHost` and `TrackMapModel`, and
+`CtcHost` passes it to the module, so no running path reads them in a build, and no
+module code was changed. A schedule for `--schedule` is a file the user names; none is
+bundled.
+
+`app.py` has no option for the engineer's gains, so in these runs G1 stayed at the yard
+exit (D024). A person sets them in the Train Controller's window; the tests use the
+Train Controller's own `--engineer-gains`.
 
 ## 3. Departures and design choices
 
@@ -157,19 +183,12 @@ the session, awaiting promotion by a person.
 
 ## 5. What is left
 
-1. **Documents** (owned by the validation work): `documents/system-integration-design.md`
-   §5.5 "Phase 4 as built" from section 1 and 2 above, Appendix A's CTC Office edges;
-   `common/harness/README.md`: the module table (`ctc_script.py` is deleted, and the
-   README still lists it), `--dispatch`, the CTC Office's test options, the readiness and
-   train events, and the tests' new contents.
-2. **Frozen build** (G-RUN-2). Add `--paths "$PWD/CTC-Office"` and
-   `--add-data "$PWD/CTC-Office/ctc_ui/ui:CTC-Office/ctc_ui/ui"` to the recipe. The
-   process finds its layouts and window under `_MEIPASS`, but `ctc.track_layout`'s
-   default `LAYOUT_DIR` and `TrackMapModel()` without a layout use `__file__` and would
-   not; the process always passes the layout, so check only that nothing else calls them
-   in a build. Then run `--headless --speedup --load-starters --dispatch G1:Green:65
-   --run-seconds 12` from outside the checkout and expect `TRAIN_ADDED` and seven exits
-   of 0.
+1. **Documents.** Done: `documents/system-integration-design.md` v0.11 has §5.5
+   "Phase 4 as built", the Phase 4 questions in §1.5, and the gaps and Appendix A
+   updated; `common/harness/README.md` describes Phase 4, the fault fixes and the frozen
+   build; `documents/integration-handover-phase-3.md` marks Q13 and Q14 resolved and
+   Q15 fixed.
+2. **Frozen build** (G-RUN-2). Done (section 2). Left: a Windows build.
 3. **The CTC Office window at 10x by eye**: the measurement ran offscreen. Watch the map
    and tables with a real display; raise `WINDOW_REFRESH_MS` if replies lag.
 4. **Phase 5**: the Track Controller HW's reports join the CTC Office's input through
