@@ -12,6 +12,10 @@ CONTROL_HZ = 10                 # ticks per second at real time
 CLOCK_START_S = 5 * 3600.0
 UI_HZ = 10
 ANNOUNCE_LOCKOUT_MS = 5000
+# Automatic lights (REQUIREMENTS.md M8): on at 18:00, off at 06:00,
+# in seconds since midnight.
+NIGHT_START_S = 18 * 3600.0
+NIGHT_END_S = 6 * 3600.0
 GAINS_HANDOVER_MS = 1500
 
 # Truth modules/train-model.md: 4 x 120 kW, the data sheet's 120 kW
@@ -82,6 +86,13 @@ PICKUP_DETECT_MIN_BLOCKS = 2
 # quarters of a minute, then hold within a tenth of a mph of target.
 DEFAULT_KP = 400_000.0          # W per m/s of error
 DEFAULT_KI = 8_000.0            # W per (m/s x s) of accumulated error
+
+# -------------------------------------------------------- announcements
+# Sent to the Train Model in both modes (REQUIREMENTS.md M7).
+ANNOUNCE_ARRIVING_BLOCKS = 3
+ANNOUNCE_ARRIVING = "The train {train_id} is arriving soon"
+ANNOUNCE_ARRIVED = "The train {train_id} has arrived at {station}"
+ANNOUNCE_DEPARTING = "The train {train_id} is departing from {station}"
 
 # ----------------------------------------------------------- vocabulary
 ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]

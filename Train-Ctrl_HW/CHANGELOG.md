@@ -31,8 +31,10 @@ the 2026-10-21 changes.
 | Emergency brake release | Only by the driver, only at a stand, and never while any detected failure is latched. A Train Model report of "off" never releases it (D011). A passenger pull is an emergency brake state that turns on while the controller is not commanding it, so a state still reported on after the release (the last command echoed, or a held passenger latch) does not latch it again: the driver's release overrides it (M2, 2026-10-21). |
 | Reported state | Received, never made up: emergency and service brake state as two signals (M18), Door State and Light State. On the bench the simulation reports them: service false while an injected brake failure blocks it; doors and lights follow their commands on each change, with no door interlock of its own (the Train Model's is commented out, so the controller is the interlock), and a state the bench publishes stands until the next command. |
 | Speed limit | Commanded speed is the limit, never above the car's 70 km/h / 43.5 mph (`REQUIREMENTS.md` M1; the Train Model has no governor, D009). Automatic targets the lower of the two; the driver's target is capped at it when set. The separate `speed_limit` input, row and readout are gone. |
-| Doors | The controller's (M6): opened only at a stand, platform side only. Automatic opens the platform side at a new beacon station once stopped, closes when the Track Signal resumes, and leaves only once Door State reports them closed. |
-| Announcements | A command to the Train Model (M7): Automatic sends the station name on a new beacon, for 5 s; Manual on the driver's press. |
+| Doors | The controller's (M6): opened only at a stand, platform side only. Automatic opens the platform side on arriving at a station (a station beacon heard, no authority left, stopped; before 2026-10-21, at any stop after a new beacon), closes when the Track Signal resumes, and leaves only once Door State reports them closed. |
+| Announcements | A command to the Train Model (M7), sent automatically in both modes (2026-10-21): "The train *id* is arriving soon" at 3 blocks of authority; "The train *id* has arrived at *station*" once a station beacon was heard and the train stands with no authority; "The train *id* is departing from *station*" once the doors report closed and the Track Signal resumes. Each held 5 s of system time. Manual's press sends the station name. Before: Automatic sent the station name on a new beacon. |
+| Lights | Automatic in both modes (M8, 2026-10-21): on with an underground beacon and at 18:00; off with a later not-underground beacon (unless night) and at 06:00 (unless underground). Only those changes act; the driver's own choice stands in between. |
+| Operators and trains | No driver before a train's gains are set (M9, 2026-10-21): selecting an uncommissioned train signs the driver out, Driver is refused, and the sign-in view says the train is waiting for its gains. Spawning a train keeps the current selection. |
 | Emergency brake access | The driver only, to engage or release, in either mode (M2); a passenger pull still latches it. |
 | Time | A fixed 0.1 s step (truth D017); 10× runs 100 ticks a second instead of a longer step. The system time is an input (M11, 2026-10-21): `step_all` takes it each tick, in seconds since midnight as `utils/system_clock.py` counts it, from the harness clock or the bench's own (from 05:00:00, simulated time). The console's clock shows the time the controller received. Pause on the bench holds every train and the bench clock. |
 | Fleet input | `step_all(dt, inputs_by_id, time_s)` refuses a tick whose set is missing any signal sent every tick, so a stale brake state cannot read as a brake failure; any `dt` other than the fixed 0.1 s step; and a `time_s` that is not a finite time of at least 0. |
@@ -65,7 +67,13 @@ the 2026-10-21 changes.
   scale; a press in its bottom gap reads 0, and a drag past either end holds
   that end instead of wrapping.
   The gains dialog keeps keyboard focus inside it.
-- Door tiles say "stop first" while moving; the header shows a Paused pill.
+- Door tiles read "Open left" / "Close left" (and right), greyed when the
+  driver cannot use them ("stop first" text removed 2026-10-21); the header
+  shows a Paused pill.
+- The train picker works while signed out, so a driver signed out by an
+  uncommissioned train can pick their way back (2026-10-21).
+- Light and door tiles always act when pressed: a state the bench
+  published no longer locks them (2026-10-21).
 - Style-guide fixes: signal-head, scrim and readout colours on tokens; bench bar
   on `radius_lg`. The service brake stays amber (`brake_service`, a pending
   token) by decision.
@@ -88,6 +96,9 @@ the 2026-10-21 changes.
   acts as a passenger pull.
 - **Block change** button in the Inputs header (2026-10-21): sends the next
   block's authority, one fewer, as the Track Model does.
+- **`at_station`** row (2026-10-21): at a station the beacon rows are heard
+  every tick; otherwise once, when one of them is sent.
+- Spawning a train no longer switches the bench or the console to it.
 - Outputs panel adds the Announcement row; values at 18 px.
 
 ### Self-check (`check.py`)
@@ -98,6 +109,13 @@ interface and bench conversion, bad input leaving nothing applied, the bench
 sending only edited rows, the roster signalling only on change, and the train
 picker's search. The 10× check waits on the speed gain instead of a 300 ms
 stopwatch (it failed 4 of 4 runs on Windows before).
+
+2026-10-21 (afternoon): new checks for a light tile answering after a
+bench light edit, underground lights from the bench, the beacon heard
+only at a station or once after a send, the three automatic announcements
+in each mode, automatic lights through 18:00 and 06:00, spawning keeping
+the selection, and no driver for an uncommissioned train. Each fails on
+`3dfdf09`.
 
 2026-10-21: the check drives the controller only through the bench
 simulation or `step_all`, never by writing its state. New checks: stepping
@@ -153,7 +171,8 @@ the dial-scale test) now send and tick first, and the climb is an
 | `1bc21d1`, `d444312`, `b9e3f6a` | 10-16 | Ivan: `main.py` split into the `train_ctrl/` package; `harness_sim.py`, a stand-in central harness (55 mph, 20 blocks, 75 °F; trains no longer armed on spawn). |
 | `4688cb4`, `d8b88ae` | 10-16 | Requirements review (`REQUIREMENTS.md`): commanded speed is the limit; e-brake for the driver only; dial on a fixed 70 km/h scale, gap press reads 0, drags past an end hold it, no dial keys; door logic and Automatic station stop in the controller; Automatic announcement command; 0.1 s step, 10× by tick rate, 05:00 clock; Pause holds the simulation; full input set per fleet tick; bench errors shown; bench cab column removed. Each rule has a check shown failing on the old code. |
 | `5a62ca7` | 10-21 | Authority used as given: the 100 m countdown removed, bench Block change button. `REQUIREMENTS.md` rules M0–M20 from the 2026-10-21 review, each marked with whether the code has it; `OPEN_ISSUES.md` #11, #14, #17, #22 resolved, #23–#30 added. |
-| (next) | 10-21 | Bench simulation moved out of the controller (`bench_sim.py`); the bench steps the fleet like the harness; `apply_inputs` removed. Brake State split into two inputs. System time as a `step_all` input; the console shows it. A passenger pull is a turn on, so the driver's release overrides a held report. `harness_sim.py`, `HARNESS_INTEGRATION.md` and this file updated. |
+| `3dfdf09` | 10-21 | Bench simulation moved out of the controller (`bench_sim.py`); the bench steps the fleet like the harness; `apply_inputs` removed. Brake State split into two inputs. System time as a `step_all` input; the console shows it. A passenger pull is a turn on, so the driver's release overrides a held report. `harness_sim.py`, `HARNESS_INTEGRATION.md` and this file updated. |
+| (next) | 10-21 | Light tiles answer every press (fixes a lock after a bench light edit); door tiles back to Open/Close; automatic lights; automatic announcements in both modes and the bench `at_station` row; spawning keeps the selection; no driver before a train's gains. |
 
 ---
 
@@ -184,6 +203,14 @@ Kept here so a reviewer reading old commits is not misled.
   2026-10-21 (M0).
 - **Brake State as one `brake_state` bool[2] input** — split into
   `emergency_brake_state` and `service_brake_state` on 2026-10-21 (M18).
+- **Door tiles saying "Left: stop first"** while moving (`4688cb4`) — back
+  to "Open left" / "Close left" on 2026-10-21.
+- **Automatic announcing the station name on a new beacon** (R6) —
+  replaced on 2026-10-21 by the arriving / arrived / departing
+  announcements in both modes.
+- **A new train selected on spawn**, with the driver kept signed in —
+  replaced on 2026-10-21: spawning keeps the selection, and an
+  uncommissioned train has no driver.
 - **Style-guide sizes** (36 px readouts, 36 px dial figures, 44 px tiles,
   13 px bench outputs, from `4bdb3b7`) — reverted to Ivan's sizes in
   `2fa4b6d`.

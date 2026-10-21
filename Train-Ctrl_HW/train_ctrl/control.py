@@ -10,6 +10,10 @@ from __future__ import annotations
 from typing import Any
 
 from .constants import (
+    ANNOUNCE_ARRIVED,
+    ANNOUNCE_ARRIVING,
+    ANNOUNCE_ARRIVING_BLOCKS,
+    ANNOUNCE_DEPARTING,
     ANNOUNCE_LOCKOUT_MS,
     BRAKE_DETECT_S,
     ENGINE_DETECT_ACCEL_MPS2,
@@ -20,6 +24,8 @@ from .constants import (
     MAX_FORCE_N,
     MAX_POWER_W,
     MAX_SPEED_MPS,
+    NIGHT_END_S,
+    NIGHT_START_S,
     PICKUP_DETECT_MIN_BLOCKS,
     SERVICE_BAND_MPS,
     STANDSTILL_MPS,
@@ -41,14 +47,26 @@ class ControllerCore:
         self.integral = 0.0
         # Inert until an engineer commissions the gains.
         self.armed = False
-        # Automatic station stop (REQUIREMENTS.md M6): a new beacon
-        # station not yet served, and whether the train is held at
-        # it, first with the doors open and then while they close.
+        # Station stop (REQUIREMENTS.md M6, M7): a station beacon
+        # heard and not yet served, the station it named, whether the
+        # train has arrived there, and, in Automatic, whether it is
+        # held there with the doors open and then while they close.
         self._station_pending = False
+        self._station_name = ""
+        self._at_station = False
         self._dwelling = False
         self._closing = False
-        # Seconds left on an automatic announcement command.
+        # Whether last tick's inputs carried a beacon, so a beacon
+        # turning up is told apart from one heard every tick.
+        self._beacon_heard = False
+        # The authority last acted on, for "arriving soon".
+        self._last_authority: int | None = None
+        # Seconds left on an announcement command.
         self._announce_left_s = 0.0
+        # Automatic lights (REQUIREMENTS.md M8): night and underground
+        # as of the last tick, so only their changes act on the lights.
+        self._night: bool | None = None
+        self._underground = False
         self._clear_detection()
 
     def _clear_detection(self) -> None:
@@ -105,13 +123,13 @@ class ControllerCore:
             if self._announce_left_s <= 0.0:
                 s.announcement = ""
         self.detect_failures()
+        self._auto_lights()
+        if self.armed and not s.manual:
+            # Commanded speed is the speed limit, never above the
+            # car's 70 km/h (REQUIREMENTS.md M1).
+            s.target_mps = self.speed_cap_mps
+        self._station_stop()
         if self.armed:
-            if not s.manual:
-                # Commanded speed is the speed limit, never above the
-                # car's 70 km/h (REQUIREMENTS.md M1).
-                s.target_mps = self.speed_cap_mps
-            self._station_stop()
-
             error = s.target_mps - s.actual_mps
             # A target of zero means stop, so the brake holds to a
             # stand rather than leaving the train creeping inside the
@@ -156,16 +174,18 @@ class ControllerCore:
         """
         s = self.state
         staged = dict(staged)
+        # A beacon is heard only near a station (truth beacon.md).
+        # One turning up, or naming a new station, means a station to
+        # serve once the train stops there; one heard every tick while
+        # the train stands there does not start another.
+        heard = any(key in staged for key in
+                    ("beacon_station", "beacon_side", "beacon_underground"))
         station = staged.get("beacon_station", s.beacon_station)
-        if station and station != s.beacon_station:
-            # A new station ahead, served once the train stops. In
-            # Automatic it is announced now, on the approach: the
-            # controller sends the command and the Train Model plays
-            # it (REQUIREMENTS.md M7).
+        new = not self._beacon_heard or station != s.beacon_station
+        if heard and new and station and not self._at_station:
             self._station_pending = True
-            if not s.manual:
-                s.announcement = station
-                self._announce_left_s = ANNOUNCE_LOCKOUT_MS / 1000
+            self._station_name = station
+        self._beacon_heard = heard
         emergency = staged.pop("emergency_brake_state", None)
         service = staged.pop("service_brake_state", None)
         for attr, value in staged.items():
@@ -368,31 +388,54 @@ class ControllerCore:
         """Whether an Automatic station stop is holding the train."""
         return self._dwelling or self._closing
 
+    def _announce(self, text: str) -> None:
+        # The controller sends the command; the Train Model plays it
+        # (REQUIREMENTS.md M7). Held for the lockout, on system time.
+        self.state.announcement = text
+        self._announce_left_s = ANNOUNCE_LOCKOUT_MS / 1000
+
     def _station_stop(self) -> None:
-        # Automatic only (REQUIREMENTS.md M6). Stopped at a new
-        # station: open the platform side and hold. The dwell is the
-        # Train Model's; the controller holds until the Track Signal
-        # resumes, then closes the doors and departs only once Door
-        # State reports them closed.
+        # REQUIREMENTS.md M6, M7. Announcements in both modes:
+        # arriving soon when the authority comes down to
+        # ANNOUNCE_ARRIVING_BLOCKS; arrived once a station beacon has
+        # been heard and the train stands with no authority left;
+        # departing once the doors report closed and the Track Signal
+        # resumes. Automatic also opens the platform side on arrival
+        # and holds: the dwell is the Train Model's, so the controller
+        # holds until the Track Signal resumes, then closes the doors
+        # and departs only once Door State reports them closed.
         s = self.state
+        authority = self.authority_blocks
+        if (authority == ANNOUNCE_ARRIVING_BLOCKS
+                and self._last_authority not in (None, authority)):
+            self._announce(ANNOUNCE_ARRIVING.format(train_id=s.train_id))
+        self._last_authority = authority
         if s.manual:
             self._dwelling = self._closing = False
-            return
-        if self._station_pending and self.at_stand:
+        if self._station_pending and authority == 0 and self.at_stand:
             self._station_pending = False
-            self._dwelling = True
-            for side in ("left", "right"):
-                if self.platform_on(side):
-                    self.command_door(side, True)
-        resumed = self.commanded_mps > 0.0 and self.authority_blocks > 0
+            self._at_station = True
+            self._announce(ANNOUNCE_ARRIVED.format(
+                train_id=s.train_id, station=self._station_name))
+            if not s.manual:
+                self._dwelling = True
+                for side in ("left", "right"):
+                    if self.platform_on(side):
+                        self.command_door(side, True)
+        resumed = self.commanded_mps > 0.0 and authority > 0
         if self._dwelling and resumed:
             self._dwelling = False
             self._closing = True
             for side in ("left", "right"):
                 self.command_door(side, False)
-        if (self._closing and not s.fb_doors_left
-                and not s.fb_doors_right):
+        doors_shut = not s.fb_doors_left and not s.fb_doors_right
+        if self._closing and doors_shut:
             self._closing = False
+        if (self._at_station and not self.station_hold and doors_shut
+                and resumed):
+            self._at_station = False
+            self._announce(ANNOUNCE_DEPARTING.format(
+                train_id=s.train_id, station=self._station_name))
         if self.station_hold:
             # Held, not creeping on what the integrator carried in.
             s.target_mps = 0.0
@@ -419,6 +462,31 @@ class ControllerCore:
         """Command the lights."""
         s = self.state
         s.interior_lights, s.exterior_lights = interior, exterior
+
+    @property
+    def night(self) -> bool:
+        """Whether the system time is between 18:00 and 06:00."""
+        time_of_day = self.state.time_s % 86400
+        return time_of_day >= NIGHT_START_S or time_of_day < NIGHT_END_S
+
+    def _auto_lights(self) -> None:
+        # REQUIREMENTS.md M8, in both modes. Underground is what the
+        # last beacon said. Lights on when a beacon says underground
+        # or at 18:00; off when a later beacon says not underground,
+        # unless it is night, and at 06:00, unless underground. Only
+        # those changes act, so the driver's own choice stands until
+        # the next one. The first tick only takes the time of day in.
+        s = self.state
+        night, underground = self.night, s.beacon_underground
+        if self._night is not None:
+            if ((night and not self._night)
+                    or (underground and not self._underground)):
+                self.command_lights(True, True)
+            elif ((self._night and not night and not underground)
+                    or (self._underground and not underground
+                        and not night)):
+                self.command_lights(False, False)
+        self._night, self._underground = night, underground
 
     def commands(self) -> TrainModelCommands:
         """Return this tick's commands to the Train Model, in SI."""

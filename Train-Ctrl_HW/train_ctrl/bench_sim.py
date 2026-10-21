@@ -31,6 +31,8 @@ from .constants import (
 )
 from .state import TrainModelCommands
 
+_BEACON = ("beacon_station", "beacon_side", "beacon_underground")
+
 # read_inputs() key -> the attribute it sets here, for bench edits.
 _EDITABLE = {
     "commanded_mps": "commanded_mps",
@@ -71,6 +73,11 @@ class SimTrain:
         self.beacon_side = "L"
         self.beacon_underground = False
         self.signal_light_ahead = "YELLOW"
+        # The beacon is heard only near a station (truth beacon.md):
+        # every tick while the bench says the train is at one, and
+        # once after the bench edits it, as if a beacon were passed.
+        self.at_station = False
+        self._beacon_once = False
 
         # Train Model stand-in.
         self.actual_mps = 0.0
@@ -93,7 +100,7 @@ class SimTrain:
     def outputs(self) -> dict[str, Any]:
         """This tick's signals to the controller, as the harness sends them."""
         pickup = self.injected["signal_pickup"]
-        return {
+        values = {
             "commanded_speed": 0.0 if pickup else self.commanded_mps,
             "authority_blocks": 0 if pickup else self.authority_blocks,
             "actual_speed": self.actual_mps,
@@ -102,11 +109,13 @@ class SimTrain:
             "door_state": [self.door_left, self.door_right],
             "light_state": [self.interior_lights, self.exterior_lights],
             "cabin_temperature": self.cabin_temp_c,
-            "beacon_station": self.beacon_station,
-            "beacon_side": self.beacon_side,
-            "beacon_underground": self.beacon_underground,
             "signal_light_ahead": self.signal_light_ahead,
         }
+        if self.at_station or self._beacon_once:
+            values.update(beacon_station=self.beacon_station,
+                          beacon_side=self.beacon_side,
+                          beacon_underground=self.beacon_underground)
+        return values
 
     def apply(self, staged: dict[str, Any]) -> None:
         """Take a bench edit, already read and checked by read_inputs()."""
@@ -115,6 +124,17 @@ class SimTrain:
                 self._pull = self._pull or bool(value)
             elif key in _EDITABLE:
                 setattr(self, _EDITABLE[key], value)
+        if any(key in staged for key in _BEACON):
+            self._beacon_once = True
+
+    def answer_next(self) -> None:
+        """Answer the next door and light commands, changed or not.
+
+        The driver pressed a tile, so the train acts on the command
+        even if it is the one already sent: a state the bench
+        published does not lock the driver out.
+        """
+        self._acted_doors = self._acted_lights = None
 
     def block_change(self) -> None:
         """The train enters the next block: one block less authority."""
@@ -123,6 +143,7 @@ class SimTrain:
     def step(self, cmd: TrainModelCommands, dt: float = TICK_S) -> None:
         """Act on one tick's commands from the controller."""
         self._pull = False
+        self._beacon_once = False
         service_works = not self.injected["brake"]
         power = 0.0 if self.injected["engine"] else cmd.power_w
         v = self.actual_mps

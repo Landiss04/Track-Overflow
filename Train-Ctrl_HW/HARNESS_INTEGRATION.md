@@ -107,9 +107,11 @@ Each train's input dict uses the keys and shapes in truth `signals/`, in SI. The
 
 | Key | Unit or shape | Notes |
 | --- | --- | --- |
-| `beacon_station` | str | Station name. A new name is how the controller learns a station is ahead |
+| `beacon_station` | str | Station name |
 | `beacon_side` | `"L"`, `"R"`, `"LR"` | Any other value is ignored |
-| `beacon_underground` | bool |  |
+| `beacon_underground` | bool | Turns the lights on when true, off when a later beacon says false (unless night; M8) |
+
+**Send the beacon keys only on a tick the train hears a beacon**, as the Train Model passes it (`ControllerOutputs.beacon`, `None` on every other tick): leave all three out otherwise. A beacon turning up, or naming a new station, is a station to serve (M7). Sending the beacon every tick is also safe: only the first tick of an unbroken run counts. The last values are kept between beacons.
 | `signal_light_ahead` | `"RED"`, `"YELLOW"`, `"GREEN"`, `"SUPER GREEN"` | Shown only; any other value is ignored. From the Track Model directly (`TrackModelOutputs.signal_seen[train_id]`, on the tick the train enters a signal block; M20), not yet mapped (`OPEN_ISSUES.md` #27) |
 
 Not an input: the speed limit the Train Model passes through (`ControllerOutputs.speed_limit_mps`); leave it out, or it is ignored like any unknown key (M1, `OPEN_ISSUES.md` #24).
@@ -138,8 +140,9 @@ Rules:
 
 - **Speed.** The target is the commanded speed, never above the car's 70 km/h (43.5 mph). The Train Model has no governor (D009), so the controller holds the cap (M1).
 - **Traction** is 0 while either brake is commanded, and while an Automatic station stop holds the train. A train that is not commissioned commands 0 W (see Commissioning).
-- **Doors** (M6). A door opens only when `actual_speed` reports the train stopped (under 0.1 m/s), and only on the platform side the last beacon gave. In Automatic, when a new `beacon_station` has arrived and the train stops, the controller opens the platform side and holds the train. When the Track Signal resumes (commanded speed and authority both above 0), it closes the doors, and it moves off only once `door_state` reports both closed. The dwell itself is the Train Model's.
-- **Announcements** (M7). The controller only sends the command; the Train Model makes the announcement. In Automatic, a new `beacon_station` sends that station's name for 5 s. In Manual, the driver's press does.
+- **Doors** (M6). A door opens only when `actual_speed` reports the train stopped (under 0.1 m/s), and only on the platform side the last beacon gave. In Automatic, on arriving at a station (a station beacon heard, `authority_blocks` 0, stopped) the controller opens the platform side and holds the train. When the Track Signal resumes (commanded speed and authority both above 0), it closes the doors, and it moves off only once `door_state` reports both closed. The dwell itself is the Train Model's.
+- **Announcements** (M7). The controller only sends the command; the Train Model makes the announcement. In both modes it sends, each for 5 s of `time_s`: "The train *id* is arriving soon" when `authority_blocks` comes down to 3; "The train *id* has arrived at *station*" once a station beacon has been heard and the train stands (`actual_speed` under 0.1 m/s) with `authority_blocks` 0; "The train *id* is departing from *station*" once `door_state` reports both closed and `commanded_speed` and `authority_blocks` are back above 0. *id* is the ID the train was added with. In Manual, the driver's press also sends the station name.
+- **Lights** (M8). In both modes the controller turns `light_command` on with an underground beacon and at 18:00 of `time_s`, and off with a later not-underground beacon (unless it is 18:00–06:00) and at 06:00 (unless underground). In between, the driver's choice stands.
 
 ## Showing the console
 
@@ -173,7 +176,7 @@ How it behaves with a harness fleet:
 
 Every train starts uncommissioned and commands 0 W until an engineer sets its gains. The brakes and the safety path run from the first tick regardless, so an uncommissioned train can still be stopped and still reports its brakes.
 
-Decided (M9): the engineer commissions every train, harness-dispatched or not, once, at the very start. Defaults are offered but never applied on their own. Gains are set from the console:
+Decided (M9): the engineer commissions every train, harness-dispatched or not, once, at the very start. Defaults are offered but never applied on their own. Until then the train has no driver: with it selected, the console stays behind the sign-in view and the Driver role is refused. Gains are set from the console:
 
 1. Select the train in the console.
 2. Sign in as Engineer, and set Kp and Ki.

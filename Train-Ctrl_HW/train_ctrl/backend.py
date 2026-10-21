@@ -59,6 +59,7 @@ class ConsoleBackend(QObject):
 
     #: Roles, by the index the Operator toggle uses. -1 is signed out.
     ROLES = ("driver", "engineer")
+    DRIVER_INDEX = ROLES.index("driver")
     ENGINEER_INDEX = ROLES.index("engineer")
 
     def __init__(self, parent: QObject | None = None, *,
@@ -108,7 +109,7 @@ class ConsoleBackend(QObject):
 
     # ---------------------------------------------------------- fleet
     def add_train(self, number: int, line: str, target: str) -> str:
-        """Put another train in the simulation and select it.
+        """Put another train in the simulation.
 
         The number is the operator's to choose; the prefix follows
         the line, which is how the CTC roster reads. Returns the id,
@@ -125,7 +126,10 @@ class ConsoleBackend(QObject):
         if self._owns_fleet:
             self.sims[train_id] = SimTrain()
         self.notes[train_id] = ""
-        self.selected = train_id
+        # The console stays on the train it shows; only the first train
+        # is selected for it.
+        if not self.has_train:
+            self.selected = train_id
         self.spawn_note = f"{train_id} spawned on the {line.lower()}."
         self._sync_roster()
         return train_id
@@ -321,6 +325,7 @@ class ConsoleBackend(QObject):
             "inject_engine": bool(sim and sim.injected["engine"]),
             "inject_brake": bool(sim and sim.injected["brake"]),
             "inject_pickup": bool(sim and sim.injected["signal_pickup"]),
+            "bench_at_station": bool(sim and sim.at_station),
             "fb_doors_left": s.fb_doors_left,
             "fb_doors_right": s.fb_doors_right,
             "fb_interior_lights": s.fb_interior_lights,
@@ -404,6 +409,12 @@ class ConsoleBackend(QObject):
         if index == self.ENGINEER_INDEX and self.core.armed:
             self._publish()
             return
+        # Nobody drives a train before its gains are set: the driver's
+        # console stays hidden until the engineer commissions it.
+        if index == self.DRIVER_INDEX and self.has_train \
+                and not self.core.armed:
+            self._publish()
+            return
         in_range = 0 <= index < len(self.ROLES)
         self.operator = self.ROLES[index] if in_range else ""
         if self.operator == "engineer":
@@ -427,14 +438,20 @@ class ConsoleBackend(QObject):
 
     @Slot(str)
     def select_train(self, train_id: str) -> None:
-        """Point the console and the bench at another train."""
+        """Point the console and the bench at another train.
+
+        A train whose gains are not set yet signs the driver out: its
+        console stays hidden until the engineer commissions it.
+        """
         if train_id in self.fleet:
             self.selected = train_id
+            if self.operator == "driver" and not self.core.armed:
+                self.operator = ""
         self._publish()
 
     @Slot(int, str, str)
     def spawn_train(self, number: int, line: str, target: str) -> None:
-        """Add a train to the simulation and select it.
+        """Add a train to the simulation, keeping the selection.
 
         It starts where every train starts: stopped, uncommissioned,
         with its own authority and destination, running its own
@@ -543,6 +560,7 @@ class ConsoleBackend(QObject):
         if not self.can_drive:
             return
         self.core.command_door(side, open_)
+        self._answer_press()
         self._publish()
 
     @Slot(bool)
@@ -551,6 +569,7 @@ class ConsoleBackend(QObject):
         if not self.can_drive:
             return
         self.core.command_lights(on, self.core.state.exterior_lights)
+        self._answer_press()
         self._publish()
 
     @Slot(bool)
@@ -559,7 +578,16 @@ class ConsoleBackend(QObject):
         if not self.can_drive:
             return
         self.core.command_lights(self.core.state.interior_lights, on)
+        self._answer_press()
         self._publish()
+
+    def _answer_press(self) -> None:
+        # The bench's train acts on a pressed tile even when the command
+        # is unchanged, so a door or light state the bench published
+        # never locks the driver out. A real Train Model follows the
+        # command every tick.
+        if self.sim is not None:
+            self.sim.answer_next()
 
     @Slot()
     def announce(self) -> None:
@@ -646,6 +674,10 @@ class ConsoleBackend(QObject):
         # not a signal: the controller has to detect them.
         injected = {name: bool(values[f"failure_{name}"])
                     for name in FAILURES if f"failure_{name}" in values}
+        # Whether the train is at a station is the bench's: it decides
+        # whether the beacon is heard (bench_sim.py).
+        at_station = (bool(values["at_station"])
+                      if "at_station" in values else sim.at_station)
         # The bench's emergency row is a passenger pull.
         if "emergency_brake_state" in values:
             si["emergency_brake_state"] = bool(
@@ -664,6 +696,7 @@ class ConsoleBackend(QObject):
                               for row, now in zip(rows, current)]
         sim.apply(read_inputs(si))
         sim.injected.update(injected)
+        sim.at_station = at_station
         # Clearing a failure on the bench resolves it in the controller
         # too, until the controller can see resolution for itself
         # (REQUIREMENTS.md M5, OPEN_ISSUES.md #23).

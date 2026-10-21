@@ -2,7 +2,7 @@
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Last reviewed 2026-10-21 (controller / test bench
-separation, `REQUIREMENTS.md` M0–M20; R15–R17 done the same day).
+separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
 
 ## Resolved 2026-10-21
 
@@ -30,6 +30,7 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R17 done the same day).
   simulator, below.
 - **Emergency echo** (`HARNESS_INTEGRATION.md`): fixed with #25's
   controller side (R16).
+- **18. Automatic lights** are built (R20, M8).
 
 ## Added 2026-10-15
 
@@ -45,13 +46,6 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R17 done the same day).
     commissioning and sets `operator = "driver"` unconditionally. Sign the
     console out inside that window and a driver is signed in anyway,
     unlocking Manual controls.
-
-18. **Automatic lights are not built.** Decided (M8): on with an
-    underground beacon, off with a later not-underground one; on at 18:00
-    and off at 06:00 system time; kept on when leaving underground between
-    18:00 and 06:00; both modes; the driver may override, and the rules act
-    only on those transitions. Needs the time of day as an input from the
-    harness clock, and from the bench clock on the bench (M11).
 
 19. **Module rules are not recorded outside this folder.** Rules M0–M20
     in `REQUIREMENTS.md` are in neither truth's Train Controller contract
@@ -148,9 +142,8 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R17 done the same day).
 30. **Rules decided 2026-10-21 not yet in the code.** M1 (70 km/h cap
     still applied), M3 and M5 (resolution not detected; blocked on #23),
     M4 (0.5 s detection; service command forced off), M6 (Manual doors
-    still platform side only), M7 (Manual announcement lockout on a
-    wall-clock timer, though `time_s` is now available), M8 (automatic
-    lights; `time_s` is now available), M17 (forced service brake at 0
+    still platform side only), M7 (the Manual press: station name only,
+    lockout on a wall-clock timer), M17 (forced service brake at 0
     authority), M19 (engine detection uses mass and `F = P/v`, #28), M20
     (signal light not mapped, #27). Update `HARNESS_INTEGRATION.md` and
     `CHANGELOG.md` with each.
@@ -163,6 +156,24 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R17 done the same day).
     - The numbers drawer's acceleration comes from the bench simulation
       and reads 0 under a harness: it is not a signal the controller
       receives (M12; the drawer is to be removed).
+
+32. **Choices made in R21–R22 for review** (2026-10-21, not specified):
+    - Automatic opens the doors on *arrival* (station beacon heard, no
+      authority, stopped), the same event as the arrival announcement.
+      Before, it opened at any stop after a new beacon.
+    - The departure announcement also needs authority above 0, the same
+      "Track Signal resumes" test Automatic departs on.
+    - Wording: "The train *id* is departing from *station*" (the request
+      said "train *id* is departing", without "The").
+    - The bench sends a beacon once after any beacon row is sent, so
+      setting underground alone works; every such beacon with a station
+      name arms a station stop, as a real beacon would.
+    - "Arriving soon" fires whenever the authority comes down to 3,
+      station or not.
+    - Lights: both interior and exterior switch together.
+    - With an uncommissioned train selected nobody is signed in, so
+      nobody can reach its emergency brake from the console; it commands
+      0 W and cannot move under its own power.
 
 ## Carried over
 

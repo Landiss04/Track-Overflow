@@ -25,7 +25,7 @@ Panel {
 
     // Only the platform side opens, and only at a stand; an open door
     // can always be closed, so a door left open when the platform side
-    // changes is not stuck. A moving train says why it will not open.
+    // changes is not stuck. A tile that cannot act now is greyed.
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
@@ -37,8 +37,7 @@ Panel {
             on: root.s.fb_doors_left
             tone: "info"
             text: root.s.fb_doors_left ? qsTr("Close left")
-                : root.s.at_stand ? qsTr("Open left")
-                : qsTr("Left: stop first")
+                                       : qsTr("Open left")
             onClicked: controller.set_door("left", !root.s.fb_doors_left)
         }
 
@@ -49,8 +48,7 @@ Panel {
             on: root.s.fb_doors_right
             tone: "info"
             text: root.s.fb_doors_right ? qsTr("Close right")
-                : root.s.at_stand ? qsTr("Open right")
-                : qsTr("Right: stop first")
+                                        : qsTr("Open right")
             onClicked: controller.set_door("right", !root.s.fb_doors_right)
         }
     }

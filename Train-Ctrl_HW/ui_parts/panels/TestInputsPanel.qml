@@ -49,7 +49,9 @@ Panel {
         // has detected (that is in the header pills).
         "failure_engine": s.inject_engine,
         "failure_signal_pickup": s.inject_pickup,
-        "failure_brake": s.inject_brake
+        "failure_brake": s.inject_brake,
+        // The bench's own: whether the beacon is heard every tick.
+        "at_station": s.bench_at_station
     })
 
     // What is typed but not sent, and which rows were typed in. The
@@ -479,6 +481,23 @@ Panel {
                 pending: root.touched["signal_light_ahead"] === true
                     && root.pending("signal_light_ahead")
                 onEdited: function (v) { root.stage("signal_light_ahead", v); }
+            }
+            // At a station the beacon rows on the left are heard every
+            // tick; otherwise only once, when one of them is sent.
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                rule: false
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "at_station"
+                kind: "bool"
+                value: root.draft.at_station
+                pending: root.touched["at_station"] === true
+                    && root.pending("at_station")
+                onEdited: function (v) { root.stage("at_station", v); }
             }
 
             // A refused send, in the shared format (REQ-INTF-004). It

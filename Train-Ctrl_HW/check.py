@@ -491,18 +491,39 @@ def run_check(
     backend.toggle_emergency_brake()
 
     # Another train, running its own plant, with its own gains.
+    # Spawning it leaves the console on the train it shows.
     first = backend.selected
     backend.spawn_train(301, "RED LINE", "f")
-    second = backend.selected
-    expect(second == "R-301", "spawning did not add the train asked for")
+    second = "R-301"
+    expect(second in backend.fleet, "spawning did not add the train asked for")
+    expect(backend.selected == first,
+           "spawning switched the console to the new train")
     expect(backend.fleet.get(second).state.authority_target == "F",
            "a block typed in lower case did not come back capitalised")
     expect(backend.snapshot["train_count"] == 2, "roster did not grow")
     backend.spawn_train(301, "RED LINE", "RED F")
     expect(backend.snapshot["train_count"] == 2,
            "spawning the same id twice added a second copy")
-    expect(not backend.core.armed, "a new train came up commissioned")
+    expect(not backend.fleet.get(second).armed,
+           "a new train came up commissioned")
     expect(backend.fleet.get(first).armed, "spawning disarmed the first train")
+    # Nobody drives a train before its gains are set: picking it signs
+    # the driver out, the Driver role is refused, and the console stays
+    # behind the sign-in view until the engineer commissions it.
+    backend.select_train(second)
+    expect(backend.snapshot["operator"] == ""
+           and not backend.snapshot["signed_in"],
+           "the driver was handed a train with no gains")
+    backend.select_operator(0)
+    expect(backend.snapshot["operator"] == "",
+           "the driver signed in to a train with no gains")
+    if shots:
+        window.grabWindow().save(str(shots / "08-needs-gains.png"))
+    backend.select_operator(1)
+    backend.commission_gains(400000, 8000)
+    _settle(app, mod.GAINS_HANDOVER_MS + 400)
+    expect(backend.snapshot["operator"] == "driver",
+           "the driver did not get the train once its gains were set")
     # A new train is stopped, so this engages and releases cleanly,
     # and the train beside it is not touched either way.
     backend.toggle_emergency_brake()
@@ -516,6 +537,45 @@ def run_check(
     backend.select_train(first)
     expect(backend.selected == first,
            "could not go back to the first train")
+
+    # A light state the bench published never locks the driver out: a
+    # pressed tile is answered even when the command is unchanged.
+    backend.set_manual(True)
+    send({"light_state_interior": False})
+    backend.set_interior_lights(not backend.snapshot["fb_interior_lights"])
+    tick()
+    tick()
+    expect(backend.snapshot["fb_interior_lights"],
+           "a light tile did not answer after the bench published a "
+           "light state")
+    # An underground beacon from the bench turns the lights on, in
+    # either mode (REQUIREMENTS.md M8).
+    send({"beacon_underground": False})
+    backend.set_interior_lights(False)
+    backend.set_exterior_lights(False)
+    tick()
+    send({"beacon_underground": True})
+    expect(backend.snapshot["interior_lights"]
+           and backend.snapshot["exterior_lights"],
+           "an underground beacon from the bench did not turn the "
+           "lights on")
+    # The beacon is heard at a station, every tick; away from one,
+    # only once, when the bench sends a beacon row.
+    send({"at_station": False})
+    expect("beacon_station" not in backend.sim.outputs(),
+           "the beacon was heard away from a station")
+    backend.apply_bench_inputs({"beacon_station": "DORMONT"})
+    expect("beacon_station" in backend.sim.outputs(),
+           "a beacon row the bench sent was not heard")
+    tick()
+    expect("beacon_station" not in backend.sim.outputs(),
+           "a beacon sent once was heard again")
+    send({"at_station": True})
+    tick()
+    expect(backend.snapshot["bench_at_station"]
+           and "beacon_station" in backend.sim.outputs(),
+           "the beacon was not heard every tick at a station")
+    send({"at_station": False})
 
     # The console's train picker narrows the roster as the operator
     # types, and a pick selects that train.
@@ -736,6 +796,7 @@ def run_check(
     def stopped() -> bool:
         return abs(door.state.actual_mps) < mod.STANDSTILL_MPS
     plant.beacon_station = "DORMONT"
+    plant.at_station = True
     plant.commanded_mps, plant.authority_blocks = 0.0, 0
     drive(door, plant, 30)
     expect(stopped() and door.state.fb_doors_right
@@ -755,6 +816,7 @@ def run_check(
     expect(door.state.target_mps > 0.0,
            "the train did not leave once the doors reported closed")
     plant.actual_mps = 5.0
+    plant.at_station = False
     plant.commanded_mps, plant.authority_blocks = 0.0, 0
     drive(door, plant, 30)
     expect(stopped() and not door.state.doors_right,
@@ -815,21 +877,80 @@ def run_check(
     expect(fleet.get("T-1").state.time_s == 18 * 3600.0,
            "a refused time still reached the controller")
 
-    # Announcements are commands (REQUIREMENTS.md M7): in Automatic a
-    # new station beacon sends one on the approach, for the lockout,
-    # and in Manual only the driver's press does.
-    talk = mod.ControllerCore()
-    talk.apply_staged(mod.read_inputs({"beacon_station": "GLENBURY"}))
-    expect(talk.commands().announcement == "GLENBURY",
-           "Automatic sent no announcement on the approach")
-    for _ in range(round(mod.ANNOUNCE_LOCKOUT_MS / 1000 / talk.dt) + 1):
-        talk.step()
-    expect(talk.commands().announcement == "",
-           "the automatic announcement never cleared")
-    talk.state.manual = True
-    talk.apply_staged(mod.read_inputs({"beacon_station": "DORMONT"}))
-    expect(talk.commands().announcement == "",
-           "Manual announced without the driver's press")
+    # Announcements are commands (REQUIREMENTS.md M7), in both modes:
+    # arriving soon at 3 blocks of authority; arrived once a station
+    # beacon was heard and the train stands with none left; departing
+    # once the doors report closed and the Track Signal resumes. Each
+    # is held for the lockout, then cleared.
+    for manual in (False, True):
+        mode = "Manual" if manual else "Automatic"
+        talk = mod.ControllerCore()
+        talk.state.manual = manual
+        talk.state.train_id = "T-9"
+
+        def say(**values: Any) -> str:
+            talk.apply_staged(mod.read_inputs(values))
+            talk.step()
+            return talk.commands().announcement
+        say(commanded_speed=10.0, authority_blocks=4, actual_speed=10.0,
+            door_state=[False, False])
+        expect(say(authority_blocks=3)
+               == mod.ANNOUNCE_ARRIVING.format(train_id="T-9"),
+               f"{mode} did not announce arriving soon at 3 blocks")
+        say(beacon_station="DORMONT", beacon_side="R")
+        say(authority_blocks=2)
+        say(authority_blocks=1)
+        arrived = mod.ANNOUNCE_ARRIVED.format(train_id="T-9",
+                                              station="DORMONT")
+        expect(say(commanded_speed=0.0, authority_blocks=0,
+                   actual_speed=5.0) != arrived,
+               f"{mode} announced the arrival while still moving")
+        expect(say(actual_speed=0.0) == arrived,
+               f"{mode} did not announce the arrival")
+        said = say(commanded_speed=10.0, authority_blocks=5)
+        expect(said == mod.ANNOUNCE_DEPARTING.format(train_id="T-9",
+                                                     station="DORMONT"),
+               f"{mode} did not announce the departure, said {said!r}")
+        for _ in range(round(mod.ANNOUNCE_LOCKOUT_MS / 1000 / talk.dt) + 1):
+            talk.step()
+        expect(talk.commands().announcement == "",
+               f"{mode}'s announcement never cleared")
+
+    # Automatic lights (REQUIREMENTS.md M8), in either mode: on with an
+    # underground beacon and at 18:00; off with a later beacon saying
+    # not underground, unless it is night, and at 06:00. Only those
+    # changes act, so the driver's own choice stands in between.
+    lamp = mod.ControllerCore()
+    lamp.state.manual = True
+
+    def lights() -> tuple[bool, bool]:
+        return lamp.commands().light_command
+
+    def lamp_tick(time_s: float, **values: Any) -> None:
+        lamp.state.time_s = time_s
+        lamp.apply_staged(mod.read_inputs(values))
+        lamp.step()
+    noon, dusk = 12 * 3600.0, 18 * 3600.0
+    lamp_tick(noon)
+    lamp.command_lights(False, False)
+    lamp_tick(noon, beacon_station="A", beacon_underground=True)
+    expect(lights() == (True, True),
+           "an underground beacon did not turn the lights on")
+    lamp.command_lights(False, True)
+    lamp_tick(noon)
+    expect(lights() == (False, True),
+           "the automatic lights overrode the driver between changes")
+    lamp_tick(noon, beacon_station="B", beacon_underground=False)
+    expect(lights() == (False, False),
+           "leaving underground by day did not turn the lights off")
+    lamp_tick(dusk)
+    expect(lights() == (True, True), "18:00 did not turn the lights on")
+    lamp_tick(dusk, beacon_station="C", beacon_underground=True)
+    lamp_tick(dusk, beacon_station="D", beacon_underground=False)
+    expect(lights() == (True, True),
+           "leaving underground at night turned the lights off")
+    lamp_tick(30 * 3600.0)                  # 06:00 the next day
+    expect(lights() == (False, False), "06:00 did not turn the lights off")
 
     # Authority is used as given (REQUIREMENTS.md M16): the bench's
     # simulation never spends it, however far the train travels. A
