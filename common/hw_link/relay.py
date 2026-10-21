@@ -27,6 +27,7 @@ class HardwareRelay(QObject):
     viewChanged = Signal(dict)
     event = Signal(str)
     completed = Signal(int, dict)
+    closing = Signal()
 
     def __init__(
         self,
@@ -117,6 +118,8 @@ class HardwareRelay(QObject):
             self._handle(incoming)
 
     def _handle(self, incoming: dict[str, Any]) -> None:
+        if self._closed:
+            return
         op = incoming["op"]
         if op == p.HELLO:
             if (
@@ -261,7 +264,8 @@ class HardwareRelay(QObject):
 
     def _pump(self) -> None:
         if (
-            self._ready
+            not self._closed
+            and self._ready
             and self._online
             and self._inflight is None
             and self._queue
@@ -275,6 +279,8 @@ class HardwareRelay(QObject):
         self, name: str, args: dict[str, Any], timeout_ms: int = 5000
     ) -> Any:
         """Apply a window action in stream order; wait within its UI slot."""
+        if self._closed:
+            return None  # Delayed window timers can outlive QML teardown.
         request = p.message(p.ACTION, self._next_id(), action=name, args=args)
         result: list[dict[str, Any]] = []
         loop = QEventLoop()
@@ -285,19 +291,23 @@ class HardwareRelay(QObject):
                 loop.quit()
 
         self.completed.connect(done)
+        self.closing.connect(loop.quit)
         timer = QTimer()
         timer.setSingleShot(True)
         timer.timeout.connect(loop.quit)
         self._action_depth += 1
         self._queue.appendleft(request)
         self._pump()
-        if not result:
+        if not result and not self._closed:
             timer.start(timeout_ms)
             loop.exec()
         self.completed.disconnect(done)
+        self.closing.disconnect(loop.quit)
         timer.stop()
         self._action_depth -= 1
         QTimer.singleShot(0, self._pump)
+        if not result and self._closed:
+            return None
         if not result:
             raise ConnectionError(
                 "The Pi did not acknowledge the action; it remains queued."
@@ -312,6 +322,9 @@ class HardwareRelay(QObject):
 
     def close(self) -> None:
         self._closed = True
+        self.closing.emit()
+        self._queue.clear()
+        self._inflight = None
         if self._online:
             self.transport.write(p.encode(p.message("QUIT")))
         self.transport.close()

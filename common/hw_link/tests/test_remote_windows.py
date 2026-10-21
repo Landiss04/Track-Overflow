@@ -179,3 +179,33 @@ def test_engineer_compound_action_precedes_queued_next_step(tmp_path):
         backend._ui.stop()
     finally:
         relay.close()
+
+
+def test_late_window_announcement_timer_does_not_wait_on_closed_pi(tmp_path):
+    from PySide6.QtCore import QTimer
+    from train_ctrl.backend import ConsoleBackend
+
+    relay, replies, events, views, errors = make_relay(tmp_path)
+    fleet = RemoteTrainFleet(relay)
+    relay.submit_step(request(1))
+    until(lambda: "R1" in fleet)
+    backend = ConsoleBackend(fleet=fleet)
+    backend.announcing.add("R1")
+    relay.close()
+    queued_before = len(relay._queue)
+    completed = []
+    failures = []
+
+    def late_timer():
+        try:
+            backend._announce_done("R1")
+        except Exception as error:
+            failures.append(error)
+        completed.append(True)
+
+    QTimer.singleShot(0, late_timer)
+    until(lambda: bool(completed), timeout=1000)
+    assert not failures
+    assert len(relay._queue) == queued_before == 0
+    assert not errors
+    backend._ui.stop()
