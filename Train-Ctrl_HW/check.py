@@ -125,10 +125,10 @@ def run_check(
     expect(not backend.core.armed, "controller armed before commissioning")
     expect(backend.snapshot["clock"] == "05:00:00",
            "the clock does not start at D017's 05:00:00")
-    # The toy plant spends a block of authority every 100 m, and the
-    # drives below cover kilometres, so give them room; the countdown
-    # has its own check further on. Commanded speed is the driver's
-    # ceiling (REQUIREMENTS.md M1), so give that room too.
+    # Authority holds until a block change or a new count arrives
+    # (REQUIREMENTS.md M16), so the drives below only need it above 0.
+    # Commanded speed is the driver's ceiling (REQUIREMENTS.md M1), so
+    # give that room too.
     backend.apply_bench_inputs({"authority_blocks": 200,
                                 "commanded_speed": 43})
     if shots:
@@ -761,20 +761,26 @@ def run_check(
     expect(talk.commands().announcement == "",
            "Manual announced without the driver's press")
 
-    # Until the Track Model sends the count, the toy plant spends one
-    # block of authority per BLOCK_LENGTH_M travelled, part-blocks
-    # carried over.
-    # carried over. A fresh core coasting at a steady 10 m/s, with no
-    # power and no brake, covers exactly two and a half blocks.
+    # Authority is used as given (REQUIREMENTS.md M16): the toy plant
+    # never spends it, however far the train travels. A fresh core
+    # coasting at 10 m/s for 25 s covers 250 m.
     plant = mod.ControllerCore()
     plant.state.actual_mps = plant.state.target_mps = 10.0
     plant.state.authority_blocks = 3
-    for _ in range(round(2.5 * mod.BLOCK_LENGTH_M / 10.0 / plant.dt)):
+    for _ in range(round(25.0 / plant.dt)):
         plant._plant()
-    expect(plant.state.authority_blocks == 1
-           and abs(plant.state.block_progress_m
-                   - 0.5 * mod.BLOCK_LENGTH_M) < 1e-6,
-           "two and a half blocks of travel did not spend two blocks")
+    expect(plant.state.authority_blocks == 3,
+           "the toy plant spent authority nobody sent")
+    # On the bench a block change stands in for the Track Model
+    # sending the next block's count: one fewer, never below 0.
+    backend.apply_bench_inputs({"authority_blocks": 2})
+    backend.bench_block_change()
+    expect(backend.snapshot["track_authority_blocks"] == 1,
+           "a bench block change did not spend one block")
+    backend.bench_block_change()
+    backend.bench_block_change()
+    expect(backend.snapshot["track_authority_blocks"] == 0,
+           "a bench block change took authority below 0")
     backend.apply_inputs({"authority_blocks": 0})
     backend.core.enforce_safety()
     expect(not backend.core.state.emergency_brake,

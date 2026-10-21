@@ -29,12 +29,10 @@ class State:
     # has to stop, as the Track Model reports it, and the block it
     # stops at. A count and an ID, not a measurement, so neither is
     # ever converted. The control law does not track blocks: the
-    # count it is sent is how far it may go. Until the Track Model
-    # sends that count, the toy plant spends it, one block per
-    # BLOCK_LENGTH_M travelled, carrying the part-block here.
+    # count it is sent is how far it may go, used as given: it
+    # changes only when a new count arrives (REQUIREMENTS.md M16).
     authority_blocks: int = 4
     authority_target: str = "GREEN K"
-    block_progress_m: float = 0.0
 
     power_w: float = 0.0
     service_brake: bool = False

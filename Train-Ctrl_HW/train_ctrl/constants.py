@@ -72,8 +72,6 @@ ENGINE_DETECT_ACCEL_MPS2 = 0.1
 ENGINE_DETECT_S = 2.0
 ENGINE_RISE_MPS = 0.05
 PICKUP_DETECT_MIN_BLOCKS = 2
-# Stand-in block length for the toy plant's authority countdown.
-BLOCK_LENGTH_M = 100.0
 
 # ---------------------------------------------------------------- gains
 # Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three

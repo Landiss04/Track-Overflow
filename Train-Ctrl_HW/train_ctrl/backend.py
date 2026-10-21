@@ -567,6 +567,21 @@ class ConsoleBackend(QObject):
         self.core.apply_staged(read_inputs(values))
         self._publish()
 
+    @Slot()
+    def bench_block_change(self) -> None:
+        """Stand in for the Track Model as the train enters a block.
+
+        Integrated, the Train Model reports the block change to the
+        Track Model, which then sends the next block's authority; the
+        controller only ever sees the new count. The bench does the
+        same: one block fewer, never below 0, through apply_inputs
+        like any other count (REQUIREMENTS.md M16).
+        """
+        if not self.has_train:
+            return
+        left = max(0, self.core.state.authority_blocks - 1)
+        self.apply_inputs({"authority_blocks": left})
+
     @Slot("QVariantMap")
     def apply_bench_inputs(self, values: dict) -> None:
         """Apply the bench's edited rows, or refuse them all and say why.

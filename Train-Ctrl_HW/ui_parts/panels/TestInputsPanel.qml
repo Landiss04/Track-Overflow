@@ -125,6 +125,16 @@ Panel {
             label: root.dirty ? qsTr("Unsent edits") : qsTr("Sent")
             variant: root.dirty ? "warning" : "ok"
         },
+        // An event, not a row: the Track Model's next count, sent at
+        // once (REQUIREMENTS.md M16).
+        AppButton {
+            objectName: "blockChangeButton"
+            size: "small"
+            variant: "ghost"
+            enabled: root.s.has_train
+            text: qsTr("Block change")
+            onClicked: controller.bench_block_change()
+        },
         AppButton {
             size: "small"
             variant: root.paused ? "primary" : "ghost"

@@ -11,7 +11,6 @@ from typing import Any
 
 from .constants import (
     ANNOUNCE_LOCKOUT_MS,
-    BLOCK_LENGTH_M,
     BRAKE_DETECT_S,
     CABIN_DRIFT_FRACTION,
     CABIN_DRIFT_MAX_C,
@@ -498,15 +497,6 @@ class ControllerCore:
         s.actual_mps = new_v
         if abs(s.actual_mps) < SETTLE_MPS and s.target_mps < SETTLE_MPS:
             s.actual_mps = 0.0          # settle cleanly at a stand
-
-        # Standing in for the Track Model's block count, so the
-        # console shows the train making progress: each fixed-length
-        # block travelled spends one block of authority. Delete this
-        # with the plant once the Track Model sends real counts.
-        s.block_progress_m += abs(s.actual_mps) * self.dt
-        while s.block_progress_m >= BLOCK_LENGTH_M:
-            s.block_progress_m -= BLOCK_LENGTH_M
-            s.authority_blocks = max(0, s.authority_blocks - 1)
 
         # Brake State, as this plant reports it: what is engaged, so
         # a failed service brake reads false whatever was commanded.
