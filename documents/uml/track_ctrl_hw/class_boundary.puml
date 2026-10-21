@@ -1,0 +1,172 @@
+@startuml class_boundary
+!include ../style.iuml
+title Track Controller (HW) — Boundary types (interface.py)
+hide empty members
+
+package "Identity and territory" {
+  class BlockKey <<frozen>> {
+    +line: str
+    +section: str
+    +block_id: str
+    +label: str
+    +ref: BlockRef
+  }
+  class BlockRef <<frozen>> {
+    +line: str
+    +block_id: str
+    +label: str
+  }
+  class Block <<frozen>> {
+    +key: BlockKey
+    +length_m: float
+    +speed_limit_mps: float
+  }
+  class Switch <<frozen>> {
+    +key: BlockKey
+    +point: str
+    +normal_end: str
+    +reverse_end: str
+    +switch_id: str
+  }
+  class Territory <<frozen>> {
+    +line: str
+    +wayside_id: str
+    +blocks: tuple[Block]
+    +switches: tuple[Switch]
+    +crossings: tuple[BlockKey]
+  }
+}
+
+package "Inputs (every tick)" {
+  class TrackControllerInputs <<frozen>> {
+    +time_s: float
+    +ctc: CtcInputs
+    +track_model: TrackModelInputs
+  }
+  class CtcInputs <<frozen>> {
+    +closed_blocks: frozenset[BlockRef]
+    +switch_commands: Mapping[BlockRef, SwitchPosition]
+    +suggestions: Mapping[BlockRef, Suggestion]
+  }
+  class Suggestion <<frozen>> {
+    +speed_mps: int
+    +authority_blocks: int
+  }
+  class TrackModelInputs <<frozen>> {
+    +occupied_blocks: frozenset[BlockKey]
+    +switch_positions: Mapping[BlockKey, SwitchPosition]
+    +crossings_active: Mapping[BlockKey, bool]
+    +signal_aspects: Mapping[BlockKey, SignalAspect]
+  }
+}
+
+package "Outputs (every tick)" {
+  class TrackControllerOutputs <<frozen>> {
+    +track_model: TrackModelOutputs
+    +ctc_reports: tuple[CtcReport]
+    +ready: bool
+    +not_ready(): tuple[CtcReport]
+  }
+  class TrackModelOutputs <<frozen>> {
+    +track_circuits: Mapping[BlockKey, TrackCircuitCommand]
+    +switch_commands: Mapping[BlockKey, SwitchPosition]
+    +crossing_commands: Mapping[BlockKey, bool]
+    +signal_commands: Mapping[BlockKey, SignalAspect]
+  }
+  class TrackCircuitCommand <<frozen>> {
+    +speed_mps: int
+    +authority_blocks: int
+  }
+  class CtcReport <<frozen>> {
+    +wayside_id: str
+    +line: str
+    +sent_at_s: float
+    +ready: bool
+    +blocks: Mapping[BlockKey, BlockReport]
+    +reason: str
+  }
+  class BlockReport <<frozen>> {
+    +occupied: bool
+    +switch_position: SwitchPosition | None
+    +crossing_active: bool | None
+    +signal_aspect: SignalAspect | None
+  }
+}
+
+package "Snapshot (for the window)" {
+  class TrackControllerSnapshot <<frozen>> {
+    +line: str | None
+    +waysides: tuple[WaysideSnapshot]
+    +time_s: float | None
+    +ticks: int
+    +ready: bool
+    +not_ready: tuple[str]
+  }
+  class WaysideSnapshot <<frozen>> {
+    +territory: Territory
+    +program: ProgramInfo | None
+    +scan: ScanInfo
+    +switches: tuple[SwitchState]
+    +signal_commands / signal_reports
+    +crossing_commands / crossing_reports
+    +track_circuits
+    +occupied_blocks / closed_blocks
+    +suggestions / switch_requests
+    +holding: str
+    +report: CtcReport | None
+  }
+  class ProgramInfo <<frozen>> {
+    +file_name: str
+    +loaded_at_s: float | None
+    +checksum: str
+    +boolean_count: int
+    +statement_count: int
+    +warnings: tuple[str]
+  }
+  class ScanInfo <<frozen>> {
+    +scans: int
+    +last_scan_s: float | None
+    +interval_s: float | None
+    +last_duration_s: float
+    +overruns: int
+    +channels_agree: bool
+    +channel_fault: str
+  }
+  class SwitchState <<frozen>> {
+    +switch: Switch
+    +commanded: SwitchPosition
+    +reported: SwitchPosition | None
+    +agreeing: bool
+  }
+}
+
+enum SwitchPosition {
+  normal
+  reverse
+}
+enum SignalAspect {
+  red
+  yellow
+  green
+  super_green
+}
+
+Territory *-- "1..*" Block
+Territory *-- "*" Switch
+Block --> BlockKey
+Switch --> BlockKey
+BlockKey ..> BlockRef : ref
+TrackControllerInputs *-- CtcInputs
+TrackControllerInputs *-- TrackModelInputs
+CtcInputs *-- "*" Suggestion
+TrackControllerOutputs *-- TrackModelOutputs
+TrackControllerOutputs *-- "*" CtcReport
+TrackModelOutputs *-- "*" TrackCircuitCommand
+CtcReport *-- "*" BlockReport
+TrackControllerSnapshot *-- "*" WaysideSnapshot
+WaysideSnapshot --> Territory
+WaysideSnapshot *-- "0..1" ProgramInfo
+WaysideSnapshot *-- ScanInfo
+WaysideSnapshot *-- "*" SwitchState
+WaysideSnapshot --> "0..1" CtcReport
+@enduml

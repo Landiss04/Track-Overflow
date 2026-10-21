@@ -1,0 +1,34 @@
+@startuml sd04_details_and_report
+!include ../style.iuml
+title SD-04 View PLC program details and the last report to the CTC Office (UC-05, UC-06)
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "PlcDetailsDialog\n(QML)" as Details
+participant "LastReportDialog\n(QML)" as Report
+participant "TrackControllerState" as State
+
+group UC-05 View PLC program details
+  P -> QML : click **i** (PLC program details)\non the Wayside PLC strip
+  QML -> Details : open()
+  Details -> State : read program (file, checksum, Booleans,\nstatements, warnings), channel A/B,\nchannel fault, held fail-safe reason
+  State --> Details : values from the last refresh()
+  Details --> P : running program and output health
+  opt **New PLC** in the dialog
+    P -> Details : click **New PLC**
+    Details -> QML : loadRequested
+    ref over QML, State : SD-02 Load PLC program
+  end
+  P -> Details : **Close**
+end
+
+group UC-06 View last report to the CTC Office
+  P -> QML : **View** on the CTC uplink card
+  QML -> Report : open()
+  Report -> State : read reportReadyText, report rows
+  State --> Report : one row per block: occupancy, switch,\nsignal, crossing (as the Track Model reports them)
+  Report --> P : wayside ready or why not, and each block
+  P -> Report : **Close**
+end
+@enduml

@@ -1,0 +1,58 @@
+@startuml deployment
+!include ../style.iuml
+title Track Controller (HW) — Deployment
+
+node "Host PC\nWindows 11, one machine, no network" as PC {
+  artifact "TrackOverflow.exe\n(PyInstaller bundle)" as Exe
+  node "Central harness process" as HP {
+    component "Central Harness\nshared clock, edge mappings,\nevent log (CSV)" as Harness
+  }
+  node "Track Ctrl HW host process" as TP {
+    component "Track Controller window\n(PySide6 / QML)" as Win
+    component "RemoteTrackController\n+ PiSerialLink" as Remote <<planned>>
+    component "HarnessEndpoint" as EP <<planned>>
+  }
+  node "Other module processes" as Others {
+    component "CTC Office" as CTC
+    component "Track Model" as TM
+    component "Train Model" as TrM
+    component "Track Ctrl SW (Green)" as TCSW
+    component "Train Ctrl SW / HW host" as TrC
+  }
+  folder "Wayside data (host disk)" as Data {
+    file "red_wayside_N.json\nwayside databases" as DB
+    file "red_wayside_N.plc\nPLC programs" as PLC
+  }
+}
+
+node "Raspberry Pi 5\nRaspberry Pi OS, Python 3" as Pi {
+  component "PiLinkServer\nUSB gadget serial /dev/ttyGS0" as PiLink <<planned>>
+  component "HwTrackController\nWayside ×N (Red Line)\nPLC engine: channels A, B\n+ vital block" as Core
+}
+
+node "Raspberry Pi\n(Train Ctrl HW)" as Pi2
+
+Exe ..> HP : starts
+HP --> TP : spawns
+HP --> Others : spawns
+Harness <--> EP : newline JSON\nrequest ID + tick (D005)
+Harness <--> Others : newline JSON
+EP --> Remote
+Win --> Remote
+Win ..> DB : Load database
+Win ..> PLC : New PLC
+Remote <--> PiLink : USB 2.0, CDC-ACM (COM port)\nnewline JSON (D027)
+PiLink --> Core
+TrC <--> Pi2 : USB serial
+
+note bottom of Pi
+  Power: the Pi 5's USB-C port is both its data link and its
+  power input. A PC port may not supply enough for a Pi 5
+  (5 V at 3 A minimum, 5 A recommended). Open item: a separate
+  5 V supply (GPIO header or a data/power splitter).
+end note
+note right of TP
+  The Track Ctrl HW test UI is a debug tool only:
+  not packaged, never started by the harness.
+end note
+@enduml
