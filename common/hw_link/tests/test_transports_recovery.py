@@ -286,3 +286,47 @@ def test_rejected_action_not_replayed_as_accepted_history(tmp_path):
         )
     finally:
         relay.close()
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--pi-reboot-at-tick", "2"],
+        ["--test-pi", "automatic"],
+    ],
+)
+def test_host_rejects_implicit_or_invalid_simulation(args):
+    import subprocess
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "track_overflow.py",
+            "--module",
+            "train-controller-hw",
+            "--harness",
+            "unused",
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2 and "error:" in result.stderr
+
+
+def test_missing_production_pi_holds_readiness_without_fallback(monkeypatch):
+    from common.hw_link.transport import QSerialPortInfo, SerialTransport
+
+    monkeypatch.setattr(QSerialPortInfo, "availablePorts", lambda: [])
+    transport = SerialTransport("track-controller-hw")
+    relay = HardwareRelay("track-controller-hw", transport)
+    ready = []
+    relay.ready.connect(lambda: ready.append(True))
+    try:
+        relay.start()
+        assert transport.retry.isActive()
+        assert not transport.port.isOpen()
+        assert not ready and not relay._ready
+        assert relay.transport is transport
+    finally:
+        relay.close()

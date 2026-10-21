@@ -39,6 +39,7 @@ class HardwareRelay(QObject):
         self.session = uuid.uuid4().hex
         self.buffer = LineBuffer()
         self._id = 1_000_000_000
+        self._action_depth = 0
         self._ready = False
         self._ever_ready = False
         self._online = False
@@ -264,6 +265,8 @@ class HardwareRelay(QObject):
             and self._inflight is None
             and self._queue
         ):
+            if self._action_depth and self._queue[0]["op"] == "STEP":
+                return
             self._inflight = self._queue.popleft()
             self.transport.write(p.encode(self._inflight))
 
@@ -284,13 +287,16 @@ class HardwareRelay(QObject):
         timer = QTimer()
         timer.setSingleShot(True)
         timer.timeout.connect(loop.quit)
-        self._queue.append(request)
+        self._action_depth += 1
+        self._queue.appendleft(request)
         self._pump()
         if not result:
             timer.start(timeout_ms)
             loop.exec()
         self.completed.disconnect(done)
         timer.stop()
+        self._action_depth -= 1
+        QTimer.singleShot(0, self._pump)
         if not result:
             raise ConnectionError(
                 "The Pi did not acknowledge the action; it remains queued."

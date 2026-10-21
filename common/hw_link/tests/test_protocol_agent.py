@@ -196,3 +196,18 @@ def test_agent_import_is_standard_library_only():
         text=True,
     )
     assert run.returncode == 0 and run.stderr == ""
+
+
+def test_view_messages_are_throttled_by_wall_time(monkeypatch):
+    import common.hw_link.agent as agent
+
+    now = [10.0]
+    monkeypatch.setattr(agent.time, "monotonic", lambda: now[0])
+    server = PiLinkServer("train-controller-hw")
+    server.handle(hello())
+    assert any(r["op"] == p.VIEW for r in server.handle(step(1)))
+    for tick in range(2, 12):
+        now[0] += 0.005  # 200 ticks/sec still produces only 10Hz VIEW.
+        assert not any(r["op"] == p.VIEW for r in server.handle(step(tick)))
+    now[0] = 10.11
+    assert any(r["op"] == p.VIEW for r in server.handle(step(12)))

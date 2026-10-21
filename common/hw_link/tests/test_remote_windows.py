@@ -116,3 +116,66 @@ def test_track_state_load_reload_report_and_maintenance(tmp_path):
     finally:
         state.close()
         relay.close()
+
+
+def test_engineer_compound_action_precedes_queued_next_step(tmp_path):
+    from train_ctrl.backend import ConsoleBackend
+
+    relay, replies, events, views, errors = make_relay(tmp_path)
+    fleet = RemoteTrainFleet(relay)
+    sent = []
+    original_write = relay.transport.write
+
+    def observe(data):
+        from common.hw_link import protocol as p
+
+        sent.append(p.decode(data))
+        original_write(data)
+
+    relay.transport.write = observe
+    try:
+        relay.submit_step(request(1))
+        until(lambda: "R1" in fleet)
+        backend = ConsoleBackend(fleet=fleet)
+        backend.select_operator(1)
+        queued = []
+
+        def next_tick(_identity, _reply):
+            if not queued:
+                queued.append(True)
+                relay.submit_step(request(2))
+
+        relay.completed.connect(next_tick)
+        backend.commission_gains(120000, 8000)
+        until(lambda: len(replies) == 2)
+        step_index = next(
+            i
+            for i, item in enumerate(sent)
+            if item["op"] == "STEP" and item["tick"] == 2
+        )
+        armed_index = next(
+            i
+            for i, item in enumerate(sent)
+            if item.get("args", {}).get("field") == "armed"
+        )
+        assert armed_index < step_index
+        preceding = [
+            frame.get("args", {}).get("field") for frame in sent[:step_index]
+        ]
+        assert preceding[-4:] == ["kp", "ki", "integral", "armed"]
+        from common.hw_link.cores import TrainCore
+
+        local = TrainCore()
+        local.step(request(1))
+        local_backend = ConsoleBackend(fleet=local.fleet)
+        local_backend.select_operator(1)
+        local_backend.commission_gains(120000, 8000)
+        import json
+
+        expected = json.loads(json.dumps(local.step(request(2))))
+        assert replies[-1]["outputs"] == expected
+        local_backend._ui.stop()
+        assert not errors
+        backend._ui.stop()
+    finally:
+        relay.close()

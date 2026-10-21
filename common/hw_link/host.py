@@ -84,7 +84,11 @@ def main(argv: list[str] | None = None) -> int:
                 fault_args.extend(["--" + flag, str(value)])
         transport = ProcessTransport(
             options.module,
-            Path(scratch.name) / "agent.jsonl",
+            (
+                options.pi_log.with_suffix(".agent.jsonl")
+                if options.pi_log
+                else Path(scratch.name) / "agent.jsonl"
+            ),
             raw_pty=options.test_pi == "pty",
             fault_args=fault_args,
             parent=app,
