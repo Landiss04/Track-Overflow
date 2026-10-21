@@ -39,13 +39,18 @@ _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 KP, KI = 400_000.0, 8_000.0
 
 
-def report(emergency: bool = False, speed_mps: float = 0.0) -> dict:
+def report(
+    emergency: bool = False,
+    speed_mps: float = 0.0,
+    commanded_mps: float = 10.0,
+    service: bool = False,
+) -> dict:
     """One tick's Train Model report, every key the fleet needs."""
     return {
-        "commanded_speed": 10.0,
+        "commanded_speed": commanded_mps,
         "authority_blocks": 4,
         "actual_speed": speed_mps,
-        "brake_state": [emergency, False],
+        "brake_state": [emergency, service],
         "door_state": [False, False],
         "light_state": [True, True],
         "cabin_temperature": 21.0,
@@ -109,6 +114,51 @@ class EchoTest(unittest.TestCase):
     def test_no_release_without_a_driver(self) -> None:
         commands = [self.step() for _ in range(5)]
         self.assertFalse(any(c.passenger_brake_release for c in commands))
+
+
+class LowerLimitAheadTest(unittest.TestCase):
+    """A train entering a slower block too fast brakes at once.
+
+    The CTC Office does not slow a train ahead of a lower limit; the
+    Train Controller slows it down as soon as it is in the slower
+    block (Kevin Schillinger, 2026-10-21, Q-P4-4). The commanded speed
+    carries the block's limit (REQUIREMENTS.md M1). Green 66 to 67:
+    18 m/s commanded in 66, 10 m/s in 67 (40 km/h).
+    """
+
+    def setUp(self) -> None:
+        self.fleet = TrainControllerFleet(echo_ticks=ECHO_TICKS)
+        self.core = self.fleet.add("G1", "Green")
+        arm(self.core)
+        # Running in the faster block at its commanded speed.
+        for _ in range(5):
+            commands = self.step(speed_mps=17.9, commanded_mps=18.0)
+        self.assertFalse(commands.service_brake)
+        self.assertGreater(commands.power_w, 0.0)
+
+    def step(self, **values: Any) -> Any:
+        """Step the train on one report; return its commands."""
+        return self.fleet.step_all(TICK_S, {"G1": report(**values)})["G1"]
+
+    def test_brakes_on_the_first_tick_in_the_slower_block(self) -> None:
+        commands = self.step(speed_mps=17.9, commanded_mps=10.0)
+        self.assertTrue(commands.service_brake)
+        self.assertEqual(commands.power_w, 0.0)
+        self.assertFalse(commands.emergency_brake)
+
+    def test_holds_the_service_brake_until_under_the_limit(self) -> None:
+        speed = 17.9
+        while speed > 10.0:
+            commands = self.step(speed_mps=speed, commanded_mps=10.0,
+                                 service=True)
+            self.assertTrue(commands.service_brake)
+            self.assertEqual(commands.power_w, 0.0)
+            self.assertFalse(commands.emergency_brake)
+            speed -= 1.2 * TICK_S
+        commands = self.step(speed_mps=9.9, commanded_mps=10.0,
+                             service=True)
+        self.assertFalse(commands.service_brake)
+        self.assertFalse(self.core.state.emergency_brake)
 
 
 class ConsoleFleetTest(unittest.TestCase):
