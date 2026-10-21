@@ -427,13 +427,12 @@ class ConsoleBackend(QObject):
     def set_manual(self, manual: bool) -> None:
         """Switch the selected train between Manual and Automatic.
 
-        Refused while a failure is up: the train is being stopped,
-        and nothing may hand it back a speed until the failure clears.
+        Allowed during a failure too, so the driver can reach Manual to
+        try the train, the service brake say, and see whether a failure
+        has been resolved. The failure still holds the target at 0 and
+        the emergency brake on in whichever mode the train is.
         """
         if not self.has_train or not self.signed_in:
-            return
-        if self.core.failed:
-            self._publish()
             return
         self.core.state.manual = manual
         self._publish()

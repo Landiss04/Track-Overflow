@@ -24,7 +24,7 @@ the 2026-10-21 changes.
 | Service band | 0.05 m/s. Ivan's 0.5 m/s left slow-downs about 1.1 mph over target, since nothing slows the train once the brake lets go; 35 → 30 mph now settles at 30.08 mph (480 kW, 0.1 s step), with no brake chatter. |
 | Authority | A count of blocks remaining, used as given (M16): it changes only when a new count arrives, and the control law stops the train when it reaches 0. Nothing counts blocks: integrated, the Track Model sends the next block's count after the Train Model reports a block change to it; on the bench, the **Block change** button sends one fewer. The 100 m countdown is gone (2026-10-21). |
 | Failure detection | The Train Model no longer reports failures (truth), so the controller infers them from what it sends back (`detect_failures()`, REQ-FUNC-038): brake — service brake commanded but never shown applied for 0.5 s; engine — power that should pull ≥ 0.1 m/s² leaves the speed flat for 2 s; signal pickup — speed and authority drop to 0 together from ≥ 2 blocks. The bench's failure rows inject into the bench's simulation (Murphy) and the controller has to find them. Rules are the team's own design (`REQUIREMENTS.md` §4). |
-| Any detected failure | Emergency brake applied and latched, power 0, target 0; Manual/Automatic switching and the driver's target refused. Latched until the failure is cleared on the test bench; the driver then releases the e-brake at a stand. |
+| Any detected failure | Emergency brake applied and latched, power 0, target 0; the driver's target refused. Manual/Automatic switching is allowed (refused until 2026-10-21), so the driver can try the train. Latched until the failure is cleared on the test bench; the driver then releases the e-brake at a stand. |
 | Engine failure | Traction is zero in the bench simulation; detected as above. |
 | Signal pickup failure | The bench simulation sends zeros for commanded speed and authority, as the Train Model does; once detected they are treated as 0 until the bench clears it. The signal lights are unaffected. Once detected, the console shows "--" for commanded speed and "Stop in" (hero tiles and numbers drawer) rather than a 0 that reads like a real command. |
 | Brake failure | Only the service brake fails (truth `modules/train-model.md`); the emergency brake still works. Once detected, the controller applies the emergency brake, the driver's service request is dropped and the service brake is never commanded; the Stop panel's service brake is greyed out, the emergency brake stays live. Detected 0.6 s after the service brake is asked for (the 0.5 s rule plus one 0.1 s tick), in Manual and Automatic. In the bench simulation, rolling resistance (C_rr 0.002) acts under an injected brake failure only; the controller models none (M19). |
@@ -103,7 +103,8 @@ the 2026-10-21 changes.
   every tick; otherwise once, when one of them is sent.
 - Spawning a train no longer switches the bench or the console to it.
 - `at_station` sits under `authority_blocks`; **Set time** beside the
-  bench clock sets it to a time of day (2026-10-21). The status line and
+  bench clock sets it to a time of day, picked on three wheels (hours
+  0–23, minutes and seconds 0–59) dragged or scrolled (2026-10-21). The status line and
   the announcement output wrap instead of being cut off.
 - Outputs panel adds the Announcement row; values at 18 px.
 
@@ -115,6 +116,10 @@ interface and bench conversion, bad input leaving nothing applied, the bench
 sending only edited rows, the roster signalling only on change, and the train
 picker's search. The 10× check waits on the speed gain instead of a 300 ms
 stopwatch (it failed 4 of 4 runs on Windows before).
+
+2026-10-21 (evening): the mode switches both ways during each failure;
+the time wheels run 24 / 60 / 60, a scroll notch steps one, a drag moves
+them, and the time they show reaches the controller.
 
 2026-10-21 (late afternoon): every checkpoint scans both windows for
 text cut off (elided, or past the window edge) and fails on any; it found
@@ -184,7 +189,8 @@ the dial-scale test) now send and tick first, and the climb is an
 | `5a62ca7` | 10-21 | Authority used as given: the 100 m countdown removed, bench Block change button. `REQUIREMENTS.md` rules M0–M20 from the 2026-10-21 review, each marked with whether the code has it; `OPEN_ISSUES.md` #11, #14, #17, #22 resolved, #23–#30 added. |
 | `3dfdf09` | 10-21 | Bench simulation moved out of the controller (`bench_sim.py`); the bench steps the fleet like the harness; `apply_inputs` removed. Brake State split into two inputs. System time as a `step_all` input; the console shows it. A passenger pull is a turn on, so the driver's release overrides a held report. `harness_sim.py`, `HARNESS_INTEGRATION.md` and this file updated. |
 | `5b99075` | 10-21 | Light tiles answer every press (fixes a lock after a bench light edit); door tiles back to Open/Close; automatic lights; automatic announcements in both modes and the bench `at_station` row; spawning keeps the selection; no driver before a train's gains. |
-| (next) | 10-21 | No text cut off (scan in the self-check; seven fixed); "Sending automatically"; bench announcement wraps; `at_station` under `authority_blocks`; bench Set time. |
+| `a6366c8` | 10-21 | No text cut off (scan in the self-check; seven fixed); "Sending automatically"; bench announcement wraps; `at_station` under `authority_blocks`; bench Set time. |
+| (next) | 10-21 | Mode switching allowed during a failure; the bench's time on drag-and-scroll wheels. |
 
 ---
 

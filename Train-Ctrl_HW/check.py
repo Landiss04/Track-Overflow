@@ -25,10 +25,14 @@ from PySide6.QtCore import (
     Q_RETURN_ARG,
     QMetaObject,
     QObject,
+    QPoint,
     QPointF,
+    Qt,
     QTime,
 )
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QWheelEvent
+from PySide6.QtQuick import QQuickItem
+from PySide6.QtTest import QTest
 
 import train_ctrl as mod
 from train_ctrl.bench_sim import SimTrain
@@ -614,6 +618,50 @@ def run_check(
     expect(backend.time_s == before and "HH:MM" in
            backend.snapshot["bench_error"],
            "the bench took a time that is not one, or said nothing")
+    # The bench's time is picked on three wheels, hours 0-23 and
+    # minutes and seconds 0-59, each scrolled a notch at a time or
+    # dragged, then set with the button beside them.
+    wheels = bench.findChild(QQuickItem, "benchTimeWheels")
+    minutes = bench.findChild(QQuickItem, "minutesWheel")
+    expect(wheels is not None and minutes is not None,
+           "the bench's time wheels are missing")
+    if wheels is not None and minutes is not None:
+        counts = [bench.findChild(QQuickItem, name).property("count")
+                  for name in ("hoursWheel", "minutesWheel",
+                               "secondsWheel")]
+        expect(counts == [24, 60, 60],
+               f"the time wheels run {counts}, not 24 / 60 / 60")
+        for name, value in (("hours", 18), ("minutes", 30),
+                            ("seconds", 15)):
+            wheels.setProperty(name, value)
+        centre = minutes.mapToScene(
+            QPointF(minutes.width() / 2, minutes.height() / 2))
+        QGuiApplication.sendEvent(bench, QWheelEvent(
+            centre, centre, QPoint(0, 0), QPoint(0, -120), Qt.NoButton,
+            Qt.NoModifier, Qt.NoScrollPhase, False))
+        _settle(app, 200)
+        expect(minutes.property("currentIndex") == 31,
+               "a scroll notch did not step the minutes by one")
+        point = centre.toPoint()
+        QTest.mousePress(bench, Qt.LeftButton, Qt.NoModifier, point)
+        for rise in range(0, 60, 4):
+            QTest.mouseMove(bench, QPoint(point.x(), point.y() - rise), 10)
+        QTest.mouseRelease(bench, Qt.LeftButton, Qt.NoModifier,
+                           QPoint(point.x(), point.y() - 60), 10)
+        _settle(app, 1500)
+        expect(minutes.property("currentIndex") != 31,
+               "dragging the minutes wheel did not move it")
+        wheels.setProperty("minutes", 30)
+        picked = QMetaObject.invokeMethod(
+            wheels, "timeText", Q_RETURN_ARG("QVariant"))
+        picked = picked.toVariant() if hasattr(picked, "toVariant") \
+            else picked
+        expect(picked == "18:30:15",
+               f"the wheels read {picked!r}, not '18:30:15'")
+        backend.set_bench_time(picked)
+        tick()
+        expect(backend.snapshot["clock"] == "18:30:15",
+               "the time on the wheels did not reach the controller")
     backend.set_bench_time("05:00")
     tick()
     # The beacon is heard at a station, every tick; away from one,
@@ -784,6 +832,14 @@ def run_check(
         backend.toggle_emergency_brake()
         expect(state.emergency_brake,
                f"the emergency brake released during a {name}")
+        # The mode still switches, both ways, so the driver can try the
+        # train in Manual; the failure keeps it stopped either way.
+        backend.set_manual(False)
+        expect(not state.manual,
+               f"the mode would not switch to Automatic during a {name}")
+        backend.set_manual(True)
+        expect(state.manual,
+               f"the mode would not switch to Manual during a {name}")
         backend.set_target_mph(30)
         expect(state.target_mps == 0.0,
                f"the driver set a target during a {name}")

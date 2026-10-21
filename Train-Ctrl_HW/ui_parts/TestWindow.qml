@@ -43,14 +43,11 @@ ScaledWindow {
             // Set the bench clock, to test the 18:00 and 06:00 lights.
             // Greyed under a harness, whose clock is the time.
             clockTools: [
-                ValueField {
-                    id: timeField
-                    objectName: "benchTimeField"
-                    Layout.fillWidth: false
-                    Layout.preferredWidth: 96
-                    Layout.maximumWidth: 96
+                TimeWheels {
+                    id: timeWheels
+                    objectName: "benchTimeWheels"
                     enabled: window.s.bench_clock
-                    text: "18:00"
+                    Component.onCompleted: hours = 18
                 },
                 AppButton {
                     objectName: "benchTimeButton"
@@ -58,12 +55,10 @@ ScaledWindow {
                     variant: "secondary"
                     text: qsTr("Set time")
                     enabled: window.s.bench_clock
-                        && /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/
-                            .test(timeField.text)
                     tooltip: window.s.bench_clock
-                        ? qsTr("HH:MM or HH:MM:SS")
+                        ? qsTr("Set the bench clock to the time on the wheels")
                         : qsTr("The harness's clock sets the time")
-                    onClicked: controller.set_bench_time(timeField.text)
+                    onClicked: controller.set_bench_time(timeWheels.timeText())
                 }
             ]
         }

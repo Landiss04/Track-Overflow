@@ -175,6 +175,12 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
     - "Arriving soon" fires whenever the authority comes down to 3,
       station or not.
     - Lights: both interior and exterior switch together.
+    - The bench's hours wheel runs 0–23, not 0–24 as asked: 24:00 is
+      00:00, and 24:30 is not a time of day (R27).
+    - Switching to Manual during a brake failure (R26) cannot yet test
+      the brake: the service brake button is still refused under a
+      brake failure (M4, #30), and nothing detects a resolution yet
+      (#23), so the bench still clears the failure.
     - With an uncommissioned train selected nobody is signed in, so
       nobody can reach its emergency brake from the console; it commands
       0 W and cannot move under its own power.
