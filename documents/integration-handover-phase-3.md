@@ -134,7 +134,7 @@ comes first.
 | Q4 | Lights: one per switch in both modules. The Track Controller names it by the switch; the Track Model stands it on the block before the point. Is the harness's mapping through the switch right? With the starter program, G1 leaving the yard sees the yard switch's light YELLOW, from a light that faces away from it (`TrackModel/BUGS.md` B1, second part). | Track Controller and Track Model owners | Accept the mapping; fix B1 in the Track Model. |
 | Q5 | Red `75-yard` sits on block 9's row. The Track Controller reads its normal leg as 9, the Track Model as 76, so NORMAL means different blocks for that one switch. | Kevin, before Phase 5 | Settle the layout data before Phase 5. |
 | Q6 | D026: the Track Model is to switch its heaters itself, but still runs them only when commanded, and nothing commands them now. What rule should it follow (D026 leaves it open)? | Track Model owner | Decide the rule, then implement it in the Track Model. |
-| Q7 | The starter program never throws switch 58 (`57-yard`), so no train can be routed into the yard. A return to the yard needs a program that throws it, or a CTC switch command, which is maintenance-only. | Harry Tye, Landis | Needed for Phase 4's retire path; decide before building it. |
+| Q7 | The starter program never throws switch 58 (`57-yard`), so no train can be routed into the yard. A return to the yard needs a program that throws it, or a CTC switch command, which is maintenance-only. | Harry Tye, Landis | Needed for Phase 4's retire path; decide before building it. **Resolved:** Kevin Schillinger said "fix" on 2026-10-21; done in `234c353`. The starter sets each switch for the train coming to its points, and retirement needs only a stop at 57 (D022), so 58 stays normal. Left for Harry Tye and Landis (`TrackCtrlSW/INTEGRATION_DISCREPANCIES.md` E7): the new `SUG_n` and `REV_s` PLC inputs; switch 28 standing reverse at rest; whether the vital lock should also be on the points block; the follower case at 76; and Landis to confirm the CTC Office's two-way zone. |
 | Q8 | Should `STEP` tell modules the clock's speed? The Track Controller's header infers "paused" from steps stopping and cannot show 10x. | Kevin | Low priority. If wanted, it is a protocol change to D005 (a truth proposal). |
 | Q9 | The Track Controller still uses lower-case enumerated values (`normal`, `red`). The design document records all capitals as "already decided" for both variants. | Track Controller owners | The edges map either way; leave it to the owners. |
 | Q10 | Should the operator window show each line's readiness? It is in the event log now. | Kevin | Optional. |
@@ -147,7 +147,9 @@ comes first.
 No truth proposal was filed in Phase 3: no new normative fact came from a decision or a
 direct statement. `truth/_inbox/claude/quirky-fermi-sickg4/` holds 16 proposals from
 earlier in the session, the D007 dwell among them, awaiting promotion by a person. If
-Q1, Q3 to Q6, Q8, Q13 or Q14 is decided, file the decision as a proposal then.
+Q1, Q3 to Q6, Q8, Q13 or Q14 is decided, file the decision as a proposal then. On
+2026-10-21 one more was filed, for Phase 4 handover Q-P4-4
+(`20261021-1445-lower-limit-ahead-train-controller-slows.md`); the inbox now holds 17.
 
 ## 4. Phase 4: beginning
 

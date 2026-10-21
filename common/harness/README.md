@@ -30,7 +30,10 @@ python track_overflow.py --stubs-only        # a stub for every module, as in Ph
 No arguments open the operator window. Add `--headless` to echo every event to the
 console, with a status line every 5 s. Ctrl+C ends the run in either mode. The CTC
 Office presses Run as soon as it is ready (`--run-on-ready`, below); the dispatcher can
-pause it in its window.
+pause it in its window. Kevin Schillinger decided on 2026-10-21 that the harness presses
+Run automatically for headless and test runs only, and that otherwise the dispatcher
+presses Run in the CTC window (D017; Q-P4-1). `app.py` does not do that yet: it presses
+Run in window mode too.
 
 A run needs three people, or the options that stand in for them: one loads the PLC
 programs, one dispatches a train, and one sets the train's gains.
@@ -185,7 +188,11 @@ exactly once.
   `clock_speedup` for the harness, and the one-time `new_trains` and `retired_trains`
   for the roster. Run, Pause and 1x / 10x in its window go to the harness at once as
   `STATE`, not only while paused (R51). It refuses a malformed tick and changes nothing.
-  Its window redraws at most every 200 ms, after the reply.
+  Its window redraws at most every 200 ms, after the reply. It takes its time from each
+  `STEP`'s `sim_time_s`, so a refused or missed tick does not leave its schedule behind
+  (`4cc873b`). Its **Return to yard** button, in the Selected train panel, orders a
+  manual train to its line's yard entry block (Green 57, Red 9); the CTC Office retires
+  it in `retired_trains` once it has stopped there with authority 0 (R66, D022).
 - **The CTC Office's test options.** They stand in for the dispatcher, as
   `--load-starters` stands in for the person who loads the PLC programs and
   `--engineer-gains` for the engineer. `app.py` passes `--run-on-ready` on every run,
@@ -339,7 +346,11 @@ Phases 1 to 4 add three layers of tests:
   Office's view of the train block by block, the GLENBURY stop and the dwell behind the
   door interlock, boarding, switch and light read-back by both names, crossings, a
   broken rail ahead, and the stop at DORMONT; and the driver's release of the emergency
-  brake, with and without a passenger pull. It takes about 13 s.
+  brake, with and without a passenger pull. It takes about 13 s. `ReturnToYardTest` (5
+  tests, about 140 s) runs a scheduled Green run round the line to the yard entry block
+  57 and its retirement, only with `TRACK_OVERFLOW_ROUND_TRIP=1`. It fails today at
+  Green 93, where the Train Controller latches an engine failure up the grade
+  (Q-P4-8).
 - `test_harness_system.py`: the real CTC Office, Track Controller SW, Track Model, Train
   Model and Train Controller processes and two stubs, with the starter programs loaded.
   It runs the Iteration 3 scenario: G1 dispatched from the yard to GLENBURY, placed at
@@ -377,6 +388,19 @@ After Phase 4 and the fault fixes, at `b65fd26`, offscreen, in a Linux cloud con
 | `python -m pytest -q utils/tests` | 82 passed, 37 subtests |
 | `CTC-Office`: `python -m unittest discover tests` | 244 OK |
 | `TrackCtrlSW`: `python -m unittest discover -s tests` | 194 OK |
+
+After the work of 2026-10-21 (return to yard, the CTC Office on the harness's clock, the
+starter's switches, and the overspeed test), offscreen, in the same container:
+
+| Suite | Result |
+|---|---|
+| `python -m pytest -q common/harness/tests` | 150 passed, 5 skipped (`ReturnToYardTest`), 495 subtests (65 s) |
+| `CTC-Office`: `python -m unittest discover tests` | 259 OK |
+| `TrackCtrlSW`: `python -m unittest discover -s tests` | 213 OK |
+| `Train-Ctrl_HW/tests` (the Train Controller under the harness) | 12 passed |
+
+`test_harness_window.py` runs system mode for 8 s. Seven real modules take about 2 s to
+be ready, and with 2 s about one run in three stopped before `ALL_READY`.
 
 ## Measuring the budget
 
