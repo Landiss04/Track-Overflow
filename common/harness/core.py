@@ -250,7 +250,8 @@ class Harness(QObject):
     def dropped_ticks(self) -> int:
         """Ticks real time earned that never ran.
 
-        The run fell too far behind, or paused with ticks owed. No
+        The run fell too far behind, paused with ticks owed, or ended
+        with ticks owed; only the first two log ``TIME_SLIPPED``. No
         module misses a tick; simulation time slips behind real time
         instead.
         """
@@ -584,7 +585,10 @@ class Harness(QObject):
         self._log_event(name, "MODULE_KILLED", "did not quit in time")
 
     def _on_backlog_dropped(self, count: int) -> None:
-        # The run fell too far behind, or paused with ticks owed.
+        # The run fell too far behind, or paused with ticks owed. Ticks
+        # owed when the run ends are not a slip: nothing was behind.
+        if self._stopping:
+            return
         self._log_event(
             HARNESS,
             "TIME_SLIPPED",

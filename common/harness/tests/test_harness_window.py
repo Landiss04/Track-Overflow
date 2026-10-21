@@ -1,4 +1,8 @@
-"""Run QML checks in a fresh GUI process, separate from QCore tests."""
+"""Run QML checks in a fresh GUI process, separate from QCore tests.
+
+Also checks, from its arguments alone, who presses Run in each kind of
+run (R83).
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from common.harness import app
+from common.harness.modules import CTC_OFFICE
 
 STUB_RUN_SECONDS = 1
 SYSTEM_RUN_SECONDS = 8
@@ -49,12 +56,14 @@ class HarnessWindowTest(unittest.TestCase):
                             "--log-dir", str(log_dir)]
                     if mode == "system":
                         # A person loads the PLC programs (R44) and the
-                        # dispatcher sends a train; here the Track
-                        # Controller commits its starters and the CTC
-                        # Office dispatches G1.
-                        args += ["--load-starters",
+                        # dispatcher presses Run and sends a train; here
+                        # the Track Controller commits its starters and
+                        # the CTC Office presses Run and dispatches G1.
+                        args += ["--auto-run", "--load-starters",
                                  "--dispatch", "G1:Green:65"]
                     else:
+                        # The stub CTC Office has no window, so it
+                        # presses Run itself.
                         args.append("--stubs-only")
                     if mode == "headless":
                         args.append("--headless")
@@ -86,6 +95,44 @@ class HarnessWindowTest(unittest.TestCase):
                         "MODULE_STARTED" in result.stdout,
                         mode == "headless",
                     )
+
+
+class AutoRunTest(unittest.TestCase):
+    """Who presses Run, from the options the CTC Office is given (R83)."""
+
+    @staticmethod
+    def ctc_args(*argv: str) -> tuple[str, ...]:
+        """The CTC Office's arguments for a harness command line."""
+        specs, _edges = app._specs(app._parse_args(argv))
+        return next(spec.args for spec in specs if spec.name == CTC_OFFICE)
+
+    def test_a_window_run_waits_for_the_dispatcher(self) -> None:
+        # Not even with the options that stand in for other people.
+        for argv in ((), ("--speedup", "--load-starters",
+                          "--dispatch", "G1:Green:65")):
+            with self.subTest(argv=argv):
+                args = self.ctc_args(*argv)
+                self.assertEqual(args[:2], ("--module", CTC_OFFICE))
+                self.assertNotIn("--run-on-ready", args)
+
+    def test_auto_run_presses_run_in_a_window_run(self) -> None:
+        self.assertIn("--run-on-ready", self.ctc_args("--auto-run"))
+
+    def test_a_headless_run_presses_run(self) -> None:
+        self.assertIn("--run-on-ready", self.ctc_args("--headless"))
+
+    def test_a_stubs_only_run_presses_run(self) -> None:
+        # Its stub CTC Office has no window to press Run in.
+        args = self.ctc_args("--stubs-only")
+        self.assertEqual(args[:2], ("--module", "stub"))
+        self.assertIn("--run-on-ready", args)
+
+    def test_the_other_options_pass_through(self) -> None:
+        self.assertEqual(
+            self.ctc_args("--speedup", "--dispatch", "G1:Green:65"),
+            ("--module", CTC_OFFICE, "--speedup-at-tick", "0",
+             "--dispatch", "G1:Green:65"),
+        )
 
 
 if __name__ == "__main__":

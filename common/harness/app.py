@@ -2,14 +2,18 @@
 
 No arguments open the operator window. ``--headless`` echoes events
 and prints a status line every five seconds. Both run until Ctrl+C,
-the time limit, or a confirmed window close. The CTC Office
-presses Run when ready; the harness window has no clock controls.
+the time limit, or a confirmed window close. The harness window has no
+clock controls: Run, Pause and 1x / 10x are the CTC Office's.
 
 The modules wired in so far run as themselves, each in its window
 (Phase 4: the CTC Office, the Track Controller SW, the Track Model, the
-Train Model and the Train Controller SW); the rest are stubs. The CTC
-Office presses Run as soon as it is ready (``--run-on-ready``), as its
-stub did before; the dispatcher can pause it in its window.
+Train Model and the Train Controller SW); the rest are stubs. The
+clock starts paused (D017). In a window run the dispatcher presses Run
+in the CTC Office's window (R83). A headless run, which has no window
+to press it in, has the CTC Office press Run as soon as it is ready
+(``--run-on-ready``), and so does a ``--stubs-only`` run, whose stub
+CTC Office has no window. ``--auto-run`` does the same in a window
+run, for tests and demonstrations only.
 
 People start the run, as in the system itself. One loads a PLC program
 on every wayside in the Track Controller's window (R44): RUN then
@@ -43,6 +47,7 @@ from common.harness.edges import SystemEdges
 from common.harness.modules import (
     CTC_OFFICE,
     TRACK_CONTROLLER_SW,
+    ModuleSpec,
     stub_specs,
     system_specs,
 )
@@ -79,21 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])
     app.setApplicationName(APPLICATION_NAME)
     log_dir = options.log_dir or _default_log_dir()
-    ctc_options = ["--run-on-ready"]
-    if options.speedup:
-        ctc_options += ["--speedup-at-tick", "0"]
-    if options.stubs_only:
-        specs = stub_specs({CTC_OFFICE: ctc_options})
-        edges = None
-    else:
-        wayside_options = ["--load-starters"] if options.load_starters else []
-        for order in options.dispatch:
-            ctc_options += ["--dispatch", order]
-        specs = system_specs({
-            CTC_OFFICE: ctc_options,
-            TRACK_CONTROLLER_SW: wayside_options,
-        })
-        edges = SystemEdges()
+    specs, edges = _specs(options)
     # A file of its own, even beside a run started in the same second.
     with EventLog.create(log_dir, datetime.now()) as log:
         harness = Harness(specs, log, edges)
@@ -151,6 +142,33 @@ def main(argv: Sequence[str] | None = None) -> int:
             window.close()
     clean = all(code == 0 for code in exit_codes.values())
     return EXIT_OK if clean else EXIT_FAILED
+
+
+def _presses_run(options: argparse.Namespace) -> bool:
+    # Whether the CTC Office presses Run by itself (R83): in a headless
+    # run, a stubs-only run or with --auto-run; otherwise the
+    # dispatcher presses it in the CTC Office's window (D017).
+    return bool(options.headless or options.stubs_only or options.auto_run)
+
+
+def _specs(
+    options: argparse.Namespace,
+) -> tuple[list[ModuleSpec], SystemEdges | None]:
+    # The modules to start, with the options that stand in for people,
+    # and the edges between them; no edges for stubs.
+    ctc_options = ["--run-on-ready"] if _presses_run(options) else []
+    if options.speedup:
+        ctc_options += ["--speedup-at-tick", "0"]
+    if options.stubs_only:
+        return stub_specs({CTC_OFFICE: ctc_options}), None
+    wayside_options = ["--load-starters"] if options.load_starters else []
+    for order in options.dispatch:
+        ctc_options += ["--dispatch", order]
+    specs = system_specs({
+        CTC_OFFICE: ctc_options,
+        TRACK_CONTROLLER_SW: wayside_options,
+    })
+    return specs, SystemEdges()
 
 
 class _StatusLine:
@@ -213,6 +231,13 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--headless",
         action="store_true",
         help="use console output without opening a window",
+    )
+    parser.add_argument(
+        "--auto-run",
+        action="store_true",
+        help="have the CTC Office press Run as soon as it is ready, for "
+        "tests and demonstrations; a headless or stubs-only run always "
+        "does",
     )
     parser.add_argument(
         "--dispatch",

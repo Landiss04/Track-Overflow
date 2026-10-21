@@ -19,6 +19,10 @@ dispatches G1 from the yard to DORMONT (``--dispatch``), and the Train
 Controller plays the engineer (``--engineer-gains``), so the train is
 released and moves for the whole measurement.
 
+A measurement is a test run, so the CTC Office presses Run itself as
+soon as it is ready (``--run-on-ready``; R83), with or without
+``--window``.
+
 Run from the repository root::
 
     python -m common.harness.measure --seconds 10 --payload-bytes 1000

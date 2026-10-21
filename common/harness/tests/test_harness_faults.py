@@ -414,5 +414,31 @@ class WrongTickTest(_FaultTest):
         self.assertEqual(self.run_.find("TICK_REJECTED"), [])
 
 
+class StopWithTicksOwedTest(_FaultTest):
+    """Ticks owed when the run ends are dropped, but are not a slip."""
+
+    def test_stopping_logs_no_time_slipped(self) -> None:
+        run = self.run_
+        harness = run.harness
+        # The Train Model holds tick FAULT_TICK's reply past the stop,
+        # so real time goes on earning ticks while it is in flight.
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 5000
+        run.run()
+        # 10x: a tick falls due every 10 ms.
+        run.fakes[CTC_OFFICE].send(encode(state_message(
+            0, {"clock_paused": False, "clock_speedup": True}
+        )))
+        self.assertTrue(wait_until(
+            lambda: harness.clock.tick_count == FAULT_TICK
+        ), run.events)
+        # Well inside the reply timeout, with several ticks owed.
+        wait_until(lambda: False, timeout_s=REPLY_TIMEOUT_S / 2)
+        self.assertFalse(harness.clock.is_paused, run.events)
+        harness.stop(timeout_s=0.5)
+        self.assertGreater(harness.dropped_ticks, 0)
+        self.assertEqual(run.find("TIME_SLIPPED"), [])
+        self.assertEqual(run.events[-1][2], "HARNESS_STOPPED")
+
+
 if __name__ == "__main__":
     unittest.main()
