@@ -43,7 +43,7 @@ from track_ctrl.stimulus import (  # noqa: E402
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rig import CONTROLLER, Rig  # noqa: E402
+from rig import CONTROLLER, Rig, loaded_state  # noqa: E402
 
 
 class UserInputTests(unittest.TestCase):
@@ -55,8 +55,7 @@ class UserInputTests(unittest.TestCase):
         cls.app = QCoreApplication.instance() or QCoreApplication([])
 
     def setUp(self) -> None:
-        self.state = TrackControllerState()
-        self.state.loadStarterPrograms()
+        self.state = loaded_state()
         # The CTC and Track Model, standing in; its steps drive the UI.
         self.rig = Rig(self.state.system, stepper=self.state.step)
         self.rig.settle()
@@ -186,7 +185,7 @@ class CommitGateTests(unittest.TestCase):
         cls.app = QCoreApplication.instance() or QCoreApplication([])
 
     def setUp(self) -> None:
-        self.state = TrackControllerState()
+        self.state = loaded_state()
 
     def user(self, op: str, **fields: object) -> str:
         return apply_user(self.state, {"type": "user", "op": op, **fields})
@@ -282,90 +281,115 @@ class TrackConfigTests(unittest.TestCase):
         self.folder = default_layout_dir()
         self.state = TrackControllerState()
 
-    def test_inspecting_a_file_reports_what_loading_would_do(self) -> None:
+    def load(self, name: str) -> str:
+        return self.state.load_track_config(str(self.folder / name))
+
+    def test_the_ui_starts_with_no_track_and_an_empty_editor(self) -> None:
+        state = self.state
+        self.assertFalse(state.hasTrack)
+        self.assertEqual(state.buffer, "")
+        self.assertFalse(state.ready)
+        self.assertEqual(state.notReadyReason, "no track is loaded")
+        self.assertEqual(state.controller["mode"], "No track loaded")
+        self.assertEqual([f["detail"] for f in state.files["rows"]],
+                         ["NO TRACK"])
+        self.assertEqual(state.outputs["rows"], [])
+        self.assertEqual(state.lines["rows"], [])
+        state.setBuffer("VAR_OUT X\nX := 1\n")
+        state.run()
+        self.assertFalse(state.canCommit)
+        self.assertIn("load a track first", state.terminal["rows"][-1])
+        state.commit()
+        self.assertEqual(state.system.controllers, {})
+
+    def test_inspecting_a_file_reports_the_fixed_wayside_count(self) -> None:
         info = self.state.inspect_track_config(str(self.folder / "green_line.json"))
         self.assertTrue(info["ok"])
         self.assertEqual(
             (info["line"], info["blocks"], info["switches"], info["crossings"]),
             ("Green Line", 150, 6, 2),
         )
-        self.assertEqual((info["min"], info["max"]), (2, 150))
-        self.assertEqual(info["replaces"], 6)
-        self.assertEqual(info["default"], 6)
+        self.assertEqual(info["controllers"], 6)
+        self.assertEqual(info["replaces"], 0)
+        self.assertNotIn("min", info)
+        self.assertNotIn("max", info)
+        red = self.state.inspect_track_config(str(self.folder / "red_line.json"))
+        self.assertEqual(red["controllers"], 5)
+        self.load("green_line.json")
+        again = self.state.inspect_track_config(
+            str(self.folder / "green_line.json"))
+        self.assertEqual(again["replaces"], 6)
 
     def test_inspecting_changes_nothing(self) -> None:
-        before = list(self.state.system.controllers)
         self.state.inspect_track_config(str(self.folder / "green_line.json"))
-        self.assertEqual(list(self.state.system.controllers), before)
+        self.assertEqual(self.state.system.controllers, {})
 
-    def test_loading_replaces_the_line_with_the_chosen_number_of_waysides(self) -> None:
-        error = self.state.load_track_config(
-            str(self.folder / "green_line.json"), 3)
-        self.assertEqual(error, "")
-        green = [c for c in self.state.system.controllers_for("Green Line")]
+    def test_loading_uses_the_waysides_the_track_is_built_with(self) -> None:
+        self.assertEqual(self.load("green_line.json"), "")
+        green = self.state.system.controllers_for("Green Line")
         self.assertEqual([c.config.controller_id for c in green],
-                         ["GTC-01", "GTC-02", "GTC-03"])
-        self.assertEqual([len(c.blocks) for c in green], [50, 50, 50])
-        # Red is untouched.
+                         [f"GTC-0{n}" for n in range(1, 7)])
+        self.assertEqual(sum(len(c.blocks) for c in green), 150)
+        self.assertEqual(self.load("red_line.json"), "")
         self.assertEqual(
             len(self.state.system.controllers_for("Red Line")), 5)
-        self.assertEqual(len(self.state.system.controllers), 8)
+        self.assertEqual(
+            len(self.state.system.controllers_for("Green Line")), 6)
 
-    def test_the_new_waysides_start_without_programs_and_not_ready(self) -> None:
-        self.state.load_track_config(str(self.folder / "green_line.json"), 2)
+    def test_a_loaded_track_has_no_programs_and_an_empty_editor(self) -> None:
+        self.load("green_line.json")
         for controller in self.state.system.controllers_for("Green Line"):
             self.assertEqual(controller.iteration, 0)
             self.assertIsNone(controller.program)
+        self.assertTrue(self.state.hasTrack)
         self.assertFalse(self.state.ready)
         self.assertIn("GTC-01", self.state.notReadyReason)
-        # The editor offers the generated program, uncommitted.
-        self.assertIn("AUTH_1", self.state.buffer)
+        self.assertEqual(self.state.buffer, "")
+        live = self.state.files["rows"][0]
+        self.assertEqual(live["detail"], "NOT COMMITTED")
+
+    def test_new_gives_an_empty_buffer(self) -> None:
+        self.load("green_line.json")
+        self.state.setBuffer("VAR_OUT X\n")
+        self.state.newFile()
+        self.assertEqual(self.state.buffer, "")
 
     def test_loading_a_line_makes_a_ready_module_not_ready_again(self) -> None:
-        self.state.loadStarterPrograms()
+        self.load("green_line.json")
+        self.load("red_line.json")
+        self.state.system.load_starter_programs()
         self.assertTrue(self.state.ready)
-        self.state.load_track_config(str(self.folder / "green_line.json"), 3)
+        self.load("green_line.json")
         self.assertFalse(self.state.ready)
         # The other line keeps its programs.
         self.assertEqual(
             self.state.system.controller("RTC-01").iteration, 1)
 
-    def test_loading_replaces_programs_the_old_waysides_held(self) -> None:
-        self.state.loadStarterPrograms()
+    def test_reloading_a_line_replaces_its_programs(self) -> None:
+        self.load("green_line.json")
+        self.state.system.load_starter_programs()
         controller = self.state.system.controller(CONTROLLER)
-        controller.commit(
-            default_program_source(controller) + "// edited\n", "mine.plc")
-        self.assertEqual(controller.iteration, 2)
-        self.state.load_track_config(str(self.folder / "green_line.json"), 6)
+        self.assertEqual(controller.iteration, 1)
+        self.load("green_line.json")
         self.assertEqual(
             self.state.system.controller(CONTROLLER).iteration, 0)
 
     def test_the_programmer_is_taken_to_what_was_loaded(self) -> None:
-        self.state.selectLine("Red Line")
-        self.state.selectController("RTC-03")
-        self.state.load_track_config(str(self.folder / "green_line.json"), 4)
+        self.load("red_line.json")
+        self.assertEqual(self.state.selectedLine, "Red Line")
+        self.assertEqual(self.state.selectedController, "RTC-01")
+        self.load("green_line.json")
         self.assertEqual(self.state.selectedLine, "Green Line")
         self.assertEqual(self.state.selectedController, "GTC-01")
-        self.assertIn("blocks 1..", self.state.buffer)
-
-    def test_a_count_outside_the_range_is_refused_and_changes_nothing(self) -> None:
-        before = [(c.config.controller_id, c.iteration)
-                  for c in self.state.system.controllers.values()]
-        for bad in (1, 0, 151):
-            message = self.state.load_track_config(
-                str(self.folder / "green_line.json"), bad)
-            self.assertIn("controllers", message)
-        after = [(c.config.controller_id, c.iteration)
-                 for c in self.state.system.controllers.values()]
-        self.assertEqual(before, after)
 
     def test_a_wayside_database_is_refused_with_the_reason(self) -> None:
         path = (Path(__file__).resolve().parents[2] / "TrackCtrlHw" / "data"
                 / "waysides" / "green_wayside_1.json")
         if not path.exists():
             self.skipTest("the HW wayside databases are not in this checkout")
-        message = self.state.load_track_config(str(path), 2)
+        message = self.state.load_track_config(str(path))
         self.assertIn("wayside database", message)
+        self.assertFalse(self.state.hasTrack)
 
     def test_a_file_that_is_not_a_layout_is_refused(self) -> None:
         import tempfile
@@ -377,20 +401,29 @@ class TrackConfigTests(unittest.TestCase):
             self.assertFalse(info["ok"])
             self.assertIn("not valid JSON", info["error"])
             self.assertIn("not valid JSON",
-                          self.state.load_track_config(str(path), 2))
+                          self.state.load_track_config(str(path)))
+
+    def _purple(self, folder: str) -> Path:
+        layout = {"line": "Purple", "blocks": [
+            {"block_number": n, "section": "A", "length_m": 50,
+             "speed_limit_kmh": 36} for n in range(1, 9)]}
+        path = Path(folder) / "purple.json"
+        path.write_text(json.dumps(layout), encoding="utf-8")
+        return path
 
     def test_a_new_line_is_added_not_substituted(self) -> None:
         import tempfile
 
-        layout = {"line": "Purple", "blocks": [
-            {"block_number": n, "section": "A", "length_m": 50,
-             "speed_limit_kmh": 36} for n in range(1, 9)]}
+        self.load("green_line.json")
+        self.load("red_line.json")
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "purple.json"
-            path.write_text(json.dumps(layout), encoding="utf-8")
+            path = self._purple(folder)
             info = self.state.inspect_track_config(str(path))
             self.assertEqual(info["replaces"], 0)
-            self.assertEqual(self.state.load_track_config(str(path), 2), "")
+            # A line the system has no wayside count for gets the
+            # fewest D014 allows.
+            self.assertEqual(info["controllers"], 2)
+            self.assertEqual(self.state.load_track_config(str(path)), "")
         self.assertEqual(
             [line.name for line in self.state.system.lines],
             ["Green Line", "Red Line", "Purple Line"],
@@ -401,14 +434,9 @@ class TrackConfigTests(unittest.TestCase):
     def test_a_loaded_line_works_with_a_wayside_that_owns_no_equipment(self) -> None:
         import tempfile
 
-        layout = {"line": "Purple", "blocks": [
-            {"block_number": n, "section": "A", "length_m": 50,
-             "speed_limit_kmh": 36} for n in range(1, 9)]}
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "purple.json"
-            path.write_text(json.dumps(layout), encoding="utf-8")
-            self.state.load_track_config(str(path), 2)
-        self.state.loadStarterPrograms()
+            self.state.load_track_config(str(self._purple(folder)))
+        self.state.system.load_starter_programs()
         controller = self.state.system.controller("PTC-01")
         self.assertEqual(controller.config.switches, ())
         self.assertEqual(controller.diagnose(
@@ -416,11 +444,15 @@ class TrackConfigTests(unittest.TestCase):
         self.state.step(0.1, TrackControllerInputs(time_s=1.0))
 
     def test_the_test_ui_sees_the_new_topology(self) -> None:
-        self.state.load_track_config(str(self.folder / "green_line.json"), 3)
+        self.load("green_line.json")
         snapshot = json.loads(json.dumps(build_snapshot(self.state)))
         ids = [c["id"] for c in snapshot["controllers"]]
-        self.assertEqual(ids[:3], ["GTC-01", "GTC-02", "GTC-03"])
-        self.assertEqual(len(ids), 8)
+        self.assertEqual(ids, [f"GTC-0{n}" for n in range(1, 7)])
+
+    def test_the_test_ui_snapshot_works_with_no_track(self) -> None:
+        snapshot = json.loads(json.dumps(build_snapshot(self.state)))
+        self.assertEqual(snapshot["controllers"], [])
+        self.assertFalse(snapshot["ready"])
 
 
 class SnapshotTests(unittest.TestCase):
@@ -430,8 +462,7 @@ class SnapshotTests(unittest.TestCase):
         cls.app = QCoreApplication.instance() or QCoreApplication([])
 
     def test_snapshot_is_json_and_reflects_a_stimulus(self) -> None:
-        state = TrackControllerState()
-        state.loadStarterPrograms()
+        state = loaded_state()
         rig = Rig(state.system, stepper=state.step)
         rig.world.set_occupancy(rig.key("3"), True)
         # Block 8 is nowhere near the train on 3, so it is not held.
@@ -455,7 +486,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertNotIn("standin", snapshot)
 
     def test_snapshot_describes_the_track_for_the_world(self) -> None:
-        state = TrackControllerState()
+        state = loaded_state()
         snapshot = build_snapshot(state)
         entry = next(c for c in snapshot["controllers"]
                      if c["id"] == CONTROLLER)
@@ -465,8 +496,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(entry["switches"][0]["block_id"], "12")
 
     def test_snapshot_carries_switch_commands_and_maintenance(self) -> None:
-        state = TrackControllerState()
-        state.loadStarterPrograms()
+        state = loaded_state()
         rig = Rig(state.system, stepper=state.step)
         rig.world.set_maintenance(True)
         rig.world.set_switch_command(rig.key("12"), "reverse")
@@ -493,7 +523,7 @@ class ClockTests(unittest.TestCase):
         self.assertEqual(state.clockSpeed, 1)
 
     def test_each_step_shows_and_stamps_the_time_it_carries(self) -> None:
-        state = TrackControllerState()
+        state = loaded_state()
         rig = Rig(state.system, stepper=state.step)
         rig.time_s = 5 * 3600.0 + 0.5
         for _ in range(10):

@@ -57,7 +57,6 @@ USER_OPS = (
     "open_file",
     "append_buffer",
     "load_program",
-    "load_starter_programs",
 )
 
 
@@ -162,11 +161,6 @@ def _apply_user_op(
             )
         state.setBuffer(state.buffer + text)
         return "user edited the buffer"
-
-    if op == "load_starter_programs":
-        before = state.system.not_ready_reasons()
-        state.loadStarterPrograms()
-        return f"user loaded starter programs ({len(before)} were missing)"
 
     # load_program
     path = _text(message, "path")
@@ -349,7 +343,7 @@ def build_snapshot(state: Any) -> dict[str, Any]:
     programmer is looking at, including after they click something.
     """
     module = state.system
-    selected = module.controller(state.selectedController)
+    selected = module.controllers.get(state.selectedController)
 
     return {
         "type": "snapshot",
@@ -371,8 +365,8 @@ def build_snapshot(state: Any) -> dict[str, Any]:
             "buffer_dirty": state.bufferDirty,
             "buffer_read_only": state.bufferReadOnly,
             "buffer_file": state.bufferFile,
-            "iteration": selected.iteration,
-            "history": [
+            "iteration": 0 if selected is None else selected.iteration,
+            "history": [] if selected is None else [
                 {"number": entry.number, "file": entry.file_name}
                 for entry in selected.history
             ],

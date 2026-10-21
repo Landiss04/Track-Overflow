@@ -3,9 +3,8 @@
 // Loading a layout replaces the line of the same name: its waysides are
 // divided up again, so the controllers on it and every program they hold
 // go. That is the one destructive thing this window does, so the dialog
-// says what the file is and what it will replace, and the count of
-// controllers is chosen here, since how many waysides a line has is
-// configurable.
+// says what the file is and what it will replace. How many waysides a
+// line has is fixed by the track, so it is shown, never chosen.
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -23,8 +22,6 @@ Dialog {
         file = url;
         info = wayside.inspectTrackConfig(url);
         failure = "";
-        if (readable)
-            count.value = info.default;
         open();
     }
 
@@ -143,21 +140,19 @@ Dialog {
                 RowLayout {
                     spacing: theme.space_3
 
-                    SpinBox {
-                        id: count
-                        from: root.info.min || 1
-                        to: root.info.max || 1
-                        editable: true
-                        font.family: theme.mono_family
+                    MonoText {
+                        text: root.readable ? String(root.info.controllers) : ""
+                        color: theme.text_primary
                         font.pixelSize: theme.size_body
                     }
 
                     Text {
                         Layout.fillWidth: true
                         text: root.readable
-                            ? qsTr("About %1 blocks each; each runs its own "
-                                + "PLC program.").arg(
-                                    Math.round(root.info.blocks / count.value))
+                            ? qsTr("Fixed by the track. About %1 blocks each; "
+                                + "each needs its own PLC program.").arg(
+                                    Math.round(root.info.blocks
+                                        / root.info.controllers))
                             : ""
                         color: theme.text_muted
                         font.family: theme.ui_family
@@ -218,9 +213,7 @@ Dialog {
                     variant: root.info.replaces > 0 ? "danger" : "primary"
                     visible: root.readable
                     onClicked: {
-                        count.contentItem.focus = false;
-                        const message = wayside.loadTrackConfig(
-                            root.file, count.value);
+                        const message = wayside.loadTrackConfig(root.file);
                         if (message === "")
                             root.close();
                         else

@@ -240,9 +240,12 @@ Item {
                             StatusBadge {
                                 label: wayside.bufferReadOnly
                                     ? qsTr("History")
+                                    : !wayside.hasProgram
+                                        ? qsTr("Not committed")
                                     : wayside.bufferDirty
                                         ? qsTr("Edited") : qsTr("Committed")
                                 variant: wayside.bufferReadOnly ? "info"
+                                    : !wayside.hasProgram ? "warning"
                                     : wayside.bufferDirty ? "warning" : "ok"
                             }
 
@@ -476,7 +479,13 @@ Item {
                     id: runningNote
                     anchors.fill: parent
                     anchors.margins: theme.space_3
-                    text: qsTr("Running iteration #") + wayside.controller.iteration
+                    text: !wayside.hasTrack
+                        ? qsTr("No track is loaded. Load a track, then write "
+                            + "or load a PLC program for every wayside.")
+                        : !wayside.hasProgram
+                        ? qsTr("No program is running on this wayside, so it "
+                            + "transmits nothing. RUN, then COMMIT a program.")
+                        : qsTr("Running iteration #") + wayside.controller.iteration
                         + qsTr(" — ") + wayside.controller.file
                         + qsTr(". The wayside executes the committed program, "
                             + "not the editor buffer.")

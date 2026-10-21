@@ -41,9 +41,10 @@ YARD = "yard"
 #: Each line needs at least this many wayside controllers (D014).
 MIN_CONTROLLERS = 2
 
-#: Default wayside count for each line the system starts with. The
-#: count is configurable: it is chosen again whenever a layout is loaded.
-DEFAULT_CONTROLLER_COUNTS: dict[str, int] = {"Green": 6, "Red": 5}
+#: How many wayside controllers each line is built with. Fixed by the
+#: track, like the blocks: the user never chooses it. A line not listed
+#: is built with the fewest D014 allows.
+WAYSIDE_COUNTS: dict[str, int] = {"Green": 6, "Red": 5}
 
 #: Identity colours from the track chart. Any other line is neutral.
 LINE_COLORS: dict[str, str] = {"Green": "#2F7D4F", "Red": "#B03A3A"}
@@ -182,8 +183,8 @@ class ParsedLayout:
 
     @property
     def default_controllers(self) -> int:
-        """The wayside count to offer when the line is first loaded."""
-        wanted = DEFAULT_CONTROLLER_COUNTS.get(self.key, MIN_CONTROLLERS)
+        """How many waysides this line is built with."""
+        wanted = WAYSIDE_COUNTS.get(self.key, MIN_CONTROLLERS)
         return max(self.min_controllers, min(wanted, self.max_controllers))
 
 
@@ -417,8 +418,14 @@ def _partition(count: int, parts: int) -> list[tuple[int, int]]:
     return spans
 
 
-def build_line(parsed: ParsedLayout, controller_count: int) -> LineLayout:
-    """Divide a line's blocks among ``controller_count`` waysides.
+def build_line(
+    parsed: ParsedLayout, controller_count: int | None = None
+) -> LineLayout:
+    """Divide a line's blocks among the waysides the track is built with.
+
+    The number of waysides is fixed by the track (``WAYSIDE_COUNTS``), so
+    the user never chooses it. ``controller_count`` overrides it for
+    tests only.
 
     Each wayside owns a contiguous run of block numbers. That run does
     not have to line up with a section boundary, and a switch belongs to
@@ -428,6 +435,8 @@ def build_line(parsed: ParsedLayout, controller_count: int) -> LineLayout:
     Raises:
         LayoutError: If the count is outside what this line allows.
     """
+    if controller_count is None:
+        controller_count = parsed.default_controllers
     if isinstance(controller_count, bool) or not isinstance(
         controller_count, int
     ):
@@ -507,7 +516,7 @@ def build_default_system() -> tuple[LineLayout, ...]:
         LayoutError: If a layout file is missing or malformed.
     """
     lines: list[LineLayout] = []
-    for key in DEFAULT_CONTROLLER_COUNTS:
+    for key in WAYSIDE_COUNTS:
         parsed = load_layout_file(
             default_layout_dir() / f"{key.lower()}_line.json"
         )

@@ -111,17 +111,16 @@ world do not, so they are tested headlessly.
 The controller is vital, so it does not run until it has been started up. The
 procedure is the programmer's, from the Track Controller UI:
 
-1. **Load the line.** The default Green and Red are loaded when the UI opens;
-   **Load track...** replaces either.
-2. **Load a PLC program on every wayside.** Open each wayside, RUN, COMMIT. The
-   editor already offers a generated program for a wayside that has none, but
-   nothing is committed for you.
+1. **Load the line.** The UI opens with no track at all. **Load track...** loads
+   a line onto the waysides it is built with.
+2. **Write or load a PLC program on every wayside.** Open each wayside, write
+   the program or **Load .plc file**, then RUN and COMMIT. A wayside with no
+   program opens an empty editor, and NEW gives an empty one too: nothing is
+   written or committed for you.
 
-Until both are done the module is **not ready**: no program runs, and every
-wayside drives its fail-safe outputs whatever the inputs say (stop everywhere,
-every signal red, every crossing armed, switches left where they stand). One
-unprogrammed wayside stalls them all. The header shows **Not ready** and says
-what is missing. Loading a new line, or `reset()`, makes a ready module not
+Until both are done the line is **not ready**: no wayside on it runs a program,
+and a wayside running nothing transmits nothing. One unprogrammed wayside stalls
+its whole line. The header shows **NOT READY**, with what is missing on hover. Loading a new line, or `reset()`, makes a ready module not
 ready again.
 
 Readiness is reported **per wayside, and so per line**: each wayside's
@@ -132,9 +131,8 @@ which waysides are not ready. There is no module-level flag on the wire.
 reports and all of them are ready, and `.not_ready()` lists the ones that are
 not. A wayside that is ready is still held while another is not, since the track
 is only safe with every wayside running. The CTC Office must dispatch nothing and
-send no speed or authority, on any line, until the whole is ready; the stand-in
-CTC in the test UI does exactly that. For a demo, **Load starters** in the header (or `python main.py
---load-starters`) commits a generated program to every wayside that has none.
+send no speed or authority on a line until its waysides are ready; the stand-in
+CTC in the test UI does exactly that.
 
 ## The module boundary
 
@@ -402,15 +400,17 @@ switch and every CTC switch command.
 ## Track configuration
 
 **Load track...** in the header reads a track layout file (`TrackModel/*.json`),
-divides its blocks among the number of wayside controllers you choose, and
+divides its blocks among the wayside controllers the line is built with, and
 installs it. The dialog first reports the line, its blocks, switches and
 crossings, and what loading would replace.
 
 - A wayside owns a contiguous run of block numbers. That run need not match a
   section boundary, and a switch belongs to the wayside that owns the block it is
   listed on even when its legs lead into a neighbouring territory.
-- The count is configurable, from 2 (D014) up to one wayside per block. The
-  system starts with Green on 6 and Red on 5.
+- **The number of waysides is fixed by the track**, like its blocks; the user
+  cannot change it. Green has 6 and Red 5 (`WAYSIDE_COUNTS` in `layout.py`). A
+  line with no entry there gets 2, the fewest D014 allows. The dialog shows the
+  count but offers no control for it.
 - A line of the same name is **replaced**, with its controllers and every program
   and committed iteration they hold, because the territories they governed no
   longer exist. The dialog says so before it loads. A line with a new name is
@@ -477,10 +477,11 @@ recorded here.
    Office's permission; block tiles are read-only. Closures arrive as a physical
    input, from the CTC in the integrated system and from the test UI's CTC
    section standing alone.
-9. **Controller counts are configurable, and so is the layout.** The system
-   starts from the real Green and Red layouts, divided 6 and 5 ways, and **Load
-   track...** replaces either with another count or another file. The generated
-   synthetic network of the first version is gone.
+9. **The layout is loaded; the wayside count is the track's.** The UI starts
+   empty and **Load track...** installs the real Green or Red layout on the 6 or
+   5 waysides it is built with. The user never chooses the count, since a
+   physical line comes with its waysides. The generated synthetic network of the
+   first version is gone.
 10. **Editor highlighting is in the gutter, not the text.** The language is
     small enough that the useful signal is which lines the compiler rejected, so
     failed lines are marked in the gutter and listed in the Parser pane rather
