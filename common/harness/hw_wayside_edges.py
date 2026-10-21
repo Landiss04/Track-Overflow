@@ -48,7 +48,7 @@ def track_model_to_track_controller(
         }
     fields = {"switch_positions": "position", "crossings_active": "active",
               "signal_aspects": "aspect"}
-    result = {
+    result: dict[str, Any] = {
         "occupied_blocks": [key(block) for block in mapped["occupied_blocks"]]
     }
     for field, value_name in fields.items():

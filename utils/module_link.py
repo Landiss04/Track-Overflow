@@ -91,6 +91,9 @@ class ModuleLink(QObject):
                 ``--harness``.
             step: Steps the module once per ``STEP``.
             parent: Optional Qt parent.
+            deferred_handler: Host relays only: receives the whole STEP.
+                Complete it later with reply_outputs or reply_rejected.
+                Without this argument the synchronous step is unchanged.
         """
         super().__init__(parent)
         self.showRequested.connect(_show_module_windows)
