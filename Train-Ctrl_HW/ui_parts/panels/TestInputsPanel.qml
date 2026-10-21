@@ -40,7 +40,7 @@ Panel {
         "beacon_underground": s.beacon_underground,
         "cabin_temperature": Math.round(s.cabin_temp_f),
         "signal_light_ahead": s.next_signal,
-        "brake_state_emergency": s.fb_emergency_brake,
+        "emergency_brake_state": s.fb_emergency_brake,
         "door_state_left": s.fb_doors_left,
         "door_state_right": s.fb_doors_right,
         "light_state_interior": s.fb_interior_lights,
@@ -311,13 +311,13 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "brake_state_emergency"
+                name: "emergency_brake_state"
                 kind: "bool"
-                value: root.draft.brake_state_emergency
-                pending: root.touched["brake_state_emergency"] === true
-                    && root.pending("brake_state_emergency")
+                value: root.draft.emergency_brake_state
+                pending: root.touched["emergency_brake_state"] === true
+                    && root.pending("emergency_brake_state")
                 onEdited: function (v) {
-                    root.stage("brake_state_emergency", v);
+                    root.stage("emergency_brake_state", v);
                 }
             }
             SignalEditRow {

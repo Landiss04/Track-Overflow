@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .constants import (
+    CLOCK_START_S,
     DEFAULT_CABIN_TEMP_C,
     DEFAULT_KI,
     DEFAULT_KP,
@@ -23,7 +24,11 @@ class State:
     actual_mps: float = 0.0
     commanded_mps: float = 0.0
     target_mps: float = 0.0
-    accel_mps2: float = 0.0
+
+    # System time as last received: seconds since midnight of the
+    # first simulated day, as utils/system_clock.py counts it, from
+    # the harness or the bench clock (REQUIREMENTS.md M11).
+    time_s: float = CLOCK_START_S
 
     # Authority: how many blocks the train may still enter before it
     # has to stop, as the Track Model reports it, and the block it
@@ -43,15 +48,10 @@ class State:
     # latched until the test bench clears them.
     failures: dict = field(
         default_factory=lambda: {name: False for name in FAILURES})
-    # Failures injected into the toy plant from the bench (Murphy).
-    # The controller never reads these; it has to detect them.
-    injected: dict = field(
-        default_factory=lambda: {name: False for name in FAILURES})
 
     # State reported back by the Train Model, as opposed to what this
     # controller commanded (truth door-state, light-state,
-    # brake-state). With no Train Model attached the toy plant stands
-    # in for it, and the bench can publish them too.
+    # brake-state), from the Train Model or the bench's simulation.
     fb_doors_left: bool = False
     fb_doors_right: bool = False
     fb_interior_lights: bool = False

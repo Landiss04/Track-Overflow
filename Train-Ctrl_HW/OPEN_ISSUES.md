@@ -2,7 +2,7 @@
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Last reviewed 2026-10-21 (controller / test bench
-separation, `REQUIREMENTS.md` M0–M20).
+separation, `REQUIREMENTS.md` M0–M20; R15–R17 done the same day).
 
 ## Resolved 2026-10-21
 
@@ -23,6 +23,13 @@ separation, `REQUIREMENTS.md` M0–M20).
   commissions every train, once, at the start; defaults are never applied
   on their own (M9). Harness trains wait at 0 W until then, as now.
 - `old_main.py` (was in #20) was removed in `c98393e`.
+- **26 (most of it). The bench's simulation lived inside the
+  controller.** Moved to `bench_sim.py` (R15): the bench now steps the
+  fleet through `step_all`, its edits go to the simulation, and the
+  controller sees them on the next tick. What is left is the choice of
+  simulator, below.
+- **Emergency echo** (`HARNESS_INTEGRATION.md`): fixed with #25's
+  controller side (R16).
 
 ## Added 2026-10-15
 
@@ -93,33 +100,30 @@ separation, `REQUIREMENTS.md` M0–M20).
     settle with Kevin: drop it from `ControllerOutputs`, or have the
     harness not map it.
 
-25. **The passenger e-brake re-latches after the driver releases it.**
-    Decided (M2): the driver's release overrides the passenger state. But
-    the Train Model's passenger latch is cleared only by a test-only call
-    (`clear_passenger_brake_for_test`), so it keeps reporting the e-brake
-    engaged, and `apply_staged` reads that as a new pull on the next tick.
-    The controller should take only a rising edge (off to on) of a report
-    it did not command as a pull; what the Train Model reports after a
-    driver release still needs agreeing with Kevin.
+25. **The passenger e-brake after the driver releases it.** Decided (M2):
+    the driver's release overrides the passenger state. The controller
+    side is done (R16): only a turn on of the emergency brake state, while
+    the controller is not commanding it, is a pull, so a held report no
+    longer re-latches it. Still open:
+    - The Train Model's passenger latch is cleared only by a test-only call
+      (`clear_passenger_brake_for_test`), so it keeps reporting the
+      e-brake engaged after the release; agree with Kevin what it should
+      report.
+    - A pull reported within a tick or two of a release, before the
+      reported state has gone false, is not seen.
+    - The bench's passenger pull is reported for one tick only, not
+      latched as the Train Model's is.
 
-26. **The bench's simulation lives inside the controller.** M0.
-    `ControllerCore` holds the toy plant (`_plant`: speed, acceleration,
-    Brake State, Door State, Light State, cabin drift, `SETTLE_MPS`), the
-    injected failures (`state.injected`, read by `received_signal` as well
-    as the plant) and the plant's command edges (`_acted_doors`,
-    `_acted_lights`). The plant writes the controller's inputs directly,
-    bypassing `read_inputs` and `EVERY_TICK`, so the bench never exercises
-    the harness path, and bench edits and the plant overwrite each other.
-    Move it to a bench-side simulator that takes `TrainModelCommands` and
-    returns the same input dict the harness sends, stepped through
-    `fleet.step_all`. Also on the bench side today: the bench clock, Pause
-    and the rate. Two choices for that simulator, not made:
-    - (a) keep a toy plant of our own (Euler, rolling resistance only
-      under a brake failure, no grade); or
+26. **Which simulator the bench uses.** The bench's simulation is now
+    separate (`bench_sim.py` `SimTrain`, R15), still the toy plant. Not
+    decided:
+    - (a) keep the toy plant (Euler, rolling resistance only under a brake
+      failure, no grade; its service brake state does not go false under
+      the e-brake as the Train Model's does); or
     - (b) reuse the Train Model's pure-Python `train_model.model.TrainModel`
-      from `development`: one physics, with real rolling resistance and
-      grade. D005 says modules do not import each other's boundary types,
-      so this needs a team decision.
+      from `development` inside `SimTrain`: one physics, with real rolling
+      resistance and grade. D005 says modules do not import each other's
+      boundary types, so this needs a team decision.
 
 27. **Signal light ahead is not mapped from the Track Model.** Decided
     (M20): it comes from the Track Model directly, as
@@ -142,12 +146,23 @@ separation, `REQUIREMENTS.md` M0–M20).
     commanded speed.
 
 30. **Rules decided 2026-10-21 not yet in the code.** M1 (70 km/h cap
-    still applied), M4 (0.5 s detection; service command forced off), M6
-    (Manual doors still platform side only), M7 (Manual announcement
-    lockout on a wall-clock timer), M17 (forced service brake at 0
-    authority), M18 (`brake_state` read as one bool[2]), M19 (engine
-    detection uses mass and `F = P/v`). `HARNESS_INTEGRATION.md` and
-    `CHANGELOG.md` follow when the code changes.
+    still applied), M3 and M5 (resolution not detected; blocked on #23),
+    M4 (0.5 s detection; service command forced off), M6 (Manual doors
+    still platform side only), M7 (Manual announcement lockout on a
+    wall-clock timer, though `time_s` is now available), M8 (automatic
+    lights; `time_s` is now available), M17 (forced service brake at 0
+    authority), M19 (engine detection uses mass and `F = P/v`, #28), M20
+    (signal light not mapped, #27). Update `HARNESS_INTEGRATION.md` and
+    `CHANGELOG.md` with each.
+
+31. **Bench-side leftovers from the separation (R15–R17).**
+    - The bench clock advances only while the selected train is
+      commissioned (unchanged from before), yet it is now the time every
+      train receives. A shared clock would run whenever the bench is not
+      paused.
+    - The numbers drawer's acceleration comes from the bench simulation
+      and reads 0 under a harness: it is not a signal the controller
+      receives (M12; the drawer is to be removed).
 
 ## Carried over
 

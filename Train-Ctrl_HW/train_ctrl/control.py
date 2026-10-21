@@ -1,20 +1,17 @@
-"""The PI speed law, the safety path and the toy plant, per train.
+"""The PI speed law and the safety path, per train.
 
-No Qt: this runs the same under the console, the bench or the
-central harness.
+No Qt: this runs the same whether the bench or the central harness
+drives it. It knows only what it receives and what it sends
+(REQUIREMENTS.md M0); the bench's simulation is train_ctrl.bench_sim.
 """
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from .constants import (
     ANNOUNCE_LOCKOUT_MS,
     BRAKE_DETECT_S,
-    CABIN_DRIFT_FRACTION,
-    CABIN_DRIFT_MAX_C,
-    EBRAKE_DECEL_MPS2,
     ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
     ENGINE_RISE_MPS,
@@ -24,10 +21,7 @@ from .constants import (
     MAX_POWER_W,
     MAX_SPEED_MPS,
     PICKUP_DETECT_MIN_BLOCKS,
-    ROLLING_DECEL_MPS2,
     SERVICE_BAND_MPS,
-    SERVICE_DECEL_MPS2,
-    SETTLE_MPS,
     STANDSTILL_MPS,
     TICK_S,
     V_FLOOR_MPS,
@@ -35,7 +29,7 @@ from .constants import (
 from .state import State, TrainModelCommands
 
 class ControllerCore:
-    """The PI speed law, the safety path and the toy plant.
+    """The PI speed law and the safety path.
 
     No Qt, no view: this class is what the hardware demo has to prove
     correct, and it runs unchanged whether or not a console is open.
@@ -47,11 +41,6 @@ class ControllerCore:
         self.integral = 0.0
         # Inert until an engineer commissions the gains.
         self.armed = False
-        # The door and light commands the plant last acted on, so it
-        # answers a command once, on its edge, and leaves a state the
-        # bench published alone in between.
-        self._acted_doors: tuple[bool, bool] | None = (False, False)
-        self._acted_lights: tuple[bool, bool] | None = (True, True)
         # Automatic station stop (REQUIREMENTS.md M6): a new beacon
         # station not yet served, and whether the train is held at
         # it, first with the doors open and then while they close.
@@ -76,16 +65,12 @@ class ControllerCore:
 
     @property
     def received_signal(self) -> tuple[float, int]:
-        """The Track Signal as it reaches the controller.
+        """The Track Signal as it reached the controller.
 
-        Commanded speed (m/s) and authority (blocks). The toy plant
-        stands in for the Train Model passing it through: with signal
-        pickup injected it passes zeros (truth leaves zeros or stale
-        values open; zeros is this plant's choice).
+        Commanded speed (m/s) and authority (blocks), as received. A
+        lost pickup arrives as zeros (Train Model, development).
         """
         s = self.state
-        if s.injected["signal_pickup"]:
-            return 0.0, 0
         return s.commanded_mps, s.authority_blocks
 
     @property
@@ -106,17 +91,13 @@ class ControllerCore:
             return 0
         return self.received_signal[1]
 
-    def step(self, plant: bool = True) -> None:
-        """Run one control period.
+    def step(self) -> None:
+        """Run one control period on the inputs last applied.
 
         Only the speed law waits for the gains. The brakes and the
         safety path run from the first tick, because a console that
         has not been commissioned yet still has to be able to stop
         the train and still has to report what the brakes are doing.
-
-        ``plant`` runs the toy train after the control law, for the
-        standalone console and bench. Driven by the harness it is
-        off: the Train Model does the physics (truth D009).
         """
         s = self.state
         if self._announce_left_s > 0.0:
@@ -160,15 +141,17 @@ class ControllerCore:
 
         self.respond_to_failures()
         self.enforce_safety()
-        if plant:
-            self._plant()
 
     def apply_staged(self, staged: dict[str, Any]) -> None:
         """Apply a set of Train Model signals read by read_inputs().
 
-        A reported emergency brake that this controller did not
-        command is a passenger pull: latch it and cut power. A report
-        of false never releases it; only the driver does (D011,
+        An emergency brake state that turns on while this controller
+        is not commanding it is a passenger pull: latch it and cut
+        power. Only the turn on counts, so a state still reported on
+        after the driver's release (the last command echoed, or a
+        passenger latch held) does not latch it again: the driver's
+        release overrides it (REQUIREMENTS.md M2). A report of false
+        never releases it; only the driver does (D011,
         arbitration/passenger-emergency-brake).
         """
         s = self.state
@@ -183,14 +166,17 @@ class ControllerCore:
             if not s.manual:
                 s.announcement = station
                 self._announce_left_s = ANNOUNCE_LOCKOUT_MS / 1000
-        brakes = staged.pop("brake_state", None)
+        emergency = staged.pop("emergency_brake_state", None)
+        service = staged.pop("service_brake_state", None)
         for attr, value in staged.items():
             setattr(s, attr, value)
-        if brakes is not None:
-            emergency, service = brakes
-            if emergency and not s.emergency_brake:
+        if service is not None:
+            s.fb_service_brake = service
+        if emergency is not None:
+            pulled = emergency and not s.fb_emergency_brake
+            if pulled and not s.emergency_brake:
                 self.engage_emergency()
-            s.fb_emergency_brake, s.fb_service_brake = emergency, service
+            s.fb_emergency_brake = emergency
 
     def detect_failures(self) -> None:
         """Infer failures from what the Train Model sends back.
@@ -413,17 +399,12 @@ class ControllerCore:
             self.integral = 0.0
 
     def command_door(self, side: str, open_: bool) -> bool:
-        """Command one side's doors, and have the plant answer it.
+        """Command one side's doors.
 
         Only the platform side opens, and only at a stand (the door
         interlock is the controller's, REQUIREMENTS.md M6). Closing is
         always allowed, so a door left open when the platform side
         changes is never stuck open. Returns whether it was sent.
-
-        The plant answers a command on its edge. Pressing a tile
-        again with the same command, because the reported state still
-        disagrees (the door interlock held it, say), has to be
-        answered too, or the tile could never change anything.
         """
         s = self.state
         if open_ and not (self.platform_on(side) and self.at_stand):
@@ -432,14 +413,12 @@ class ControllerCore:
             s.doors_left = open_
         else:
             s.doors_right = open_
-        self._acted_doors = None
         return True
 
     def command_lights(self, interior: bool, exterior: bool) -> None:
-        """Command the lights, and have the plant answer it."""
+        """Command the lights."""
         s = self.state
         s.interior_lights, s.exterior_lights = interior, exterior
-        self._acted_lights = None
 
     def commands(self) -> TrainModelCommands:
         """Return this tick's commands to the Train Model, in SI."""
@@ -452,75 +431,4 @@ class ControllerCore:
             light_command=(s.interior_lights, s.exterior_lights),
             temperature_setpoint_c=s.target_temp_c,
             announcement=s.announcement,
-        )
-
-    def _plant(self) -> None:
-        # Toy physics standing in for the Train Model until it is
-        # wired in:
-        #
-        #     F = P / v     a = F / M     v = v + a dt
-        #
-        # No resistance term in normal running: the model is the block
-        # diagram and nothing else. A train with no power applied
-        # coasts forever, so the only ways down are the two brakes,
-        # and the speed law holds its target from below rather than
-        # settling onto it from both sides. The injected failures act
-        # here the way truth modules/train-model.md says the Train
-        # Model applies them: an engine failure zeroes traction, and a
-        # brake failure blocks the service brake only; the emergency
-        # brake still works. Under a brake failure, and only then for
-        # now, rolling resistance (same source) also acts on the
-        # train. Signal pickup is applied in received_signal.
-        s = self.state
-        service_works = not s.injected["brake"]
-        power = 0.0 if s.injected["engine"] else s.power_w
-        v = s.actual_mps
-        force = min(MAX_FORCE_N, power / max(abs(v), V_FLOOR_MPS))
-        a = force / MASS_KG
-        decel = 0.0
-        if s.emergency_brake:
-            decel = EBRAKE_DECEL_MPS2
-        elif service_works and s.service_brake:
-            decel = SERVICE_DECEL_MPS2
-        if decel:
-            # A brake opposes the motion and never reverses it.
-            a = -math.copysign(decel, v) if v else 0.0
-        elif not service_works:
-            # Resistance opposes the motion, holds the train at rest,
-            # and never reverses it.
-            a = (a - math.copysign(ROLLING_DECEL_MPS2, v) if v
-                 else max(0.0, a - ROLLING_DECEL_MPS2))
-        new_v = v + a * self.dt
-        if v * new_v < 0.0:
-            new_v = 0.0             # stopped, never reversed
-        s.accel_mps2 = a
-        s.actual_mps = new_v
-        if abs(s.actual_mps) < SETTLE_MPS and s.target_mps < SETTLE_MPS:
-            s.actual_mps = 0.0          # settle cleanly at a stand
-
-        # Brake State, as this plant reports it: what is engaged, so
-        # a failed service brake reads false whatever was commanded.
-        # That is the plant's own stand-in; what the real Train Model
-        # reports is for it to settle.
-        s.fb_emergency_brake = s.emergency_brake
-        s.fb_service_brake = s.service_brake and service_works
-
-        # Door and light commands are answered on their edge. A door
-        # only opens at a stand (the door interlock, truth
-        # door-command.md); a command to open while moving is ignored.
-        doors = (s.doors_left, s.doors_right)
-        if doors != self._acted_doors:
-            at_stand = abs(s.actual_mps) < STANDSTILL_MPS
-            s.fb_doors_left = s.doors_left and at_stand
-            s.fb_doors_right = s.doors_right and at_stand
-            self._acted_doors = doors
-        lights = (s.interior_lights, s.exterior_lights)
-        if lights != self._acted_lights:
-            s.fb_interior_lights, s.fb_exterior_lights = lights
-            self._acted_lights = lights
-
-        drift = s.target_temp_c - s.cabin_temp_c
-        s.cabin_temp_c += max(
-            -CABIN_DRIFT_MAX_C,
-            min(CABIN_DRIFT_MAX_C, drift * CABIN_DRIFT_FRACTION),
         )

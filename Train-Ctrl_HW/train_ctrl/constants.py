@@ -7,7 +7,9 @@ from .units import KMH_PER_MPS
 # ticks per second, never a longer step (REQUIREMENTS.md M11).
 TICK_S = 0.1
 CONTROL_HZ = 10                 # ticks per second at real time
-CLOCK_START = (5, 0, 0)         # D017's clock starts at 05:00:00
+# D017's clock starts at 05:00:00, counted in seconds since midnight
+# as utils/system_clock.py does.
+CLOCK_START_S = 5 * 3600.0
 UI_HZ = 10
 ANNOUNCE_LOCKOUT_MS = 5000
 GAINS_HANDOVER_MS = 1500
@@ -29,8 +31,9 @@ DEFAULT_TARGET_TEMP_C = 22.2
 CABIN_DRIFT_FRACTION = 0.01
 CABIN_DRIFT_MAX_C = 0.011
 
-# --------------------------------------- plant model (toy, replaced by
-# the Train Model)
+# ------------------------------- bench simulation (bench_sim.py), and
+# the engine-failure rule in control.py, which still uses the mass and
+# force cap (OPEN_ISSUES.md #28)
 #     F = P / v        a = F / M        v = v + a dt
 # F = P / v is undefined at a stand, so the division uses a floor
 # speed; below it the train pulls its full tractive effort.
@@ -52,15 +55,16 @@ EBRAKE_DECEL_MPS2 = 2.73
 # Kept to about a tenth of a mile an hour, so a slow-down settles on
 # its target (35 -> 30 mph ends at 30.08 at the 0.1 s step).
 SERVICE_BAND_MPS = 0.05
-# Rolling resistance, from truth modules/train-model.md. Applied only
-# under a brake failure for now; see ControllerCore._plant().
+# Rolling resistance, from truth modules/train-model.md. The bench
+# simulation applies it only under a brake failure; the controller
+# never models it (REQUIREMENTS.md M19).
 ROLLING_RESISTANCE_COEFF = 0.002
 GRAVITY_MPS2 = 9.81
 ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
 # Below this the emergency brake may be released (D011).
 STANDSTILL_MPS = 0.1
-# Below this, with nothing asked of it, the toy plant settles to an
-# exact stand instead of creeping.
+# Below this, with no power applied, the bench simulation settles to
+# an exact stand instead of creeping.
 SETTLE_MPS = 0.12
 
 # ---------------------------------------------------- failure detection

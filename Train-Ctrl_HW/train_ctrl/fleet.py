@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator, Mapping
 
 from .constants import TICK_S
@@ -62,24 +63,33 @@ class TrainControllerFleet:
         return iter(list(self._cores.values()))
 
     def step_all(
-        self, dt: float, inputs_by_id: Mapping[str, dict],
+        self, dt: float, inputs_by_id: Mapping[str, dict], time_s: float,
     ) -> dict[str, TrainModelCommands]:
         """Step every train's controller one tick, or none of them.
 
-        ``inputs_by_id`` holds each train's Train Model signals in SI
-        (the keys read_inputs() takes), exactly one entry per train.
-        Every train's set is read before any train steps, so a set
-        one train would refuse leaves the whole fleet unchanged. The
-        toy plant does not run: the Train Model does the physics.
-        Returns each train's commands to its Train Model.
+        ``inputs_by_id`` holds each train's signals in SI (the keys
+        read_inputs() takes), exactly one entry per train. Every
+        train's set is read before any train steps, so a set one train
+        would refuse leaves the whole fleet unchanged. The physics is
+        the Train Model's, or the bench simulation's. Returns each
+        train's commands to its Train Model.
 
         ``dt`` must be TICK_S: the step is fixed at 0.1 s (truth D006 /
         D017) and faster simulation means more ticks, never longer
         ones. It is still passed, as TrainModelFleet takes it.
+
+        ``time_s`` is the system time this tick, in seconds since
+        midnight of the first simulated day, as utils/system_clock.py
+        gives it: the harness clock, or the bench's own
+        (REQUIREMENTS.md M11).
         """
         if dt != TICK_S:
             raise InvalidInputError(
                 f"dt must be the fixed {TICK_S} s step, not {dt!r}")
+        if (isinstance(time_s, bool) or not isinstance(time_s, (int, float))
+                or not math.isfinite(time_s) or time_s < 0):
+            raise InvalidInputError(
+                f"time_s must be a time of at least 0 s, not {time_s!r}")
         unknown = sorted(set(inputs_by_id) - set(self._cores))
         if unknown:
             raise UnknownTrainError(f"inputs for unknown trains: {unknown}")
@@ -95,7 +105,8 @@ class TrainControllerFleet:
                   for train_id in self._cores}
         commands = {}
         for train_id, core in self._cores.items():
+            core.state.time_s = float(time_s)
             core.apply_staged(staged[train_id])
-            core.step(plant=False)
+            core.step()
             commands[train_id] = core.commands()
         return commands

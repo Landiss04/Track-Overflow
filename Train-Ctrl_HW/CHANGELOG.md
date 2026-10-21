@@ -2,17 +2,19 @@
 
 Everything changed in the HW Train Controller module since Ivan's last commit
 (`493f16e`, "update compiled Python bytecode for check.py"), up to the
-failure-detection commit (2026-10-15). Work by Jonathan Tsang, with Claude. Open, unfixed items are in
-[`OPEN_ISSUES.md`](OPEN_ISSUES.md).
+controller / test bench separation (2026-10-21). Work by Jonathan Tsang, with Claude. Open, unfixed items are in
+[`OPEN_ISSUES.md`](OPEN_ISSUES.md); rules and their status in
+[`REQUIREMENTS.md`](REQUIREMENTS.md).
 
 Base for every check below: `python main.py --check` (run with the module's
-venv) — 0 QML warnings, 0 behaviour problems at `700d83d`.
+venv) — 0 QML warnings, 0 behaviour problems at `700d83d`, and again after
+the 2026-10-21 changes.
 
 ---
 
 ## 1. Where things stand (net effect)
 
-### Control and safety (`main.py`)
+### Control and safety (`train_ctrl/`)
 
 | Area | Behaviour now |
 |---|---|
@@ -20,23 +22,24 @@ venv) — 0 QML warnings, 0 behaviour problems at `700d83d`.
 | Traction under braking | Power is 0 W whenever the service brake is applied, and the PI integrator holds (truth `arbitration/traction-cut-under-braking`). Before: up to 120 kW against the brake. |
 | Stopping on a zero target | A target of 0 brakes the train to a stand instead of leaving it creeping inside the service band. |
 | Service band | 0.05 m/s. Ivan's 0.5 m/s left slow-downs about 1.1 mph over target, since nothing slows the train once the brake lets go; 35 → 30 mph now settles at 30.08 mph (480 kW, 0.1 s step), with no brake chatter. |
-| Authority | A count of blocks remaining, as sent; the control law stops the train when it reaches 0. Until the Track Model sends the count, the toy plant spends one block per 100 m travelled (`BLOCK_LENGTH_M`, an arbitrary stand-in; real block lengths are unknown, `OPEN_ISSUES.md` item 11), so the console shows the train making progress. The aspect is not stepped and `current_block` is not restored. |
-| Failure detection | The Train Model no longer reports failures (truth), so the controller infers them from what it sends back (`detect_failures()`, REQ-FUNC-038): brake — service brake commanded but never shown applied for 0.5 s; engine — power that should pull ≥ 0.1 m/s² leaves the speed flat for 2 s; signal pickup — speed and authority drop to 0 together from ≥ 2 blocks. The bench's failure rows now inject into the toy plant (Murphy) and the controller has to find them. Rules are the team's own design (`REQUIREMENTS.md` §4). |
+| Authority | A count of blocks remaining, used as given (M16): it changes only when a new count arrives, and the control law stops the train when it reaches 0. Nothing counts blocks: integrated, the Track Model sends the next block's count after the Train Model reports a block change to it; on the bench, the **Block change** button sends one fewer. The 100 m countdown is gone (2026-10-21). |
+| Failure detection | The Train Model no longer reports failures (truth), so the controller infers them from what it sends back (`detect_failures()`, REQ-FUNC-038): brake — service brake commanded but never shown applied for 0.5 s; engine — power that should pull ≥ 0.1 m/s² leaves the speed flat for 2 s; signal pickup — speed and authority drop to 0 together from ≥ 2 blocks. The bench's failure rows inject into the bench's simulation (Murphy) and the controller has to find them. Rules are the team's own design (`REQUIREMENTS.md` §4). |
 | Any detected failure | Emergency brake applied and latched, power 0, target 0; Manual/Automatic switching and the driver's target refused. Latched until the failure is cleared on the test bench; the driver then releases the e-brake at a stand. |
-| Engine failure | Traction is zero in the plant; detected as above. |
-| Signal pickup failure | The plant passes zeros for commanded speed and authority; once detected they are treated as 0 until the bench clears it. The signal lights are unaffected. Once detected, the console shows "--" for commanded speed and "Stop in" (hero tiles and numbers drawer) rather than a 0 that reads like a real command. |
-| Brake failure | Only the service brake fails (truth `modules/train-model.md`); the emergency brake still works. Once detected, the controller applies the emergency brake, the driver's service request is dropped and the service brake is never commanded; the Stop panel's service brake is greyed out, the emergency brake stays live. Detected 0.6 s after the service brake is asked for (the 0.5 s rule plus one 0.1 s tick), in Manual and Automatic. Rolling resistance (C_rr 0.002) still acts under an injected brake failure only. |
-| Emergency brake release | Only by the driver, only at a stand, and never while any detected failure is latched. A Train Model report of "off" never releases it (D011). |
-| Reported state | The toy plant reports Brake State `[emergency, service]` (service false while an injected brake failure blocks it; the plant's own stand-in), Door State with the door interlock (opens only at a stand), and Light State. Door and light commands are answered when pressed, including a repeat press after the interlock held a door shut. |
+| Engine failure | Traction is zero in the bench simulation; detected as above. |
+| Signal pickup failure | The bench simulation sends zeros for commanded speed and authority, as the Train Model does; once detected they are treated as 0 until the bench clears it. The signal lights are unaffected. Once detected, the console shows "--" for commanded speed and "Stop in" (hero tiles and numbers drawer) rather than a 0 that reads like a real command. |
+| Brake failure | Only the service brake fails (truth `modules/train-model.md`); the emergency brake still works. Once detected, the controller applies the emergency brake, the driver's service request is dropped and the service brake is never commanded; the Stop panel's service brake is greyed out, the emergency brake stays live. Detected 0.6 s after the service brake is asked for (the 0.5 s rule plus one 0.1 s tick), in Manual and Automatic. In the bench simulation, rolling resistance (C_rr 0.002) acts under an injected brake failure only; the controller models none (M19). |
+| Emergency brake release | Only by the driver, only at a stand, and never while any detected failure is latched. A Train Model report of "off" never releases it (D011). A passenger pull is an emergency brake state that turns on while the controller is not commanding it, so a state still reported on after the release (the last command echoed, or a held passenger latch) does not latch it again: the driver's release overrides it (M2, 2026-10-21). |
+| Reported state | Received, never made up: emergency and service brake state as two signals (M18), Door State and Light State. On the bench the simulation reports them: service false while an injected brake failure blocks it; doors and lights follow their commands on each change, with no door interlock of its own (the Train Model's is commented out, so the controller is the interlock), and a state the bench publishes stands until the next command. |
 | Speed limit | Commanded speed is the limit, never above the car's 70 km/h / 43.5 mph (`REQUIREMENTS.md` M1; the Train Model has no governor, D009). Automatic targets the lower of the two; the driver's target is capped at it when set. The separate `speed_limit` input, row and readout are gone. |
 | Doors | The controller's (M6): opened only at a stand, platform side only. Automatic opens the platform side at a new beacon station once stopped, closes when the Track Signal resumes, and leaves only once Door State reports them closed. |
 | Announcements | A command to the Train Model (M7): Automatic sends the station name on a new beacon, for 5 s; Manual on the driver's press. |
 | Emergency brake access | The driver only, to engage or release, in either mode (M2); a passenger pull still latches it. |
-| Time | A fixed 0.1 s step (truth D017); 10× runs 100 ticks a second instead of a longer step; the clock starts at 05:00:00 and runs on simulated time. Pause on the bench holds every train and the clock. |
-| Fleet input | `step_all` refuses a tick whose set is missing any signal the Train Model sends every tick, so a stale Brake State cannot read as a brake failure, and any `dt` other than the fixed 0.1 s step. |
+| Time | A fixed 0.1 s step (truth D017); 10× runs 100 ticks a second instead of a longer step. The system time is an input (M11, 2026-10-21): `step_all` takes it each tick, in seconds since midnight as `utils/system_clock.py` counts it, from the harness clock or the bench's own (from 05:00:00, simulated time). The console's clock shows the time the controller received. Pause on the bench holds every train and the bench clock. |
+| Fleet input | `step_all(dt, inputs_by_id, time_s)` refuses a tick whose set is missing any signal sent every tick, so a stale brake state cannot read as a brake failure; any `dt` other than the fixed 0.1 s step; and a `time_s` that is not a finite time of at least 0. |
 | Outputs to the Train Model | `ControllerCore.commands()` returns `TrainModelCommands` in SI, one field per truth signal (power, service/emergency brake, door bool[2], light bool[2] interior/exterior, temperature setpoint °C, announcement); `commands_changed` emits on change for the central harness (D005). |
-| Train Model interface | `apply_inputs` takes SI in truth shapes (signed actual speed, `brake_state` / `door_state` / `light_state` bool[2], beacon station + side + underground); `failure_status` is gone (truth withdrew it). The whole set is checked before any of it is applied. |
-| Bench interface | `apply_bench_inputs` converts the bench's mph / °F once and calls `apply_inputs`. A set it cannot read is refused whole and shown as a "Not sent" callout on the bench. Gains are commissioned only from the engineer's pop-up. The bench cannot set the service-brake state. |
+| Train Model interface | One way in, `read_inputs` through `step_all`: SI in truth shapes (signed actual speed, `emergency_brake_state` and `service_brake_state`, `door_state` / `light_state` bool[2], beacon station + side + underground); `failure_status` is gone (truth withdrew it). The whole set is checked before any of it is applied. The console's `apply_inputs` slot, a second way in, is gone (2026-10-21). |
+| Bench and controller | Separate (M0, 2026-10-21). `ControllerCore` holds only what it receives and sends: the toy plant, Murphy's injected failures and the plant's command edges moved to `train_ctrl/bench_sim.py` (`SimTrain`, no Qt). Standalone, the console steps the fleet the way the harness does: each train's signals from its `SimTrain`, one `step_all` with the bench clock, the commands back into the simulation. Speed curves are unchanged (0 → 43 mph reaches 42.9 mph at 42.3 s, and 11.18 / 22.37 / 33.55 mph at 10 / 20 / 30 s, before and after). |
+| Bench interface | `apply_bench_inputs` converts the bench's mph / °F once, checks the set with `read_inputs`, and edits the bench's simulation; the controller gets it on the next tick, as it would a harness signal. A set it cannot read is refused whole and shown as a "Not sent" callout on the bench; so is any edit to a train a harness drives. Clearing an injected failure still clears it in the controller too, until the controller detects resolution itself (`OPEN_ISSUES.md` #23). Gains are commissioned only from the engineer's pop-up. The bench cannot set the service brake state. |
 | Units on screen | Imperial throughout, conversion factors from truth `conventions/units.md`; acceleration in the numbers drawer is m/s², a debugging exception (M12). |
 | Code conventions | snake_case verb slots, unit-suffixed constants, no magic numbers, docstrings, `TrainControllerError` / `InvalidInputError`, flake8 79/72 with pep8-naming clean. |
 
@@ -80,7 +83,11 @@ venv) — 0 QML warnings, 0 behaviour problems at `700d83d`.
   the signal aspect on the right. Pause holds the whole simulation.
 - Train Model rows follow truth shapes: beacon as three fields, failures in
   engine / pickup / brake order, interior / exterior lights, emergency-brake
-  report only (no service-brake row).
+  report only (no service-brake row). The emergency row is
+  `emergency_brake_state` (was `brake_state_emergency`, 2026-10-21) and
+  acts as a passenger pull.
+- **Block change** button in the Inputs header (2026-10-21): sends the next
+  block's authority, one fewer, as the Track Model does.
 - Outputs panel adds the Announcement row; values at 18 px.
 
 ### Self-check (`check.py`)
@@ -91,6 +98,18 @@ interface and bench conversion, bad input leaving nothing applied, the bench
 sending only edited rows, the roster signalling only on change, and the train
 picker's search. The 10× check waits on the speed gain instead of a 300 ms
 stopwatch (it failed 4 of 4 runs on Windows before).
+
+2026-10-21: the check drives the controller only through the bench
+simulation or `step_all`, never by writing its state. New checks: stepping
+the controller moves nothing it receives (M0); a held emergency report
+does not undo the driver's release, a new turn on does latch (M2); a tick
+missing either brake state is refused (M18); the harness's time reaches
+the controller and a bad time is refused (M11); a bench block change spends
+one block and the controller receives it (M16). Each fails on the previous
+commit. Two waits that timed out unchecked (the 35 mph climb before the
+slow-down test, which then sped up to 30 mph instead of slowing to it, and
+the dial-scale test) now send and tick first, and the climb is an
+`expect`.
 
 ### Repository
 
@@ -132,7 +151,9 @@ stopwatch (it failed 4 of 4 runs on Windows before).
 | `8ca396f` | 10-16 | Operator bar no longer shifts when the gains are set: the Gains badge sits in a slot as wide as "Gains missing", so its narrower "Gains set" label no longer hands 15 px to the toggles. Checked by comparing the bar's geometry before and after commissioning. |
 | `37ec328` | 10-16 | Instance spawner: `TrainControllerFleet`, one controller per train ID, stepped together by `step_all`. Reverted on `Train-Ctrl_HW` (`515cc24`); kept in Ivan's split as `train_ctrl/fleet.py`. |
 | `1bc21d1`, `d444312`, `b9e3f6a` | 10-16 | Ivan: `main.py` split into the `train_ctrl/` package; `harness_sim.py`, a stand-in central harness (55 mph, 20 blocks, 75 °F; trains no longer armed on spawn). |
-| (next) | 10-16 | Requirements review (`REQUIREMENTS.md`): commanded speed is the limit; e-brake for the driver only; dial on a fixed 70 km/h scale, gap press reads 0, drags past an end hold it, no dial keys; door logic and Automatic station stop in the controller; Automatic announcement command; 0.1 s step, 10× by tick rate, 05:00 clock; Pause holds the simulation; full input set per fleet tick; bench errors shown; bench cab column removed. Each rule has a check shown failing on the old code. |
+| `4688cb4`, `d8b88ae` | 10-16 | Requirements review (`REQUIREMENTS.md`): commanded speed is the limit; e-brake for the driver only; dial on a fixed 70 km/h scale, gap press reads 0, drags past an end hold it, no dial keys; door logic and Automatic station stop in the controller; Automatic announcement command; 0.1 s step, 10× by tick rate, 05:00 clock; Pause holds the simulation; full input set per fleet tick; bench errors shown; bench cab column removed. Each rule has a check shown failing on the old code. |
+| `5a62ca7` | 10-21 | Authority used as given: the 100 m countdown removed, bench Block change button. `REQUIREMENTS.md` rules M0–M20 from the 2026-10-21 review, each marked with whether the code has it; `OPEN_ISSUES.md` #11, #14, #17, #22 resolved, #23–#30 added. |
+| (next) | 10-21 | Bench simulation moved out of the controller (`bench_sim.py`); the bench steps the fleet like the harness; `apply_inputs` removed. Brake State split into two inputs. System time as a `step_all` input; the console shows it. A passenger pull is a turn on, so the driver's release overrides a held report. `harness_sim.py`, `HARNESS_INTEGRATION.md` and this file updated. |
 
 ---
 
@@ -155,9 +176,14 @@ Kept here so a reviewer reading old commits is not misled.
   it); failures are now detected.
 - **Failures stopping the train on the service brake** (`98eccfd`) — replaced
   in `a69495c` by the emergency brake for engine and pickup failures.
-- **Authority countdown removed** (`4bdb3b7`) — a countdown is back as of
-  2026-10-08, in the toy plant only and at 100 m per block instead of 500 m;
-  it no longer steps the signal aspect.
+- **Authority countdown removed** (`4bdb3b7`) — a countdown was back from
+  2026-10-08 to 2026-10-21, in the toy plant only and at 100 m per block;
+  removed again in `5a62ca7` (authority is used as given, M16).
+- **The toy plant inside `ControllerCore`** (`_plant()`, `step(plant=True)`,
+  `State.injected`, `State.accel_mps2`) — moved to `bench_sim.py` on
+  2026-10-21 (M0).
+- **Brake State as one `brake_state` bool[2] input** — split into
+  `emergency_brake_state` and `service_brake_state` on 2026-10-21 (M18).
 - **Style-guide sizes** (36 px readouts, 36 px dial figures, 44 px tiles,
   13 px bench outputs, from `4bdb3b7`) — reverted to Ivan's sizes in
   `2fa4b6d`.
