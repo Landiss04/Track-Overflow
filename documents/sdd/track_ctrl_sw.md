@@ -485,10 +485,22 @@ There is one sequence diagram per use case.
 
 ![Deployment](../uml/track_ctrl_sw/deployment.png)
 
-- The system is one executable on one Windows PC. It starts the central harness, which
-  spawns one process per module (D005).
-- The Track Ctrl SW process (`main.py`) shows the window and runs every Green Line wayside.
-  There is no separate hardware.
+Startup, numbered as in the figure:
+
+1. The user runs `TrackOverflow.exe`, the single executable on the one Windows PC. It
+   starts the central harness process.
+2. The harness spawns one process per module (D005), the Track Ctrl SW host process among
+   them.
+3. The harness talks to each process in newline JSON with a request ID and a tick number.
+   Each module reports when it is ready, and the harness then runs the shared clock (D017).
+4. In the Track Ctrl SW window, the programmer loads the Green Line and commits a PLC
+   program to each of its six waysides. Until then the line reports NOT READY and
+   transmits nothing (UC-18).
+5. Every tick, the harness sends `step(dt, inputs)` through the «planned»
+   `HarnessEndpoint` and waits for the outputs.
+
+- The Track Ctrl SW host process (`main.py`) shows the window and runs every Green Line
+  wayside in the same process. There is no separate hardware.
 - The track layout and the PLC programs are files on the PC, picked in the window. Layouts
   default to the `TrackModel/` folder.
 - The test UI (`test_main.py`) is a debugging tool.
