@@ -25,13 +25,20 @@ class Wire(unittest.TestCase):
     def test_round_trips_through_json(self) -> None:
         controller = loaded(1, 2, 3)
         sent = inputs(
-            controller, occupied=["4", "19"], closed=["30"],
-            failures={"80": "power"}, suggestions={"4": (12, 3)},
-            maintenance=True, switch_commands={"12": "reverse"},
+            controller, occupied=["4", "19", "80"], closed=["30"],
+            suggestions={"4": (12, 3)},
+            switch_commands={"12": "reverse"},
             lit={"12": "green", "85": "super_green"},
         )
         wire = json.loads(json.dumps(inputs_to_wire(sent)))
         self.assertEqual(inputs_from_wire(wire), sent)
+        # The CTC Office's part is in its own shapes.
+        self.assertEqual(wire["ctc"]["closed_blocks"],
+                         [{"line": "Green", "block_id": "30"}])
+        self.assertEqual(
+            wire["ctc"]["switch_commands"],
+            [{"line": "Green", "switch_id": "12", "position": "reverse"}],
+        )
         out = controller.step(0.1, sent)
         self.assertEqual(
             out.ctc_reports[2].blocks[keys(controller)["85"]].signal_aspect,
@@ -45,17 +52,22 @@ class Wire(unittest.TestCase):
             self.assertEqual(territory_from_wire(wire), t)
 
     def test_rejects_malformed_messages(self) -> None:
-        good = inputs_to_wire(inputs(loaded(1), suggestions={"4": (12, 3)}))
+        good = inputs_to_wire(inputs(
+            loaded(1), suggestions={"4": (12, 3)},
+            switch_commands={"12": "reverse"},
+        ))
         cases = []
         for path, value in (
             (("time_s",), "noon"),
             (("time_s",), True),
-            (("ctc", "maintenance_mode"), "yes"),
+            (("ctc", "switch_commands", 0, "position"), "sideways"),
+            (("ctc", "switch_commands", 0, "switch_id"), None),
             (("ctc", "closed_blocks"), {"line": "Green"}),
+            (("ctc", "closed_blocks"), ["Green:13"]),
             (("ctc", "suggestions", 0, "speed_mps"), -1),
             (("ctc", "suggestions", 0, "speed_mps"), 1.5),
-            (("ctc", "suggestions", 0, "block", "line"), ""),
-            (("track_model", "failures"), [{"block": None, "kind": "power"}]),
+            (("ctc", "suggestions", 0, "line"), ""),
+            (("track_model", "occupied_blocks"), [{"line": "Green"}]),
         ):
             case = json.loads(json.dumps(good))
             target = case
@@ -135,8 +147,8 @@ class Views(unittest.TestCase):
     def test_rows_show_display_units_and_states(self) -> None:
         controller = loaded(1)
         controller.step(0.1, inputs(
-            controller, occupied=["4"], closed=["7"],
-            failures={"9": "broken_rail"}, suggestions={"4": (12, 3)},
+            controller, occupied=["4", "9"], closed=["7"],
+            suggestions={"4": (12, 3)},
             lit={"12": "green"},
         ))
         wayside = controller.snapshot().waysides[0]
@@ -144,15 +156,17 @@ class Views(unittest.TestCase):
         self.assertEqual(rows["4"]["stateText"], "Occupied")
         self.assertEqual(rows["4"]["circuit"], "27 mph \u00b7 3 blocks")
         self.assertEqual(rows["7"]["badge"], "warning")
-        self.assertEqual(rows["9"]["stateText"], "Broken rail")
+        self.assertEqual(rows["9"]["stateText"], "Occupied")
         self.assertEqual(rows["1"]["circuit"], display.EM_DASH)
         self.assertEqual(rows["13"]["length"], "492 ft")
         office = views.office_rows(wayside)
         self.assertEqual(office, [{"block": "B-4", "speed": "27 mph",
                                    "authority": "3 blocks"}])
-        (switch,) = views.switch_rows(wayside, maintenance=False)
+        (switch,) = views.switch_rows(wayside)
         self.assertEqual(switch["commanded"], "Normal \u00b7 12\u201313")
         self.assertEqual(switch["agreeText"], "Agreeing")
+        self.assertEqual(switch["ctcRequest"], display.EM_DASH)
+        self.assertEqual(views.maintenance_text(wayside), "Closed: Green:7")
         report = views.report_rows(wayside)
         self.assertEqual(len(report), 20)
         self.assertEqual(report[0]["key"], "Green \u00b7 A \u00b7 1")

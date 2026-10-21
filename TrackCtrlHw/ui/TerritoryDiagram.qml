@@ -112,8 +112,7 @@ Item {
                 ctx.strokeRect(x + 0.5, top + 0.5, w - 1, 11);
                 return;
             }
-            ctx.fillStyle = state === "occupied" ? theme.info
-                : state === "closed" ? theme.warning : theme.danger;
+            ctx.fillStyle = state === "occupied" ? theme.info : theme.warning;
             ctx.fillRect(x, top, w, 12);
             ctx.save();
             ctx.beginPath();
@@ -126,13 +125,6 @@ Item {
                 for (let i = -12; i < w + 12; i += 6) {
                     ctx.moveTo(x + i, top + 12);
                     ctx.lineTo(x + i + 12, top);
-                }
-            } else if (state === "failure") {
-                for (let i = 0; i < w; i += 12) {
-                    ctx.moveTo(x + i + 2, top + 2);
-                    ctx.lineTo(x + i + 10, top + 10);
-                    ctx.moveTo(x + i + 10, top + 2);
-                    ctx.lineTo(x + i + 2, top + 10);
                 }
             }
             ctx.stroke();

@@ -10,12 +10,20 @@ The module is one line's set of wayside controllers: the hardware
 Track Controller runs every wayside of its line, the software one the
 other line. Each wayside governs a territory loaded from a database
 file. Everything the module exchanges is keyed by block, because a
-wayside knows the blocks it governs, never the trains on them.
+wayside knows the blocks it governs, never the trains on them. Nor does
+it know failures: a broken rail, a dead track circuit or a power
+failure reaches it only as an occupied block, and it reports that block
+to the CTC Office as occupied.
 
 Units are backend units per ``truth/conventions/units.md``: speed in
 m/s, distance in m, time in s. Authority is a whole number of blocks.
 Every ID is a string. A switch, its signal and a crossing are each
 identified by the block they are listed on in the database.
+
+What the CTC Office sends names a block as it does, by line and block
+number with no section (``BlockRef``, written ``Green:13``). It sends
+no maintenance flag: only the blocks it has closed and, while its
+dispatcher is in maintenance mode, the switch positions it commands.
 """
 
 from __future__ import annotations
@@ -25,7 +33,6 @@ from typing import Literal, Mapping, Protocol
 
 SwitchPosition = Literal["normal", "reverse"]
 SignalAspect = Literal["red", "yellow", "green", "super_green"]
-FailureKind = Literal["broken_rail", "track_circuit", "power"]
 
 SWITCH_POSITIONS: tuple[SwitchPosition, ...] = ("normal", "reverse")
 #: Most restrictive first; a signal falls back to the first entry.
@@ -34,11 +41,6 @@ SIGNAL_ASPECTS: tuple[SignalAspect, ...] = (
     "yellow",
     "green",
     "super_green",
-)
-FAILURE_KINDS: tuple[FailureKind, ...] = (
-    "broken_rail",
-    "track_circuit",
-    "power",
 )
 
 
@@ -63,6 +65,25 @@ class BlockKey:
     def label(self) -> str:
         """Section and number, as the UIs print it: ``C-12``."""
         return f"{self.section}-{self.block_id}"
+
+    @property
+    def ref(self) -> BlockRef:
+        """The block as the CTC Office names it."""
+        return BlockRef(self.line, self.block_id)
+
+
+@dataclass(frozen=True, slots=True)
+class BlockRef:
+    """A block, or the switch listed on it, as the CTC Office names it:
+    line and block number, no section."""
+
+    line: str
+    block_id: str
+
+    @property
+    def label(self) -> str:
+        """The CTC Office's text form: ``Green:13``."""
+        return f"{self.line}:{self.block_id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,26 +147,28 @@ class Suggestion:
 
 @dataclass(frozen=True, slots=True)
 class CtcInputs:
-    """From the CTC Office, every tick."""
+    """From the CTC Office, every tick, keyed as it names blocks."""
 
-    maintenance_mode: bool = False
-    # Blocks the dispatcher has closed. A block not listed is open.
-    closed_blocks: frozenset[BlockKey] = frozenset()
-    # Positions the dispatcher set, by the switch's block. Obeyed only
-    # in maintenance mode.
-    switch_commands: Mapping[BlockKey, SwitchPosition] = field(
+    # Blocks the dispatcher has closed, the full set every tick. A block
+    # not listed is open.
+    closed_blocks: frozenset[BlockRef] = frozenset()
+    # Positions the dispatcher commands, by the switch's block. Sent only
+    # while the dispatcher is in maintenance mode, and withdrawn when it
+    # ends. They go to the PLC program, which decides whether to obey.
+    switch_commands: Mapping[BlockRef, SwitchPosition] = field(
         default_factory=dict
     )
     # A block not listed has nothing to send down its track circuit.
-    suggestions: Mapping[BlockKey, Suggestion] = field(default_factory=dict)
+    suggestions: Mapping[BlockRef, Suggestion] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class TrackModelInputs:
     """From the Track Model, every tick."""
 
+    # Blocks a train, or a failure, makes read as occupied. The module
+    # cannot tell which.
     occupied_blocks: frozenset[BlockKey] = frozenset()
-    failures: Mapping[BlockKey, FailureKind] = field(default_factory=dict)
     # Actual positions of the switch machines, by the switch's block.
     switch_positions: Mapping[BlockKey, SwitchPosition] = field(
         default_factory=dict
@@ -202,8 +225,8 @@ class TrackModelOutputs:
 class BlockReport:
     """What a wayside reports to the CTC Office about one block."""
 
+    # A train and a failure both read occupied.
     occupied: bool
-    failure: FailureKind | None = None
     # None where the block has no switch, or none was reported.
     switch_position: SwitchPosition | None = None
     # None where the block has no crossing, or none was reported.
@@ -218,8 +241,15 @@ class CtcReport:
     """One wayside's report to the CTC Office: all of its blocks."""
 
     wayside_id: str
+    line: str
     sent_at_s: float
+    # Started up: a PLC program is loaded and running on both channels.
+    # Every wayside of a line holds its fail-safe outputs while any one
+    # is not ready, so a ready wayside may still be held.
+    ready: bool
     blocks: Mapping[BlockKey, BlockReport] = field(default_factory=dict)
+    # Why it is not ready, or "" when it is.
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,19 +260,25 @@ class TrackControllerOutputs:
     # One report per wayside, in the order the waysides were loaded.
     ctc_reports: tuple[CtcReport, ...] = ()
 
+    @property
+    def ready(self) -> bool:
+        """Whether the whole module is started up: derived, not sent.
+
+        True only when at least one wayside reports and every one is
+        ready.
+        """
+        return bool(self.ctc_reports) and all(
+            report.ready for report in self.ctc_reports
+        )
+
+    def not_ready(self) -> tuple[CtcReport, ...]:
+        """The reports of the waysides that are not ready."""
+        return tuple(r for r in self.ctc_reports if not r.ready)
+
 
 # ------------------------------------------------------------------ #
 # Snapshot, for the Track Controller UI
 # ------------------------------------------------------------------ #
-
-@dataclass(frozen=True, slots=True)
-class Override:
-    """One vital-layer intervention on a scan: what it held, and why."""
-
-    rule: str
-    target: str
-    message: str
-
 
 @dataclass(frozen=True, slots=True)
 class ProgramInfo:
@@ -270,8 +306,9 @@ class ScanInfo:
     overruns: int = 0
     # False once channels A and B disagree; cleared by a new program.
     channels_agree: bool = True
-    # Why every output is held at its most restrictive, or "".
-    vital_fault: str = ""
+    # What they disagreed on, or "". Every output is held fail-safe
+    # until a new program is loaded.
+    channel_fault: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,8 +318,6 @@ class SwitchState:
     switch: Switch
     commanded: SwitchPosition
     reported: SwitchPosition | None
-    # "PLC" or "CTC".
-    set_by: str
 
     @property
     def agreeing(self) -> bool:
@@ -306,11 +341,12 @@ class WaysideSnapshot:
     track_circuits: Mapping[BlockKey, TrackCircuitCommand]
     occupied_blocks: frozenset[BlockKey]
     closed_blocks: frozenset[BlockKey]
-    failures: Mapping[BlockKey, FailureKind]
     suggestions: Mapping[BlockKey, Suggestion]
     # Positions the dispatcher asked for, by the switch's block.
     switch_requests: Mapping[BlockKey, SwitchPosition]
-    overrides: tuple[Override, ...]
+    # Why every output is at its fail-safe value, or "" while the
+    # program drives them.
+    holding: str
     report: CtcReport | None
 
 
@@ -320,10 +356,13 @@ class TrackControllerSnapshot:
 
     line: str | None
     waysides: tuple[WaysideSnapshot, ...]
-    maintenance_mode: bool
     # Simulation time of the last tick; None before the first.
     time_s: float | None
     ticks: int
+    # Whether at least one wayside is loaded and every one is ready, and
+    # if not, what is missing, one line per cause.
+    ready: bool
+    not_ready: tuple[str, ...]
 
 
 # ------------------------------------------------------------------ #
@@ -333,8 +372,10 @@ class TrackControllerSnapshot:
 class TrackController(Protocol):
     """One line's wayside controllers, stepped by the harness.
 
-    Constructed with no arguments; waysides are added by loading their
-    databases from the Track Controller UI.
+    Constructed with no arguments, and not ready; waysides are added by
+    loading their databases from the Track Controller UI. A wayside is
+    ready once a PLC program is loaded on it and running. While any
+    wayside is not ready, every wayside holds its fail-safe outputs.
     """
 
     def step(
