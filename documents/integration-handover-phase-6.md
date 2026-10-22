@@ -197,7 +197,7 @@ reuses `_Line` from the SW starter tests; CTC/SW owner rules are unchanged.
 | Ticket sales rate, light-ahead B1, heaters, Green starter decisions | Existing module owners; unresolved questions carry forward |
 | Real 10x performance, USB buffering and journal persistence | Real Pi 5 provisioning and measurements; speed decision waits for them |
 | Windows packaging | Deferred by Kevin |
-| Truth promotion | 30 branch proposals plus 4 from PR #43 await human review; agents do not promote |
+| Truth promotion | 34 branch proposals plus 4 from PR #43 await human review; agents do not promote |
 
 Only humans promote or delete inbox proposals. D033 proposes the authorized
 Red test routing policy; D034 proposes the Phase 6 readiness scope; D035
@@ -246,8 +246,39 @@ stated in section 3; source station tests provide the station-stop evidence.
 | `ede5c89` | Shared Pi transport, provisioning, bundle hashes and bring-up tools |
 | `16a64b8` | All Red switch routing, shared neighbor closures, D035, follower observation and Red return tests |
 | `5223f1f` | Approved CLI passthrough, review scenarios, Linux build recipe and scenario evidence |
+| `25cc37a` | Phase 6 evidence, performance limits and CTC review questions |
+| `d8b175a` | Merge the finalized remote Phase 6 prompt and four pending proposals, preserving both histories |
 
 The orchestrator inspected `git show --stat` for every commit above and
 independently ran the final checks attributed to it in section 3. The
 Pi-only echo/replay timings are explicitly the Pi agent's report. No agent
 changed branches or opened a pull request.
+
+## 8. Remote reconciliation
+
+Kevin authorized inspection and reconciliation of the remote branch.
+Normal merge `d8b175a` preserves its two commits, `caf72da` (final Phase 6
+prompt) and `8300977` (four proposals), alongside the five local commits
+listed above. There were no conflicts or source, UI or test changes.
+Validated runtime behavior therefore remains unchanged: the complete
+harness result is 185 passed and three owner-question failures; final
+requested-10x measurements remain 9.16x headless / 8.36x with Wayland
+window launches. No additional runtime checks were required for this
+prompt/proposal-only reconciliation. The orchestrator verified the runtime
+and test diff from `25cc37a` is empty and the expected bundle hash still
+matches the final frozen manifest:
+`31fee16e8225461b3cab92baaf77bb059ad766cd7290ac88de97b077441893c0`.
+
+The inbox now contains 34 proposals on this branch plus four from PR #43.
+Short decision IDs overlap and require human review before promotion:
+
+| Short ID | Remote canonical key | Local canonical key | Review needed |
+| --- | --- | --- | --- |
+| D033 | `D033-red-test-plc-switch-routing` | `D033-red-integration-plc-routing` | Overlapping Red routing policies; reconcile their scope and content |
+| D034 | `D034-authoritative-green-plc-programs` | `D034-phase6-integration-scope` | Different entries reuse the same short ID |
+| D035 | `D035-pi-paths-share-one-implementation` | `D035-shared-neighbor-closures` | Different entries reuse the same short ID |
+
+All canonical filenames are distinct. No proposal was edited, renamed,
+deleted or promoted during reconciliation. Human review must resolve the
+short-ID ambiguity before promotion; no prefix is treated as an already
+accepted decision.
