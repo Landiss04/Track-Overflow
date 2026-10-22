@@ -329,6 +329,9 @@ def _check_directions(
             if out is None:
                 switch = by_point.get(block_id)
                 if (switch is None
+                        or (switch.from_yard and not (
+                            line == "RED" and blocks[block_id].number == 9
+                        ))
                         or None not in (switch.normal_block_id,
                                         switch.reverse_block_id)):
                     raise LayoutError(

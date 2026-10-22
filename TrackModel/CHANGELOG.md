@@ -23,3 +23,10 @@ Assumption for the Track Model owner and Braden: point 9, NORMAL to 8,
 REVERSE to yard, fixed side 10 and light on 10. Yard arrivals can trail
 through 9 toward 10; returning from 10, REVERSE selects the yard. This
 needs owner confirmation; it is not a correction to the course source.
+
+## 2026-10-22 — Limit the yard-entry validation exception
+
+The exception allowing an annotated yard return on a `from_yard` switch
+is now limited to Red block 9. Green's entry-only switch at 63 still
+rejects an added yard exit, while the unchanged course files load. Tests
+also reject a missing Green-57 yard return. No track data changed.

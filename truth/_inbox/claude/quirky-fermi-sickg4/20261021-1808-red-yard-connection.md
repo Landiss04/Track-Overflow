@@ -16,21 +16,13 @@
 ## Decision
 
 The Red yard physically connects through the switch listed on Red block 9,
-section C. The course-given track data must remain unchanged. Its `yard`
-adjacency on block 75 is interpreted by the readers as the physical yard
-connection at block 9.
+section C (Kevin Schillinger, 2026-10-21). The given track data must not be
+modified (Kevin Schillinger, 2026-10-22).
 
-Kevin Schillinger superseded K2's instruction to edit the source file on
-2026-10-22: "the track is a given data point and can not be modified".
+## Unconfirmed interpretation
 
-## Scope
-
-The decision establishes the physical connection and preservation of the
-course file. It does not establish the exact NORMAL leg, fixed side or
-signal location. Those interpretations require the Track Model owner and
-Braden to confirm; implementation assumptions belong in the integration
-handover, not in this normative entry.
-
-## Supersedes
-
-- K2's source-file edit instruction (Kevin Schillinger, 2026-10-21) is superseded by Kevin's 2026-10-22 instruction to preserve the given track data.
+Reader implementations currently interpret the block-75 yard adjacency at
+block 9. Their assumed geometry is point 9, NORMAL to 8, REVERSE to the
+yard, fixed side 10 and light on 10. This is an implementation assumption,
+not a decision asserted by Kevin. The Track Model owner and Braden must
+confirm it.
