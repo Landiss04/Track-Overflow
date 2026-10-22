@@ -94,6 +94,7 @@ class _FakeModule:
         # Raw replies by tick, and how long to hold each back.
         self.scripts: dict[int, Script] = {}
         self.delay_ms: dict[int, int] = {}
+        self._delayed: list[QTimer] = []
         self.steps: list[dict[str, Any]] = []
         self._buffer = LineBuffer()
         self._socket = QLocalSocket()
@@ -110,6 +111,9 @@ class _FakeModule:
 
     def close(self) -> None:
         """Drop the link."""
+        for timer in self._delayed:
+            timer.stop()
+        self._delayed.clear()
         self._socket.abort()
         self._socket.deleteLater()
 
@@ -128,7 +132,11 @@ class _FakeModule:
             if delay_ms is None:
                 self.send(data)
             else:
-                QTimer.singleShot(delay_ms, lambda: self.send(data))
+                timer = QTimer(self._socket)
+                timer.setSingleShot(True)
+                timer.timeout.connect(lambda payload=data: self.send(payload))
+                self._delayed.append(timer)
+                timer.start(delay_ms)
 
     def _plain(self, step: Mapping[str, Any]) -> bytes:
         # The CTC Office keeps the clock running.
