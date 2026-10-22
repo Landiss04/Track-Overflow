@@ -50,8 +50,9 @@ Date Modified: {{date_modified}}
 
 | Name           | Date       | Reason For Changes                                                                                          | Version     |
 | -------------- | ---------- | ----------------------------------------------------------------------------------------------------------- | ----------- |
-| Jonathan Tsang | 2026-10-21 | Train Controller sections filled for the merge                                                              | {{version}} |
-| Jonathan Tsang | 2026-10-22 | Scope combined; design choices, class cards, IO dictionary, use cases, authority, timing and vitality added | {{version}} |
+| Ivan Zheng     | 2026-10-21 | Fixed inconsistencies between diagrams and presentation                                                     |     1.2     |
+| Jonathan Tsang | 2026-10-21 | Train Controller sections filled for the merge                                                              |     1.1     |
+| Jonathan Tsang | 2026-10-22 | Scope combined; design choices, class cards, IO dictionary, use cases, authority, timing and vitality added |     1.0     |
 
 ---
 
