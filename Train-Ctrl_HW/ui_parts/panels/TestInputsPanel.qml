@@ -40,7 +40,11 @@ Panel {
         "beacon_underground": s.beacon_underground,
         "cabin_temperature": Math.round(s.cabin_temp_f),
         "signal_light_ahead": s.next_signal,
+<<<<<<< HEAD
         "brake_state_emergency": s.fb_emergency_brake,
+=======
+        "emergency_brake_state": s.fb_emergency_brake,
+>>>>>>> origin/Train_Ctrl_integration
         "door_state_left": s.fb_doors_left,
         "door_state_right": s.fb_doors_right,
         "light_state_interior": s.fb_interior_lights,
@@ -49,7 +53,13 @@ Panel {
         // has detected (that is in the header pills).
         "failure_engine": s.inject_engine,
         "failure_signal_pickup": s.inject_pickup,
+<<<<<<< HEAD
         "failure_brake": s.inject_brake
+=======
+        "failure_brake": s.inject_brake,
+        // The bench's own: whether the beacon is heard every tick.
+        "at_station": s.bench_at_station
+>>>>>>> origin/Train_Ctrl_integration
     })
 
     // What is typed but not sent, and which rows were typed in. The
@@ -125,6 +135,19 @@ Panel {
             label: root.dirty ? qsTr("Unsent edits") : qsTr("Sent")
             variant: root.dirty ? "warning" : "ok"
         },
+<<<<<<< HEAD
+=======
+        // An event, not a row: the Track Model's next count, sent at
+        // once (REQUIREMENTS.md M16).
+        AppButton {
+            objectName: "blockChangeButton"
+            size: "small"
+            variant: "ghost"
+            enabled: root.s.has_train
+            text: qsTr("Block change")
+            onClicked: controller.bench_block_change()
+        },
+>>>>>>> origin/Train_Ctrl_integration
         AppButton {
             size: "small"
             variant: root.paused ? "primary" : "ghost"
@@ -226,6 +249,25 @@ Panel {
                     root.stage("authority_blocks", v);
                 }
             }
+<<<<<<< HEAD
+=======
+            // At a station the beacon rows below are heard every tick;
+            // otherwise only once, when one of them is sent.
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "at_station"
+                kind: "bool"
+                value: root.draft.at_station
+                pending: root.touched["at_station"] === true
+                    && root.pending("at_station")
+                onEdited: function (v) { root.stage("at_station", v); }
+            }
+>>>>>>> origin/Train_Ctrl_integration
             SignalEditRow {
                 Layout.fillWidth: true
                 editable: true
@@ -301,6 +343,7 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
+<<<<<<< HEAD
                 name: "brake_state_emergency"
                 kind: "bool"
                 value: root.draft.brake_state_emergency
@@ -308,6 +351,15 @@ Panel {
                     && root.pending("brake_state_emergency")
                 onEdited: function (v) {
                     root.stage("brake_state_emergency", v);
+=======
+                name: "emergency_brake_state"
+                kind: "bool"
+                value: root.draft.emergency_brake_state
+                pending: root.touched["emergency_brake_state"] === true
+                    && root.pending("emergency_brake_state")
+                onEdited: function (v) {
+                    root.stage("emergency_brake_state", v);
+>>>>>>> origin/Train_Ctrl_integration
                 }
             }
             SignalEditRow {

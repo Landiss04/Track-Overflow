@@ -102,7 +102,14 @@ Rectangle {
             objectName: "trainPicker"
             Layout.preferredWidth: 280
             Layout.alignment: Qt.AlignTop
+<<<<<<< HEAD
             enabled: root.s.signed_in && root.s.train_count > 0
+=======
+            // Usable signed out too: picking a train whose gains are
+            // not set signs the driver out, and they must be able to
+            // pick their way back.
+            enabled: root.s.train_count > 0
+>>>>>>> origin/Train_Ctrl_integration
             label: qsTr("Current selected train")
             trains: controller.trains
             currentId: root.s.has_train ? root.s.train_id : ""

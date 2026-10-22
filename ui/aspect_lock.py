@@ -74,6 +74,7 @@ def constrain_drag(
         height_change = abs(client_h - current_client[1]) / ratio_h
         width_drives = width_change >= height_change
 
+<<<<<<< HEAD
     at_minimum = (
         current_client[0] == min_client_width
         and abs(current_client[1]
@@ -92,6 +93,13 @@ def constrain_drag(
     else:
         new_w = max(min_client_width, round(client_h * ratio_w / ratio_h))
         new_h = round(new_w * ratio_h / ratio_w)
+=======
+    if width_drives:
+        new_w = max(min_client_width, client_w)
+    else:
+        new_w = max(min_client_width, round(client_h * ratio_w / ratio_h))
+    new_h = round(new_w * ratio_h / ratio_w)
+>>>>>>> origin/Train_Ctrl_integration
 
     if edge in _LEFT_EDGES:
         left = right - new_w - frame_w
@@ -197,6 +205,7 @@ def install_aspect_lock(
         return None
     ratio_w, ratio_h = ratio
     height = window.height()
+<<<<<<< HEAD
     width_limit = window.width()
     screen = window.screen()
     if screen is not None:
@@ -228,6 +237,13 @@ def install_aspect_lock(
                 available.bottom() + 1 - height - margins.bottom(),
             )),
         )
+=======
+    width = round(height * ratio_w / ratio_h)
+    if width > window.width():
+        width = window.width()
+        height = round(width * ratio_h / ratio_w)
+    window.resize(width, height)
+>>>>>>> origin/Train_Ctrl_integration
     return WindowsAspectLock(window, ratio)
 
 

@@ -23,15 +23,22 @@ Panel {
         }
     ]
 
+<<<<<<< HEAD
     // Only the platform side opens, and only at a stand; an open door
     // can always be closed, so a door left open when the platform side
     // changes is not stuck. A moving train says why it will not open.
+=======
+    // Either side opens at a stand, only the platform side at a
+    // station (REQUIREMENTS.md M6); an open door can always be closed.
+    // A tile that cannot act now is greyed.
+>>>>>>> origin/Train_Ctrl_integration
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
 
         ToggleTile {
             Layout.fillWidth: true
+<<<<<<< HEAD
             enabled: root.s.can_drive && (root.s.fb_doors_left
                 || (root.s.platform_left && root.s.at_stand))
             on: root.s.fb_doors_left
@@ -39,11 +46,20 @@ Panel {
             text: root.s.fb_doors_left ? qsTr("Close left")
                 : root.s.at_stand ? qsTr("Open left")
                 : qsTr("Left: stop first")
+=======
+            enabled: root.s.can_drive
+                && (root.s.fb_doors_left || root.s.may_open_left)
+            on: root.s.fb_doors_left
+            tone: "info"
+            text: root.s.fb_doors_left ? qsTr("Close left")
+                                       : qsTr("Open left")
+>>>>>>> origin/Train_Ctrl_integration
             onClicked: controller.set_door("left", !root.s.fb_doors_left)
         }
 
         ToggleTile {
             Layout.fillWidth: true
+<<<<<<< HEAD
             enabled: root.s.can_drive && (root.s.fb_doors_right
                 || (root.s.platform_right && root.s.at_stand))
             on: root.s.fb_doors_right
@@ -51,6 +67,14 @@ Panel {
             text: root.s.fb_doors_right ? qsTr("Close right")
                 : root.s.at_stand ? qsTr("Open right")
                 : qsTr("Right: stop first")
+=======
+            enabled: root.s.can_drive
+                && (root.s.fb_doors_right || root.s.may_open_right)
+            on: root.s.fb_doors_right
+            tone: "info"
+            text: root.s.fb_doors_right ? qsTr("Close right")
+                                        : qsTr("Open right")
+>>>>>>> origin/Train_Ctrl_integration
             onClicked: controller.set_door("right", !root.s.fb_doors_right)
         }
     }

@@ -23,11 +23,14 @@ Item {
     onAppliedChanged: armed = false
     onEnabledChanged: if (!enabled) armed = false
     onVisibleChanged: if (!visible) armed = false
+<<<<<<< HEAD
     // Disarm when focus leaves the prompt, so a later stray click cannot
     // confirm a prompt nobody is looking at.
     readonly property bool promptFocused: confirmButton.activeFocus
         || cancelButton.activeFocus
     onPromptFocusedChanged: if (!promptFocused) armed = false
+=======
+>>>>>>> origin/Train_Ctrl_integration
 
     implicitHeight: theme.safety_min_height
     // Fit the longer of the apply and release labels, so the control does

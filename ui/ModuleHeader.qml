@@ -43,7 +43,10 @@ Rectangle {
 
         Text {
             text: root.moduleName
+<<<<<<< HEAD
             textFormat: Text.PlainText
+=======
+>>>>>>> origin/Train_Ctrl_integration
             color: theme.text_primary
             font.family: theme.ui_family
             font.pixelSize: theme.size_h3

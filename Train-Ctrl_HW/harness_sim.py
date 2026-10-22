@@ -19,8 +19,14 @@ from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 from train_ctrl import (  # noqa: E402
+<<<<<<< HEAD
     EBRAKE_DECEL_MPS2, MASS_KG, MAX_FORCE_N, MPS_TO_MPH, SERVICE_DECEL_MPS2,
     TICK_S, V_FLOOR_MPS, TrainControllerFleet, TrainModelCommands, f_to_c,
+=======
+    CLOCK_START_S, EBRAKE_DECEL_MPS2, MASS_KG, MAX_FORCE_N, MPS_TO_MPH,
+    SERVICE_DECEL_MPS2, TICK_S, V_FLOOR_MPS, TrainControllerFleet,
+    TrainModelCommands, f_to_c,
+>>>>>>> origin/Train_Ctrl_integration
 )
 from train_ctrl.app import run  # noqa: E402
 
@@ -37,6 +43,12 @@ class StandInHarness:
         self.fleet = fleet
         self.speed: dict[str, float] = {}
         self.last: dict[str, TrainModelCommands] = {}
+<<<<<<< HEAD
+=======
+        # Stands in for utils/system_clock.py: seconds since midnight,
+        # from 05:00:00, one tick at a time.
+        self.time_s = CLOCK_START_S
+>>>>>>> origin/Train_Ctrl_integration
 
     def spawn(self, train_id: str) -> None:
         core = self.fleet.add(train_id, "GREEN LINE")
@@ -63,7 +75,12 @@ class StandInHarness:
                 # Echo the service brake so it is not taken for a
                 # failure. Emergency is reported only for a passenger
                 # pull, which this stand-in never makes.
+<<<<<<< HEAD
                 "brake_state": [False, bool(last and last.service_brake)],
+=======
+                "emergency_brake_state": False,
+                "service_brake_state": bool(last and last.service_brake),
+>>>>>>> origin/Train_Ctrl_integration
                 # The fleet wants the full set every tick; doors and
                 # lights simply do what they were last told.
                 "door_state": (list(last.door_command) if last
@@ -71,7 +88,12 @@ class StandInHarness:
                 "light_state": (list(last.light_command) if last
                                 else [True, True]),
             }
+<<<<<<< HEAD
         commands = self.fleet.step_all(DT_S, inputs)
+=======
+        self.time_s += DT_S
+        commands = self.fleet.step_all(DT_S, inputs, self.time_s)
+>>>>>>> origin/Train_Ctrl_integration
         for train_id, cmd in commands.items():
             self.last[train_id] = cmd
             v = self.speed[train_id]

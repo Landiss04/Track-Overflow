@@ -145,6 +145,10 @@ Panel {
             inlineUnit: true
             valueSize: theme.size_h3
             rule: false
+<<<<<<< HEAD
+=======
+            wrapValue: true
+>>>>>>> origin/Train_Ctrl_integration
             name: "announcement"
             kind: "string"
             value: root.s.announcement

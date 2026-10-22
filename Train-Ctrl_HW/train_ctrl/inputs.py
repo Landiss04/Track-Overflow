@@ -14,8 +14,13 @@ from .errors import InvalidInputError
 # fleet refuses it. Beacon and aspect are not here: a beacon is only
 # heard near a station (truth beacon.md).
 EVERY_TICK = ("actual_speed", "commanded_speed", "authority_blocks",
+<<<<<<< HEAD
               "brake_state", "door_state", "light_state",
               "cabin_temperature")
+=======
+              "emergency_brake_state", "service_brake_state",
+              "door_state", "light_state", "cabin_temperature")
+>>>>>>> origin/Train_Ctrl_integration
 
 
 def _read_flags(values: dict, key: str, count: int) -> list[bool]:
@@ -45,8 +50,14 @@ def read_inputs(values: dict) -> dict[str, Any]:
     Keys and shapes follow truth signals/: commanded_speed and
     actual_speed (m/s, actual signed),
     cabin_temperature (C), authority_blocks, signal_light_ahead,
+<<<<<<< HEAD
     beacon_station / beacon_side / beacon_underground, brake_state
     bool[2] (emergency, service), door_state bool[2] (left, right)
+=======
+    beacon_station / beacon_side / beacon_underground,
+    emergency_brake_state and service_brake_state (bool each, what is
+    engaged; REQUIREMENTS.md M18), door_state bool[2] (left, right)
+>>>>>>> origin/Train_Ctrl_integration
     and light_state bool[2] (interior, exterior). There is no
     failure status: the Train Model no longer sends one (truth
     modules/train-model.md); detect_failures() infers failures
@@ -79,8 +90,14 @@ def read_inputs(values: dict) -> dict[str, Any]:
             values["beacon_underground"])
     if values.get("signal_light_ahead") in ASPECTS:
         staged["next_signal"] = values["signal_light_ahead"]
+<<<<<<< HEAD
     if "brake_state" in values:
         staged["brake_state"] = _read_flags(values, "brake_state", 2)
+=======
+    for key in ("emergency_brake_state", "service_brake_state"):
+        if key in values:
+            staged[key] = bool(values[key])
+>>>>>>> origin/Train_Ctrl_integration
     if "door_state" in values:
         staged["fb_doors_left"], staged["fb_doors_right"] = (
             _read_flags(values, "door_state", 2))

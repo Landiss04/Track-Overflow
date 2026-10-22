@@ -29,6 +29,11 @@ Rectangle {
     property bool paused: false
     //: Fault labels shown after the emergency badge, hidden when empty.
     property var alerts: []
+<<<<<<< HEAD
+=======
+    //: Controls placed just before the clock (the bench's time setter).
+    property alias clockTools: clockTools.data
+>>>>>>> origin/Train_Ctrl_integration
     property var navigationEntries: []
     property int currentNavigationIndex: -1
     signal navigationActivated(int index)
@@ -139,6 +144,14 @@ Rectangle {
             visible: root.line !== ""
         }
 
+<<<<<<< HEAD
+=======
+        RowLayout {
+            id: clockTools
+            spacing: theme.space_2
+        }
+
+>>>>>>> origin/Train_Ctrl_integration
         MonoText {
             text: root.clock
             color: theme.text_muted

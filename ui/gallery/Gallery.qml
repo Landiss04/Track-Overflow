@@ -28,7 +28,10 @@ ApplicationWindow {
     property bool editBool: true
     property var editFloat: 118000.5
     property var editInt: 12
+<<<<<<< HEAD
     property var editCount: 30
+=======
+>>>>>>> origin/Train_Ctrl_integration
     property string editString: "GREEN M"
     property real liveValue: 0
     property string clockText: Qt.formatTime(new Date(), "hh:mm:ss")
@@ -327,7 +330,11 @@ ApplicationWindow {
 
                         Card {
                             Layout.fillWidth: true
+<<<<<<< HEAD
                             title: "IntField · FloatField · ValueField · SelectField"
+=======
+                            title: "ValueField · SelectField"
+>>>>>>> origin/Train_Ctrl_integration
 
                             GridLayout {
                                 Layout.fillWidth: true
@@ -335,22 +342,42 @@ ApplicationWindow {
                                 columnSpacing: theme.space_4
                                 rowSpacing: theme.space_3
 
+<<<<<<< HEAD
                                 IntField {
                                     Layout.fillWidth: true
                                     label: "Integer (IntField)"
                                     text: "42"
                                     onCommitted: function (v) {
                                         gallery.log("IntField committed "
+=======
+                                ValueField {
+                                    Layout.fillWidth: true
+                                    label: "Integer (kind int)"
+                                    kind: "int"
+                                    text: "42"
+                                    onCommitted: function (v) {
+                                        gallery.log("ValueField int committed "
+>>>>>>> origin/Train_Ctrl_integration
                                             + v + " (" + typeof v + ")");
                                     }
                                 }
 
+<<<<<<< HEAD
                                 FloatField {
                                     Layout.fillWidth: true
                                     label: "Float (FloatField)"
                                     text: "12.5"
                                     onCommitted: function (v) {
                                         gallery.log("FloatField committed "
+=======
+                                ValueField {
+                                    Layout.fillWidth: true
+                                    label: "Float (kind float)"
+                                    kind: "float"
+                                    text: "12.5"
+                                    onCommitted: function (v) {
+                                        gallery.log("ValueField float committed "
+>>>>>>> origin/Train_Ctrl_integration
                                             + v + " (" + typeof v + ")");
                                     }
                                 }
@@ -365,6 +392,7 @@ ApplicationWindow {
                                     }
                                 }
 
+<<<<<<< HEAD
                                 FloatField {
                                     Layout.fillWidth: true
                                     label: "Invalid float (shows error)"
@@ -377,10 +405,27 @@ ApplicationWindow {
                                 IntField {
                                     Layout.fillWidth: true
                                     label: "Disabled"
+=======
+                                ValueField {
+                                    Layout.fillWidth: true
+                                    label: "Invalid float (shows error)"
+                                    kind: "float"
+                                    text: "-"
+                                    onCommitted: function (v) {
+                                        gallery.log("ValueField invalid committed " + v);
+                                    }
+                                }
+
+                                ValueField {
+                                    Layout.fillWidth: true
+                                    label: "Disabled"
+                                    kind: "int"
+>>>>>>> origin/Train_Ctrl_integration
                                     text: "7"
                                     enabled: false
                                 }
 
+<<<<<<< HEAD
                                 PositiveIntField {
                                     Layout.fillWidth: true
                                     label: "Count (PositiveIntField, refuses -)"
@@ -390,6 +435,8 @@ ApplicationWindow {
                                     }
                                 }
 
+=======
+>>>>>>> origin/Train_Ctrl_integration
                                 ValueField {
                                     Layout.fillWidth: true
                                     kind: "string"
@@ -422,6 +469,7 @@ ApplicationWindow {
 
                                 // Narrow on purpose: long text must end in "…"
                                 // before the arrow, never run underneath it.
+<<<<<<< HEAD
                                 // The maximum is a hard cap; the grid column can
                                 // stretch a preferred width past what the label
                                 // needs on narrower fonts.
@@ -429,6 +477,11 @@ ApplicationWindow {
                                     objectName: "elideSelect"
                                     Layout.preferredWidth: 200
                                     Layout.maximumWidth: 200
+=======
+                                SelectField {
+                                    objectName: "elideSelect"
+                                    Layout.preferredWidth: 220
+>>>>>>> origin/Train_Ctrl_integration
                                     label: "Long option (elides)"
                                     model: [{
                                         label: "Green Line — Dormont to South Hills Junction",
@@ -576,6 +629,7 @@ ApplicationWindow {
 
                             SignalRow {
                                 Layout.fillWidth: true
+<<<<<<< HEAD
                                 name: "edit_count"
                                 kind: "uint"
                                 value: gallery.editCount
@@ -589,6 +643,8 @@ ApplicationWindow {
 
                             SignalRow {
                                 Layout.fillWidth: true
+=======
+>>>>>>> origin/Train_Ctrl_integration
                                 name: "edit_string"
                                 kind: "string"
                                 value: gallery.editString

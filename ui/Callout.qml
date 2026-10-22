@@ -40,7 +40,10 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             text: root.heading.toUpperCase()
+<<<<<<< HEAD
             textFormat: Text.PlainText
+=======
+>>>>>>> origin/Train_Ctrl_integration
             color: root.tone
             font.family: theme.ui_family
             font.pixelSize: theme.size_small

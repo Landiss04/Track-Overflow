@@ -16,7 +16,13 @@ Panel {
         // What the brakes are actually doing, as the Train Model
         // reports it (Brake State), not what was asked of them.
         StatusBadge {
+<<<<<<< HEAD
             label: root.s.fault_brake ? qsTr("Brake failure")
+=======
+            // "Brake fault", as the header pill says it: "Brake
+            // failure" left no room for the panel's title.
+            label: root.s.fault_brake ? qsTr("Brake fault")
+>>>>>>> origin/Train_Ctrl_integration
                 : root.s.fb_emergency_brake ? qsTr("Emergency")
                 : root.s.fb_service_brake ? qsTr("Braking")
                 : qsTr("Running")
@@ -55,9 +61,16 @@ Panel {
         Layout.fillHeight: true
         Layout.preferredHeight: 100
         tone: "service"
+<<<<<<< HEAD
         // A brake failure is the service brake failing; the emergency
         // brake above stands in for it.
         enabled: root.s.can_drive && !root.s.fault_brake
+=======
+        // Live under a brake failure too, so the driver can try the
+        // brake (REQUIREMENTS.md M4); the emergency brake above stops
+        // the train.
+        enabled: root.s.can_drive
+>>>>>>> origin/Train_Ctrl_integration
         applied: root.s.service_request
         text: root.s.service_request ? qsTr("Release service brake")
                                      : qsTr("Service brake")

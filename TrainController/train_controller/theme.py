@@ -1,12 +1,9 @@
-"""Design tokens for the ECE1140 UI Style Guide, light theme.
+"""Design tokens for the ECE1140 UI Style Guide.
 
 Single source of truth for colour, typography, spacing, radius and
 control sizing, per style guide section 9. No literal token value
 appears anywhere else in the module: QML reads these through the
 ``theme`` context property.
-
-Token names match the style guide so the optional dark theme of section
-10 is a drop-in replacement.
 """
 
 from __future__ import annotations
