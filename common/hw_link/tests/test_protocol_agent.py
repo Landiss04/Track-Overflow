@@ -208,10 +208,12 @@ def test_view_messages_are_throttled_by_wall_time(monkeypatch):
     server.handle(hello())
     assert any(r["op"] == p.VIEW for r in server.handle(step(1)))
     for tick in range(2, 12):
-        now[0] += 0.005  # 200 ticks/sec still produces only 10Hz VIEW.
+        now[0] += 0.005  # 200 ticks/sec still produces only 5Hz VIEW.
         assert not any(r["op"] == p.VIEW for r in server.handle(step(tick)))
-    now[0] = 10.11
-    assert any(r["op"] == p.VIEW for r in server.handle(step(12)))
+    now[0] = 10.199
+    assert not any(r["op"] == p.VIEW for r in server.handle(step(12)))
+    now[0] = 10.201
+    assert any(r["op"] == p.VIEW for r in server.handle(step(13)))
 
 
 def test_restored_session_requires_fresh_successful_hello(tmp_path):

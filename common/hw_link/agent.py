@@ -22,6 +22,11 @@ from utils.harness_protocol import LineBuffer, ProtocolError
 from . import protocol as p
 from .cores import make_core
 
+# K6 permits display snapshots every 100–200 ms. Use the 200 ms bound
+# to halve measured snapshot packing/unpacking and window refresh overhead.
+# STEP replies and ACTION acknowledgement views are still immediate.
+VIEW_INTERVAL_S = 0.2
+
 AGENT_VERSION = "1"
 AGENT_HASH = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
 
@@ -221,7 +226,7 @@ class PiLinkServer:
         self.cache[key] = (p.encode(request), reply)
         replies = [reply]
         now = time.monotonic()
-        if now - self.last_view >= 0.1:
+        if now - self.last_view >= VIEW_INTERVAL_S:
             self.last_view = now
             replies.append(
                 p.message(p.VIEW, tick=request["tick"], view=self.core.view())
