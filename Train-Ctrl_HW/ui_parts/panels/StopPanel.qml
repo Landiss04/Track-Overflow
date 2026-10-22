@@ -57,9 +57,10 @@ Panel {
         Layout.fillHeight: true
         Layout.preferredHeight: 100
         tone: "service"
-        // A brake failure is the service brake failing; the emergency
-        // brake above stands in for it.
-        enabled: root.s.can_drive && !root.s.fault_brake
+        // Live under a brake failure too, so the driver can try the
+        // brake (REQUIREMENTS.md M4); the emergency brake above stops
+        // the train.
+        enabled: root.s.can_drive
         applied: root.s.service_request
         text: root.s.service_request ? qsTr("Release service brake")
                                      : qsTr("Service brake")

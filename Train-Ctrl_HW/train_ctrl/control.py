@@ -15,7 +15,6 @@ from .constants import (
     ANNOUNCE_ARRIVING_BLOCKS,
     ANNOUNCE_DEPARTING,
     ANNOUNCE_LOCKOUT_MS,
-    BRAKE_DETECT_S,
     ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
     ENGINE_RISE_MPS,
@@ -74,7 +73,11 @@ class ControllerCore:
 
     def _clear_detection(self) -> None:
         # What detect_failures() carries from one tick to the next.
-        self._brake_unanswered_s = 0.0
+        # Whether last tick's commands asked for the service brake with
+        # the emergency brake off, so this tick's service brake state
+        # answers it (the Train Model reports the service brake off
+        # while the emergency brake is engaged, OPEN_ISSUES.md #23).
+        self._service_asked = False
         self._engine_stalled_s = 0.0
         self._engine_ref_mps = 0.0
         self._last_signal: tuple[float, int] | None = None
@@ -167,6 +170,7 @@ class ControllerCore:
 
         self.respond_to_failures()
         self.enforce_safety()
+        self._service_asked = s.service_brake and not s.emergency_brake
 
     def apply_staged(self, staged: dict[str, Any]) -> None:
         """Apply a set of Train Model signals read by read_inputs().
@@ -214,10 +218,10 @@ class ControllerCore:
         signals it does return, against what this controller last
         commanded:
 
-            brake          the service brake was commanded, the
-                           emergency brake was not, and Brake State
-                           has not shown the service brake applied
-                           for BRAKE_DETECT_S
+            brake          last tick commanded the service brake,
+                           not the emergency brake, and this tick's
+                           service brake state still reads off
+                           (REQUIREMENTS.md M4)
             engine         the power commanded should have pulled at
                            least ENGINE_DETECT_ACCEL_MPS2, no brake is
                            on, and the actual speed has not risen for
@@ -231,13 +235,8 @@ class ControllerCore:
         """
         s = self.state
 
-        if (s.service_brake and not s.emergency_brake
-                and not s.fb_service_brake):
-            self._brake_unanswered_s += self.dt
-            if self._brake_unanswered_s >= BRAKE_DETECT_S:
-                s.failures["brake"] = True
-        else:
-            self._brake_unanswered_s = 0.0
+        if self._service_asked and not s.fb_service_brake:
+            s.failures["brake"] = True
 
         v = s.actual_mps
         force = min(MAX_FORCE_N, s.power_w / max(abs(v), V_FLOOR_MPS))
@@ -269,9 +268,7 @@ class ControllerCore:
         it at a stand once no failure is left.
         """
         self.state.failures[name] = False
-        if name == "brake":
-            self._brake_unanswered_s = 0.0
-        elif name == "engine":
+        if name == "engine":
             self._engine_stalled_s = 0.0
             self._engine_ref_mps = self.state.actual_mps
         else:
@@ -290,7 +287,9 @@ class ControllerCore:
                            safe to zero (the signal lights still read)
             brake          only the service brake has failed (truth
                            modules/train-model.md); the emergency
-                           brake still works, so it stops the train
+                           brake still works, so it stops the train.
+                           The service brake is still commanded when
+                           asked for (REQUIREMENTS.md M4)
 
         Once the train stands, the driver may release the emergency
         brake in Manual to try the train (release_emergency); the
@@ -307,11 +306,6 @@ class ControllerCore:
         self.integral = 0.0
         if new and not s.emergency_brake:
             self.engage_emergency()
-        if s.emergency_brake:
-            s.service_brake = False
-        if s.failures["brake"]:
-            # The driver's request was for the brake that failed.
-            s.service_request = False
 
     def enforce_safety(self) -> None:
         """Override the PI law with the safety rules.
@@ -337,11 +331,6 @@ class ControllerCore:
         if s.emergency_brake:
             s.power_w = 0.0
             self.integral = 0.0
-
-        # A failed service brake is not commanded, whatever asked for
-        # it, in either mode; the emergency brake stands in for it.
-        if s.failures["brake"]:
-            s.service_brake = False
 
     def engage_emergency(self) -> None:
         """Engage now, without waiting for the next control tick.

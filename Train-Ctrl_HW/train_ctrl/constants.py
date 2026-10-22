@@ -75,7 +75,6 @@ SETTLE_MPS = 0.12
 # The Train Model no longer reports its failures, so the controller
 # infers them. Rules and thresholds are this controller's own design;
 # see ControllerCore.detect_failures() and OPEN_ISSUES.md.
-BRAKE_DETECT_S = 0.5
 ENGINE_DETECT_ACCEL_MPS2 = 0.1
 ENGINE_DETECT_S = 2.0
 ENGINE_RISE_MPS = 0.05

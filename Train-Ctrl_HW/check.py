@@ -800,8 +800,9 @@ def run_check(
             expect(_until(app, lambda: state.fb_emergency_brake, 2),
                    "the emergency brake did not report applied during "
                    "a brake failure")
-            expect(not state.service_brake and not state.service_request,
-                   "the failed service brake was still commanded")
+            expect(state.service_brake and state.service_request,
+                   "the service brake stopped being commanded under a "
+                   "brake failure")
             expect(state.actual_mps <= asked,
                    "the train sped up on a brake failure")
         else:
@@ -849,9 +850,15 @@ def run_check(
         expect(state.target_mps == 0.0,
                f"the driver set a target during a {name}")
         if key == "brake":
+            # Still live under a brake failure, so the driver can try
+            # it (REQUIREMENTS.md M4).
+            asked = state.service_request
             backend.toggle_service_brake()
-            expect(not state.service_request,
-                   "the service brake could be asked for while failed")
+            expect(state.service_request != asked,
+                   "the service brake could not be asked for under a "
+                   "brake failure")
+            if state.service_request:
+                backend.toggle_service_brake()
         # In Manual, at a stand, the driver may release it with the
         # failure still latched, and the failure does not engage it
         # again.
@@ -905,6 +912,37 @@ def run_check(
     expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
            "an engine failure at cruise was not found once speed was "
            "asked for")
+
+    # A brake failure is concluded on the tick after the service brake
+    # is commanded, when its state still reads off; a working brake is
+    # never taken for one (REQUIREMENTS.md M4).
+    for failed in (False, True):
+        quick = mod.ControllerCore()
+        quick.armed = True
+        quick.state.manual = True
+        plant = SimTrain()
+        plant.authority_blocks = 999
+        plant.commanded_mps = 20 / mod.MPS_TO_MPH
+        drive(quick, plant, quick.dt)
+        quick.set_target_mps(20 / mod.MPS_TO_MPH)
+        drive(quick, plant, 20)
+        plant.injected["brake"] = failed
+        quick.state.service_request = True
+        drive(quick, plant, quick.dt)
+        expect(not quick.failed,
+               "a brake failure was concluded before the Train Model "
+               "could answer")
+        drive(quick, plant, quick.dt)
+        if failed:
+            expect(quick.failed == ["brake"]
+                   and quick.state.emergency_brake
+                   and quick.state.service_brake,
+                   "a brake failure was not concluded on the next tick, "
+                   "with the service brake still commanded")
+        else:
+            drive(quick, plant, 5)
+            expect(not quick.failed,
+                   "a working service brake was taken for a failure")
 
     # Doors are the controller's (REQUIREMENTS.md M6): never opened
     # while moving; in Automatic, opened on the platform side at a new

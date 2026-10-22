@@ -145,8 +145,7 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     recorded yet.
 
 30. **Rules decided 2026-10-21 not yet in the code.** M3 (resolution not
-    detected, blocked on #23), M4 (0.5 s detection; service command
-    forced off), M5 (#23), M6 (Manual doors still platform side only), M7
+    detected, blocked on #23), M5 (#23), M6 (Manual doors still platform side only), M7
     (the Manual press: station name only, no repeat of the announcements,
     lockout on a wall-clock timer), M8 (no lights-on check for a train
     spawned at the yard between 18:00 and 06:00), M11 (bench clock gated
@@ -184,11 +183,11 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     - Lights: both interior and exterior switch together.
     - The bench's hours wheel runs 0–23, not 0–24 as asked: 24:00 is
       00:00, and 24:30 is not a time of day (R27).
-    - Switching to Manual during a brake failure (R26) cannot yet test
-      the brake: the service brake button is still refused under a
-      brake failure (M4, #30), and nothing detects a resolution yet
-      (#23), so the bench still clears the failure. The e-brake can be
-      released in Manual at a stand (R31).
+    - Switching to Manual during a brake failure (R26) now lets the
+      driver ask for the service brake (the button is live, R32; the
+      e-brake can be released in Manual at a stand, R31), but nothing
+      detects a resolution yet (#23), so the bench still clears the
+      failure.
     - With an uncommissioned train selected nobody is signed in, so
       nobody can reach its emergency brake from the console; it commands
       0 W and cannot move under its own power.

@@ -534,10 +534,10 @@ class ConsoleBackend(QObject):
     def toggle_service_brake(self) -> None:
         """Apply or release the driver's service brake request.
 
-        Refused while a brake failure is latched: the service brake
-        is the one that failed.
+        Also under a brake failure, so the driver can try the brake
+        (REQUIREMENTS.md M4).
         """
-        if not self.can_drive or self.core.state.failures["brake"]:
+        if not self.can_drive:
             return
         s = self.core.state
         s.service_request = not s.service_request
