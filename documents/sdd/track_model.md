@@ -393,7 +393,27 @@ The Track controller and the Train controller each have a hardware variant that 
 
 Human actors are the Track Builder and Murphy. System actors are the Track controller, Train model, Train controller and CTC office.
 
-![Figure 6. Use case diagram: Track Model.](../uml/track_model/03_usecase.png)
+![Figure 6. Use case diagram: Track Model, all actors.](../uml/track_model/03_usecase.png)
+
+
+The same use cases, one diagram for each actor:
+
+![Figure 7. Use cases of the Track Builder.](../uml/track_model/uc_track_builder.png)
+
+
+![Figure 8. Use cases of Murphy.](../uml/track_model/uc_murphy.png)
+
+
+![Figure 9. Use cases of the Track Controller.](../uml/track_model/uc_track_controller.png)
+
+
+![Figure 10. Use cases of the Train Model.](../uml/track_model/uc_train_model.png)
+
+
+![Figure 11. Use cases of the Train Controller.](../uml/track_model/uc_train_controller.png)
+
+
+![Figure 12. Use cases of the CTC Office.](../uml/track_model/uc_ctc_office.png)
 
 
 | ID | Use case | Actors | Description | Data | Stimulus and response | Sequence |
@@ -419,16 +439,16 @@ Human actors are the Track Builder and Murphy. System actors are the Track contr
 
 The Track Model runs as one process with a window. The window (Qt Quick, PySide6) shows state through `TrackModelState`, which converts to display units. The module core (`model.py`, `layout.py`) has no Qt code. The boundary types and the `TrackModel` Protocol are in `interface.py`. The test scaffolding (`test_link/`, `test_ui/`) is not part of the module and is removed at integration. At integration the harness calls `step` through the edge functions in `common/harness/`.
 
-![Figure 7. Track Model software architecture (component diagram).](../uml/track_model/06_component.png)
+![Figure 13. Track Model software architecture (component diagram).](../uml/track_model/06_component.png)
 
 #### C.2 Class Diagrams
 
-Figure 8 shows the module core and Figure 9 the window and the test link.
+Figure 14 shows the module core and Figure 15 the window and the test link.
 
-![Figure 8. Class diagram 1: module core.](../uml/track_model/04_class_core.png)
+![Figure 14. Class diagram 1: module core.](../uml/track_model/04_class_core.png)
 
 
-![Figure 9. Class diagram 2: window and test link.](../uml/track_model/05_class_ui.png)
+![Figure 15. Class diagram 2: window and test link.](../uml/track_model/05_class_ui.png)
 
 #### C.3 Data Design
 
@@ -504,52 +524,52 @@ Each use case has one sequence diagram, numbered to match: SD-01 is the diagram 
 | SD-15 | One tick in the Track Model (overview) | UC-3 to UC-9, UC-13 |
 | SD-16 | Dispatch a train (system level) | all |
 
-![Figure 10. SD-01 Load a track layout (UC-1).](../uml/track_model/sd01_load.png)
+![Figure 16. SD-01 Load a track layout (UC-1).](../uml/track_model/sd01_load.png)
 
 
-![Figure 11. SD-02 Display track properties (UC-2).](../uml/track_model/sd02_display.png)
+![Figure 17. SD-02 Display track properties (UC-2).](../uml/track_model/sd02_display.png)
 
 
-![Figure 12. SD-03 Track train position and occupancy (UC-3).](../uml/track_model/sd03_position.png)
+![Figure 18. SD-03 Track train position and occupancy (UC-3).](../uml/track_model/sd03_position.png)
 
 
-![Figure 13. SD-04 Report state to the Track Controller (UC-4).](../uml/track_model/sd04_report.png)
+![Figure 19. SD-04 Report state to the Track Controller (UC-4).](../uml/track_model/sd04_report.png)
 
 
-![Figure 14. SD-05 Apply a switch position (UC-5).](../uml/track_model/sd05_switch.png)
+![Figure 20. SD-05 Apply a switch position (UC-5).](../uml/track_model/sd05_switch.png)
 
 
-![Figure 15. SD-06 Apply signal lights and crossing gates (UC-6).](../uml/track_model/sd06_signal.png)
+![Figure 21. SD-06 Apply signal lights and crossing gates (UC-6).](../uml/track_model/sd06_signal.png)
 
 
-![Figure 16. SD-07 Deliver the track circuit signal (UC-7).](../uml/track_model/sd07_circuit.png)
+![Figure 22. SD-07 Deliver the track circuit signal (UC-7).](../uml/track_model/sd07_circuit.png)
 
 
-![Figure 17. SD-08 Send beacon data (UC-8).](../uml/track_model/sd08_beacon.png)
+![Figure 23. SD-08 Send beacon data (UC-8).](../uml/track_model/sd08_beacon.png)
 
 
-![Figure 18. SD-09 Send the signal light to the Train Controller (UC-9).](../uml/track_model/sd09_signalseen.png)
+![Figure 24. SD-09 Send the signal light to the Train Controller (UC-9).](../uml/track_model/sd09_signalseen.png)
 
 
-![Figure 19. SD-10 Sell tickets and board passengers (UC-10).](../uml/track_model/sd10_boarding.png)
+![Figure 25. SD-10 Sell tickets and board passengers (UC-10).](../uml/track_model/sd10_boarding.png)
 
 
-![Figure 20. SD-11 Report ticket sales (UC-11).](../uml/track_model/sd11_tickets.png)
+![Figure 26. SD-11 Report ticket sales (UC-11).](../uml/track_model/sd11_tickets.png)
 
 
-![Figure 21. SD-12 Set the ambient temperature (UC-12).](../uml/track_model/sd12_temperature.png)
+![Figure 27. SD-12 Set the ambient temperature (UC-12).](../uml/track_model/sd12_temperature.png)
 
 
-![Figure 22. SD-13 Switch the track heaters (UC-13).](../uml/track_model/sd13_heaters.png)
+![Figure 28. SD-13 Switch the track heaters (UC-13).](../uml/track_model/sd13_heaters.png)
 
 
-![Figure 23. SD-14 Inject or clear a failure (UC-14).](../uml/track_model/sd14_failure.png)
+![Figure 29. SD-14 Inject or clear a failure (UC-14).](../uml/track_model/sd14_failure.png)
 
 
-![Figure 24. SD-15 One tick in the Track Model (overview).](../uml/track_model/sd15_tick.png)
+![Figure 30. SD-15 One tick in the Track Model (overview).](../uml/track_model/sd15_tick.png)
 
 
-![Figure 25. SD-16 Dispatch a train (system level).](../uml/track_model/sd16_dispatch.png)
+![Figure 31. SD-16 Dispatch a train (system level).](../uml/track_model/sd16_dispatch.png)
 
 
 
@@ -557,13 +577,13 @@ Each use case has one sequence diagram, numbered to match: SD-01 is the diagram 
 
 Each block is always in one of three states. A failure overrides the occupancy states and reads as occupied.
 
-![Figure 26. Block state machine.](../uml/track_model/13_state_block.png)
+![Figure 32. Block state machine.](../uml/track_model/13_state_block.png)
 
 ### F. Deployment Diagram
 
 The system runs on one Windows 11 PC as one executable, with Python 3.10 or later and PySide6. The executable starts the central harness; the harness starts each module as its own process by running the same executable again with the module's name. No network connection or external service is needed. The Track Model process needs its layout files. Each hardware variant's window runs on the PC and relays the harness's messages over USB to its Raspberry Pi. The Track Model test UI exists only when the module runs alone.
 
-![Figure 27. Deployment diagram.](../uml/track_model/14_deployment.png)
+![Figure 33. Deployment diagram.](../uml/track_model/14_deployment.png)
 
 ### G. Interface Dictionary
 
@@ -608,7 +628,7 @@ SRS requirements that the Track Model covers, and where each is designed.
 | Requirement | Summary | Use cases | Design elements | Figures |
 |-----------|-------------------|------|---------------|-------|
 | REQ-FUNC-015, REQ-INTF-012 | Load the track layout from JSON at startup | UC-1 | `layout.py` (`load_layout`), `Layout` | SD-01 |
-| REQ-FUNC-016 | Display each segment's grade, elevation, length, speed limit, direction, crossings, heaters and beacons | UC-2 | `Block`, `TrackModelState` | SD-02, Figure 9 |
+| REQ-FUNC-016 | Display each segment's grade, elevation, length, speed limit, direction, crossings, heaters and beacons | UC-2 | `Block`, `TrackModelState` | SD-02, Figure 15 |
 | REQ-FUNC-017 | Track ticket sales and send them to the CTC office | UC-10, UC-11 | `_sell_tickets`, `CtcOutputs`, `track_model_to_ctc_office` | SD-10, SD-11 |
 | REQ-FUNC-018 | Show passengers boarding. Disembarking is reported by the Train Model and is not an input to the Track Model. | UC-10 | `_board`, `TrainFeed.passengers_boarded` | SD-10 |
 | REQ-FUNC-019 | Show train occupancy on the display | UC-3 | `_move_trains`, `TrackModelState` | SD-03 |
@@ -617,7 +637,7 @@ SRS requirements that the Track Model covers, and where each is designed.
 | REQ-FUNC-022 | Simulate track heaters | UC-13 | `_heater_on`, `_update_track_temps` | SD-13 |
 | REQ-FUNC-016.8 | Beacons: display them and send them with the train feed | UC-8 | `Layout.beacons`, `Beacon` | SD-08 |
 | REQ-FUNC-023 | Display switch positions and light states | UC-5, UC-6 | `TrackModelState` switch and signal rows | SD-05, SD-06 |
-| REQ-FUNC-024 | Simulate broken rail, track circuit and power failures | UC-14 | `TrackFailure`, `set_block_failure` | SD-14, Figure 26 |
+| REQ-FUNC-024 | Simulate broken rail, track circuit and power failures | UC-14 | `TrackFailure`, `set_block_failure` | SD-14, Figure 32 |
 | REQ-INTF-001.2 | A GUI for the Track Model | UC-2 | `TrackModelState`, `ui/*.qml` | Appendix C.5 |
 | REQ-INTF-013, REQ-FUNC-001 to 003 | One shared clock; real time, 10x and pause | - | `SystemClock`, harness | Appendix A.5 |
 | REQ-NFR-003, REQ-NFR-004 | Validate input; reject bad input without changing state | - | `_validate`, `InvalidInputError` | Section 4.6 |
