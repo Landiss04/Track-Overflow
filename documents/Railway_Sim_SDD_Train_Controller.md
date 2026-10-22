@@ -413,9 +413,8 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   | fleet            | The fleet shown: its own, or the harness's  |
   | selected         | The selected train                          |
   | operator         | Driver, engineer or nobody                  |
-  | sim_rate, paused | 1× or 10×, and Pause, for a fleet it owns |
-  | sims             | The bench's `SimTrain` per train          |
-  | time_s           | The clock shown                             |
+  | idle             | An unstepped controller, so the views have a shape to read while no train is in service |
+  | notes            | A message per train, shown on the console   |
 
   | Responsibility                                                                          | Collaborator                   |
   | --------------------------------------------------------------------------------------- | ------------------------------ |
@@ -471,7 +470,8 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   | Train Model      | Train Controller | Beacon                        | Station name, platform side, underground       |
   | Track Model      | Train Controller | Signal aspect ahead           | Red, Yellow, Green, Super Green                |
   | Train Controller | Train Model      | Power command                 | Power, W                                       |
-  | Train Controller | Train Model      | Brake command                 | Emergency, service                             |
+  | Train Controller | Train Model      | Service brake command         | On, off                                        |
+  | Train Controller | Train Model      | Emergency brake command       | On, off                                        |
   | Train Controller | Train Model      | Door command                  | Left, right                                    |
   | Train Controller | Train Model      | Light command                 | Interior, exterior                             |
   | Train Controller | Train Model      | Temperature setpoint          | °C                                            |
@@ -517,14 +517,12 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   | Field                      | Unit / shape                  | Truth signal                                           | Harness maps to (`ControllerCommands`) |
   | -------------------------- | ----------------------------- | ------------------------------------------------------ | ---------------------------------------- |
   | `power_w`                | W, 0–480,000                 | `power-command`                                      | `power_cmd_w`                          |
-  | `brake_command`          | `[emergency, service]` bool | `emergency-brake-command`, `service-brake-command` | `emergency_brake`, `service_brake`   |
+  | `service_brake`          | bool                     | `service-brake-command`   | `service_brake`                        |
+  | `emergency_brake`        | bool                     | `emergency-brake-command` | `emergency_brake`                      |
   | `door_command`           | `(left, right)`             | `door-command`                                       | `door_left_open`, `door_right_open`  |
   | `light_command`          | `(interior, exterior)`      | `light-command`                                      | `interior_lights`, `exterior_lights` |
   | `temperature_setpoint_c` | °C                           | `temperature-setpoint`                               | `temp_setpoint_c`                      |
   | `announcement`           | str, empty when none          | `announcement`                                       | `announcement`                         |
-
-  Code today sends two bools (`service_brake`, `emergency_brake`); to
-  change to `brake_command`.
 
   **Errors** (all derive from `TrainControllerError`; a failed
   `step_all` changes no train):
