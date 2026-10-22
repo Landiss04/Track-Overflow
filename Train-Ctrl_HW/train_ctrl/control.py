@@ -23,7 +23,6 @@ from .constants import (
     MASS_KG,
     MAX_FORCE_N,
     MAX_POWER_W,
-    MAX_SPEED_MPS,
     NIGHT_END_S,
     NIGHT_START_S,
     PICKUP_DETECT_MIN_BLOCKS,
@@ -124,10 +123,15 @@ class ControllerCore:
                 s.announcement = ""
         self.detect_failures()
         self._auto_lights()
-        if self.armed and not s.manual:
-            # Commanded speed is the speed limit, never above the
-            # car's 70 km/h (REQUIREMENTS.md M1).
-            s.target_mps = self.speed_cap_mps
+        if self.armed:
+            # The commanded speed is the only cap, in both modes: the
+            # controller cannot know the true limit (REQUIREMENTS.md M1).
+            # In Manual it lowers the driver's setpoint when it drops,
+            # rather than springing back when it rises again.
+            if s.manual:
+                s.target_mps = min(s.target_mps, self.commanded_mps)
+            else:
+                s.target_mps = self.commanded_mps
         self._station_stop()
         if self.armed:
             error = s.target_mps - s.actual_mps
@@ -354,25 +358,15 @@ class ControllerCore:
         s.emergency_brake = False
         return True
 
-    @property
-    def speed_cap_mps(self) -> float:
-        """The fastest the train may be asked to go, in m/s.
-
-        The commanded speed, never above the car's 70 km/h
-        (REQUIREMENTS.md M1). The Train Model has no governor (truth
-        D009), so the cap is the controller's.
-        """
-        return min(self.commanded_mps, MAX_SPEED_MPS)
-
     def set_target_mps(self, mps: float) -> None:
-        """Set the driver's target in m/s, capped at speed_cap_mps.
+        """Set the driver's target in m/s, capped at the commanded speed.
 
-        Capped only when set: the target then follows the driver
-        (REQUIREMENTS.md M1).
+        The only cap (REQUIREMENTS.md M1); step() keeps it under the
+        commanded speed as that changes.
         """
         s = self.state
         if s.manual and self.authority_blocks > 0 and not self.failed:
-            s.target_mps = max(0.0, min(mps, self.speed_cap_mps))
+            s.target_mps = max(0.0, min(mps, self.commanded_mps))
 
     def platform_on(self, side: str) -> bool:
         """Whether the last beacon put a platform on this side."""

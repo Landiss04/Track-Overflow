@@ -144,10 +144,9 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     Push it here, and fix its window and threshold, which are not
     recorded yet.
 
-30. **Rules decided 2026-10-21 not yet in the code.** M1 (70 km/h cap
-    still applied; the Manual setpoint is capped only when set), M2 and
-    M3 (release in Manual at a stand with a failure latched; resolution
-    not detected, blocked on #23), M4 (0.5 s detection; service command
+30. **Rules decided 2026-10-21 not yet in the code.** M2 and M3 (release in
+    Manual at a stand with a failure latched; resolution not detected,
+    blocked on #23), M4 (0.5 s detection; service command
     forced off), M5 (#23), M6 (Manual doors still platform side only), M7
     (the Manual press: station name only, no repeat of the announcements,
     lockout on a wall-clock timer), M8 (no lights-on check for a train

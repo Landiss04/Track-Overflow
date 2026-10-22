@@ -1104,10 +1104,9 @@ def run_check(
     backend.set_target_mph(30)
     expect(backend.core.state.target_mps == 0.0,
            "the driver could set a target with no authority left")
-    # Commanded speed is the speed limit, never above the car's 70 km/h
-    # (REQUIREMENTS.md M1): it caps the driver's target when set, and in
-    # Automatic it is the target.
-    car_max_mph = mod.MAX_SPEED_MPS * mod.MPS_TO_MPH
+    # The commanded speed is the only cap, in both modes, with no
+    # 70 km/h cap (REQUIREMENTS.md M1): in Manual it caps the driver's
+    # setpoint, also when it drops later; in Automatic it is the target.
     send({"authority_blocks": 6, "commanded_speed": 40})
     backend.set_manual(True)
     backend.set_target_mph(55)
@@ -1115,16 +1114,18 @@ def run_check(
            "the driver's target was not capped at the commanded speed")
     send({"commanded_speed": 60})
     backend.set_target_mph(55)
-    expect(abs(backend.snapshot["target_mph"] - car_max_mph) < 0.01,
-           "the driver's target went above the car's 70 km/h")
+    expect(abs(backend.snapshot["target_mph"] - 55) < 0.5,
+           "the driver's target was capped below the commanded speed")
+    send({"commanded_speed": 30})
+    expect(abs(backend.snapshot["target_mph"] - 30) < 0.5,
+           "the driver's target stayed above a lowered commanded speed")
     backend.set_manual(False)
     send({"commanded_speed": 30})
     expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 30) < 0.5,
            "Automatic did not take the commanded speed as its target")
     send({"commanded_speed": 60})
-    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH
-               - car_max_mph) < 0.01,
-           "Automatic targeted more than the car's 70 km/h")
+    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 60) < 0.5,
+           "Automatic did not target a commanded speed above 70 km/h")
     backend.set_manual(True)
     _settle(app, 300)
 
