@@ -2,8 +2,8 @@
 ## For the Railway Simulation Project
 
 Version: 1.0  
-Prepared by: [Your name]  
-Organization: ECE 1140, [Group name]  
+Prepared by: Deni Ephraim  
+Organization: ECE 1140,  Track Overflow  
 Date Modified: 2026-10-22
 
 Module described in detail in this revision: **Track Model**
