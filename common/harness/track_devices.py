@@ -127,11 +127,10 @@ def switch_places(layout: Mapping[str, Any]) -> tuple[SwitchPlace, ...]:
         point, legs = _point_and_legs(str(text))
         if (
             line == "Red" and block == "9"
-            and "yard" in row.get("next_blocks", ())
-            and ";" not in str(text)
+            and str(text).strip() == "75-yard"
         ):
-            # K2: row adjacency locates the yard; source text stays open.
-            point, legs = block, {str(int(block) + 1), YARD}
+            # Assumption: yard arrivals leave 9 on its fixed side toward 10.
+            point, legs = block, {str(int(block) - 1), YARD}
         beside = neighbours.get(point, set()) - legs
         if len(beside) != 1:
             raise ValueError(

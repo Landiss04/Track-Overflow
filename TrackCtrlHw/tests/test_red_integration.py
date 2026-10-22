@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -59,8 +60,14 @@ class RedIntegration(unittest.TestCase):
         self.assertEqual(set(owners), set(range(1, 77)))
         self.assertEqual(owners[9], owners[75])
         self.assertEqual(rows[9]["section"], "C")
-        self.assertIn("yard", rows[9]["next_blocks"])
-        self.assertNotIn("yard", rows[75]["next_blocks"])
+        self.assertNotIn("yard", rows[9]["next_blocks"])
+        self.assertIn("yard", rows[75]["next_blocks"])
+        # Course source immediately before f27ba4e; byte-for-byte immutable.
+        self.assertEqual(
+            hashlib.sha256((ROOT / "TrackModel/red_line.json").read_bytes())
+            .hexdigest(),
+            "42afbb5505d4cb16e9efb8a3d995409973cd53fdafed4104be997a52c123ca33",
+        )
         self.assertEqual(rows[9]["infrastructure"]["switch"], "75-yard")
 
     def test_every_red_switch_agrees_in_all_readers(self) -> None:
@@ -100,8 +107,15 @@ class RedIntegration(unittest.TestCase):
                     (sw.point, sw.normal_end, sw.reverse_end),
                     (switch.point, switch.normal_end, switch.reverse_end),
                 )
+        for wayside in controller.snapshot().waysides:
+            for block in wayside.territory.blocks:
+                if block.key.block_id in {"9", "75"}:
+                    self.assertEqual(
+                        "yard" in block.next_blocks,
+                        block.key.block_id == "9",
+                    )
         yard = devices.by_switch("Red", "9")
-        self.assertEqual((yard.point, yard.light), ("9", "8"))
+        self.assertEqual((yard.point, yard.light), ("9", "10"))
 
     def test_every_five_bit_speed_is_capped_for_every_block(self) -> None:
         controller = loaded_red()

@@ -107,12 +107,18 @@ def parse_territory(data: Any) -> Territory:
         limit_kmh = _positive(
             raw.get("speed_limit_kmh"), "speed_limit_kmh", block_id
         )
+        next_blocks = _next_blocks(raw.get("next_blocks", []), block_id)
+        if line == "Red" and block_id in {"9", "75"}:
+            # Interpret the given course file without changing its rows.
+            next_blocks = tuple(n for n in next_blocks if n != YARD)
+            if block_id == "9":
+                next_blocks += (YARD,)
         blocks.append(
             Block(
                 key=key,
                 length_m=length_m,
                 speed_limit_mps=limit_kmh / _KMH_PER_MPS,
-                next_blocks=_next_blocks(raw.get("next_blocks", []), block_id),
+                next_blocks=next_blocks,
             )
         )
         infrastructure = raw.get("infrastructure") or {}
@@ -184,11 +190,11 @@ def parse_switch(
                 f"{where}: a single connection must lead to the yard."
             )
         point = only[1] if only[0] == YARD else only[0]
-        if key.line == "Red" and key.block_id == "9" and YARD in next_blocks:
-            # The row adjacency is authoritative for the Red yard (K2).
-            # Keep the stale source text for its owners to resolve.
+        if (key.line == "Red" and key.block_id == "9"
+                and text.strip() == "75-yard"):
+            # Assumption: yard arrivals leave 9 on its fixed side toward 10.
             point = key.block_id
-            normal_end = str(int(point) + 1)
+            normal_end = str(int(point) - 1)
             if normal_end not in next_blocks:
                 raise TerritoryError(
                     f"{where}: normal main-line leg is missing."

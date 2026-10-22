@@ -270,6 +270,12 @@ def _read_next_blocks(
                     f"{line} block {number}: bad next_blocks entry {value!r}"
                 )
         result[number] = outs
+    if line == "RED":
+        # Kevin 2026-10-22: preserve the course data; the yard joins 9.
+        if 75 in result:
+            result[75] = [out for out in result[75] if out is not None]
+        if 9 in result and None not in result[9]:
+            result[9].append(None)
     return result
 
 
@@ -322,7 +328,7 @@ def _check_directions(
         for out in outs:
             if out is None:
                 switch = by_point.get(block_id)
-                if (switch is None or switch.from_yard
+                if (switch is None
                         or None not in (switch.normal_block_id,
                                         switch.reverse_block_id)):
                     raise LayoutError(
@@ -422,11 +428,11 @@ def _read_switches(
         interpreted = str(text)
         if (
             line == "RED" and raw["block_number"] == 9
-            and "yard" in raw.get("next_blocks", ())
-            and ";" not in interpreted
+            and interpreted.strip() == "75-yard"
         ):
-            # K2: preserve the owner's switch text; use the authoritative row.
-            interpreted = f"{raw['block_number']}-yard"
+            # Assumption: yard arrivals trail through 9 toward 10;
+            # the main-line leg is 8, with the fixed side at 10.
+            interpreted = "Yard-9"
         for point, leg in _parse_switch_text(interpreted):
             point_legs = legs.setdefault(point, [])
             if leg not in point_legs:
@@ -455,7 +461,7 @@ def _read_switches(
             source="; ".join(sources[point]),
             from_yard=any(
                 s.strip().upper().startswith(YARD) for s in sources[point]
-            ),
+            ) or (line == "RED" and point == 9),
         ))
     return switches
 

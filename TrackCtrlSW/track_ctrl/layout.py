@@ -323,6 +323,12 @@ def parse_layout(data: Any, source: str = "layout") -> ParsedLayout:
             raise LayoutError(f"{source}: block {block_id}: infrastructure "
                               "is not an object.")
         station = infrastructure.get("station")
+        next_blocks = _next_blocks(raw.get("next_blocks"), block_id, source)
+        if line == "Red" and block_id in {"9", "75"}:
+            # Interpret the given course file without changing its rows.
+            next_blocks = tuple(n for n in next_blocks if n != YARD)
+            if block_id == "9":
+                next_blocks += (YARD,)
         blocks.append(
             Block(
                 block_id=block_id,
@@ -333,8 +339,7 @@ def parse_layout(data: Any, source: str = "layout") -> ParsedLayout:
                 grade_percent=float(grade),
                 speed_limit_mps=limit_kmh / _KMH_PER_MPS,
                 station=station if isinstance(station, str) else None,
-                next_blocks=_next_blocks(raw.get("next_blocks"),
-                                         block_id, source),
+                next_blocks=next_blocks,
             )
         )
         if "switch" in infrastructure:
@@ -441,9 +446,9 @@ def _parse_switch(
             block_id == "9" and text.strip() == "75-yard"
             and YARD in next_blocks
         ):
-            # K2: row adjacency locates the yard; source text stays unresolved.
+            # Assumption: yard arrivals leave 9 on its fixed side toward 10.
             point = block_id
-            normal_end, reverse_end = str(int(point) + 1), YARD
+            normal_end, reverse_end = str(int(point) - 1), YARD
             if normal_end not in next_blocks:
                 raise LayoutError(f"{where}: normal main-line leg is missing.")
         elif point == block_id:
