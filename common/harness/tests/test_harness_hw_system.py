@@ -33,8 +33,8 @@ def run_hw_system(log_path, fault_module=None, fault_options=()):
     final = {}
     stopped = set()
     with EventLog(log_path) as log:
-        harness = Harness(system_specs(options, wired=MODULE_NAMES), log,
-                          SystemEdges(wired=MODULE_NAMES))
+        harness = Harness(system_specs(options), log,
+                          SystemEdges())
         harness.eventLogged.connect(lambda source, event, detail:
                                     events.append((source, event, detail)))
         def on_tick(tick, duration):

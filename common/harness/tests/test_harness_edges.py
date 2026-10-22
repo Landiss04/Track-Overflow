@@ -911,8 +911,7 @@ class SystemEdgesTest(unittest.TestCase):
         sent = wayside_outputs(occupied=("64",))
         inputs = self.inputs(CTC_OFFICE, {
             TRACK_CONTROLLER_SW: sent,
-            # A stub's outputs carry no reports, and are left out.
-            "track-controller-hw": {"tick": 1},
+            # The HW controller has not reported yet.
         })
         self.assertEqual(inputs["track_controller"],
                          track_controller_to_ctc(sent))
@@ -1026,10 +1025,12 @@ class SystemEdgesTest(unittest.TestCase):
             "G1", self.inputs(TRAIN_CONTROLLER_SW, outputs)["trains"]
         )
 
-    def test_stubs_get_their_producers_outputs_whole(self) -> None:
+    def test_explicit_stubs_get_producers_outputs_whole(self) -> None:
         outputs = {TRAIN_MODEL: {"tick": 1}, CTC_OFFICE: {"tick": 1}}
         self.assertEqual(
-            self.inputs(TRAIN_CONTROLLER_HW, outputs),
+            SystemEdges(wired=()).inputs_for(
+                TRAIN_CONTROLLER_HW, 1, 18000.1, outputs
+            ),
             {TRAIN_MODEL: {"tick": 1}},
         )
 

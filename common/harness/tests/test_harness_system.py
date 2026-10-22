@@ -50,6 +50,8 @@ from common.harness.modules import (  # noqa: E402
     CTC_OFFICE,
     MODULE_NAMES,
     TRACK_CONTROLLER_SW,
+    TRACK_CONTROLLER_HW,
+    TRAIN_CONTROLLER_HW,
     TRACK_MODEL,
     TRAIN_CONTROLLER_SW,
     TRAIN_MODEL,
@@ -117,6 +119,8 @@ class SystemTest(unittest.TestCase):
         harness = Harness(
             system_specs({
                 CTC_OFFICE: CTC_OPTIONS,
+                TRACK_CONTROLLER_HW: ["--test-pi", "process"],
+                TRAIN_CONTROLLER_HW: ["--test-pi", "process"],
                 TRACK_CONTROLLER_SW: ["--load-starters"],
                 TRAIN_CONTROLLER_SW: ["--engineer-gains", "400000", "8000"],
             }),
@@ -289,7 +293,11 @@ class NotReadyTest(unittest.TestCase):
             Path(folder) / "events.csv"
         ) as log:
             harness = Harness(
-                system_specs({CTC_OFFICE: CTC_OPTIONS}),
+                system_specs({
+                    CTC_OFFICE: CTC_OPTIONS,
+                    TRACK_CONTROLLER_HW: ["--test-pi", "process"],
+                    TRAIN_CONTROLLER_HW: ["--test-pi", "process"],
+                }),
                 log,
                 SystemEdges(),
             )

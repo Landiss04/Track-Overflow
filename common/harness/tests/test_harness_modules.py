@@ -94,14 +94,22 @@ class CommandLineTest(unittest.TestCase):
         self.assertIn("track-controller-hw", track_overflow._MODULES)
         self.assertIn("train-controller-hw", track_overflow._MODULES)
 
-    def test_staged_hardware_and_stubs_only_specs(self) -> None:
+    def test_default_hardware_and_stubs_only_specs(self) -> None:
         from common.harness.app import _parse_args, _specs
-        for args, expected in (([], False), (["--with-hardware"], True),
-                               (["--with-hardware", "--stubs-only"], False)):
+        for args, expected in (([], True), (["--test-pi", "process"], True),
+                               (["--test-pi", "process", "--stubs-only"], False)):
             specs, _ = _specs(_parse_args(args))
             for name in ("track-controller-hw", "train-controller-hw"):
                 spec = next(spec for spec in specs if spec.name == name)
                 self.assertEqual(spec.args[1] == name, expected)
+
+    def test_simulation_is_explicit_and_not_a_missing_pi_fallback(self) -> None:
+        from common.harness.app import _parse_args, _specs
+        for args in ([], ["--test-pi", "process"], ["--test-pi", "pty"]):
+            specs, _ = _specs(_parse_args(args))
+            for spec in specs:
+                if spec.name in {"track-controller-hw", "train-controller-hw"}:
+                    self.assertEqual("--test-pi" in spec.args, bool(args))
 
     def test_unknown_module_is_refused(self) -> None:
         errors = io.StringIO()

@@ -5,9 +5,9 @@ and prints a status line every five seconds. Both run until Ctrl+C,
 the time limit, or a confirmed window close. The harness window has no
 clock controls: Run, Pause and 1x / 10x are the CTC Office's.
 
-The modules wired in so far run as themselves, each in its window
-(Phase 4: the CTC Office, the Track Controller SW, the Track Model, the
-Train Model and the Train Controller SW); the rest are stubs. The
+All seven modules run as themselves, each in its window. Each HW host
+waits for its assigned USB Pi; --test-pi selects a simulated Pi explicitly
+for tests and development. The
 clock starts paused (D017). In a window run the dispatcher presses Run
 in the CTC Office's window (R83). A headless run, which has no window
 to press it in, has the CTC Office press Run as soon as it is ready
@@ -167,13 +167,17 @@ def _specs(
     wayside_options = ["--load-starters"] if options.load_starters else []
     for order in options.dispatch:
         ctc_options += ["--dispatch", order]
-    wired = WIRED_MODULES | ({TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW}
-                             if options.with_hardware else set())
-    specs = system_specs({
+    wired = WIRED_MODULES
+    module_options = {
         CTC_OFFICE: ctc_options,
         TRACK_CONTROLLER_SW: wayside_options,
-        TRACK_CONTROLLER_HW: wayside_options if options.with_hardware else [],
-    }, wired=wired)
+        TRACK_CONTROLLER_HW: list(wayside_options),
+        TRAIN_CONTROLLER_HW: [],
+    }
+    if options.test_pi:
+        for name in (TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW):
+            module_options[name] += ["--test-pi", options.test_pi]
+    specs = system_specs(module_options, wired=wired)
     return specs, SystemEdges(wired=wired)
 
 
@@ -276,8 +280,10 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="run at 10x from the start",
     )
-    parser.add_argument("--with-hardware", action="store_true",
-                        help="run both HW host relays; requires both Pis")
+    parser.add_argument(
+        "--test-pi", choices=("process", "pty"),
+        help="tests/development only: explicitly simulate both Pis",
+    )
     parser.add_argument(
         "--stubs-only",
         action="store_true",

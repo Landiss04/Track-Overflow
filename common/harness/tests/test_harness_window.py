@@ -59,7 +59,7 @@ class HarnessWindowTest(unittest.TestCase):
                         # dispatcher presses Run and sends a train; here
                         # the Track Controller commits its starters and
                         # the CTC Office presses Run and dispatches G1.
-                        args += ["--auto-run", "--load-starters",
+                        args += ["--test-pi", "process", "--auto-run", "--load-starters",
                                  "--dispatch", "G1:Green:65"]
                     else:
                         # The stub CTC Office has no window, so it
