@@ -93,8 +93,6 @@ section 9.
 
 ## 3. Use cases
 
-![Use case diagram](../uml/ctc_office/uc_ctc_office.png)
-
 Actors:
 
 - **Dispatcher** — the person at the CTC Office window. Every interactive control of the
@@ -104,6 +102,27 @@ Actors:
   and keeps the roster of trains the CTC Office creates and retires.
 - **Track Controller** and **Track Model** — the neighbouring modules, reached only through
   the harness.
+
+### Use case diagrams
+
+One diagram per actor. A use case in grey belongs to another actor and is shown only for
+its include or extend link.
+
+**Dispatcher** (UC-01 to UC-15):
+
+![Use cases of the Dispatcher](../uml/ctc_office/uc_dispatcher.png)
+
+**Central Harness** (UC-01, UC-16 and the use cases it includes, UC-24):
+
+![Use cases of the Central Harness](../uml/ctc_office/uc_harness.png)
+
+**Track Controller** (UC-17, UC-18, UC-21, UC-22, UC-24):
+
+![Use cases of the Track Controller](../uml/ctc_office/uc_track_controller.png)
+
+**Track Model** (UC-23):
+
+![Use cases of the Track Model](../uml/ctc_office/uc_track_model.png)
 
 ### User stories
 
@@ -336,7 +355,7 @@ stories cover every use case.
 
 | | |
 |---|---|
-| **Actors** | Central Harness (included in UC-16) |
+| **Actors** | Central Harness (included in UC-16); Track Controller (its occupancy) |
 | **Description** | Works out where each of its trains is, and which occupied blocks are failures, from occupancy alone. |
 | **Data** | Occupancy now and at the last step; each train's route, authority and suggested speeds; the trains it has released. |
 | **Stimulus** | Every step. |
@@ -413,7 +432,7 @@ stories cover every use case.
 
 | | |
 |---|---|
-| **Actors** | Central Harness (extends UC-16) |
+| **Actors** | Central Harness (extends UC-16); Track Controller (a wayside not ready) |
 | **Description** | Keeps a line still while any wayside on it is not ready (no PLC program loaded). The waysides are vital, so nothing is sent to a line until every wayside on it runs its program. |
 | **Data** | Each wayside's ready and reason. A line is ready once a wayside on it has reported and every wayside on it is ready. |
 | **Stimulus** | Any step on which a line is not ready. |
@@ -729,7 +748,7 @@ whole step, refers to the diagrams of the use cases it includes.
 |---|---|---|
 | 1.3 System architecture and design: route, authority, wayside distribution, timing, vitality | 15 | Section 4.1 for the CTC Office's part; [system_concepts.md](system_concepts.md) for the system. |
 | 1.4 Software architecture | 14 | Section 4 and its figure. |
-| 1.5 Use case diagram (actors shown) | 14 | Section 3: diagram, actors, a user story per actor, and a description of each use case, UC-01 to UC-24. |
+| 1.5 Use case diagram (actors shown) | 14 | Section 3: one use case diagram per actor, a user story per actor, and a description of each use case, UC-01 to UC-24. |
 | 1.6 Class diagram | 14 | Section 6: four diagrams. |
 | 1.7 Sequence diagram | 14 | Section 7: one per use case, SD-01 to SD-24. |
 | 1.8 Deployment diagram | 14 | Section 8. |
