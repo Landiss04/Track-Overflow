@@ -3,8 +3,20 @@
 PySide6 + QML front-end for the ECE1140 Train Model, covering **page 3a** (main
 operational view) and **page 3b** (test harness). `TrainModelState` wraps the
 real `TrainModel` in `train_model/model.py`, and the views show the model's
-state. Header metadata that the model does not produce (train ID, line,
-arrival) shows a dash. The clock shows elapsed model time.
+state. Train ID and line come from the fleet/harness roster. The current clock
+uses harness-supplied time in integrated operation and model elapsed time
+in standalone operation. Independent drift checks run every 15 harness ticks.
+The inspected window retains next station/platform and omits arrival time.
+
+The [SDD v0.2](../documents/Railway_Sim_SDD_Train_Model.md) records Kevin
+Schillinger’s October 20, 2026 accepted design. The current working tree includes
+concurrent backend/UI edits for summed brakes, complete beacon validation,
+integrated clock checks and arrival removal. This documentation task inspected
+those edits without implementing or testing them; see [follow-up](docs/open-issues.md).
+
+## Development: standalone utility
+
+The test UI is a developer utility, not a product actor or product use case.
 
 The two pages are **independent windows, each its own process**:
 
@@ -118,7 +130,7 @@ the window shows the train picked in its header selector. Standalone,
 `main.py` runs a one-train fleet (`T-1`) for the test UI to drive.
 
 See [open issues](docs/open-issues.md) for speed-control ownership and
-vehicle calibration.
+the remaining backend/UI work.
 
 Detailed documentation in `docs/`:
 
@@ -132,16 +144,35 @@ Detailed documentation in `docs/`:
 ## Physics stepping
 
 Commands are held for the complete tick. Traction is evaluated at the
-midpoint velocity so its mechanical work cannot exceed the available
-commanded energy. Internal substeps resolve the low-speed `P/v` transition;
-they do not change the harness clock. Stops are integrated only up to zero
+midpoint velocity in the power-limited regime so segment work matches
+commanded work without artificial energy gain. Constant-force segments are exact.
+Internal boundaries handle stops and traction-regime transitions accurately;
+further segment limits maintain stability. Segment durations total the fixed
+external dt; speed/pause change tick frequency only. Stops are integrated only up to zero
 velocity, then static holding or rollback is evaluated for the remaining
 time. Reported acceleration uses the current forces at the final velocity.
 Nonfinite numeric inputs and negative power are rejected before state changes,
 as are inputs of the wrong type: a `bool` or text where a number belongs, an
 integer too large for a float, a number where a name belongs, and a beacon
-whose platform side is not `L` or `R` or whose station name passes 128
-characters.
+whose platform side is not `L`, `R` or `LR`, or whose complete canonical
+beacon payload exceeds 128 characters. The inspected codec counts syntax and
+escapes; [encoding and validation](docs/module-interface.md#beacon-payload-encoding)
+reject overlength payloads without truncation. Name length alone is insufficient.
+
+## Accepted vehicle and brake scope
+
+Maximum power is confirmed at **480 kW**. Rolling resistance uses the existing
+configured coefficient `0.002` and is the only passive resistance term in scope;
+grade remains gravitational force and braking commanded force. No real-world
+calibration study is claimed, and aerodynamic drag, wheel slip and brake build-up
+are outside this model.
+
+Both brakes may engage simultaneously and their configured forces sum. Emergency
+follows the controller command or passenger latch; service follows its command
+unless service failure is active. The inspected working tree implements
+independent engagement and summed forces. Pickup failure already outputs zero
+commanded speed and authority while leaving terrain unaffected. Position offset
+references the front of the train; this decision adds no block-crossing behavior.
 
 ## Reference mass and operating mass
 
@@ -208,7 +239,7 @@ QT_QPA_PLATFORM=offscreen timeout 8 python main.py      # clean = no output
 QT_QPA_PLATFORM=offscreen timeout 8 python test_ui.py   # clean = no output
 ```
 
-Tests (`pip install pytest` into `.venv` first):
+Local developer verification (`pip install pytest` into `.venv` first):
 
 ```bash
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
@@ -216,6 +247,19 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 
 Set `TRAIN_MODEL_LINK` to run a pair on a private link name, for example
 beside a Train Model that is already open.
+
+For native Windows startup sizing, run the following from the repository
+root in the signed-in desktop session. Repeat at the presentation's display
+resolution and DPI settings; the check opens each real launcher and checks
+that its frame fits above the taskbar, with the shared icon installed:
+
+```powershell
+TrainModel\.venv\Scripts\python TrainModel\tests\windows_startup_check.py
+```
+
+Use `--shots DIR` to save startup screenshots. The offscreen Windows test
+runner can use `QT_QPA_FONTDIR=C:\Windows\Fonts` so Qt can find its fonts;
+native desktop runs use the Windows font system directly.
 
 ## Type-check
 
@@ -229,7 +273,7 @@ PySide6 ships its own type stubs, so no local stubs are needed.
 ## Build an executable
 
 PyInstaller builds each window as its own executable. Run from the
-repository root, not `TrainModel/`. The four data folders keep their
+repository root, not `TrainModel/`. The data folders and logo keep their
 source paths inside the bundle: the code finds them under the bundle's
 root (`sys._MEIPASS`) at the same paths as under the repository root,
 and the QML reaches the shared `ui/` and `pics/` by relative paths.
@@ -242,6 +286,7 @@ or loads with a blank ad or no track.
 | `TrainModel/pics` | the header ads |
 | `ui` | the shared QML components |
 | `TrackModel` | the line layouts the test UI loads |
+| `utils/Track_Overlow_Logo.png` | the shared window and taskbar icon |
 
 On Windows (PowerShell; `;` separates an `--add-data` source from its
 destination, `:` on Linux):
@@ -254,6 +299,7 @@ foreach ($app in 'main', 'test_ui') {
         --add-data "TrainModel\pics;TrainModel\pics" `
         --add-data "ui;ui" `
         --add-data "TrackModel;TrackModel" `
+        --add-data "utils\Track_Overlow_Logo.png;utils" `
         --hidden-import ui.theme --hidden-import ui.aspect_lock `
         "TrainModel\$app.py"
 }
@@ -324,29 +370,25 @@ failures, pending edits, and elapsed time.
 
 ## Doors and boarding
 
-The doors follow the Door Command, whatever the speed. The door interlock (a
-door opens only at 0 mph and closes once the train moves) is commented out of
-`model.py`, not deleted: whether the Train Model enforces it is with the course
-instructor, and Kevin believes it does not (2026-10-06). Until that is settled
-nothing in the Train Model keeps a door shut while moving; see
-[open issues](docs/open-issues.md). Its tests are skipped, not removed.
+The Train Controller ensures doors remain closed when required. The Train
+Model follows Door Command at any speed and enforces no interlock.
 
-Passengers board at rest with a door open, at a station or not (Kevin,
-2026-10-07). The `station` input row names the station in the current block
-(`TrackInfo.station_name`); leave it empty away from a station. The module
-boards nobody from a count received at any other time; the test UI holds such
-a count in its row until a step can board it. Disembarking is one draw per
-stop, on the first tick at rest with a door open, at a station or not: with a
-door open, passengers can get off (Kevin, 2026-10-07). The next stop begins
-once the train has moved.
+The Track Model sends boarding events only at stations. The Train Model checks
+rest, an open door, count bounds and capacity without a station-presence gate.
+`TrackInfo.station_name` is station display metadata. An ineligible event boards
+nobody and is not retained by the model; the developer utility may keep its
+staged count until an eligible send. Disembarking is one draw per stop, on the
+first tick at rest with a door open, at a station or elsewhere. Reopening a
+door does not redraw until the train has moved.
 
-## Passenger brake override
+## Development: passenger brake override
 
 The test harness emergency-brake input can explicitly override the passenger
 latch. An injected brake failure blocks the service brake only; the emergency
 brake and a passenger pull still work. The overview offers
-no release, pending a decision on normal operation; this test override does
-not define that policy. Its button always reads *Apply emergency brake* and is
+no release action. Normal release is the Train Controller’s one-shot
+`passenger_brake_release`; it clears only the passenger latch, preserving an
+independently held controller emergency command. That path already exists. Its button always reads *Apply emergency brake* and is
 disabled while the emergency brake is engaged from any source (a Train
 Controller command from the test UI, or a pull) and while a pull is latched.
 
@@ -375,8 +417,10 @@ Controller command from the test UI, or a pull) and while a pull is latched.
 
 ## Remaining display limitations
 
-- Train ID, line, and arrival time have no defined source and display a dash;
-  see [open issues](docs/open-issues.md).
+- Train ID and line already come from fleet metadata. Arrival time is outside
+  the intended window for now; the inspected QML retains next-station/platform
+  without arrival. Integrated time and selected-train drift diagnostics are
+  present in current working-tree code; see [follow-up](docs/open-issues.md).
 - Power command (Train Model window) displays the commanded power, capped at
   the maximum and zero on engine failure. It is not the power delivered or
   consumed, which the model does not account for.

@@ -40,7 +40,7 @@ class TrainConfig:
     n_crew: int = 5                         # 1 per car x 5 modules
 
     # Propulsion
-    p_max_w: float = 480_000.0              # 4 x 120 kW, provisional
+    p_max_w: float = 480_000.0              # 4 x 120 kW, confirmed 2026-10-20
 
     # Rated performance, all at 2/3 load (datasheet)
     ref_load_fraction: float = 2.0 / 3.0
@@ -85,6 +85,8 @@ PlatformSide = Literal["L", "R", "LR"]  # "LR": platforms on both sides
 class Beacon:
     """Received near stations only. Serialized form must fit 128 characters."""
 
+    # Complete compact ASCII JSON [name, side, underground], including
+    # syntax/escapes, is bounded; keep these typed/named boundary fields.
     station_name: str
     platform_side: PlatformSide
     underground: bool
@@ -117,6 +119,9 @@ class ControllerCommands:
     door_right_open: bool
     temp_setpoint_c: float
     announcement: str
+    # One-shot: true on the tick the Train Controller releases a
+    # passenger pull (signals/passenger-brake-release).
+    passenger_brake_release: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +136,7 @@ class TrackInfo:
     elevation_m: float
     speed_limit_mps: float
     polarity: bool
-    # Station in this block; None where there is none.
+    # Station display metadata; None where absent. Not a boarding gate.
     station_name: str | None = None
 
 
@@ -151,7 +156,8 @@ class TrackInputs:
     track_info: TrackInfo
     track_signal: TrackSignal
     beacon: Beacon | None           # None when not over a beacon
-    # 0 except when boarding; never exceeds last reported capacity.
+    # Track Model sends only at stations, once per event, within capacity.
+    # Train Model checks rest, doors, count/capacity without a station gate.
     passengers_boarded: int
 
 
@@ -171,7 +177,8 @@ class ControllerOutputs:
 
     actual_speed_mps: float
     # Brake State, bool[2]: emergency then service. Engaged, not
-    # commanded: a brake failure blocks only the service brake.
+    # commanded: failure blocks only service. Both can engage; configured
+    # forces sum (October 20 SDD review).
     emergency_brake_active: bool    # controller or passenger
     service_brake_active: bool
     door_left_open: bool
@@ -179,12 +186,12 @@ class ControllerOutputs:
     interior_lights_on: bool
     exterior_lights_on: bool
     cabin_temp_c: float
-    # Passed through; zeros or stale under pickup failure, open.
+    # Commanded speed and authority both become zero under pickup failure.
     commanded_speed_mps: float
     authority_blocks: int           # passed through; 0 = must stop
-    # Passed through from TrackInfo, provisional.
+    # Passed through from TrackInfo; terrain unaffected by pickup failure.
     speed_limit_mps: float
-    beacon: Beacon | None           # between-beacon behaviour open
+    beacon: Beacon | None           # None between ticks; controller retains data
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,7 +199,7 @@ class TrackOutputs:
     """To the Track Model."""
 
     block_id: str
-    offset_m: float                # reference point on the 32.2 m train open
+    offset_m: float                # signed front-of-train offset, m
     actual_speed_mps: float         # negative during rollback
     # True on the tick polarity reverses; table says int.
     block_changed: bool
@@ -258,5 +265,5 @@ class TrainModel(Protocol):
         ...
 
     def clear_passenger_brake_for_test(self) -> None:
-        """Test harness override only; normal UI release is undecided."""
+        """Developer override; normal release is the controller one-shot command."""
         ...

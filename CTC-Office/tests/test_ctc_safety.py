@@ -37,6 +37,7 @@ from ctc.wire import WireFormatError, inputs_from_wire  # noqa: E402
 from tests.occupancy import (  # noqa: E402
     DT_S,
     at,
+    own_block,
     ready_office,
     reports,
     step_at,
@@ -125,7 +126,7 @@ class TrackControllerReadyTest(unittest.TestCase):
                                  (0, "not ready"))
         # Ready: everything goes out.
         track = ctc.step(DT_S, reports(at("T1", "63"))).track_controller
-        (suggestion,) = track.suggestions
+        suggestion = own_block(track.suggestions)
         self.assertEqual((suggestion.block_id, suggestion.authority_blocks),
                          ("63", 2))
         self.assertEqual(track.closed_blocks, (BlockRef("Green", "5"),))
@@ -153,7 +154,8 @@ class TrackControllerReadyTest(unittest.TestCase):
         ctc.place_train("R1", "Red", "9")
         track = ctc.step(DT_S, reports(at("T1", "63"), at("R1", "9", "Red"),
                                        ready=["Green"])).track_controller
-        self.assertEqual([s.train_id for s in track.suggestions], ["T1"])
+        # T1's block and the next on its route.
+        self.assertEqual({s.train_id for s in track.suggestions}, {"T1"})
         self.assertEqual(track.closed_blocks, (BlockRef("Green", "5"),))
         limits = {a.train_id: a for a in ctc.snapshot().authorities}
         self.assertEqual((limits["R1"].blocks, limits["R1"].reason),
@@ -233,7 +235,7 @@ class SuggestedSpeedTest(unittest.TestCase):
         ctc.dispatch("T1", "Green", "65")
         # Green 117 is limited to 15 km/h (4.2 m/s): suggest 3 m/s.
         out = step_at(ctc, at("T1", "117"))
-        self.assertEqual(out.track_controller.suggestions[0]
+        self.assertEqual(own_block(out.track_controller.suggestions)
                          .suggested_speed_mps, 3)
 
     def test_never_above_any_block_limit(self) -> None:
@@ -241,7 +243,7 @@ class SuggestedSpeedTest(unittest.TestCase):
         ctc.dispatch("T1", "Green", "65")
         for block in range(1, 151):
             out = step_at(ctc, at("T1", str(block)))
-            (suggestion,) = out.track_controller.suggestions
+            suggestion = own_block(out.track_controller.suggestions)
             limit_mps = [b.speed_limit_kmh for b in
                          _GREEN.blocks if b.block_id == str(block)][0] / 3.6
             with self.subTest(block=block):

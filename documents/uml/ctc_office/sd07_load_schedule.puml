@@ -1,0 +1,46 @@
+@startuml sd07_load_schedule
+!include ../style.iuml
+title SD-07 Load a schedule (UC-07)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "AutoDispatchPanel\n(Automatic view)" as UI
+participant "CtcHost" as Host
+participant "schedule" as Sch
+participant "StubCtcOffice" as Model
+participant "TrackGraph" as G
+participant "AutoDispatcher" as AD
+end box
+
+D -> UI : Load schedule
+UI -> D : file dialog (Schedule files (*.json))
+D -> UI : schedule_v4.json
+UI -> Host : loadSchedule(url)
+Host -> Sch : load_schedule(path)
+alt unreadable or malformed
+  Sch --> Host : ScheduleError
+  Host --> UI : "Schedule not loaded: ..."
+  UI -> D : the error; the current schedule is kept
+else parsed
+  Sch --> Host : Schedule(runs, each with line,\nrun number and timed stops)
+  Host -> Model : load_schedule(schedule)
+  Model -> Model : every stop a block of the layout; no run listed\ntwice; train IDs G1.., R1.. unique and valid
+  alt invalid
+    Model --> Host : InvalidInputError
+    Host --> UI : "Schedule not loaded: ..."
+  else valid
+    loop each run
+      Model -> Model : plan_run(run, ...)
+      Model -> G : route from the yard exit (Green 63, Red 9)\nto the nearest scheduled station not yet\nvisited, carrying on the way it goes
+      G --> Model : route
+      Model -> Model : due = 05:00 + departure + run time\n(+ 45 s dwell per stop before)
+      Model -> G : route from the last stop to the yard entry\n(Green 57, Red 9)
+    end
+    Model -> AD : AutoDispatcher(plans):\ntwo-way zones per line
+    Model --> Host : ok
+    Host --> UI : scheduleFile, departures
+    UI -> D : DEPARTURES: every run, due time, "Queued"
+  end
+end
+@enduml

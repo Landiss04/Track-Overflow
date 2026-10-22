@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 
-from track_ctrl_hw.interface import FailureKind, SignalAspect, SwitchPosition
+from track_ctrl_hw.interface import SignalAspect, SwitchPosition
 
 MPH_PER_MPS = 2.236936
 FT_PER_M = 3.280840
@@ -30,11 +30,6 @@ _ASPECT_LETTERS = {
     "yellow": "Y",
     "green": "G",
     "super_green": "SG",
-}
-_FAILURE_NAMES = {
-    "broken_rail": "Broken rail",
-    "track_circuit": "Track circuit",
-    "power": "Power failure",
 }
 
 
@@ -87,8 +82,3 @@ def crossing_name(active: bool | None) -> str:
     if active is None:
         return EM_DASH
     return "Lights on, gates down" if active else "Gates up"
-
-
-def failure_name(failure: FailureKind | None) -> str:
-    """``Broken rail``; ``None`` when there is no failure."""
-    return "None" if failure is None else _FAILURE_NAMES[failure]

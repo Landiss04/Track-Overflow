@@ -142,14 +142,15 @@ def test_test_input_overrides_passenger_latch_both_ways() -> None:
     assert snap(state)["emergency_brake"] is False
 
 
-def test_test_override_restores_service_brake() -> None:
-    """A service request becomes effective after the test override."""
+def test_test_override_keeps_service_brake_engaged() -> None:
+    """Passenger release leaves independently commanded service engaged."""
     state, harness = make_harness()
     harness.setInput("service_brake_command", True)
     harness.sendInputs()
     state.applyEmergencyBrake()
     harness.advanceTick()
-    assert snap(state)["service_brake"] is False
+    assert snap(state)["service_brake"] is True
+    assert snap(state)["emergency_brake"] is True
     harness.setInput("emergency_brake_command", False)
     harness.sendInputs()
     assert snap(state)["emergency_brake"] is False

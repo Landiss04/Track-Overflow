@@ -99,7 +99,7 @@ def test_feed_carries_the_block_and_track_circuit() -> None:
     assert feed.track_info.block_id == "GREEN A-3"
     assert feed.track_info.speed_limit_mps == pytest.approx(45 / 3.6)
     assert feed.track_signal.commanded_speed_mps == 12
-    assert isinstance(feed.track_signal.commanded_speed_mps, int)
+    assert isinstance(feed.track_signal.commanded_speed_mps, float)
     assert feed.track_signal.authority_blocks == 5
     assert feed.beacon is not None
     assert feed.beacon.station_name == "PIONEER"
@@ -113,15 +113,51 @@ def test_speed_and_authority_come_from_the_occupied_block() -> None:
         commanded_authority={"BLUE A-3": 2, "BLUE A-4": 6},
     )
     drive(model, "T1", "BLUE A-3", 1.0, commands)
-    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", 1.0)}))
+    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", 1.0)},
+                                       commands))
     signal = out.train_feeds["T1"].track_signal
     assert (signal.commanded_speed_mps, signal.authority_blocks) == (
         10, 2)
     end = past_end(model, "BLUE A-3")
-    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", end)}))
+    out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", end)},
+                                       commands))
     signal = out.train_feeds["T1"].track_signal
     assert (signal.commanded_speed_mps, signal.authority_blocks) == (
         5, 6)
+
+
+def test_speed_and_authority_last_one_tick() -> None:
+    """Check a block not commanded on the latest tick reads zero.
+
+    Truth ``signals/track-signal.md``: the Track Model clears a block's
+    values once it has delivered them, and a block the Track Controller
+    did not command on the latest tick reads zero.
+    """
+    model = make_model()
+    commands = cmd(commanded_speed_mps={"GREEN A-3": 12.5},
+                   commanded_authority={"GREEN A-3": 4})
+    out = model.step(DT_S, make_inputs(
+        {"T1": report("GREEN A-3", 1.0)}, commands))
+    signal = out.train_feeds["T1"].track_signal
+    assert (signal.commanded_speed_mps, signal.authority_blocks) == (
+        12.5, 4)
+    out = model.step(DT_S, make_inputs({"T1": report("GREEN A-3", 2.0)}))
+    signal = out.train_feeds["T1"].track_signal
+    assert (signal.commanded_speed_mps, signal.authority_blocks) == (0, 0)
+    circuit = model.snapshot().track_circuit["GREEN A-3"]
+    assert (circuit.commanded_speed_mps, circuit.authority_blocks) == (0, 0)
+
+
+def test_a_value_for_an_empty_block_is_not_kept_for_a_later_train() -> (
+        None):
+    """Check a block commanded before its train arrives keeps nothing."""
+    model = make_model()
+    model.step(DT_S, make_inputs(controller=cmd(
+        commanded_speed_mps={"GREEN A-3": 9.0},
+        commanded_authority={"GREEN A-3": 2})))
+    out = model.step(DT_S, make_inputs({"T1": report("GREEN A-3", 1.0)}))
+    signal = out.train_feeds["T1"].track_signal
+    assert (signal.commanded_speed_mps, signal.authority_blocks) == (0, 0)
 
 
 def test_two_trains_in_one_block_get_the_same_signal() -> None:
@@ -497,11 +533,16 @@ def test_reset_clears_trains_and_commands() -> None:
     make_inputs(controller=cmd(
         signal_commands={"BLUE A-3": SignalAspect.GREEN})),
     make_inputs(controller=cmd(commanded_speed_mps={"BLUE A-3": -1})),
-    make_inputs(controller=cmd(commanded_speed_mps={"BLUE A-3": 12.5})),
+    make_inputs(controller=cmd(
+        commanded_speed_mps={"BLUE A-3": float("nan")})),
+    make_inputs(controller=cmd(
+        commanded_speed_mps={"BLUE A-3": float("inf")})),
     make_inputs(controller=cmd(commanded_speed_mps={"BLUE A-3": True})),
     make_inputs(controller=cmd(commanded_speed_mps={"NOWHERE 1": 5})),
     make_inputs(controller=cmd(
         commanded_authority={"BLUE A-3": -1})),
+    make_inputs(controller=cmd(
+        commanded_authority={"BLUE A-3": 1.5})),
     make_inputs(controller=cmd(
         commanded_authority={"NOWHERE 1": 3})),
     make_inputs({"T1": report("BLUE A-3", float("nan"))}),
@@ -511,10 +552,12 @@ def test_reset_clears_trains_and_commands() -> None:
     "switch command on a block with no switch",
     "signal command on a block with no light",
     "negative commanded speed",
-    "fractional commanded speed",
+    "NaN commanded speed",
+    "infinite commanded speed",
     "boolean commanded speed",
     "commanded speed for an unknown block",
     "negative authority",
+    "fractional authority",
     "authority for an unknown block",
     "NaN train offset",
     "infinite ambient temperature",

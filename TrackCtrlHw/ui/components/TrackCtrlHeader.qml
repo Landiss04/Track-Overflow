@@ -7,10 +7,10 @@ import "../../../ui" as Shared
 // simulation clock in mono 13 px --text-muted.
 //
 // Module-local rather than the shared ui/ModuleHeader because this header
-// carries module-specific controls (wayside select, Load database, the
-// Automatic/Maintenance toggle), which the shared header has no slot for, and
-// because the mode badge must change semantic colour in Maintenance. Same
-// reason CTC Office keeps CtcHeader. Height matches ui/ModuleHeader exactly.
+// carries module-specific controls (wayside select, Load database), which the
+// shared header has no slot for, and because the Ready badge must change
+// semantic colour when the line is not ready. Same reason CTC Office keeps
+// CtcHeader. Height matches ui/ModuleHeader exactly.
 Rectangle {
     id: root
 

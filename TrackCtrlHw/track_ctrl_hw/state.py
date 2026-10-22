@@ -181,7 +181,13 @@ class TrackControllerState(QObject):
             "waysides": ids,
             "selected": self._selected,
             "clock": display.clock(snapshot.time_s),
-            "maintenance": snapshot.maintenance_mode,
+            "ready": snapshot.ready,
+            "notReady": " ".join(snapshot.not_ready),
+            "reportReady": "" if report is None
+            else "Ready" if report.ready
+            else f"Not ready: {report.reason}",
+            "maintenance": "" if wayside is None
+            else views.maintenance_text(wayside),
             "testUi": self._server.connected,
             "source": (
                 "Inputs from test UI" if self._server.connected
@@ -194,7 +200,8 @@ class TrackControllerState(QObject):
             else display.clock(snapshot.time_s),
             "uplink": "Not sent yet" if report is None
             else f"Sent {display.clock(report.sent_at_s)}",
-            "vitalFault": "" if wayside is None else wayside.scan.vital_fault,
+            "channelFault": "" if wayside is None
+            else wayside.scan.channel_fault,
             "agreeing": 0 if wayside is None
             else sum(1 for s in wayside.switches if s.agreeing),
             "switchCount": 0 if wayside is None else len(wayside.switches),
@@ -202,13 +209,11 @@ class TrackControllerState(QObject):
         self._details = (
             {} if wayside is None else views.program_details(wayside)
         )
-        self._fill_tables(wayside, snapshot.maintenance_mode)
+        self._fill_tables(wayside)
         self._update_diagram(wayside)
         self.changed.emit()
 
-    def _fill_tables(
-        self, wayside: WaysideSnapshot | None, maintenance: bool
-    ) -> None:
+    def _fill_tables(self, wayside: WaysideSnapshot | None) -> None:
         if wayside is None:
             for model in (
                 self._blocks, self._office, self._switches, self._devices,
@@ -218,7 +223,7 @@ class TrackControllerState(QObject):
             return
         self._blocks.set_rows(views.block_rows(wayside))
         self._office.set_rows(views.office_rows(wayside))
-        self._switches.set_rows(views.switch_rows(wayside, maintenance))
+        self._switches.set_rows(views.switch_rows(wayside))
         self._devices.set_rows(views.device_rows(wayside))
         self._report.set_rows(views.report_rows(wayside))
 
@@ -262,8 +267,24 @@ class TrackControllerState(QObject):
         return self._scalar("clock")
 
     @Property(bool, notify=changed)
-    def maintenance(self) -> bool:
-        """Whether the CTC Office has maintenance mode on."""
+    def ready(self) -> bool:
+        """Whether every wayside has a running program."""
+        return self._scalar("ready")
+
+    @Property(str, notify=changed)
+    def notReadyText(self) -> str:  # noqa: N802
+        """What startup still needs, or ""."""
+        return self._scalar("notReady")
+
+    @Property(str, notify=changed)
+    def reportReadyText(self) -> str:  # noqa: N802
+        """The ready flag in the last report of the wayside on screen."""
+        return self._scalar("reportReady")
+
+    @Property(str, notify=changed)
+    def maintenanceText(self) -> str:  # noqa: N802
+        """The CTC Office's closures and switch commands in the wayside
+        on screen, or "" when there are none."""
         return self._scalar("maintenance")
 
     @Property(bool, notify=changed)
@@ -292,9 +313,10 @@ class TrackControllerState(QObject):
         return self._scalar("uplink")
 
     @Property(str, notify=changed)
-    def vitalFault(self) -> str:  # noqa: N802
-        """Why the wayside on screen holds every output, or ""."""
-        return self._scalar("vitalFault")
+    def channelFault(self) -> str:  # noqa: N802
+        """What channels A and B disagreed on in the wayside on screen,
+        or ""."""
+        return self._scalar("channelFault")
 
     @Property(int, notify=changed)
     def switchesAgreeing(self) -> int:  # noqa: N802
