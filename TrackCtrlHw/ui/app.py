@@ -54,7 +54,9 @@ class Window:
 
         # Python must hold the state: QML keeps only a C++ pointer.
         self.state = (
-            state_factory() if state_factory is not None else TrackControllerState()
+            state_factory()
+            if state_factory is not None
+            else TrackControllerState()
         )
         self.engine = QQmlApplicationEngine()
         self.engine.addImportPath(str(UI_DIR))
