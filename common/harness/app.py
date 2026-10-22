@@ -49,6 +49,7 @@ from common.harness.modules import (
     TRACK_CONTROLLER_SW,
     TRACK_CONTROLLER_HW,
     TRAIN_CONTROLLER_HW,
+    TRAIN_CONTROLLER_SW,
     WIRED_MODULES,
     ModuleSpec,
     stub_specs,
@@ -167,13 +168,21 @@ def _specs(
     wayside_options = ["--load-starters"] if options.load_starters else []
     for order in options.dispatch:
         ctc_options += ["--dispatch", order]
+    if options.schedule is not None:
+        ctc_options += ["--schedule", str(options.schedule)]
     wired = WIRED_MODULES
     module_options = {
         CTC_OFFICE: ctc_options,
         TRACK_CONTROLLER_SW: wayside_options,
         TRACK_CONTROLLER_HW: list(wayside_options),
         TRAIN_CONTROLLER_HW: [],
+        TRAIN_CONTROLLER_SW: [],
     }
+    if options.engineer_gains is not None:
+        for name in (TRAIN_CONTROLLER_SW, TRAIN_CONTROLLER_HW):
+            module_options[name] += [
+                "--engineer-gains", *map(str, options.engineer_gains)
+            ]
     if options.test_pi:
         for name in (TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW):
             module_options[name] += ["--test-pi", options.test_pi]
@@ -257,6 +266,14 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help="dispatch a train from the yard to a block in the CTC "
         "Office once its line is ready, for a demonstration; may be "
         "repeated",
+    )
+    parser.add_argument(
+        "--schedule", type=Path,
+        help="load this CTC schedule and run it in automatic mode",
+    )
+    parser.add_argument(
+        "--engineer-gains", type=float, nargs=2, metavar=("KP", "KI"),
+        help="set both train controllers' gains for tests and demonstrations",
     )
     parser.add_argument(
         "--load-starters",

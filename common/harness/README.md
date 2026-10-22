@@ -1,5 +1,10 @@
 # Central harness
 
+For the current manual/scheduled two-line review commands, recovery steps and
+Linux build recipe, see [the review runbook](../../documents/review-runbook.md).
+`utils/build_linux.sh` includes all seven modules, HW data and the Pi manifest;
+the earlier phase build recipes below are historical validation records.
+
 The harness is the one process that owns the simulation clock and drives every module
 (D005, D017). It starts each module as a process of its own and sends every module, on
 every tick, `dt`, the simulation time, and its inputs. It then waits for every reply

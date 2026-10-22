@@ -38,7 +38,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--module")
+    parser.add_argument("--pi-agent", action="store_true")
     known, rest = parser.parse_known_args(args)
+    if known.pi_agent:
+        from common.hw_link import agent
+
+        # The agent owns --module too; preserve it after internal routing.
+        return agent.main(["--module", known.module, *rest])
     if known.module is None:
         # Imported here, so a module process loads only its own code.
         from common.harness import app

@@ -156,6 +156,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.
     """
     options = _parse_args(argv)
+    if options.system and not options.test_pi:
+        print(
+            "Waiting for the assigned USB Pis; use --test-pi process "
+            "for explicit local simulation.", flush=True,
+        )
     if options.window:
         from PySide6.QtGui import QGuiApplication
 
