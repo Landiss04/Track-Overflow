@@ -1,0 +1,2126 @@
+{
+ "chapters": [
+  {
+   "number": "5.1",
+   "title": "CTC Office",
+   "owner": "Landis",
+   "src": "sdd/ctc_office.md",
+   "parts": [
+    {
+     "number": "5.1.1",
+     "title": "Scope"
+    },
+    {
+     "number": "5.1.2",
+     "title": "Requirements coverage"
+    },
+    {
+     "number": "5.1.3",
+     "title": "Use cases"
+    },
+    {
+     "number": "5.1.4",
+     "title": "CTC Office architecture (component view)"
+    },
+    {
+     "number": "5.1.5",
+     "title": "Interface"
+    },
+    {
+     "number": "5.1.6",
+     "title": "Class diagrams"
+    },
+    {
+     "number": "5.1.7",
+     "title": "Sequence diagrams"
+    },
+    {
+     "number": "5.1.8",
+     "title": "Open items"
+    }
+   ]
+  },
+  {
+   "number": "5.2",
+   "title": "Track Controller (SW)",
+   "owner": "Harry Tye",
+   "src": "sdd/track_ctrl_sw.md",
+   "parts": [
+    {
+     "number": "5.2.1",
+     "title": "Scope"
+    },
+    {
+     "number": "5.2.2",
+     "title": "Requirements coverage"
+    },
+    {
+     "number": "5.2.3",
+     "title": "Use cases"
+    },
+    {
+     "number": "5.2.4",
+     "title": "Track Controller (SW) architecture (component view)"
+    },
+    {
+     "number": "5.2.5",
+     "title": "Class diagrams"
+    },
+    {
+     "number": "5.2.6",
+     "title": "Sequence diagrams"
+    },
+    {
+     "number": "5.2.7",
+     "title": "Open items"
+    }
+   ]
+  },
+  {
+   "number": "5.3",
+   "title": "Track Controller (HW)",
+   "owner": "Braden Bosilovich",
+   "src": "sdd/track_ctrl_hw.md",
+   "parts": [
+    {
+     "number": "5.3.1",
+     "title": "Scope"
+    },
+    {
+     "number": "5.3.2",
+     "title": "Requirements coverage"
+    },
+    {
+     "number": "5.3.3",
+     "title": "Use cases"
+    },
+    {
+     "number": "5.3.4",
+     "title": "Track Controller (HW) architecture (component view)"
+    },
+    {
+     "number": "5.3.5",
+     "title": "Class diagrams"
+    },
+    {
+     "number": "5.3.6",
+     "title": "Sequence diagrams"
+    },
+    {
+     "number": "5.3.7",
+     "title": "Open items"
+    }
+   ]
+  },
+  {
+   "number": "5.4",
+   "title": "Track Model",
+   "owner": "Deni Ephraim",
+   "src": "sdd/track_model.md",
+   "parts": [
+    {
+     "number": "5.4.1",
+     "title": "Stakeholder concerns"
+    },
+    {
+     "number": "5.4.2",
+     "title": "Use cases"
+    },
+    {
+     "number": "5.4.3",
+     "title": "Track Model architecture (component view)"
+    },
+    {
+     "number": "5.4.4",
+     "title": "Boundary types"
+    },
+    {
+     "number": "5.4.5",
+     "title": "Class diagrams"
+    },
+    {
+     "number": "5.4.6",
+     "title": "Interface"
+    },
+    {
+     "number": "5.4.7",
+     "title": "Interface dictionary"
+    },
+    {
+     "number": "5.4.8",
+     "title": "Data design"
+    },
+    {
+     "number": "5.4.9",
+     "title": "Algorithms"
+    },
+    {
+     "number": "5.4.10",
+     "title": "User interface"
+    },
+    {
+     "number": "5.4.11",
+     "title": "Test interface"
+    },
+    {
+     "number": "5.4.12",
+     "title": "Sequence diagrams"
+    },
+    {
+     "number": "5.4.13",
+     "title": "State machine"
+    },
+    {
+     "number": "5.4.14",
+     "title": "Design decisions"
+    },
+    {
+     "number": "5.4.15",
+     "title": "Requirements traceability"
+    }
+   ]
+  },
+  {
+   "number": "5.5",
+   "title": "Train Model",
+   "owner": "Kevin Schillinger",
+   "src": "Railway_Sim_SDD_Train_Model.md",
+   "parts": [
+    {
+     "number": "5.5.1",
+     "title": "Scope"
+    },
+    {
+     "number": "5.5.2",
+     "title": "Stakeholder concerns"
+    },
+    {
+     "number": "5.5.3",
+     "title": "Train Model in the system"
+    },
+    {
+     "number": "5.5.4",
+     "title": "Use cases"
+    },
+    {
+     "number": "5.5.5",
+     "title": "Train Model architecture (component view)"
+    },
+    {
+     "number": "5.5.6",
+     "title": "Class diagrams"
+    },
+    {
+     "number": "5.5.7",
+     "title": "Interface"
+    },
+    {
+     "number": "5.5.8",
+     "title": "Interaction: one simulation tick"
+    },
+    {
+     "number": "5.5.9",
+     "title": "Design decisions"
+    },
+    {
+     "number": "5.5.10",
+     "title": "Review items and deferred work"
+    },
+    {
+     "number": "5.5.11",
+     "title": "Requirements traceability"
+    },
+    {
+     "number": "5.5.12",
+     "title": "Verification references"
+    }
+   ]
+  },
+  {
+   "number": "5.6",
+   "title": "Train Controller (SW and HW)",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "src": "Railway_Sim_SDD_Train_Controller.md",
+   "parts": [
+    {
+     "number": "5.6.1",
+     "title": "Scope"
+    },
+    {
+     "number": "5.6.2",
+     "title": "Stakeholder concerns"
+    },
+    {
+     "number": "5.6.3",
+     "title": "Train Controller in the system"
+    },
+    {
+     "number": "5.6.4",
+     "title": "Use cases"
+    },
+    {
+     "number": "5.6.5",
+     "title": "Train Controller architecture (component view)"
+    },
+    {
+     "number": "5.6.6",
+     "title": "Class diagrams"
+    },
+    {
+     "number": "5.6.7",
+     "title": "Interface"
+    },
+    {
+     "number": "5.6.8",
+     "title": "Interaction: one tick"
+    },
+    {
+     "number": "5.6.9",
+     "title": "Speed law and safety path"
+    },
+    {
+     "number": "5.6.10",
+     "title": "Failure inference"
+    },
+    {
+     "number": "5.6.11",
+     "title": "Automatic behaviour"
+    },
+    {
+     "number": "5.6.12",
+     "title": "Design decisions"
+    },
+    {
+     "number": "5.6.13",
+     "title": "Open items"
+    }
+   ]
+  }
+ ],
+ "figures": [
+  {
+   "number": 1,
+   "caption": "System architecture: modules, users and the information between them",
+   "path": "uml/system/system_architecture.png",
+   "chapter": "System",
+   "section": "3.1",
+   "section_title": "001-context: System Context",
+   "owner": "Ivan Zheng",
+   "heading": "001-context: System Context",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 2,
+   "caption": "Software architecture, part 1: the central harness, shared utilities and the seven module processes",
+   "path": "uml/system/system_classes_harness.png",
+   "chapter": "System",
+   "section": "3.2",
+   "section_title": "002-composition: Software Architecture",
+   "owner": "Braden Bosilovich",
+   "heading": "002-composition: Software Architecture",
+   "note": "",
+   "viewpoint": "Composition"
+  },
+  {
+   "number": 3,
+   "caption": "Software architecture, part 2: module contracts, implementations, remote proxies and Pi cores",
+   "path": "uml/system/system_classes_modules.png",
+   "chapter": "System",
+   "section": "3.2",
+   "section_title": "002-composition: Software Architecture",
+   "owner": "Braden Bosilovich",
+   "heading": "002-composition: Software Architecture",
+   "note": "",
+   "viewpoint": "Composition"
+  },
+  {
+   "number": 4,
+   "caption": "Representative interaction: movement authority from the CTC Office to the train, tick by tick",
+   "path": "uml/system/system_seq_authority.png",
+   "chapter": "System",
+   "section": "3.5",
+   "section_title": "005-interaction: Representative Interaction, Movement Authority",
+   "owner": "Braden Bosilovich",
+   "heading": "005-interaction: Representative Interaction, Movement Authority",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 5,
+   "caption": "Deployment: the host PC, its processes and data files, and the two Raspberry Pi 5 boards",
+   "path": "uml/system/system_deployment.png",
+   "chapter": "System",
+   "section": "3.6",
+   "section_title": "006-deployment: Deployment",
+   "owner": "Braden Bosilovich",
+   "heading": "006-deployment: Deployment",
+   "note": "",
+   "viewpoint": "Deployment"
+  },
+  {
+   "number": 6,
+   "caption": "Use cases of the Dispatcher",
+   "path": "uml/ctc_office/uc_dispatcher.png",
+   "chapter": "CTC Office",
+   "section": "5.1.3",
+   "section_title": "Use cases",
+   "owner": "Landis",
+   "heading": "Use case diagrams",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 7,
+   "caption": "Use cases of the Central Harness",
+   "path": "uml/ctc_office/uc_harness.png",
+   "chapter": "CTC Office",
+   "section": "5.1.3",
+   "section_title": "Use cases",
+   "owner": "Landis",
+   "heading": "Use case diagrams",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 8,
+   "caption": "Use cases of the Track Controller",
+   "path": "uml/ctc_office/uc_track_controller.png",
+   "chapter": "CTC Office",
+   "section": "5.1.3",
+   "section_title": "Use cases",
+   "owner": "Landis",
+   "heading": "Use case diagrams",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 9,
+   "caption": "Use cases of the Track Model",
+   "path": "uml/ctc_office/uc_track_model.png",
+   "chapter": "CTC Office",
+   "section": "5.1.3",
+   "section_title": "Use cases",
+   "owner": "Landis",
+   "heading": "Use case diagrams",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 10,
+   "caption": "CTC Office architecture (component view)",
+   "path": "uml/ctc_office/architecture.png",
+   "chapter": "CTC Office",
+   "section": "5.1.4",
+   "section_title": "CTC Office architecture (component view)",
+   "owner": "Landis",
+   "heading": "CTC Office architecture (component view)",
+   "note": "",
+   "viewpoint": "Composition"
+  },
+  {
+   "number": 11,
+   "caption": "Core classes: module and tracking",
+   "path": "uml/ctc_office/class_core.png",
+   "chapter": "CTC Office",
+   "section": "5.1.6",
+   "section_title": "Class diagrams",
+   "owner": "Landis",
+   "heading": "Core: the module and train tracking",
+   "note": "- StubCtcOffice implements CtcOffice. It holds the orders, closures, switch commands and granted blocks, and owns one TrackGraph per line, the TrainTracker and, once a schedule is loaded, the AutoDispatcher. - _Layout checks every reference and input against the layout files. - Every refusal is a CtcError: InvalidInputError (bad value), InvalidTimeStepError, MaintenanceModeRequiredError, UnsafeActionError (a safety rule). - TrainTracker keeps one Tracked per train: its blocks, how far it may have got, the fastest it may be going and the block it came from. Each step it reads the last step's Plan per train and the trains released (Waiting).",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 12,
+   "caption": "Core classes: scheduling, routing and data",
+   "path": "uml/ctc_office/class_services.png",
+   "chapter": "CTC Office",
+   "section": "5.1.6",
+   "section_title": "Class diagrams",
+   "owner": "Landis",
+   "heading": "Core: scheduling, routing and data",
+   "note": "- plan_run turns each ScheduledTrain into a RunPlan: its stops in track order with due times, the path out and back, and where on it each stop is. - AutoDispatcher keeps a Progress per run and the two-way zones per line. Each step it reads a World and gives Order and Cancel actions, which the model carries out with the dispatcher's own safety checks. - TrackGraph is built from a Line's blocks; authority() counts an AuthorityLimit along a route.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 13,
+   "caption": "CTC Office: boundary types",
+   "path": "uml/ctc_office/class_boundary.png",
+   "chapter": "CTC Office",
+   "section": "5.1.6",
+   "section_title": "Class diagrams",
+   "owner": "Landis",
+   "heading": "Boundary types",
+   "note": "All are frozen dataclasses in ctc/interface.py, owned by the CTC Office (D005); other modules' types never appear in them, and common/interfaces.py is not used (D008). CtcSnapshot is for the CTC window only and crosses no module boundary.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 14,
+   "caption": "Process and window classes",
+   "path": "uml/ctc_office/class_host.png",
+   "chapter": "CTC Office",
+   "section": "5.1.6",
+   "section_title": "Class diagrams",
+   "owner": "Landis",
+   "heading": "Process and window classes",
+   "note": "- CtcOfficeProcess answers the harness through ModuleLink and steps the module through CtcHost. - CtcHost is the only object QML talks to: it reads snapshots into rows, and its slots return an empty string or the refusal's text. - HarnessClockBridge gives QML the same clock face as the standalone clock, but shows the harness's time, and hands Run, Pause and 1x / 10x to the module and the harness.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 15,
+   "caption": "SD-01 Control the simulation clock",
+   "path": "uml/ctc_office/sd01_clock.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-01 Control the simulation clock",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 16,
+   "caption": "SD-02 Change operating mode",
+   "path": "uml/ctc_office/sd02_mode.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-02 Change operating mode",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 17,
+   "caption": "SD-03 Dispatch a train to a station",
+   "path": "uml/ctc_office/sd03_dispatch_station.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-03 Dispatch a train to a station",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 18,
+   "caption": "SD-04 Dispatch a train to a block",
+   "path": "uml/ctc_office/sd04_dispatch_block.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-04 Dispatch a train to a block",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 19,
+   "caption": "SD-05 Reroute or cancel a train's order",
+   "path": "uml/ctc_office/sd05_reroute_cancel.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-05 Reroute or cancel a train's order",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 20,
+   "caption": "SD-06 Return a train to the yard",
+   "path": "uml/ctc_office/sd06_return_to_yard.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-06 Return a train to the yard",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 21,
+   "caption": "SD-07 Load a schedule",
+   "path": "uml/ctc_office/sd07_load_schedule.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-07 Load a schedule",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 22,
+   "caption": "SD-08 Monitor and pause automatic dispatch",
+   "path": "uml/ctc_office/sd08_auto_dispatch.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-08 Monitor and pause automatic dispatch",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 23,
+   "caption": "SD-09 Close or reopen a block",
+   "path": "uml/ctc_office/sd09_close_block.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-09 Close or reopen a block",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 24,
+   "caption": "SD-10 Set a switch position",
+   "path": "uml/ctc_office/sd10_set_switch.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-10 Set a switch position",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 25,
+   "caption": "SD-11 Monitor the track map",
+   "path": "uml/ctc_office/sd11_track_map.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-11 Monitor the track map",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 26,
+   "caption": "SD-12 Monitor train occupancy",
+   "path": "uml/ctc_office/sd12_occupancy.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-12 Monitor train occupancy",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 27,
+   "caption": "SD-13 View the selected train",
+   "path": "uml/ctc_office/sd13_selected_train.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-13 View the selected train",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 28,
+   "caption": "SD-14 View throughput metrics",
+   "path": "uml/ctc_office/sd14_throughput.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-14 View throughput metrics",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 29,
+   "caption": "SD-15 Handle notices and reversal alerts",
+   "path": "uml/ctc_office/sd15_notices_alerts.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-15 Handle notices and reversal alerts",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 30,
+   "caption": "SD-16 Run one step",
+   "path": "uml/ctc_office/sd16_step.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-16 Run one step",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 31,
+   "caption": "SD-17 Receive Track Controller reports",
+   "path": "uml/ctc_office/sd17_reports.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-17 Receive Track Controller reports",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 32,
+   "caption": "SD-18 Follow trains from occupancy",
+   "path": "uml/ctc_office/sd18_tracking.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-18 Follow trains from occupancy",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 33,
+   "caption": "SD-19 Run the schedule",
+   "path": "uml/ctc_office/sd19_schedule_run.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-19 Run the schedule",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 34,
+   "caption": "SD-20 Release and retire trains",
+   "path": "uml/ctc_office/sd20_release_retire.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-20 Release and retire trains",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 35,
+   "caption": "SD-21 Send speed and authority suggestions",
+   "path": "uml/ctc_office/sd21_suggestions.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-21 Send speed and authority suggestions",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 36,
+   "caption": "SD-22 Send closures and switch commands",
+   "path": "uml/ctc_office/sd22_closures_switches.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-22 Send closures and switch commands",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 37,
+   "caption": "SD-23 Receive ticket sales",
+   "path": "uml/ctc_office/sd23_ticket_sales.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-23 Receive ticket sales",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 38,
+   "caption": "SD-24 Hold a line that is not ready",
+   "path": "uml/ctc_office/sd24_line_not_ready.png",
+   "chapter": "CTC Office",
+   "section": "5.1.7",
+   "section_title": "Sequence diagrams",
+   "owner": "Landis",
+   "heading": "SD-24 Hold a line that is not ready",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 39,
+   "caption": "Track Controller (SW): use case diagram",
+   "path": "uml/track_ctrl_sw/track_controller_use_cases.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.3",
+   "section_title": "Use cases",
+   "owner": "Harry Tye",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 40,
+   "caption": "Track Controller (SW) architecture (component view)",
+   "path": "uml/track_ctrl_sw/architecture.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.4",
+   "section_title": "Track Controller (SW) architecture (component view)",
+   "owner": "Harry Tye",
+   "heading": "Track Controller (SW) architecture (component view)",
+   "note": "",
+   "viewpoint": "Composition"
+  },
+  {
+   "number": 41,
+   "caption": "Core classes",
+   "path": "uml/track_ctrl_sw/class_core.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.5",
+   "section_title": "Class diagrams",
+   "owner": "Harry Tye",
+   "heading": "Core classes",
+   "note": "- SwTrackController holds one _Wayside per wayside of every loaded line, and scans each once per step. While any wayside of a line has no program, every wayside of that line idles. - TrackController is one wayside. - It owns its territory (ControllerConfig, Blocks), its ControllerInputs, the user's Program, and the compiled vital Program. - scan decodes the inputs, runs both programs and encodes the OUT_ bits into ControllerOutputs. - run_program does the same on a copy of the inputs (UC-05). - commit installs a program as a new Iteration, keeping the last five. - Program is immutable: a compiled program never changes while it is scanned. diagnostics lists any problems; any diagnostic blocks a commit.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 42,
+   "caption": "Track layout",
+   "path": "uml/track_ctrl_sw/class_layout.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.5",
+   "section_title": "Class diagrams",
+   "owner": "Harry Tye",
+   "heading": "Track layout",
+   "note": "- layout.parse_layout reads the course layout into a ParsedLayout. - build_line divides its blocks among the fixed number of waysides (WAYSIDE_COUNTS) into ControllerConfigs, so that every switch lies inside one wayside. - Switch, WaysideSignal and Crossing name their PLC outputs (SW_s, SIG_s_*, XING_c).",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 43,
+   "caption": "Track Controller (SW): boundary types",
+   "path": "uml/track_ctrl_sw/class_boundary.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.5",
+   "section_title": "Class diagrams",
+   "owner": "Harry Tye",
+   "heading": "Boundary types",
+   "note": "- All the boundary types are frozen dataclasses. - Every block is named by BlockKey(line, block_id). A switch, its signal and a crossing are named by the block they sit on. - Speeds are whole m/s; authorities are block counts (D013). - TrackControllerOutputs.ready is derived from the per-wayside CtcReports.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 44,
+   "caption": "Host-side classes",
+   "path": "uml/track_ctrl_sw/class_host.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.5",
+   "section_title": "Class diagrams",
+   "owner": "Harry Tye",
+   "heading": "Host-side classes",
+   "note": "- TrackControllerState is the only object QML talks to. It owns the SwTrackController, holds the editor buffer and its last clean run, and pushes rows into BlockListModel, which updates in place. - StimulusServer accepts one test client at a time on a named pipe. It runs step, user (a window action), clock and hello messages against TrackControllerState. - TestClientState runs in the test UI process. - Its StandInWorld plays the CTC Office and the Track Model, moving simple Trains block by block. - Its ClockDriver plays the shared clock.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 45,
+   "caption": "SD-01 Load track layout (UC-01)",
+   "path": "uml/track_ctrl_sw/sequence/sd01_load_track_layout.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 46,
+   "caption": "SD-02 Select wayside (UC-02)",
+   "path": "uml/track_ctrl_sw/sequence/sd02_select_wayside.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 47,
+   "caption": "SD-03 Load PLC program (UC-03)",
+   "path": "uml/track_ctrl_sw/sequence/sd03_load_plc_program.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 48,
+   "caption": "SD-04 Write PLC program (UC-04)",
+   "path": "uml/track_ctrl_sw/sequence/sd04_write_plc_program.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 49,
+   "caption": "SD-05 Run PLC program (UC-05)",
+   "path": "uml/track_ctrl_sw/sequence/sd05_run_plc_program.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 50,
+   "caption": "SD-06 Commit PLC program (UC-06)",
+   "path": "uml/track_ctrl_sw/sequence/sd06_commit_plc_program.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 51,
+   "caption": "SD-07 Monitor wayside state (UC-07)",
+   "path": "uml/track_ctrl_sw/sequence/sd07_monitor_wayside_state.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 52,
+   "caption": "SD-08 Hand-set switch (UC-08)",
+   "path": "uml/track_ctrl_sw/sequence/sd08_hand_set_switch.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 53,
+   "caption": "SD-09 Run scan cycle (UC-09)",
+   "path": "uml/track_ctrl_sw/sequence/sd09_run_scan_cycle.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 54,
+   "caption": "SD-10 Receive speed and authority suggestions (UC-10)",
+   "path": "uml/track_ctrl_sw/sequence/sd10_receive_suggestions.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 55,
+   "caption": "SD-11 Receive closures and switch commands (UC-11)",
+   "path": "uml/track_ctrl_sw/sequence/sd11_receive_closures_switch_commands.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 56,
+   "caption": "SD-12 Receive track state (UC-12)",
+   "path": "uml/track_ctrl_sw/sequence/sd12_receive_track_state.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 57,
+   "caption": "SD-13 Command switches (UC-13)",
+   "path": "uml/track_ctrl_sw/sequence/sd13_command_switches.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 58,
+   "caption": "SD-14 Set signal aspects (UC-14)",
+   "path": "uml/track_ctrl_sw/sequence/sd14_set_signal_aspects.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 59,
+   "caption": "SD-15 Control railway crossings (UC-15)",
+   "path": "uml/track_ctrl_sw/sequence/sd15_control_railway_crossings.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 60,
+   "caption": "SD-16 Send speed and authority on track circuits (UC-16)",
+   "path": "uml/track_ctrl_sw/sequence/sd16_send_track_circuits.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 61,
+   "caption": "SD-17 Report occupancy, read-back and readiness (UC-17)",
+   "path": "uml/track_ctrl_sw/sequence/sd17_report_to_ctc.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 62,
+   "caption": "SD-18 Transmit nothing while not ready (UC-18)",
+   "path": "uml/track_ctrl_sw/sequence/sd18_transmit_nothing_while_not_ready.png",
+   "chapter": "Track Controller (SW)",
+   "section": "5.2.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Harry Tye",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 63,
+   "caption": "Track Controller (HW): use case diagram",
+   "path": "uml/track_ctrl_hw/uc_track_ctrl_hw.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.3",
+   "section_title": "Use cases",
+   "owner": "Braden Bosilovich",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 64,
+   "caption": "Track Controller (HW) architecture (component view)",
+   "path": "uml/track_ctrl_hw/architecture.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.4",
+   "section_title": "Track Controller (HW) architecture (component view)",
+   "owner": "Braden Bosilovich",
+   "heading": "Track Controller (HW) architecture (component view)",
+   "note": "",
+   "viewpoint": "Composition"
+  },
+  {
+   "number": 65,
+   "caption": "Core classes: control",
+   "path": "uml/track_ctrl_hw/class_core_control.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.5",
+   "section_title": "Class diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Core classes (Raspberry Pi)",
+   "note": "- HwTrackController holds one Wayside per loaded database, all on one line, and scans each once per step. While any wayside is not ready, every wayside holds fail-safe. - Wayside owns its territory, the user's Program, and (planned) the generated vital Program. scan builds the input image, runs the programs on both channels, compares them, drives the outputs and builds the CtcReport. - Program is immutable: a compiled program never changes while it is scanned. Each Statement carries a tree (channel A) and postfix code (channel B). - On the Pi, PiLinkServer (common/hw_link/agent.py) reads requests from the USB gadget serial port, journals them, and passes them to TrackCore, which steps the controller, runs the allowlisted window actions (load_territory, load_program, reset) and packs snapshots for the window.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 66,
+   "caption": "Core classes: PLC engine",
+   "path": "uml/track_ctrl_hw/class_core_plc.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.5",
+   "section_title": "Class diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Core classes (Raspberry Pi)",
+   "note": "- HwTrackController holds one Wayside per loaded database, all on one line, and scans each once per step. While any wayside is not ready, every wayside holds fail-safe. - Wayside owns its territory, the user's Program, and (planned) the generated vital Program. scan builds the input image, runs the programs on both channels, compares them, drives the outputs and builds the CtcReport. - Program is immutable: a compiled program never changes while it is scanned. Each Statement carries a tree (channel A) and postfix code (channel B). - On the Pi, PiLinkServer (common/hw_link/agent.py) reads requests from the USB gadget serial port, journals them, and passes them to TrackCore, which steps the controller, runs the allowlisted window actions (load_territory, load_program, reset) and packs snapshots for the window.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 67,
+   "caption": "Boundary types: inputs and outputs",
+   "path": "uml/track_ctrl_hw/class_boundary_io.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.5",
+   "section_title": "Class diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Boundary types",
+   "note": "All are frozen dataclasses. The CTC Office names a block by BlockRef (line and number, Red:15); the Track Model by BlockKey (line, section, number). A switch, its signal and a crossing are named by the block they are listed on. Speeds are whole m/s; authorities are block counts (D013).",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 68,
+   "caption": "Boundary types: territory",
+   "path": "uml/track_ctrl_hw/class_boundary_territory.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.5",
+   "section_title": "Class diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Boundary types",
+   "note": "All are frozen dataclasses. The CTC Office names a block by BlockRef (line and number, Red:15); the Track Model by BlockKey (line, section, number). A switch, its signal and a crossing are named by the block they are listed on. Speeds are whole m/s; authorities are block counts (D013).",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 69,
+   "caption": "Boundary types: snapshot",
+   "path": "uml/track_ctrl_hw/class_boundary_snapshot.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.5",
+   "section_title": "Class diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Boundary types",
+   "note": "All are frozen dataclasses. The CTC Office names a block by BlockRef (line and number, Red:15); the Track Model by BlockKey (line, section, number). A switch, its signal and a crossing are named by the block they are listed on. Speeds are whole m/s; authorities are block counts (D013).",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 70,
+   "caption": "Host-side classes: presentation",
+   "path": "uml/track_ctrl_hw/class_host_ui.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.5",
+   "section_title": "Class diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Host-side classes (PC)",
+   "note": "- TrackControllerState is the only object QML talks to. It reads a snapshot, turns it into rows through views, and pushes them into five RowsModels that update in place. - RemoteTrackController (common/hw_link/remote_track.py) implements the same Protocol as HwTrackController, so the window is unchanged. It caches the snapshot the Pi pushes and turns each window action into one request through HardwareRelay; errors come back typed. - ModuleLink answers the harness: each STEP goes to HardwareRelay.submit_step, and the Pi's reply comes back as OUTPUTS or REJECTED. HardwareRelay keeps requests in order, holds replies while the USB link is lost, and SerialTransport finds the Pi by its USB identity.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 71,
+   "caption": "Host-side classes: link to the Pi",
+   "path": "uml/track_ctrl_hw/class_host_link.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.5",
+   "section_title": "Class diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Host-side classes (PC)",
+   "note": "- TrackControllerState is the only object QML talks to. It reads a snapshot, turns it into rows through views, and pushes them into five RowsModels that update in place. - RemoteTrackController (common/hw_link/remote_track.py) implements the same Protocol as HwTrackController, so the window is unchanged. It caches the snapshot the Pi pushes and turns each window action into one request through HardwareRelay; errors come back typed. - ModuleLink answers the harness: each STEP goes to HardwareRelay.submit_step, and the Pi's reply comes back as OUTPUTS or REJECTED. HardwareRelay keeps requests in order, holds replies while the USB link is lost, and SerialTransport finds the Pi by its USB identity.",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 72,
+   "caption": "SD-01 Load wayside database (UC-01)",
+   "path": "uml/track_ctrl_hw/sd01_load_database.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 73,
+   "caption": "SD-02 Load PLC program (UC-02)",
+   "path": "uml/track_ctrl_hw/sd02_load_program.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 74,
+   "caption": "SD-03 Select wayside (UC-03)",
+   "path": "uml/track_ctrl_hw/sd03_select_wayside.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 75,
+   "caption": "SD-04 Monitor wayside state (UC-04)",
+   "path": "uml/track_ctrl_hw/sd04_monitor.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 76,
+   "caption": "SD-05 View PLC program details (UC-05)",
+   "path": "uml/track_ctrl_hw/sd05_plc_details.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 77,
+   "caption": "SD-06 View last report to the CTC Office (UC-06)",
+   "path": "uml/track_ctrl_hw/sd06_last_report.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 78,
+   "caption": "SD-07 Run scan cycle (UC-07)",
+   "path": "uml/track_ctrl_hw/sd07_run_scan_cycle.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 79,
+   "caption": "SD-08 Receive speed and authority suggestions (UC-08)",
+   "path": "uml/track_ctrl_hw/sd08_suggestions.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 80,
+   "caption": "SD-09 Receive closures and maintenance switch commands (UC-09)",
+   "path": "uml/track_ctrl_hw/sd09_closures_switch_commands.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 81,
+   "caption": "SD-10 Receive track state (UC-10)",
+   "path": "uml/track_ctrl_hw/sd10_track_state.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 82,
+   "caption": "SD-11 Command switches (UC-11)",
+   "path": "uml/track_ctrl_hw/sd11_command_switches.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 83,
+   "caption": "SD-12 Set signal aspects (UC-12)",
+   "path": "uml/track_ctrl_hw/sd12_signal_aspects.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 84,
+   "caption": "SD-13 Control railway crossings (UC-13)",
+   "path": "uml/track_ctrl_hw/sd13_crossings.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 85,
+   "caption": "SD-14 Send speed and authority on track circuits (UC-14)",
+   "path": "uml/track_ctrl_hw/sd14_track_circuits.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 86,
+   "caption": "SD-15 Report occupancy, state and readiness (UC-15)",
+   "path": "uml/track_ctrl_hw/sd15_report.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 87,
+   "caption": "SD-16 Hold fail-safe outputs (UC-16)",
+   "path": "uml/track_ctrl_hw/sd16_hold_fail_safe.png",
+   "chapter": "Track Controller (HW)",
+   "section": "5.3.6",
+   "section_title": "Sequence diagrams",
+   "owner": "Braden Bosilovich",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 88,
+   "caption": "Use case diagram: Track Model, all actors",
+   "path": "uml/track_model/03_usecase.png",
+   "chapter": "Track Model",
+   "section": "5.4.2",
+   "section_title": "Use cases",
+   "owner": "Deni Ephraim",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 89,
+   "caption": "Use cases of the Track Builder",
+   "path": "uml/track_model/uc_track_builder.png",
+   "chapter": "Track Model",
+   "section": "5.4.2",
+   "section_title": "Use cases",
+   "owner": "Deni Ephraim",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 90,
+   "caption": "Use cases of Murphy",
+   "path": "uml/track_model/uc_murphy.png",
+   "chapter": "Track Model",
+   "section": "5.4.2",
+   "section_title": "Use cases",
+   "owner": "Deni Ephraim",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 91,
+   "caption": "Use cases of the Track Controller",
+   "path": "uml/track_model/uc_track_controller.png",
+   "chapter": "Track Model",
+   "section": "5.4.2",
+   "section_title": "Use cases",
+   "owner": "Deni Ephraim",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 92,
+   "caption": "Use cases of the Train Model",
+   "path": "uml/track_model/uc_train_model.png",
+   "chapter": "Track Model",
+   "section": "5.4.2",
+   "section_title": "Use cases",
+   "owner": "Deni Ephraim",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 93,
+   "caption": "Use cases of the Train Controller",
+   "path": "uml/track_model/uc_train_controller.png",
+   "chapter": "Track Model",
+   "section": "5.4.2",
+   "section_title": "Use cases",
+   "owner": "Deni Ephraim",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 94,
+   "caption": "Use cases of the CTC Office",
+   "path": "uml/track_model/uc_ctc_office.png",
+   "chapter": "Track Model",
+   "section": "5.4.2",
+   "section_title": "Use cases",
+   "owner": "Deni Ephraim",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 95,
+   "caption": "Track Model architecture (component view)",
+   "path": "uml/track_model/06_component.png",
+   "chapter": "Track Model",
+   "section": "5.4.3",
+   "section_title": "Track Model architecture (component view)",
+   "owner": "Deni Ephraim",
+   "heading": "Track Model architecture (component view)",
+   "note": "",
+   "viewpoint": "Composition"
+  },
+  {
+   "number": 96,
+   "caption": "Boundary types of the Track Model (`track_model/interface.py`)",
+   "path": "uml/track_model/16_types.png",
+   "chapter": "Track Model",
+   "section": "5.4.4",
+   "section_title": "Boundary types",
+   "owner": "Deni Ephraim",
+   "heading": "Boundary types",
+   "note": "",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 97,
+   "caption": "Class diagram 1: module core",
+   "path": "uml/track_model/04_class_core.png",
+   "chapter": "Track Model",
+   "section": "5.4.5",
+   "section_title": "Class diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Class diagrams",
+   "note": "",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 98,
+   "caption": "Class diagram 2: window and test link",
+   "path": "uml/track_model/05_class_ui.png",
+   "chapter": "Track Model",
+   "section": "5.4.5",
+   "section_title": "Class diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Class diagrams",
+   "note": "",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 99,
+   "caption": "The `TrackModel` Protocol and the harness edge functions",
+   "path": "uml/track_model/17_protocols.png",
+   "chapter": "Track Model",
+   "section": "5.4.6",
+   "section_title": "Interface",
+   "owner": "Deni Ephraim",
+   "heading": "Interface",
+   "note": "",
+   "viewpoint": "Interface"
+  },
+  {
+   "number": 100,
+   "caption": "SD-01 Load a track layout (UC-1)",
+   "path": "uml/track_model/sd01_load.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 101,
+   "caption": "SD-02 Display track properties (UC-2)",
+   "path": "uml/track_model/sd02_display.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 102,
+   "caption": "SD-03 Track train position and occupancy (UC-3)",
+   "path": "uml/track_model/sd03_position.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 103,
+   "caption": "SD-04 Report state to the Track Controller (UC-4)",
+   "path": "uml/track_model/sd04_report.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 104,
+   "caption": "SD-05 Apply a switch position (UC-5)",
+   "path": "uml/track_model/sd05_switch.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 105,
+   "caption": "SD-06 Apply signal lights and crossing gates (UC-6)",
+   "path": "uml/track_model/sd06_signal.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 106,
+   "caption": "SD-07 Deliver the track circuit signal (UC-7)",
+   "path": "uml/track_model/sd07_circuit.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 107,
+   "caption": "SD-08 Send beacon data (UC-8)",
+   "path": "uml/track_model/sd08_beacon.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 108,
+   "caption": "SD-09 Send the signal light to the Train Controller (UC-9)",
+   "path": "uml/track_model/sd09_signalseen.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 109,
+   "caption": "SD-10 Sell tickets and board passengers (UC-10)",
+   "path": "uml/track_model/sd10_boarding.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 110,
+   "caption": "SD-11 Report ticket sales (UC-11)",
+   "path": "uml/track_model/sd11_tickets.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 111,
+   "caption": "SD-12 Set the ambient temperature (UC-12)",
+   "path": "uml/track_model/sd12_temperature.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 112,
+   "caption": "SD-13 Switch the track heaters (UC-13)",
+   "path": "uml/track_model/sd13_heaters.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 113,
+   "caption": "SD-14 Inject or clear a failure (UC-14)",
+   "path": "uml/track_model/sd14_failure.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 114,
+   "caption": "SD-15 One tick in the Track Model (overview)",
+   "path": "uml/track_model/sd15_tick.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 115,
+   "caption": "SD-16 Dispatch a train (system level)",
+   "path": "uml/track_model/sd16_dispatch.png",
+   "chapter": "Track Model",
+   "section": "5.4.12",
+   "section_title": "Sequence diagrams",
+   "owner": "Deni Ephraim",
+   "heading": "Sequence diagrams",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 116,
+   "caption": "Block state machine",
+   "path": "uml/track_model/13_state_block.png",
+   "chapter": "Track Model",
+   "section": "5.4.13",
+   "section_title": "State machine",
+   "owner": "Deni Ephraim",
+   "heading": "State machine",
+   "note": "",
+   "viewpoint": "State dynamics"
+  },
+  {
+   "number": 117,
+   "caption": "Train Model use case diagram",
+   "path": "uml/train-model-uml(2)(1)-png/01_use-case.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 118,
+   "caption": "Train Model: use cases by role",
+   "path": "uml/train-model-uml(2)(1)-png/02_use-cases-by-role.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 119,
+   "caption": "Train Model: use case descriptions",
+   "path": "uml/train-model-uml(2)(1)-png/03_use-case-descriptions.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "Use cases",
+   "note": "",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 120,
+   "caption": "Sequence diagram: validate step inputs",
+   "path": "uml/train-model-uml(2)(1)-png/15_sequence-validate-step-inputs.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-01: Advance physical motion",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 121,
+   "caption": "Sequence diagram: compute train motion",
+   "path": "uml/train-model-uml(2)(1)-png/16_sequence-compute-train-motion.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-01: Advance physical motion",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 122,
+   "caption": "Sequence diagram: update passengers",
+   "path": "uml/train-model-uml(2)(1)-png/17_sequence-update-passengers.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-01: Advance physical motion",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 123,
+   "caption": "Sequence diagram: detect block change",
+   "path": "uml/train-model-uml(2)(1)-png/18_sequence-detect-block-change.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-01: Advance physical motion",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 124,
+   "caption": "Sequence diagram: update cabin temperature",
+   "path": "uml/train-model-uml(2)(1)-png/19_sequence-update-cabin-temperature.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-01: Advance physical motion",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 125,
+   "caption": "Sequence diagram: publish outputs",
+   "path": "uml/train-model-uml(2)(1)-png/20_sequence-publish-outputs.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-01: Advance physical motion",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 126,
+   "caption": "Sequence diagram: view train status",
+   "path": "uml/train-model-uml(2)(1)-png/06_sequence-view-train-status.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-02: View and select a train",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 127,
+   "caption": "Sequence diagram: view announcement",
+   "path": "uml/train-model-uml(2)(1)-png/07_sequence-view-announcement.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-02: View and select a train",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 128,
+   "caption": "Sequence diagram: apply controller commands",
+   "path": "uml/train-model-uml(2)(1)-png/12_sequence-apply-controller-commands.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-03: Apply onboard equipment commands",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 129,
+   "caption": "Sequence diagram: receive track data",
+   "path": "uml/train-model-uml(2)(1)-png/13_sequence-receive-track-data.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-04: Receive track circuit, terrain, and beacon data",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 130,
+   "caption": "Sequence diagram: board and disembark passengers",
+   "path": "uml/train-model-uml(2)(1)-png/09_sequence-board-and-disembark-passengers.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-05: Board and disembark passengers",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 131,
+   "caption": "Sequence diagram: pull passenger emergency brake",
+   "path": "uml/train-model-uml(2)(1)-png/08_sequence-pull-passenger-emergency-brake.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-06: Pull and release the passenger emergency brake",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 132,
+   "caption": "Sequence diagram: inject clear failure",
+   "path": "uml/train-model-uml(2)(1)-png/10_sequence-inject-clear-failure.png",
+   "chapter": "Train Model",
+   "section": "5.5.4",
+   "section_title": "Use cases",
+   "owner": "Kevin Schillinger",
+   "heading": "UC-TM-07: Inject or clear a failure",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 133,
+   "caption": "Train Model class diagram",
+   "path": "uml/train-model-uml(2)(1)-png/04_class.png",
+   "chapter": "Train Model",
+   "section": "5.5.6",
+   "section_title": "Class diagrams",
+   "owner": "Kevin Schillinger",
+   "heading": "Class diagrams",
+   "note": "",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 134,
+   "caption": "One accepted or rejected Train Model tick",
+   "path": "uml/train-model-uml(2)(1)-png/05_sequence-advance-one-simulation-step.png",
+   "chapter": "Train Model",
+   "section": "5.5.8",
+   "section_title": "Interaction: one simulation tick",
+   "owner": "Kevin Schillinger",
+   "heading": "Interaction: one simulation tick",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 135,
+   "caption": "Sequence diagram: report state to train controller",
+   "path": "uml/train-model-uml(2)(1)-png/11_sequence-report-state-to-train-controller.png",
+   "chapter": "Train Model",
+   "section": "5.5.8",
+   "section_title": "Interaction: one simulation tick",
+   "owner": "Kevin Schillinger",
+   "heading": "Interaction: one simulation tick",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 136,
+   "caption": "Sequence diagram: report position to track model",
+   "path": "uml/train-model-uml(2)(1)-png/14_sequence-report-position-to-track-model.png",
+   "chapter": "Train Model",
+   "section": "5.5.8",
+   "section_title": "Interaction: one simulation tick",
+   "owner": "Kevin Schillinger",
+   "heading": "Interaction: one simulation tick",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 137,
+   "caption": "Train Controller (SW and HW): use case diagram",
+   "path": "sdd-figures/train-controller/03-use-case.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use cases",
+   "note": "Signal aspect ahead stands in for the light seen through the front window. Only the driver releases the e-brake (M2).",
+   "viewpoint": "Context"
+  },
+  {
+   "number": 138,
+   "caption": "Sequence diagram: Set target speed (Manual)",
+   "path": "sdd-figures/train-controller/07-seq-01-set-target-speed.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 1 — Set target speed (Manual)",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 139,
+   "caption": "Sequence diagram: Switch Manual / Automatic",
+   "path": "sdd-figures/train-controller/07-seq-02-switch-mode.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 2 — Switch Manual / Automatic",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 140,
+   "caption": "Sequence diagram: Apply service brake",
+   "path": "sdd-figures/train-controller/07-seq-03-service-brake.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 3 — Apply service brake",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 141,
+   "caption": "Sequence diagram: Open or close doors",
+   "path": "sdd-figures/train-controller/07-seq-04-doors.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 4 — Doors, lights, temperature, announce",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 142,
+   "caption": "Sequence diagram: Turn lights on or off",
+   "path": "sdd-figures/train-controller/07-seq-05-lights.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 4 — Doors, lights, temperature, announce",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 143,
+   "caption": "Sequence diagram: Set cabin temperature",
+   "path": "sdd-figures/train-controller/07-seq-06-cabin-temperature.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 4 — Doors, lights, temperature, announce",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 144,
+   "caption": "Sequence diagram: Announce station",
+   "path": "sdd-figures/train-controller/07-seq-07-announce.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 4 — Doors, lights, temperature, announce",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 145,
+   "caption": "Sequence diagram: Engage e-brake",
+   "path": "sdd-figures/train-controller/07-seq-09-engage-ebrake.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 5 — Engage the emergency brake",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 146,
+   "caption": "Sequence diagram: Release e-brake",
+   "path": "sdd-figures/train-controller/07-seq-10-release-ebrake.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 6 — Release the emergency brake",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 147,
+   "caption": "Sequence diagram: Set Kp and Ki",
+   "path": "sdd-figures/train-controller/07-seq-08-set-gains.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.4",
+   "section_title": "Use cases",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Use case 7 — Commission Kp and Ki",
+   "note": "",
+   "viewpoint": "Interaction"
+  },
+  {
+   "number": 148,
+   "caption": "Train Controller (SW and HW) architecture (component view)",
+   "path": "sdd-figures/train-controller/02-software-architecture.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.5",
+   "section_title": "Train Controller architecture (component view)",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Train Controller architecture (component view)",
+   "note": "Either the harness or the bench drives the fleet, never both, and the controller cannot tell which (M0). - More Information: HARNESS_INTEGRATION.md gives the call sequence and import path. import train_ctrl imports no Qt and does not re-export bench_sim.",
+   "viewpoint": "Composition"
+  },
+  {
+   "number": 149,
+   "caption": "Class diagram: controller core",
+   "path": "sdd-figures/train-controller/04-class-controller-core.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.6",
+   "section_title": "Class diagrams",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Class diagrams",
+   "note": "",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 150,
+   "caption": "Class diagram: State and exceptions",
+   "path": "sdd-figures/train-controller/05-class-state-exceptions.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.6",
+   "section_title": "Class diagrams",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Class diagrams",
+   "note": "",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 151,
+   "caption": "Class diagram: console",
+   "path": "sdd-figures/train-controller/06-class-console.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.6",
+   "section_title": "Class diagrams",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Class diagrams",
+   "note": "Boundary types this module produces: TrainModelCommands (one per train per tick). Boundary type it consumes: a plain dict per train with the keys in 004-interface, checked by read_inputs. It defines no typing.Protocol yet (§4.1).",
+   "viewpoint": "Logical"
+  },
+  {
+   "number": 152,
+   "caption": "Sequence diagram: one 0.1 s tick",
+   "path": "sdd-figures/train-controller/07-seq-00-one-tick.png",
+   "chapter": "Train Controller (SW and HW)",
+   "section": "5.6.8",
+   "section_title": "Interaction: one tick",
+   "owner": "Jonathan Tsang, Ivan Zheng",
+   "heading": "Interaction: one tick",
+   "note": "",
+   "viewpoint": "Interaction"
+  }
+ ]
+}
