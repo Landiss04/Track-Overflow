@@ -56,6 +56,7 @@ from track_ctrl_hw.interface import (
     SIGNAL_ASPECTS,
     BlockKey,
     BlockReport,
+    BlockRef,
     CtcInputs,
     CtcReport,
     ProgramInfo,
@@ -84,14 +85,21 @@ MAX_SPEED_MPS = (1 << SPEED_BITS) - 1
 _LIMIT_TOLERANCE = 1e-9
 
 
+def _neighbor_numbers(territory: Territory) -> frozenset[str]:
+    """The adjacent block IDs whose state is shared read-only."""
+    return frozenset(number for block in territory.blocks
+                     for number in block.next_blocks if number != "yard")
+
+
 def input_names(territory: Territory) -> frozenset[str]:
     """Every name this wayside feeds a PLC program."""
     names = set()
     for block in territory.blocks:
         number = block.key.block_id
         names.update((f"OCC_{number}", f"CLOSED_{number}"))
-        names.update(f"OCC_{n}" for n in block.next_blocks if n != "yard")
         names.update(_speed_names("SPD", number))
+    for number in _neighbor_numbers(territory):
+        names.update((f"OCC_{number}", f"CLOSED_{number}"))
     for switch in territory.switches:
         number = switch.switch_id
         names.update(
@@ -303,7 +311,7 @@ class Wayside:
             values, holding = None, stall
         else:
             values, holding = self._run_program(
-                occupied, closed, suggestions, requests, track_model
+                occupied, closed, suggestions, requests, track_model, ctc
             )
         duration = time.perf_counter() - started
 
@@ -386,6 +394,7 @@ class Wayside:
         suggestions: Mapping[BlockKey, Suggestion],
         requests: Mapping[BlockKey, SwitchPosition],
         track_model: TrackModelInputs,
+        ctc: CtcInputs,
     ) -> tuple[dict[str, bool] | None, str]:
         # The program's outputs and "", or None and why no program runs.
         if self._scan_info.channel_fault:
@@ -401,14 +410,11 @@ class Wayside:
             speed = 0 if suggestion is None else suggestion.speed_mps
             for bit, name in enumerate(_speed_names("SPD", number)):
                 image[name] = bool(speed >> bit & 1)
-        for block in self._territory.blocks:
-            for neighbor in block.next_blocks:
-                if neighbor != "yard":
-                    image[f"OCC_{neighbor}"] = any(
-                        k.line == self._territory.line
-                        and k.block_id == neighbor
-                        for k in track_model.occupied_blocks
-                    )
+        occupied_refs = {key.ref for key in track_model.occupied_blocks}
+        for number in _neighbor_numbers(self._territory):
+            ref = BlockRef(self._territory.line, number)
+            image[f"OCC_{number}"] = ref in occupied_refs
+            image[f"CLOSED_{number}"] = ref in ctc.closed_blocks
         for switch in self._territory.switches:
             number = switch.switch_id
             image[f"SWREV_{number}"] = (

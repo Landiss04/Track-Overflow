@@ -25,7 +25,37 @@ at block 9 in the reader. Assumption for Braden and the Track Model owner:
 point 9, NORMAL to 8, REVERSE to yard, fixed side 10 and light on 10.
 This lets a yard release proceed 9 → 10 and requires owner confirmation.
 
-Real Red PLC programs remain Braden's work. The test PLC programs do not
-route Red switches: return through 66 → 52 needs REVERSE at 52, while the
-outgoing 52 → 53 route needs NORMAL. No switch-routing or automatic
-reversal workaround is added.
+## 2026-10-22 — Green-style Red integration routing
+
+Kevin authorized reusing Braden's real Green PLC routing pattern in the
+Red integration test programs. All seven switches now obey CTC overrides when
+free, otherwise select a reverse approach or route around a closed normal
+leg using AUTO/WANT logic. Occupied points hold their reported position;
+switches 15, 32 and 43 also retain the listed-joint lock used by Green's
+pattern. Point 9 never selects the yard automatically. Signals follow the
+reported selected leg, remain red for mismatch/occupied points or a
+blocked route, and show caution for reverse or maintenance.
+
+Switch 52 selects REVERSE for a train on 66 and returns to NORMAL for an
+outbound train on 51. No automatic train reversal or course data edit is
+added. All test-copy declarations and Braden owner-review requirements
+remain. The wayside split is unchanged: Red-1 1–24/73–76, Red-2
+25–45/67–72, Red-3 46–66.
+
+Kevin explicitly approved shared read-only neighbor closure inputs. The
+same adjacency helper now defines both `OCC_n` and `CLOSED_n` input scope;
+the scan image reads line-scoped full occupancy/closure sets. Switch 27
+therefore receives `CLOSED_76` and can route and protect its reverse leg.
+Foreign output ownership remains rejected. Missing occupancy still counts
+as clear under the existing contract; Braden and Harry's review remains.
+
+Routing checks cover normal/automatic/CTC selection, blocked approaches,
+closed legs, occupied-point holds, selected-leg aspects and correspondence.
+The existing Red speed/crossing/separation checks remain. A separate Green
+snapshot test reuses the existing SW starter helper to record the
+75/76 follower issue for Harry and Landis, without changing owner rules.
+
+The round-trip regression reuses the existing seven-core `RedLoop` helper:
+9 … 16 outbound, then an explicit return request through 17 … 66 → 52 … 9,
+retired exactly once. It passes in 26.69 s; the helper checks emergency
+brake and signal pickup every tick. No second launcher is introduced.

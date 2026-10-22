@@ -238,3 +238,74 @@ class RedIntegration(unittest.TestCase):
             }["9"],
             "red",
         )
+
+
+class RedSwitchRouting(unittest.TestCase):
+    # Listed switch ID, actual points, normal approach, reverse approach.
+    ROUTES = (("27", "27", "28", "76"),
+              ("15", "16", "15", "1"),
+              ("32", "33", "32", "72"),
+              ("38", "38", "39", "71"),
+              ("43", "44", "43", "67"),
+              ("52", "52", "53", "66"))
+
+    def scan(self, key, **kwargs):
+        controller = loaded_red()
+        out = controller.step(0.1, inputs(controller, **kwargs))
+        self.assertTrue(out.ready)
+        return (
+            {k.block_id: v for k, v in
+             out.track_model.switch_commands.items()}[key],
+            {k.block_id: v for k, v in
+             out.track_model.signal_commands.items()}[key],
+        )
+
+    def test_reverse_approach_and_normal_closure_select_reverse(self):
+        for key, point, normal, reverse in self.ROUTES:
+            with self.subTest(switch=key):
+                self.assertEqual(self.scan(key)[0], "normal")
+                self.assertEqual(
+                    self.scan(key, occupied=[reverse])[0], "reverse")
+                self.assertEqual(
+                    self.scan(key, closed=[normal])[0], "reverse")
+                self.assertEqual(self.scan(
+                    key, occupied=[reverse, normal])[0], "normal")
+                self.assertEqual(self.scan(
+                    key, occupied=[reverse], closed=[reverse])[0], "normal")
+
+    def test_ctc_override_and_points_lock_every_switch(self):
+        for key, point in (("9", "9"),) + tuple(
+                (key, point) for key, point, _, _ in self.ROUTES):
+            for requested in ("normal", "reverse"):
+                opposite = "normal" if requested == "reverse" else "reverse"
+                with self.subTest(switch=key, requested=requested):
+                    self.assertEqual(self.scan(
+                        key, switch_commands={key: requested})[0], requested)
+                    self.assertEqual(self.scan(
+                        key, occupied=[point], reported={key: opposite},
+                        switch_commands={key: requested})[0], opposite)
+
+    def test_signals_follow_reported_selected_route(self):
+        for key, point, normal, reverse in self.ROUTES:
+            for position, selected, unselected in (
+                    ("normal", normal, reverse),
+                    ("reverse", reverse, normal)):
+                kwargs = dict(switch_commands={key: position},
+                              reported={key: position})
+                with self.subTest(switch=key, route=position):
+                    self.assertNotEqual(self.scan(key, **kwargs)[1], "red")
+                    self.assertEqual(self.scan(
+                        key, closed=[selected], **kwargs)[1], "red")
+                    self.assertEqual(self.scan(
+                        key, occupied=[selected], **kwargs)[1], "red")
+                    self.assertNotEqual(self.scan(
+                        key, closed=[unselected], **kwargs)[1], "red")
+                    self.assertEqual(self.scan(
+                        key, occupied=[point], **kwargs)[1], "red")
+            self.assertEqual(self.scan(
+                key, switch_commands={key: "reverse"},
+                reported={key: "normal"})[1], "red")
+
+    def test_yard_switch_never_automatically_selects_yard(self):
+        for kwargs in ({}, {"occupied": ["8"]}, {"closed": ["8"]}):
+            self.assertEqual(self.scan("9", **kwargs)[0], "normal")
