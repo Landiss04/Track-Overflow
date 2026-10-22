@@ -63,16 +63,18 @@ class State:
     beacon_station: str = ""
     beacon_side: str = "L"
     beacon_underground: bool = False
-    # What the Announcement signal carries: the station name while an
-    # announcement plays, empty otherwise.
+    # What the Announcement signal carries: the announcement while it
+    # plays, empty otherwise (REQUIREMENTS.md M7).
     announcement: str = ""
 
     cabin_temp_c: float = DEFAULT_CABIN_TEMP_C
     target_temp_c: float = DEFAULT_TARGET_TEMP_C
     doors_left: bool = False
     doors_right: bool = False
-    interior_lights: bool = True
-    exterior_lights: bool = True
+    # A train spawns with nothing on; the first tick sets the lights
+    # from the time of day (REQUIREMENTS.md M8).
+    interior_lights: bool = False
+    exterior_lights: bool = False
 
     next_signal: str = "YELLOW"
 

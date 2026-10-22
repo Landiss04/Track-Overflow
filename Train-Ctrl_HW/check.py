@@ -1105,7 +1105,13 @@ def run_check(
     # not underground, unless it is night, and at 06:00. Only those
     # changes act, so the driver's own choice stands in between. A
     # train spawned at the yard between 18:00 and 06:00 has its lights
-    # set on, and off by day.
+    # set on, and off by day; it spawns with nothing on.
+    fresh = mod.State()
+    expect(not (fresh.interior_lights or fresh.exterior_lights
+                or fresh.doors_left or fresh.doors_right
+                or fresh.service_request or fresh.service_brake
+                or fresh.emergency_brake or fresh.announcement),
+           "a train spawned with something on")
     for spawned, on in ((19 * 3600.0, True), (5 * 3600.0, True),
                         (12 * 3600.0, False)):
         yard = mod.ControllerCore()
