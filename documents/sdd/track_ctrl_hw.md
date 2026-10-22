@@ -1,4 +1,4 @@
-# Track Controller (HW) — Software Design
+﻿# Track Controller (HW) â€” Software Design
 
 Contribution to the Software Design Description (WP2), for the hardware Track Controller.
 Paste into the group SDD as needed; every figure is a PNG beside its PlantUML source in
@@ -11,7 +11,7 @@ Paste into the group SDD as needed; every figure is a PNG beside its PlantUML so
 | **Status** | Draft for WP2 and the design review, 2026-10-22 |
 | **Basis** | PR #43 (merged into `development`); integration branch `claude/quirky-fermi-sickg4` (`common/hw_link/`, built by Kevin Schillinger); decisions D005, D006, D013, D017, D021, D027 on `truth` |
 
-**Reading the figures.** Orange elements marked «planned» are designed but not built yet.
+**Reading the figures.** Orange elements marked Â«plannedÂ» are designed but not built yet.
 One part of the design is planned: **the read-only vital PLC block**, a design assumption
 until Harry Tye confirms it. Each wayside would run a fixed, generated PLC block after the
 user's program, which can only make an output more restrictive. The split between the PC
@@ -48,10 +48,10 @@ is covered by at least one use case (section 3).
 | 6.7 | 1 | Load PLC file | REQ-FUNC-050 | UC-02 |
 | 6.8 | 1 | In maintenance mode, manually set a switch position | REQ-FUNC-057, REQ-FUNC-012 | UC-09, UC-11 |
 | 6.9 | 1 | Has safety-critical architecture | REQ-FUNC-058 | UC-07, UC-16 |
-| — | — | Failures detected (as occupancy) | REQ-FUNC-059 | UC-10 |
+| â€” | â€” | Failures detected (as occupancy) | REQ-FUNC-059 | UC-10 |
 | 9.0 | 5 | Each sub-system has a user interface | REQ-INTF-001.4 | UC-01 to UC-06 |
-| — | — | Track layout loaded from JSON | REQ-INTF-012 | UC-01 |
-| — | — | Channels to and from the CTC Office, Track Model and train | REQ-INTF-017 to 020 | UC-08, UC-10, UC-14, UC-15 |
+| â€” | â€” | Track layout loaded from JSON | REQ-INTF-012 | UC-01 |
+| â€” | â€” | Channels to and from the CTC Office, Track Model and train | REQ-INTF-017 to 020 | UC-08, UC-10, UC-14, UC-15 |
 
 Rubric 6.8 is met by the CTC Office's dispatcher: only the CTC Office sets a switch in
 maintenance mode, and the wayside's program carries the command out (UC-09). Whether the
@@ -66,12 +66,12 @@ Track Controller (section 8).
 
 Actors:
 
-- **Programmer** — the person at the Track Controller window. Loads databases and PLC
+- **Programmer** â€” the person at the Track Controller window. Loads databases and PLC
   programs and watches the waysides. Every interactive control of the window belongs to one
   of UC-01 to UC-06.
-- **Central Harness** — owns the shared clock and steps the module once per tick (D005,
+- **Central Harness** â€” owns the shared clock and steps the module once per tick (D005,
   D017). It carries everything the CTC Office and the Track Model send and receive.
-- **CTC Office** and **Track Model** — the neighbouring modules, reached only through the
+- **CTC Office** and **Track Model** â€” the neighbouring modules, reached only through the
   harness.
 
 ### UC-01 Load wayside database
@@ -272,7 +272,7 @@ Actors:
 
 ---
 
-## 4. Software architecture
+## 4. Module architecture (component view)
 
 ![Track Controller (HW) architecture (component view)](../uml/track_ctrl_hw/architecture.png)
 
@@ -409,7 +409,7 @@ The test UI is a debugging tool, not packaged and never started by the harness.
 |---|---|---|
 | 1 | The read-only vital PLC block is assumed. Harry Tye to confirm for both variants; implementation steps are recorded. | Braden, Harry |
 | 2 | Whether the programmer may set a switch by hand in maintenance mode (rubric 6.8). Assumed: only the CTC Office sets a switch. The software variant has a manual switch. | Braden, Harry |
-| 3 | The Red Line's wayside boundaries. The integration branch carries test copies (Red-1: blocks 1–24 and 73–76; Red-2: 25–45 and 67–72; Red-3: 46–66) that keep every switch inside one wayside; they await Braden's approval. | Braden |
+| 3 | The Red Line's wayside boundaries. The integration branch carries test copies (Red-1: blocks 1â€“24 and 73â€“76; Red-2: 25â€“45 and 67â€“72; Red-3: 46â€“66) that keep every switch inside one wayside; they await Braden's approval. | Braden |
 | 4 | Power for the Pi 5: its USB-C port is both data link and power input. | Braden, Kevin |
 | 5 | At 10x the harness sends 100 ticks per second and waits for every reply, so the USB round trip and the scan must stay under 10 ms. To be measured on the Pi. | Braden |
 | 6 | The PLC names still differ between the variants (the software variant keeps `MAINT`), so one program file does not yet load on both (REQ-INTF-009). | Braden, Harry |
