@@ -1,7 +1,7 @@
-// Station announcement. The controller only sends the command and the
-// Train Model makes the announcement (REQUIREMENTS.md M7). The station
-// announcements go out automatically, so in Automatic the control says
-// so instead of inviting a press.
+// Announcements. The controller only sends the command and the Train
+// Model makes the announcement (REQUIREMENTS.md M7). They go out
+// automatically in both modes; in Manual the driver may repeat the last
+// one, so in Automatic the control says so instead of inviting a press.
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
@@ -29,7 +29,7 @@ Panel {
         size: "large"
         variant: "secondary"
         text: root.s.announce_label
-        enabled: root.s.can_drive && !root.s.announcing
+        enabled: root.s.can_drive && root.s.can_announce
         onClicked: controller.announce()
 
         // The shared button's label, wrapping onto a second line

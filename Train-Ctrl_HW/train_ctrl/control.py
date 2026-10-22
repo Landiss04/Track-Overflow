@@ -61,6 +61,9 @@ class ControllerCore:
         self._last_authority: int | None = None
         # Seconds left on an announcement command.
         self._announce_left_s = 0.0
+        # The last automatic announcement, which the driver may repeat
+        # in Manual until the next one is sent (REQUIREMENTS.md M7).
+        self.last_announcement = ""
         # Automatic lights (REQUIREMENTS.md M8): night and underground
         # as of the last tick, so only their changes act on the lights.
         self._night: bool | None = None
@@ -388,7 +391,28 @@ class ControllerCore:
         # The controller sends the command; the Train Model plays it
         # (REQUIREMENTS.md M7). Held for the lockout, on system time.
         self.state.announcement = text
+        self.last_announcement = text
         self._announce_left_s = ANNOUNCE_LOCKOUT_MS / 1000
+
+    @property
+    def can_repeat(self) -> bool:
+        """Whether the driver may repeat the last announcement now.
+
+        In Manual, once one has been sent, and not while one plays.
+        """
+        s = self.state
+        return s.manual and bool(self.last_announcement) \
+            and not s.announcement
+
+    def repeat_announcement(self) -> bool:
+        """Send the last automatic announcement again, held as before.
+
+        Returns whether it was sent (REQUIREMENTS.md M7).
+        """
+        if not self.can_repeat:
+            return False
+        self._announce(self.last_announcement)
+        return True
 
     def _station_stop(self) -> None:
         # REQUIREMENTS.md M6, M7. Announcements in both modes:

@@ -8,7 +8,7 @@ from typing import Any
 
 from PySide6.QtCore import Property, QObject, Qt, QTimer, Signal, Slot
 
-from .constants import (ANNOUNCE_LOCKOUT_MS, ASPECTS, ASPECT_TEXT,
+from .constants import (ASPECTS, ASPECT_TEXT,
                         CABIN_MAX_F, CABIN_MIN_F, CLOCK_START_S, FAILURES,
                         FAILURE_TEXT, GAINS_HANDOVER_MS, LINES, MAX_POWER_W,
                         MAX_SPEED_MPS,
@@ -74,7 +74,6 @@ class ConsoleBackend(QObject):
         self._roster: tuple[str, ...] = tuple(self.fleet.ids())
         self.selected = self._roster[0] if self._roster else ""
         self.notes: dict[str, str] = {}
-        self.announcing: set[str] = set()
         self.sim_rate = 1
         self.paused = False
         self.bench_error = ""
@@ -146,7 +145,6 @@ class ConsoleBackend(QObject):
         index = self.fleet.ids().index(train_id)
         self.fleet.remove(train_id)
         self.notes.pop(train_id, None)
-        self.announcing.discard(train_id)
         self._last_commands.pop(train_id, None)
         self.sims.pop(train_id, None)
         if self.selected == train_id:
@@ -355,8 +353,8 @@ class ConsoleBackend(QObject):
             "interior_lights": s.interior_lights,
             "exterior_lights": s.exterior_lights,
 
-            "announcing": (self.selected in self.announcing
-                           or bool(s.announcement)),
+            "announcing": bool(s.announcement),
+            "can_announce": self.core.can_repeat,
             "announce_label": self._announce_label(),
 
             "next_signal": s.next_signal,
@@ -391,12 +389,13 @@ class ConsoleBackend(QObject):
     def _announce_label(self) -> str:
         # The controller only sends the command; the Train Model
         # makes the announcement (REQUIREMENTS.md M7).
-        if (self.selected in self.announcing
-                or self.core.state.announcement):
+        if self.core.state.announcement:
             return "Announcement sent"
         if self.operator == "driver" and not self.core.state.manual:
             return "Sending automatically"
-        return "Send station announcement"
+        if not self.core.last_announcement:
+            return "Nothing to repeat yet"
+        return "Repeat last announcement"
 
     # ------------------------------------------------------ write side
     @Slot(int)
@@ -592,20 +591,14 @@ class ConsoleBackend(QObject):
 
     @Slot()
     def announce(self) -> None:
-        """Send the station announcement command, then lock out."""
-        if not self.can_drive or self.selected in self.announcing:
-            return
-        train = self.selected
-        self.announcing.add(train)
-        self.core.state.announcement = self.core.state.beacon_station
-        QTimer.singleShot(ANNOUNCE_LOCKOUT_MS,
-                          lambda: self._announce_done(train))
-        self._publish()
+        """Repeat the last automatic announcement, in Manual.
 
-    def _announce_done(self, train: str) -> None:
-        self.announcing.discard(train)
-        if train in self.fleet:
-            self.fleet.get(train).state.announcement = ""
+        Held for the lockout on system time, as the automatic ones are
+        (REQUIREMENTS.md M7, M11).
+        """
+        if not self.can_drive:
+            return
+        self.core.repeat_announcement()
         self._publish()
 
     # ------------------------------------------------------- bench

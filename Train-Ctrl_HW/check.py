@@ -1057,7 +1057,8 @@ def run_check(
     # arriving soon at 3 blocks of authority; arrived once a station
     # beacon was heard and the train stands with none left; departing
     # once the doors report closed and the Track Signal resumes. Each
-    # is held for the lockout, then cleared.
+    # is held for the lockout, then cleared. In Manual the driver may
+    # repeat the last one, not while one plays.
     for manual in (False, True):
         mode = "Manual" if manual else "Automatic"
         talk = mod.ControllerCore()
@@ -1070,6 +1071,8 @@ def run_check(
             return talk.commands().announcement
         say(commanded_speed=10.0, authority_blocks=4, actual_speed=10.0,
             door_state=[False, False])
+        expect(not talk.repeat_announcement(),
+               f"{mode} repeated an announcement before any was sent")
         expect(say(authority_blocks=3)
                == mod.ANNOUNCE_ARRIVING.format(train_id="T-9"),
                f"{mode} did not announce arriving soon at 3 blocks")
@@ -1087,10 +1090,15 @@ def run_check(
         expect(said == mod.ANNOUNCE_DEPARTING.format(train_id="T-9",
                                                      station="DORMONT"),
                f"{mode} did not announce the departure, said {said!r}")
+        expect(not talk.repeat_announcement(),
+               f"{mode} repeated an announcement while one played")
         for _ in range(round(mod.ANNOUNCE_LOCKOUT_MS / 1000 / talk.dt) + 1):
             talk.step()
         expect(talk.commands().announcement == "",
                f"{mode}'s announcement never cleared")
+        expect(talk.repeat_announcement() == manual
+               and talk.commands().announcement == (said if manual else ""),
+               f"{mode} got the repeat of the last announcement wrong")
 
     # Automatic lights (REQUIREMENTS.md M8), in either mode: on with an
     # underground beacon and at 18:00; off with a later beacon saying
@@ -1203,8 +1211,8 @@ def run_check(
     expect(backend.snapshot["train_count"] == 1,
            "removing a missing train changed the roster")
 
-    # Announcements lock out for their duration, and carry the
-    # beacon's station while they play.
+    # In Manual the press repeats the last announcement, held for the
+    # lockout on system time (REQUIREMENTS.md M7, M11).
     # The longest announcement the controller sends, on screen.
     longest = mod.ANNOUNCE_DEPARTING.format(train_id=backend.selected,
                                             station="DORMONT")
@@ -1216,14 +1224,16 @@ def run_check(
     scan("long announcement")
     if shots:
         bench.grabWindow().save(str(shots / "09-announcement.png"))
-    backend.core.state.announcement = ""
+    expect(_until(app, lambda: not backend.snapshot["announcing"], 10),
+           "announcement never cleared")
+    scan("nothing announcing")
     backend.announce()
     scan("announcing")
     expect(backend.snapshot["announcing"], "announcement did not start")
-    expect(backend.snapshot["announcement"] == "DORMONT",
-           "the announcement did not carry the beacon's station")
-    _settle(app, mod.ANNOUNCE_LOCKOUT_MS + 400)
-    expect(not backend.snapshot["announcing"], "announcement never cleared")
+    expect(backend.snapshot["announcement"] == longest,
+           "the press did not repeat the last announcement")
+    expect(_until(app, lambda: not backend.snapshot["announcing"], 10),
+           "announcement never cleared")
 
     for text, seen in sorted(cut.items()):
         expect(False, f"text cut off: {text!r} ({', '.join(seen[:3])})")
