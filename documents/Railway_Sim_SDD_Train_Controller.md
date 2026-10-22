@@ -1035,8 +1035,6 @@ No user starts it: it runs in every tick (005-interaction).
 | Stimulus | The Track Model sends the signal aspect ahead. |
 | Response | The console shows the light; the driver drives to it. |
 
-![Sequence diagram: Send signal aspect ahead](sdd-figures/train-controller/07-seq-11-signal-aspect.png)
-
 ---
 
 *— End of document —*
