@@ -199,6 +199,14 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     inside the window, or a state the check never reaches (a very long
     station name, say).
 
+34. **E-brake left off in Automatic with a failure latched** (R31, to
+    test later). The driver releases the emergency brake in Manual at a
+    stand, failure still latched, then switches to Automatic: the brake
+    stays off, and the train is held only by the 0 target (and the
+    service brake if it moves). That follows M3 ("does not engage it
+    again"). To decide after testing: keep it, or have Automatic engage
+    it again while a failure is latched.
+
 ## Carried over
 
 - **Rolling resistance.** Decided: the controller models no outside forces
