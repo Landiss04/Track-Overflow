@@ -3,58 +3,75 @@
 hide empty members
 left to right direction
 
-package "track_ctrl_hw (host process): link to the Pi" {
-  class HarnessEndpoint <<planned>> {
-    -_controller: TrackController
-    +on_message(line: str): None
-    -_reply(id: int, tick: int, outputs): None
+package "utils" {
+  class ModuleLink <<QObject>> {
+    +clockStateChanged: Signal
+    +quitRequested: Signal
+    +harnessLost: Signal
+    +connect_to_harness(): None
+    +announce_ready(): None
+    +reply_outputs(id, tick, outputs): bool
+    +reply_rejected(id, tick, reason): bool
+    +push_state(state: dict): None
+  }
+}
+
+package "common/hw_link (host process)" {
+  class HardwareRelay <<QObject>> {
+    +ready: Signal
+    +reply: Signal[dict]
+    +viewChanged: Signal[dict]
+    +diagnosticEvent: Signal[str]
+    +start(): None
+    +set_clock_state(state: dict): None
+    +submit_step(request): None
+    +call_action(name: str, args: dict): Any
+    +close(): None
   }
 
-  class RemoteTrackController <<planned>> {
-    -_link: PiSerialLink
-    +step(dt, inputs): TrackControllerOutputs
+  class RemoteTrackController {
+    -relay: HardwareRelay
+    -_snapshot: TrackControllerSnapshot
     +snapshot(): TrackControllerSnapshot
     +load_territory(territory): tuple[str]
     +load_program(wayside_id, source, file_name): ProgramInfo
     +reset(): None
+    +step(dt, inputs): never, harness drives the Pi
   }
 
-  class PiSerialLink <<planned>> {
-    -_port: QSerialPort
-    -_next_id: int
-    +open(): bool
-    +request(op: str, payload: dict): dict
+  abstract class ByteTransport <<QObject>> {
+    +start(): None
+    +write(data: bytes): None
+    +close(): None
   }
+  class SerialTransport
+  class ProcessTransport
+  note bottom of SerialTransport
+    QSerialPort; finds the Pi by its
+    USB identity, never a COM number
+  end note
 
-  class TrackControllerState
+  class codec <<module>> {
+    +pack(value): Any
+    +unpack(value): Any
+  }
 }
 
-interface TrackController <<Protocol>> {
-  +step(dt, inputs): TrackControllerOutputs
-  +snapshot(): TrackControllerSnapshot
-  +load_territory(territory): tuple[str]
-  +load_program(wayside_id, source, file_name): ProgramInfo
-  +reset(): None
-}
-
-class QSerialPort
+interface TrackController <<Protocol>>
+class TrackControllerState
 
 package "Raspberry Pi 5" {
-  class PiLinkServer <<planned>>
-  class HwTrackController
+  class PiLinkServer
 }
 
-note bottom of PiSerialLink
-  Finds the Pi by its USB identity,
-  never a fixed COM number (D027).
-end note
-
-HarnessEndpoint --> TrackController : step()
-TrackControllerState --> TrackController : load, snapshot
+ModuleLink --> HardwareRelay : STEP via submit_step
+HardwareRelay --> ModuleLink : OUTPUTS / REJECTED
+HardwareRelay --> ByteTransport
+ByteTransport <|-- SerialTransport
+ByteTransport <|-- ProcessTransport
 RemoteTrackController ..|> TrackController
-HwTrackController ..|> TrackController
-RemoteTrackController --> PiSerialLink
-PiSerialLink --> QSerialPort
-PiSerialLink ..> PiLinkServer : USB serial,\nnewline JSON
-PiLinkServer --> HwTrackController
+RemoteTrackController --> HardwareRelay : call_action
+RemoteTrackController ..> codec : unpack snapshots
+TrackControllerState --> TrackController
+SerialTransport ..> PiLinkServer : USB serial,\nnewline JSON
 @enduml

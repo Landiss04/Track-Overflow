@@ -9,16 +9,14 @@ Paste into the group SDD as needed; every figure is a PNG beside its PlantUML so
 | **Module** | Track Controller, hardware variant (`TrackCtrlHw/`, package `track_ctrl_hw`) |
 | **Owner** | Braden |
 | **Status** | Draft for WP2 and the design review, 2026-10-22 |
-| **Basis** | PR #43 (`feature/TrackCtrl-Showcase-Feedback`, `49f16e6`); decisions D005, D006, D013, D017, D021, D027 on `truth` |
+| **Basis** | PR #43 (merged into `development`); integration branch `claude/quirky-fermi-sickg4` (`common/hw_link/`, built by Kevin Schillinger); decisions D005, D006, D013, D017, D021, D027 on `truth` |
 
 **Reading the figures.** Orange elements marked «planned» are designed but not built yet.
-Everything else exists in PR #43. Two parts of the design are planned:
-
-- **The split between PC and Raspberry Pi** (D021, D027). Today the whole module runs in one
-  process on the PC. In the design, the core runs on the Pi and the PC keeps the window.
-- **The read-only vital PLC block.** A design assumption until Harry Tye confirms it: each
-  wayside runs a fixed, generated PLC block after the user's program, which can only make
-  an output more restrictive.
+One part of the design is planned: **the read-only vital PLC block**, a design assumption
+until Harry Tye confirms it. Each wayside would run a fixed, generated PLC block after the
+user's program, which can only make an output more restrictive. The split between the PC
+and the Raspberry Pi (D021, D027) is built: the window runs on the PC and the core on the Pi,
+linked by `common/hw_link/`.
 
 ---
 
@@ -124,7 +122,7 @@ Actors:
 | **Stimulus** | Any tick; the window refreshes at most every 100 ms. Zoom and **Fit** on the diagram. |
 | **Response** | Tables update in place; the diagram redraws. |
 | **Requirements** | REQ-INTF-001.4, REQ-INTF-011; displays rubric 6.1 to 6.5 |
-| **Sequence** | SD-03 |
+| **Sequence** | SD-04 |
 
 ### UC-05 View PLC program details
 
@@ -136,7 +134,7 @@ Actors:
 | **Stimulus** | The programmer clicks **i** on the Wayside PLC strip. |
 | **Response** | The PLC program details dialog opens; **New PLC** there starts UC-02. |
 | **Requirements** | Rubric 6.9; REQ-FUNC-050 |
-| **Sequence** | SD-04 |
+| **Sequence** | SD-05 |
 
 ### UC-06 View last report to the CTC Office
 
@@ -148,7 +146,7 @@ Actors:
 | **Stimulus** | The programmer clicks **View** on the CTC uplink strip. |
 | **Response** | The Last report dialog opens. |
 | **Requirements** | Rubric 6.4; REQ-FUNC-055 |
-| **Sequence** | SD-04 |
+| **Sequence** | SD-06 |
 
 ### UC-07 Run scan cycle
 
@@ -161,7 +159,7 @@ Actors:
 | **Response** | Before the next tick: track-circuit commands, switch, signal and crossing commands, and one report per wayside. Each statement runs on two independently written channels and both must agree; the vital block then runs the same way. |
 | **Alternatives** | Invalid dt or input: the whole tick is rejected before anything changes, and the harness logs it. Any wayside not ready: UC-16. |
 | **Requirements** | Rubric 6.1, 6.2, 6.6, 6.9; REQ-FUNC-058, REQ-INTF-013, REQ-NFR-002 |
-| **Sequence** | SD-05, SD-06 |
+| **Sequence** | SD-07 |
 
 ### UC-08 Receive speed and authority suggestions
 
@@ -174,7 +172,7 @@ Actors:
 | **Response** | The speed enters the program as five bits, `SPD_n_0..4`; the authority waits for the program's `AUTH_n`. Blocks of other lines or no wayside are ignored. |
 | **Alternatives** | A negative, fractional or too-large value rejects the tick. |
 | **Requirements** | Rubric 6.0; REQ-FUNC-049, REQ-INTF-019 |
-| **Sequence** | SD-05 |
+| **Sequence** | SD-08 |
 
 ### UC-09 Receive closures and maintenance switch commands
 
@@ -186,7 +184,7 @@ Actors:
 | **Stimulus** | Every tick. |
 | **Response** | `CLOSED_n`, `CTCSW_s` and `CTCREV_s` inputs to the program. The window shows each command as "CTC asks" and lists closures and commands in the maintenance banner. |
 | **Requirements** | Rubric 6.8; REQ-FUNC-057, REQ-FUNC-012 |
-| **Sequence** | SD-07 |
+| **Sequence** | SD-09 |
 
 ### UC-10 Receive track state
 
@@ -198,7 +196,7 @@ Actors:
 | **Stimulus** | Every tick. |
 | **Response** | `OCC_n` and `SWREV_s` inputs to the program; the read-back goes into the report (UC-15). A failed block is protected exactly like an occupied one. |
 | **Requirements** | Rubric 6.3; REQ-FUNC-054, REQ-FUNC-059, REQ-INTF-018 |
-| **Sequence** | SD-05 |
+| **Sequence** | SD-10 |
 
 ### UC-11 Command switches
 
@@ -210,7 +208,7 @@ Actors:
 | **Stimulus** | Each scan (UC-07). |
 | **Response** | A switch command to the Track Model. The vital block holds a switch where it reports while a train is on its blocks. |
 | **Requirements** | Rubric 6.1, 6.8; REQ-FUNC-052 |
-| **Sequence** | SD-06, SD-07 |
+| **Sequence** | SD-11 |
 
 ### UC-12 Set signal aspects
 
@@ -222,7 +220,7 @@ Actors:
 | **Stimulus** | Each scan. |
 | **Response** | A signal command to the Track Model. |
 | **Requirements** | Rubric 6.2; REQ-FUNC-053 |
-| **Sequence** | SD-06 |
+| **Sequence** | SD-12 |
 
 ### UC-13 Control railway crossings
 
@@ -234,7 +232,7 @@ Actors:
 | **Stimulus** | Each scan. |
 | **Response** | A crossing command to the Track Model. |
 | **Requirements** | Rubric 6.5; REQ-FUNC-056 |
-| **Sequence** | SD-06 |
+| **Sequence** | SD-13 |
 
 ### UC-14 Send speed and authority on track circuits
 
@@ -246,7 +244,7 @@ Actors:
 | **Stimulus** | Each scan. |
 | **Response** | One track-circuit command per block with a suggestion. |
 | **Requirements** | Rubric 6.0, 6.9; REQ-INTF-017, REQ-FUNC-058.1 |
-| **Sequence** | SD-06 |
+| **Sequence** | SD-14 |
 
 ### UC-15 Report occupancy, state and readiness
 
@@ -258,7 +256,7 @@ Actors:
 | **Stimulus** | Each scan. |
 | **Response** | The harness maps the reports into the CTC Office's inputs. The CTC Office dispatches nothing on a line until every wayside of it is ready. |
 | **Requirements** | Rubric 6.4; REQ-FUNC-055, REQ-INTF-020 |
-| **Sequence** | SD-05, SD-06 |
+| **Sequence** | SD-15 |
 
 ### UC-16 Hold fail-safe outputs
 
@@ -270,20 +268,20 @@ Actors:
 | **Stimulus** | Any of those conditions at a scan. |
 | **Response** | Every signal red, every crossing active, speed 0 and authority 0 on every track circuit, switches left where they are. The report says not ready and why. |
 | **Requirements** | Rubric 6.9; REQ-FUNC-058 |
-| **Sequence** | SD-06 |
+| **Sequence** | SD-16 |
 
 ---
 
 ## 4. Software architecture
 
-![Software architecture](../uml/track_ctrl_hw/architecture.png)
+![Track Controller (HW) architecture (component view)](../uml/track_ctrl_hw/architecture.png)
 
 The module is layered so that the safety-relevant part has no user interface and no Qt:
 
 | Layer | Runs on | Parts | Responsibility |
 |---|---|---|---|
 | Presentation | PC | QML window and dialogs, `TrackControllerState`, `views`, `display`, `schematic` | Shows the waysides in imperial units; turns clicks into calls on the `TrackController` interface. Never decides anything. |
-| Communication | PC and Pi | `HarnessEndpoint`, `RemoteTrackController`, `PiSerialLink` (PC); `PiLinkServer` (Pi); `wire` (both) | Carries harness ticks and window requests to the Pi and the replies back, as newline JSON over USB serial (D027). |
+| Communication | PC and Pi | `ModuleLink`, `RemoteTrackController`, `HardwareRelay`, `SerialTransport` (PC); `PiLinkServer`, `TrackCore` (Pi); `wire`, `codec` (both) | Carries harness ticks and window requests to the Pi and the replies back, as newline JSON over USB serial (D027). Built in `common/hw_link/`. |
 | Control | Pi | `HwTrackController`, `Wayside` | One line's waysides: input image, scan, outputs, report, ready, fail-safe hold. |
 | PLC engine | Pi | `compile_program`, channel A, channel B, vital block | Compiles each statement twice, by different algorithms, and runs both every scan. |
 | Contract | both | `interface.py`, `errors.py` | The `TrackController` Protocol and the boundary types. The software variant implements the same Protocol. |
@@ -293,7 +291,8 @@ Design choices:
 - **One interface, three users.** The harness, the window and the test UI drive the module
   only through `TrackController` (`step`, `snapshot`, `load_territory`, `load_program`,
   `reset`). `RemoteTrackController` implements the same Protocol on the PC and forwards each
-  call to the Pi, so the window and the harness endpoint do not change when the core moves.
+  window action to the Pi, so the window did not change when the core moved. Harness ticks
+  go straight from `ModuleLink` to the Pi through `HardwareRelay`.
 - **The core is Qt-free.** `interface`, `controller`, `wayside`, `plc`, `territory`, `wire`
   and `errors` import no Qt, so they run on the Pi with plain Python and are unit-tested
   headlessly (74 tests).
@@ -320,8 +319,10 @@ Design choices:
   them, drives the outputs and builds the `CtcReport`.
 - `Program` is immutable: a compiled program never changes while it is scanned. Each
   `Statement` carries a tree (channel A) and postfix code (channel B).
-- `PiLinkServer` (planned) reads requests from the USB gadget serial port and calls the
-  controller.
+- On the Pi, `PiLinkServer` (`common/hw_link/agent.py`) reads requests from the USB gadget
+  serial port, journals them, and passes them to `TrackCore`, which steps the controller,
+  runs the allowlisted window actions (`load_territory`, `load_program`, `reset`) and packs
+  snapshots for the window.
 
 ### 5.2 Boundary types
 
@@ -344,56 +345,61 @@ block counts (D013).
 
 - `TrackControllerState` is the only object QML talks to. It reads a snapshot, turns it into
   rows through `views`, and pushes them into five `RowsModel`s that update in place.
-- `RemoteTrackController` (planned) replaces the in-process `HwTrackController`; it owns the
-  serial link to the Pi through `PiSerialLink`. It implements the same Protocol, so each
-  call becomes one request over USB (newline JSON via `wire.py`) and errors come back typed.
-- `HarnessEndpoint` (planned) answers the harness's tick messages.
+- `RemoteTrackController` (`common/hw_link/remote_track.py`) implements the same Protocol as
+  `HwTrackController`, so the window is unchanged. It caches the snapshot the Pi pushes and
+  turns each window action into one request through `HardwareRelay`; errors come back typed.
+- `ModuleLink` answers the harness: each STEP goes to `HardwareRelay.submit_step`, and the
+  Pi's reply comes back as OUTPUTS or REJECTED. `HardwareRelay` keeps requests in order,
+  holds replies while the USB link is lost, and `SerialTransport` finds the Pi by its USB
+  identity.
 
 ---
 
 ## 6. Sequence diagrams
 
-| Diagram | Use cases |
-|---|---|
-| SD-01 Load wayside database | UC-01 |
-| SD-02 Load PLC program | UC-02 |
-| SD-03 Select wayside and monitor its state | UC-03, UC-04 |
-| SD-04 View PLC details and the last report | UC-05, UC-06 |
-| SD-05 One tick through the central harness | UC-07 to UC-10, UC-14, UC-15 |
-| SD-06 Scan cycle of one wayside | UC-07, UC-11 to UC-16 |
-| SD-07 Maintenance switch command | UC-09, UC-11 |
+One sequence diagram per use case.
 
-![SD-01](../uml/track_ctrl_hw/sd01_load_database.png)
+![SD-01 Load wayside database (UC-01)](../uml/track_ctrl_hw/sd01_load_database.png)
 
-![SD-02](../uml/track_ctrl_hw/sd02_load_program.png)
+![SD-02 Load PLC program (UC-02)](../uml/track_ctrl_hw/sd02_load_program.png)
 
-![SD-03](../uml/track_ctrl_hw/sd03_monitor.png)
+![SD-03 Select wayside (UC-03)](../uml/track_ctrl_hw/sd03_select_wayside.png)
 
-![SD-04](../uml/track_ctrl_hw/sd04_details_and_report.png)
+![SD-04 Monitor wayside state (UC-04)](../uml/track_ctrl_hw/sd04_monitor.png)
 
-![SD-05](../uml/track_ctrl_hw/sd05_tick.png)
+![SD-05 View PLC program details (UC-05)](../uml/track_ctrl_hw/sd05_plc_details.png)
 
-![SD-06](../uml/track_ctrl_hw/sd06_scan_cycle.png)
+![SD-06 View last report to the CTC Office (UC-06)](../uml/track_ctrl_hw/sd06_last_report.png)
 
-![SD-07](../uml/track_ctrl_hw/sd07_maintenance_switch.png)
+![SD-07 Run scan cycle (UC-07)](../uml/track_ctrl_hw/sd07_run_scan_cycle.png)
+
+![SD-08 Receive speed and authority suggestions (UC-08)](../uml/track_ctrl_hw/sd08_suggestions.png)
+
+![SD-09 Receive closures and maintenance switch commands (UC-09)](../uml/track_ctrl_hw/sd09_closures_switch_commands.png)
+
+![SD-10 Receive track state (UC-10)](../uml/track_ctrl_hw/sd10_track_state.png)
+
+![SD-11 Command switches (UC-11)](../uml/track_ctrl_hw/sd11_command_switches.png)
+
+![SD-12 Set signal aspects (UC-12)](../uml/track_ctrl_hw/sd12_signal_aspects.png)
+
+![SD-13 Control railway crossings (UC-13)](../uml/track_ctrl_hw/sd13_crossings.png)
+
+![SD-14 Send speed and authority on track circuits (UC-14)](../uml/track_ctrl_hw/sd14_track_circuits.png)
+
+![SD-15 Report occupancy, state and readiness (UC-15)](../uml/track_ctrl_hw/sd15_report.png)
+
+![SD-16 Hold fail-safe outputs (UC-16)](../uml/track_ctrl_hw/sd16_hold_fail_safe.png)
 
 ---
 
 ## 7. Deployment
 
-![Deployment](../uml/track_ctrl_hw/deployment.png)
-
-- The system is one executable on one Windows PC. It starts the central harness, which
-  spawns one process per module (D005).
-- The Track Ctrl HW process on the PC shows the window, owns the serial port, and relays the
-  harness's messages to the Pi and the replies back (D027).
-- One Raspberry Pi 5, in USB device mode, runs the core for every Red Line wayside. It
-  appears on the PC as a standard USB serial (COM) port, needing no driver; the PC finds it
-  by its USB identity, not a fixed COM number.
-- Wayside databases and PLC programs are files on the PC; the window sends their contents
-  to the Pi.
-- The test UI is a debugging tool. It is not packaged and the harness never starts it, so it
-  is not part of the deployment.
+The module is part of the system deployment diagram. Specific to it: the Track Ctrl HW
+process on the PC (`common/hw_link/host.py`) shows the window and owns the serial port, and
+one Raspberry Pi 5 in USB device mode runs the core for every Red Line wayside. Wayside
+databases and PLC programs are files on the PC; the window sends their contents to the Pi.
+The test UI is a debugging tool, not packaged and never started by the harness.
 
 ---
 
@@ -403,10 +409,8 @@ block counts (D013).
 |---|---|---|
 | 1 | The read-only vital PLC block is assumed. Harry Tye to confirm for both variants; implementation steps are recorded. | Braden, Harry |
 | 2 | Whether the programmer may set a switch by hand in maintenance mode (rubric 6.8). Assumed: only the CTC Office sets a switch. The software variant has a manual switch. | Braden, Harry |
-| 3 | The Red Line's wayside boundaries, and its database and program files. Every switch must lie inside one wayside. Block 9's switch string `75-yard` should be checked against the course spreadsheet. | Braden |
-| 4 | The USB message framing and the Pi's identification on connect. | Kevin, Braden |
-| 5 | Power for the Pi 5: its USB-C port is both data link and power input. | Braden, Kevin |
-| 6 | At 10x the harness sends 100 ticks per second and waits for every reply, so the USB round trip and the scan must stay under 10 ms. To be measured on the Pi. | Braden |
-| 7 | The PLC names differ between the variants (`CTCSW_n`, `CTCREV_n`, `SPD_n_b`, `CMD_n_b` here; `MAINT`, no speed bits in the software variant), so one program file does not yet load on both (REQ-INTF-009). | Braden, Harry |
-| 8 | Signal aspects cross the boundary in lower case here (`super_green`); the system convention is upper case (`SUPER_GREEN`). The harness mapping or the module must convert. | Braden |
-| 9 | REQ-FUNC-057 ("know when the system is in maintenance mode"): the CTC Office sends no flag, so the wayside knows only through switch commands. Wording left open. | Braden |
+| 3 | The Red Line's wayside boundaries. The integration branch carries test copies (Red-1: blocks 1–24 and 73–76; Red-2: 25–45 and 67–72; Red-3: 46–66) that keep every switch inside one wayside; they await Braden's approval. | Braden |
+| 4 | Power for the Pi 5: its USB-C port is both data link and power input. | Braden, Kevin |
+| 5 | At 10x the harness sends 100 ticks per second and waits for every reply, so the USB round trip and the scan must stay under 10 ms. To be measured on the Pi. | Braden |
+| 6 | The PLC names still differ between the variants (the software variant keeps `MAINT`), so one program file does not yet load on both (REQ-INTF-009). | Braden, Harry |
+| 7 | REQ-FUNC-057 ("know when the system is in maintenance mode"): the CTC Office sends no flag, so the wayside knows only through switch commands. Wording left open. | Braden |

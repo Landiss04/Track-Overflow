@@ -3,20 +3,33 @@
 hide empty members
 left to right direction
 
+package "common/hw_link (Pi agent)" {
+  class PiLinkServer {
+    -core: TrackCore
+    -journal: Path | None
+    -cache: dict
+    +handle(request: dict): list[dict]
+    +feed(data: bytes): list[bytes]
+  }
+  class TrackCore {
+    -controller: HwTrackController
+    +step(request: dict): dict
+    +action(name: str, args: dict): Any
+    +view(): dict
+  }
+  note bottom of TrackCore
+    Allowlisted window actions:
+    load_territory, load_program, reset
+  end note
+}
+
 package "track_ctrl_hw (Qt-free core): control" {
   interface TrackController <<Protocol>> {
-    +step(dt: float, inputs: TrackControllerInputs): TrackControllerOutputs
+    +step(dt, inputs): TrackControllerOutputs
     +snapshot(): TrackControllerSnapshot
-    +load_territory(territory: Territory): tuple[str]
-    +load_program(wayside_id: str, source: str, file_name: str): ProgramInfo
+    +load_territory(territory): tuple[str]
+    +load_program(wayside_id, source, file_name): ProgramInfo
     +reset(): None
-  }
-
-  class PiLinkServer <<planned>> {
-    -_port: serial device /dev/ttyGS0
-    -_controller: HwTrackController
-    +serve(): None
-    -_handle(request: dict): dict
   }
 
   class HwTrackController {
@@ -44,7 +57,6 @@ package "track_ctrl_hw (Qt-free core): control" {
     -_circuits: dict[BlockKey, TrackCircuitCommand]
     -_holding: str
     +territory: Territory
-    +program: Program | None
     +not_ready_reason: str
     +owns(key: BlockKey): bool
     +load_program(source, file_name, time_s): ProgramInfo
@@ -58,10 +70,10 @@ package "track_ctrl_hw (Qt-free core): control" {
   }
 
   class WaysideScan {
-    +track_circuits: dict[BlockKey, TrackCircuitCommand]
-    +switch_commands: dict[BlockKey, SwitchPosition]
-    +crossing_commands: dict[BlockKey, bool]
-    +signal_commands: dict[BlockKey, SignalAspect]
+    +track_circuits
+    +switch_commands
+    +crossing_commands
+    +signal_commands
     +report: CtcReport
   }
 
@@ -72,13 +84,6 @@ package "track_ctrl_hw (Qt-free core): control" {
     +inputs_to_wire / inputs_from_wire
     +outputs_to_wire / outputs_from_wire
     +territory_to_wire / territory_from_wire
-    +snapshot_to_wire / snapshot_from_wire <<planned>>
-  }
-
-  class territory <<module>> {
-    +load_territory_file(path): Territory
-    +parse_territory(data): Territory
-    +parse_switch(key, text, ids): Switch
   }
 
   class TrackControllerError
@@ -91,8 +96,9 @@ package "track_ctrl_hw (Qt-free core): control" {
   class WireFormatError
 }
 
-PiLinkServer --> HwTrackController : drives
-PiLinkServer ..> wire
+PiLinkServer --> TrackCore : dispatches
+TrackCore --> HwTrackController : drives
+TrackCore ..> wire
 HwTrackController ..|> TrackController
 HwTrackController "1" *-- "1..*" Wayside : runs >
 Wayside --> "0..1" Program : user program
@@ -104,5 +110,4 @@ TrackControllerError <|-- PlcError
 TrackControllerError <|-- InvalidTimeStepError
 TrackControllerError <|-- InvalidInputError
 TrackControllerError <|-- WireFormatError
-territory ..> TerritoryError : raises
 @enduml

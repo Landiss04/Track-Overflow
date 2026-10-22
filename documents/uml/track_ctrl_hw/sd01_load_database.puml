@@ -6,48 +6,38 @@ actor Programmer as P
 participant "Main window\n(QML)" as QML
 participant "TrackControllerState" as State
 participant "territory" as Terr
-participant "RemoteTrackController\n+ PiSerialLink" as Remote <<planned>>
+participant "RemoteTrackController" as Remote
+participant "HardwareRelay\n+ SerialTransport" as Relay
 box "Raspberry Pi 5" #F2F5F9
-participant "PiLinkServer" as Pi <<planned>>
+participant "PiLinkServer\n+ TrackCore" as Pi
 participant "HwTrackController" as Ctrl
-participant "Wayside" as W
 end box
 
-P -> QML : click **Load database**
-QML -> P : file dialog
-P -> QML : choose red_wayside_N.json
+P -> QML : **Load database**, pick a file
 QML -> State : loadDatabase(url)
 State -> Terr : load_territory_file(path)
-alt file unreadable or malformed
+alt unreadable or malformed
   Terr --> State : TerritoryError
-  State --> QML : problem("Database not loaded", reason)
-  QML --> P : error dialog
+  State --> QML : problem("Database not loaded")
 else valid
   Terr --> State : Territory
   State -> Remote : load_territory(territory)
-  Remote -> Pi : {"id", "op": "load_territory", territory} (USB serial)
+  Remote -> Relay : call_action("load_territory",\nterritory_to_wire)
+  Relay -> Pi : ACTION over USB
   Pi -> Ctrl : load_territory(territory)
-  alt other line, or a block another wayside governs
+  alt another line, or a block\nanother wayside governs
     Ctrl --> Pi : TerritoryError
-    Pi --> Remote : {"id", "error": "TerritoryError", message}
-    Remote --> State : raise TerritoryError
-    State --> QML : problem("Database not loaded", reason)
-    QML --> P : error dialog
+    Pi --> Relay : refused, with reason
+    Relay --> Remote : RemoteActionError
+    Remote --> State : TerritoryError
+    State --> QML : problem("Database not loaded")
   else accepted
-    Ctrl -> W ** : Wayside(territory)
-    opt a wayside with this ID was already loaded
-      Ctrl -> W : adopt_program(previous)
-      W --> Ctrl : kept or unloaded
-    end
+    Ctrl -> Ctrl : add or replace the wayside;\nkeep its program if it fits
     Ctrl --> Pi : notices
-    Pi --> Remote : {"id", "ok": notices}
-    Remote --> State : notices
-    State -> State : select the new wayside, refresh()
-    State --> QML : changed
-    opt program no longer fits
-      State --> QML : notice("PLC program unloaded", ...)
-    end
-    QML --> P : wayside listed, header reads **Not ready**
+    Pi --> Relay : ACK + VIEW (packed snapshot)
+    Relay --> Remote : viewChanged: cache snapshot
+    Relay --> State : refresh()
+    State --> QML : wayside listed, **Not ready**
   end
 end
 @enduml

@@ -5,50 +5,43 @@ autonumber
 actor Programmer as P
 participant "Main window\n(QML)" as QML
 participant "TrackControllerState" as State
-participant "RemoteTrackController\n+ PiSerialLink" as Remote <<planned>>
+participant "RemoteTrackController" as Remote
+participant "HardwareRelay\n+ SerialTransport" as Relay
 box "Raspberry Pi 5" #F2F5F9
-participant "PiLinkServer" as Pi <<planned>>
+participant "PiLinkServer\n+ TrackCore" as Pi
 participant "HwTrackController" as Ctrl
 participant "Wayside" as W
 participant "plc" as PLC
 end box
 
-P -> QML : click **New PLC**
-QML -> P : file dialog
-P -> QML : choose red_wayside_N.plc
+P -> QML : **New PLC**, pick a file
 QML -> State : loadProgram(url)
-alt no wayside selected
-  State --> QML : problem("No wayside", ...)
-else
-  State -> State : read the file\n(at most 1 MB, UTF-8)
-  State -> Remote : load_program(wayside_id,\nsource, file_name)
-  Remote -> Pi : {"id", "op": "load_program",\nwayside_id, source}
-  Pi -> Ctrl : load_program(wayside_id,\nsource, file_name)
-  Ctrl -> W : load_program(source,\nfile_name, time_s)
-  W -> PLC : compile_program(source)
-  note over W, PLC
-    Every statement is compiled twice:
-    a tree for channel A, postfix
-    code for channel B.
-  end note
-  PLC --> W : Program (diagnostics)
-  W -> W : check_program()\nnames must be\nthis wayside's I/O
-  alt any error
-    W --> Ctrl : PlcError(diagnostics)
-    Ctrl --> Pi : PlcError
-    Pi --> Remote : {"id", "error": "PlcError",\ndiagnostics}
-    Remote --> State : raise PlcError
-    State --> QML : problem("PLC program\nnot loaded", message,\ndiagnostics)
-    QML --> P : every problem\nwith its line number
-  else no errors
-    W -> W : install program,\nreset ScanInfo, hold\nfail-safe until\nthe next scan
-    W --> Ctrl : ProgramInfo (checksum,\ncounts, warnings)
-    Ctrl --> Pi : ProgramInfo
-    Pi --> Remote : {"id", "ok": ProgramInfo}
-    Remote --> State : ProgramInfo
-    State -> State : refresh()
-    State --> QML : changed
-    QML --> P : program name, checksum;\n**Ready** once every\nwayside has a program
-  end
+State -> State : read the file\n(at most 1 MB, UTF-8)
+State -> Remote : load_program(wayside,\nsource, file_name)
+Remote -> Relay : call_action("load_program")
+Relay -> Pi : ACTION over USB
+Pi -> Ctrl : load_program(...)
+Ctrl -> W : load_program(source, ...)
+W -> PLC : compile_program(source)
+note over W, PLC
+  Every statement is compiled
+  twice: a tree for channel A,
+  postfix code for channel B.
+end note
+PLC --> W : Program (diagnostics)
+W -> W : check_program()\nnames must be this\nwayside's I/O
+alt any error
+  W --> Pi : PlcError(diagnostics)
+  Pi --> Relay : refused, with diagnostics
+  Relay --> Remote : RemoteActionError
+  Remote --> State : PlcError(diagnostics)
+  State --> QML : problem("PLC program not\nloaded", every line)
+else no errors
+  W -> W : install; hold fail-safe\nuntil the next scan
+  W --> Pi : ProgramInfo
+  Pi --> Relay : ACK (packed) + VIEW
+  Relay --> Remote : ProgramInfo, snapshot
+  Remote --> State : ProgramInfo
+  State --> QML : program name, checksum;\n**Ready** once every\nwayside has a program
 end
 @enduml
