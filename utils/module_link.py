@@ -37,6 +37,7 @@ from PySide6.QtNetwork import QLocalSocket
 
 from utils.harness_protocol import (
     QUIT,
+    CLOCK_STATE,
     SHOW,
     STEP,
     LineBuffer,
@@ -69,6 +70,8 @@ class ModuleLink(QObject):
 
     #: The harness sent ``QUIT``.
     quitRequested = Signal()
+    #: The harness clock changed; host relays use this for recovery.
+    clockStateChanged = Signal(object)
     #: The harness asked to reopen this module's window.
     showRequested = Signal()
     #: The harness could not be reached, or the connection closed.
@@ -253,6 +256,11 @@ class ModuleLink(QObject):
         op = message["op"]
         if op == STEP:
             self._answer_step(message)
+        elif op == CLOCK_STATE:
+            state = message["state"]
+            if (isinstance(state.get("clock_paused"), bool)
+                    and isinstance(state.get("clock_speedup"), bool)):
+                self.clockStateChanged.emit(dict(state))
         elif op == QUIT:
             self.quitRequested.emit()
         elif op == SHOW:

@@ -25,6 +25,9 @@ Harness to module:
   unwrapped simulation time at the end of the step (D017).
 - ``QUIT``: end the process.
 - ``SHOW``: reopen the module window; no reply (additive in v1).
+- ``CLOCK_STATE``: actual harness pause/speed state for HW hosts, initially
+  and on transitions, including between steps (additive in v1). Carries
+  id 0 and state with boolean clock_paused and clock_speedup.
 
 Module to harness:
 
@@ -55,6 +58,7 @@ __all__ = [
     "STATE",
     "SHOW",
     "STEP",
+    "CLOCK_STATE",
     "LineBuffer",
     "decode",
     "encode",
@@ -96,8 +100,9 @@ OUTPUTS = "OUTPUTS"
 REJECTED = "REJECTED"
 STATE = "STATE"
 SHOW = "SHOW"
+CLOCK_STATE = "CLOCK_STATE"
 
-HARNESS_TO_MODULE = frozenset({STEP, QUIT, SHOW})
+HARNESS_TO_MODULE = frozenset({STEP, QUIT, SHOW, CLOCK_STATE})
 MODULE_TO_HARNESS = frozenset({READY, OUTPUTS, REJECTED, STATE})
 
 # Fields each message must carry beyond op, id and tick, with a check
@@ -120,6 +125,7 @@ _REQUIRED_FIELDS: dict[str, dict[str, str]] = {
     OUTPUTS: {"outputs": _OBJECT},
     REJECTED: {"reason": _STRING},
     STATE: {"state": _OBJECT},
+    CLOCK_STATE: {"state": _OBJECT},
 }
 
 
@@ -223,6 +229,14 @@ def validate(message: Mapping[str, Any]) -> None:
         if not _has_kind(message[field], kind):
             raise ProtocolError(
                 f"{op} {field} must be a {kind}, got {message[field]!r}"
+            )
+    if op == CLOCK_STATE:
+        state = message["state"]
+        if message["id"] != 0 or set(state) != {
+            "clock_paused", "clock_speedup"
+        } or not all(isinstance(value, bool) for value in state.values()):
+            raise ProtocolError(
+                "CLOCK_STATE needs id 0 and boolean clock_paused/clock_speedup"
             )
 
 

@@ -9,6 +9,7 @@ import json
 import unittest
 
 from utils.harness_protocol import (
+    CLOCK_STATE,
     OUTPUTS,
     PROTOCOL_VERSION,
     QUIT,
@@ -43,6 +44,8 @@ class RoundTripTest(unittest.TestCase):
             outputs_message(41, 12, {"clock_paused": False}),
             rejected_message(41, 12, "grade out of range"),
             state_message(12, {"clock_paused": True}),
+            {"op": CLOCK_STATE, "id": 0, "tick": 12,
+             "state": {"clock_paused": True, "clock_speedup": False}},
         ]
         for message in messages:
             with self.subTest(op=message["op"]):
@@ -61,6 +64,22 @@ class RoundTripTest(unittest.TestCase):
         message = ready_message("ctc-office")
         self.assertEqual(message["protocol"], PROTOCOL_VERSION)
         self.assertEqual((message["id"], message["tick"]), (0, 0))
+
+
+class ClockStateTest(unittest.TestCase):
+    def test_clock_state_requires_both_booleans_and_unsolicited_id(self):
+        for state in ({}, {"clock_paused": True},
+                      {"clock_paused": 1, "clock_speedup": False},
+                      {"clock_paused": False, "clock_speedup": "false"},
+                      {"clock_paused": True, "clock_speedup": False,
+                       "extra": True}):
+            with self.subTest(state=state), self.assertRaises(ProtocolError):
+                encode({"op": CLOCK_STATE, "id": 0, "tick": 1,
+                        "state": state})
+        with self.assertRaises(ProtocolError):
+            encode({"op": CLOCK_STATE, "id": 9, "tick": 1,
+                    "state": {"clock_paused": True,
+                              "clock_speedup": False}})
 
 
 class ValidationTest(unittest.TestCase):

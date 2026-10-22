@@ -154,6 +154,22 @@ class ModuleLinkTest(unittest.TestCase):
         self.assertFalse(self.link.reply_outputs(44, 5, {}))
         self.assertIsNone(self.link.pending_request)
 
+    def test_clock_state_is_delivered_between_steps_without_reply(self):
+        states = []
+        self.link.clockStateChanged.connect(states.append)
+        self.connect_ready()
+        for paused in (False, True):
+            self.harness.send({
+                "op": "CLOCK_STATE", "id": 0, "tick": 0,
+                "state": {"clock_paused": paused, "clock_speedup": False},
+            })
+        self.assertTrue(wait_until(lambda: len(states) == 2))
+        self.assertEqual([state["clock_paused"] for state in states],
+                         [False, True])
+        self.assertEqual(self.steps, [])
+        self.assertEqual(self.link.tick, 0)
+        self.assertEqual(len(self.harness.received), 1)
+
     def test_ready_waits_for_the_link_then_goes_once(self) -> None:
         self.link.announce_ready()
         self.link.announce_ready()

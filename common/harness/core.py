@@ -204,6 +204,7 @@ class Harness(QObject):
         )
         self._reply_timer.timeout.connect(self._on_reply_timeout)
         self._clock.add_tick_listener(self._on_tick)
+        self._clock.add_state_listener(self._broadcast_clock_state)
         self._pacer.backlogDropped.connect(self._on_backlog_dropped)
         supervisor = self._supervisor
         supervisor.moduleStarted.connect(self._on_module_started)
@@ -497,6 +498,22 @@ class Harness(QObject):
             else:
                 self._ctc_speedup = value
 
+    def _send_clock_state(self, module: str) -> None:
+        if self._stopping:
+            return
+        self._supervisor.send(module, {
+            "op": "CLOCK_STATE", "id": 0, "tick": self._clock.tick_count,
+            "state": {"clock_paused": self._clock.is_paused,
+                      "clock_speedup": self._clock.speed == SPEEDUP_SPEED},
+        })
+
+    def _broadcast_clock_state(self) -> None:
+        if self._stopping:
+            return
+        for module in self.ready_modules:
+            if module in {"track-controller-hw", "train-controller-hw"}:
+                self._send_clock_state(module)
+
     def _apply_clock_state(self) -> None:
         # Set the clock's speed, then run or hold it.
         if self._stopping:
@@ -547,6 +564,8 @@ class Harness(QObject):
     def _on_module_ready(self, name: str) -> None:
         # One more module can step.
         self._log_event(name, "MODULE_READY")
+        if name in {"track-controller-hw", "train-controller-hw"}:
+            self._send_clock_state(name)
 
     def _on_all_ready(self) -> None:
         # The clock may run from now on, once the CTC Office asks.
