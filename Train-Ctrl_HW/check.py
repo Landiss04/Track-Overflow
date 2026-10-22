@@ -496,17 +496,6 @@ def run_check(
     expect(not backend.snapshot["fb_interior_lights"],
            "the plant wrote over a light state the bench published")
 
-    # Only the platform side opens (truth beacon.md). The beacon above
-    # put the platform on the right, so the left doors stay shut, and
-    # platforms on both sides open either.
-    backend.set_door("left", True)
-    expect(not backend.snapshot["doors_left"],
-           "the left doors opened with the platform on the right")
-    send({"beacon_side": "LR"})
-    expect(backend.snapshot["platform_left"]
-           and backend.snapshot["platform_right"],
-           "platforms on both sides did not allow both doors")
-
     # The door interlock: a door commanded open while moving stays
     # shut (truth door-command.md).
     send({"door_state_left": False})
@@ -516,17 +505,18 @@ def run_check(
            "a door opened while the train was moving")
     # Pressed again at a stand, the same command still opens it: the
     # tile re-sends a command the plant has already answered once.
+    # The platform is on the right, but away from a station either
+    # side opens (REQUIREMENTS.md M6).
     backend.toggle_emergency_brake()
     _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
     backend.set_door("left", True)
     _settle(app, 300)
     expect(backend.snapshot["fb_doors_left"],
            "re-pressing 'Open left' at a stand did not open the door")
-    # Moved off the platform side, an open door still closes.
-    send({"beacon_side": "R"})
+    # An open door always closes.
     backend.set_door("left", False)
     expect(not backend.snapshot["doors_left"],
-           "an open door off the platform side could not be closed")
+           "the open left door could not be closed")
     backend.toggle_emergency_brake()
 
     # Another train, running its own plant, with its own gains.
@@ -989,6 +979,24 @@ def run_check(
     drive(door, plant, 30)
     expect(stopped() and not door.state.doors_right,
            "the doors opened at a stop with no new station")
+
+    # Manual, at a station: only the platform side opens
+    # (REQUIREMENTS.md M6).
+    door = mod.ControllerCore()
+    door.armed = True
+    door.state.manual = True
+    plant = SimTrain()
+    plant.commanded_mps = plant.actual_mps = 10.0
+    plant.authority_blocks = 999
+    plant.beacon_side = "R"
+    door.apply_staged(mod.read_inputs(plant.outputs()))
+    plant.beacon_station = "DORMONT"
+    plant.at_station = True
+    plant.commanded_mps, plant.authority_blocks = 0.0, 0
+    drive(door, plant, 30)
+    expect(stopped() and not door.command_door("left", True)
+           and door.command_door("right", True),
+           "at a station Manual did not open only the platform side")
 
     # The controller only commands (REQUIREMENTS.md M0): stepping it
     # sends power and moves nothing it receives.

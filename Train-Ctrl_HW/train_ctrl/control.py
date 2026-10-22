@@ -437,16 +437,25 @@ class ControllerCore:
             s.target_mps = 0.0
             self.integral = 0.0
 
+    def may_open(self, side: str) -> bool:
+        """Whether one side's doors may be commanded open now.
+
+        At a stand, either side; at a station (arrived, until it
+        departs), only the platform side the beacon gave. The door
+        interlock is the controller's (REQUIREMENTS.md M6).
+        """
+        if not self.at_stand:
+            return False
+        return not self._at_station or self.platform_on(side)
+
     def command_door(self, side: str, open_: bool) -> bool:
         """Command one side's doors.
 
-        Only the platform side opens, and only at a stand (the door
-        interlock is the controller's, REQUIREMENTS.md M6). Closing is
-        always allowed, so a door left open when the platform side
-        changes is never stuck open. Returns whether it was sent.
+        Opening follows may_open(). Closing is always allowed, so a
+        door is never stuck open. Returns whether it was sent.
         """
         s = self.state
-        if open_ and not (self.platform_on(side) and self.at_stand):
+        if open_ and not self.may_open(side):
             return False
         if side == "left":
             s.doors_left = open_

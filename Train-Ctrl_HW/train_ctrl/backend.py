@@ -337,9 +337,8 @@ class ConsoleBackend(QObject):
             "beacon_station": s.beacon_station,
             "beacon_side": s.beacon_side,
             "beacon_underground": s.beacon_underground,
-            "platform_left": self.core.platform_on("left"),
-            "platform_right": self.core.platform_on("right"),
-            "at_stand": self.core.at_stand,
+            "may_open_left": self.core.may_open("left"),
+            "may_open_right": self.core.may_open("right"),
             "station_hold": self.core.station_hold,
             "announcement": s.announcement,
 

@@ -23,17 +23,17 @@ Panel {
         }
     ]
 
-    // Only the platform side opens, and only at a stand; an open door
-    // can always be closed, so a door left open when the platform side
-    // changes is not stuck. A tile that cannot act now is greyed.
+    // Either side opens at a stand, only the platform side at a
+    // station (REQUIREMENTS.md M6); an open door can always be closed.
+    // A tile that cannot act now is greyed.
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive && (root.s.fb_doors_left
-                || (root.s.platform_left && root.s.at_stand))
+            enabled: root.s.can_drive
+                && (root.s.fb_doors_left || root.s.may_open_left)
             on: root.s.fb_doors_left
             tone: "info"
             text: root.s.fb_doors_left ? qsTr("Close left")
@@ -43,8 +43,8 @@ Panel {
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive && (root.s.fb_doors_right
-                || (root.s.platform_right && root.s.at_stand))
+            enabled: root.s.can_drive
+                && (root.s.fb_doors_right || root.s.may_open_right)
             on: root.s.fb_doors_right
             tone: "info"
             text: root.s.fb_doors_right ? qsTr("Close right")
