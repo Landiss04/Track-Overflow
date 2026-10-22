@@ -1023,18 +1023,6 @@ No user starts it: it runs in every tick (005-interaction).
 
 No user starts it: it runs in every tick (005-interaction).
 
-#### Use case 11 — Send signal aspect ahead
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Send signal aspect ahead |
-| Actors | Track Model |
-| Description | • Each tick the Track Model sends the next signal light ahead: RED, YELLOW, GREEN or SUPER GREEN.<br>• The console shows the light and what it means: Stop, Slow down, Continue to cruise, All clear ahead.<br>• It stands in for the light the driver sees through the front window.<br>• The controller does not act on it; the driver drives accordingly. |
-| Data | Input: signal aspect ahead<br>Output: the light and its meaning on the console |
-| Stimulus | The Track Model sends the signal aspect ahead. |
-| Response | The console shows the light; the driver drives to it. |
-
 ---
 
 *— End of document —*
