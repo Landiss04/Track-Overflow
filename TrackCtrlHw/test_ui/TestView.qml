@@ -41,7 +41,6 @@ Item {
             moduleName: qsTr("Track Controller \u2014 Test UI")
             instance: harness.selectedWayside === "" ? ""
                 : qsTr("WAYSIDE %1").arg(harness.selectedWayside)
-            mode: harness.maintenance ? qsTr("Maintenance") : ""
             line: harness.line === "" ? "" : qsTr("%1 Line").arg(harness.line)
             clock: harness.clockText
         }
@@ -131,45 +130,32 @@ Item {
                         title: qsTr("Inputs \u2014 from CTC Office")
                         enabled: root.ready
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.space_3
-
-                            MonoText {
-                                Layout.fillWidth: true
-                                text: "maintenance_mode"
-                            }
-
-                            MonoText {
-                                Layout.preferredWidth: 64
-                                text: "bool"
-                                color: theme.text_muted
-                            }
-
-                            SegmentedToggle {
-                                Layout.preferredWidth: 180
-                                options: [qsTr("True"), qsTr("False")]
-                                currentIndex: harness.maintenance ? 0 : 1
-                                onActivated: function (index) {
-                                    harness.setMaintenance(index === 0);
-                                }
-                            }
-
-                            Item { Layout.preferredWidth: 52 }
-                        }
-
-                        HelperText {
-                            Layout.fillWidth: true
-                            text: qsTr("System-wide, not per block. "
-                                + "switch_command is sent only while it is "
-                                + "true.")
-                        }
-
                         TableHeader { Layout.fillWidth: true }
 
                         Repeater {
                             model: harness.ctcInputs
                             delegate: SignalTableRow { inputs: true }
+                        }
+
+                        HelperText {
+                            Layout.fillWidth: true
+                            text: qsTr("Sent for the whole line, as the CTC "
+                                + "Office names blocks (line:block). It sends "
+                                + "no maintenance flag, and a switch command "
+                                + "only in maintenance mode: NONE sends none.")
+                        }
+
+                        KeyValueRow {
+                            Layout.fillWidth: true
+                            label: "closed_blocks"
+                            value: harness.closedBlocksText
+                        }
+
+                        KeyValueRow {
+                            Layout.fillWidth: true
+                            label: "switch_commands"
+                            value: harness.switchCommandsText
+                            rule: false
                         }
                     }
 
