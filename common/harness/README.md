@@ -424,12 +424,15 @@ python -m common.harness.measure --seconds 10 --payload-bytes 10000
 python -m common.harness.measure --system --test-pi process --seconds 10
 ```
 
-This runs seven stubs at 10x and reports the round trip of each tick against the 10 ms
-budget. `--system` runs the system as wired instead, with the Track Controller's
+The first command runs seven stubs at 10x and reports each tick against the
+10 ms budget. The second runs the wired system with explicit process-based
+simulated Pis for both HW modules. Without `--test-pi`, system mode waits
+for the assigned real Pis; it never falls back. Add `--window` to construct
+the harness frontend too. System mode loads the Track Controllers'
 starter programs loaded, the CTC Office dispatching G1 to DORMONT (`--dispatch
 G1:Green:73`), and the Train Controller playing the engineer, so the train is released
-and runs for the whole measurement. The results are in section 5 of the design
-document.
+and runs for the whole measurement. The final 200 ms VIEW-cadence measurements and their unresolved 10x
+shortfall are in design section 5.6 and the Phase 5 handover.
 
 ## Operator window
 
@@ -780,3 +783,20 @@ zero or multiple matches, immediately and every five seconds while searching.
 They reach the event log before READY without releasing the clock's readiness
 barrier. The HW window constructs its existing state with the remote controller
 through the approved state factory.
+
+### 2026-10-22: course Red data and owner safety review
+
+`f27ba4e` added the K2 Red-9 special case in `track_devices.py` and
+cross-wayside `OCC_n` inputs in the HW controller. `5d51051` restores the
+course `red_line.json` bytes and interprets the yard at 9 in all readers,
+with CTC yard metadata aligned. Assumption for the Track Model owner and
+Braden: point 9/NORMAL to 8/REVERSE yard/fixed side 10/light on 10.
+
+**Safety note for Braden and Harry Tye:** an occupied block missing from
+the inputs counts as clear. Review full-line occupancy delivery and PLC
+expectations before approving these extensions. This changelog request
+does not change the core's occupancy handling.
+
+The profile-driven `c9498e4` change sends periodic Pi VIEW snapshots every
+200 ms instead of 100 ms, within K6's approved 100–200 ms range. STEP and
+ACTION ordering, durable journal synchronization and replay are unchanged.
