@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections import deque
+from collections.abc import Mapping
 from typing import Any
 
 from PySide6.QtCore import QEventLoop, QObject, QTimer, Signal
@@ -25,7 +26,7 @@ class HardwareRelay(QObject):
     ready = Signal()
     reply = Signal(dict)
     viewChanged = Signal(dict)
-    event = Signal(str)
+    diagnosticEvent = Signal(str)
     completed = Signal(int, dict)
     closing = Signal()
 
@@ -61,7 +62,10 @@ class HardwareRelay(QObject):
         self.transport.disconnected.connect(self._disconnected)
         self.transport.received.connect(self._received)
         self.transport.diagnostic.connect(
-            lambda value: self.event.emit("TRANSPORT " + value)
+            lambda value: self.diagnosticEvent.emit(
+                value if value.startswith("PI_SEARCH ")
+                else "TRANSPORT " + value
+            )
         )
 
     def start(self) -> None:
@@ -80,7 +84,7 @@ class HardwareRelay(QObject):
             return
         self._online = True
         self.buffer = LineBuffer()
-        self.event.emit("PI_CONNECTED " + self.module)
+        self.diagnosticEvent.emit("PI_CONNECTED " + self.module)
         self.transport.write(
             p.encode(
                 p.message(
@@ -101,7 +105,9 @@ class HardwareRelay(QObject):
         self._online = self._ready = False
         if not self._recovering:
             self._lost_running = self._clock_running
-        self.event.emit(f"PI_LOST {self.module} running={self._lost_running}")
+        self.diagnosticEvent.emit(
+            f"PI_LOST {self.module} running={self._lost_running}"
+        )
         # The process transport needs an explicit restart. SerialTransport also
         # keeps scanning, and start() is idempotent for both.
         QTimer.singleShot(1100, self.transport.start)
@@ -113,7 +119,7 @@ class HardwareRelay(QObject):
                     raise line
                 incoming = p.decode(line)
             except ProtocolError as error:
-                self.event.emit(f"PI_SKIPPED_LINE {error}")
+                self.diagnosticEvent.emit(f"PI_SKIPPED_LINE {error}")
                 continue
             self._handle(incoming)
 
@@ -130,7 +136,7 @@ class HardwareRelay(QObject):
                 or not incoming.get("agent_hash")
                 or not incoming.get("boot")
             ):
-                self.event.emit(
+                self.diagnosticEvent.emit(
                     "PI_HELLO_REJECTED identity or version mismatch"
                 )
                 return
@@ -138,7 +144,7 @@ class HardwareRelay(QObject):
                 "boot"
             )
             self._boot = incoming.get("boot")
-            self.event.emit(
+            self.diagnosticEvent.emit(
                 f"PI_HELLO {self.module} "
                 f"version={incoming['agent_version']} "
                 f"hash={incoming['agent_hash']}"
@@ -172,13 +178,13 @@ class HardwareRelay(QObject):
                             args={"trains": gains},
                         )
                     )
-                    self.event.emit(
+                    self.diagnosticEvent.emit(
                         "GAINS_RESENT"
                         if self._lost_running
                         else "GAINS_WAIT_ENGINEER"
                     )
                 elif self.module == "train-controller-hw":
-                    self.event.emit("GAINS_NOT_RESENT paused unplug")
+                    self.diagnosticEvent.emit("GAINS_NOT_RESENT paused unplug")
                 self._recovering = True
                 self._pump_recovery()
             else:
@@ -192,7 +198,7 @@ class HardwareRelay(QObject):
             current["id"],
             current["tick"],
         ):
-            self.event.emit(
+            self.diagnosticEvent.emit(
                 f"PI_UNMATCHED_REPLY id={incoming['id']} "
                 f"tick={incoming['tick']}"
             )
@@ -204,9 +210,11 @@ class HardwareRelay(QObject):
             self._take_view(incoming["view"])
         if self._recovering:
             if op == "REJECTED":
-                self.event.emit("PI_RECOVERY_REJECTED " + incoming["reason"])
+                self.diagnosticEvent.emit(
+                    "PI_RECOVERY_REJECTED " + incoming["reason"]
+                )
                 return  # Hold the clock: recovery has not succeeded.
-            self.event.emit(
+            self.diagnosticEvent.emit(
                 f"PI_REPLAYED {current['op']} id={current['id']} "
                 f"tick={current['tick']}"
             )
@@ -256,18 +264,20 @@ class HardwareRelay(QObject):
         self._inflight, self._saved_inflight = self._saved_inflight, None
         self._ready = True
         if self._inflight:
-            self.event.emit(f"PI_RESEND_PENDING tick={self._inflight['tick']}")
+            self.diagnosticEvent.emit(
+                f"PI_RESEND_PENDING tick={self._inflight['tick']}"
+            )
             self.transport.write(p.encode(self._inflight))
         else:
             self._pump()
-        self.event.emit("PI_RECOVERED " + self.module)
+        self.diagnosticEvent.emit("PI_RECOVERED " + self.module)
 
     def _become_ready(self) -> None:
         self._ready = self._ever_ready = True
         self.ready.emit()
         self._pump()
 
-    def submit_step(self, request: dict[str, Any]) -> None:
+    def submit_step(self, request: Mapping[str, Any]) -> None:
         """Queue the exact harness envelope; completion is asynchronous."""
         self._queue.append(dict(request))
         self._pump()

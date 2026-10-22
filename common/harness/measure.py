@@ -11,9 +11,9 @@ tick falls due every 10 ms, so the round trip must stay well under
 that.
 
 With ``--system`` the wired modules run as themselves, with their
-windows: in Phase 4 the CTC Office, the Track Controller SW, the Track
-Model, the Train Model and the Train Controller SW, running the
-Iteration 3 scenario. The Track Controller loads its starter programs
+windows and both HW host relays. Hardware uses the assigned USB Pis
+unless ``--test-pi process|pty`` explicitly selects local agents. The Track
+Controller loads its starter programs
 (``--load-starters``), the CTC Office presses Run (and 10x) and
 dispatches G1 from the yard to DORMONT (``--dispatch``), and the Train
 Controller plays the engineer (``--engineer-gains``), so the train is
@@ -27,7 +27,7 @@ Run from the repository root::
 
     python -m common.harness.measure --seconds 10 --payload-bytes 1000
     python -m common.harness.measure --window --seconds 10
-    python -m common.harness.measure --system
+    python -m common.harness.measure --system --test-pi process
 """
 
 from __future__ import annotations
@@ -49,7 +49,9 @@ from common.harness.edges import SystemEdges
 from common.harness.modules import (
     CTC_OFFICE,
     MODULE_NAMES,
+    TRACK_CONTROLLER_HW,
     TRACK_CONTROLLER_SW,
+    TRAIN_CONTROLLER_HW,
     TRAIN_CONTROLLER_SW,
     TRAIN_MODEL,
     WIRED_MODULES,
@@ -180,6 +182,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if options.speed != 1:
             module_options[CTC_OFFICE] += ["--speedup-at-tick", "0"]
         module_options[TRACK_CONTROLLER_SW] = ["--load-starters"]
+        module_options[TRACK_CONTROLLER_HW] = ["--load-starters"]
+        module_options[TRAIN_CONTROLLER_HW] = []
+        if options.test_pi:
+            for name in (TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW):
+                module_options[name] += ["--test-pi", options.test_pi]
         module_options[TRAIN_CONTROLLER_SW] = [
             "--engineer-gains", *ENGINEER_GAINS
         ]
@@ -201,6 +208,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     TRAIN_MODEL if options.system else CTC_OFFICE
                 )
                 console.endRunRequested.connect(lambda: app.exit(EXIT_OK))
+                from PySide6.QtGui import QGuiApplication
+
+                assert isinstance(app, QGuiApplication)
                 window = HarnessWindow(app, console)
             meter = _Meter(harness, options.seconds)
             meter.launched_s = time.perf_counter()
@@ -317,7 +327,15 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="run the modules wired so far as themselves",
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--test-pi",
+        choices=("process", "pty"),
+        help="explicit local Pi agents for --system (default: USB Pis)",
+    )
+    options = parser.parse_args(argv)
+    if options.test_pi and not options.system:
+        parser.error("--test-pi requires --system")
+    return options
 
 
 if __name__ == "__main__":

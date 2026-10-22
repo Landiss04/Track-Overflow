@@ -211,6 +211,7 @@ class Harness(QObject):
         supervisor.moduleReady.connect(self._on_module_ready)
         supervisor.allReady.connect(self._on_all_ready)
         supervisor.messageReceived.connect(self._on_message)
+        supervisor.diagnosticReceived.connect(self._log_event)
         supervisor.protocolError.connect(self._on_protocol_error)
         supervisor.moduleDisconnected.connect(self._on_module_disconnected)
         supervisor.moduleExited.connect(self._on_module_exited)

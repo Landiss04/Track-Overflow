@@ -67,7 +67,7 @@ def make_relay(tmp_path, *, pty=False, faults=None):
     ready, replies, events, views, errors = [], [], [], [], []
     relay.ready.connect(lambda: ready.append(True))
     relay.reply.connect(replies.append)
-    relay.event.connect(events.append)
+    relay.diagnosticEvent.connect(events.append)
     relay.viewChanged.connect(views.append)
     transport.diagnostic.connect(errors.append)
     relay.start()
@@ -197,7 +197,7 @@ def test_same_boot_unplug_resends_running_gains_only(tmp_path):
         transport = InMemory()
         relay = HardwareRelay("train-controller-hw", transport)
         events = []
-        relay.event.connect(events.append)
+        relay.diagnosticEvent.connect(events.append)
         relay.start()
         relay.submit_step(request(1))
         for field, value in (("kp", 120000), ("ki", 8000)):
@@ -410,3 +410,45 @@ def test_retire_and_reuse_before_next_view_cannot_recover_old_gains():
     assert transport.frames[-1]["action"] == "recovery_gains"
     assert transport.frames[-1]["args"] == {"trains": {}}
     relay.close()
+
+
+@pytest.mark.parametrize("count", [0, 2])
+def test_missing_or_ambiguous_pi_names_identity_and_repeats(
+    monkeypatch, count
+):
+    from common.hw_link import transport as module
+
+    class Port:
+        def __init__(self, name):
+            self.name = name
+
+        def systemLocation(self):
+            return self.name
+
+    ports = [Port(f"/dev/ttyACM{index}") for index in range(count)]
+    monkeypatch.setattr(
+        module.QSerialPortInfo, "availablePorts", lambda: ports
+    )
+    monkeypatch.setattr(module, "matches_identity", lambda *_args: True)
+    now = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: now[0])
+    transport = module.SerialTransport("track-controller-hw")
+    events = []
+    transport.diagnostic.connect(events.append)
+    try:
+        transport.start()
+        assert len(events) == 1
+        assert "track-controller-hw" in events[0]
+        assert "TO-TRACK-CTRL-HW-01" in events[0]
+        assert "1d6b:0104" in events[0]
+        assert f"matches={count}" in events[0]
+        for port in ports:
+            assert port.systemLocation() in events[0]
+        transport._find()
+        assert len(events) == 1
+        now[0] += 5.0
+        transport._find()
+        assert len(events) == 2
+        assert not transport.port.isOpen()
+    finally:
+        transport.close()

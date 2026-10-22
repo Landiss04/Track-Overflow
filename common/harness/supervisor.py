@@ -31,6 +31,8 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from common.harness.modules import (
     ModuleSpec,
+    TRACK_CONTROLLER_HW,
+    TRAIN_CONTROLLER_HW,
     module_command,
     working_directory,
 )
@@ -38,6 +40,7 @@ from utils.harness_protocol import (
     MODULE_TO_HARNESS,
     PROTOCOL_VERSION,
     READY,
+    STATE,
     LineBuffer,
     ProtocolError,
     decode,
@@ -75,6 +78,7 @@ class _Connection(QObject):
         """Wrap ``socket``; the connection owns it from now on."""
         super().__init__(parent)
         self.module: str | None = None
+        self.diagnostic_module: str | None = None
         self._closed = False
         self._socket = socket
         socket.setParent(self)
@@ -134,6 +138,8 @@ class ModuleSupervisor(QObject):
     allReady = Signal()
     #: A ready module sent a message: its name and the message.
     messageReceived = Signal(str, object)
+    #: A validated HW diagnostic, including while its Pi is not ready.
+    diagnosticReceived = Signal(str, str, str)
     #: Something broke the protocol: who, and what.
     protocolError = Signal(str, str)
     #: A ready module's connection closed.
@@ -351,9 +357,12 @@ class ModuleSupervisor(QObject):
     def _on_message(
         self, connection: _Connection, message: Mapping[str, Any]
     ) -> None:
-        # A connection's first message must be READY; after that,
-        # anything a module may send goes up.
+        # HW diagnostic STATE may precede READY, without releasing the
+        # readiness barrier. Other traffic must follow READY.
         op = message["op"]
+        if op == STATE and "pi_event" in message["state"]:
+            self._diagnostic(connection, message["state"])
+            return
         if connection.module is None:
             if op == READY:
                 self._identify(connection, message)
@@ -367,12 +376,42 @@ class ModuleSupervisor(QObject):
             return
         self.messageReceived.emit(connection.module, message)
 
+    def _diagnostic(
+        self, connection: _Connection, state: Mapping[str, Any]
+    ) -> None:
+        # This identifies diagnostic provenance only. READY remains mandatory
+        # before sending STEP, accepting outputs or starting the clock.
+        name = state.get("module")
+        event = state.get("pi_event")
+        if (
+            name not in (TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW)
+            or name not in self.module_names
+            or (connection.module is not None and connection.module != name)
+            or (connection.diagnostic_module is not None
+                and connection.diagnostic_module != name)
+            or (name in self._ready and self._ready[name] is not connection)
+            or not isinstance(event, dict)
+            or not isinstance(event.get("event"), str)
+            or not event["event"]
+            or len(event["event"]) > 64
+            or any(c not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+                   for c in event["event"])
+            or not isinstance(event.get("detail"), str)
+            or len(event["detail"]) > 4096
+        ):
+            self._refuse(connection, "invalid hardware diagnostic")
+            return
+        connection.diagnostic_module = name
+        self.diagnosticReceived.emit(name, event["event"], event["detail"])
+
     def _identify(
         self, connection: _Connection, message: Mapping[str, Any]
     ) -> None:
         # Accept a READY from an expected module not yet connected.
         name = message["module"]
-        if message["protocol"] != PROTOCOL_VERSION:
+        if connection.diagnostic_module not in (None, name):
+            self._refuse(connection, "READY differs from diagnostic identity")
+        elif message["protocol"] != PROTOCOL_VERSION:
             self._refuse(
                 connection,
                 f"{name} speaks protocol {message['protocol']}, "

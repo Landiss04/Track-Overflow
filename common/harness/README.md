@@ -421,6 +421,7 @@ be ready, and with 2 s about one run in three stopped before `ALL_READY`.
 
 ```
 python -m common.harness.measure --seconds 10 --payload-bytes 10000
+python -m common.harness.measure --system --test-pi process --seconds 10
 ```
 
 This runs seven stubs at 10x and reports the round trip of each tick against the 10 ms
@@ -768,3 +769,14 @@ enabled Green round trip passes its five tests. The full Pi suite passes
 simulated Pis, strict empty stderr and seven zero exits. The handover
 distinguishes delegated broad suites from the orchestrator's independent
 acceptance reruns and records the known preexisting harness type mismatch.
+
+### 2026-10-22: explicit Pi budget runs and startup diagnostics
+
+`measure --system --test-pi process|pty` explicitly selects simulated Pis for
+both hardware modules; omitting it waits for their assigned USB devices. Red
+Track Controller starter programs are loaded in system measurements. Hardware
+startup events now identify the sought K5 identity and matching ports, including
+zero or multiple matches, immediately and every five seconds while searching.
+They reach the event log before READY without releasing the clock's readiness
+barrier. The HW window constructs its existing state with the remote controller
+through the approved state factory.

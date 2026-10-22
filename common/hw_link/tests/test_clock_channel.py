@@ -34,7 +34,7 @@ def test_clock_wire_pause_between_steps_and_late_pause_loss_policy(
     link.clockStateChanged.connect(states.append)
     link.clockStateChanged.connect(relay.set_clock_state)
     relay.ready.connect(link.announce_ready)
-    relay.event.connect(events.append)
+    relay.diagnosticEvent.connect(events.append)
     relay.reply.connect(replies.append)
     relay.reply.connect(
         lambda value: link.reply_outputs(

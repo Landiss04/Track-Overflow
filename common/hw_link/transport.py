@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -68,13 +69,15 @@ class SerialTransport(ByteTransport):
         self.port = QSerialPort(self)
         self.port.setBaudRate(115200)
         self.port.readyRead.connect(
-            lambda: self.received.emit(bytes(self.port.readAll()))
+            lambda: self.received.emit(self.port.readAll().data())
         )
         self.port.errorOccurred.connect(self._error)
         self.retry = QTimer(self)
         self.retry.setInterval(300)
         self.retry.timeout.connect(self._find)
         self._open = False
+        self._last_search: tuple[str, ...] | None = None
+        self._last_search_at = 0.0
 
     def start(self) -> None:
         self.retry.start()
@@ -88,6 +91,19 @@ class SerialTransport(ByteTransport):
             for info in QSerialPortInfo.availablePorts()
             if matches_identity(info, self.module)
         ]
+        matches = tuple(sorted(info.systemLocation() for info in ports))
+        now = time.monotonic()
+        if matches != self._last_search or now - self._last_search_at >= 5.0:
+            self._last_search, self._last_search_at = matches, now
+            identity = IDENTITIES[self.module]
+            self.diagnostic.emit(
+                f"PI_SEARCH module={self.module} "
+                f"manufacturer={identity['manufacturer']!r} "
+                f"product={identity['product']!r} "
+                f"serial={identity['serial']} "
+                f"vid:pid={identity['vid']:04x}:{identity['pid']:04x} "
+                f"matches={len(matches)} ports={list(matches)!r}"
+            )
         if len(ports) != 1:
             return
         self.port.setPort(ports[0])
@@ -191,14 +207,14 @@ class ProcessTransport(ByteTransport):
             self._ended()
 
     def _read_stdout(self) -> None:
-        data = bytes(self.process.readAllStandardOutput())
+        data = self.process.readAllStandardOutput().data()
         if not self.raw_pty and data:
             self.received.emit(data)
 
     def _read_stderr(self) -> None:
-        data = bytes(self.process.readAllStandardError())
+        data = self.process.readAllStandardError().data()
         if data:
-            self.diagnostic.emit(data.decode("utf-8", "replace"))
+            self.diagnostic.emit(bytes(data).decode("utf-8", "replace"))
 
     def _read_pty(self, *_args: Any) -> None:
         if self._master is None:

@@ -51,10 +51,55 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Pi fault injection requires explicit --test-pi")
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     track_window: Any = None
-    initial_state: Any = None
+    scratch = (
+        tempfile.TemporaryDirectory(prefix="track-overflow-pi-")
+        if options.test_pi
+        else None
+    )
+
+    def make_relay(app: QGuiApplication) -> HardwareRelay:
+        transport: ByteTransport
+        if options.test_pi:
+            assert scratch is not None
+            fault_args = []
+            for flag in (
+                "delay-ms", "jitter-ms", "drop-after", "reboot-at-tick"
+            ):
+                value = getattr(options, "pi_" + flag.replace("-", "_"))
+                if value is not None and value != 0:
+                    fault_args.extend(["--" + flag, str(value)])
+            transport = ProcessTransport(
+                options.module,
+                (
+                    options.pi_log.with_suffix(".agent.jsonl")
+                    if options.pi_log
+                    else Path(scratch.name) / "agent.jsonl"
+                ),
+                raw_pty=options.test_pi == "pty",
+                fault_args=fault_args,
+                parent=app,
+            )
+        else:
+            transport = SerialTransport(options.module, app)
+        return HardwareRelay(options.module, transport, app)
+
+    relay: HardwareRelay
+    remote: Any
     if options.module == "track-controller-hw":
-        # Reuse all existing window construction and theme code; inject only
-        # the already-supported controller seam before the event loop starts.
+        from .remote_track import RemoteTrackController
+        from track_ctrl_hw.state import TrackControllerState
+
+        def make_state() -> TrackControllerState:
+            # Window calls this only after constructing its application.
+            nonlocal relay, remote
+            application = QGuiApplication.instance()
+            assert isinstance(application, QGuiApplication)
+            relay = make_relay(application)
+            remote = RemoteTrackController(relay)
+            state = TrackControllerState(controller=remote)
+            relay.viewChanged.connect(lambda _view: state.refresh())
+            return state
+
         source = ROOT / "TrackCtrlHw" / "ui" / "app.py"
         spec = importlib.util.spec_from_file_location(
             "_track_hw_host_window", source
@@ -62,40 +107,18 @@ def main(argv: list[str] | None = None) -> int:
         assert spec is not None and spec.loader is not None
         window_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(window_module)
-        track_window = window_module.Window(sys.argv[:1])
-        app = track_window.app
-        initial_state = track_window.state
-        initial_state.close()
-    else:
-        app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])
-    keep_windows_open(app)
-    scratch = (
-        tempfile.TemporaryDirectory(prefix="track-overflow-pi-")
-        if options.test_pi
-        else None
-    )
-    transport: ByteTransport
-    if options.test_pi:
-        assert scratch is not None
-        fault_args = []
-        for flag in ("delay-ms", "jitter-ms", "drop-after", "reboot-at-tick"):
-            value = getattr(options, "pi_" + flag.replace("-", "_"))
-            if value is not None and value != 0:
-                fault_args.extend(["--" + flag, str(value)])
-        transport = ProcessTransport(
-            options.module,
-            (
-                options.pi_log.with_suffix(".agent.jsonl")
-                if options.pi_log
-                else Path(scratch.name) / "agent.jsonl"
-            ),
-            raw_pty=options.test_pi == "pty",
-            fault_args=fault_args,
-            parent=app,
+        track_window = window_module.Window(
+            sys.argv[:1], state_factory=make_state
         )
+        app = track_window.app
     else:
-        transport = SerialTransport(options.module, app)
-    relay = HardwareRelay(options.module, transport, app)
+        from .remote_train import RemoteTrainFleet
+
+        app = QGuiApplication.instance() or QGuiApplication(sys.argv[:1])
+        assert isinstance(app, QGuiApplication)
+        relay = make_relay(app)
+        remote = RemoteTrainFleet(relay)
+    keep_windows_open(app)
     link = ModuleLink(
         options.module,
         options.harness,
@@ -133,25 +156,14 @@ def main(argv: list[str] | None = None) -> int:
             stream.write(f"{stamp} {options.module} {text}\n")
             stream.flush()
             os.fsync(stream.fileno())
+        event, _, detail = text.partition(" ")
+        link.push_state({
+            "module": options.module,
+            "pi_event": {"event": event, "detail": detail},
+        })
 
-    relay.event.connect(record_event)
+    relay.diagnosticEvent.connect(record_event)
     record_event("PI_TRACE " + str(log_path))
-    if options.module == "track-controller-hw":
-        from .remote_track import RemoteTrackController
-        from track_ctrl_hw.state import TrackControllerState
-
-        remote: Any = RemoteTrackController(relay)
-        state = TrackControllerState(controller=remote)
-        track_window.state = state
-        track_window.engine.rootContext().setContextProperty(
-            "trackController", state
-        )
-        # Reuse the existing state's refresh timer/rows, respecting 100ms VIEW.
-        relay.viewChanged.connect(lambda _view: state.refresh())
-    else:
-        from .remote_train import RemoteTrainFleet
-
-        remote = RemoteTrainFleet(relay)
     initialized = False
 
     def ready() -> None:
@@ -192,7 +204,6 @@ def main(argv: list[str] | None = None) -> int:
     else:
         exit_code = app.exec()
         track_window.shutdown()
-        del initial_state
     relay.close()
     link.close()
     if scratch:
