@@ -30,9 +30,9 @@ Item {
             Layout.fillWidth: true
             moduleName: qsTr("Track Controller")
             instance: page.loaded ? tc.line + qsTr(" Line \u00b7 ") + page.waysideName : ""
-            mode: tc.maintenance ? qsTr("Maintenance") : qsTr("Automatic")
-            modeKind: tc.maintenance ? "warning" : "info"
-            faultText: tc.vitalFault !== "" ? qsTr("Vital fault") : ""
+            mode: tc.ready ? qsTr("Ready") : qsTr("Not ready")
+            modeKind: tc.ready ? "ok" : "warning"
+            faultText: tc.channelFault !== "" ? qsTr("Channel fault") : ""
             source: tc.sourceText
             clock: tc.clockText
 
@@ -185,12 +185,23 @@ Item {
 
                 Banner {
                     Layout.fillWidth: true
-                    compact: true
-                    kind: tc.maintenance ? "warning" : "info"
-                    heading: tc.maintenance ? qsTr("MAINTENANCE") : qsTr("AUTOMATIC")
-                    body: tc.maintenance
-                        ? qsTr("The CTC Office sets the switches. The PLC still sets signals and crossings.")
-                        : qsTr("The PLC program sets switches, signals and crossings.")
+                    visible: !tc.ready
+                    kind: "warning"
+                    heading: qsTr("NOT READY")
+                    body: tc.notReadyText + qsTr(" Until every wayside is "
+                        + "ready, every wayside holds its fail-safe outputs "
+                        + "and reports not ready to the CTC Office.")
+                }
+
+                Banner {
+                    readonly property bool active: tc.maintenanceText !== ""
+                    Layout.fillWidth: true
+                    compact: !active
+                    kind: active ? "warning" : "info"
+                    heading: active ? qsTr("CTC MAINTENANCE") : qsTr("NO CTC MAINTENANCE")
+                    body: active
+                        ? tc.maintenanceText + qsTr(". The PLC program decides what to do with them.")
+                        : qsTr("No block closed and no switch commanded by the CTC Office here.")
                 }
 
                 RowLayout {
@@ -288,7 +299,7 @@ Item {
                             { title: qsTr("Switch"), role: "name", width: 72, mono: true },
                             { title: qsTr("Commanded"), role: "commanded", fill: true, mono: true },
                             { title: qsTr("Reported"), role: "reported", width: 80 },
-                            { title: qsTr("Set by"), role: "setBy", width: 96, tone: "secondary" },
+                            { title: qsTr("CTC asks"), role: "ctcRequest", width: 96, tone: "secondary" },
                             { title: qsTr("Agreement"), role: "agreeText", badgeRole: "agreeBadge", width: 144 }
                         ]
                     }
@@ -344,6 +355,7 @@ Item {
         model: tc.report
         waysideName: page.waysideName
         sentText: tc.uplinkText
+        readyText: tc.reportReadyText
     }
 
     ModalDialog {

@@ -31,8 +31,7 @@ Flow {
                 ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
                 return;
             }
-            ctx.fillStyle = state === "occupied" ? theme.info
-                : state === "closed" ? theme.warning : theme.danger;
+            ctx.fillStyle = state === "occupied" ? theme.info : theme.warning;
             ctx.fillRect(0, 0, width, height);
             ctx.strokeStyle = theme.bg_surface;
             ctx.lineWidth = 1.5;
@@ -42,9 +41,6 @@ Flow {
                     ctx.moveTo(i, height);
                     ctx.lineTo(i + 12, 0);
                 }
-            } else if (state === "failure") {
-                ctx.moveTo(6, 2); ctx.lineTo(14, 10);
-                ctx.moveTo(14, 2); ctx.lineTo(6, 10);
             }
             ctx.stroke();
         }
@@ -53,7 +49,6 @@ Flow {
     Row { spacing: theme.space_2; Swatch { state: "free" } Caption { text: qsTr("CLEAR") } }
     Row { spacing: theme.space_2; Swatch { state: "occupied" } Caption { text: qsTr("OCCUPIED") } }
     Row { spacing: theme.space_2; Swatch { state: "closed" } Caption { text: qsTr("CLOSED") } }
-    Row { spacing: theme.space_2; Swatch { state: "failure" } Caption { text: qsTr("FAILURE") } }
 
     Row {
         spacing: theme.space_2

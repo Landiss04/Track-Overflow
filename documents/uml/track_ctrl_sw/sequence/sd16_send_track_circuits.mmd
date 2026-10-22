@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    participant W as TrackController (wayside)
+    participant V as attached vital code
+    participant M as SwTrackController
+    participant H as Central Harness
+    participant TM as Track Model
+    Note over W,V: Within a scan (UC-09), after the program has set AUTH_n.
+    W->>V: AUTH_n, CLOSED_n, the switch on the block moving
+    V->>V: OUT_AUTH_n := AUTH_n AND NOT CLOSED_n AND NOT moving
+    V-->>W: OUT_AUTH_n, OUT_HALF_n
+    loop each block the CTC suggested something for
+        alt OUT_AUTH_n
+            W->>W: OS encode: the suggestion, speed halved if OUT_HALF_n
+        else not
+            W->>W: OS encode: speed 0, authority 0
+        end
+    end
+    W-->>M: track_circuits
+    M-->>H: commanded speed (whole m/s) and authority (blocks), per block
+    H->>TM: track circuit commands
+    Note right of TM: The train in the block gets them. A lower speed or authority is what brakes the train.

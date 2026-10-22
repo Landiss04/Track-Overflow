@@ -1,0 +1,31 @@
+@startuml sd16_hold_fail_safe
+!include ../style.iuml
+autonumber
+
+participant "HwTrackController" as Ctrl
+participant "Wayside" as W
+participant "User program\n(channels A, B)" as U
+participant "Track Controller\nwindow" as Win
+
+Ctrl -> W : scan(..., stall)
+alt another wayside of the line is not ready
+  W -> W : hold: "Wayside X is not ready"
+else no program loaded
+  W -> W : hold: "No PLC program is loaded."
+else channel fault already latched
+  W -> W : hold: the channel fault
+else program runs
+  W -> U : scan_a(image), scan_b(image)
+  U --> W : outputs A, outputs B
+  opt A ≠ B
+    W -> W : latch channel fault naming the outputs;\nhold until a new program is loaded
+  end
+end
+W -> W : _hold_restrictive(reason):\nevery signal red, every crossing active,\nspeed 0 and authority 0, switches stay
+W --> Ctrl : WaysideScan + CtcReport\n(ready = false, reason)
+W --> Win : header **Not ready**; PLC details\n"Held fail-safe: reason"
+note over W, U
+  A new program also holds until its first scan.
+  Switches stay where they are: moving one is not a safe way to fail.
+end note
+@enduml

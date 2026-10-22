@@ -700,10 +700,12 @@ Item {
         id: switchDialog
         parent: Overlay.overlay
         switches: wayside.switches.rows
-        onApplied: function (switchId, reverse) {
+        onSwitchApplied: function (switchId, reverse) {
             wayside.setSwitch(switchId, reverse);
         }
-        onReleased: function (switchId) { wayside.releaseSwitch(switchId); }
+        onSwitchReleased: function (switchId) {
+            wayside.releaseSwitch(switchId);
+        }
     }
 
     FileDialog {

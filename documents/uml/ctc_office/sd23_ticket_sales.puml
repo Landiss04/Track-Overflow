@@ -1,0 +1,32 @@
+@startuml sd23_ticket_sales
+!include ../style.iuml
+title SD-23 Receive ticket sales (UC-23)
+autonumber
+
+participant "Track Model" as TM
+participant "Central Harness" as H
+box "CTC Office process" #F7F9FC
+participant "CtcOfficeProcess" as Proc
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+TM --> H : tick outputs: tickets sold this tick, per station
+H -> H : TicketSales.add(): held until the CTC Office\nhas stepped on them
+H -> H : track_model_to_ctc(): whole numbers ≥ 0;\nstations with sales only
+H -> Proc : STEP (inputs.track_model.ticket_sales:\n{"GLENBURY": 4, "DORMONT": 12})
+Proc -> Host : step_at(...)
+Host -> Model : step(...)
+Model -> Model : every station on the layout,\nevery count a whole number ≥ 0
+alt invalid
+  Model --> Host : InvalidInputError: the tick is refused
+  H -> H : the sales are sent again with the next step
+else valid
+  Model -> Model : tickets_sold[station] += count
+  Model --> Host : outputs
+  Host -> Host : hourly sales[(clock hour, line)] += count
+  Host --> Proc : outputs
+  Proc --> H : reply
+  H -> H : TicketSales.delivered(): each sale counted once
+end
+@enduml

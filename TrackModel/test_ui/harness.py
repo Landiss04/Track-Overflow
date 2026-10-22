@@ -39,6 +39,7 @@ from track_model.interface import (
     TrackModelOutputs,
     TrainReport,
 )
+from utils.system_clock import DEFAULT_START_TIME_S
 
 DT_S = 0.100
 REAL_TIME_MS = 100
@@ -405,8 +406,9 @@ class TrackModelTestHarness(QObject):
         if not self._selected_block:
             return []
         return [
-            _row("speed", "uint", self._speed.get(self._selected_block, 0),
-                 "m/s", row_id="commanded_speed_mps"),
+            _row("speed", "float",
+                 self._speed.get(self._selected_block, 0.0), "m/s",
+                 row_id="commanded_speed_mps"),
             _row("authority", "uint",
                  self._authority.get(self._selected_block, 0), "blocks",
                  row_id="authority_blocks"),
@@ -551,7 +553,7 @@ class TrackModelTestHarness(QObject):
                  row_id="track_info.polarity"),
             _row("station", "string", info.station_name or "none",
                  row_id="track_info.station_name"),
-            _row("cmd speed", "int", sig.commanded_speed_mps, "m/s",
+            _row("cmd speed", "float", sig.commanded_speed_mps, "m/s",
                  row_id="track_signal.commanded_speed_mps"),
             _row("authority", "uint", sig.authority_blocks, "blocks",
                  row_id="track_signal.authority_blocks"),
@@ -586,7 +588,7 @@ class TrackModelTestHarness(QObject):
         self._on_track: set[str] = set()
         self._selected_train = ""
         self._selected_block = ""
-        self._speed: dict[str, int] = {}
+        self._speed: dict[str, float] = {}
         self._authority: dict[str, int] = {}
         self._switches: dict[str, str] = {}
         self._signals: dict[str, str] = {}
@@ -678,7 +680,7 @@ class TrackModelTestHarness(QObject):
         # One Track Controller command for the selected block.
         block_id = self._selected_block
         if name == "commanded_speed_mps":
-            self._speed[block_id] = int(value)
+            self._speed[block_id] = max(0.0, float(value))
         elif name == "authority_blocks":
             self._authority[block_id] = max(0, int(float(value)))
         else:
@@ -711,6 +713,7 @@ class TrackModelTestHarness(QObject):
                 for train_id, t in self._trains.items()
             },
             ambient_temp_c=f_to_c(self._ambient_f),
+            sim_time_s=DEFAULT_START_TIME_S + self._tick * DT_S,
         )
 
     def _on_outputs(self, outputs: TrackModelOutputs) -> None:

@@ -1,0 +1,19 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    Note over P,UI: Requires UC-02: a wayside is selected.
+    opt start from an empty file
+        P->>UI: click New
+        UI->>S: newFile()
+        S->>S: buffer := empty
+        S-->>UI: buffer changed
+    end
+    loop each edit
+        P->>UI: type in the editor
+        UI->>S: setBuffer(text)
+        S->>S: the last RUN no longer matches
+        S-->>UI: Edited, COMMIT disabled
+    end
+    Note right of S: Nothing reaches the wayside until the buffer is RUN and committed.

@@ -34,6 +34,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+from utils.beacon_codec import encode_beacon
+
 #: Where the Track Model keeps its layout files: under the repository
 #: root, or in a PyInstaller build the bundle's root.
 LAYOUT_DIR = Path(
@@ -93,6 +95,13 @@ class TrackBlock:
     # underground.
     beacon_side: str = _DEFAULT_PLATFORM_SIDE
     beacon_underground: bool = False
+
+    def __post_init__(self) -> None:
+        if self.beacon_station:
+            encode_beacon(
+                self.beacon_station, self.beacon_side,
+                self.beacon_underground,
+            )
 
 
 def _grade_deg(grade_percent: float) -> float:

@@ -54,8 +54,10 @@ Two programs run side by side and talk over a local connection:
 | `test_ui/TestView.qml`, `test_ui/Main.qml`, `test_ui/main.py` | The test UI window and its start-up. | move or restyle things in the test UI |
 | `test_link/codec.py` | Converts inputs and outputs **to and from JSON** for the link. | you added a field and it must cross the link |
 | `test_link/link.py` | The **local connection**: `LinkServer` (inside the Track Model process) and `LinkClient` (inside the test UI). | the two windows don't talk |
-| `../common/harness/track_model_edges.py` | The **functions other modules call** at integration, one per connection: Track Controller ↔ Track Model, Train Model ↔ Track Model, Track Model → Train Controller. | see what another module receives from you |
-| `../common/interfaces.py` (last section) | The team-wide **catalog types** those functions translate to and from. Kevin owns this file. | check the shared shape of a signal |
+| `track_model/module_process.py`, `track_model/wire.py` | The **process the central harness starts** (`track_overflow.py --module track-model`): steps the model on each `STEP`, redraws the window after the reply, and the inputs and outputs **as JSON**. | the harness sends or expects a field differently |
+| `../common/harness/track_edges.py` | The harness's **direct edges** between the Track Model and the trains (Phase 2), and the mapping between `GREEN K-63` and `("Green", "63")`. | see what another module receives from you |
+| `../common/harness/track_model_edges.py` | Legacy one-sided conversions through the stale catalog; not on the running path, kept for this module's tests. | inspect adapter gaps |
+| `../common/interfaces.py` (last section) | Stale legacy catalog still used by `track_model_edges.py`; superseded by D008. Intended mappings go directly between module-owned types. | inspect legacy adapters, not current requirements |
 | `green_line.json`, `red_line.json`, `blue_line.json` | The **track layouts**. All three carry `next_blocks` (direction of travel). | fix layout data |
 | `tests/` | The automated tests (section 7). `run_tests.py` prints them readably. | check what is covered |
 | `README.md`, `MANUAL_TESTS.md` | How to run things, the behaviour rules, open questions, and the hand-test script. | — |
@@ -120,16 +122,20 @@ Defined in `track_model/interface.py`. Every value is in backend units
 **In (`TrackModelInputs`), every tick:**
 
 - `controller` (`TrackControllerCommands`), keyed by block unless noted:
-  - commanded speed (whole m/s) and authority (a whole count of blocks,
-    0 = stop), per block;
+  - commanded speed (m/s, a float) and authority (a whole count of
+    blocks, 0 = stop), per block, for this tick only: a block not
+    commanded on a tick reads zero;
   - switch positions, signal colours and crossing gates, each keyed by
     the block the device is on;
   - heaters on/off, keyed by section (`"GREEN B"`).
 - `trains`: for each train ID, a `TrainReport` with block, offset since
-  entering the block (the Train Model restarts it at 0 in each block),
+  entering the block, referenced to the train’s front (Train Model resets on polarity change),
   speed, a block-changed flag, passenger capacity and whether a door is
   open. Block `""` means the train isn't on the track yet.
-- `ambient_temp_c`.
+- `ambient_temp_c` (optional): the window's value wins once set; none
+  leaves the temperature as it is.
+- `sim_time_s` (optional): the central clock's time, for the window's
+  time of day only. Behaviour never depends on it.
 
 **Out (`TrackModelOutputs`):**
 

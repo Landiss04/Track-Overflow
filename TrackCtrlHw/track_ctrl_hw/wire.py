@@ -1,8 +1,10 @@
 """JSON forms of the module's boundary types, for the test UI link.
 
-Every per-block mapping travels as a list of entries, each naming its
-block as ``{"line", "section", "block_id"}``. Decoding is strict: a
-message from another process is untrusted, so anything that is not
+Every per-block mapping travels as a list of entries. A Track Model
+entry names its block as ``{"line", "section", "block_id"}``. A CTC
+Office entry names it the CTC Office's way, ``{"line", "block_id"}``,
+or ``{"line", "switch_id"}`` for a switch command. Decoding is strict:
+a message from another process is untrusted, so anything that is not
 exactly the expected shape raises ``WireFormatError``.
 """
 
@@ -13,11 +15,11 @@ from typing import Any, Callable, Mapping, TypeVar
 
 from track_ctrl_hw.errors import WireFormatError
 from track_ctrl_hw.interface import (
-    FAILURE_KINDS,
     SIGNAL_ASPECTS,
     SWITCH_POSITIONS,
     Block,
     BlockKey,
+    BlockRef,
     BlockReport,
     CtcInputs,
     CtcReport,
@@ -83,6 +85,53 @@ def _key_set(data: Any, name: str) -> frozenset[BlockKey]:
     return frozenset(key_from_wire(item) for item in data)
 
 
+def _ref_to_wire(ref: BlockRef, id_name: str = "block_id") -> dict[str, str]:
+    return {"line": ref.line, id_name: ref.block_id}
+
+
+def _ref_from_wire(
+    record: Mapping[str, Any], id_name: str = "block_id"
+) -> BlockRef:
+    return BlockRef(
+        line=_text(record, "line"), block_id=_text(record, id_name)
+    )
+
+
+def _ref_entries(
+    mapping: Mapping[BlockRef, T],
+    encode: Callable[[T], dict[str, Any]],
+    id_name: str = "block_id",
+) -> list[dict[str, Any]]:
+    return [
+        {**_ref_to_wire(ref, id_name), **encode(value)}
+        for ref, value in mapping.items()
+    ]
+
+
+def _from_ref_entries(
+    data: Any,
+    name: str,
+    decode: Callable[[Mapping[str, Any]], T],
+    id_name: str = "block_id",
+) -> dict[BlockRef, T]:
+    if not isinstance(data, list):
+        raise WireFormatError(f"{name} must be a list")
+    result: dict[BlockRef, T] = {}
+    for entry in data:
+        record = _object(entry, name)
+        ref = _ref_from_wire(record, id_name)
+        if ref in result:
+            raise WireFormatError(f"{name} lists {ref.label} twice")
+        result[ref] = decode(record)
+    return result
+
+
+def _ref_set(data: Any, name: str) -> frozenset[BlockRef]:
+    if not isinstance(data, list):
+        raise WireFormatError(f"{name} must be a list")
+    return frozenset(_ref_from_wire(_object(item, name)) for item in data)
+
+
 # ------------------------------------------------------------------ #
 # Inputs and outputs
 # ------------------------------------------------------------------ #
@@ -94,12 +143,11 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
     return {
         "time_s": inputs.time_s,
         "ctc": {
-            "maintenance_mode": ctc.maintenance_mode,
-            "closed_blocks": [key_to_wire(k) for k in ctc.closed_blocks],
-            "switch_commands": _entries(
-                ctc.switch_commands, lambda p: {"position": p}
+            "closed_blocks": [_ref_to_wire(r) for r in ctc.closed_blocks],
+            "switch_commands": _ref_entries(
+                ctc.switch_commands, lambda p: {"position": p}, "switch_id"
             ),
-            "suggestions": _entries(
+            "suggestions": _ref_entries(
                 ctc.suggestions,
                 lambda s: {
                     "speed_mps": s.speed_mps,
@@ -111,7 +159,6 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
             "occupied_blocks": [
                 key_to_wire(k) for k in model.occupied_blocks
             ],
-            "failures": _entries(model.failures, lambda f: {"kind": f}),
             "switch_positions": _entries(
                 model.switch_positions, lambda p: {"position": p}
             ),
@@ -133,13 +180,13 @@ def inputs_from_wire(data: Any) -> TrackControllerInputs:
     return TrackControllerInputs(
         time_s=_number(record, "time_s"),
         ctc=CtcInputs(
-            maintenance_mode=_flag(ctc, "maintenance_mode"),
-            closed_blocks=_key_set(ctc.get("closed_blocks"), "closed_blocks"),
-            switch_commands=_from_entries(
+            closed_blocks=_ref_set(ctc.get("closed_blocks"), "closed_blocks"),
+            switch_commands=_from_ref_entries(
                 ctc.get("switch_commands"), "switch_commands",
                 lambda r: _choice(r, "position", SWITCH_POSITIONS),
+                "switch_id",
             ),
-            suggestions=_from_entries(
+            suggestions=_from_ref_entries(
                 ctc.get("suggestions"), "suggestions",
                 lambda r: Suggestion(
                     speed_mps=_count(r, "speed_mps"),
@@ -150,10 +197,6 @@ def inputs_from_wire(data: Any) -> TrackControllerInputs:
         track_model=TrackModelInputs(
             occupied_blocks=_key_set(
                 model.get("occupied_blocks"), "occupied_blocks"
-            ),
-            failures=_from_entries(
-                model.get("failures"), "failures",
-                lambda r: _choice(r, "kind", FAILURE_KINDS),
             ),
             switch_positions=_from_entries(
                 model.get("switch_positions"), "switch_positions",
@@ -196,12 +239,14 @@ def outputs_to_wire(outputs: TrackControllerOutputs) -> dict[str, Any]:
         "ctc_reports": [
             {
                 "wayside_id": report.wayside_id,
+                "line": report.line,
                 "sent_at_s": report.sent_at_s,
+                "ready": report.ready,
+                "reason": report.reason,
                 "blocks": _entries(
                     report.blocks,
                     lambda b: {
                         "occupied": b.occupied,
-                        "failure": b.failure,
                         "switch_position": b.switch_position,
                         "crossing_active": b.crossing_active,
                         "signal_aspect": b.signal_aspect,
@@ -225,12 +270,14 @@ def outputs_from_wire(data: Any) -> TrackControllerOutputs:
         report = _object(raw, "ctc_report")
         reports.append(CtcReport(
             wayside_id=_text(report, "wayside_id"),
+            line=_text(report, "line"),
             sent_at_s=_number(report, "sent_at_s"),
+            ready=_flag(report, "ready"),
+            reason=_reason(report, "reason"),
             blocks=_from_entries(
                 report.get("blocks"), "blocks",
                 lambda r: BlockReport(
                     occupied=_flag(r, "occupied"),
-                    failure=_optional_choice(r, "failure", FAILURE_KINDS),
                     switch_position=_optional_choice(
                         r, "switch_position", SWITCH_POSITIONS
                     ),
@@ -281,6 +328,7 @@ def territory_to_wire(territory: Territory) -> dict[str, Any]:
                 "block": key_to_wire(block.key),
                 "length_m": block.length_m,
                 "speed_limit_mps": block.speed_limit_mps,
+                "next_blocks": list(block.next_blocks),
             }
             for block in territory.blocks
         ],
@@ -316,6 +364,7 @@ def territory_from_wire(data: Any) -> Territory:
             key=key_from_wire(block.get("block")),
             length_m=_number(block, "length_m"),
             speed_limit_mps=_number(block, "speed_limit_mps"),
+            next_blocks=_neighbor_numbers(block.get("next_blocks", [])),
         ))
     switches = []
     for raw in raw_switches:
@@ -349,6 +398,13 @@ def _text(record: Mapping[str, Any], name: str) -> str:
     value = record.get(name)
     if not isinstance(value, str) or not value:
         raise WireFormatError(f"{name} must be non-empty text")
+    return value
+
+
+def _reason(record: Mapping[str, Any], name: str) -> str:
+    value = record.get(name)
+    if not isinstance(value, str):
+        raise WireFormatError(f"{name} must be text")
     return value
 
 
@@ -394,3 +450,12 @@ def _optional_choice(
     record: Mapping[str, Any], name: str, allowed: tuple[str, ...]
 ) -> Any:
     return None if record.get(name) is None else _choice(record, name, allowed)
+
+
+def _neighbor_numbers(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not (item.isdigit() or item == "yard")
+        for item in value
+    ):
+        raise WireFormatError("next_blocks must list block numbers or yard")
+    return tuple(value)

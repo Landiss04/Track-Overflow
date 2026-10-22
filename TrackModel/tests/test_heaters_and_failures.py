@@ -142,7 +142,8 @@ def test_clearing_a_failure_restores_the_block() -> None:
     model.set_block_failure("GREEN C-9", TrackFailure.BROKEN_RAIL)
     model.step(DT_S, make_inputs(controller=commands))
     model.set_block_failure("GREEN C-9", TrackFailure.NONE)
-    out = model.step(DT_S, make_inputs({"T1": report("GREEN C-9", 1.0)}))
+    out = model.step(DT_S, make_inputs({"T1": report("GREEN C-9", 1.0)},
+                                       commands))
     assert out.train_feeds["T1"].track_signal.commanded_speed_mps == 12
     assert model.snapshot().outputs.controller.block_occupancy["GREEN C-9"]
     model.step(DT_S, make_inputs())
