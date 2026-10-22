@@ -1,0 +1,48 @@
+@startuml sd03_dispatch_station
+!include ../style.iuml
+title SD-03 Dispatch a train to a station (UC-03)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "DispatchPanel (QML)" as UI
+participant "CtcHost" as Host
+participant "display" as Disp
+participant "StubCtcOffice" as Model
+end box
+
+D -> UI : pick Line
+UI -> Host : trainOptions(line), stationOptions(line)
+Host --> UI : trains on the line + "New train (T1)";\nthe line's station blocks
+D -> UI : pick Train, Destination station,\nArrival (HH:MM, optional)
+D -> UI : Dispatch train
+UI -> Host : dispatchTrain(train_id, line, block_id, "HH:MM")
+opt arrival given
+  Host -> Disp : parse_time_of_day("HH:MM")
+  alt not a time of day
+    Disp --> Host : TimeOfDayError
+    Host --> UI : message
+    UI -> D : the reason; nothing changes
+  end
+end
+Host -> Model : dispatch(train_id, line, block_id, arrival_s)
+Model -> Model : train ID trimmed, printable, at most 32 characters;\nline and block on the layout; arrival within a day
+alt a wayside on the line not ready
+  Model --> Host : UnsafeActionError "The Red line's Track Controller\nis not ready (W2: no PLC program) ..."
+else destination closed or closing
+  Model --> Host : UnsafeActionError "... is closed; no train can be sent into it."
+else the train is on the other line
+  Model --> Host : UnsafeActionError "T1 is on the Green line ..."
+else accepted
+  Model -> Model : orders[train_id] = DispatchOrder(train, line,\nblock, arrival) — replaces any earlier order
+  Model --> Host : ok
+end
+Host -> Host : revision += 1
+Host --> UI : "" or the refusal's text
+UI -> D : "T1 dispatched to GLENBURY." or the reason
+note over Model
+  A new train waits in the yard until it is released (SD-20).
+  From then on it gets authority toward the station every step (SD-21).
+  The arrival time ranks it for contested blocks.
+end note
+@enduml

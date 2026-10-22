@@ -1,0 +1,34 @@
+@startuml sd04_dispatch_block
+!include ../style.iuml
+title SD-04 Dispatch a train to a block (UC-04)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "DispatchPanel (QML)" as UI
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+D -> UI : pick Line and Train
+D -> UI : Block on the selected line\n("or dispatch directly to a block")
+UI -> Host : blockOptions(line)
+Host --> UI : every block of the line
+D -> UI : Set authority
+UI -> Host : setAuthority(train_id, line, block_id)
+Host -> Model : dispatch(train_id, line, block_id, None)
+alt refused (line not ready, block closed or closing,\ntrain on the other line, bad train ID)
+  Model --> Host : UnsafeActionError / InvalidInputError
+  Host --> UI : the refusal's text
+else accepted
+  Model -> Model : orders[train_id] = DispatchOrder(train, line, block)
+  Model --> Host : ok
+  Host --> UI : ""
+end
+UI -> D : "T1 given authority toward Green block 30." or the reason
+note over Model
+  Every step the order becomes a count of blocks
+  (D013): the blocks ahead of the train's head block
+  that it may still enter on its way to that block.
+end note
+@enduml

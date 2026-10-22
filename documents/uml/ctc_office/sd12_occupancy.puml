@@ -1,0 +1,29 @@
+@startuml sd12_occupancy
+!include ../style.iuml
+title SD-12 Monitor train occupancy (UC-12)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "CtcHeader" as Hdr
+participant "OccupancyWindow\n/ OccupancyDock" as Occ
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+D -> Hdr : Train occupancy
+Hdr -> Occ : open
+loop after each step
+  Occ -> Host : trains
+  Host -> Model : snapshot()
+  Model --> Host : followed trains, orders, authorities,\nsuggestions, lost trains
+  Host --> Occ : per train: line, block(s), suggested speed (mph),\nauthority (blocks, end block), destination,\narrival, status (En route, In yard, Not located, No order)
+  Occ -> D : table
+end
+D -> Occ : filter by line or status; search train ID
+Occ -> D : matching rows
+D -> Occ : click a row, Select train
+Occ -> D : the train in Selected train (SD-13)
+D -> Occ : Keep open at bottom / minimize
+Occ -> D : docked over the track view
+@enduml

@@ -1,0 +1,47 @@
+@startuml sd16_step
+!include ../style.iuml
+title SD-16 Run one step (UC-16)
+autonumber
+
+participant "Central Harness\n(shared clock, roster)" as H
+box "CTC Office process" #F7F9FC
+participant "ModuleLink" as Link
+participant "CtcOfficeProcess" as Proc
+participant "wire" as Wire
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+H -> Link : STEP {id, tick: k, dt: 0.1, sim_time_s, inputs}
+Link -> Proc : step(tick, dt, sim_time_s, inputs)
+Proc -> Wire : inputs_from_wire(inputs)
+alt unknown keys or malformed JSON
+  Proc --> Link : TickRejectedError
+  Link --> H : rejection; module unchanged
+end
+Proc -> Host : step_at(dt, sim_time_s, inputs)
+Host -> Model : step(dt, inputs, sim_time_s)
+Model -> Model : dt finite and positive; time after the module's;\nevery input valid against the layout (SD-17)
+alt invalid
+  Model --> Host : InvalidInputError / InvalidTimeStepError
+  Host --> Proc : raise
+  Proc --> Link : TickRejectedError
+  Link --> H : rejection; the harness logs it\nand keeps the last outputs
+else valid
+  ref over Model : SD-18 Follow trains from occupancy
+  ref over Model : SD-23 Receive ticket sales
+  ref over Model : SD-19 Run the schedule
+  Model -> Model : close pending closures whose block is clear
+  ref over Model : SD-20 Release and retire trains
+  Model -> Model : work out authority; commit grants\non ready lines (SD-24)
+  ref over Model : SD-21, SD-22 Outputs for the Track Controller
+  Model --> Host : CtcOutputs
+  Host -> Host : count the step's ticket sales in its hour
+  Host --> Proc : CtcOutputs
+  Proc -> Proc : show the harness's time
+  Proc -> Wire : to_wire(outputs)
+  Proc --> Link : outputs
+  Link --> H : reply {id, tick: k, outputs}
+  Proc ->> Host : redraw the window\n(at most every 200 ms)
+end
+@enduml
