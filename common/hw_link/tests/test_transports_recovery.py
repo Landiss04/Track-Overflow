@@ -330,3 +330,83 @@ def test_missing_production_pi_holds_readiness_without_fallback(monkeypatch):
         assert relay.transport is transport
     finally:
         relay.close()
+
+
+def test_retired_or_unarmed_display_clears_saved_engineer_gains():
+    from common.hw_link.transport import ByteTransport
+
+    class Idle(ByteTransport):
+        def start(self):
+            pass
+
+        def write(self, data):
+            pass
+
+        def close(self):
+            pass
+
+    relay = HardwareRelay("train-controller-hw", Idle())
+    commissioned = {"core": {"armed": True}, "state": {"kp": 12, "ki": 8}}
+    relay._take_view({"trains": {"R1": commissioned}})
+    assert relay._gains == {"R1": [12, 8]}
+    relay._take_view({"trains": {}})
+    assert relay._gains == {}
+    reused = {"core": {"armed": False}, "state": {"kp": 12, "ki": 8}}
+    relay._take_view({"trains": {"R1": reused}})
+    assert relay._gains == {}
+    relay.close()
+
+
+def test_retire_and_reuse_before_next_view_cannot_recover_old_gains():
+    from common.hw_link import protocol as p
+    from common.hw_link.transport import ByteTransport
+
+    class Recording(ByteTransport):
+        def __init__(self):
+            super().__init__()
+            self.frames = []
+
+        def start(self):
+            pass
+
+        def write(self, data):
+            self.frames.append(p.decode(data))
+
+        def close(self):
+            pass
+
+    transport = Recording()
+    relay = HardwareRelay("train-controller-hw", transport)
+    relay._ever_ready = True
+    relay._boot = "first-boot"
+    relay._gains = {"R1": [120000, 8000]}
+    retired = request(2)
+    retired["inputs"] = {"trains": {}}
+    relay._inflight = retired
+    relay._handle(
+        p.message("OUTPUTS", retired["id"], 2, outputs={"trains": {}})
+    )
+    assert relay._gains == {}
+    reused = request(3)
+    relay._inflight = reused
+    relay._handle(
+        p.message("OUTPUTS", reused["id"], 3, outputs={"trains": {"R1": {}}})
+    )
+    assert relay._gains == {}  # No VIEW arrived between either reply.
+    relay.set_clock_state({"clock_paused": False})
+    relay._disconnected()
+    relay._handle(
+        p.message(
+            p.HELLO,
+            protocol=p.VERSION,
+            module=relay.module,
+            session=relay.session,
+            agent_version="1",
+            agent_hash="hash",
+            boot="second-boot",
+            resumed=True,
+        )
+    )
+    assert transport.frames[-1]["action"] == "recovery_gains"
+    assert transport.frames[-1]["args"] == {"trains": {}}
+    relay.close()

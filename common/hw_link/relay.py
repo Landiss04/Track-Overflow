@@ -218,6 +218,13 @@ class HardwareRelay(QObject):
         if op != "REJECTED":
             self._history.append(current)
         if current["op"] == "STEP":
+            trains = incoming.get("outputs", {}).get("trains")
+            if isinstance(trains, dict):
+                self._gains = {
+                    key: value
+                    for key, value in self._gains.items()
+                    if key in trains
+                }
             metric = dict(
                 incoming.get("metrics", {}),
                 tick=current["tick"],
@@ -232,9 +239,12 @@ class HardwareRelay(QObject):
 
     def _take_view(self, view: dict[str, Any]) -> None:
         self._last_view = view
-        for key, entry in view.get("trains", {}).items():
-            if entry["core"].get("armed"):
-                self._gains[key] = [entry["state"]["kp"], entry["state"]["ki"]]
+        if "trains" in view:
+            self._gains = {
+                key: [entry["state"]["kp"], entry["state"]["ki"]]
+                for key, entry in view["trains"].items()
+                if entry["core"].get("armed")
+            }
         self.viewChanged.emit(view)
 
     def _pump_recovery(self) -> None:
