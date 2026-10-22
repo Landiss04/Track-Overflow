@@ -1,16 +1,15 @@
-@startuml class_host
+@startuml class_host_ui
 !include ../style.iuml
-title Track Controller (HW) — Host-side classes (run on the PC)
 hide empty members
+left to right direction
 
 package "Qt / QML" {
+  class "Main.qml / TrackController.qml\nPlcDetailsDialog.qml / LastReportDialog.qml" as Qml <<QML>>
   class QObject
   class QAbstractListModel
-  class QSerialPort
-  class "Main.qml / TrackController.qml\nPlcDetailsDialog.qml / LastReportDialog.qml" as Qml <<QML>>
 }
 
-package "track_ctrl_hw (host process)" {
+package "track_ctrl_hw (host process): presentation" {
   class TrackControllerState {
     -_controller: TrackController
     -_selected: str
@@ -20,12 +19,12 @@ package "track_ctrl_hw (host process)" {
     +diagramChanged: Signal
     +problem: Signal[title, message, details]
     +notice: Signal[title, message]
+    +line / waysides / selectedWayside / ready / notReadyText
+    +program / diagram / maintenanceText / channelFault
     +loadDatabase(location: str) <<Slot>>
     +loadProgram(location: str) <<Slot>>
     +selectWayside(wayside_id: str) <<Slot>>
     +refresh() <<Slot>>
-    +line / waysides / selectedWayside / ready / notReadyText
-    +program / diagram / maintenanceText / channelFault
   }
 
   class RowsModel {
@@ -57,53 +56,17 @@ package "track_ctrl_hw (host process)" {
   class territory <<module>> {
     +load_territory_file(path): Territory
   }
-
-  class RemoteTrackController <<planned>> {
-    -_link: PiSerialLink
-    +step(dt, inputs): TrackControllerOutputs
-    +snapshot(): TrackControllerSnapshot
-    +load_territory(territory): tuple[str]
-    +load_program(wayside_id, source, file_name): ProgramInfo
-    +reset(): None
-  }
-  note right of RemoteTrackController
-    Same Protocol as HwTrackController.
-    Each call becomes one request over USB
-    (newline JSON via wire.py); errors come
-    back typed (PlcError, TerritoryError, ...).
-  end note
-
-  class PiSerialLink <<planned>> {
-    -_port: QSerialPort
-    -_next_id: int
-    +open(): bool
-    +request(op: str, payload: dict): dict
-  }
-  note bottom of PiSerialLink
-    Finds the Pi by its USB identity, never a
-    fixed COM number (D027).
-  end note
-
-  class HarnessEndpoint <<planned>> {
-    -_controller: TrackController
-    +on_message(line: str): None
-    -_reply(id: int, tick: int, outputs): None
-  }
 }
 
 interface TrackController <<Protocol>>
 
+Qml ..> TrackControllerState : binds properties,\ncalls slots
 QObject <|-- TrackControllerState
 QAbstractListModel <|-- RowsModel
-Qml ..> TrackControllerState : binds properties,\ncalls slots
 TrackControllerState *-- "5" RowsModel
 TrackControllerState --> TrackController
 TrackControllerState ..> views
 TrackControllerState ..> territory
 views ..> display
 views ..> schematic
-RemoteTrackController ..|> TrackController
-RemoteTrackController --> PiSerialLink
-PiSerialLink --> QSerialPort
-HarnessEndpoint --> TrackController : step()
 @enduml

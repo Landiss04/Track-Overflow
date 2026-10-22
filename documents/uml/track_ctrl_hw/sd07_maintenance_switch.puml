@@ -1,6 +1,5 @@
 @startuml sd07_maintenance_switch
 !include ../style.iuml
-title SD-07 Maintenance switch command from the CTC Office (UC-09, UC-11)
 autonumber
 
 actor Dispatcher as D

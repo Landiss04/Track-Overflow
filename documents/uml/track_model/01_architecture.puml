@@ -1,0 +1,50 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+hide stereotype
+skinparam rectangle {
+  BackgroundColor<<ctc>> #5B9BD5
+  BackgroundColor<<ctrl>> #E8A0A0
+  BackgroundColor<<model>> #C8BC62
+  BackgroundColor<<tm>> #F2C14E
+  BorderColor black
+  FontSize 14
+}
+skinparam nodesep 70
+skinparam ranksep 90
+actor "Dispatcher" as Disp
+actor "Transit\nProgrammer" as Prog
+actor "Driver" as Drv
+actor "Murphy" as M1
+actor "Murphy" as M2
+actor "Track Builder" as TB
+rectangle "CTC Office" as CTC <<ctc>>
+rectangle "Track Controller\n(Wayside, PLC)" as TC <<ctrl>>
+rectangle "Train Controller" as TrC <<ctrl>>
+rectangle "**Track Model**\n(this document)" as TM <<tm>>
+rectangle "Train Model" as TrM <<model>>
+
+Disp -right-> CTC : dispatch,\nmode,\nmaintenance
+Prog -right-> TC : PLC\nprogram
+Drv -left-> TrC : brakes,\nset speed
+M1 -right-> TM : failures,\ntemperature
+M2 -left-> TrM : train\nfailures
+TB -up-> TM : track layout\nfile (.json)
+
+CTC -down-> TC : suggested speed, authority,\nswitch commands, closed blocks
+TC -up-> CTC : block occupancy,\nswitch / crossing /\nsignal status
+TC -down-> TM : commanded speed, authority,\nswitch positions, signals,\ncrossing gates (per block)
+TM -up-> TC : block occupancy, switch /\nsignal / gate state,\nfailures, heaters
+TM -right-> TrM : track info, speed, authority,\nbeacon, passengers boarded
+TrM -left-> TM : block, offset,\nspeed, doors
+TM -[norank]-> TrC : signal light\nahead
+TrM -up-> TrC : track signal,\nbeacon, speed
+TrC -down-> TrM : power command,\nbrakes, doors, lights
+TM .[norank].> CTC : ticket sales
+TC -[hidden]right- TrC
+@enduml

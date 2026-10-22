@@ -1,6 +1,5 @@
 @startuml sd04_details_and_report
 !include ../style.iuml
-title SD-04 View PLC program details and the last report to the CTC Office (UC-05, UC-06)
 autonumber
 
 actor Programmer as P

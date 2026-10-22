@@ -1,15 +1,22 @@
-@startuml class_core
+@startuml class_core_control
 !include ../style.iuml
-title Track Controller (HW) — Core classes (run on the Raspberry Pi)
 hide empty members
+left to right direction
 
-package "track_ctrl_hw (Qt-free core)" {
+package "track_ctrl_hw (Qt-free core): control" {
   interface TrackController <<Protocol>> {
     +step(dt: float, inputs: TrackControllerInputs): TrackControllerOutputs
     +snapshot(): TrackControllerSnapshot
     +load_territory(territory: Territory): tuple[str]
     +load_program(wayside_id: str, source: str, file_name: str): ProgramInfo
     +reset(): None
+  }
+
+  class PiLinkServer <<planned>> {
+    -_port: serial device /dev/ttyGS0
+    -_controller: HwTrackController
+    +serve(): None
+    -_handle(request: dict): dict
   }
 
   class HwTrackController {
@@ -58,80 +65,8 @@ package "track_ctrl_hw (Qt-free core)" {
     +report: CtcReport
   }
 
-  class Program {
-    +source: str
-    +inputs: tuple[str]
-    +outputs: tuple[str]
-    +statements: tuple[Statement]
-    +diagnostics: tuple[Diagnostic]
-    +errors: tuple[Diagnostic]
-    +warnings: tuple[Diagnostic]
-    +checksum: str
-    +boolean_count: int
-    +scan_a(inputs): dict[str, bool]
-    +scan_b(inputs): dict[str, bool]
-  }
-  note right of Program
-    Channel A: recursive descent, tree walk.
-    Channel B: shunting-yard, stack machine.
-    Every scan runs both and compares them.
-  end note
-
-  class Statement {
-    +target: str
-    +tree: Node
-    +code: tuple[Instruction]
-    +line: int
-  }
-
-  class Diagnostic {
-    +severity: str
-    +line: int
-    +message: str
-  }
-
-  abstract class Node
-  class Constant {
-    +value: bool
-  }
-  class Read {
-    +name: str
-  }
-  class Negate {
-    +operand: Node
-  }
-  class Combine {
-    +operator: str
-    +left: Node
-    +right: Node
-  }
-
-  class plc <<module>> {
-    +compile_program(source: str): Program
-  }
-
-  class "wayside" as wayside_io <<module>> {
-    +input_names(territory): frozenset[str]
-    +output_names(territory): frozenset[str]
-    +check_program(program, territory): (errors, warnings)
-    +decode_aspect(values, switch): SignalAspect
-    +speed_limit_whole_mps(limit_mps): int
-  }
-
-  class vital <<planned>> {
-    +vital_source(territory: Territory): str
-  }
-  note bottom of vital
-    Read-only PLC block generated per territory and
-    run after the user's program on both channels.
-    It can only make an output more restrictive.
-  end note
-
-  class territory <<module>> {
-    +load_territory_file(path): Territory
-    +parse_territory(data): Territory
-    +parse_switch(key, text, ids): Switch
-  }
+  class Program
+  note right of Program : see PLC engine
 
   class wire <<module>> {
     +inputs_to_wire / inputs_from_wire
@@ -140,11 +75,10 @@ package "track_ctrl_hw (Qt-free core)" {
     +snapshot_to_wire / snapshot_from_wire <<planned>>
   }
 
-  class PiLinkServer <<planned>> {
-    -_port: serial device /dev/ttyGS0
-    -_controller: HwTrackController
-    +serve(): None
-    -_handle(request: dict): dict
+  class territory <<module>> {
+    +load_territory_file(path): Territory
+    +parse_territory(data): Territory
+    +parse_switch(key, text, ids): Switch
   }
 
   class TrackControllerError
@@ -157,24 +91,13 @@ package "track_ctrl_hw (Qt-free core)" {
   class WireFormatError
 }
 
+PiLinkServer --> HwTrackController : drives
+PiLinkServer ..> wire
 HwTrackController ..|> TrackController
 HwTrackController "1" *-- "1..*" Wayside : runs >
 Wayside --> "0..1" Program : user program
 Wayside ..> "1" Program : vital block <<planned>>
 Wayside ..> WaysideScan : returns
-Wayside ..> wayside_io
-Wayside ..> vital
-Program "1" *-- "*" Statement
-Program "1" *-- "*" Diagnostic
-Statement --> Node : tree
-Node <|-- Constant
-Node <|-- Read
-Node <|-- Negate
-Node <|-- Combine
-plc ..> Program : creates
-Wayside ..> plc
-PiLinkServer --> HwTrackController : drives
-PiLinkServer ..> wire
 
 TrackControllerError <|-- TerritoryError
 TrackControllerError <|-- PlcError

@@ -35,6 +35,8 @@ SLIDE_H = Inches(7.5)
 MARGIN = Inches(0.45)
 TITLE_H = Inches(0.95)
 FOOTER_H = Inches(0.35)
+# Sequence diagrams too detailed to read on one slide.
+SPLIT = {"sd05_tick": 2, "sd01_load_database": 2, "sd02_load_program": 2}
 
 
 class Deck:
@@ -71,7 +73,7 @@ class Deck:
             run.font.name = font
         return box
 
-    def _chrome(self, title: str, section: str = ""):
+    def _chrome(self, title: str, section: str = "", footer: bool = True):
         self.number += 1
         slide = self.prs.slides.add_slide(self.blank)
         bar = slide.shapes.add_shape(
@@ -87,8 +89,9 @@ class Deck:
                        Inches(3.8), Inches(0.75), section, size=12,
                        color=LIGHT, align=PP_ALIGN.RIGHT,
                        anchor=MSO_ANCHOR.MIDDLE)
-        self._text(slide, MARGIN, SLIDE_H - FOOTER_H, Inches(9),
-                   FOOTER_H, self.footer, size=10, color=MUTED)
+        if footer:
+            self._text(slide, MARGIN, SLIDE_H - FOOTER_H, Inches(9),
+                       FOOTER_H, self.footer, size=10, color=MUTED)
         self._text(slide, SLIDE_W - Inches(1.5), SLIDE_H - FOOTER_H,
                    Inches(1.05), FOOTER_H, str(self.number), size=10,
                    color=MUTED, align=PP_ALIGN.RIGHT)
@@ -159,16 +162,39 @@ class Deck:
         return slide
 
     def diagram(self, title: str, image: Path, section: str = "",
-                caption: str = ""):
-        """One diagram, fitted; a tall one is split across slides."""
+                caption: str = "", crop: tuple | None = None,
+                full: bool = False, blank: tuple = (), notes: str = "",
+                parts: int | None = None):
+        """One diagram, fitted; a tall one is split across slides.
+
+        ``crop`` keeps a region given as (left, top, right, bottom)
+        fractions; ``blank`` whites out regions given the same way, to
+        hide fragments of neighbouring boxes. ``full`` fills the slide
+        below the title bar, with no footer or caption. ``parts`` forces
+        the number of slides instead of choosing it from the shape.
+        """
+        if crop is not None:
+            with Image.open(image) as picture:
+                w, h = picture.size
+                picture = picture.convert("RGB")
+                for region in blank:
+                    picture.paste((255, 255, 255), (
+                        int(region[0] * w), int(region[1] * h),
+                        int(region[2] * w), int(region[3] * h)))
+                box = (int(crop[0] * w), int(crop[1] * h),
+                       int(crop[2] * w), int(crop[3] * h))
+                path = self._scratch / (
+                    f"{image.stem}_{'_'.join(map(str, box))}.png")
+                picture.crop(box).save(path)
+            image = path
         with Image.open(image) as picture:
             w_px, h_px = picture.size
-        parts = max(1, round(h_px / w_px / 0.9))
+        parts = parts or max(1, round(h_px / w_px / 0.9))
         if parts == 1:
-            return self._picture(title, image, section, caption)
+            return self._picture(title, image, section, caption, full, notes)
         for index, piece in enumerate(self._slices(image, parts), start=1):
             self._picture(f"{title} ({index} of {parts})", piece, section,
-                          caption if index == parts else "")
+                          caption if index == parts else "", full, notes)
 
     def _slices(self, image: Path, parts: int) -> list[Path]:
         # Cut where a row holds the least ink, so no message is split.
@@ -195,9 +221,17 @@ class Deck:
         return pieces
 
     def _picture(self, title: str, image: Path, section: str,
-                 caption: str):
-        slide = self._chrome(title, section)
-        left, top, width, height = self._body_box()
+                 caption: str, full: bool = False, notes: str = ""):
+        slide = self._chrome(title, section, footer=not full)
+        if notes:
+            slide.notes_slide.notes_text_frame.text = notes
+        left, width = MARGIN, SLIDE_W - 2 * MARGIN
+        if full:
+            top, caption = TITLE_H, ""
+            height = SLIDE_H - top - Inches(0.12)
+        else:
+            top = TITLE_H + Inches(0.12)
+            height = SLIDE_H - top - FOOTER_H - Inches(0.1)
         if caption:
             height -= Inches(0.45)
         with Image.open(image) as picture:
@@ -364,11 +398,37 @@ def build_track_ctrl_hw() -> None:
     deck.diagram("Use case diagram", UML / "uc_track_ctrl_hw.png",
                  section="Use cases",
                  caption="Programmer actions are every control of the "
-                 "window; the scan cycle runs once per tick")
+                 "window; the scan cycle runs once per tick",
+                 notes="16 use cases. UC-01 to UC-06 are every control of "
+                 "the window (Programmer). UC-07 Run scan cycle runs once per "
+                 "tick, driven by the harness, and includes UC-08 to UC-15: "
+                 "inputs from the CTC Office and Track Model, commands to the "
+                 "Track Model, the report to the CTC. UC-16 Hold fail-safe "
+                 "extends the scan. Together they cover rubric 6.0 to 6.9 and "
+                 "9.0.")
 
     deck.section("Architecture")
     deck.diagram("Software architecture", UML / "architecture.png",
-                 section="Architecture")
+                 section="Architecture",
+                 notes="Layers: presentation and host-side communication on "
+                 "the PC; control, PLC engine and Pi-side communication on "
+                 "the Pi; the contract (interface, wire format, errors) is "
+                 "shared by both. Orange = planned: the PC/Pi split.")
+    deck.diagram("Software architecture: host PC", UML / "architecture.png",
+                 section="Architecture", crop=(0, 0, 0.405, 0.59),
+                 blank=((0.336, 0.42, 1, 1),),
+                 notes="PC side. The QML window talks only to "
+                 "TrackControllerState. Harness ticks and window requests "
+                 "both go through RemoteTrackController, which forwards them "
+                 "over USB serial through PiSerialLink.")
+    deck.diagram("Software architecture: Raspberry Pi and shared code",
+                 UML / "architecture.png", section="Architecture",
+                 crop=(0.336, 0.42, 1, 1),
+                 notes="Pi side. PiLinkServer receives each request and calls "
+                 "HwTrackController, which scans every Wayside. Each "
+                 "statement is compiled twice and run on two channels; the "
+                 "vital block runs after the user's program (planned). "
+                 "interface.py and wire.py are used on both sides.")
     deck.bullets("Architecture: design choices", [
         "One interface, three users: harness, window and test UI call only "
         "the TrackController Protocol",
@@ -386,29 +446,110 @@ def build_track_ctrl_hw() -> None:
     ], section="Architecture")
 
     deck.section("Class diagrams")
-    deck.diagram("Core classes (Raspberry Pi)", UML / "class_core.png",
-                 section="Class diagrams")
-    deck.diagram("Boundary types", UML / "class_boundary.png",
-                 section="Class diagrams",
-                 caption="CTC Office names blocks by BlockRef (Red:15); "
-                 "Track Model by BlockKey (line, section, number)")
-    deck.diagram("Host-side classes (PC)", UML / "class_host.png",
-                 section="Class diagrams")
+    deck.diagram("Core classes (Raspberry Pi): control",
+                 UML / "class_core_control.png", section="Class diagrams",
+                 notes="HwTrackController implements the TrackController "
+                 "Protocol and owns one Wayside per database, all on one "
+                 "line. Wayside.scan builds the input image, runs the "
+                 "programs, compares the channels, drives the outputs and "
+                 "builds the CTC report. Every error derives from "
+                 "TrackControllerError. PiLinkServer is planned.")
+    deck.diagram("Core classes (Raspberry Pi): PLC engine",
+                 UML / "class_core_plc.png", section="Class diagrams",
+                 notes="compile_program turns source into an immutable "
+                 "Program. Each Statement holds a tree (channel A) and "
+                 "postfix code (channel B); scan_a and scan_b must agree. "
+                 "check_program verifies every name against the wayside's "
+                 "I/O. vital_source (planned) generates the read-only block.")
+    deck.diagram("Boundary types: inputs and outputs",
+                 UML / "class_boundary_io.png", section="Class diagrams",
+                 full=True,
+                 notes="What crosses the boundary each tick. In: from the "
+                 "CTC Office closures, maintenance switch commands and "
+                 "per-block suggestions; from the Track Model occupancy and "
+                 "read-back. Out: track circuits and switch, signal and "
+                 "crossing commands to the Track Model; one CtcReport per "
+                 "wayside. The CTC keys blocks by BlockRef, the Track Model "
+                 "by BlockKey.")
+    deck.diagram("Boundary types: territory",
+                 UML / "class_boundary_territory.png",
+                 section="Class diagrams", full=True,
+                 notes="A wayside's territory, from its database: blocks "
+                 "with length and speed limit, switches (point, normal and "
+                 "reverse ends), crossings. BlockKey is line, section, "
+                 "number; BlockRef is line and number, the CTC's form "
+                 "(Red:15).")
+    deck.diagram("Boundary types: snapshot for the window",
+                 UML / "class_boundary_snapshot.png",
+                 section="Class diagrams", full=True,
+                 notes="Read-only state for the window, from snapshot(), "
+                 "with no side effects: per wayside its program, scan "
+                 "health (scans, overruns, channel agreement), switch states "
+                 "and last report.")
+    deck.diagram("Host-side classes (PC): presentation",
+                 UML / "class_host_ui.png", section="Class diagrams",
+                 caption="QML only binds to TrackControllerState and calls "
+                 "its slots; rows update in place every 100 ms at most",
+                 notes="TrackControllerState is the QML bridge: slots for "
+                 "the window's actions, properties QML binds to. It turns "
+                 "snapshots into rows through views, display and schematic, "
+                 "and updates five RowsModels in place, at most every 100 ms.")
+    deck.diagram("Host-side classes (PC): link to the Pi",
+                 UML / "class_host_link.png", section="Class diagrams",
+                 caption="RemoteTrackController has the same Protocol as "
+                 "HwTrackController; each call is one request over USB",
+                 notes="Planned. RemoteTrackController implements the same "
+                 "Protocol as HwTrackController, so neither the window nor "
+                 "the harness endpoint changes. PiSerialLink sends each call "
+                 "as one newline-JSON request over USB serial (D027); "
+                 "HarnessEndpoint answers the harness's ticks.")
 
     deck.section("Sequence diagrams")
-    for name, title in (
-        ("sd05_tick", "SD-05 One tick through the central harness"),
-        ("sd06_scan_cycle", "SD-06 Scan cycle of one wayside"),
-        ("sd01_load_database", "SD-01 Load wayside database"),
-        ("sd02_load_program", "SD-02 Load PLC program"),
-        ("sd03_monitor", "SD-03 Select wayside and monitor"),
-        ("sd04_details_and_report", "SD-04 PLC details and last report"),
-        ("sd07_maintenance_switch", "SD-07 Maintenance switch command"),
+    for name, title, notes in (
+        ("sd05_tick", "SD-05 One tick through the central harness",
+         "One tick: the harness maps the CTC Office's and Track Model's "
+         "previous outputs into this module's inputs; the PC relays the step "
+         "to the Pi; every wayside scans; the outputs go back. An invalid "
+         "input rejects the whole tick. At 10x, USB round trip plus scan "
+         "must stay under 10 ms."),
+        ("sd06_scan_cycle", "SD-06 Scan cycle of one wayside",
+         "One wayside's scan. It holds fail-safe if any wayside is not ready, "
+         "it has no program, or a channel fault is latched. Otherwise: build "
+         "the input image, run the user program on channels A and B, "
+         "compare, run the vital block the same way (planned), then drive "
+         "the outputs. The CTC report is built every scan."),
+        ("sd01_load_database", "SD-01 Load wayside database",
+         "The PC parses the file and rejects a bad one before sending it; "
+         "the Pi checks the line and that no other wayside owns its blocks. "
+         "A replaced wayside keeps its program if the program still fits."),
+        ("sd02_load_program", "SD-02 Load PLC program",
+         "Compiled twice and checked against the wayside's I/O, on the Pi. "
+         "Any error refuses the program and lists every problem with its "
+         "line number; the old program keeps running. A new program holds "
+         "fail-safe until its first scan."),
+        ("sd03_monitor", "SD-03 Select wayside and monitor",
+         "The window takes a snapshot, converts it to rows in display units "
+         "and updates the tables in place. A 100 ms timer refreshes when "
+         "ticks have advanced. Zoom and Fit are QML only."),
+        ("sd04_details_and_report", "SD-04 PLC details and last report",
+         "Two read-only dialogs over values from the last refresh. New PLC "
+         "in the details dialog starts SD-02."),
+        ("sd07_maintenance_switch", "SD-07 Maintenance switch command",
+         "The CTC Office's command reaches the program as the CTCSW and "
+         "CTCREV inputs; the program obeys unless a train holds the switch. "
+         "The Track Model's read-back goes into the CTC report. When "
+         "maintenance ends, the program routes the switch again."),
     ):
-        deck.diagram(title, UML / f"{name}.png", section="Sequence diagrams")
+        deck.diagram(title, UML / f"{name}.png", section="Sequence diagrams",
+                     notes=notes, parts=SPLIT.get(name))
 
     deck.section("Deployment")
-    deck.diagram("Deployment", UML / "deployment.png", section="Deployment")
+    deck.diagram("Deployment", UML / "deployment.png", section="Deployment",
+                 notes="One Windows PC runs the executable; the harness "
+                 "spawns one process per module. The Track Ctrl HW process "
+                 "shows the window and owns the COM port to a Raspberry Pi 5 "
+                 "in USB device mode, which runs every Red Line wayside. The "
+                 "test UI is not deployed. Open item: powering the Pi 5.")
 
     deck.section("System concepts", "Track Controller's part of the joint "
                  "concepts, with Harry and Landis")
