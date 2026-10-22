@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.14. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5). Not normative. |
+| **Status** | Draft v0.15. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5); Phase 5 software steps 1–9 and documentation step 13 are built and verified with simulated Pis (section 5.6); hardware steps 10–12 have not started. Not normative. |
 | **Date** | 2026-10-21 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
@@ -12,6 +12,15 @@ The `truth` branch is the authoritative record. This document cites it by shard 
 (`origin/truth:truth/<path>`, shortened below to the shard name) and does not override it.
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
+
+**Changes in v0.15**
+
+- Phase 5 decisions K1–K12 are R93–R107 (section 1.4.1), including the
+  separately named K3b/K4b. The physical Red yard connection is settled;
+  NORMAL-leg interpretation and original switch text remain owner questions.
+- PR #43's source and Braden's WP2 design are merged; the GitHub PR stays
+  unmerged. Section 5.6 distinguishes implementation, simulated verification
+  and the deferred hardware/provisioning/packaging work.
 
 **Changes since v0.13**
 
@@ -221,6 +230,31 @@ automatic Run for `--stubs-only`.
 | R90 | Q-P4-7 | "add this to open questions" | The ticket sales rate stays open, for the Track Model owner. |
 | R91 | Engine detector / OPEN_ISSUES #26 | "Accept the steady-fall check as built" | Kevin Schillinger, direct statement 2026-10-21: accept the implementation in `460579b`, including half-second speed means within 10% of the total fall of a straight line across the 6 s window (section 5.5). The two known limits remain. |
 | R92 | R83 stubs-only exception | "Keep automatic Run for --stubs-only" | Kevin Schillinger, direct statement 2026-10-21: a `--stubs-only` run presses Run automatically, including window mode, because the stub CTC Office has no window. A real window run still waits for the dispatcher unless `--auto-run` is given. |
+
+
+### 1.4.1 Phase 5 decisions of 2026-10-21
+
+Kevin authorized steps 1–9 and 13 in the attached session prompt. K4 includes
+Braden's answers relayed by Kevin. Quotes preserve their wording. These
+implementation rulings do not promote proposals to `truth`.
+
+| # | Source | Kevin's words | Effect |
+| --- | --- | --- | --- |
+| R93 | K1: Go and order | Steps 1–9 and 13 now; "no hardware is functional yet so that cant be tested" | Build against simulated Pis; steps 10–12 remain out of scope. |
+| R94 | K2: Red yard (Phase 3 Q5) | "block 9 physically connects to the yard via a switch … note that block 9 is in section c" | Move yard adjacency from 75 to section-C block 9. Point 9, NORMAL toward 10 and REVERSE yard is explicitly an assumption for the Track Model owner and Braden. Preserve the leftover `75-yard` text for them to resolve. |
+| R95 | K3: PR #43 | "merge into this branch not devlopment leave the pr unmerged" | Merge the source into this branch with a merge commit. Do not merge/close/comment on the GitHub PR. |
+| R96 | K3b: Vital layer | "the vital layer has been removed. everything is done by the plc code." | The no-vital policy covers both HW and SW, explicitly confirmed by Kevin later in this session. All safety belongs in PLC programs. Existing SW vital implementation is left unchanged under the original implementation scope, and is an owner follow-up. |
+| R97 | K4: Red databases/programs, Braden relayed by Kevin | "use test only copies"; "it should be divided in any way that work, maybe 3 waysides. That's fine to keep 9 and 75 in the same wayside."; switches "yes"; crossings "Yes"; "Check the wp2/ branch that braden made. Many updates are found there as well." | Use about three integration test waysides, all 76 blocks once, 9/75 together. NORMAL starters, crossings 11/47 active for own/either-neighbor occupancy; take safety/speed-cap design from WP2. |
+| R98 | K4b: WP2 design | The wp2/ branch has "many updates" | Merge `origin/wp2/TrackCtrl-HW-design` (f590f41) separately. Follow Braden's core-on-Pi/host-window split unless a ruling conflicts. Dual channels and five-bit speed exist in PR #43; the generated read-only vital PLC block does not. K3b puts safety in test programs; Harry confirms the planned vital block. |
+| R99 | K5: Pis and USB identity | "Pi 5 set up by module owners. assign the both usb ident strigns" | Assign manufacturer/product/serial/VID:PID per module; owners provision the Pis. Write setup instructions without hardware execution. |
+| R100 | K6: Pi-link additions | "accept" | Host-to-Pi HELLO (protocol/module/version/hash/session), ACTION/ACK before the next STEP, VIEW at most every 100–200 ms; harness protocol unchanged. |
+| R101 | K7: Unplug or reboot recovery | "approved" | Hold the reply; reconnect by identity, redo HELLO, replay loads, re-send pending STEP, log stages. Pi caches `(id,tick)` and never advances that STEP twice. |
+| R102 | K8: Pi missing at launch | "the whole clock should wait this will never happen" | No fallback. Missing Pi holds the clock; simulated agents require explicit development/test selection. |
+| R103 | K9: Pi capacity at 10x | "agreed test when implemented" | Hardware USB/10x measurement is step 10 later. Record simulated output bytes/core time as groundwork only. |
+| R104 | K10: Windows builder/separate installs | "kick this down the road" | Deferred; no Windows builder, separate-installer or packaging claim. |
+| R105 | K11: Gains after reboot | "they should never loose connection mid run but add logic to check if connections are lost while the clock as running and if they are lost while the clock is running then the gains should be resent" | Re-send engineer gains only after a loss while running; no automatic gain application after a paused loss (D024). Log both. Kevin later explicitly approved the CLOCK_STATE exception (R107); implementation and integrated recovery checks follow that approval. |
+| R106 | K12: Window Python | "any ui changes require permission" | No additional QML or Python-behind-window changes without permission. Use adapters through existing controller/fleet constructor parameters. K3 authorizes the existing owner-authored UI changes in the merge itself. |
+| R107 | K11 clock metadata follow-up | Kevin explicitly approved the prepared CLOCK_STATE exception in his later reply of 2026-10-21. | Add authoritative initial/change clock metadata on the harness-to-HW-host channels. Latch the state at Pi loss before timeout pause; verify running-loss gain replay and paused-loss non-application. |
 
 ### 1.5 Questions
 
@@ -886,6 +920,143 @@ integrating everything at once.
 
 The missing integration guides (section 3.1) should be written as each module joins.
 `common/harness/README.md` says how a module joins the harness.
+
+### 5.6 Phase 5 as built (steps 1–9) [C]
+
+Kevin authorized the software work in the attached Phase 5 session prompt,
+with no functional Pis available. Software steps 1–9 and documentation
+step 13 are complete against explicit simulated Pis. Real hardware steps
+10–12 have not started. R93–R107 preserve the decisions. The two
+source merges are `8407baf` (PR #43 source branch, GitHub PR unchanged) and
+`2335197` (Braden's WP2 design). `f27ba4e` repairs the Green sample cuts,
+adds Red integration test databases/PLCs and aligns the Red yard readers.
+`cb8a326`/`d4db358` supply HW mappings, mixed-line routing and deferred replies.
+
+**Red topology and safety.** The three test databases cover 76 blocks exactly
+once: Red-1 has 1–24/73–76, Red-2 has 25–45/67–72, and Red-3 has 46–66.
+9 and 75 share Red-1. Files say they are integration test copies, not
+Braden's, for him to replace or approve. All rows include `next_blocks`.
+The yard now joins section-C block 9 and no longer joins 75. Original
+`75-yard` text is retained; point 9/NORMAL toward 10/REVERSE yard remains
+an explicit assumption for the Track Model owner and Braden. HW territory,
+Track Model, harness devices and SW topology readers agree. No SW vital
+logic changed. Kevin subsequently confirmed the no-vital policy covers SW
+too; its existing vital implementation is a deferred owner follow-up.
+
+PR #43 has dual PLC channels and five-bit speed input/output, but no
+read-only generated vital PLC block. The Red programs contain speed caps,
+separation, closures, switch correspondence/occupied locking, signals and
+crossings. Switches remain NORMAL at rest. Crossings 11/47 activate for own
+or either-neighbor occupancy. Read-only `OCC_n` inputs extend across declared
+neighbors without duplicating output ownership. The full Red occupied set
+must reach the mapping; missing set membership has the existing meaning
+clear, and a disconnected harness module stops clock advancement. The WP2
+planned generated vital block remains for Harry and Braden to confirm;
+K3b takes precedence for this implementation.
+
+**Mixed-line run.** In the seven-core in-process scenario, R1 is released at
+9 and traverses 9–16, with each module receiving the train one tick apart.
+There is no emergency brake or signal-pickup latch, and Green G1 continues
+under its SW controller. An onward order is issued immediately after the
+Red doors open: first open tick 657, close tick 1107, exactly 45.0 s later.
+Red return is not complete: the return request is accepted after the dwell,
+R1 continues to 66 and is held by the NORMAL-only route at switch 52.
+After 600 simulated seconds it has not retired at 9; no train-left-track,
+removal, emergency-brake or pickup-failure event occurs. Automatic Red
+turnback has not been demonstrated. Changing the first-version switch
+policy would require another decision.
+
+**Pi link implementation and verification boundary.** `common/hw_link/`
+contains a Qt-free Pi agent, strict newline framing and HELLO/ACTION/ACK/VIEW,
+remote adapters, event-driven QSerialPort, explicit local QProcess agents
+and Linux pty transports. The host's reply is deferred until the Pi answers.
+USB discovery uses the assigned serial plus VID/PID, with HELLO module/version
+validation and no production fallback. Agents run no clock. The current
+recovery code and tests exercise reply caching, durable journal reconstruction,
+loads, pending STEP replay, reconnect logging and gain replay policy.
+
+The durable journal stores full accepted requests and replies per session;
+the session cache/history grows with the run. Cold restart reconstructs the
+core from that history, so replay cost grows too. Simulated step timings
+exclude disk synchronization, serial transit and replay. A real Pi power-loss
+and long-session journal test remains part of later hardware acceptance.
+The relay implements the running-loss/paused-loss gain replay policy. Kevin
+subsequently approved authoritative CLOCK_STATE metadata on the harness-to-HW
+host channel (R107). Commit `9325523` implements that explicit protocol/core exception. The
+orchestrator independently reran 34 focused clock/protocol/link/channel
+checks with 22 subtests and the full Pi suite: 31 passed at `baed0cd`.
+CLOCK_STATE has a strict schema and a pause notification never runs STEP.
+Gain replay uses the current armed train roster, including rapid retirement/
+ID reuse: running-loss replay is distinct from paused-loss non-application.
+
+**Simulated cost groundwork (K9).** One 1,107-tick mixed run measured module
+step plus wire encoding/compact JSON round-trip, without serial or windows:
+
+| Module | Mean / p95 / maximum (ms) | Mean / maximum output bytes per tick |
+| --- | --- | --- |
+| Track Controller HW | 1.3453 / 1.3828 / 1.5307 | 12,410.48 / 12,428 |
+| Train Controller HW | 0.02863 / 0.03258 / 0.04961 | 219.80 / 241 |
+
+The two maximum outputs total 12,669 bytes/tick, about 1.27 MB/s at 100
+ticks/second, before inputs, framing, VIEW traffic, journaling and recovery.
+This sizes the workload; it establishes no actual USB latency or Pi 10x
+feasibility result. G-CLK-6 remains open for the USB and Windows measurements.
+
+**Final software verification.** The HW baseline after merges
+was 73 passed/48,074 subtests and one known missing-`next_blocks` failure;
+after the repair it is 80 passed/50,506 subtests. The orchestrator independently
+reran that full HW suite and 14 mapping/mixed-loop/deferred-reply tests.
+The delegated post-default harness+utils run reports 252 passed, 5 skipped
+and 540 subtests in 99.69 s (harness 166 passed/5 skipped; utils 86 passed).
+The broad module suites report CTC Office 259/284 subtests; Track Controller SW 213/16;
+Track Model 309; Train Controller 23/18; Train Model 879 passed/13 skipped.
+The Train Controller `main.py --check` exits zero, with zero QML warnings and
+zero behaviour problems. The post-default opt-in Green round trip passes all five checks in 40.56 s.
+The final independent slices below include the real-process Pi acceptance.
+
+**Host/default acceptance.** The seven-real-process tests report
+three passing scenarios: clean run, injected disconnect and injected reboot.
+They assert Green/Red routes, seven zero exits and empty stderr. Journal
+evidence records each STEP once, the repeated pending tick is served from
+cache, and the harness logs REPLY_LATE followed by LATE_REPLY_RECEIVED.
+The orchestrator independently checked these acceptance slices; overlapping
+checks are not summed into a new suite total:
+
+| Independent rerun | Result |
+| --- | --- |
+| Final default-tree faults, launcher arguments and all-seven-process clean/drop/reboot | 27 passed, 7 subtests, 33.42 s; strict empty stderr |
+| Full Pi protocol/transport/recovery/window suite | 31 passed, 7.76 s |
+| CLOCK_STATE schema, initial/change state, link and Pi channel | 34 passed, 22 subtests, 4.06 s |
+| Full Track Controller HW | 80 passed, 50,506 subtests, 4.61 s |
+| Mixed route, mappings and deferred replies | 14 passed, 4.62 s |
+
+
+Kevin approved the concrete CLOCK_STATE exception to the otherwise unchanged
+harness protocol/core. It supplies authoritative initial/change clock metadata
+to HW hosts; the relay latches it at loss before late-reply timeout pauses the
+clock. K11 and the production-default patch are now authorized. CLOCK_STATE is
+implemented in `9325523`, and the final gain-cache/armed-roster behavior
+is verified in `baed0cd`, including rapid train ID reuse. Both HW variants
+are now real modules by default. `--test-pi process` or `--test-pi pty`
+explicitly selects development agents; `--stubs-only` remains seven stubs.
+Production hosts wait for their USB identities with no fallback. The final
+post-default broad regression and Green round trip pass as recorded above.
+
+**Static checks.** Production flake8 passes. The Pi package's 15 checked
+Python files pass mypy. The nine-file harness type check has one preexisting
+`common/harness/app.py:106` Qt application argument mismatch; the other
+eight checked files are clean. That unrelated UI-facing annotation was not
+changed, and this is not a claim that all repository type checks are green.
+
+**Proposals and deferred work.** Commit `17beefc` files five new full proposals
+for K2, K5, K6, K7 and K11. Two further full proposals record the confirmed both-variant K3b policy
+and approved CLOCK_STATE exception. This branch's inbox has 27 proposals,
+plus four
+owner-source proposals brought in under PR #43's original branch directory.
+All await human promotion; no existing proposal was edited or deleted. Pi owner
+setup is documented in `documents/pi-owner-setup.md`, untested on hardware.
+Steps 10 (USB measurements), 11 (owner Pi provisioning) and 12 (packaging/
+Windows builder/separate installs) have not started.
 
 ### 5.5 Phase 4 as built [C]
 
@@ -1726,10 +1897,10 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-SIG-8 | Resolved (R33, R69) | A failed block reads as occupied, and the Track Controller reports it to the CTC Office as occupied, with no closure ([P] `block-occupancy`; pending D015). Built in Phase 3: a broken rail ahead stops the train short on the service brake, with no latch (section 5.4). | Track Controller owners |
 | G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Built in Phase 2: the Track Model's commanded speed is a float, and the harness maps doors open from the Train Model's door state, either door, without a new Train Model output (section 5.3). | signal owner Track Model; Train Model owner Kevin Schillinger |
 | G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN` (the harness maps it meanwhile), and the Track Model must produce the light ahead of each train on every tick; it sends the light only as a train enters a signal block (section 5.3), logged as a bug on 2026-10-20 (`TrackModel/BUGS.md` B1). | signal owner Track Model |
-| G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Built in Phase 2: the harness maps the Track Model's block names, `GREEN K-63`, both ways (section 5.3). Left: the HW variant's section keys (Phase 5). | identifiers owner Kevin |
+| G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Built in Phase 2: the harness maps the Track Model's block names, `GREEN K-63`, both ways (section 5.3). Phase 5 maps HW section keys directly through BlockNames (section 5.6). | identifiers owner Kevin |
 | G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Built in Phase 2: each tick's commands replace the last (section 5.3). | Track Model owner |
 | G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). Phase 2 maps the Track Model's edges to the trains directly (`track_edges.py`); the legacy `track_model_edges.py` stays for the Track Model's own tests, and other modules still import `common/interfaces.py`. | D008 owner Kevin |
-| G-SIG-14 | Partial: Phases 1 to 4 built | Mapped directly: Train Model ↔ Train Controller (Phase 1), Track Model ↔ Train Model and Track Model → Train Controller (Phase 2), and Track Controller ↔ Track Model, CTC Office → Track Controller and Track Controller → CTC Office (Phase 3, `wayside_edges.py`). `ModuleLink` supplies the shared time. Phase 4 puts the CTC Office's own process on the CTC Office's edges in place of Phase 3's scripted stand-in, adds Track Model → CTC Office (ticket sales, `track_edges.py`), and takes the roster from the CTC Office's events (section 5.5). Left: the HW variants' edges (Phase 5). | module owners |
+| G-SIG-14 | Partial: Phases 1 to 4 built | Mapped directly: Train Model ↔ Train Controller (Phase 1), Track Model ↔ Train Model and Track Model → Train Controller (Phase 2), and Track Controller ↔ Track Model, CTC Office → Track Controller and Track Controller → CTC Office (Phase 3, `wayside_edges.py`). `ModuleLink` supplies the shared time. Phase 4 puts the CTC Office's own process on the CTC Office's edges in place of Phase 3's scripted stand-in, adds Track Model → CTC Office (ticket sales, `track_edges.py`), and takes the roster from the CTC Office's events (section 5.5). Phase 5 adds the HW edges and merges the per-line commands/reports (section 5.6). | module owners |
 | G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Kevin Schillinger set on 2026-10-20 that the CTC Office schedules the dwell and the Train Controller enforces it ([P] D007 update, section 7.1). Built: the Train Controller holds the doors open at least 45 s, however soon its authority comes back (`Train-Ctrl_HW/CHANGELOG.md`). Left: a station the train runs through stays pending until its next stop (`Train-Ctrl_HW/OPEN_ISSUES.md` #25). | D007 owner Kevin |
 | G-SIG-16 | Resolved (R61, R79) | The Train Controller releases a passenger pull with a one-shot command ([P] `passenger-brake-release`), and enforces the door interlock: doors open only when stopped, on the platform side, and no power while a door is open ([P] `door-command`). | Train Controller |
 | G-SIG-17 | Resolved (R27, R72) | Maintenance is `closed-blocks`, with no boolean. The SW variant's maintenance state follows the CTC Office's commands, as it already does. Left: SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
@@ -1740,7 +1911,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-LIFE-1 | Resolved (R18, R44) | Layout files load by default at startup; PLC programs and wayside databases are loaded by hand. Left: Red's HW data, later (R34). | unassigned |
+| G-LIFE-1 | Resolved (R18, R44) | Layout files load by default at startup; PLC programs and wayside databases are loaded by hand. Phase 5 supplies marked Red test copies for owner approval; manual load/readiness remains (section 5.6). | unassigned |
 | G-LIFE-2 | Resolved (R64), built | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Seven stubs are ready in about 0.25 s (section 5.1), the Phase 1 system, two of them with windows, in about 0.5 s (section 5.2), the Phase 2 system, three with windows, in about 1 s (section 5.3), the Phase 3 system, four with windows, in 1.0 to 1.4 s (section 5.4), and the Phase 4 system, five with windows, in 1.0 to 1.4 s (section 5.5). The harness window shows startup progress and names the modules a startup timeout catches (section 5.1). Left: the modules still stubs, with their windows and files, against 20 s. | unassigned |
 | G-LIFE-3 | Resolved (R64), built | On exit the harness tells every module to quit, and ends any that do not ([P] D005). Built: `QUIT`, up to 5 s, then kill (section 5.1). | unassigned |
 | G-LIFE-4 | Partly (R19, R64, R80) | A rejected tick is skipped, the run continues, and the harness shows it in its window and writes it to the event log. The team will return to what can break. Built: the skip, the log, and the harness window, which lists every event with faults labelled (section 5.1). Phase 4 fixed seven faults found in validation: a reply with a non-finite number, invalid Unicode or an over-long line, a reply for the wrong tick, inputs that cannot be sent, and two in the log and the window. Each is now logged and its module named, rather than stalling the clock or closing the link (section 5.5). | unassigned |
@@ -1763,8 +1934,8 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-HW-1 | Resolved (R5, R32, R42, R81) | Pis on USB serial in the standard communications class, driven by Windows' built-in driver, found by USB identity; the HW variant's host process relays the messages; one Pi per hardware module ([P] D021, D027). Left: build the relay and the Pi side, and measure the round trip. | unassigned |
-| G-HW-2 | Resolved (R5, R40, R77) | Track Controller HW on Red and SW on Green, the HW variant's line set by the databases it is given; Train Controller by the train's line ([P] D021). The Blue Line is out of scope ([P] D023). Left: the HW variant's Red data, later (R34). The SW variant's process loads Green only (section 5.4); its standalone window still loads both lines. | D021 owner Kevin |
+| G-HW-1 | Resolved (R5, R32, R42, R81) | Pis on USB serial in the standard communications class, driven by Windows' built-in driver, found by USB identity; the HW variant's host process relays the messages; one Pi per hardware module ([P] D021, D027). Phase 5 builds the relay and Pi agent against simulated byte streams/processes. Real USB round-trip measurement remains step 10 (section 5.6). | unassigned |
+| G-HW-2 | Resolved (R5, R40, R77) | Track Controller HW on Red and SW on Green, the HW variant's line set by the databases it is given; Train Controller by the train's line ([P] D021). The Blue Line is out of scope ([P] D023). Phase 5 supplies marked integration test Red databases and PLCs for Braden to replace or approve (section 5.6). The SW variant's process loads Green only (section 5.4); its standalone window still loads both lines. | D021 owner Kevin |
 | G-HW-3 | Resolved (R32, R75) | The interfaces are to be identical, and Harry Tye owns the Track Controller contract shard ([P]). Both variants already name blocks to the CTC Office by line and number. | Harry Tye |
 
 ### 6.6 Truth and process
@@ -1784,7 +1955,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-NEW-2 | Resolved (R70). Every wayside is reported from startup and is not ready until loaded, so a line cannot read ready early ([P] `track-controller-ready`). | `ctc/model.py:346-351`; `track_ctrl_hw/controller.py:67-76` on PR #43 | Track Controller |
 | G-NEW-3 | Resolved (R60), built. Only the train whose input is invalid misses the tick ([P] `modules/train-model.md`). The Train Model's process steps each train on its own and names a rejected one (section 5.2). | `TrainModel/train_model/module_process.py` | Train Model owner Kevin Schillinger |
 | G-NEW-4 | Closed (R42). Gains are set in the UI, which runs on the host PC for the HW variant too. Each new train still waits for an engineer to set its gains before it moves. | Section 3.3 | Train Controller |
-| G-NEW-5 | Closed (R34). Red data for the Track Controller HW will be loaded later. | `TrackCtrlHw/data/` | Track Controller HW |
+| G-NEW-5 | Software built (R34/K4). Red integration test databases/PLCs cover all 76 blocks; owner approval/replacement remains (section 5.6). | `TrackCtrlHw/data/` | Track Controller HW |
 | G-NEW-6 | Resolved by `460579b` (Q-P4-8). The old detector falsely latched at steady speed on Green 93. The full Green round trip now completes and retires at 57 (five opt-in tests pass). Kevin accepted the extra steady-fall criterion as built on 2026-10-21 (R91); the dead-engine-at-stand and heavily-loaded-grade limits remain (section 5.5). | `Train-Ctrl_HW/train_ctrl/constants.py`, `control.py`; `ReturnToYardTest` in `common/harness/tests/test_harness_train_loop.py` | Train Controller (unassigned) |
 
 ## 7. Truth proposals

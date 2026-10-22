@@ -267,3 +267,13 @@ sample programs obey them.
   reports, not where it was last commanded.
 - The test UI shows values in backend units (m/s, blocks); the Track Controller
   window shows imperial.
+
+## Phase 5 integration test data
+
+See [INTEGRATION.md](INTEGRATION.md) for the Red test copies, host/Pi split,
+read-only cross-wayside occupancy inputs and the unresolved Red-9 yard text.
+`red_wayside_*_integration_test.json` and matching PLCs are integration test
+copies, not Braden's, for him to replace or approve. The three Green samples
+now include `next_blocks` as exact cuts of the course layout (R78).
+Pi owner instructions are in [pi-owner-setup.md](../documents/pi-owner-setup.md),
+marked untested on hardware.

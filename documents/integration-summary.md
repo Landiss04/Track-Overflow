@@ -511,3 +511,36 @@ A	utils/tests/test_event_log_names.py
 M	utils/tests/test_harness_protocol.py
 A	utils/tests/test_protocol_faults.py
 ```
+
+## Phase 5 software as built (2026-10-21)
+
+This section is additional to the audited Phase 3/4 range above. The Phase 5
+session starts at `aa7776c`. The full ruling record and acceptance limits are
+in `system-integration-design.md` §5.6 and `integration-handover-phase-5.md`.
+
+| Area | What changed / why | Commits / covering evidence |
+| --- | --- | --- |
+| Track Controller HW | Merge PR #43 source and Braden's WP2 design; dual channels/five-bit speed, no generated vital PLC. Add exact-cut Green adjacency and three marked Red integration test waysides/PLCs with all safety in programs (K3/K3b/K4/K4b). | `8407baf`, `2335197`, `f27ba4e`; full HW 80/50,506 subtests, exhaustive Red speed/topology/crossing/separation tests. |
+| Track Model / SW topology | Yard adjacency moves from 75 to section-C 9 (K2); four readers agree using row9 while retaining unresolved `75-yard` source. Kevin confirmed the policy covers SW too; existing SW vital code stays unchanged under the original implementation scope, with an owner follow-up. | `f27ba4e`; reader contract and existing layout regressions. |
+| Harness / utils | Direct HW edge mappings, Green+Red command/report merging, variant train routing and deferred replies; both HW modules real by default with explicit test-only simulated Pis; approved CLOCK_STATE metadata for exact loss-time gain policy. | `cb8a326`, `d4db358`, `9325523`, `f465c99`; mixed seven-core run, decoder/deferred and clock-state tests. |
+| USB / Pi | Standard-library agent and host transport/adapters implement the D027 split against explicit simulated Pis; no missing-Pi fallback. Final real-process and K11 integrated acceptance is recorded in the handover. | `daaa3e7`, `78c470c`, `8d15a69`, `c39a070`, `baed0cd`; protocol/recovery/window tests. |
+| Documents / truth proposals | K1–K12 exact decisions R93–R107, integration guide, untested owner setup, Phase5 handover; seven new normative proposals, including the later confirmed both-variant policy and CLOCK_STATE exception. | `17beefc`; K2/K5/K6/K7/K11 proposals await human promotion. |
+| CTC Office, Train Model, Train Controller safety | No additional module safety/UI change was needed for the in-process Red outbound route. Existing line-specific behavior is mapped through the harness; remote adapters reuse existing window constructors. | Mixed-line route 9–16, 45 s dwell, Green unaffected; broad suites in handover. |
+
+Owner review must include the test copies, read-only neighbor OCC extension,
+Red-9 NORMAL-leg assumption/source text, WP2 vital-block discrepancy and the
+NORMAL-only return limitation (held 66 by switch 52; no retirement/turnback).
+Hardware USB measurements, provisioning and Windows/installer packaging are
+steps 10–12, not started. The starting 20 current-branch proposals plus 7 new
+ones make 27; four merged-owner proposals remain under their separate source
+branch path. None has been promoted by this work.
+
+Software steps 1–9 and documentation step 13 are complete against explicit
+simulated Pis. Both HW modules are real by default, with identity-based USB
+waiting and no fallback; `--test-pi process`/`pty` is an explicit development
+selection. Approved CLOCK_STATE supplies authoritative loss-time clock state.
+Final post-default harness+utils: 252 passed/5 skipped/540 subtests; opt-in
+Green round trip: 5 passed. Full Pi suite: 31 passed. The handover lists all
+module counts, independent acceptance slices and the known preexisting
+harness Qt argument type-check mismatch. No actual Pi/USB/Windows result is
+implied by the simulated software acceptance.

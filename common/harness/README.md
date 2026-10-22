@@ -443,7 +443,8 @@ python track_overflow.py --headless --speedup --run-seconds 30
 python track_overflow.py --headless --stubs-only --run-seconds 30
 ```
 
-The default is now the Phase 4 system: five real modules and two stubs. Add
+The default is the Phase 5 system: all seven modules run as themselves,
+with the two HW cores on their assigned USB Pis. Add
 `--load-starters` to commit the Track Controller's starter programs at launch, and
 `--dispatch TRAIN:LINE:BLOCK` to have the CTC Office dispatch a train once the line is
 ready.
@@ -702,3 +703,68 @@ joining the Green Line. The same bundle contains all three UIs and Train Model
 images, retaining the real module implementations unchanged.
 It also ran successfully from `/tmp` with an empty `PYTHONPATH`, independently
 of the source checkout.
+
+## Phase 5 as built: Red and Pi relays
+
+See [the Phase 5 handover](../../documents/integration-handover-phase-5.md)
+and design §5.6 for the final acceptance evidence. All seven modules are
+real by default; the two HW hosts wait for their USB Pis with no fallback.
+CLOCK_STATE is implemented in `9325523` for authoritative loss-time metadata.
+`--with-hardware` was a staging option and has been removed.
+
+`hw_wayside_edges.py` maps CTC BlockRef and Track Model BlockKey separately;
+sections come from BlockNames. `edges.py` selects the variant by line, merges
+both Track Controller reports into the CTC Office and both Train Controller
+commands into the Train Model. Red readiness comes from the HW reports.
+Track Controller HW receives the full line occupancy set, including failures
+as occupied, so declared neighbor OCC inputs across waysides remain valid.
+
+`ModuleLink` supports deferred STEP replies. A HW host owns its window and
+USB serial port, relaying to a Qt-free Pi agent in `common/hw_link/`. The
+production path finds K5 VID/PID/serial identities and validates HELLO. A
+missing Pi never falls back to a stub or local core. Simulated agents and
+Linux pty transports are selected explicitly by development tests. The agent
+CLI offers `--delay-ms`, `--jitter-ms`, `--drop-after` and
+`--reboot-at-tick` for fault injection; none simulates physical USB timing.
+
+The Red integration test copies cover all 76 blocks once; they are not
+Braden's approved programs. With their first-version NORMAL switch policy,
+R1 runs 9–16 with a 45 s dwell alongside unaffected Green G1. Return is held
+at 66 by switch 52; retirement at 9 and automatic turnback are not established.
+Source `75-yard` text remains for owners; authoritative adjacency locates
+the yard at section-C block 9, with the NORMAL-leg assumption documented.
+
+The durable Pi session journal grows with accepted requests/replies, and
+cold reconstruction cost grows with the run. Simulated core timings omit
+fsync/serial/replay. USB throughput, Pi power/reboot behavior and Windows
+packaging remain deferred; [owner setup](../../documents/pi-owner-setup.md)
+is explicitly untested on hardware.
+
+### Phase 5 launch modes
+
+```sh
+# Production: both assigned Pis must connect; no local fallback.
+python track_overflow.py
+# Explicit development/test agents; engineer gains still require an action.
+python track_overflow.py --test-pi process --load-starters \
+  --dispatch G1:Green:65 --dispatch R1:Red:16
+# Linux-only raw-tty development transport.
+python track_overflow.py --test-pi pty --load-starters
+# Original Phase 0 mode.
+python track_overflow.py --stubs-only
+```
+
+`--test-pi` is an explicit test/development choice, never an automatic
+response to missing USB hardware. It is forwarded to both HW hosts. Qt
+windows still run on the host; offscreen mode does not bypass commissioning
+or silently supply engineer gains. The `--system` measurement command now
+selects the physical Pi path; earlier Phase 4 timing tables above remain
+historical and do not measure this USB path.
+
+Final post-default verification on 2026-10-21: harness 166 passed/5 opt-in
+skips and utils 86 passed (252 passed, 540 subtests combined); the explicitly
+enabled Green round trip passes its five tests. The full Pi suite passes
+31 tests. The all-seven real-process clean/drop/reboot scenarios use explicit
+simulated Pis, strict empty stderr and seven zero exits. The handover
+distinguishes delegated broad suites from the orchestrator's independent
+acceptance reruns and records the known preexisting harness type mismatch.
