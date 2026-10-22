@@ -757,8 +757,10 @@ def run_check(
     # injects them into the plant and the controller has to detect
     # each one from what comes back (REQ-FUNC-038). A detected failure
     # applies and latches the emergency brake and stops the train
-    # (REQ-FUNC-037.2), and refuses driving and brake release until
-    # the bench clears it. Ten times real time keeps the stops short.
+    # (REQ-FUNC-037.2), and refuses driving until the bench clears it;
+    # once stopped, the driver may release the brake in Manual only
+    # (REQUIREMENTS.md M2, M3). Ten times real time keeps the stops
+    # short.
     backend.set_sim_rate(mod.SIM_RATES.index(10))
     state = backend.core.state
 
@@ -824,19 +826,22 @@ def run_check(
             window.grabWindow().save(str(shots / "06-failure.png"))
             bench.grabWindow().save(str(shots / "07-test.png"))
 
-        # Latched while the bench still has it in: no release, no
-        # target, no service brake, and still detected at a stand.
+        # Latched while the bench still has it in: no target, no
+        # service brake, still detected at a stand, and no release in
+        # Automatic.
         _settle(app, 300)
         expect(state.failures[key],
                f"the {name} cleared by itself while still injected")
-        backend.toggle_emergency_brake()
-        expect(state.emergency_brake,
-               f"the emergency brake released during a {name}")
         # The mode still switches, both ways, so the driver can try the
         # train in Manual; the failure keeps it stopped either way.
         backend.set_manual(False)
         expect(not state.manual,
                f"the mode would not switch to Automatic during a {name}")
+        backend.toggle_emergency_brake()
+        expect(state.emergency_brake,
+               f"the emergency brake released in Automatic during a "
+               f"{name}")
+        scan("06-failure-automatic-release")
         backend.set_manual(True)
         expect(state.manual,
                f"the mode would not switch to Manual during a {name}")
@@ -847,14 +852,25 @@ def run_check(
             backend.toggle_service_brake()
             expect(not state.service_request,
                    "the service brake could be asked for while failed")
+        # In Manual, at a stand, the driver may release it with the
+        # failure still latched, and the failure does not engage it
+        # again.
+        backend.toggle_emergency_brake()
+        expect(not state.emergency_brake,
+               f"the driver could not release the emergency brake in "
+               f"Manual during a {name}")
+        _settle(app, 300)
+        expect(state.failures[key] and not state.emergency_brake,
+               f"the {name}, still latched, engaged the emergency brake "
+               "again after the driver's release")
+        expect(state.target_mps == 0.0 and state.power_w == 0.0
+               and state.actual_mps == 0.0,
+               f"the train moved after the release during a {name}")
 
-        # The bench resolves it; the driver then releases the brake.
+        # The bench resolves it; the brake is already off.
         backend.apply_bench_inputs({row: False})
         expect(not backend.core.failed,
                f"clearing the {name} on the bench did not resolve it")
-        backend.toggle_emergency_brake()
-        expect(not state.emergency_brake,
-               f"the brake would not release once the {name} cleared")
         if key == "brake":
             # The service brake answers again.
             drive_off("after the brake failure cleared")

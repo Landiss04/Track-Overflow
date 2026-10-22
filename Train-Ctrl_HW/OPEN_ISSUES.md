@@ -144,9 +144,8 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     Push it here, and fix its window and threshold, which are not
     recorded yet.
 
-30. **Rules decided 2026-10-21 not yet in the code.** M2 and M3 (release in
-    Manual at a stand with a failure latched; resolution not detected,
-    blocked on #23), M4 (0.5 s detection; service command
+30. **Rules decided 2026-10-21 not yet in the code.** M3 (resolution not
+    detected, blocked on #23), M4 (0.5 s detection; service command
     forced off), M5 (#23), M6 (Manual doors still platform side only), M7
     (the Manual press: station name only, no repeat of the announcements,
     lockout on a wall-clock timer), M8 (no lights-on check for a train
@@ -187,9 +186,9 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
       00:00, and 24:30 is not a time of day (R27).
     - Switching to Manual during a brake failure (R26) cannot yet test
       the brake: the service brake button is still refused under a
-      brake failure (M4, #30), the e-brake cannot yet be released under
-      a failure (M2, #30), and nothing detects a resolution yet (#23), so
-      the bench still clears the failure.
+      brake failure (M4, #30), and nothing detects a resolution yet
+      (#23), so the bench still clears the failure. The e-brake can be
+      released in Manual at a stand (R31).
     - With an uncommissioned train selected nobody is signed in, so
       nobody can reach its emergency brake from the console; it commands
       0 W and cannot move under its own power.

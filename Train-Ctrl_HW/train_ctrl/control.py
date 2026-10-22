@@ -66,6 +66,10 @@ class ControllerCore:
         # as of the last tick, so only their changes act on the lights.
         self._night: bool | None = None
         self._underground = False
+        # The failures that have already latched the emergency brake,
+        # so a failure still latched after the driver's release does
+        # not engage it again (REQUIREMENTS.md M2, M3).
+        self._braked_for: set[str] = set()
         self._clear_detection()
 
     def _clear_detection(self) -> None:
@@ -278,7 +282,7 @@ class ControllerCore:
 
         REQ-FUNC-037.2: the controller stops the train when a failure
         is detected. Every failure removes the target and the power,
-        and applies and latches the emergency brake:
+        and applies and latches the emergency brake once, on detection:
 
             engine         no traction is left to drive with
             signal pickup  commanded speed and authority cannot be
@@ -288,18 +292,23 @@ class ControllerCore:
                            modules/train-model.md); the emergency
                            brake still works, so it stops the train
 
-        The emergency brake cannot be released until the failure
-        clears (release_emergency refuses while any is latched).
+        Once the train stands, the driver may release the emergency
+        brake in Manual to try the train (release_emergency); the
+        failure, still latched, does not engage it again
+        (REQUIREMENTS.md M2, M3).
         """
+        new = set(self.failed) - self._braked_for
+        self._braked_for = set(self.failed)
         if not self.failed:
             return
         s = self.state
         s.target_mps = 0.0
         s.power_w = 0.0
         self.integral = 0.0
-        if not s.emergency_brake:
+        if new and not s.emergency_brake:
             self.engage_emergency()
-        s.service_brake = False
+        if s.emergency_brake:
+            s.service_brake = False
         if s.failures["brake"]:
             # The driver's request was for the brake that failed.
             s.service_request = False
@@ -345,15 +354,19 @@ class ControllerCore:
         self.enforce_safety()
 
     def release_emergency(self) -> bool:
-        """Release the latched brake, at a stand with no failure.
+        """Release the latched brake, at a stand.
 
-        Asking a released brake to release is not a refusal: it is
-        already where the caller wants it.
+        With no failure latched, in either mode; with one still
+        latched, only in Manual, so the driver can try the train
+        (REQUIREMENTS.md M2, M3). Asking a released brake to release
+        is not a refusal: it is already where the caller wants it.
         """
         s = self.state
         if not s.emergency_brake:
             return True
-        if self.failed or abs(s.actual_mps) >= STANDSTILL_MPS:
+        if abs(s.actual_mps) >= STANDSTILL_MPS:
+            return False
+        if self.failed and not s.manual:
             return False
         s.emergency_brake = False
         return True

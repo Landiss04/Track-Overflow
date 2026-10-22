@@ -226,7 +226,7 @@ The controller infers failures from what the harness sends back, so three inputs
 | Engine | Power that should pull 0.1 m/s² or more, and `actual_speed` up by less than 0.05 m/s for 2 s | The real `actual_speed` every tick |
 | Signal pickup | `commanded_speed` and `authority_blocks` both drop to 0 in one update, from 2 or more blocks | Authority counting down normally, not a jump to 0 |
 
-A detected failure latches until cleared; the harness has no call to clear one. Decided: the controller detects resolution itself (M3), not yet built; it cannot see brake or engine resolution while the e-brake is on (`OPEN_ISSUES.md` #23).
+A detected failure latches until cleared; the harness has no call to clear one. Decided: the controller detects resolution itself (M3), not yet built; it cannot see brake or engine resolution while the e-brake is on (`OPEN_ISSUES.md` #23). The failure latches the e-brake once, on detection; at a stand the driver may release it in Manual with the failure still latched, and `emergency_brake` then stays false.
 
 `door_state` must be faithful too: an Automatic train leaves a station only once `door_state` reports both doors closed. If it never does, the train waits at the station.
 

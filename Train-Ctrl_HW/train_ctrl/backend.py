@@ -375,8 +375,8 @@ class ConsoleBackend(QObject):
         names = ", ".join(FAILURE_TEXT[name] for name in failed)
         # The panel callouts say what each failure is doing to the
         # train; this only says what is locked and until when.
-        return (f"{names[0].upper()}{names[1:]}. Driving and brake "
-                "release resume once it clears.")
+        return (f"{names[0].upper()}{names[1:]}. Driving resumes once "
+                "it clears.")
 
     def _dial_hint(self) -> str:
         # While a failure is up, the hint says why the train is
@@ -509,7 +509,8 @@ class ConsoleBackend(QObject):
 
         Engagement is immediate and unconfirmed, the one exception the
         style guide grants (section 7). Release is refused unless the
-        train is stopped and no failure is latched. The driver only.
+        train is stopped, and, with a failure latched, unless it is in
+        Manual. The driver only.
         """
         if not self.can_ebrake:
             return
@@ -522,11 +523,11 @@ class ConsoleBackend(QObject):
             )
         elif self.core.release_emergency():
             self.brake_note = ""
-        elif self.core.failed:
-            names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
-            self.brake_note = f"Cannot release: {names} is still active."
-        else:
+        elif not self.core.at_stand:
             self.brake_note = "Cannot release: the train is still moving."
+        else:
+            names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
+            self.brake_note = f"Release it in Manual: {names} is still active."
         self._publish()
 
     @Slot()
