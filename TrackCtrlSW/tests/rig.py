@@ -53,6 +53,27 @@ def default_module(programs: bool = True) -> SwTrackController:
     return module
 
 
+def loaded_state(programs: bool = True) -> Any:
+    """A Track Controller UI with both default lines loaded.
+
+    The UI starts with no track; this loads Green then Red through the
+    UI's own track loading, commits the generated starter programs when
+    ``programs`` is set, and leaves GTC-01 on Green selected. Needs a Qt
+    application object.
+    """
+    from track_ctrl.layout import default_layout_dir
+    from track_ctrl.state import TrackControllerState
+
+    state = TrackControllerState()
+    for name in ("green_line.json", "red_line.json"):
+        message = state.load_track_config(str(default_layout_dir() / name))
+        assert message == "", message
+    if programs:
+        state.system.load_starter_programs()
+    state.selectLine("Green Line")
+    return state
+
+
 class Rig:
     """A module, a world around it, and a clock that only moves on tick."""
 

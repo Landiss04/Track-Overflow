@@ -1,0 +1,185 @@
+@startuml class_core
+!include ../style.iuml
+title Track Controller (HW) — Core classes (run on the Raspberry Pi)
+hide empty members
+
+package "track_ctrl_hw (Qt-free core)" {
+  interface TrackController <<Protocol>> {
+    +step(dt: float, inputs: TrackControllerInputs): TrackControllerOutputs
+    +snapshot(): TrackControllerSnapshot
+    +load_territory(territory: Territory): tuple[str]
+    +load_program(wayside_id: str, source: str, file_name: str): ProgramInfo
+    +reset(): None
+  }
+
+  class HwTrackController {
+    -_waysides: dict[str, Wayside]
+    -_time_s: float | None
+    -_ticks: int
+    +line: str | None
+    +wayside_ids: tuple[str]
+    +ticks: int
+    +not_ready_reasons(): tuple[str]
+    +step(dt, inputs): TrackControllerOutputs
+    +snapshot(): TrackControllerSnapshot
+    +load_territory(territory): tuple[str]
+    +load_program(wayside_id, source, file_name): ProgramInfo
+    +reset(): None
+  }
+
+  class Wayside {
+    -_territory: Territory
+    -_program: Program | None
+    -_vital: Program <<planned>>
+    -_program_info: ProgramInfo | None
+    -_scan_info: ScanInfo
+    -_commanded: dict[BlockKey, SwitchPosition]
+    -_circuits: dict[BlockKey, TrackCircuitCommand]
+    -_holding: str
+    +territory: Territory
+    +program: Program | None
+    +not_ready_reason: str
+    +owns(key: BlockKey): bool
+    +load_program(source, file_name, time_s): ProgramInfo
+    +adopt_program(previous: Wayside): bool
+    +scan(dt, time_s, ctc, track_model, stall): WaysideScan
+    +snapshot(): WaysideSnapshot
+    +reset(): None
+    -_run_program(...): dict[str, bool] | None
+    -_drive(values): None
+    -_hold_restrictive(reason: str): None
+  }
+
+  class WaysideScan {
+    +track_circuits: dict[BlockKey, TrackCircuitCommand]
+    +switch_commands: dict[BlockKey, SwitchPosition]
+    +crossing_commands: dict[BlockKey, bool]
+    +signal_commands: dict[BlockKey, SignalAspect]
+    +report: CtcReport
+  }
+
+  class Program {
+    +source: str
+    +inputs: tuple[str]
+    +outputs: tuple[str]
+    +statements: tuple[Statement]
+    +diagnostics: tuple[Diagnostic]
+    +errors: tuple[Diagnostic]
+    +warnings: tuple[Diagnostic]
+    +checksum: str
+    +boolean_count: int
+    +scan_a(inputs): dict[str, bool]
+    +scan_b(inputs): dict[str, bool]
+  }
+  note right of Program
+    Channel A: recursive descent, tree walk.
+    Channel B: shunting-yard, stack machine.
+    Every scan runs both and compares them.
+  end note
+
+  class Statement {
+    +target: str
+    +tree: Node
+    +code: tuple[Instruction]
+    +line: int
+  }
+
+  class Diagnostic {
+    +severity: str
+    +line: int
+    +message: str
+  }
+
+  abstract class Node
+  class Constant {
+    +value: bool
+  }
+  class Read {
+    +name: str
+  }
+  class Negate {
+    +operand: Node
+  }
+  class Combine {
+    +operator: str
+    +left: Node
+    +right: Node
+  }
+
+  class plc <<module>> {
+    +compile_program(source: str): Program
+  }
+
+  class "wayside" as wayside_io <<module>> {
+    +input_names(territory): frozenset[str]
+    +output_names(territory): frozenset[str]
+    +check_program(program, territory): (errors, warnings)
+    +decode_aspect(values, switch): SignalAspect
+    +speed_limit_whole_mps(limit_mps): int
+  }
+
+  class vital <<planned>> {
+    +vital_source(territory: Territory): str
+  }
+  note bottom of vital
+    Read-only PLC block generated per territory and
+    run after the user's program on both channels.
+    It can only make an output more restrictive.
+  end note
+
+  class territory <<module>> {
+    +load_territory_file(path): Territory
+    +parse_territory(data): Territory
+    +parse_switch(key, text, ids): Switch
+  }
+
+  class wire <<module>> {
+    +inputs_to_wire / inputs_from_wire
+    +outputs_to_wire / outputs_from_wire
+    +territory_to_wire / territory_from_wire
+    +snapshot_to_wire / snapshot_from_wire <<planned>>
+  }
+
+  class PiLinkServer <<planned>> {
+    -_port: serial device /dev/ttyGS0
+    -_controller: HwTrackController
+    +serve(): None
+    -_handle(request: dict): dict
+  }
+
+  class TrackControllerError
+  class TerritoryError
+  class PlcError {
+    +diagnostics: tuple[str]
+  }
+  class InvalidTimeStepError
+  class InvalidInputError
+  class WireFormatError
+}
+
+HwTrackController ..|> TrackController
+HwTrackController "1" *-- "1..*" Wayside : runs >
+Wayside --> "0..1" Program : user program
+Wayside ..> "1" Program : vital block <<planned>>
+Wayside ..> WaysideScan : returns
+Wayside ..> wayside_io
+Wayside ..> vital
+Program "1" *-- "*" Statement
+Program "1" *-- "*" Diagnostic
+Statement --> Node : tree
+Node <|-- Constant
+Node <|-- Read
+Node <|-- Negate
+Node <|-- Combine
+plc ..> Program : creates
+Wayside ..> plc
+PiLinkServer --> HwTrackController : drives
+PiLinkServer ..> wire
+
+TrackControllerError <|-- TerritoryError
+TrackControllerError <|-- PlcError
+TrackControllerError <|-- InvalidTimeStepError
+TrackControllerError <|-- InvalidInputError
+TrackControllerError <|-- WireFormatError
+territory ..> TerritoryError : raises
+@enduml

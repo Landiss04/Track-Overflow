@@ -36,6 +36,9 @@ from track_ctrl.link import StimulusServer  # noqa: E402
 from track_ctrl.state import TrackControllerState  # noqa: E402
 from track_ctrl_test.client import TestClientState  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from rig import loaded_state  # noqa: E402
+
 
 def wait_for(condition: Callable[[], bool], seconds: float = 3.0) -> bool:
     """Pump Qt events until ``condition`` holds or time runs out."""
@@ -56,8 +59,7 @@ class LinkTests(unittest.TestCase):
         cls.app = QCoreApplication.instance() or QCoreApplication([])
 
     def setUp(self) -> None:
-        self.state = TrackControllerState()
-        self.state.loadStarterPrograms()
+        self.state = loaded_state()
         # A unique pipe name per test, so tests never see each other.
         self.name = f"track-ctrl-test-{uuid.uuid4().hex}"
         self.server = StimulusServer(self.state, self.name)
@@ -162,7 +164,7 @@ class LinkTests(unittest.TestCase):
             for each in self.state.system.controllers.values()
             for c in each.outputs.track_circuits.values()))
         # Starting it up, from the programmer's side, releases the stall.
-        self.state.loadStarterPrograms()
+        self.state.system.load_starter_programs()
         self.assertTrue(wait_for(lambda: client.controllerReady))
         self.assertTrue(wait_for(
             lambda: bool(self.controller().inputs.suggestions)))
@@ -229,7 +231,7 @@ class LinkTests(unittest.TestCase):
     def test_yellow_and_super_green_reach_the_test_ui_and_fail_safe(self) -> None:
         client = self.connect()
         controller = self.controller()
-        for suffix, aspect in (("_O", "YELLOW"), ("_SG", "SUPER GREEN")):
+        for suffix, aspect in (("_Y", "YELLOW"), ("_SG", "SUPER GREEN")):
             with self.subTest(aspect=aspect):
                 client.setOccupancy("12", False)
                 lines = []
@@ -431,15 +433,15 @@ class LinkTests(unittest.TestCase):
 
         client = self.connect()
         self.assertEqual(len(client.controllerIds), 11)
+        # Reloading Green replaces its waysides: same count, since the
+        # track fixes it, but no programs until they are loaded again.
         self.state.load_track_config(
-            str(default_layout_dir() / "green_line.json"), 3)
-        self.assertTrue(wait_for(lambda: len(client.controllerIds) == 8))
-        self.assertEqual(client.controllerIds[:3],
-                         ["GTC-01", "GTC-02", "GTC-03"])
-        # The target survived: GTC-01 still exists on the new layout.
+            str(default_layout_dir() / "green_line.json"))
+        self.assertTrue(wait_for(lambda: not client.controllerReady))
+        self.assertEqual(len(client.controllerIds), 11)
         self.assertIn(client.target, client.controllerIds)
-        self.assertEqual(len(client.blockIds), 50)
-        # And the controller is still being stepped with the new waysides.
+        self.assertEqual(len(client.blockIds), 25)
+        # And the controller is still being stepped.
         before = self.ticks()
         self.assertTrue(wait_for(lambda: self.ticks() > before + 3))
 

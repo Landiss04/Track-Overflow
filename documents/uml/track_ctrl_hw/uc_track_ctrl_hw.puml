@@ -1,0 +1,57 @@
+@startuml uc_track_ctrl_hw
+!include ../style.iuml
+title Track Controller (HW) — Use Cases
+left to right direction
+
+actor "Programmer" as prog
+actor "Central Harness\n(shared clock)" as harness
+actor "CTC Office" as ctc
+actor "Track Model" as tm
+
+rectangle "Track Controller (HW) — every wayside of the Red Line" {
+  usecase "UC-01 Load wayside database" as UC01
+  usecase "UC-02 Load PLC program" as UC02
+  usecase "UC-03 Select wayside" as UC03
+  usecase "UC-04 Monitor wayside state" as UC04
+  usecase "UC-05 View PLC program details" as UC05
+  usecase "UC-06 View last report to CTC" as UC06
+
+  usecase "UC-07 Run scan cycle" as UC07
+  usecase "UC-08 Receive speed and\nauthority suggestions" as UC08
+  usecase "UC-09 Receive closures and\nmaintenance switch commands" as UC09
+  usecase "UC-10 Receive track state" as UC10
+  usecase "UC-11 Command switches" as UC11
+  usecase "UC-12 Set signal aspects" as UC12
+  usecase "UC-13 Control railway crossings" as UC13
+  usecase "UC-14 Send speed and authority\non track circuits" as UC14
+  usecase "UC-15 Report occupancy, state\nand readiness" as UC15
+  usecase "UC-16 Hold fail-safe outputs" as UC16
+}
+
+prog --> UC01
+prog --> UC02
+prog --> UC03
+prog --> UC04
+prog --> UC05
+prog --> UC06
+
+harness --> UC07
+UC07 ..> UC08 : <<include>>
+UC07 ..> UC09 : <<include>>
+UC07 ..> UC10 : <<include>>
+UC07 ..> UC11 : <<include>>
+UC07 ..> UC12 : <<include>>
+UC07 ..> UC13 : <<include>>
+UC07 ..> UC14 : <<include>>
+UC07 ..> UC15 : <<include>>
+UC16 ..> UC07 : <<extend>>
+
+UC08 <-- ctc
+UC09 <-- ctc
+UC15 --> ctc
+UC10 <-- tm
+UC11 --> tm
+UC12 --> tm
+UC13 --> tm
+UC14 --> tm
+@enduml

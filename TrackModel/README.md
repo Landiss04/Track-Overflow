@@ -8,6 +8,8 @@ New to the code? Start with
 [`knowledge/CODE_OVERVIEW.md`](knowledge/CODE_OVERVIEW.md): what each
 file does, and where to look for each behaviour.
 
+Wiring it into the full system: [`INTEGRATION.md`](INTEGRATION.md).
+
 ## Run
 
 From the repository root, two processes, started in either order:
