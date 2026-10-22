@@ -1,0 +1,21 @@
+@startuml sd22_closures_switches
+!include ../style.iuml
+title SD-22 Send closures and switch commands (UC-22)
+autonumber
+
+box "CTC Office process" #F7F9FC
+participant "StubCtcOffice" as Model
+end box
+participant "Central Harness" as H
+participant "Track Controller\n(the line's)" as TC
+
+Model -> Model : closed_blocks = closed + closing blocks,\nthe full set, sorted
+Model -> Model : switch_commands = every commanded switch\n(none outside maintenance mode)
+Model -> Model : keep only the lines that are ready (SD-24)
+Model --> H : outputs.track_controller:\nclosed_blocks, switch_commands
+H -> H : ctc_to_track_controller(line):\nthe line's blocks and switches
+H -> TC : (tick k+1) closed blocks; switch commands\n(normal / reverse, by switch block)
+TC -> TC : a listed block may not be overridden;\nthe PLC program moves a commanded switch
+TC --> H : (later tick) the switch reports its new position
+H --> Model : switches input (SD-17): Set switch position\nshows "Reported by track controller"
+@enduml

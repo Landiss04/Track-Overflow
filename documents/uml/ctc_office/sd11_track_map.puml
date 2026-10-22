@@ -1,0 +1,32 @@
+@startuml sd11_track_map
+!include ../style.iuml
+title SD-11 Monitor the track map (UC-11)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "TrackViewPanel\n/ TrackMap (QML)" as Map
+participant "TrackMapModel" as TM
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+== At start ==
+Map -> TM : block geometry
+TM --> Map : both lines from the layout files,\ncoloured by line
+
+== After each step ==
+loop at most every 200 ms
+  Host -> Model : snapshot()
+  Model --> Host : inputs (occupancy, crossings), closed and\npending blocks, followed trains
+  Host -> Host : revision += 1; stateChanged
+  Map -> Host : blockStates, crossingStates, mapTrains
+  Host --> Map : per block: occupied / closed / closing;\nactive crossings; each followed train\nas a tagged car on its head block
+  Map -> D : redrawn map; any other occupied block\n(an inferred failure among them) has an untagged car
+end
+
+D -> Map : + / − (1.25x steps, up to 4x), drag to pan
+Map -> D : zoomed view
+D -> Map : Fit
+Map -> D : the whole map
+@enduml
