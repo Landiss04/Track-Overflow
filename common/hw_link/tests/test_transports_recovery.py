@@ -257,7 +257,7 @@ def test_second_loss_preserves_pending_and_original_classification(
             module=relay.module,
             session=relay.session,
             agent_version="1",
-            agent_hash="hash",
+            agent_hash=relay.expected_agent_hash,
             boot=boot,
             resumed=True,
         )
@@ -402,7 +402,7 @@ def test_retire_and_reuse_before_next_view_cannot_recover_old_gains():
             module=relay.module,
             session=relay.session,
             agent_version="1",
-            agent_hash="hash",
+            agent_hash=relay.expected_agent_hash,
             boot="second-boot",
             resumed=True,
         )

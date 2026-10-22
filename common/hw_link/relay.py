@@ -11,6 +11,7 @@ from PySide6.QtCore import QEventLoop, QObject, QTimer, Signal
 from utils.harness_protocol import LineBuffer, ProtocolError
 from . import protocol as p
 from .transport import ByteTransport
+from .manifest import AGENT_VERSION, expected_hash
 
 
 class RemoteActionError(ValueError):
@@ -39,6 +40,7 @@ class HardwareRelay(QObject):
         super().__init__(parent)
         self.module, self.transport = module, transport
         self.session = uuid.uuid4().hex
+        self.expected_agent_hash = expected_hash()
         self.buffer = LineBuffer()
         self._id = 1_000_000_000
         self._action_depth = 0
@@ -63,7 +65,8 @@ class HardwareRelay(QObject):
         self.transport.received.connect(self._received)
         self.transport.diagnostic.connect(
             lambda value: self.diagnosticEvent.emit(
-                value if value.startswith("PI_SEARCH ")
+                value
+                if value.startswith("PI_SEARCH ")
                 else "TRANSPORT " + value
             )
         )
@@ -132,12 +135,13 @@ class HardwareRelay(QObject):
                 incoming["module"] != self.module
                 or incoming["protocol"] != p.VERSION
                 or incoming["session"] != self.session
-                or not incoming.get("agent_version")
-                or not incoming.get("agent_hash")
+                or incoming.get("agent_version") != AGENT_VERSION
+                or incoming.get("agent_hash") != self.expected_agent_hash
                 or not incoming.get("boot")
             ):
                 self.diagnosticEvent.emit(
-                    "PI_HELLO_REJECTED identity or version mismatch"
+                    "PI_HELLO_REJECTED "
+                    "identity, version or bundle hash mismatch"
                 )
                 return
             rebooted = self._boot is not None and self._boot != incoming.get(

@@ -8,7 +8,6 @@ before replying; replay is internal reconstruction, never a new harness tick.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import random
@@ -21,14 +20,14 @@ from typing import Any, Callable
 from utils.harness_protocol import LineBuffer, ProtocolError
 from . import protocol as p
 from .cores import make_core
+from .manifest import AGENT_VERSION, expected_hash
 
 # K6 permits display snapshots every 100–200 ms. Use the 200 ms bound
 # to halve measured snapshot packing/unpacking and window refresh overhead.
 # STEP replies and ACTION acknowledgement views are still immediate.
 VIEW_INTERVAL_S = 0.2
 
-AGENT_VERSION = "1"
-AGENT_HASH = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
+AGENT_HASH = expected_hash()
 
 
 class PiLinkServer:
@@ -39,8 +38,11 @@ class PiLinkServer:
         module: str,
         journal: Path | None = None,
         log: Callable[[str], None] | None = None,
+        *,
+        echo_test: bool = False,
     ) -> None:
         self.module = module
+        self.echo_test = echo_test
         self.journal = journal
         self.log = log or (lambda text: None)
         self.boot = uuid.uuid4().hex
@@ -186,6 +188,11 @@ class PiLinkServer:
                     agent_hash=AGENT_HASH,
                     boot=self.boot,
                     resumed=resumed,
+                    **(
+                        {"echo": request.get("echo", "")}
+                        if self.echo_test
+                        else {}
+                    ),
                 )
             ]
         if op == "QUIT":
@@ -262,6 +269,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--jitter-ms", type=float, default=0)
     parser.add_argument("--drop-after", type=int)
     parser.add_argument("--reboot-at-tick", type=int)
+    parser.add_argument(
+        "--echo-test",
+        action="store_true",
+        help="reflect HELLO echo payload for isolated link tests",
+    )
     options = parser.parse_args(argv)
 
     def log(text: str) -> None:
@@ -269,7 +281,9 @@ def main(argv: list[str] | None = None) -> int:
             with options.log.open("a") as stream:
                 stream.write(text + "\n")
 
-    server = PiLinkServer(options.module, options.journal, log)
+    server = PiLinkServer(
+        options.module, options.journal, log, echo_test=options.echo_test
+    )
     count = 0
     fault_marker = options.journal.with_suffix(".fault-used")
     while True:

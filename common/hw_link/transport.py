@@ -172,8 +172,11 @@ class ProcessTransport(ByteTransport):
         ):
             return
         args = [
-            "-m",
-            "common.hw_link.agent",
+            *(
+                ["--pi-agent"]
+                if getattr(sys, "frozen", False)
+                else ["-m", "common.hw_link.agent"]
+            ),
             "--module",
             self.module,
             "--journal",

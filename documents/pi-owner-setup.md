@@ -1,148 +1,127 @@
 # Raspberry Pi owners: USB serial and agent setup
 
-**Status:** Instructions only, 2026-10-21. Untested on hardware. No Pi was
-provisioned in Phase 5 steps 1–9/13. Module owners perform step 11 when working
-Raspberry Pi 5 boards are available; USB timing is step 10 and packaging is
-step 12. Those three steps have not started.
+**Status:** Phase 6 software preparation, 2026-10-22. Installer generation,
+Qt-free bundle smoke checks and simulated links are testable here. No Pi has
+been provisioned or measured. Boot-to-HELLO under 20 seconds remains a real
+hardware acceptance target. Windows packaging remains deferred.
 
-Kevin's K5 assigns one Pi per HW module. Both windows stay on the host. The Pi
-runs the Qt-free Python core and `common.hw_link.agent`, without its own clock.
+Both module owners use this same recipe, parameterized by module. Each Pi 5
+runs `common.hw_link.agent` and its Qt-free core. The two windows stay on the
+host; the central harness remains the only clock. The same agent, protocol,
+relay and transports serve real and explicitly selected simulated links.
 
-## Identity
+## Assigned identity
 
 | Field | Track Controller HW | Train Controller HW |
 | --- | --- | --- |
-| Module argument | `track-controller-hw` | `train-controller-hw` |
+| Module | `track-controller-hw` | `train-controller-hw` |
 | Manufacturer | Track Overflow | Track Overflow |
 | Product | Track Overflow Track Controller HW | Track Overflow Train Controller HW |
 | Serial | TO-TRACK-CTRL-HW-01 | TO-TRAIN-CTRL-HW-01 |
 | VID:PID | `1d6b:0104` | `1d6b:0104` |
 
-`1d6b:0104` is the selected Linux composite-gadget default, not a newly
-allocated vendor ID. The host matches VID, PID and the distinct serial, then
-checks the module in HELLO. A COM number is never configured. Product and
-manufacturer strings describe each device for its owner.
+The VID/PID is the selected Linux composite gadget default, not a newly
+allocated vendor ID. Discovery matches VID, PID and the module's serial;
+manufacturer/product are also displayed for inspection. COM numbers and
+`ttyACM` suffixes can change. HELLO checks module, protocol, agent version
+and the full shared runtime bundle hash before the host becomes ready.
 
-## Prepare the board
+## Generate and transfer the bundle
 
-Use a current Raspberry Pi OS installation and Python 3.10 or newer. Copy the
-same source revision as the host to `/opt/track-overflow`; that path is an
-example installation location chosen for the service below. The Pi needs
-`common/`, `utils/`, `TrackCtrlHw/track_ctrl_hw/` and
-`Train-Ctrl_HW/train_ctrl/`, preserving their relative paths. It needs no
-PySide6, Qt or host UI assets. The owner chooses a suitable power arrangement
-and a data-capable cable before connecting the USB-C port to the host.
+On the host, from the repository root and project virtual environment:
 
-Raspberry Pi documents the board's USB-C port for gadget mode and notes that
-some host ports cannot power a Pi 5 reliably. The default Raspberry Pi USB
-network gadget is a different function; do not have it bind the same USB
-controller while configuring this serial-only gadget.
-[Official Raspberry Pi gadget guidance](https://www.raspberrypi.com/news/usb-gadget-mode-in-raspberry-pi-os-ssh-over-usb/).
+```sh
+python -m common.hw_link.provision --module track-controller-hw --output /tmp/track-pi.tar.gz
+python -m common.hw_link.provision --module train-controller-hw --output /tmp/train-pi.tar.gz
+```
 
-Enable the DWC2 peripheral overlay in the active boot configuration
-(normally `/boot/firmware/config.txt`, under `[all]`):
+Transfer the appropriate archive to its board by removable media or the
+owner's existing administration connection. This is an offline bundle:
+installation downloads nothing. It includes the existing agent, strict
+protocol/framing, core adapters and both Qt-free core packages, one configfs
+script, two systemd units, a tty permission rule and `install.sh`.
+`manifest.json` records module, identity, source revision and content hash;
+`SHA256SUMS` records every bundled file. Generate from the same source as the
+host executable. The content hash covers source bytes, so an uncommitted
+source change also requires regenerating the matching host and Pi bundles.
+It is a consistency check, not a cryptographic authenticity signature.
+
+## Prepare the Pi 5 and install
+
+Use Raspberry Pi OS with `/usr/bin/python3` version 3.10 or later. No Qt,
+PySide6, pip install or window assets are needed on the board. Connect the
+board's USB-C port using a data cable. Confirm the chosen host port/power
+arrangement reliably powers the board under load. Raspberry Pi explicitly
+lists Pi 5 USB-C for gadget mode and describes power-related reboots/drops;
+its default USB network gadget must be disabled before this serial-only
+gadget binds the same controller.
+[Official Raspberry Pi USB gadget guidance](https://www.raspberrypi.com/news/usb-gadget-mode-in-raspberry-pi-os-ssh-over-usb/).
+
+Enable this line under `[all]` in the active boot configuration, normally
+`/boot/firmware/config.txt`, using the owner's editor:
 
 ```ini
 [all]
 dtoverlay=dwc2,dr_mode=peripheral
 ```
 
-After the owner reboots, verify `/sys/class/udc` has a controller. Stop here
-if none appears: no software fallback should hide an unavailable Pi (K8).
-
-## Serial gadget template
-
-The following configfs script is an owner-run example for a clean boot with
-no gadget already bound. Save as `/usr/local/sbin/track-overflow-gadget`,
-make executable, and choose the two strings for the correct module. It uses
-Linux's ACM function and binds one USB controller.
-[Linux configfs gadget procedure](https://www.kernel.org/doc/html/latest/usb/gadget_configfs.html).
+Extract into an empty directory on the board, then install:
 
 ```sh
-#!/bin/sh
-set -eu
-# Train Controller owners substitute their product and serial from the table.
-TO_PRODUCT='Track Overflow Track Controller HW'
-TO_SERIAL='TO-TRACK-CTRL-HW-01'
-modprobe libcomposite
-mountpoint -q /sys/kernel/config || mount -t configfs none /sys/kernel/config
-TO_GADGET=/sys/kernel/config/usb_gadget/track-overflow
-mkdir "$TO_GADGET"
-cd "$TO_GADGET"
-printf '0x1d6b' > idVendor
-printf '0x0104' > idProduct
-mkdir strings/0x409
-printf '%s' 'Track Overflow' > strings/0x409/manufacturer
-printf '%s' "$TO_PRODUCT" > strings/0x409/product
-printf '%s' "$TO_SERIAL" > strings/0x409/serialnumber
-mkdir configs/c.1
-mkdir configs/c.1/strings/0x409
-printf 'Track Overflow CDC-ACM' > configs/c.1/strings/0x409/configuration
-mkdir functions/acm.usb0
-ln -s functions/acm.usb0 configs/c.1/acm.usb0
-set -- /sys/class/udc/*
-[ "$#" -eq 1 ] && [ -e "$1" ]
-printf '%s' "${1##*/}" > UDC
+mkdir -p ~/track-overflow-install
+cd ~/track-overflow-install
+tar -xzf /path/to/track-pi.tar.gz
+sudo ./install.sh
+sudo reboot
 ```
 
-Do not run this twice against an existing configfs instance. An owner who
-changes the identity must unbind the gadget before reconfiguring it. Ensure
-no serial console/getty or modem manager drives `/dev/ttyGS0`. The agent puts
-that device in raw mode with echo off when it opens it.
+Use `train-pi.tar.gz` on the Train Controller board. The script verifies
+checksums and Python, creates an unprivileged `trackoverflow` service user,
+copies source into `/opt/track-overflow`, installs the gadget/agent units and
+tty permission rule, masks the conflicting ttyGS0 getty and enables startup
+at boot. It preserves the journal in `/var/lib/track-overflow/session.json`.
+It does not modify boot config or reboot for you. Existing competing gadgets
+must be stopped by their owner. Identity changes require a fresh boot: the
+gadget script refuses to silently reconfigure an existing configfs gadget.
 
-## Example systemd units
+The generated script configures `acm.usb0` through configfs, assigns the
+strings above and binds the one controller under `/sys/class/udc`.
+[Linux configfs gadget procedure](https://docs.kernel.org/usb/gadget_configfs.html),
+[Linux ACM gadget function](https://docs.kernel.org/usb/gadget-testing.html#acm-function).
+If no controller appears after reboot, stop and diagnose the boot overlay,
+kernel and board configuration; a simulated Pi must never hide that fault.
 
-Save `/etc/systemd/system/track-overflow-gadget.service`:
-
-```ini
-[Unit]
-Description=Track Overflow CDC-ACM gadget
-After=systemd-modules-load.service sys-kernel-config.mount
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/track-overflow-gadget
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
+```sh
+ls /sys/class/udc
+systemctl status track-overflow-gadget.service track-overflow-agent.service
+journalctl -b -u track-overflow-gadget.service -u track-overflow-agent.service
+ls -l /dev/ttyGS0
+cat /opt/track-overflow/common/hw_link/manifest.py
 ```
 
-Create an unprivileged `trackoverflow` user with access to `/dev/ttyGS0`
-(for example through the device's `dialout` group on the installed OS).
-Save `/etc/systemd/system/track-overflow-agent.service`. Replace the module
-argument for the Train Controller board:
+## Host verification and acceptance
 
-```ini
-[Unit]
-Description=Track Overflow Pi core
-Requires=track-overflow-gadget.service
-After=track-overflow-gadget.service
+Run `python -m common.hw_link.bringup --list` to inspect both identities at
+once. The report names each module as found, missing or ambiguous, with all
+matching paths and expected strings. Linux should show `/dev/ttyACM*`;
+Windows should show a COM port using its standard CDC-ACM driver. Resolve
+permissions or duplicate serials before proceeding. Close any application
+already holding the port, then:
 
-[Service]
-Type=simple
-User=trackoverflow
-SupplementaryGroups=dialout
-WorkingDirectory=/opt/track-overflow
-StateDirectory=track-overflow
-ExecStart=/usr/bin/python3 -m common.hw_link.agent --module track-controller-hw --device /dev/ttyGS0 --journal /var/lib/track-overflow/session.json --log /var/lib/track-overflow/agent.log
-Restart=always
-RestartSec=1
-
-[Install]
-WantedBy=multi-user.target
+```sh
+python -m common.hw_link.bringup --module track-controller-hw --timeout 20
+python -m common.hw_link.bringup --module train-controller-hw --timeout 20
 ```
 
-Owners then reload systemd and enable the two services. They must verify
-actual device permissions, service ordering, source revision and journal
-persistence on their OS. The example units have not been installed or run.
+These commands check identity/version/hash and report `hello_s`; they do not
+step the core. Measure cold boot separately: start the host probe before
+powering the board and record power-on plus HELLO timestamps. A successful
+probe against an already booted board establishes connection latency only.
+The 20 second timeout applies to each pending HELLO/reply, not to the entire
+length of a workload benchmark.
 
-## Owner acceptance after hardware works
-
-Confirm both identities enumerate on Windows with its built-in CDC-ACM
-serial driver, correct HELLO module/version, manual database/program loads,
-engineer gains, a Green+Red run, and unplug/reboot recovery. Verify no step
-runs twice. Measure 1x/10x round trips, per-tick traffic, Pi scan duration and
-power stability. The simulated-process and Linux pty tests do not establish
-these hardware results. Windows packaging and separate installs remain
-deferred under K10.
+Use [the bring-up measurement and fault runbook](pi-bringup-checks.md) for
+echo sizes, recorded Red workloads, full-system timing and recovery evidence.
+Record the actual Pi model, OS/kernel, revision/hash, cable and power supply,
+host OS and identities beside the measurements. Real USB/power, cold boot,
+Windows enumeration and real unplug/reboot tests are still pending.
