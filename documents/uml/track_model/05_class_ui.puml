@@ -24,10 +24,14 @@ class TrackModelState <<QObject, ui bridge>> {
   +stationRows : list
   +selectedDetails : list
   +refresh() : None
+  +mark_step() : None
   +selectBlock(block_id) : None
   +setSelectedFailure(name) : None
   +setAmbientF(temp_f) : None
   +loadLayout(url) : None
+  <<signals>> changed, viewChanged,
+  linesChanged, loadMessageChanged,
+  runningChanged
 }
 class LinkServer <<QObject, test_link>> {
   +listen() : bool
@@ -46,6 +50,18 @@ class TrackModelTestHarness <<QObject, test_ui>> {
   +addTrain(train_id, block_id) : None
   +stepOnce() : None
 }
+class TrackModelProcess <<QObject, module_process.py>> {
+  +start() : None
+  +step(tick, dt, sim_time_s, inputs) : dict
+}
+class ModuleLink <<utils.module_link>> {
+  +connect_to_harness() : None
+  +announce_ready() : None
+}
+class "wire\n<<track_model/wire.py>>" as WI {
+  decode_inputs(inputs, sim_time_s) : TrackModelInputs
+  encode_outputs(outputs) : dict
+}
 class "codec\n<<test_link/codec.py>>" as CD {
   encode_inputs(inputs) : Json
   decode_inputs(data) : TrackModelInputs
@@ -58,5 +74,9 @@ LinkServer ..> CD
 LinkClient ..> CD
 LinkClient --> LinkServer : local socket,\nJSON lines
 TrackModelTestHarness --> LinkClient
+ModuleLink --> TrackModelProcess : STEP message
+TrackModelProcess --> WI
+TrackModelProcess --> P : step()
+TrackModelProcess --> TrackModelState : mark_step(), refresh()
 LinkServer ..> TrackModelState : changed, stepped
 @enduml

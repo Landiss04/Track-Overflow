@@ -79,7 +79,7 @@ Out of scope:
 | Authority | The number of blocks a train may still enter beyond its current block. 0 means stop before leaving the current block. |
 | Beacon | Station data (station name, platform side, underground flag) broadcast near a station. |
 | Block | The smallest unit of track, named by a string such as `GREEN D-13`. At most one train occupies it. |
-| Commanded speed | The speed, in whole m/s, that the Track Controller sends to the track circuit of a block. |
+| Commanded speed | The speed, in m/s, that the Track Controller sends to the track circuit of a block. |
 | CTC | Centralized Traffic Control — the module that issues movement authority / routing decisions across the track network. |
 | Edge | The connection from one module to another. The harness has one pure mapping function for each edge. |
 | Fail-safe | A fault drives the system to its most restrictive state. |
@@ -205,7 +205,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
 
 - **More Information:**
 
-  Every type is a frozen dataclass or an enumeration, so a value cannot change after it is sent. Every value is in its backend unit: metres, m/s, degrees and degrees Celsius (D002). Every ID is a string: a block is `GREEN D-13`, a section is `GREEN D`. A switch is keyed by the block of its point, a signal by the block it stands on, a crossing by its block. Commanded speed and authority are per block, never per train, because the Track Controller knows which blocks are occupied, not which train is in them. Speed is a whole number of m/s and authority is a whole number of blocks (D013). The fields are described in Appendix G.
+  Every type is a frozen dataclass or an enumeration, so a value cannot change after it is sent. Every value is in its backend unit: metres, m/s, degrees and degrees Celsius (D002). Every ID is a string: a block is `GREEN D-13`, a section is `GREEN D`. A switch is keyed by the block of its point, a signal by the block it stands on, a crossing by its block. Commanded speed and authority are per block, never per train, because the Track Controller knows which blocks are occupied, not which train is in them. Commanded speed is in m/s and authority is a whole number of blocks (D013). The fields are described in Appendix G.
 
 ### 004-interface — Module Interface Contracts
 - **Viewpoint:** Interface
@@ -215,7 +215,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
 
 - **More Information:**
 
-  The whole interface for the other modules is one call, `step(dt, inputs)`, which returns the outputs. The harness calls it once per tick. The other methods serve the Track Model window (`snapshot`, `set_block_failure`, `set_ambient_temp`, `load_layout_file`) or the test UI (`edit_block`, `reset`). The module does not know that a test UI exists.
+  The whole interface for the other modules is one call, `step(dt, inputs)`, which returns the outputs. The harness calls it once per tick. The other methods serve the Track Model window (`snapshot`, `set_block_failure`, `set_ambient_temp`, `load_layout_file`) or the test UI (`edit_block`, `reset`). The module does not know that a test UI exists. In the running system the call reaches `step` through the module's process: the harness sends a STEP message, `TrackModelProcess` decodes it with `wire.py`, and the reply carries the encoded outputs (SD-15).
 
   The harness owns one pure function for each connection:
 
@@ -236,7 +236,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
 
 ![Figure 5. Movement authority request across the CTC, Track controller, Track Model, Train model and Train controller.](../uml/track_model/18_seq_authority.png)
 
-  The CTC suggests a speed and authority for each block. The Track controller runs its PLC program and its vital supervisor, which can only make an output more restrictive, and sends a speed and an authority to the track circuit of each block, with its switch, signal and crossing commands. The harness maps them to the Track Model's inputs. The Track Model checks the whole tick before changing anything, stores the values for each block, places the trains from their reports, and builds a feed for each train. The train receives the speed and authority of the block it is in; a block that was never commanded, or whose circuit has failed, carries 0 and 0. The harness passes the feed to the Train model, and the light the train saw on entering a signal block to the Train controller. The full dispatch scenario is SD-16 in Appendix D.
+  The CTC suggests a speed and authority for each block. The Track controller runs its PLC program and its vital supervisor, which can only make an output more restrictive, and sends a speed and an authority to the track circuit of each block, with its switch, signal and crossing commands. The harness maps them to the Track Model's inputs. The Track Model checks the whole tick before changing anything, stores the values for each block, places the trains from their reports, and builds a feed for each train. The train receives the speed and authority of the block it is in; a block that was not commanded on this tick, or whose circuit has failed, carries 0 and 0. The harness passes the feed to the Train model, and the light the train saw on entering a signal block to the Train controller. The full dispatch scenario is SD-16 in Appendix D.
 
 ---
 
@@ -298,7 +298,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   - Check the whole tick first and reject it as a whole, so that nothing changes.
   - Check each value as it is used and keep the valid part.
   - Trust the caller.
-- **Outcome:** The first option. `step` raises `InvalidInputError` or `UnknownIdError` for a non-finite number, a speed or authority that is not a whole non-negative number, or an ID that is not in the layout. A bad layout file raises `LayoutError` and the loaded track is kept.
+- **Outcome:** The first option. `step` raises `InvalidInputError` or `UnknownIdError` for a non-finite number, a speed that is not finite and non-negative, an authority that is not a whole non-negative number, or an ID that is not in the layout. A bad layout file raises `LayoutError` and the loaded track is kept.
 
 ### 4.7 Knowledge Capture and Decision Logging
 
@@ -340,7 +340,7 @@ Authority is the number of blocks a train may still enter before it must stop (D
 
 - **CTC office:** suggests a speed and an authority for each block.
 - **Track controller:** passes a block's suggestion down its track circuit or replaces it with speed 0 and authority 0. Its vital supervisor can only make a result more restrictive; it never raises a speed or extends an authority.
-- **Track Model:** stores the speed and the authority of each block as the signal of that block's track circuit. A train receives the signal of the block it is in. A block that was never commanded, or whose track circuit has failed, carries speed 0 and authority 0.
+- **Track Model:** keeps the speed and the authority of each block, for this tick only, as the signal of that block's track circuit. A train receives the signal of the block it is in. A block not commanded on a tick, or whose track circuit has failed, carries speed 0 and authority 0.
 - **Train controller:** stops the train inside its authority.
 
 Authority and commanded speed are per block, not per train, like the signal on the rails.
@@ -373,6 +373,7 @@ For the Track Model the language matters only through its outputs, which arrive 
 - **One clock:** `SystemClock` (`utils/system_clock.py`) is the only clock. The harness owns it and sends dt and the simulation time to every module on each tick. A module sees its inputs only on the rising edge of the clock (D017).
 - **Fixed step:** dt is 0.1 s and constant. Speed changes only the tick rate: 1x is 10 ticks per real second and 10x is 100 (D006, D017).
 - **Pause:** the CTC office can pause and resume the clock, and set its speed to 1x or 10x.
+- **Display:** the Track Model window shows the central clock's time of day.
 - **Waiting:** the harness waits for every module's reply to a tick before it sends the next. If a reply takes longer than about 1 s, it pauses the clock and names the late module.
 - **Order in a tick:** the Track Model steps on the previous tick's train reports, then each Train model steps on this tick's feed.
 
@@ -424,12 +425,12 @@ The same use cases, one diagram for each actor:
 | UC-4 | Report State to Track Controller | Track Controller | (1) Every tick the Track Model builds the actual state of every device: block occupancy, switch positions, crossing gates, signal aspects, failure status, heater states and track temperature. (2) It returns it for the Track controller. The CTC office reads it through the Track controller. | Out: TrackControllerOutputs. | Tick or failure injected. The read-back shows the actual state, which a failure can make differ from the command. | SD-04 |
 | UC-5 | Apply Switch Position | Track Controller | (1) The Track controller commands a switch position. (2) The switch moves to it unless its block has lost power. (3) The actual position is reported. | In: switch commands. Out: switch states. | Command received. The switch shows its actual position. | SD-05 |
 | UC-6 | Apply Signal Lights and Crossing Gates | Track Controller | (1) The Track controller commands signal aspects and crossing gates. (2) A light shows its commanded aspect, or RED without power. A gate is down when commanded, or without power. | In: signal and crossing commands. Out: signal and gate states. | Command received. Lights and gates show the new state. | SD-06 |
-| UC-7 | Deliver Track Circuit Signal | Track Controller, Train Model | (1) The Track controller sends a speed (whole m/s) and an authority (blocks) for each block. (2) The Track Model stores them as the signal of that block's track circuit. (3) Each train receives the signal of the block it is in. A failed circuit, or a block never commanded, carries speed 0 and authority 0. | In: speed and authority per block. Out: TrackSignal in the train feed. | Tick. The train gets the signal of its block. | SD-07 |
+| UC-7 | Deliver Track Circuit Signal | Track Controller, Train Model | (1) The Track controller sends a speed (m/s) and an authority (blocks) for each block. (2) The Track Model keeps them, for this tick, as the signal of that block's track circuit. (3) Each train receives the signal of the block it is in. A failed circuit, or a block not commanded this tick, carries speed 0 and authority 0. | In: speed and authority per block. Out: TrackSignal in the train feed. | Tick. The train gets the signal of its block. | SD-07 |
 | UC-8 | Send Beacon Data | Train Model | (1) Beacons stand on the blocks next to a station block. (2) When a train is in a beacon block, its feed carries the station name, platform side and underground flag. | Out: Beacon in the train feed. | Train in a beacon block. The feed carries the beacon. | SD-08 |
 | UC-9 | Send Signal Light to Train Controller | Train Controller | (1) A signal stands on the block before each switch. (2) On the tick a train enters such a block, the Track Model reports the light's colour for that train; on every other tick it reports none. (3) The harness sends it to the Train controller, which keeps it. | Out: `signal_seen` per train. | Train enters a signal block. The Train controller receives the colour once. | SD-09 |
 | UC-10 | Sell Tickets and Board Passengers | Train Model | (1) Each station may sell one ticket per tick, at a configured probability, and keeps a queue of waiting passengers. (2) A train that is stopped in a station block with a door open takes min(waiting, capacity) passengers. (3) The count is returned in the train feed. | In: speed, doors, capacity. Out: passengers boarded. | Train stopped with a door open. The waiting count falls and the train is told how many boarded. | SD-10 |
 | UC-11 | Report Ticket Sales | CTC Office | (1) Every tick the Track Model reports the tickets sold on that tick, by station. (2) It keeps no running total and sends none. (3) The harness sends the sales to the CTC office as (count, station) pairs. | Out: `tickets_sold_now`. | Tick. The CTC office receives the sales of that tick. | SD-11 |
-| UC-12 | Set Ambient Temperature | Murphy | (1) Murphy enters a temperature in °F in the Track Model window. (2) It replaces the temperature the harness or test UI sends, until the module restarts. | In: temperature. Out: displayed ambient temperature. | Value entered. Track temperature follows it. | SD-12 |
+| UC-12 | Set Ambient Temperature | Murphy | (1) Murphy enters a temperature in °F in the Track Model window. (2) The harness sends no temperature, so the window is the source. A value set there replaces one sent by a test UI, until the module restarts. | In: temperature. Out: displayed ambient temperature. | Value entered. Track temperature follows it. | SD-12 |
 | UC-13 | Switch Track Heaters | Murphy (indirect) | (1) The Track Model switches each section's heaters itself (D026). (2) Each section's track temperature eases toward ambient, or toward ambient plus 10 °C while its heaters run. (3) A power failure in any block of the section stops its heaters. | In: ambient temperature. Out: heater state and track temperature per section. | Temperature change. Heater states and track temperatures change. | SD-13 |
 | UC-14 | Inject or Clear Failure | Murphy | (1) Murphy selects a block and a failure: broken rail, track circuit or power. (2) The block reads occupied and its track circuit carries nothing, so a train in it gets speed 0 and authority 0. (3) A power failure also holds the block's switch, shows its light RED, drops its crossing gates and stops its section's heaters. | In: block and failure. Out: failure shown in the window and in the read-back. | Failure selected. The Track controller sees it at once, between ticks. | SD-14 |
 
@@ -437,18 +438,18 @@ The same use cases, one diagram for each actor:
 
 #### C.1 Software Architecture
 
-The Track Model runs as one process with a window. The window (Qt Quick, PySide6) shows state through `TrackModelState`, which converts to display units. The module core (`model.py`, `layout.py`) has no Qt code. The boundary types and the `TrackModel` Protocol are in `interface.py`. The test scaffolding (`test_link/`, `test_ui/`) is not part of the module and is removed at integration. At integration the harness calls `step` through the edge functions in `common/harness/`.
+The Track Model runs as one process with a window. The window (Qt Quick, PySide6) shows state through `TrackModelState`, which converts to display units. The module core (`model.py`, `layout.py`) has no Qt code. The boundary types and the `TrackModel` Protocol are in `interface.py`. The test scaffolding (`test_link/`, `test_ui/`) is not part of the module and is removed at integration. At integration the harness starts the module as its own process (`module_process.py`). A `TrackModelProcess` receives each STEP message, decodes the JSON with `wire.py`, calls `step` and replies with the encoded outputs. The edge functions in `common/harness/` map the other modules' types.
 
 ![Figure 13. Track Model software architecture (component diagram).](../uml/track_model/06_component.png)
 
 #### C.2 Class Diagrams
 
-Figure 14 shows the module core and Figure 15 the window and the test link.
+Figure 14 shows the module core and Figure 15 the window, the harness process and the test link.
 
 ![Figure 14. Class diagram 1: module core.](../uml/track_model/04_class_core.png)
 
 
-![Figure 15. Class diagram 2: window and test link.](../uml/track_model/05_class_ui.png)
+![Figure 15. Class diagram 2: window, harness process and test link.](../uml/track_model/05_class_ui.png)
 
 #### C.3 Data Design
 
@@ -458,14 +459,14 @@ Figure 14 shows the module core and Figure 15 the window and the test link.
 
 **Derived from the layout.** Switch legs come from the switch text in the layout. The first leg listed is NORMAL. A signal stands on each block next to a switch point on its fixed side. A beacon stands on each neighbour of a station block.
 
-**Runtime state.** Each device keeps what the Track controller commanded and what it is actually doing: `_switch_cmd` and `_switches`, `_signal_cmd`, `_crossing_cmd`. Also kept: `_failures` by block, `_commanded_speed` and `_authority` by block, `_trains`, `_waiting` passengers by station, and `_track_temp_c` by section. Devices start safe: switches NORMAL, gates up, lights RED, heaters off. `TrackConfig` holds the layout paths, the ticket probability per station per tick (default 0.02) and a random seed.
+**Runtime state.** Each device keeps what the Track controller commanded and what it is actually doing: `_switch_cmd` and `_switches`, `_signal_cmd`, `_crossing_cmd`. Also kept: `_failures` by block, `_commanded_speed` and `_authority` by block (this tick's values only), `_trains`, `_waiting` passengers by station, and `_track_temp_c` by section. Devices start safe: switches NORMAL, gates up, lights RED, heaters off. `TrackConfig` holds the layout paths, the ticket probability per station per tick (default 0.02) and a random seed.
 
 #### C.4 Algorithms
 
 **One tick (`step`).**
 
 1. Check the whole input. If anything is wrong, raise and change nothing.
-2. Store the Track controller's commands. A switch moves to its command unless its block has lost power.
+2. Store the Track controller's commands. Commanded speed and authority last one tick: a block not commanded on a tick reads 0 and 0. A switch moves to its command unless its block has lost power.
 3. Work out each device's actual state: what was commanded, unless a failure overrides it.
 4. Move each section's track temperature toward ambient, or toward ambient plus 10 °C while the section's heaters run. The time constant is 300 s. Both numbers are placeholders.
 5. Move trains across block boundaries from their reported offsets.
@@ -503,7 +504,7 @@ The test UI is a separate program (`test_ui/`). It stands in for the Track contr
 
 ### D. Sequence Diagrams
 
-Each use case has one sequence diagram, numbered to match: SD-01 is the diagram of UC-1, and so on. SD-15 is an overview of one tick and SD-16 is the system-level dispatch scenario. Figure 5 (Section 3) is the movement authority request.
+Each use case has one sequence diagram, numbered to match: SD-01 is the diagram of UC-1, and so on. SD-15 is an overview of one tick and SD-16 is the system-level dispatch scenario. Figure 5 (Section 3) is the movement authority request. In SD-01 to SD-14, "Central harness → Track Model: step" stands for the longer path shown in SD-15 (STEP message, `TrackModelProcess`, JSON decode).
 
 | Diagram | Title | Use case |
 |--------|------------------------------------|---------------|
@@ -591,8 +592,8 @@ Every value is in its backend unit (D002). Per-block data is keyed by block ID, 
 
 | ID | Direction | Signal | Type | Units | Description |
 |----|----------|----------|-----------|------|-----------------|
-| IF-01 | Track Controller → Track Model | commanded_speed_mps | dict[block, int] | m/s | Speed for the track circuit of each block, a whole number. |
-| IF-02 | Track Controller → Track Model | commanded_authority | dict[block, int] | blocks | Blocks a train in that block may still enter. 0 = stop. |
+| IF-01 | Track Controller → Track Model | commanded_speed_mps | dict[block, float] | m/s | Speed for the track circuit of each block. Valid for this tick only: a block not commanded on a tick reads 0. |
+| IF-02 | Track Controller → Track Model | commanded_authority | dict[block, int] | blocks | Blocks a train in that block may still enter. 0 = stop. Valid for this tick only. |
 | IF-03 | Track Controller → Track Model | switch_commands | dict[switch, SwitchPosition] | - | Keyed by the block of the switch point. |
 | IF-04 | Track Controller → Track Model | crossing_commands | dict[block, bool] | - | True = gate closed. |
 | IF-05 | Track Controller → Track Model | signal_commands | dict[block, SignalAspect] | - | Aspect of the light on the block. |
@@ -603,23 +604,24 @@ Every value is in its backend unit (D002). Per-block data is keyed by block ID, 
 | IF-10 | Train Model → Track Model | passenger_capacity | int | persons | Passengers the train can take. |
 | IF-11 | Train Model → Track Model | block_changed | bool | - | Recorded, not used. |
 | IF-12 | Harness → Track Model | dt | float | s | Tick length, fixed at 0.1 s. |
-| IF-13 | Harness → Track Model | ambient_temp_c | float | deg C | Ambient temperature. A value set in the Track Model window replaces it. |
-| IF-14 | Murphy (window) → Track Model | set_block_failure | (block, TrackFailure) | - | Inject or clear NONE, BROKEN_RAIL, TRACK_CIRCUIT or POWER. |
-| IF-15 | Murphy (window) → Track Model | set_ambient_temp | float | deg C | Entered in deg F and converted by the window. |
-| IF-16 | Track Builder (window) → Track Model | load_layout_file | path to .json | - | Replaces or adds a line and restarts the module. |
-| IF-17 | Track Model → Track Controller | block_occupancy | dict[block, bool] | - | True if a train is in the block or its circuit has failed. |
-| IF-18 | Track Model → Track Controller | switch_states | dict[switch, SwitchPosition] | - | Actual positions. |
-| IF-19 | Track Model → Track Controller | crossing_states | dict[block, bool] | - | True = gate closed (also closed without power). |
-| IF-20 | Track Model → Track Controller | signal_states | dict[block, SignalAspect] | - | Actual aspects (RED without power). |
-| IF-21 | Track Model → Track Controller | failure_status | dict[block, TrackFailure] | - | Active failure on each block. |
-| IF-22 | Track Model → Track Controller | heater_states | dict[section, bool] | - | Heaters actually running. |
-| IF-23 | Track Model → Track Controller | track_temp_c | dict[section, float] | deg C | Track temperature of each section. |
-| IF-24 | Track Model → CTC Office | tickets_sold_now | dict[station, int] | tickets | Tickets sold this tick. No running total is kept or sent. The edge sends (count, station) pairs. |
-| IF-25 | Track Model → Train Model | track_info | block_id, grade_deg, elevation_m, speed_limit_mps, polarity, station_name | deg, m, m/s | Terrain of the occupied block. Polarity reverses at every block change. |
-| IF-26 | Track Model → Train Model | track_signal | commanded_speed_mps: int, authority_blocks: int | m/s, blocks | Track circuit signal of the occupied block. 0 and 0 on a dead circuit. |
-| IF-27 | Track Model → Train Model | beacon | station_name, platform_side, underground | - | Platform side is L, R or LR. None when not over a beacon. |
-| IF-28 | Track Model → Train Model | passengers_boarded | int | persons | Passengers who boarded this tick. |
-| IF-29 | Track Model → Train Controller | signal_seen | dict[train, SignalAspect or None] | - | Colour of the light as the train enters a signal block, on that tick only. Sent directly, not through the Train Model. |
+| IF-13 | Harness → Track Model | sim_time_s | float or None | s | Simulation time from the central clock, sent with each step. The window shows it as the time of day. |
+| IF-14 | Harness → Track Model | ambient_temp_c | float or None | deg C | Optional. The central harness sends none; the Track Model window is the source. A value set in the window replaces one sent. |
+| IF-15 | Murphy (window) → Track Model | set_block_failure | (block, TrackFailure) | - | Inject or clear NONE, BROKEN_RAIL, TRACK_CIRCUIT or POWER. |
+| IF-16 | Murphy (window) → Track Model | set_ambient_temp | float | deg C | Entered in deg F and converted by the window. |
+| IF-17 | Track Builder (window) → Track Model | load_layout_file | path to .json | - | Replaces or adds a line and restarts the module. |
+| IF-18 | Track Model → Track Controller | block_occupancy | dict[block, bool] | - | True if a train is in the block or its circuit has failed. |
+| IF-19 | Track Model → Track Controller | switch_states | dict[switch, SwitchPosition] | - | Actual positions. |
+| IF-20 | Track Model → Track Controller | crossing_states | dict[block, bool] | - | True = gate closed (also closed without power). |
+| IF-21 | Track Model → Track Controller | signal_states | dict[block, SignalAspect] | - | Actual aspects (RED without power). |
+| IF-22 | Track Model → Track Controller | failure_status | dict[block, TrackFailure] | - | Active failure on each block. |
+| IF-23 | Track Model → Track Controller | heater_states | dict[section, bool] | - | Heaters actually running. |
+| IF-24 | Track Model → Track Controller | track_temp_c | dict[section, float] | deg C | Track temperature of each section. |
+| IF-25 | Track Model → CTC Office | tickets_sold_now | dict[station, int] | tickets | Tickets sold this tick. No running total is kept or sent. The edge sends (count, station) pairs. |
+| IF-26 | Track Model → Train Model | track_info | block_id, grade_deg, elevation_m, speed_limit_mps, polarity, station_name | deg, m, m/s | Terrain of the occupied block. Polarity reverses at every block change. |
+| IF-27 | Track Model → Train Model | track_signal | commanded_speed_mps: float, authority_blocks: int | m/s, blocks | Track circuit signal of the occupied block. 0 and 0 on a dead circuit. |
+| IF-28 | Track Model → Train Model | beacon | station_name, platform_side, underground | - | Platform side is L, R or LR. None when not over a beacon. |
+| IF-29 | Track Model → Train Model | passengers_boarded | int | persons | Passengers who boarded this tick. |
+| IF-30 | Track Model → Train Controller | signal_seen | dict[train, SignalAspect or None] | - | Colour of the light as the train enters a signal block, on that tick only. Sent directly, not through the Train Model. |
 
 ### H. Requirements Traceability
 

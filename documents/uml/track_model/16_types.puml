@@ -15,10 +15,11 @@ skinparam ranksep 45
 class TrackModelInputs <<frozen dataclass>> {
   controller : TrackControllerCommands
   trains : Mapping[str, TrainReport]
-  ambient_temp_c : float
+  ambient_temp_c : float | None
+  sim_time_s : float | None
 }
 class TrackControllerCommands <<frozen dataclass>> {
-  commanded_speed_mps : Mapping[str, int]
+  commanded_speed_mps : Mapping[str, float]
   commanded_authority : Mapping[str, int]
   switch_commands : Mapping[str, SwitchPosition]
   crossing_commands : Mapping[str, bool]
@@ -65,7 +66,7 @@ class TrackInfo <<frozen dataclass>> {
   station_name : str | None
 }
 class TrackSignal <<frozen dataclass>> {
-  commanded_speed_mps : int
+  commanded_speed_mps : float
   authority_blocks : int
 }
 class Beacon <<frozen dataclass>> {

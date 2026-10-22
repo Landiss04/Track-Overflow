@@ -14,7 +14,7 @@ participant ":TrackModel" as TM
 participant "Track Controller" as TC
 H -> TM : step(dt, inputs)
 loop each section
-  TM -> TM : heater state of the section (D026, no command from the Track Controller)
+  TM -> TM : _heater_on(section)  // D026
   alt a block of the section has a power failure
     TM -> TM : heater off
   end

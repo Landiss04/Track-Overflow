@@ -18,7 +18,8 @@ class TrackModel <<model.py>> {
   -_switch_cmd, _switches : dict[str, SwitchPosition]
   -_signal_cmd, _crossing_cmd : dict
   -_failures : dict[str, TrackFailure]
-  -_commanded_speed, _authority : dict[str, int]
+  -_commanded_speed : dict[str, float]  // this tick only
+  -_authority : dict[str, int]  // this tick only
   -_trains : dict[str, _Train]
   -_waiting : dict[str, int]
   -_track_temp_c : dict[str, float]
@@ -27,14 +28,24 @@ class TrackModel <<model.py>> {
   +set_block_failure(block_id, failure) : None
   +set_ambient_temp(temp_c) : None
   +load_layout_file(path) : str
+  -_adopt(layout) : None
+  -_restart() : None
   -_validate(dt, inputs) : None
   -_apply_commands(commands) : None
   -_update_track_temps(dt) : None
   -_move_trains(reports) : None
   -_advance(train_id, train, offset_m) : None
+  -_carry_into(train, offset_in_left_m) : float
   -_sell_tickets() : dict[str, int]
   -_board(block, report) : int
   -_feed(train, report) : TrainFeed
+  -_track_signal(block_id) : TrackSignal
+  -_signal_state(block_id) : SignalAspect
+  -_gate_closed(block_id) : bool
+  -_heater_on(section_id) : bool
+  -_signal_seen(train) : SignalAspect | None
+  -_controller_outputs() : TrackControllerOutputs
+  -_ctc_outputs() : CtcOutputs
 }
 class _Train <<private dataclass>> {
   +block_id : str
@@ -83,6 +94,10 @@ class TrackConfig <<frozen dataclass>> {
   +ticket_probability : float
   +seed : int
 }
+class "layout.py\n<<module functions>>" as LF {
+  load_layout(paths) : Layout
+  line_of_file(path) : str
+}
 class TrackModelError <<Exception>>
 class InvalidInputError <<Exception>>
 class UnknownIdError <<Exception>>
@@ -90,6 +105,8 @@ class LayoutError <<Exception>>
 TrackModel "1" *-- "0..*" _Train
 TrackModel "1" --> "1" Layout
 TrackModel --> TrackConfig
+TrackModel ..> LF : uses
+LF ..> Layout : builds
 Layout "1" *-- "1..*" Block
 Layout "1" *-- "0..*" Switch
 TrackModelError <|-- InvalidInputError
