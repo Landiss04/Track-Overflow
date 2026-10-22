@@ -2,7 +2,7 @@
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Last reviewed 2026-10-21 (controller / test bench
-separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
+separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
 
 ## Resolved 2026-10-21
 
@@ -31,6 +31,9 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
 - **Emergency echo** (`HARNESS_INTEGRATION.md`): fixed with #25's
   controller side (R16).
 - **18. Automatic lights** are built (R20, M8).
+- **29. The dial's 70 km/h scale against M1.** Decided (R29, M14): the
+  dial keeps its 70 km/h scale as display only, not a cap; a commanded
+  speed above 43.5 mph cannot be set from the dial, and that is accepted.
 
 ## Added 2026-10-15
 
@@ -77,7 +80,14 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
       25.7 kN), so a repaired engine can never show rising speed.
 
     Signal pickup is unaffected (a non-zero Track Signal can return at any
-    time). Candidate approaches, none chosen:
+    time). Decided in part (R29, M2, M3): once the train stands, the
+    driver may release the e-brake in Manual with the failure still
+    latched, and the failure does not engage it again. That lets a
+    repaired service brake read applied, once the driver may command it
+    under a brake failure (M4). It does not settle the engine: a latched
+    failure keeps the target at 0, so no power is commanded and §4's
+    "commanded power gives rising speed again" cannot happen. Candidate
+    approaches for the rest, none chosen:
     - (a) Once stopped, hold an engine failure on the service brake
       instead of the e-brake, and probe with power.
     - (b) Once stopped, briefly drop the controller's e-brake command and
@@ -134,25 +144,24 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
     Push it here, and fix its window and threshold, which are not
     recorded yet.
 
-29. **The dial's 70 km/h scale against M1.** With no 70 km/h cap (M1), a
-    commanded speed above 43.5 mph is a target the dial cannot show or
-    set. Either keep the scale and accept it, or scale the dial to the
-    commanded speed.
-
 30. **Rules decided 2026-10-21 not yet in the code.** M1 (70 km/h cap
-    still applied), M3 and M5 (resolution not detected; blocked on #23),
-    M4 (0.5 s detection; service command forced off), M6 (Manual doors
-    still platform side only), M7 (the Manual press: station name only,
-    lockout on a wall-clock timer), M17 (forced service brake at 0
-    authority), M19 (engine detection uses mass and `F = P/v`, #28), M20
-    (signal light not mapped, #27). Update `HARNESS_INTEGRATION.md` and
-    `CHANGELOG.md` with each.
+    still applied; the Manual setpoint is capped only when set), M2 and
+    M3 (release in Manual at a stand with a failure latched; resolution
+    not detected, blocked on #23), M4 (0.5 s detection; service command
+    forced off), M5 (#23), M6 (Manual doors still platform side only), M7
+    (the Manual press: station name only, no repeat of the announcements,
+    lockout on a wall-clock timer), M8 (no lights-on check for a train
+    spawned at the yard between 18:00 and 06:00), M11 (bench clock gated
+    on the selected train, #31), M19 (engine detection uses mass and
+    `F = P/v`, #28), M20 (signal light not mapped, #27). Update
+    `HARNESS_INTEGRATION.md` and `CHANGELOG.md` with each.
 
 31. **Bench-side leftovers from the separation (R15–R17).**
     - The bench clock advances only while the selected train is
       commissioned (unchanged from before), yet it is now the time every
-      train receives. A shared clock would run whenever the bench is not
-      paused. Set time works either way.
+      train receives. Decided (M11, R29): it starts when the first train
+      is commissioned and then always runs, whichever train is selected;
+      not built yet (#30). Set time works either way.
     - Setting the bench clock is a jump: the lights act only if the jump
       changes night to day or back. 05:00 (the start) to 18:00 is night
       to night, so nothing changes; set a daytime first, or 17:59 and let
@@ -172,15 +181,16 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R22 done the same day).
     - The bench sends a beacon once after any beacon row is sent, so
       setting underground alone works; every such beacon with a station
       name arms a station stop, as a real beacon would.
-    - "Arriving soon" fires whenever the authority comes down to 3,
-      station or not.
+    - "Arriving soon" fires whenever the authority reaches 3, station or
+      not; a rise to 3 announces too, accepted (M7, R29).
     - Lights: both interior and exterior switch together.
     - The bench's hours wheel runs 0–23, not 0–24 as asked: 24:00 is
       00:00, and 24:30 is not a time of day (R27).
     - Switching to Manual during a brake failure (R26) cannot yet test
       the brake: the service brake button is still refused under a
-      brake failure (M4, #30), and nothing detects a resolution yet
-      (#23), so the bench still clears the failure.
+      brake failure (M4, #30), the e-brake cannot yet be released under
+      a failure (M2, #30), and nothing detects a resolution yet (#23), so
+      the bench still clears the failure.
     - With an uncommissioned train selected nobody is signed in, so
       nobody can reach its emergency brake from the console; it commands
       0 W and cannot move under its own power.
