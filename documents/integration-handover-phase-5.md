@@ -184,7 +184,7 @@ implementation rulings do not promote proposals to `truth`.
 | # | Source | Kevin's words | Effect |
 | --- | --- | --- | --- |
 | R93 | K1: Go and order | Steps 1–9 and 13 now; "no hardware is functional yet so that cant be tested" | Build against simulated Pis; steps 10–12 remain out of scope. |
-| R94 | K2: Red yard (Phase 3 Q5) | "block 9 physically connects to the yard via a switch … note that block 9 is in section c" | Originally instructed a source-file edit; Kevin superseded that part on 2026-10-22: "the track is a given data point and can not be modified". The readers interpret the yard at section-C block 9 while preserving the given bytes; detailed switch legs remain an owner assumption. |
+| R94 | K2: Red yard (Phase 3 Q5) | "block 9 physically connects to the yard via a switch … note that block 9 is in section c" | Kevin confirmed on 2026-10-22: "the track is a given data point and can not be modified". Kevin established the physical yard connection at section-C block 9. Readers interpret the stale adjacency while preserving the given bytes; that interpretation and detailed switch legs remain owner assumptions. The earlier source-file edit was an implementation choice, not Kevin's instruction. |
 | R95 | K3: PR #43 | "merge into this branch not devlopment leave the pr unmerged" | Merge the source into this branch with a merge commit. Do not merge/close/comment on the GitHub PR. |
 | R96 | K3b: Vital layer | "the vital layer has been removed. everything is done by the plc code." | The no-vital policy covers both HW and SW, explicitly confirmed by Kevin: "yes", 2026-10-22. All safety belongs in PLC programs. Existing SW vital implementation is left unchanged under the original implementation scope, and is an owner follow-up. |
 | R97 | K4: Red databases/programs, Braden relayed by Kevin | "use test only copies"; "it should be divided in any way that work, maybe 3 waysides. That's fine to keep 9 and 75 in the same wayside."; switches "yes"; crossings "Yes"; "Check the wp2/ branch that braden made. Many updates are found there as well." | Use about three integration test waysides, all 76 blocks once, 9/75 together. NORMAL starters, crossings 11/47 active for own/either-neighbor occupancy; take safety/speed-cap design from WP2. |
@@ -265,7 +265,7 @@ directory including tests with the same no-untyped-defs rule reports
 The existing harness `app.py` mismatch is outside the changed-file check.
 
 Production flake8 and the four Phase 5 harness test files pass `flake8 -j1`
-in the orchestrator's rerun; `02c2d7a` cleans test E501/E402/N802 formatting
+with `--extend-ignore=N815` for Qt signal names in the orchestrator's rerun; `02c2d7a` cleans test E501/E402/N802 formatting
 without changing assertions. The Red reader/data agent separately checked
 all its changed Python files with `flake8 -j1`: clean.
 
@@ -355,8 +355,11 @@ scenarios exercise G1 and R1 together.
 | Headless | 10x | 1,455 / 1,502 | 9.69x | 10.00 / 8.41 / 21.83 / 29.02 / 62.28 | 0.49 s | 27% |
 | Window, offscreen | 10x | 1,414 / 1,502 | 9.42x | 10.27 / 8.57 / 23.20 / 30.26 / 73.09 | 0.51 s | 29% |
 
-Every final run reports zero slipped ticks and zero late replies; that
-does not imply all due ticks completed. Both final 10x runs fail the
+Every final run reports zero explicit dropped-backlog (slip) events and
+zero late replies. The headless 10x run completed 47 fewer ticks than due;
+the offscreen window run completed 88 fewer. Those unfinished ticks are
+not reported as dropped-backlog events. Zero slip events therefore does
+not imply all due ticks completed. Both final 10x runs fail the
 measurement's 99% completion criterion. Before the cadence change, a
 separate unprofiled 100 ms run reached 10.00x headless (8.32 ms mean) and
 9.70x with windows (9.24 ms mean). These samples show variability, not a
@@ -393,3 +396,13 @@ on `kevin-framework`, Ubuntu 26.04.1 LTS, at 17:59 EDT on 2026-10-21.
 
 October 22 correction work used the same toolchain on `kevin-framework`,
 Ubuntu 26.04.1 LTS; system time was checked at 01:00 EDT on 2026-10-22.
+
+## Phase 6 follow-up
+
+The [Phase 6 handover](integration-handover-phase-6.md) records Kevin's
+subsequent authorization to reuse Green routing in all Red test switches,
+the approved shared read-only neighbor closure inputs, the completed Red
+return, fresh visible-window measurements and Linux build smoke. It also
+records the three failing CTC multi-train acceptance probes. Phase 5's
+historical wait for real Red programs is superseded for these test copies;
+Braden's review and physical-Pi validation remain open.

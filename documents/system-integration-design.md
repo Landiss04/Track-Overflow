@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.15. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5); Phase 5 software steps 1–9 and documentation step 13 are built and verified with simulated Pis (section 5.6); hardware steps 10–12 have not started. Not normative. |
-| **Date** | 2026-10-21 |
+| **Status** | Draft v0.16. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5); Phase 5 software steps 1–9 and documentation step 13 are built and verified with simulated Pis (section 5.6); Phase 6 review path is built; multi-train acceptance remains incomplete (section 5.7). Real-Pi steps 10–11 await hardware, and Windows packaging remains deferred. Not normative. |
+| **Date** | 2026-10-22 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
 | **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1); Phase 1 on the same branch, with the Train Controller of PR #44 (section 5.2); Phase 2 on the same branch, with the `track-model` branch merged, and Kevin Schillinger's operator window and Train Model review merged from the same branch (sections 5.1 and 5.3); Phase 3 on the same branch, with its tests and measurements of 2026-10-20 (section 5.4); Phase 4 on the same branch, with its tests, measurements and frozen build of 2026-10-20 (section 5.5); the answers of 2026-10-21 and the work on the same branch since `a55b8b9` (`0305d05` to `460579b`), with its tests of 2026-10-21 (section 5.5); `truth` after the promotion of 2026-10-19 (`84c7d44`) |
@@ -12,6 +12,18 @@ The `truth` branch is the authoritative record. This document cites it by shard 
 (`origin/truth:truth/<path>`, shortened below to the shard name) and does not override it.
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
+
+**Changes in v0.16**
+
+- Phase 6 validates Iteration 3 readiness, Red test routing and shared
+  neighbor closure inputs, with the unchanged course track files (§5.7).
+- Final sequential simulated-Pi samples pass at 1x but fail 10x: 9.16x
+  headless and 8.36x with Wayland window launches, including explicit
+  dropped-backlog events. Reliable 10x remains open; no optimization was made.
+- The Phase 5 handover distinguishes unfinished due ticks from explicit
+  dropped-backlog events and records the Qt-signal lint exception.
+- Red yard geometry, Green follower locking, CTC Red concurrency, SW vital
+  implementation and real-Pi speed remain owner questions.
 
 **Changes in v0.15**
 
@@ -241,7 +253,7 @@ implementation rulings do not promote proposals to `truth`.
 | # | Source | Kevin's words | Effect |
 | --- | --- | --- | --- |
 | R93 | K1: Go and order | Steps 1–9 and 13 now; "no hardware is functional yet so that cant be tested" | Build against simulated Pis; steps 10–12 remain out of scope. |
-| R94 | K2: Red yard (Phase 3 Q5) | "block 9 physically connects to the yard via a switch … note that block 9 is in section c" | Originally instructed a source-file edit; Kevin superseded that part on 2026-10-22: "the track is a given data point and can not be modified". The readers interpret the yard at section-C block 9 while preserving the given bytes; detailed switch legs remain an owner assumption. |
+| R94 | K2: Red yard (Phase 3 Q5) | "block 9 physically connects to the yard via a switch … note that block 9 is in section c" | Kevin confirmed on 2026-10-22: "the track is a given data point and can not be modified". Kevin established the physical yard connection at section-C block 9. Readers interpret the stale adjacency while preserving the given bytes; that interpretation and detailed switch legs remain owner assumptions. The earlier source-file edit was an implementation choice, not Kevin's instruction. |
 | R95 | K3: PR #43 | "merge into this branch not devlopment leave the pr unmerged" | Merge the source into this branch with a merge commit. Do not merge/close/comment on the GitHub PR. |
 | R96 | K3b: Vital layer | "the vital layer has been removed. everything is done by the plc code." | The no-vital policy covers both HW and SW, explicitly confirmed by Kevin: "yes", 2026-10-22. All safety belongs in PLC programs. Existing SW vital implementation is left unchanged under the original implementation scope, and is an owner follow-up. |
 | R97 | K4: Red databases/programs, Braden relayed by Kevin | "use test only copies"; "it should be divided in any way that work, maybe 3 waysides. That's fine to keep 9 and 75 in the same wayside."; switches "yes"; crossings "Yes"; "Check the wp2/ branch that braden made. Many updates are found there as well." | Use about three integration test waysides, all 76 blocks once, 9/75 together. NORMAL starters, crossings 11/47 active for own/either-neighbor occupancy; take safety/speed-cap design from WP2. |
@@ -921,6 +933,92 @@ integrating everything at once.
 The missing integration guides (section 3.1) should be written as each module joins.
 `common/harness/README.md` says how a module joins the harness.
 
+### 5.7 Phase 6 review path built; acceptance incomplete [C]
+
+Phase 6 targets Iteration 3 full system integration on 2026-11-12. Kevin's
+2026-10-22 instructions authorize Green-style routing in the Red integration
+test PLC copies, at least two trains per line without a hardcoded train
+count, shared Pi plumbing with only transport differences, and deferral of
+the speed decision until real-Pi measurements. Windows packaging remains
+deferred. No automatic reversal or track-data edit is authorized.
+
+The Track Model's yard-entry validation exception is limited to Red block
+9. Regressions reject an added Green-63 yard return and a missing Green-57
+yard exit; the focused layout/direction suites pass 59 tests. The
+orchestrator's full Track Model suite passes 312. The CTC owner changelog
+records the block-9 `to_yard` assumption in `5d51051`; D028 now separates
+Kevin's physical-connection and immutable-data decisions from unconfirmed
+reader geometry. Phase 5's source-file edit was an implementation choice,
+not an instruction quoted from Kevin.
+
+The Red routing input review found that Red-2 received occupancy for
+switch 27's reverse leg 76 but not its closure. Kevin explicitly approved
+"Approve shared read-only neighbor closure inputs" on 2026-10-22. The
+existing adjacency helper now shares occupancy and closure names/images,
+with line scoping and output ownership preserved. All seven switches use
+the Green-style test pattern. Four boundary tests pass; Red routing,
+controller and follower tests pass 51 tests and 2494 subtests. Reusing the
+existing seven-core `RedLoop` helper, Red outbound 9 … 16 and return
+17 … 66 → 52 … 9 complete with one retirement event (one test, 26.69 s),
+without automatic reversal.
+
+The final four sequential simulated-Pi measurements on `kevin-framework`
+at 12:24:45–12:26 EDT ran committed `5223f1f`, including routing commit
+`16a64b8`. Both 1x samples pass; both 10x samples fail the 99% tick-completion
+criterion. Headless 10x completes 1376/1502 due ticks (9.16x), with 10.56 ms
+mean and 100 explicit dropped-backlog ticks. Wayland 10x completes
+1260/1507 (8.36x), with 11.53 ms mean and 200 explicit drops. Deficits
+beyond reported drops are 26/47 unfinished due ticks, not additional drop
+events or a precise in-flight count. There are no late replies. Startup is
+0.50–0.61 s. Reliable simulated 10x remains open; no Phase 6 profiling or
+optimization was authorized or performed. The speed decision waits for
+real-Pi measurements.
+
+The Wayland runs launched windows on the actual desktop; no screenshot
+or visual inspection verified their appearance. The audit had finished,
+no deliberate concurrent heavy job was run, and initial CPU pressure was
+zero, but this does not establish full benchmark isolation. The earlier
+11:10 checkpoint reached rounded 10x before final routing/closure changes,
+with an audit running; it does not establish final-revision performance.
+The rerun does not causally isolate source changes, CPU state or general
+variability.
+
+The user-supplied Phase 5 fix-check on a four-core cloud host reported
+3.6–4.3x at requested 10x and about 2 s startup, versus earlier framework
+9.69x/about 0.5 s and current 9.16x/8.36x with 0.50–0.61 s startup.
+Different host/CPU, process startup, scheduling, workload, profiling and
+display circumstances make this an unpaired comparison; no individual
+cause can be quantified. The cloud fix-check is separate from the
+historical Phase 0 Xeon/stub table. No Pi performance follows from it.
+
+Implementation commits are `7af402a` (yard guard and decisions),
+`ede5c89` (shared Pi tooling), `16a64b8` (routing/closures) and `5223f1f`
+(review CLI/scenarios/Linux recipe); the orchestrator inspected every
+commit's stat and independently ran the final regressions.
+
+The Green follower boundary snapshot reproduces the existing lock at
+76 with the switch reverse after a head on 77 clears toward 101; owner
+rules were not changed. The final HW suite passes 89 tests and 50538
+subtests; shared Pi/recovery passes 44. Manual/scheduled seven-process
+review scenarios pass three tests. The complete harness with both slow
+opt-ins records 185 passed and three failed: mixed two-train, mixed
+three-train and Green-only three-train probes. Green's five-test round
+trip and Green two-train schedule pass. Red remains at one concurrent
+train under the existing shared-zone rule; Green three-train completion
+stalls at 65/64 through a 2400 simulated-second bound. These are CTC owner
+questions; no scheduler rule was changed and permanent deadlock is not
+established.
+
+A final post-closure Linux build runs outside the checkout for 20 s with
+simulated Pis, matching HELLO hashes, both lines ready, both trains added,
+seven module exits at code 0 and no fault events. This is a startup/release
+smoke, while source-process tests establish station stops. Physical Pi
+performance and USB behavior remain unverified. Completed evidence and
+remaining owner questions are tracked in
+[`integration-handover-phase-6.md`](integration-handover-phase-6.md).
+No optimization-derived speed improvement or real Pi execution is inferred
+from the simulated measurements.
+
 ### 5.6 Phase 5 as built (steps 1–9) [C]
 
 Kevin authorized the software work in the attached Phase 5 session prompt,
@@ -1112,7 +1210,8 @@ module_link/harness_protocol) with explicit package bases, no untyped defs,
 silent import following and ignored missing imports: clean. This scope
 excludes tests; checking the whole Pi-link directory with the same rule
 reports 61 missing-annotation errors. Production and four Phase 5 harness
-test files pass flake8. All Pi-link tests, startup diagnostics and the
+test files pass `flake8 -j1 --extend-ignore=N815` (Qt signal names).
+All Pi-link tests, startup diagnostics and the
 three G1/R1 full-process clean/disconnect/reboot scenarios independently
 pass: 44 tests in 34.64 s. The module agent's sequential full results are
 HW 80 tests/50,506 subtests; SW 213/16; Track Model 310; CTC 261/284.
@@ -1143,16 +1242,19 @@ responsiveness checks or actual Pi/USB results.
 | Headless | 10x | 1,455 / 1,502 | 9.69x | 10.00 / 21.83 / 62.28 |
 | Window, offscreen | 10x | 1,414 / 1,502 | 9.42x | 10.27 / 23.20 / 73.09 |
 
-All four report zero slipped ticks and late replies, but both 10x runs
-fail the 99% completion criterion. Earlier 100 ms-cadence runs achieved
+All four report zero explicit dropped-backlog events and late replies.
+The 10x runs finish 47 and 88 ticks below due without reporting those
+unfinished ticks as dropped; both fail the 99% completion criterion. Earlier 100 ms-cadence runs achieved
 10.00x headless and 9.70x offscreen; variation is unresolved. Phase 4
 measured 10.00x at 5.1–5.8 ms mean with a different workload, before both
 HW agent paths and journals. Reliable simulated 10x remains open, with
 K7 unchanged. Options are to accept the observed simulated rate,
 authorize separate snapshot/refresh optimization and review, or wait
 for real Pi/USB measurement. No further tuning or durability relaxation
-is chosen here. Red return still awaits real switch-routing programs or
-an explicit dispatcher reversal decision; the test PLCs remain unchanged.
+was chosen in Phase 5. At that phase's close, Red return awaited real
+switch-routing programs and the test PLCs remained unchanged. Kevin's
+Phase 6 authorization and completed test-copy routing supersede that wait
+(section 5.7); automatic train reversal remains excluded.
 
 ### 5.5 Phase 4 as built [C]
 
@@ -1972,7 +2074,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-CLK-3 | Resolved (R3, R51) | `clock_paused` is one boolean, true while paused, starting paused. While paused the harness reads it from the CTC Office's `snapshot()` ([P] `ctc-deployment/20261016-1517-clock-pause.md`, form confirmed). Phase 0 has the module push the value as a `STATE` message (section 5.1). Built in Phase 4: the CTC window's Run, Pause and speed set the module's `clock_paused` and `clock_speedup`, not a clock of the window's own, and go to the harness as `STATE` on every press (section 5.5). Left: the CTC Office owner to confirm the `STATE` push. | signal owner CTC Office |
 | G-CLK-4 | Resolved (R64) | The 0.1 s tick is a recorded deviation from REQ-NFR-001.1's 1 ms "should" ([P] D017). | D017 owner Landis |
 | G-CLK-5 | Resolved (R64) | No tick is skipped: when the harness falls behind, simulated time runs slower than real time ([P] D017). | D017 owner Landis |
-| G-CLK-6 | Measured with stubs and with Phases 1 to 4 (R64) | Seven stub processes at 10x: a mean round trip of 1 to 3 ms against the 10 ms budget for replies up to 30 KB, and no tick slipped (section 5.1). The Train Model and the Train Controller as themselves, with one train: under 2 ms mean, no tick slipped (section 5.2). The Phase 2 system, with the Track Model too: 3.5 to 3.8 ms mean, no tick slipped, headless or with the window (section 5.3). The Phase 3 system, with the Track Controller SW too: 4.4 to 5.2 ms mean at 10x, no tick slipped, headless or with the window (section 5.4). The Phase 4 system, with the CTC Office too: 5.1 to 5.8 ms mean at 10x, no tick slipped, headless or with the window (section 5.5). Left: the modules still stubs, the Windows lab machines, and the USB round trip (Phase 5). | unassigned |
+| G-CLK-6 | All seven integrated; simulated 10x incomplete | Final committed-revision process samples complete 1x, but requested 10x reaches 9.16x headless / 8.36x with Wayland window launches, with 100/200 explicit dropped-backlog ticks and no late replies (section 5.7). No visual inspection verified window appearance. Real Pi/USB performance remains unmeasured; Kevin defers the speed decision until those measurements. No Phase 6 optimization or profiling was performed. | Kevin; module owners |
 | G-CLK-7 | Resolved (R15, R16, R57) | The test-UI clocks and the CTC window's clock go. The Train Controller's gains hand-over moves to simulation time; its announcement lockout and the Train Model's ads and popups stay on wall-clock time. | module owners |
 | G-CLK-8 | Resolved design; Train Model code inspected 2026-10-20 | Train Model now displays harness time and checks independent per-train time every 15 harness ticks, including rejections, using fixed creation epochs and 1e-6 s tolerance. The harness window shows the 24-hour time (section 5.1), and the Track Model window the harness's time of day (`3e7c15f`, merged in Phase 2). Train Controller display adoption remains separate integration work. | module owners |
 | G-CLK-9 | Resolved (R64) | The `SystemClock` code stays in `utils/system_clock.py`, and the harness owns the instance. | D017 owner Landis |
@@ -2008,7 +2110,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-LIFE-1 | Resolved (R18, R44) | Layout files load by default at startup; PLC programs and wayside databases are loaded by hand. Phase 5 supplies marked Red test copies for owner approval; manual load/readiness remains (section 5.6). | unassigned |
-| G-LIFE-2 | Resolved (R64), built | The harness starts every module at once and allows Run once each has said it is ready ([P] D005). Seven stubs are ready in about 0.25 s (section 5.1), the Phase 1 system, two of them with windows, in about 0.5 s (section 5.2), the Phase 2 system, three with windows, in about 1 s (section 5.3), the Phase 3 system, four with windows, in 1.0 to 1.4 s (section 5.4), and the Phase 4 system, five with windows, in 1.0 to 1.4 s (section 5.5). The harness window shows startup progress and names the modules a startup timeout catches (section 5.1). Left: the modules still stubs, with their windows and files, against 20 s. | unassigned |
+| G-LIFE-2 | Seven-process simulated startup measured | Final samples have every module ready in 0.50–0.61 s against the 20 s target (section 5.7). Both hardware variants use explicit simulated Pi agents. Physical Pi power-on, USB discovery and cold-boot timing remain untested. | module owners |
 | G-LIFE-3 | Resolved (R64), built | On exit the harness tells every module to quit, and ends any that do not ([P] D005). Built: `QUIT`, up to 5 s, then kill (section 5.1). | unassigned |
 | G-LIFE-4 | Partly (R19, R64, R80) | A rejected tick is skipped, the run continues, and the harness shows it in its window and writes it to the event log. The team will return to what can break. Built: the skip, the log, and the harness window, which lists every event with faults labelled (section 5.1). Phase 4 fixed seven faults found in validation: a reply with a non-finite number, invalid Unicode or an over-long line, a reply for the wrong tick, inputs that cannot be sent, and two in the log and the window. Each is now logged and its module named, rather than stalling the clock or closing the link (section 5.5). | unassigned |
 | G-LIFE-5 | Resolved (R12, R76) | Every test UI goes at integration except the Track Controller HW test UI, which stays and is never started by the harness ([P] D005; pending D018). | D010 owner Kevin Schillinger |
@@ -2018,20 +2120,20 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
 | G-RUN-1 | Resolved (R4) | Process model 2. The work it creates is G-RUN-6, -7 and -8. | none |
-| G-RUN-2 | Resolved (R29, R64), built | One executable: no arguments starts the harness, `--module <name>` a module, and the harness re-runs it once per module ([P] `files-and-paths`). A frozen one-folder build on Linux works (section 5.1); Kevin Schillinger's carries the harness window's QML and logo, Phase 2's the Track Model's window and layouts (section 5.3), Phase 3's the Track Controller SW's package and window (section 5.4), and Phase 4's the CTC Office's package and window (section 5.5). Left: try the frozen build on Windows early; the course deck's per-subsystem installables. | unassigned |
+| G-RUN-2 | All-module Linux build smoked; Windows deferred | The one-folder build includes every module, HW data and the Pi source manifest. A final external-directory 20 s simulated-Pi smoke records matching HELLO hashes, both lines ready, G1/R1 added, seven clean module exits and HARNESS_STOPPED (section 5.7). This does not establish frozen station stops or physical USB delivery. Windows packaging remains deferred by Kevin. | unassigned |
 | G-RUN-3 | Resolved (R30, R81) | Everything runs on one computer, with the Pis as USB peripherals of it ([P] D027). | unassigned |
 | G-RUN-4 | Resolved (R80) | The event logger stays: the harness writes one CSV file ([P] `files-and-paths`, D005). This reverses R13, so no conflict with the SRS remains. | files-and-paths owner Kevin |
 | G-RUN-5 | Resolved (R31) | PySide6 6.11 or later. Left: `TrackCtrlSW/README.md` still installs 6.8. | toolchain owner Kevin |
 | G-RUN-6 | Resolved (R64), built | Newline-delimited JSON, each message with a request ID and the tick number; one driver per module ([P] D005). Built in `utils/harness_protocol.py` (section 5.1). | unassigned |
-| G-RUN-7 | Resolved (R64), built for five modules | Each module says when it is ready; windows hide rather than close; only the harness ends a module ([P] D005). The Train Model, the Train Controller, the Track Model, the Track Controller SW and the CTC Office do (`utils/module_window.py`, sections 5.2 to 5.5). Closing the harness window asks first, and **Show window** sends `SHOW`, which reopens a module's main windows (section 5.1). Left: each module's side as it joins. | unassigned |
+| G-RUN-7 | Seven module processes integrated | Both HW hosts now join the existing module lifecycle alongside the five earlier processes. The final frozen simulated-Pi smoke records all seven MODULE_EXITED events at code 0 followed by HARNESS_STOPPED; source station scenarios also pass. Window appearance was not visually inspected. Physical USB lifecycle/fault checks remain pending (section 5.7). | module owners |
 | G-RUN-8 | Resolved (R64), built | Window changes show up in the module's next outputs; pause is read from the CTC Office's state ([P] D005). Built: the harness reads the CTC Office's `STATE` (section 5.1), and the CTC Office's process sends it on every press of Run, Pause or the speed (section 5.5). | unassigned |
 
 ### 6.5 Hardware variants and variant selection
 
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-HW-1 | Resolved (R5, R32, R42, R81) | Pis on USB serial in the standard communications class, driven by Windows' built-in driver, found by USB identity; the HW variant's host process relays the messages; one Pi per hardware module ([P] D021, D027). Phase 5 builds the relay and Pi agent against simulated byte streams/processes. Real USB round-trip measurement remains step 10 (section 5.6). | unassigned |
-| G-HW-2 | Resolved (R5, R40, R77) | Track Controller HW on Red and SW on Green, the HW variant's line set by the databases it is given; Train Controller by the train's line ([P] D021). The Blue Line is out of scope ([P] D023). Phase 5 supplies marked integration test Red databases and PLCs for Braden to replace or approve (section 5.6). The SW variant's process loads Green only (section 5.4); its standalone window still loads both lines. | D021 owner Kevin |
+| G-HW-1 | Shared plumbing implemented; real USB pending | Shared common.hw_link agent/transports, provisioning bundles, HELLO source manifests, echo/replay probes and existing-test fault selectors are implemented. Process and Linux pty checks, twelve short echo cases and four recorded 658-STEP replays provide software evidence only (section 5.7 and Pi bring-up checks). Owners still provision real Pi 5 boards; USB buffering, power loss, cold boot and actual throughput are unverified. | module owners |
+| G-HW-2 | Red/HW and Green/SW integrated; Red copies await review | Red uses HW Track/Train Controller variants with explicit simulated Pi transport; Green uses SW. All seven Red test switches use the approved Green-style routing pattern and shared read-only neighbor closure inputs. Red outbound and return via 66 → 52 → 9 pass without automatic reversal. Braden must review or replace the marked test copies; Red-9 geometry remains an owner assumption. Physical Pi execution is pending (section 5.7). | Braden; Track Model owner; Kevin |
 | G-HW-3 | Resolved (R32, R75) | The interfaces are to be identical, and Harry Tye owns the Track Controller contract shard ([P]). Both variants already name blocks to the CTC Office by line and number. | Harry Tye |
 
 ### 6.6 Truth and process
