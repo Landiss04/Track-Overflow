@@ -234,18 +234,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
 
   **Train Controller:**
 
-  ```mermaid
-  flowchart LR
-    Driver([Train driver]) -->|speed, brakes, e-brake, mode,<br/>doors, lights, temperature,<br/>announcement repeat| TC[Train Controller<br/>one controller per train]
-    Engineer([Engineer]) -->|Kp, Ki once| TC
-    TC -->|power, brakes, doors, lights,<br/>temp setpoint, announcement| H[Central harness<br/>clock: dt, time_s]
-    H -->|step_all each tick| TC
-    H -->|inputs per train| TC
-    H -->|ControllerCommands| TM[Train Model]
-    TM -->|actual speed, brake states,<br/>doors, lights, cabin temp,<br/>Track Signal, beacon| H
-    H ~~~ TK[Track Model]
-    TK -->|signal aspect ahead| TC
-  ```
+  ![System architecture](sdd-figures/train-controller/01-system-architecture.png)
 
   In the simulation the harness maps every edge (D005). The signal
   aspect ahead comes straight from the Track Model and bypasses the
@@ -289,19 +278,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   | Views             | `ui_parts/*.qml`                        | Yes        | Console and bench screens, built on the shared `ui/` library                                         |
 
 
-  ```mermaid
-  flowchart TB
-    subgraph Core[Qt-free core]
-      F[TrainControllerFleet] --> C[ControllerCore x N]
-      F --> I[read_inputs]
-      C --> S[State]
-      C --> O[TrainModelCommands]
-    end
-    B[ConsoleBackend / QML console] -->|operator actions| C
-    B -->|reads snapshot| S
-    Bench[SimTrain bench simulation] -->|inputs, through step_all| F
-    H[Central harness] -->|inputs, through step_all| F
-  ```
+  ![Software architecture](sdd-figures/train-controller/02-software-architecture.png)
 
   Either the harness or the bench drives the fleet, never both, and the
   controller cannot tell which (M0).
@@ -332,54 +309,17 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
 
   **Train Controller:**
 
-  ```mermaid
-  classDiagram
-    class TrainControllerFleet {
-      +add(train_id: str, line: str) ControllerCore
-      +remove(train_id: str)
-      +get(train_id: str) ControllerCore
-      +ids() list~str~
-      +step_all(dt: float, inputs_by_id: dict, time_s: float) dict
-    }
-    class ControllerCore {
-      +State state
-      +armed: bool
-      +step()
-      +apply_staged(staged: dict)
-      +detect_failures()
-      +respond_to_failures()
-      +enforce_safety()
-      +engage_emergency()
-      +release_emergency() bool
-      +set_target_mps(mps: float)
-      +may_open(side: str) bool
-      +command_door(side: str, open_: bool) bool
-      +command_lights(interior: bool, exterior: bool)
-      +repeat_announcement() bool
-      +clear_failure(name: str)
-      +commands() TrainModelCommands
-    }
-    class State
-    class TrainModelCommands {
-      <<frozen dataclass>>
-      +power_w: float
-      +brake_command: bool[2]
-      +door_command: tuple
-      +light_command: tuple
-      +temperature_setpoint_c: float
-      +announcement: str
-    }
-    class TrainControllerError
-    class InvalidInputError
-    class DuplicateTrainError
-    class UnknownTrainError
-    TrainControllerFleet "1" o-- "*" ControllerCore
-    ControllerCore *-- State
-    ControllerCore ..> TrainModelCommands : produces
-    TrainControllerError <|-- InvalidInputError
-    TrainControllerError <|-- DuplicateTrainError
-    TrainControllerError <|-- UnknownTrainError
-  ```
+  Controller core:
+
+  ![Class diagram: controller core](sdd-figures/train-controller/04-class-controller-core.png)
+
+  State and exceptions:
+
+  ![Class diagram: State and exceptions](sdd-figures/train-controller/05-class-state-exceptions.png)
+
+  Console:
+
+  ![Class diagram: console](sdd-figures/train-controller/06-class-console.png)
 
   Boundary types this module **produces**: `TrainModelCommands` (one per
   train per tick). Boundary type it **consumes**: a plain `dict` per
@@ -624,36 +564,20 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   Track Model are the CTC Office's and Track Controller's, to be
   detailed in their blocks at the merge.
 
-  ```mermaid
-  sequenceDiagram
-    participant CTC as CTC Office
-    participant TKC as Track Controller
-    participant TK as Track Model
-    participant TM as Train Model
-    participant H as Central harness
-    participant TC as Train Controller
-    CTC->>TKC: suggested speed, suggested authority (blocks)
-    TKC->>TK: commanded speed, authority (Track Signal)
-    TK->>TM: TrackSignal(commanded_speed_mps, authority_blocks)
-    TM->>H: ControllerOutputs (Track Signal passed through)
-    H->>TC: step_all(0.1, {id: inputs}, time_s)
-    TC->>TC: read_inputs: validate all trains
-    TC->>TC: target = min(setpoint or commanded, commanded)<br/>authority 0 → target 0, service brake
-    TC->>TC: PI law → power, brake if over target
-    TC-->>H: {id: TrainModelCommands}
-    H->>TM: ControllerCommands
-    Note over TM,TK: Train enters a new block
-    TM->>TK: block change
-    TK->>TM: next block's Track Signal (new count)
-    Note over TC: The controller never counts authority itself (M16)
-  ```
-
   When `authority_blocks` reaches 3 the controller sends "arriving
   soon" (also on a rise to 3); at 0 the target is 0 and the service brake
   is applied while the train moves, as a fail safe (M17). Stopping at the right block depends on the wayside
   lowering the commanded speed in time. If commanded speed and
   authority both drop to 0 from 2 or more blocks in one update, the
   controller infers a signal pickup failure (Appendix B).
+
+  **One 0.1 s tick under the harness.** Inputs come from the Train
+  Model, commands go back to it (D005). All or nothing: any error
+  before the loop leaves every train unchanged. The automatic
+  behaviours (regulating speed, the authority stop, failure detection,
+  the station stop) run inside `step()`.
+
+  ![Sequence diagram: one 0.1 s tick](sdd-figures/train-controller/07-seq-00-one-tick.png)
 
 ---
 
@@ -929,316 +853,189 @@ redundancy too is undecided.
 ### Appendix E — Train Controller: use cases
 
 Senders on the left, receivers on the right; the use cases read top to
-bottom. Cab inputs flow to the controller's commands, which the Train
-Model receives; the Train Model and Track Model send the readings.
+bottom. Automatic behaviours (regulating speed, the authority stop,
+failure detection, the station stop) have no bubble, because no user
+starts them; they sit inside Send power command and Send brake
+commands, and run in the per-tick sequence in 005-interaction. Vital
+use cases are in orange.
 
-```mermaid
-flowchart LR
-  Drv[Driver]
-  Eng[Engineer]
-  Pas[Passenger]
-  subgraph SYS[HW Train Controller]
-    A1([Open or close doors])
-    A2([Turn lights on or off])
-    A3([Set cabin temperature])
-    A4([Announce station])
-    A5(["Set target speed (Manual)"])
-    A6([Switch Manual / Automatic])
-    A7([Set Kp and Ki])
-    A8([Apply service brake])
-    A9([Engage e-brake]):::vital
-    A10([Release e-brake]):::vital
-    M1([Send power command])
-    M2([Send brake commands]):::vital
-    S1([Send actual speed])
-    S2([Send Track Signal])
-    S3([Send beacon])
-    S4([Send Brake State])
-    S5([Send door state])
-    S6([Send light state])
-    S7([Send cabin temperature])
-    S8([Send signal aspect ahead])
-    C1([Receive door command])
-    C2([Receive light command])
-    C3([Receive temperature setpoint])
-    C4([Receive announcement])
-    C5([Receive power command])
-    C6([Receive brake commands])
-  end
-  TM[Train Model]
-  TK[Track Model]
-  Drv --- A1 & A2 & A3 & A4 & A5 & A6 & A8 & A9 & A10
-  Eng --- A7
-  Pas --- A9
-  A1 --> C1
-  A2 --> C2
-  A3 --> C3
-  A4 --> C4
-  A5 & A6 & A7 --> M1 --> C5
-  A8 & A9 & A10 --> M2 --> C6
-  C1 & C2 & C3 & C4 & C5 & C6 --- TM
-  S1 & S2 & S3 & S4 & S5 & S6 & S7 --- TM
-  S8 --- TK
-  A10 ~~~ S1 & S2 & S3 & S4 & S5 & S6 & S7 & S8
-  classDef vital fill:#fbe3d4,stroke:#b5541c
-```
+![Use case diagram](sdd-figures/train-controller/03-use-case.png)
 
-Orange: vital. Signal aspect ahead stands in for the light seen through
-the front window. Only the driver releases the e-brake (M2).
+Signal aspect ahead stands in for the light seen through the front
+window. Only the driver releases the e-brake (M2).
 
-- The console shows the signal aspect ahead; the controller does not
-  act on it (M20).
-- Regulating speed, stopping when authority runs out and detecting
-  failures sit inside Send power command (UC11) and Send brake commands
-  (UC12). The "Send …" readings and "Receive …" use cases have no
-  description of their own; their data is in 004-interface.
+Each description below is followed by the sequence diagram of the use
+case a user starts. Each command reaches the Train Model on the next
+tick, when the harness steps the fleet and maps its commands (D005).
 
-#### UC1 — Open or close doors
-
-|                     |                                                                                                                                                                                                                                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| User story          | As a driver, I want to open and close the doors myself in Manual; in Automatic, the train opens the platform-side doors at a station and closes them before it departs.                                                                                                                          |
-| SRS                 | FUNC-034, FUNC-036                                                                                                                                                                                                                                                                               |
-| Acceptance criteria | In Manual, each press sends the door command, within the rules below. In Automatic, given a station beacon and the authority ending at the station, the train opens the platform side when stopped, closes the doors when the Track Signal resumes, and moves off once both doors report closed. |
-| Actors              | Train driver; Train Model (receives the door command)                                                                                                                                                                                                                                            |
-| Preconditions       | Manual: train commissioned; driver signed in. Automatic: a station beacon heard.                                                                                                                                                                                                                 |
-| Postconditions      | The door command is sent to the Train Model on the next tick.                                                                                                                                                                                                                                    |
-| Normal flow         | Manual: either side at a stand, only the platform side at a station (M6). Automatic: 1. A beacon names the station and platform side. 2. Authority 0 and standing: platform-side doors open, train held. 3. The Track Signal resumes: doors close. 4. Both doors report closed: hold released.   |
-| Exceptional flow    | Door tiles are greyed while moving or on the wrong side at a station. If the doors never report closed, the train waits. The dwell is the Train Model's.                                                                                                                                         |
-
-```mermaid
-sequenceDiagram
-  participant TM as Train Model
-  participant H as Central harness
-  participant C as ControllerCore
-  TM-->>H: beacon (station, side, underground)
-  H->>C: beacon keys, through step_all
-  H->>C: authority 3
-  C-->>H: announcement: arriving soon
-  H->>C: authority 0, train standing
-  C-->>H: arrived, platform-side door open, power 0
-  H->>C: Track Signal resumes
-  C-->>H: doors closed command
-  TM-->>H: door state both closed
-  H->>C: door_state closed
-  C-->>H: departing, power from the PI law
-```
-
-#### UC2 — Turn lights on or off
-
-|                     |                                                                                                                                        |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| User story          | As a driver, I want to turn the cabin lights on or off myself in Manual.                                                               |
-| SRS                 | FUNC-033                                                                                                                               |
-| Acceptance criteria | Given Manual mode, each press sends the light command.                                                                                 |
-| Actors              | Train driver; Train Model (receives the light command)                                                                                 |
-| Preconditions       | Train commissioned; driver signed in; Manual mode.                                                                                     |
-| Postconditions      | The light command is sent to the Train Model on the next tick.                                                                         |
-| Normal flow         | Lights: on or off at any time; the automatic rules act only on their transitions (M8).                                                 |
-| Exceptional flow    | In Automatic the console is locked except the emergency brake and the mode switch; the lights follow the automatic rules (Appendix C). |
-
-#### UC3 — Set cabin temperature
-
-|                     |                                                                                    |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| User story          | As a driver, I want to set the cabin temperature myself in Manual.                 |
-| SRS                 | FUNC-027                                                                           |
-| Acceptance criteria | Given Manual mode, the setpoint is sent to the Train Model.                        |
-| Actors              | Train driver; Train Model (receives the temperature setpoint)                      |
-| Preconditions       | Train commissioned; driver signed in; Manual mode.                                 |
-| Postconditions      | The setpoint is sent to the Train Model on the next tick.                          |
-| Normal flow         | Temperature: 60–80 °F, sent in °C.                                              |
-| Exceptional flow    | In Automatic the console is locked except the emergency brake and the mode switch. |
-
-#### UC4 — Announce station
-
-|                     |                                                                                                                                                                                                                        |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User story          | As a passenger, I want stations announced; as a driver, I want to repeat the last announcement in Manual.                                                                                                              |
-| SRS                 | FUNC-035                                                                                                                                                                                                               |
-| Acceptance criteria | Given a station beacon and the authority ending at the station, the train announces arriving, arrived and departing. In Manual, a press repeats the last automatic announcement.                                       |
-| Actors              | Train driver; Train Model (receives the announcement)                                                                                                                                                                  |
-| Preconditions       | Automatic announcements: a station beacon heard (both modes). Repeat: driver signed in; Manual mode.                                                                                                                   |
-| Postconditions      | The announcement is sent to the Train Model, held 5 s.                                                                                                                                                                 |
-| Normal flow         | 1. At 3 blocks: "arriving soon". 2. Authority 0 and standing: "has arrived at *station*". 3. Both doors report closed: "is departing from *station*". Announcement: repeats the last automatic one, held 5 s (M7). |
-| Exceptional flow    | The announcement button is greyed while one plays and before any was sent.                                                                                                                                             |
-
-#### UC5 — Set target speed (Manual)
-
-|                     |                                                                                                                                                                                                                                                                                     |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User story          | As a driver, I want to set the train's speed on the dial, so that I can drive it by hand.                                                                                                                                                                                           |
-| SRS                 | FUNC-025, FUNC-031                                                                                                                                                                                                                                                                  |
-| Acceptance criteria | Given Manual mode, when the driver sets a speed, then the train regulates to it, never above the commanded speed.                                                                                                                                                                   |
-| Actors              | Train driver                                                                                                                                                                                                                                                                        |
-| Preconditions       | Train commissioned; driver signed in; Manual mode.                                                                                                                                                                                                                                  |
-| Postconditions      | The target is the setpoint, capped at the commanded speed.                                                                                                                                                                                                                          |
-| Normal flow         | 1. The driver turns the dial (1 mph steps). 2. The console converts mph to m/s and sets the target. 3. Each tick the controller caps the target at the commanded speed and computes power, or brakes if over the target. 4. The Train Model reports the new speed on the next tick. |
-| Exceptional flow    | In Automatic the dial is disabled; before commissioning there is no driver (M9). When the commanded speed drops below the setpoint, the setpoint drops with it (M1). A latched failure keeps the target at 0.                                                                       |
-
-```mermaid
-sequenceDiagram
-  actor D as Driver
-  participant B as ConsoleBackend
-  participant C as ControllerCore
-  participant H as Central harness
-  participant TM as Train Model
-  D->>B: set_target_mph(mph)
-  B->>C: set_target_mps(mph to m/s)
-  H->>C: step_all, with commanded and actual speed
-  C->>C: target = min(target, commanded), PI law
-  C-->>H: power, or brake command [off, on] if over target
-  H->>TM: ControllerCommands
-  TM-->>H: actual speed, next tick
-```
-
-#### UC6 — Switch Manual / Automatic
-
-|                     |                                                                                                                                                                |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User story          | As a driver, I want to switch between Manual and Automatic, also with a failure latched, to try the train.                                                     |
-| SRS                 | FUNC-025, FUNC-026                                                                                                                                             |
-| Acceptance criteria | Given a signed-in operator, the mode changes; a latched failure still holds the target at 0.                                                                   |
-| Actors              | Train driver                                                                                                                                                   |
-| Preconditions       | Someone signed in, a train selected.                                                                                                                           |
-| Postconditions      | The train is in the chosen mode.                                                                                                                               |
-| Normal flow         | 1. The driver picks Manual or Automatic. 2. The console sets the mode. 3. The next tick regulates to the setpoint (Manual) or the commanded speed (Automatic). |
-| Exceptional flow    | With a failure latched the target stays 0. After a Manual release of the emergency brake, switching to Automatic leaves it off (#34).                          |
-
-#### UC7 — Set Kp and Ki
-
-|                     |                                                                                                                                                                                                                                                                   |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User story          | As an engineer, I want to set Kp and Ki once for a new train, so that it can apply power.                                                                                                                                                                         |
-| SRS                 | FUNC-030                                                                                                                                                                                                                                                          |
-| Acceptance criteria | Given an uncommissioned train, when the engineer sets Kp and Ki, then the gains are fixed for the train's run, the train may apply power, and the console hands over to the driver.                                                                               |
-| Actors              | Engineer                                                                                                                                                                                                                                                          |
-| Preconditions       | The train is in service and not commissioned; it commands 0 W. The engineer is signed in with it selected.                                                                                                                                                        |
-| Postconditions      | The gains are fixed; the train applies power by the PI law; the driver may sign in.                                                                                                                                                                               |
-| Normal flow         | 1. The engineer enters Kp and Ki in the pop-up (defaults offered, never applied on their own). 2. The console sets the gains, clears the integral and marks the train commissioned. 3. It confirms the values. 4. After 1.5 s it hands the console to the driver. |
-| Exceptional flow    | Gains that are not numbers are refused ("Kp and Ki must be numbers."). The Engineer role is refused on a train already commissioned.                                                                                                                              |
-
-```mermaid
-sequenceDiagram
-  actor E as Engineer
-  participant B as ConsoleBackend
-  participant C as ControllerCore
-  participant H as Central harness
-  E->>B: commission_gains(kp, ki)
-  B->>C: kp, ki set, integral 0, armed
-  B-->>E: Set to Kp, Ki. Fixed for this run.
-  Note over B: 1.5 s later the console passes to the driver
-  H->>C: next tick, through step_all
-  C-->>H: power from the PI law
-```
-
-#### UC8 — Apply service brake
-
-|                     |                                                                                                                                                                       |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User story          | As a driver, I want to slow the train with the service brake.                                                                                                         |
-| SRS                 | FUNC-029                                                                                                                                                              |
-| Acceptance criteria | Given a moving train, when the driver applies the service brake, traction is cut and the brake is commanded.                                                          |
-| Actors              | Train driver                                                                                                                                                          |
-| Preconditions       | Driver signed in; Manual mode.                                                                                                                                        |
-| Postconditions      | Brake commanded and power 0.                                                                                                                                          |
-| Normal flow         | 1. The driver applies the service brake. 2. The controller commands it on the driver's request; power is 0 while it is commanded and the integral holds (Appendix A). |
-| Exceptional flow    | In Automatic the console is locked except the emergency brake and the mode switch.                                                                                    |
-
-#### UC9 — Engage e-brake (vital)
+#### Use case 1 — Set target speed (Manual)
 
 | | |
 |---|---|
-| User story | As a driver, I want to stop the train with the emergency brake. As a passenger, I want to stop the train in an emergency. |
-| SRS | FUNC-028, FUNC-047 |
-| Acceptance criteria | Given a moving train, when the driver applies the emergency brake, traction is cut and the brake is commanded; the emergency brake latches. Given a passenger pull in the Train Model, the controller latches its own emergency brake and cuts traction. |
-| Actors | Train driver; Passenger, through the Train Model |
-| Preconditions | Driver: signed in, any mode. Passenger: train in service. |
-| Postconditions | Brake commanded and power 0; only the driver releases it (UC10). |
-| Normal flow (driver) | 1. The driver presses the emergency brake. 2. The controller commands it and sets power to 0. 3. The Train Model reports it engaged. |
-| Normal flow (passenger) | 1. The Train Model reports the emergency brake engaged while the controller is not commanding it. 2. The controller reads that as a pull and latches its emergency brake. 3. Power is 0. |
-| Exceptional flow | Engagement needs no confirmation. A pull reported within a tick or two of the driver's release, before the reported state has gone false, is not seen. |
+| System | HW Train Controller |
+| Use case | Set target speed (Manual) |
+| Actors | Driver |
+| Description | • The driver turns the speed dial in 1 mph steps; a press in the bottom gap reads 0 (M14).<br>• Accepted only when the driver is signed in, the train is in Manual, authority is above 0 and no failure is latched.<br>• The target is capped at the commanded speed, the only cap; when the commanded speed drops, the target drops with it (M1).<br>• Each tick the PI law drives power toward the target. |
+| Data | Input: dial value (mph)<br>Output: target speed; power command (W) each tick |
+| Stimulus | The driver moves the speed dial. |
+| Response | The train accelerates or slows to the target; the dial shows the new setpoint. |
 
-```mermaid
-sequenceDiagram
-  actor D as Driver
-  participant B as ConsoleBackend
-  participant C as ControllerCore
-  participant H as Central harness
-  participant TM as Train Model
-  D->>B: toggle_emergency_brake
-  B->>C: engage_emergency
-  C-->>H: brake command [on, off], power 0
-  H->>TM: ControllerCommands
-  TM-->>H: emergency brake engaged, speed falling
-```
+![Sequence diagram: Set target speed (Manual)](sdd-figures/train-controller/07-seq-01-set-target-speed.png)
 
-#### UC10 — Release e-brake (vital)
+#### Use case 2 — Switch Manual / Automatic
 
 | | |
 |---|---|
-| User story | As a driver, I want to release the emergency brake once stopped. |
-| SRS | FUNC-028 |
-| Acceptance criteria | The emergency brake is released only by the driver, only at a stand (M2). |
-| Actors | Train driver |
-| Preconditions | Emergency brake engaged; driver signed in. |
-| Postconditions | After a release, the train may move again. |
-| Normal flow | 1. Once the train stands (< 0.1 m/s), the driver presses the emergency brake again. 2. The controller releases it. |
-| Exceptional flow | Release while moving is refused ("Cannot release: the train is still moving."). With a failure latched, release is refused in Automatic ("Release it in Manual: …") and allowed in Manual. How the Train Model clears its own latch after the release is open (#25). |
+| System | HW Train Controller |
+| Use case | Switch Manual / Automatic |
+| Actors | Driver |
+| Description | • The signed-in operator picks Manual or Automatic for the selected train.<br>• Allowed with a failure latched, so the driver can reach Manual to try the train; the failure still holds the target at 0 (M3).<br>• Automatic: the target follows the commanded speed, and the cab controls lock except the emergency brake and the mode switch.<br>• Manual: the driver's own target applies (use case 1). |
+| Data | Input: mode selection<br>Output: control mode; which cab controls are enabled |
+| Stimulus | The driver selects a mode. |
+| Response | The mode changes, and controls that are no longer available are disabled. |
 
-```mermaid
-sequenceDiagram
-  actor D as Driver
-  participant B as ConsoleBackend
-  participant C as ControllerCore
-  D->>B: toggle_emergency_brake
-  B->>C: release_emergency
-  alt train stands, no failure or Manual
-    C-->>B: released
-  else moving, or failure in Automatic
-    C-->>B: refused, reason shown
-  end
-```
+![Sequence diagram: Switch Manual / Automatic](sdd-figures/train-controller/07-seq-02-switch-mode.png)
 
-#### UC11 — Send power command
+#### Use case 3 — Apply service brake
 
-|                     |                                                                                                                                                                                                                       |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User story          | As the wayside, I want the train to run at the commanded speed and stop where its authority ends.                                                                                                                     |
-| SRS                 | FUNC-025, FUNC-026, FUNC-032, FUNC-037.1                                                                                                                                                                              |
-| Acceptance criteria | Given a commanded speed and authority, the train regulates to the commanded speed (Automatic) or the driver's setpoint capped at it (Manual), and at 0 blocks targets 0.                                              |
-| Actors              | Train Model (receives the power command); fed by Set target speed, Switch Manual / Automatic and Set Kp and Ki                                                                                                        |
-| Preconditions       | Train commissioned; the harness steps it every tick.                                                                                                                                                                  |
-| Postconditions      | The train runs at its target or stands at authority 0.                                                                                                                                                                |
-| Normal flow         | Each tick: target from the mode (Appendix A); `P = Kp·e + Ki·∫e dt`, clamped 0–480 kW. See 005-interaction.                                                                                                     |
-| Exceptional flow    | Uncommissioned: power 0 until the engineer sets Kp, Ki (M9). Power 0 while either brake is commanded. A latched failure keeps the target at 0. A tick with a missing or bad input is refused for every train (§4.6). |
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Apply service brake |
+| Actors | Driver |
+| Description | • In Manual, the driver toggles a service brake request.<br>• Also allowed under a brake failure, so the driver can try the brake (M4).<br>• While it is applied, traction is cut to 0 and the integrator holds.<br>• The Train Model reports back whether the brake is actually applied (Brake State). |
+| Data | Input: service brake press<br>Output: brake command [emergency, service] with service on; power 0 W |
+| Stimulus | The driver presses the service brake. |
+| Response | The train slows at the service rate (1.2 m/s² on the data sheet) until the driver releases it. |
 
-#### UC12 — Send brake commands (vital)
+![Sequence diagram: Apply service brake](sdd-figures/train-controller/07-seq-03-service-brake.png)
 
-|                             |                                                                                                                                                                                                                                                                                                                                                |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User story                  | As the train's controller, I want to brake when over the target, at authority 0, and on engine, brake and signal pickup failures detected from what the Train Model returns, so that the train stops safely.                                                                                                                                   |
-| SRS                         | FUNC-028, FUNC-029, FUNC-037, FUNC-038                                                                                                                                                                                                                                                                                                         |
-| Acceptance criteria         | The service brake is commanded over the target, on the driver's request and at authority 0 while moving. Given a failure, the controller detects it, latches the emergency brake once and holds the target at 0 in either mode.                                                                                                                |
-| Actors                      | Train Model (its returned signals; receives the brake commands); fed by Apply service brake and Engage or release e-brake                                                                                                                                                                                                                      |
-| Preconditions               | Train in service.                                                                                                                                                                                                                                                                                                                              |
-| Postconditions              | Brake command [emergency, service] sent each tick; on a failure: failure shown, emergency brake latched, target 0.                                                                                                                                                                                                                             |
-| Normal flow (brake failure) | 1. The controller commands the service brake with the emergency brake off. 2. On the next tick the Train Model still reports the service brake off. 3. The controller concludes a brake failure, latches the emergency brake and shows "Brake fault".                                                                                          |
-| Exceptional flow            | A brake failure is seen only when the service brake is asked for. Commanded speed and authority both dropping to 0 from 2 or more blocks: signal pickup failure; while one is detected, the console shows the commanded speed and authority as "--", not 0. The engine rule false-trips on grades (#28). Resolution is not yet detected (#23). |
+#### Use case 4 — Doors, lights, temperature, announce
 
-```mermaid
-sequenceDiagram
-  participant H as Central harness
-  participant C as ControllerCore
-  participant TM as Train Model
-  C-->>H: tick n, brake command [off, on]
-  H->>TM: ControllerCommands
-  TM-->>H: service brake state off
-  H->>C: tick n+1, through step_all
-  C->>C: detect_failures: brake failure
-  C->>C: respond_to_failures: e-brake latched, target 0
-  C-->>H: brake command [on, on], power 0
-```
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Doors, lights, temperature, announce |
+| Actors | Driver (Manual only) |
+| Description | • Doors open only at a stand (under 0.1 m/s), and at a station only on the platform side from the beacon; closing is always allowed (M6).<br>• Interior and exterior lights toggle independently.<br>• Cabin temperature setpoint from 60 to 80 °F, sent to the Train Model in °C.<br>• Announce repeats the last automatic announcement, held 5 s of system time; the Train Model plays it (M7). |
+| Data | Input: tile presses, thermostat (°F)<br>Output: door, light, temperature setpoint and announcement commands |
+| Stimulus | The driver presses a tile or sets the thermostat. |
+| Response | The command goes out; tiles show the state the Train Model reports, and a tile that is not available now is greyed out. |
+
+Open or close doors:
+
+![Sequence diagram: Open or close doors](sdd-figures/train-controller/07-seq-04-doors.png)
+
+Turn lights on or off:
+
+![Sequence diagram: Turn lights on or off](sdd-figures/train-controller/07-seq-05-lights.png)
+
+Set cabin temperature:
+
+![Sequence diagram: Set cabin temperature](sdd-figures/train-controller/07-seq-06-cabin-temperature.png)
+
+Announce station:
+
+![Sequence diagram: Announce station](sdd-figures/train-controller/07-seq-07-announce.png)
+
+#### Use case 5 — Engage the emergency brake
+
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Engage the emergency brake |
+| Actors | Driver; Passenger (through the Train Model) |
+| Description | • The driver engages it in any mode; it acts at once and latches.<br>• A passenger pull arrives as Brake State from the Train Model and latches it too.<br>• While it is applied, traction is cut to 0.<br>• Only the driver can release it (use case 6, M2). |
+| Data | Input: emergency brake button; Brake State [emergency]<br>Output: brake command [emergency, service] with emergency on; power 0 W |
+| Stimulus | The driver presses the emergency brake, or a passenger pulls it. |
+| Response | The train stops on the emergency brake (2.73 m/s² on the data sheet); the console shows it engaged. |
+
+![Sequence diagram: Engage e-brake](sdd-figures/train-controller/07-seq-09-engage-ebrake.png)
+
+#### Use case 6 — Release the emergency brake
+
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Release the emergency brake |
+| Actors | Driver |
+| Description | • Only the driver releases it (M2); passengers and the engineer cannot.<br>• Only below 0.1 m/s: with no failure latched, in either mode; with one latched, only in Manual, so the driver can try the train (M2, M3).<br>• A Train Model report of off never releases it.<br>• A refused release says why: still moving, or which failure is active. |
+| Data | Input: emergency brake button<br>Output: brake command with emergency off; brake message |
+| Stimulus | The driver presses the emergency brake while it is engaged. |
+| Response | The brake releases, or the console says why it cannot. |
+
+![Sequence diagram: Release e-brake](sdd-figures/train-controller/07-seq-10-release-ebrake.png)
+
+#### Use case 7 — Commission Kp and Ki
+
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Commission Kp and Ki |
+| Actors | Engineer |
+| Description | • The engineer signs in on the selected train; refused if it is already commissioned.<br>• Kp and Ki go in the gains pop-up (defaults 400,000 W per m/s and 8,000 W per m); they must be numbers, and negatives become 0.<br>• The gains are fixed for the run, and the console hands back to the driver after 1.5 s.<br>• Until then the train commands 0 W, but its brakes and safety path still work. |
+| Data | Input: Kp, Ki<br>Output: a commissioned train; a confirmation message |
+| Stimulus | The engineer commits the gains. |
+| Response | The pop-up confirms "Set to Kp …, Ki …. Fixed for this run." and the train can now be driven. |
+
+![Sequence diagram: Set Kp and Ki](sdd-figures/train-controller/07-seq-08-set-gains.png)
+
+#### Use case 8 — Regulate to commanded speed (Automatic)
+
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Regulate to commanded speed (Automatic) |
+| Actors | Train Model |
+| Description | • The target is the commanded speed, the only cap (M1).<br>• Power = Kp × error + Ki × ∫error, limited to 0–480 kW, with the integrator held at the limits.<br>• The service brake applies when the train is more than 0.05 m/s over target, or the target is 0 while it moves.<br>• At a new station beacon: announce, stop, open the platform side, hold until the Track Signal resumes, close the doors, then depart (M6, M7). |
+| Data | Input: commanded speed, actual speed, beacon, door state<br>Output: power, service brake, door and announcement commands |
+| Stimulus | Each tick while the train is in Automatic. |
+| Response | The train holds the commanded speed; a 35 → 30 mph change settles at 30.08 mph. |
+
+No user starts it: it runs in every tick (005-interaction, "One 0.1 s
+tick").
+
+#### Use case 9 — Stop when authority runs out
+
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Stop when authority runs out |
+| Actors | Train Model |
+| Description | • When authority reaches 0 the target becomes 0, traction is cut and the integrator resets.<br>• The service brake holds until the train stands, in either mode; it is not an emergency.<br>• The driver's speed changes are refused while authority is 0.<br>• Known limit: braking starts only at 0, so with 100 m blocks the train overruns above 34.6 mph (OPEN_ISSUES #11). |
+| Data | Input: authority (blocks) in the Track Signal<br>Output: service brake command; power 0 W |
+| Stimulus | Authority in the Track Signal reaches 0. |
+| Response | The train comes to a stand on the service brake. |
+
+No user starts it: it runs in every tick (005-interaction).
+
+#### Use case 10 — Detect failures and stop
+
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Detect failures and stop |
+| Actors | Train Model |
+| Description | • Brake: the service brake was commanded last tick (emergency brake off) and is still reported off this tick (M4). Engine: power that should pull, but no rise in speed for 2 s; under review, as it trips on grades (#28). Signal pickup: commanded speed and authority drop to 0 together from 2 or more blocks.<br>• On detection the target and power go to 0, and the emergency brake engages and latches, once (M3, M4).<br>• Mode switching stays allowed; at a stand the driver may release the emergency brake in Manual to try the train (M2, M3).<br>• Resolution is not detected yet: the failure stays latched until it is cleared on the test bench (#23). |
+| Data | Input: Brake State, actual speed, Track Signal<br>Output: brake command with emergency on; the failure named on the console |
+| Stimulus | The signals returned disagree with what was commanded. |
+| Response | The train stops on the emergency brake and the console names the failure. |
+
+No user starts it: it runs in every tick (005-interaction).
+
+#### Use case 11 — Send signal aspect ahead
+
+| | |
+|---|---|
+| System | HW Train Controller |
+| Use case | Send signal aspect ahead |
+| Actors | Track Model |
+| Description | • Each tick the Track Model sends the next signal light ahead: RED, YELLOW, GREEN or SUPER GREEN.<br>• The console shows the light and what it means: Stop, Slow down, Continue to cruise, All clear ahead.<br>• It stands in for the light the driver sees through the front window.<br>• The controller does not act on it; the driver drives accordingly. |
+| Data | Input: signal aspect ahead<br>Output: the light and its meaning on the console |
+| Stimulus | The Track Model sends the signal aspect ahead. |
+| Response | The console shows the light; the driver drives to it. |
+
+![Sequence diagram: Send signal aspect ahead](sdd-figures/train-controller/07-seq-11-signal-aspect.png)
 
 ---
 
