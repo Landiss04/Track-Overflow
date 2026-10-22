@@ -144,6 +144,31 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     Push it here, and fix its window and threshold, which are not
     recorded yet.
 
+    Measured 2026-10-21: this controller against `development`'s
+    `TrainModel` (`de7a98f`), grades from `Track_layout/` (Green ±5 %,
+    Red ±2 %), commanded 15 m/s. Worst speed fall over a window with
+    power above 0, no brake, and outside a 0.1 m/s band of the target:
+
+    | Case | 2 s | 3 s | 4 s | 5 s |
+    |---|---|---|---|---|
+    | Healthy, flat | 0 | 0 | 0 | 0 |
+    | Healthy, onto +2 %, full load | 0.19 | 0.23 | 0.26 | 0.27 |
+    | Healthy, onto +5 %, crew only | 0.44 | 0.50 | 0.53 | 0.53 |
+    | Healthy, onto +5 %, full load | 0.55 | 0.67 | 0.74 | 0.81 |
+    | Engine failed, flat (any load, 5 or 15 m/s) | 0.04 | 0.06 | 0.08 | 0.10 |
+    | Engine failed, +2 % | 0.43 | 0.65 | 0.86 | 1.08 |
+    | Engine failed, +5 % | 1.02 | 1.53 | 2.04 | 2.55 |
+
+    (m/s; a 0.05 or 0.2 m/s band changes these by under 0.1.) No window
+    and threshold separate them: on the flat a dead engine loses only
+    rolling resistance (0.0196 m/s²), less than a healthy full train
+    loses under full power on +5 %, which keeps slowing as long as the
+    hill lasts. Without the grade (M19) the controller cannot tell the
+    two apart. On the bench nothing falls at all: the bench simulation
+    has no resistance, so a dead engine coasts at constant speed. The
+    current `F = P/v` rule flags a healthy full train 2.4–2.9 s onto a
+    +2 % or +5 % grade.
+
 30. **Rules decided 2026-10-21 not yet in the code.** M3 (resolution not
     detected, blocked on #23), M5 (#23), M19 (engine detection uses mass
     and `F = P/v`, #28), M20 (signal light not mapped, #27). Update
