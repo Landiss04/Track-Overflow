@@ -1,0 +1,27 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam sequenceMessageAlign left
+skinparam ParticipantPadding 20
+autonumber
+actor Murphy
+participant "Track Model window" as W
+participant ":TrackModelState" as S
+participant ":TrackModel" as TM
+participant "Central harness" as H
+Murphy -> W : select a block, choose BROKEN_RAIL / TRACK_CIRCUIT / POWER
+W -> S : setSelectedFailure(name)
+S -> TM : set_block_failure(block_id, failure)
+TM -> TM : store failure, rebuild Track Controller read-back at once
+S -> W : refresh (block shown as failed)
+... next tick ...
+H -> TM : step(dt, inputs)
+TM -> TM : block reads occupied, track circuit dead
+TM -> TM : POWER only: switch held, light RED, gates down, heaters off
+TM --> H : occupancy true, failure_status, train feed with speed 0, authority 0
+@enduml

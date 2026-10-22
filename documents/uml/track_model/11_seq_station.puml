@@ -1,0 +1,26 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam sequenceMessageAlign left
+skinparam ParticipantPadding 20
+autonumber
+participant "Train Model" as TRM
+participant "Central harness" as H
+participant ":TrackModel" as TM
+participant "CTC Office" as CTC
+loop every tick
+  TM -> TM : _sell_tickets()  // each station may sell one ticket
+  TM --> H : tickets_sold_now (this tick, by station)
+  H -> CTC : track_model_to_ctc_office() -> (count, station) pairs
+end
+TRM --> H : speed 0, doors_open, passenger_capacity
+H -> TM : step(dt, inputs)
+TM -> TM : _board(block, report)  // station block, stopped, door open
+TM --> H : TrainFeed.passengers_boarded = min(waiting, capacity)
+H -> TRM : feed with passengers boarded
+@enduml
