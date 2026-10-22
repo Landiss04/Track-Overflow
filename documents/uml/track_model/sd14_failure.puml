@@ -14,7 +14,7 @@ participant "Track Model window" as W
 participant ":TrackModelState" as S
 participant ":TrackModel" as TM
 participant "Central harness" as H
-Murphy -> W : select a block, choose BROKEN_RAIL / TRACK_CIRCUIT / POWER
+Murphy -> W : select a block, choose BROKEN_RAIL / TRACK_CIRCUIT / POWER (or NONE to clear)
 W -> S : setSelectedFailure(name)
 S -> TM : set_block_failure(block_id, failure)
 TM -> TM : store failure, rebuild Track Controller read-back at once

@@ -27,6 +27,7 @@ else true offset < 0 (rolling back)
 else still inside the block
   TM -> TM : no change
 end
-TM --> H : TrainFeed for the new block (polarity reversed), signal_seen
+TM -> TM : _controller_outputs()  // occupied = a train is in the block or its circuit is dead
+TM --> H : block_occupancy, TrainFeed for the new block
 H -> TRM : feed (Train Model resets its offset to 0)
 @enduml

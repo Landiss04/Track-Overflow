@@ -236,7 +236,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
 
 ![Figure 5. Movement authority request across the CTC, Track controller, Track Model, Train model and Train controller.](../uml/track_model/18_seq_authority.png)
 
-  The CTC suggests a speed and authority for each block. The Track controller runs its PLC program and its vital supervisor, which can only make an output more restrictive, and sends a speed and an authority to the track circuit of each block, with its switch, signal and crossing commands. The harness maps them to the Track Model's inputs. The Track Model checks the whole tick before changing anything, stores the values for each block, places the trains from their reports, and builds a feed for each train. The train receives the speed and authority of the block it is in; a block that was never commanded, or whose circuit has failed, carries 0 and 0. The harness passes the feed to the Train model, and the light the train saw on entering a signal block to the Train controller. The full dispatch scenario is Figure 10 in Appendix D.
+  The CTC suggests a speed and authority for each block. The Track controller runs its PLC program and its vital supervisor, which can only make an output more restrictive, and sends a speed and an authority to the track circuit of each block, with its switch, signal and crossing commands. The harness maps them to the Track Model's inputs. The Track Model checks the whole tick before changing anything, stores the values for each block, places the trains from their reports, and builds a feed for each train. The train receives the speed and authority of the block it is in; a block that was never commanded, or whose circuit has failed, carries 0 and 0. The harness passes the feed to the Train model, and the light the train saw on entering a signal block to the Train controller. The full dispatch scenario is SD-16 in Appendix D.
 
 ---
 
@@ -396,22 +396,22 @@ Human actors are the Track Builder and Murphy. System actors are the Track contr
 ![Figure 6. Use case diagram: Track Model.](../uml/track_model/03_usecase.png)
 
 
-| ID | Use case | Actors | Description | Data | Stimulus and response |
-|---|--------|-------|----------------------|-------|----------|
-| UC-1 | Load Track Layout | Track Builder | (1) The builder chooses a layout JSON file with Load track... (2) The module reads each block and its infrastructure, converts grade and speed to backend units, finds switches, signals and beacons and builds the track graph. (3) The file replaces the loaded line of the same name or adds a new line, and the module restarts. At startup the module loads each `*_line.json` file beside it. | In: layout file. Out: loaded line, or an error message. | File chosen. A bad file changes nothing and shows why. |
-| UC-2 | Display Track Properties | Track Builder | (1) The user selects a block. (2) The window shows its length, grade, speed limit, elevation, commanded speed, authority, station, platform, direction of travel, beacon, heater, track temperature, underground flag, crossing, signal, switch and occupancy, in imperial units. | In: selected block. Out: block table and detail panel. | Block selected. All properties are shown. |
-| UC-3 | Track Train Position and Occupancy | Train Model | (1) Each tick the Train Model reports each train's block and offset. (2) The Track Model adds the offset to the distance it kept from earlier blocks and moves the train to the next block when that passes the block length, or back when it goes below 0, following the switches as set. (3) A block is occupied when a train is in it or its track circuit has failed. | In: TrainReport per train. Out: occupancy. | Tick. Occupancy matches the train positions. |
-| UC-4 | Report State to Track Controller | Track Controller | (1) Every tick the Track Model builds the actual state of every device: block occupancy, switch positions, crossing gates, signal aspects, failure status, heater states and track temperature. (2) It returns it for the Track controller. The CTC office reads it through the Track controller. | Out: TrackControllerOutputs. | Tick or failure injected. The read-back shows the actual state, which a failure can make differ from the command. |
-| UC-5 | Apply Switch Position | Track Controller | (1) The Track controller commands a switch position. (2) The switch moves to it unless its block has lost power. (3) The actual position is reported. | In: switch commands. Out: switch states. | Command received. The switch shows its actual position. |
-| UC-6 | Apply Signal Lights and Crossing Gates | Track Controller | (1) The Track controller commands signal aspects and crossing gates. (2) A light shows its commanded aspect, or RED without power. A gate is down when commanded, or without power. | In: signal and crossing commands. Out: signal and gate states. | Command received. Lights and gates show the new state. |
-| UC-7 | Deliver Track Circuit Signal | Track Controller, Train Model | (1) The Track controller sends a speed (whole m/s) and an authority (blocks) for each block. (2) The Track Model stores them as the signal of that block's track circuit. (3) Each train receives the signal of the block it is in. A failed circuit, or a block never commanded, carries speed 0 and authority 0. | In: speed and authority per block. Out: TrackSignal in the train feed. | Tick. The train gets the signal of its block. |
-| UC-8 | Send Beacon Data | Train Model | (1) Beacons stand on the blocks next to a station block. (2) When a train is in a beacon block, its feed carries the station name, platform side and underground flag. | Out: Beacon in the train feed. | Train in a beacon block. The feed carries the beacon. |
-| UC-9 | Send Signal Light to Train Controller | Train Controller | (1) A signal stands on the block before each switch. (2) On the tick a train enters such a block, the Track Model reports the light's colour for that train; on every other tick it reports none. (3) The harness sends it to the Train controller, which keeps it. | Out: `signal_seen` per train. | Train enters a signal block. The Train controller receives the colour once. |
-| UC-10 | Sell Tickets and Board Passengers | Train Model | (1) Each station may sell one ticket per tick, at a configured probability, and keeps a queue of waiting passengers. (2) A train that is stopped in a station block with a door open takes min(waiting, capacity) passengers. (3) The count is returned in the train feed. | In: speed, doors, capacity. Out: passengers boarded. | Train stopped with a door open. The waiting count falls and the train is told how many boarded. |
-| UC-11 | Report Ticket Sales | CTC Office | (1) Every tick the Track Model reports the tickets sold on that tick, by station. (2) It keeps no running total and sends none. (3) The harness sends the sales to the CTC office as (count, station) pairs. | Out: `tickets_sold_now`. | Tick. The CTC office receives the sales of that tick. |
-| UC-12 | Set Ambient Temperature | Murphy | (1) Murphy enters a temperature in °F in the Track Model window. (2) It replaces the temperature the harness or test UI sends, until the module restarts. | In: temperature. Out: displayed ambient temperature. | Value entered. Track temperature follows it. |
-| UC-13 | Switch Track Heaters | Murphy (indirect) | (1) The Track Model switches each section's heaters itself (D026). (2) Each section's track temperature eases toward ambient, or toward ambient plus 10 °C while its heaters run. (3) A power failure in any block of the section stops its heaters. | In: ambient temperature. Out: heater state and track temperature per section. | Temperature change. Heater states and track temperatures change. |
-| UC-14 | Inject or Clear Failure | Murphy | (1) Murphy selects a block and a failure: broken rail, track circuit or power. (2) The block reads occupied and its track circuit carries nothing, so a train in it gets speed 0 and authority 0. (3) A power failure also holds the block's switch, shows its light RED, drops its crossing gates and stops its section's heaters. | In: block and failure. Out: failure shown in the window and in the read-back. | Failure selected. The Track controller sees it at once, between ticks. |
+| ID | Use case | Actors | Description | Data | Stimulus and response | Sequence |
+|---|-------|-------|--------------------|-------|---------|----|
+| UC-1 | Load Track Layout | Track Builder | (1) The builder chooses a layout JSON file with Load track... (2) The module reads each block and its infrastructure, converts grade and speed to backend units, finds switches, signals and beacons and builds the track graph. (3) The file replaces the loaded line of the same name or adds a new line, and the module restarts. At startup the module loads each `*_line.json` file beside it. | In: layout file. Out: loaded line, or an error message. | File chosen. A bad file changes nothing and shows why. | SD-01 |
+| UC-2 | Display Track Properties | Track Builder | (1) The user selects a block. (2) The window shows its length, grade, speed limit, elevation, commanded speed, authority, station, platform, direction of travel, beacon, heater, track temperature, underground flag, crossing, signal, switch and occupancy, in imperial units. | In: selected block. Out: block table and detail panel. | Block selected. All properties are shown. | SD-02 |
+| UC-3 | Track Train Position and Occupancy | Train Model | (1) Each tick the Train Model reports each train's block and offset. (2) The Track Model adds the offset to the distance it kept from earlier blocks and moves the train to the next block when that passes the block length, or back when it goes below 0, following the switches as set. (3) A block is occupied when a train is in it or its track circuit has failed. | In: TrainReport per train. Out: occupancy. | Tick. Occupancy matches the train positions. | SD-03 |
+| UC-4 | Report State to Track Controller | Track Controller | (1) Every tick the Track Model builds the actual state of every device: block occupancy, switch positions, crossing gates, signal aspects, failure status, heater states and track temperature. (2) It returns it for the Track controller. The CTC office reads it through the Track controller. | Out: TrackControllerOutputs. | Tick or failure injected. The read-back shows the actual state, which a failure can make differ from the command. | SD-04 |
+| UC-5 | Apply Switch Position | Track Controller | (1) The Track controller commands a switch position. (2) The switch moves to it unless its block has lost power. (3) The actual position is reported. | In: switch commands. Out: switch states. | Command received. The switch shows its actual position. | SD-05 |
+| UC-6 | Apply Signal Lights and Crossing Gates | Track Controller | (1) The Track controller commands signal aspects and crossing gates. (2) A light shows its commanded aspect, or RED without power. A gate is down when commanded, or without power. | In: signal and crossing commands. Out: signal and gate states. | Command received. Lights and gates show the new state. | SD-06 |
+| UC-7 | Deliver Track Circuit Signal | Track Controller, Train Model | (1) The Track controller sends a speed (whole m/s) and an authority (blocks) for each block. (2) The Track Model stores them as the signal of that block's track circuit. (3) Each train receives the signal of the block it is in. A failed circuit, or a block never commanded, carries speed 0 and authority 0. | In: speed and authority per block. Out: TrackSignal in the train feed. | Tick. The train gets the signal of its block. | SD-07 |
+| UC-8 | Send Beacon Data | Train Model | (1) Beacons stand on the blocks next to a station block. (2) When a train is in a beacon block, its feed carries the station name, platform side and underground flag. | Out: Beacon in the train feed. | Train in a beacon block. The feed carries the beacon. | SD-08 |
+| UC-9 | Send Signal Light to Train Controller | Train Controller | (1) A signal stands on the block before each switch. (2) On the tick a train enters such a block, the Track Model reports the light's colour for that train; on every other tick it reports none. (3) The harness sends it to the Train controller, which keeps it. | Out: `signal_seen` per train. | Train enters a signal block. The Train controller receives the colour once. | SD-09 |
+| UC-10 | Sell Tickets and Board Passengers | Train Model | (1) Each station may sell one ticket per tick, at a configured probability, and keeps a queue of waiting passengers. (2) A train that is stopped in a station block with a door open takes min(waiting, capacity) passengers. (3) The count is returned in the train feed. | In: speed, doors, capacity. Out: passengers boarded. | Train stopped with a door open. The waiting count falls and the train is told how many boarded. | SD-10 |
+| UC-11 | Report Ticket Sales | CTC Office | (1) Every tick the Track Model reports the tickets sold on that tick, by station. (2) It keeps no running total and sends none. (3) The harness sends the sales to the CTC office as (count, station) pairs. | Out: `tickets_sold_now`. | Tick. The CTC office receives the sales of that tick. | SD-11 |
+| UC-12 | Set Ambient Temperature | Murphy | (1) Murphy enters a temperature in °F in the Track Model window. (2) It replaces the temperature the harness or test UI sends, until the module restarts. | In: temperature. Out: displayed ambient temperature. | Value entered. Track temperature follows it. | SD-12 |
+| UC-13 | Switch Track Heaters | Murphy (indirect) | (1) The Track Model switches each section's heaters itself (D026). (2) Each section's track temperature eases toward ambient, or toward ambient plus 10 °C while its heaters run. (3) A power failure in any block of the section stops its heaters. | In: ambient temperature. Out: heater state and track temperature per section. | Temperature change. Heater states and track temperatures change. | SD-13 |
+| UC-14 | Inject or Clear Failure | Murphy | (1) Murphy selects a block and a failure: broken rail, track circuit or power. (2) The block reads occupied and its track circuit carries nothing, so a train in it gets speed 0 and authority 0. (3) A power failure also holds the block's switch, shows its light RED, drops its crossing gates and stops its section's heaters. | In: block and failure. Out: failure shown in the window and in the read-back. | Failure selected. The Track controller sees it at once, between ticks. | SD-14 |
 
 ### C. Track Model Detailed Design
 
@@ -483,36 +483,87 @@ The test UI is a separate program (`test_ui/`). It stands in for the Track contr
 
 ### D. Sequence Diagrams
 
-Figure 5 (Section 3) is the movement authority request.
+Each use case has one sequence diagram, numbered to match: SD-01 is the diagram of UC-1, and so on. SD-15 is an overview of one tick and SD-16 is the system-level dispatch scenario. Figure 5 (Section 3) is the movement authority request.
 
-![Figure 10. System sequence diagram: dispatch a train.](../uml/track_model/02_system_sequence.png)
+| Diagram | Title | Use case |
+|--------|------------------------------------|---------------|
+| SD-01 | Load a track layout | UC-1 |
+| SD-02 | Display track properties | UC-2 |
+| SD-03 | Track train position and occupancy | UC-3 |
+| SD-04 | Report state to the Track Controller | UC-4 |
+| SD-05 | Apply a switch position | UC-5 |
+| SD-06 | Apply signal lights and crossing gates | UC-6 |
+| SD-07 | Deliver the track circuit signal | UC-7 |
+| SD-08 | Send beacon data | UC-8 |
+| SD-09 | Send the signal light to the Train Controller | UC-9 |
+| SD-10 | Sell tickets and board passengers | UC-10 |
+| SD-11 | Report ticket sales | UC-11 |
+| SD-12 | Set the ambient temperature | UC-12 |
+| SD-13 | Switch the track heaters | UC-13 |
+| SD-14 | Inject or clear a failure | UC-14 |
+| SD-15 | One tick in the Track Model (overview) | UC-3 to UC-9, UC-13 |
+| SD-16 | Dispatch a train (system level) | all |
+
+![Figure 10. SD-01 Load a track layout (UC-1).](../uml/track_model/sd01_load.png)
 
 
-![Figure 11. Load a track layout (UC-1, UC-2).](../uml/track_model/07_seq_load.png)
+![Figure 11. SD-02 Display track properties (UC-2).](../uml/track_model/sd02_display.png)
 
 
-![Figure 12. One tick in the Track Model (UC-3 to UC-9, UC-13).](../uml/track_model/08_seq_tick.png)
+![Figure 12. SD-03 Track train position and occupancy (UC-3).](../uml/track_model/sd03_position.png)
 
 
-![Figure 13. A train crosses into the next block (UC-3, UC-9).](../uml/track_model/09_seq_blockchange.png)
+![Figure 13. SD-04 Report state to the Track Controller (UC-4).](../uml/track_model/sd04_report.png)
 
 
-![Figure 14. Murphy injects a failure (UC-14).](../uml/track_model/10_seq_failure.png)
+![Figure 14. SD-05 Apply a switch position (UC-5).](../uml/track_model/sd05_switch.png)
 
 
-![Figure 15. Tickets and boarding (UC-10, UC-11).](../uml/track_model/11_seq_station.png)
+![Figure 15. SD-06 Apply signal lights and crossing gates (UC-6).](../uml/track_model/sd06_signal.png)
+
+
+![Figure 16. SD-07 Deliver the track circuit signal (UC-7).](../uml/track_model/sd07_circuit.png)
+
+
+![Figure 17. SD-08 Send beacon data (UC-8).](../uml/track_model/sd08_beacon.png)
+
+
+![Figure 18. SD-09 Send the signal light to the Train Controller (UC-9).](../uml/track_model/sd09_signalseen.png)
+
+
+![Figure 19. SD-10 Sell tickets and board passengers (UC-10).](../uml/track_model/sd10_boarding.png)
+
+
+![Figure 20. SD-11 Report ticket sales (UC-11).](../uml/track_model/sd11_tickets.png)
+
+
+![Figure 21. SD-12 Set the ambient temperature (UC-12).](../uml/track_model/sd12_temperature.png)
+
+
+![Figure 22. SD-13 Switch the track heaters (UC-13).](../uml/track_model/sd13_heaters.png)
+
+
+![Figure 23. SD-14 Inject or clear a failure (UC-14).](../uml/track_model/sd14_failure.png)
+
+
+![Figure 24. SD-15 One tick in the Track Model (overview).](../uml/track_model/sd15_tick.png)
+
+
+![Figure 25. SD-16 Dispatch a train (system level).](../uml/track_model/sd16_dispatch.png)
+
+
 
 ### E. State Machine Diagram
 
 Each block is always in one of three states. A failure overrides the occupancy states and reads as occupied.
 
-![Figure 16. Block state machine.](../uml/track_model/13_state_block.png)
+![Figure 26. Block state machine.](../uml/track_model/13_state_block.png)
 
 ### F. Deployment Diagram
 
 The system runs on one Windows 11 PC as one executable, with Python 3.10 or later and PySide6. The executable starts the central harness; the harness starts each module as its own process by running the same executable again with the module's name. No network connection or external service is needed. The Track Model process needs its layout files. Each hardware variant's window runs on the PC and relays the harness's messages over USB to its Raspberry Pi. The Track Model test UI exists only when the module runs alone.
 
-![Figure 17. Deployment diagram.](../uml/track_model/14_deployment.png)
+![Figure 27. Deployment diagram.](../uml/track_model/14_deployment.png)
 
 ### G. Interface Dictionary
 
@@ -556,16 +607,17 @@ SRS requirements that the Track Model covers, and where each is designed.
 
 | Requirement | Summary | Use cases | Design elements | Figures |
 |-----------|-------------------|------|---------------|-------|
-| REQ-FUNC-015, REQ-INTF-012 | Load the track layout from JSON at startup | UC-1 | `layout.py` (`load_layout`), `Layout` | Figure 11 |
-| REQ-FUNC-016 | Display each segment's grade, elevation, length, speed limit, direction, crossings, heaters and beacons | UC-2 | `Block`, `TrackModelState` | Figure 9 |
-| REQ-FUNC-017 | Track ticket sales and send them to the CTC office | UC-10, UC-11 | `_sell_tickets`, `CtcOutputs`, `track_model_to_ctc_office` | Figure 15 |
-| REQ-FUNC-018 | Show passengers boarding. Disembarking is reported by the Train Model and is not an input to the Track Model. | UC-10 | `_board`, `TrainFeed.passengers_boarded` | Figure 15 |
-| REQ-FUNC-019 | Show train occupancy on the display | UC-3 | `_move_trains`, `TrackModelState` | Figure 13 |
-| REQ-FUNC-020, REQ-INTF-018 | Send and receive track circuit signals; occupancy channel with the Track controller | UC-4, UC-7 | `TrackSignal`, `TrackControllerOutputs` | Figures 5, 12 |
-| REQ-FUNC-021 | Set the environmental temperature | UC-12 | `set_ambient_temp` | Figure 9 |
-| REQ-FUNC-022 | Simulate track heaters | UC-13 | `_heater_on`, `_update_track_temps` | Figure 12 |
-| REQ-FUNC-023 | Display switch positions and light states | UC-5, UC-6 | `TrackModelState` switch and signal rows | Figure 9 |
-| REQ-FUNC-024 | Simulate broken rail, track circuit and power failures | UC-14 | `TrackFailure`, `set_block_failure` | Figures 14, 16 |
+| REQ-FUNC-015, REQ-INTF-012 | Load the track layout from JSON at startup | UC-1 | `layout.py` (`load_layout`), `Layout` | SD-01 |
+| REQ-FUNC-016 | Display each segment's grade, elevation, length, speed limit, direction, crossings, heaters and beacons | UC-2 | `Block`, `TrackModelState` | SD-02, Figure 9 |
+| REQ-FUNC-017 | Track ticket sales and send them to the CTC office | UC-10, UC-11 | `_sell_tickets`, `CtcOutputs`, `track_model_to_ctc_office` | SD-10, SD-11 |
+| REQ-FUNC-018 | Show passengers boarding. Disembarking is reported by the Train Model and is not an input to the Track Model. | UC-10 | `_board`, `TrainFeed.passengers_boarded` | SD-10 |
+| REQ-FUNC-019 | Show train occupancy on the display | UC-3 | `_move_trains`, `TrackModelState` | SD-03 |
+| REQ-FUNC-020, REQ-INTF-018 | Send and receive track circuit signals; occupancy channel with the Track controller | UC-4, UC-7 | `TrackSignal`, `TrackControllerOutputs` | SD-04, SD-07, Figure 5 |
+| REQ-FUNC-021 | Set the environmental temperature | UC-12 | `set_ambient_temp` | SD-12 |
+| REQ-FUNC-022 | Simulate track heaters | UC-13 | `_heater_on`, `_update_track_temps` | SD-13 |
+| REQ-FUNC-016.8 | Beacons: display them and send them with the train feed | UC-8 | `Layout.beacons`, `Beacon` | SD-08 |
+| REQ-FUNC-023 | Display switch positions and light states | UC-5, UC-6 | `TrackModelState` switch and signal rows | SD-05, SD-06 |
+| REQ-FUNC-024 | Simulate broken rail, track circuit and power failures | UC-14 | `TrackFailure`, `set_block_failure` | SD-14, Figure 26 |
 | REQ-INTF-001.2 | A GUI for the Track Model | UC-2 | `TrackModelState`, `ui/*.qml` | Appendix C.5 |
 | REQ-INTF-013, REQ-FUNC-001 to 003 | One shared clock; real time, 10x and pause | - | `SystemClock`, harness | Appendix A.5 |
 | REQ-NFR-003, REQ-NFR-004 | Validate input; reject bad input without changing state | - | `_validate`, `InvalidInputError` | Section 4.6 |
