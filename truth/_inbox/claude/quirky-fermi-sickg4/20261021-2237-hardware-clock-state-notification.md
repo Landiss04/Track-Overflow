@@ -1,17 +1,17 @@
 **Target:** truth/decisions/D031-hardware-clock-state-notification.md
 **Action:** create
 **Proposed by:** Integration on claude/quirky-fermi-sickg4
-**Provenance:** Kevin Schillinger explicitly approved the prepared CLOCK_STATE exception in this integration session on 2026-10-21.
+**Provenance:** asserted by Kevin Schillinger 2026-10-22: "yes" to approval of the prepared CLOCK_STATE exception.
 
 ---
 
-# hardware-clock-state-notification
+# D031-hardware-clock-state-notification
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** Kevin Schillinger explicitly approved the prepared CLOCK_STATE exception in this integration session on 2026-10-21.
+**Provenance:** asserted by Kevin Schillinger 2026-10-22: "yes" to approval of the prepared CLOCK_STATE exception.
 **Aliases:** CLOCK_STATE, hardware clock metadata, loss while running
-**Last updated:** 2026-10-21
+**Last updated:** 2026-10-22
 
 ## Decision
 

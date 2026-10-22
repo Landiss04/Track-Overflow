@@ -1,17 +1,17 @@
 **Target:** truth/decisions/D019-wayside-runs-only-its-program.md
 **Action:** create
 **Proposed by:** Integration on claude/quirky-fermi-sickg4
-**Provenance:** Kevin Schillinger directly confirmed in this integration session on 2026-10-21 that K3b's no-vital policy covers SW too; Braden's 2026-10-16 showcase decision is the earlier HW source.
+**Provenance:** asserted by Kevin Schillinger 2026-10-22: "yes" to confirming that the no-vital-layer policy covers SW too; asserted by Braden 2026-10-16 (showcase changes).
 
 ---
 
-# track-controller-plc-only-both-variants
+# D019-wayside-runs-only-its-program
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** Kevin Schillinger directly confirmed in this integration session on 2026-10-21 that K3b's no-vital policy covers SW too; Braden's 2026-10-16 showcase decision is the earlier HW source.
+**Provenance:** asserted by Kevin Schillinger 2026-10-22: "yes" to confirming that the no-vital-layer policy covers SW too; asserted by Braden 2026-10-16 (showcase changes).
 **Aliases:** no vital layer, PLC-only safety, SW and HW policy
-**Last updated:** 2026-10-21
+**Last updated:** 2026-10-22
 
 ## Decision
 
@@ -32,5 +32,14 @@ all applicable safety and precedence rules.
 ## Supersedes
 
 - The October 14 pending SW vital-restrictions policy is superseded by
-  Kevin's explicit October 21 clarification that the no-vital policy
+  Kevin's explicit October 22 confirmation that the no-vital policy
   covers both variants.
+
+## Conflict
+
+- This proposed D019 entry (`20261021-2237-track-controller-plc-only-both-variants.md`): no separate vital layer in either variant, with dual-channel execution integrity allowed for HW. Provenance: Kevin Schillinger, "yes", 2026-10-22.
+- Braden's proposed D019 entry (`truth/_inbox/feature/TrackCtrl-Showcase-Feedback/20261016-1430-D019-wayside-runs-only-its-program.md`): outputs pass through as the program produces them; fail-safe values apply only while no program runs. Provenance: asserted by Braden 2026-10-16 (showcase changes).
+
+Both proposals target `truth/decisions/D019-wayside-runs-only-its-program.md`. Their treatment of execution integrity and fail-safe holds requires reconciliation before promotion; neither replaces the other here.
+
+**Resolution owner:** Harry Tye (Track Controller contract owner), with Braden responsible for resolving the HW interpretation.
