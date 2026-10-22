@@ -504,10 +504,14 @@ class ControllerCore:
         # or at 18:00; off when a later beacon says not underground,
         # unless it is night, and at 06:00, unless underground. Only
         # those changes act, so the driver's own choice stands until
-        # the next one. The first tick only takes the time of day in.
+        # the next one. The first tick is the train spawned at the
+        # yard: its lights are set on between 18:00 and 06:00, off
+        # otherwise.
         s = self.state
         night, underground = self.night, s.beacon_underground
-        if self._night is not None:
+        if self._night is None:
+            self.command_lights(night, night)
+        else:
             if ((night and not self._night)
                     or (underground and not self._underground)):
                 self.command_lights(True, True)

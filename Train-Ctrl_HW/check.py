@@ -1103,7 +1103,18 @@ def run_check(
     # Automatic lights (REQUIREMENTS.md M8), in either mode: on with an
     # underground beacon and at 18:00; off with a later beacon saying
     # not underground, unless it is night, and at 06:00. Only those
-    # changes act, so the driver's own choice stands in between.
+    # changes act, so the driver's own choice stands in between. A
+    # train spawned at the yard between 18:00 and 06:00 has its lights
+    # set on, and off by day.
+    for spawned, on in ((19 * 3600.0, True), (5 * 3600.0, True),
+                        (12 * 3600.0, False)):
+        yard = mod.ControllerCore()
+        yard.command_lights(not on, not on)
+        yard.state.time_s = spawned
+        yard.step()
+        expect(yard.commands().light_command == (on, on),
+               f"a train spawned at {spawned / 3600:.0f}:00 did not "
+               f"have its lights set {'on' if on else 'off'}")
     lamp = mod.ControllerCore()
     lamp.state.manual = True
 

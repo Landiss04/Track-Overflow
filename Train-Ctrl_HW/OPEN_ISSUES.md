@@ -145,10 +145,9 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     recorded yet.
 
 30. **Rules decided 2026-10-21 not yet in the code.** M3 (resolution not
-    detected, blocked on #23), M5 (#23), M8 (no lights-on check for a
-    train spawned at the yard between 18:00 and 06:00), M11 (bench clock
-    gated on the selected train, #31), M19 (engine detection uses mass and
-    `F = P/v`, #28), M20 (signal light not mapped, #27). Update
+    detected, blocked on #23), M5 (#23), M11 (bench clock gated on the
+    selected train, #31), M19 (engine detection uses mass and `F = P/v`,
+    #28), M20 (signal light not mapped, #27). Update
     `HARNESS_INTEGRATION.md` and `CHANGELOG.md` with each.
 
 31. **Bench-side leftovers from the separation (R15–R17).**
