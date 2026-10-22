@@ -35,6 +35,8 @@ SLIDE_H = Inches(7.5)
 MARGIN = Inches(0.45)
 TITLE_H = Inches(0.95)
 FOOTER_H = Inches(0.35)
+# Sequence diagrams too detailed to read on one slide.
+SPLIT = {"sd05_tick": 2, "sd01_load_database": 2, "sd02_load_program": 2}
 
 
 class Deck:
@@ -161,13 +163,15 @@ class Deck:
 
     def diagram(self, title: str, image: Path, section: str = "",
                 caption: str = "", crop: tuple | None = None,
-                full: bool = False, blank: tuple = (), notes: str = ""):
+                full: bool = False, blank: tuple = (), notes: str = "",
+                parts: int | None = None):
         """One diagram, fitted; a tall one is split across slides.
 
         ``crop`` keeps a region given as (left, top, right, bottom)
         fractions; ``blank`` whites out regions given the same way, to
         hide fragments of neighbouring boxes. ``full`` fills the slide
-        below the title bar, with no footer or caption.
+        below the title bar, with no footer or caption. ``parts`` forces
+        the number of slides instead of choosing it from the shape.
         """
         if crop is not None:
             with Image.open(image) as picture:
@@ -185,7 +189,7 @@ class Deck:
             image = path
         with Image.open(image) as picture:
             w_px, h_px = picture.size
-        parts = max(1, round(h_px / w_px / 0.9))
+        parts = parts or max(1, round(h_px / w_px / 0.9))
         if parts == 1:
             return self._picture(title, image, section, caption, full, notes)
         for index, piece in enumerate(self._slices(image, parts), start=1):
@@ -537,7 +541,7 @@ def build_track_ctrl_hw() -> None:
          "maintenance ends, the program routes the switch again."),
     ):
         deck.diagram(title, UML / f"{name}.png", section="Sequence diagrams",
-                     notes=notes)
+                     notes=notes, parts=SPLIT.get(name))
 
     deck.section("Deployment")
     deck.diagram("Deployment", UML / "deployment.png", section="Deployment",

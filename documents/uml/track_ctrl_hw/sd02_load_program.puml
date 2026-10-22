@@ -20,35 +20,35 @@ QML -> State : loadProgram(url)
 alt no wayside selected
   State --> QML : problem("No wayside", ...)
 else
-  State -> State : read the file (at most 1 MB, UTF-8)
-  State -> Remote : load_program(wayside_id, source, file_name)
-  Remote -> Pi : {"id", "op": "load_program", wayside_id, source}
-  Pi -> Ctrl : load_program(wayside_id, source, file_name)
-  Ctrl -> W : load_program(source, file_name, time_s)
+  State -> State : read the file\n(at most 1 MB, UTF-8)
+  State -> Remote : load_program(wayside_id,\nsource, file_name)
+  Remote -> Pi : {"id", "op": "load_program",\nwayside_id, source}
+  Pi -> Ctrl : load_program(wayside_id,\nsource, file_name)
+  Ctrl -> W : load_program(source,\nfile_name, time_s)
   W -> PLC : compile_program(source)
-  note right of PLC
+  note over W, PLC
     Every statement is compiled twice:
-    a tree for channel A and postfix
+    a tree for channel A, postfix
     code for channel B.
   end note
   PLC --> W : Program (diagnostics)
-  W -> W : check_program(program, territory)\nnames must be this wayside's I/O
+  W -> W : check_program()\nnames must be\nthis wayside's I/O
   alt any error
     W --> Ctrl : PlcError(diagnostics)
     Ctrl --> Pi : PlcError
-    Pi --> Remote : {"id", "error": "PlcError", diagnostics}
+    Pi --> Remote : {"id", "error": "PlcError",\ndiagnostics}
     Remote --> State : raise PlcError
-    State --> QML : problem("PLC program not loaded", message, diagnostics)
-    QML --> P : every problem with its line number
+    State --> QML : problem("PLC program\nnot loaded", message,\ndiagnostics)
+    QML --> P : every problem\nwith its line number
   else no errors
-    W -> W : install program, reset ScanInfo,\nhold fail-safe until the next scan
-    W --> Ctrl : ProgramInfo (checksum, counts, warnings)
+    W -> W : install program,\nreset ScanInfo, hold\nfail-safe until\nthe next scan
+    W --> Ctrl : ProgramInfo (checksum,\ncounts, warnings)
     Ctrl --> Pi : ProgramInfo
     Pi --> Remote : {"id", "ok": ProgramInfo}
     Remote --> State : ProgramInfo
     State -> State : refresh()
     State --> QML : changed
-    QML --> P : program name and checksum;\n**Ready** once every wayside has a program
+    QML --> P : program name, checksum;\n**Ready** once every\nwayside has a program
   end
 end
 @enduml
