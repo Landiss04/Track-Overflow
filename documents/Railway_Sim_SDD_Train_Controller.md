@@ -980,49 +980,6 @@ Announce station:
 
 ![Sequence diagram: Set Kp and Ki](sdd-figures/train-controller/07-seq-08-set-gains.png)
 
-#### Use case 8 — Regulate to commanded speed (Automatic)
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Regulate to commanded speed (Automatic) |
-| Actors | Train Model |
-| Description | • The target is the commanded speed, the only cap (M1).<br>• Power = Kp × error + Ki × ∫error, limited to 0–480 kW, with the integrator held at the limits.<br>• The service brake applies when the train is more than 0.05 m/s over target, or the target is 0 while it moves.<br>• At a new station beacon: announce, stop, open the platform side, hold until the Track Signal resumes, close the doors, then depart (M6, M7). |
-| Data | Input: commanded speed, actual speed, beacon, door state<br>Output: power, service brake, door and announcement commands |
-| Stimulus | Each tick while the train is in Automatic. |
-| Response | The train holds the commanded speed; a 35 → 30 mph change settles at 30.08 mph. |
-
-No user starts it: it runs in every tick (005-interaction, "One 0.1 s
-tick").
-
-#### Use case 9 — Stop when authority runs out
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Stop when authority runs out |
-| Actors | Train Model |
-| Description | • When authority reaches 0 the target becomes 0, traction is cut and the integrator resets.<br>• The service brake holds until the train stands, in either mode; it is not an emergency.<br>• The driver's speed changes are refused while authority is 0.<br>• Known limit: braking starts only at 0, so with 100 m blocks the train overruns above 34.6 mph (OPEN_ISSUES #11). |
-| Data | Input: authority (blocks) in the Track Signal<br>Output: service brake command; power 0 W |
-| Stimulus | Authority in the Track Signal reaches 0. |
-| Response | The train comes to a stand on the service brake. |
-
-No user starts it: it runs in every tick (005-interaction).
-
-#### Use case 10 — Detect failures and stop
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Detect failures and stop |
-| Actors | Train Model |
-| Description | • Brake: the service brake was commanded last tick (emergency brake off) and is still reported off this tick (M4). Engine: power that should pull, but no rise in speed for 2 s; under review, as it trips on grades (#28). Signal pickup: commanded speed and authority drop to 0 together from 2 or more blocks.<br>• On detection the target and power go to 0, and the emergency brake engages and latches, once (M3, M4).<br>• Mode switching stays allowed; at a stand the driver may release the emergency brake in Manual to try the train (M2, M3).<br>• Resolution is not detected yet: the failure stays latched until it is cleared on the test bench (#23). |
-| Data | Input: Brake State, actual speed, Track Signal<br>Output: brake command with emergency on; the failure named on the console |
-| Stimulus | The signals returned disagree with what was commanded. |
-| Response | The train stops on the emergency brake and the console names the failure. |
-
-No user starts it: it runs in every tick (005-interaction).
-
 ---
 
 *— End of document —*
