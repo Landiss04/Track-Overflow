@@ -543,6 +543,15 @@ def run_check(
     expect(backend.snapshot["operator"] == ""
            and not backend.snapshot["signed_in"],
            "the driver was handed a train with no gains")
+    # The bench clock keeps running with an uncommissioned train
+    # selected, once any train has been commissioned (REQUIREMENTS.md
+    # M11).
+    before = backend.time_s
+    for _ in range(10):
+        tick()
+    expect(abs(backend.time_s - before - 1.0) < 1e-6,
+           "the bench clock stopped with an uncommissioned train "
+           "selected")
     backend.select_operator(0)
     expect(backend.snapshot["operator"] == "",
            "the driver signed in to a train with no gains")

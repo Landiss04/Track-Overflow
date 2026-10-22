@@ -85,6 +85,10 @@ class ConsoleBackend(QObject):
         # signals and the time (REQUIREMENTS.md M0, M11).
         self.sims: dict[str, SimTrain] = {}
         self.time_s = CLOCK_START_S
+        # The bench clock starts when the first train is commissioned
+        # and then always runs, whichever train is selected
+        # (REQUIREMENTS.md M11).
+        self._clock_started = False
 
         self.operator: str = ""         # "" | "driver" | "engineer"
         self.gains_note = ""
@@ -174,9 +178,10 @@ class ConsoleBackend(QObject):
         # bench clock, and the commands back into the simulation.
         if self.paused:
             return
-        # The bench clock is simulated time, one step per tick, once
-        # the selected train is running.
-        if self.core.armed:
+        # The bench clock is simulated time, one step per tick.
+        if not self._clock_started:
+            self._clock_started = any(core.armed for core in self.fleet)
+        if self._clock_started:
             self.time_s += TICK_S
         inputs = {train_id: sim.outputs()
                   for train_id, sim in self.sims.items()}

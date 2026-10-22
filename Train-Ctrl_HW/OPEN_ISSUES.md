@@ -145,17 +145,13 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     recorded yet.
 
 30. **Rules decided 2026-10-21 not yet in the code.** M3 (resolution not
-    detected, blocked on #23), M5 (#23), M11 (bench clock gated on the
-    selected train, #31), M19 (engine detection uses mass and `F = P/v`,
-    #28), M20 (signal light not mapped, #27). Update
+    detected, blocked on #23), M5 (#23), M19 (engine detection uses mass
+    and `F = P/v`, #28), M20 (signal light not mapped, #27). Update
     `HARNESS_INTEGRATION.md` and `CHANGELOG.md` with each.
 
 31. **Bench-side leftovers from the separation (R15–R17).**
-    - The bench clock advances only while the selected train is
-      commissioned (unchanged from before), yet it is now the time every
-      train receives. Decided (M11, R29): it starts when the first train
-      is commissioned and then always runs, whichever train is selected;
-      not built yet (#30). Set time works either way.
+    - The bench clock now starts at the first commissioning and then
+      always runs, whichever train is selected (M11, R37).
     - Setting the bench clock is a jump: the lights act only if the jump
       changes night to day or back. 05:00 (the start) to 18:00 is night
       to night, so nothing changes; set a daytime first, or 17:59 and let
