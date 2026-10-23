@@ -13,9 +13,10 @@ participant "Central harness" as H
 participant ":ModuleLink" as ML
 participant ":TrackModelProcess" as P
 participant "wire" as W
+participant ":TrackModelState" as S
 participant ":TrackModel" as TM
 participant ":Layout" as L
-H -> ML : STEP message (tick, dt, sim time, inputs as JSON)
+H -> ML : STEP message (tick, dt, sim_time_s, inputs as JSON)
 ML -> P : step(tick, dt, sim_time_s, inputs)
 P -> W : decode_inputs(inputs, sim_time_s)
 W --> P : TrackModelInputs
@@ -25,25 +26,31 @@ TM -> TM : _validate(dt, inputs)
 alt invalid input
   TM --> P : InvalidInputError (nothing changed)
   P --> ML : TickRejectedError
-  ML --> H : tick refused, logged
+  ML --> H : tick refused (logged)
 else valid
-  TM -> TM : _apply_commands(controller)  // switch moves unless its block has no power
+  TM -> TM : _apply_commands(commands)  // a switch moves unless its block has no power
   TM -> TM : _update_track_temps(dt)
+  TM -> TM : _move_trains(reports)
   loop each train report
-    TM -> TM : _move_trains() / _advance()
-    TM -> L : next_block(block, came_from, switches)
-    L --> TM : block, YARD or same block
+    TM -> TM : _advance(train_id, train, offset_m)
+    TM -> L : next_block(block_id, previous_block_id, switch_states)
+    L --> TM : block_id (None = yard, same block = dead end)
   end
   TM -> TM : _sell_tickets()
   loop each train
     TM -> TM : _feed(train, report)  // track info, signal, beacon, boarding
   end
-  TM -> TM : _controller_outputs(), _ctc_outputs(), _signal_seen()
+  TM -> TM : _controller_outputs()
+  TM -> TM : _ctc_outputs()
+  loop each train
+    TM -> TM : _signal_seen(train)
+  end
   TM --> P : TrackModelOutputs
   P -> W : encode_outputs(outputs)
-  P --> ML : outputs as JSON
-  ML --> H : reply
-  P -> P : mark_step(), redraw the window (at most every 100 ms)
+  P --> ML : outputs (dict)
+  ML --> H : reply (outputs as JSON)
+  P -> S : mark_step()
+  S -> S : refresh()  // at most every 100 ms
 end
 deactivate TM
 @enduml

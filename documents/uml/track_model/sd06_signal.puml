@@ -12,13 +12,17 @@ autonumber
 participant "Track Controller" as TC
 participant "Central harness" as H
 participant ":TrackModel" as TM
-TC --> H : signal aspects, crossing gates
-H -> H : track_controller_to_track_model()
+TC --> H : WaysideCommands (signal aspects, crossing gates)
+H -> H : track_controller_to_track_model(commands)
 H -> TM : step(dt, inputs)
-TM -> TM : _validate()  // unknown signal or crossing: nothing changes
-TM -> TM : store signal and crossing commands
-TM -> TM : _signal_state(block)  // RED if the block has a power failure
-TM -> TM : _gate_closed(block)  // down if the block has a power failure
-TM --> H : signal_states, crossing_states (actual)
-H -> TC : read-back through track_model_to_track_controller()
+TM -> TM : _validate(dt, inputs)  // unknown signal or crossing: nothing changes
+TM -> TM : _apply_commands(commands)
+TM -> TM : _controller_outputs()
+loop each signal and each crossing
+  TM -> TM : _signal_state(block_id)  // RED if the block has a power failure
+  TM -> TM : _gate_closed(block_id)  // down if the block has a power failure
+end
+TM --> H : TrackModelOutputs (signal_states, crossing_states)
+H -> H : track_model_to_track_controller(outputs)
+H -> TC : step(dt, inputs with TrackReadback)
 @enduml

@@ -12,19 +12,22 @@ autonumber
 participant "Train Model" as TRM
 participant "Central harness" as H
 participant ":TrackModel" as TM
-loop every tick
-  TM -> TM : _sell_tickets()  // each station may sell one ticket
-  TM -> TM : waiting passengers of the station + 1
-end
-TRM --> H : speed 0, doors_open, passenger_capacity
+TRM --> H : TrainTrackReport (actual_speed_mps = 0, doors_open, passenger_capacity)
+H -> H : train_model_to_track_model(reports)
 H -> TM : step(dt, inputs)
-TM -> TM : _board(block, report)
-alt station block, speed 0 and a door open
-  TM -> TM : boarded = min(waiting, capacity)
-  TM -> TM : waiting = waiting - boarded
-else
-  TM -> TM : boarded = 0
+TM -> TM : _sell_tickets()
+note right : each station: _waiting[station] += sold
+loop each train on the track
+  TM -> TM : _feed(train, report)
+  TM -> TM : _board(block, report)
+  alt station block, speed 0 and a door open
+    TM -> TM : boarded = min(_waiting[station], passenger_capacity)
+    TM -> TM : _waiting[station] -= boarded
+  else
+    TM -> TM : return 0
+  end
 end
-TM --> H : TrainFeed.passengers_boarded
-H -> TRM : feed with passengers boarded
+TM --> H : TrackModelOutputs (train_feeds[train_id].passengers_boarded)
+H -> H : track_model_to_train_model(outputs, train_id)
+H -> TRM : TrainTrackFeed (passengers_boarded)
 @enduml

@@ -15,8 +15,11 @@ participant ":TrackModelState" as S
 participant ":TrackModel" as TM
 Murphy -> W : type the ambient temperature (deg F)
 W -> S : setAmbientF(temp_f)
-S -> S : temp_c = (temp_f - 32) * 5 / 9
-S -> TM : set_ambient_temp(temp_c)
-TM -> TM : the window is the source (the harness sends none);\na value set here is kept until the module restarts
-S -> W : refresh (ambient temperature shown)
+S -> TM : set_ambient_temp(temp_c)  // temp_c = (temp_f - 32) * 5 / 9
+TM -> TM : _ambient_override_c = temp_c  // kept until the module restarts
+S -> S : refresh()
+S -> TM : snapshot()
+TM --> S : TrackModelSnapshot (ambient_temp_c)
+S --> W : changed
+W -> Murphy : ambient temperature shown
 @enduml

@@ -16,13 +16,14 @@ participant "Train Model" as TRM
 H -> TM : step(dt, inputs)
 loop each train on the track
   TM -> TM : _feed(train, report)
-  TM -> L : beacons.get(train's block)
+  TM -> L : beacons.get(block_id)
   alt block next to a station
-    L --> TM : Beacon (station, platform side, underground)
+    L --> TM : Beacon (station_name, platform_side, underground)
   else
-    L --> TM : none
+    L --> TM : None
   end
 end
-TM --> H : TrainFeed.beacon
-H -> TRM : track_model_to_train_model()  // beacon passed on
+TM --> H : TrackModelOutputs (train_feeds[train_id].beacon)
+H -> H : track_model_to_train_model(outputs, train_id)
+H -> TRM : TrainTrackFeed (beacon)
 @enduml

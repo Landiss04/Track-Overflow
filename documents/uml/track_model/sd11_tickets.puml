@@ -12,8 +12,10 @@ autonumber
 participant ":TrackModel" as TM
 participant "Central harness" as H
 participant "CTC Office" as CTC
-TM -> TM : _sell_tickets()  // tickets sold this tick, by station
-TM --> H : CtcOutputs.tickets_sold_now
-H -> H : track_model_to_ctc_office()  // (count, station) pairs
-H -> CTC : step(dt, inputs with ticket sales)  // direct, no running total
+H -> TM : step(dt, inputs)
+TM -> TM : _sell_tickets()
+TM -> TM : _ctc_outputs()
+TM --> H : TrackModelOutputs.ctc (CtcOutputs.tickets_sold_now)
+H -> H : track_model_to_ctc_office(outputs)
+H -> CTC : step(dt, inputs with TicketSales)  // direct, no running total
 @enduml

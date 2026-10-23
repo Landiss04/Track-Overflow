@@ -10,29 +10,32 @@ skinparam sequenceMessageAlign left
 skinparam ParticipantPadding 20
 autonumber
 actor Dispatcher
+participant "Central harness" as H
 participant "CTC Office" as CTC
 participant "Track Controller" as TC
 participant "Track Model" as TM
 participant "Train Model" as TRM
 participant "Train Controller" as TrC
-note over CTC, TrC : Every message passes through the central harness, once per tick.
 Dispatcher -> CTC : dispatch_train(train_id, destination)
 CTC -> CTC : plan route
 loop every tick (dt = 0.1 s)
-  CTC -> TC : suggested speed, authority (per block)
+  H -> CTC : step(dt, inputs)
+  CTC --> H : suggested speed, authority (per block)
+  H -> TC : step(dt, inputs)
   TC -> TC : PLC scan, vital supervisor
-  TC -> TM : speed, authority, switches, signals, gates (per block)
-  TM -> TM : place trains, set occupancy, build feeds
-  TM -> TC : occupancy, switch / signal / gate state, failures
-  TC -> CTC : occupancy and device state
-  TM -> TRM : track info, speed, authority, beacon, boarded
-  TM -> TrC : signal light seen on entering a block
-  TM -> CTC : tickets sold this tick
-  TRM -> TM : block, offset, speed, doors
-  TRM -> TrC : track signal, beacon, speed
-  TrC -> TRM : power command, brakes
+  TC --> H : WaysideCommands (speed, authority, switches, signals, gates)
+  H -> H : track_controller_to_track_model(commands)
+  H -> TM : step(dt, inputs)
+  TM --> H : TrackModelOutputs
+  H -> H : track_model_to_track_controller(outputs)
+  H -> TC : step(dt, inputs with TrackReadback)
+  H -> H : track_model_to_train_model(outputs, train_id)
+  H -> TRM : step(dt, inputs with TrainTrackFeed)
+  H -> H : track_model_to_train_controller(outputs, train_id)
+  H -> TrC : step(dt, inputs with signal_light_ahead)
+  H -> H : track_model_to_ctc_office(outputs)
+  H -> CTC : step(dt, inputs with TicketSales)
+  TRM --> H : TrainTrackReport (block, offset_m, speed, doors)
+  TrC --> H : power command, brakes
 end
-TrC -> TRM : service brake (authority used up)
-TRM -> TM : speed 0, doors open at the station
-TM -> TRM : passengers boarded
 @enduml

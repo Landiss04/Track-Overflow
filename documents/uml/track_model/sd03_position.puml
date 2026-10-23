@@ -13,21 +13,28 @@ participant "Train Model" as TRM
 participant "Central harness" as H
 participant ":TrackModel" as TM
 participant ":Layout" as L
-TRM --> H : block, offset (since entering the block), speed
-H -> TM : step(dt, inputs with TrainReport)
-TM -> TM : true offset = offset_m + carry_m
-alt true offset >= block length
-  TM -> L : next_block(block, came_from, switch positions)
-  L --> TM : next block (None = yard, same block = dead end)
-  TM -> TM : carry = overshoot, polarity flips, entered_this_tick = True
-else true offset < 0 (rolling back)
-  TM -> L : previous_block(block, came_from)
-  L --> TM : block rolled back into
-  TM -> TM : carry = new block length + offset
-else still inside the block
-  TM -> TM : no change
+TRM --> H : TrainTrackReport (block, offset_m, speed)
+H -> H : train_model_to_track_model(reports)
+H -> TM : step(dt, inputs)
+TM -> TM : _validate(dt, inputs)
+TM -> TM : _move_trains(reports)
+loop each train on the track
+  TM -> TM : _advance(train_id, train, offset_m)  // offset_m = offset + carry_m
+  alt offset_m >= block length
+    TM -> L : next_block(block_id, previous_block_id, switch_states)
+    L --> TM : block_id (None = yard, same block = dead end)
+    TM -> TM : _carry_into(train, offset_in_left_m)
+  else offset_m < 0 (rolling back)
+    TM -> L : previous_block(block_id, previous_block_id)
+    L --> TM : block_id
+    TM -> TM : _behind(target, old)
+    TM -> TM : _carry_into(train, offset_in_left_m)
+  else still inside the block
+    TM -> TM : return (no change)
+  end
 end
-TM -> TM : _controller_outputs()  // occupied = a train is in the block or its circuit is dead
-TM --> H : block_occupancy, TrainFeed for the new block
-H -> TRM : feed (Train Model resets its offset to 0)
+TM -> TM : _controller_outputs()
+TM --> H : TrackModelOutputs (block_occupancy, train_feeds)
+H -> H : track_model_to_train_model(outputs, train_id)
+H -> TRM : TrainTrackFeed (the Train Model resets its offset to 0)
 @enduml

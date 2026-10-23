@@ -15,9 +15,14 @@ participant ":TrackModelState" as S
 participant ":TrackModel" as TM
 TB -> W : click a block in the block table
 W -> S : selectBlock(block_id)
-S -> TM : snapshot()
-TM --> S : TrackModelSnapshot (blocks, track circuits, outputs)
-S -> S : selectedDetails: convert to ft, mph and deg F
+S -> S : viewChanged.emit(), changed.emit()
 S --> W : changed
+W -> S : selectedDetails
+S -> S : _cmd_speed(block_id), _authority(block_id)
+S -> S : _beacon_long(block_id), _direction_long(block)
+S -> S : _aspect(block_id), _switch_position(block_id), _crossing(block_id)
+S -> S : _temp_f(temp_c)
+S --> W : details (label, value pairs in ft, mph, deg F)
 W -> TB : detail panel: length, grade, limit, elevation, commanded speed,\nauthority, station, direction, beacon, heater, crossing, signal, switch, occupied
+note over S, TM : S -> TM : snapshot() after every step (refresh), so S\nalready holds the TrackModelSnapshot it converts here.
 @enduml

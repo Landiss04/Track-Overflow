@@ -13,14 +13,17 @@ participant "Central harness" as H
 participant ":TrackModel" as TM
 participant "Track Controller" as TC
 H -> TM : step(dt, inputs)
+TM -> TM : _update_track_temps(dt)
 loop each section
-  TM -> TM : _heater_on(section)  // D026
+  TM -> TM : _heater_on(section_id)  // D026
   alt a block of the section has a power failure
-    TM -> TM : heater off
+    TM -> TM : _powered_off(block_id)  // heater off
   end
   TM -> TM : target = ambient, or ambient + 10 deg C while the heater runs
-  TM -> TM : track temperature moves toward the target
+  TM -> TM : _track_temp_c[section_id] moves toward the target
 end
-TM --> H : heater_states, track_temp_c
-H -> TC : read-back through track_model_to_track_controller()
+TM -> TM : _controller_outputs()
+TM --> H : TrackModelOutputs (heater_states, track_temp_c)
+H -> H : track_model_to_track_controller(outputs)
+H -> TC : step(dt, inputs with TrackReadback)
 @enduml

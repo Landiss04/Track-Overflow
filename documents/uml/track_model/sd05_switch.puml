@@ -12,17 +12,21 @@ autonumber
 participant "Track Controller" as TC
 participant "Central harness" as H
 participant ":TrackModel" as TM
-TC --> H : switch commands {switch: NORMAL or REVERSE}
-H -> H : track_controller_to_track_model()
+TC --> H : WaysideCommands (switch commands {switch: NORMAL or REVERSE})
+H -> H : track_controller_to_track_model(commands)
 H -> TM : step(dt, inputs)
-TM -> TM : _validate()  // unknown switch: UnknownIdError, nothing changes
+TM -> TM : _validate(dt, inputs)  // unknown switch: UnknownIdError, nothing changes
+TM -> TM : _apply_commands(commands)
 loop each commanded switch
+  TM -> TM : _powered_off(block_id)
   alt the switch block has a power failure
     TM -> TM : keep the actual position
   else
-    TM -> TM : actual position = commanded position
+    TM -> TM : _switches[switch_id] = commanded position
   end
 end
-TM --> H : switch_states (actual positions)
-H -> TC : read-back through track_model_to_track_controller()
+TM -> TM : _controller_outputs()
+TM --> H : TrackModelOutputs (switch_states)
+H -> H : track_model_to_track_controller(outputs)
+H -> TC : step(dt, inputs with TrackReadback)
 @enduml

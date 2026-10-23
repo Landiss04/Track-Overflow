@@ -14,11 +14,11 @@ participant ":TrackModel" as TM
 participant "Track Controller" as TC
 participant "CTC Office" as CTC
 H -> TM : step(dt, inputs)
-TM -> TM : _controller_outputs()  // actual state of every device
-TM --> H : TrackControllerOutputs (occupancy, switches, gates, signals,\nfailures, heaters, track temperature)
-H -> H : track_model_to_track_controller()
-H -> TC : step(dt, inputs with the read-back)
+TM -> TM : _controller_outputs()
+TM --> H : TrackModelOutputs.controller (TrackControllerOutputs)
+H -> H : track_model_to_track_controller(outputs)
+H -> TC : step(dt, inputs with TrackReadback)
 TC --> H : report per wayside
-H -> CTC : occupancy and device state (through the Track Controller)
+H -> CTC : step(dt, inputs with occupancy and device state)  // through the Track Controller
 note over TM : A failure injected between ticks\nrebuilds the read-back at once.
 @enduml

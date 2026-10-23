@@ -20,16 +20,20 @@ CTC --> H : suggested speed and authority per block
 H -> TC : step(dt, inputs)
 activate TC
 TC -> TC : PLC scan, vital supervisor
-TC --> H : speed and authority per block, switch, signal, crossing commands
+TC --> H : WaysideCommands (speed and authority per block, switch, signal, crossing commands)
 deactivate TC
-H -> H : track_controller_to_track_model()
-H -> TM : step(dt, TrackModelInputs)
+H -> H : track_controller_to_track_model(commands)
+H -> TM : step(dt, inputs)
 activate TM
-TM -> TM : validate, store commands, move trains
+TM -> TM : _validate(dt, inputs)
+TM -> TM : _apply_commands(commands)
+TM -> TM : _move_trains(reports)
+TM -> TM : _feed(train, report)
 TM --> H : TrackModelOutputs
 deactivate TM
-H -> H : track_model_to_train_model(), track_model_to_train_controller()
-H -> TRM : step(dt, feed with speed and authority of the train's block)
-H -> TrC : step(dt, signal light seen)
-TRM --> H : block, offset, speed, doors (used by the next tick)
+H -> H : track_model_to_train_model(outputs, train_id)
+H -> TRM : step(dt, inputs with TrainTrackFeed)  // speed and authority of the train's block
+H -> H : track_model_to_train_controller(outputs, train_id)
+H -> TrC : step(dt, inputs with signal_light_ahead)
+TRM --> H : TrainTrackReport (block, offset_m, speed, doors)  // used by the next tick
 @enduml

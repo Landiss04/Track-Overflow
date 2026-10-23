@@ -13,18 +13,21 @@ participant "Track Controller" as TC
 participant "Central harness" as H
 participant ":TrackModel" as TM
 participant "Train Model" as TRM
-TC --> H : speed (m/s) and authority (blocks) per block
+TC --> H : WaysideCommands (commanded_speed_mps, authority_blocks per block)
+H -> H : track_controller_to_track_model(commands)
 H -> TM : step(dt, inputs)
-TM -> TM : _validate()  // known block, finite non-negative speed, whole authority
-TM -> TM : keep this tick's speed and authority of each block
+TM -> TM : _validate(dt, inputs)  // known block, finite non-negative speed, whole authority
+TM -> TM : _apply_commands(commands)
 loop each train on the track
-  TM -> TM : _track_signal(train's block)
-  alt circuit failed, or block not commanded this tick
-    TM -> TM : TrackSignal(speed 0, authority 0)
+  TM -> TM : _feed(train, report)
+  TM -> TM : _track_signal(block_id)
+  alt _circuit_dead(block_id), or block not commanded this tick
+    TM -> TM : TrackSignal(commanded_speed_mps=0, authority_blocks=0)
   else
     TM -> TM : TrackSignal(this tick's speed, this tick's authority)
   end
 end
-TM --> H : TrainFeed.track_signal per train
-H -> TRM : track_model_to_train_model()  // speed and authority of the train's block
+TM --> H : TrackModelOutputs (train_feeds[train_id].track_signal)
+H -> H : track_model_to_train_model(outputs, train_id)
+H -> TRM : TrainTrackFeed (track_signal)
 @enduml

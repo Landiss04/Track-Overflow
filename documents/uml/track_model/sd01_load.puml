@@ -18,21 +18,26 @@ TB -> W : Load track... (choose a .json file)
 W -> S : loadLayout(url)
 S -> TM : load_layout_file(path)
 TM -> L : line_of_file(path)
-TM -> L : load_layout(all line paths)
+L --> TM : line
+TM -> L : load_layout(line_paths)
 activate L
-L -> L : read blocks, convert grade and speed units
-L -> L : read switches, signals, beacons, next_blocks
-L -> L : check directions against switches
+L -> L : _read_line(data, path)
+L -> L : _read_block(line, raw)
+L -> L : _read_switches(line, raw_blocks, by_number)
+L -> L : _check_directions(line, exits, switches, blocks)
 L --> TM : Layout
 deactivate L
 alt file is valid
-  TM -> TM : _adopt(layout), _restart()
-  TM --> S : line name
-  S -> W : linesChanged, changed
+  TM -> TM : _adopt(layout)
+  TM -> TM : _restart()
+  TM --> S : line
+  S -> S : linesChanged.emit(), changed.emit()
+  S --> W : linesChanged, changed
   W -> TB : line shown, trains cleared
 else bad file (LayoutError)
-  TM --> S : error, nothing changed
-  S -> W : loadMessage
+  TM --> S : LayoutError (nothing changed)
+  S -> S : _set_load_message(message)
+  S --> W : loadMessage
   W -> TB : error shown, old track kept
 end
 @enduml

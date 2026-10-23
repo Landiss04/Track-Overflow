@@ -15,13 +15,17 @@ participant ":TrackModelState" as S
 participant ":TrackModel" as TM
 participant "Central harness" as H
 Murphy -> W : select a block, choose BROKEN_RAIL / TRACK_CIRCUIT / POWER (or NONE to clear)
+W -> S : selectBlock(block_id)
 W -> S : setSelectedFailure(name)
 S -> TM : set_block_failure(block_id, failure)
-TM -> TM : store failure, rebuild Track Controller read-back at once
-S -> W : refresh (block shown as failed)
+TM -> TM : _failures[block_id] = failure
+S -> S : refresh()
+S --> W : changed
+W -> Murphy : block shown as failed
 ... next tick ...
 H -> TM : step(dt, inputs)
-TM -> TM : block reads occupied, track circuit dead
-TM -> TM : POWER only: switch held, light RED, gates down, heaters off
-TM --> H : occupancy true, failure_status, train feed with speed 0, authority 0
+TM -> TM : _circuit_dead(block_id)  // block reads occupied, track circuit dead
+TM -> TM : _powered_off(block_id)  // POWER only: switch held, light RED, gates down, heaters off
+TM -> TM : _controller_outputs()
+TM --> H : TrackModelOutputs (block_occupancy, failure_status, train_feeds with speed 0, authority 0)
 @enduml

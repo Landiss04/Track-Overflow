@@ -29,6 +29,15 @@ class TrackModelState <<QObject, ui bridge>> {
   +setSelectedFailure(name) : None
   +setAmbientF(temp_f) : None
   +loadLayout(url) : None
+  -_set_load_message(message) : None
+  -_cmd_speed(block_id) : str
+  -_authority(block_id) : str
+  -_beacon_long(block_id) : str
+  -_direction_long(block) : str
+  -_aspect(block_id) : str
+  -_switch_position(block_id) : str
+  -_crossing(block_id) : str
+  -_temp_f(temp_c) : str
   <<signals>> changed, viewChanged,
   linesChanged, loadMessageChanged,
   runningChanged

@@ -15,13 +15,13 @@ participant "Train Controller" as TC
 H -> TM : step(dt, inputs)
 loop each train on the track
   TM -> TM : _signal_seen(train)
-  alt train entered a block with a signal this tick
-    TM -> TM : _signal_state(block)  // commanded aspect, RED without power
+  alt train.entered_this_tick and the block has a signal
+    TM -> TM : _signal_state(block_id)  // commanded aspect, RED without power
   else
-    TM -> TM : none
+    TM -> TM : return None
   end
 end
-TM --> H : signal_seen per train
-H -> H : track_model_to_train_controller()
-H -> TC : step(dt, signal light seen)  // sent directly, kept by the Train Controller
+TM --> H : TrackModelOutputs (signal_seen[train_id])
+H -> H : track_model_to_train_controller(outputs, train_id)
+H -> TC : step(dt, inputs with signal_light_ahead)  // sent directly, kept by the Train Controller
 @enduml

@@ -41,6 +41,9 @@ class TrackModel <<model.py>> {
   -_feed(train, report) : TrainFeed
   -_track_signal(block_id) : TrackSignal
   -_signal_state(block_id) : SignalAspect
+  -_powered_off(block_id) : bool
+  -_circuit_dead(block_id) : bool
+  -_behind(block_id, ahead) : str | None
   -_gate_closed(block_id) : bool
   -_heater_on(section_id) : bool
   -_signal_seen(train) : SignalAspect | None
@@ -97,6 +100,10 @@ class TrackConfig <<frozen dataclass>> {
 class "layout.py\n<<module functions>>" as LF {
   load_layout(paths) : Layout
   line_of_file(path) : str
+  -_read_line(data, path) : tuple
+  -_read_block(line, raw) : Block
+  -_read_switches(line, raw_blocks, by_number) : list
+  -_check_directions(line, exits, switches, blocks) : None
 }
 class TrackModelError <<Exception>>
 class InvalidInputError <<Exception>>
