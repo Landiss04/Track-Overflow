@@ -1,7 +1,8 @@
 # Train-Ctrl_HW — open issues for review
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
-picked up later. Last reviewed 2026-10-24 against `cfba866`
+picked up later. Last reviewed 2026-10-24, after the station boarding
+change (M6, M7)
 (`REQUIREMENTS.md` M0–M21, revisions R2–R37; M5 is merged into M3).
 
 ## Resolved 2026-10-24
@@ -191,18 +192,14 @@ picked up later. Last reviewed 2026-10-24 against `cfba866`
       receives (M12; the drawer is to be removed).
 
 32. **Choices made in R21–R22 for review** (2026-10-21, not specified):
-    - Automatic opens the doors on *arrival* (station beacon heard, no
-      authority, stopped), the same event as the arrival announcement.
-      Before, it opened at any stop after a new beacon.
-    - The departure announcement also needs authority above 0, the same
-      "Track Signal resumes" test Automatic departs on.
     - Wording: "The train *id* is departing from *station*" (the request
       said "train *id* is departing", without "The").
     - The bench sends a beacon once after any beacon row is sent, so
-      setting underground alone works; every such beacon with a station
-      name arms a station stop, as a real beacon would.
-    - "Arriving soon" fires whenever the authority reaches 3, station or
-      not; a rise to 3 announces too, accepted (M7, R29).
+      setting underground alone works. Sent with no authority, no
+      commanded speed and the train standing, that beacon is an arrival
+      (M6), as a real one would be.
+    - A rise to 3 blocks announces "arriving soon" too, accepted (M7,
+      R29); never at a station (2026-10-24).
     - Lights: both interior and exterior switch together.
     - The bench's hours wheel runs 0–23, not 0–24 as asked: 24:00 is
       00:00, and 24:30 is not a time of day (R27).
@@ -272,7 +269,17 @@ Not issues: things to know.
 - **The vote is shown failing only in `check.py`** (M21), which swaps
   power channels for faulty ones. The bench has no row for it: it would
   have to reach inside the controller (M0).
+- **Yard departure announcements.** Leaving the yard has no announcement
+  of its own: the yard is not a station and sends no beacon, so there is
+  no boarding and no "departing". The departure is the first tick the
+  train is commissioned and receives commanded speed and authority above
+  0. With 3 blocks or fewer, "The train *id* is arriving soon" is sent at
+  once, also when the count arrived before the gains were set; with
+  more, it is sent when the authority comes down to 3 (M7).
 - **`HARNESS_INTEGRATION.md` is to be updated** once this refactor
   settles. Until then it does not list `power_verified` or the vitality
-  breach, and still says `check.py` must be on the path for the console
-  (no longer true).
+  breach; still says `check.py` must be on the path for the console (no
+  longer true); still says the dwell is the Train Model's (it is the
+  controller's, M6); and says to send the beacon only on the tick the
+  train passes one, where M6 needs it every tick the train is on a
+  station's block and nothing otherwise.

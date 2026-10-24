@@ -31,8 +31,8 @@ the 2026-10-21 changes.
 | Emergency brake release | Only by the driver, only at a stand; with a detected failure latched, only in Manual (before 2026-10-21: never). A Train Model report of "off" never releases it (D011). A passenger pull is an emergency brake state that turns on while the controller is not commanding it, so a state still reported on after the release (the last command echoed, or a held passenger latch) does not latch it again: the driver's release overrides it (M2, 2026-10-21). |
 | Reported state | Received, never made up: emergency and service brake state as two signals (M18), Door State and Light State. On the bench the simulation reports them: service false while an injected brake failure blocks it; doors and lights follow their commands on each change, with no door interlock of its own (the Train Model's is commented out, so the controller is the interlock), and a state the bench publishes stands until the next command. |
 | Speed limit | Commanded speed is the only cap, in both modes (`REQUIREMENTS.md` M1): the controller cannot know the true limit. Automatic targets it; the driver's target is capped at it when set and lowered with it when it drops. No 70 km/h cap since 2026-10-21 (before: the lower of the commanded speed and 43.5 mph); the dial's 70 km/h scale is display only (M14). The separate `speed_limit` input, row and readout are gone. |
-| Doors | The controller's (M6): opened only at a stand; either side, except at a station (arrived, until it departs), where only the platform side opens (2026-10-21; before, the platform side only, anywhere). Automatic opens the platform side on arriving at a station (a station beacon heard, no authority left, stopped; before 2026-10-21, at any stop after a new beacon), closes when the Track Signal resumes, and leaves only once Door State reports them closed. |
-| Announcements | A command to the Train Model (M7), sent automatically in both modes (2026-10-21): "The train *id* is arriving soon" at 3 blocks of authority; "The train *id* has arrived at *station*" once a station beacon was heard and the train stands with no authority; "The train *id* is departing from *station*" once the doors report closed and the Track Signal resumes. Each held 5 s of system time. In Manual the press repeats the last of them, held the same way (2026-10-21; before, it sent the station name on a wall-clock timer). Before: Automatic sent the station name on a new beacon. |
+| Doors | The controller's (M6), with station boarding in both modes (2026-10-24): on arrival (the beacon received, authority 0, commanded speed 0, at a stand) it opens the platform side, holds the 45 s dwell (truth D007) from Door State reporting it open, then closes the doors; after the dwell the Manual driver may work the platform side until a new Track Signal, which closes and locks the doors. No traction while a stop holds the train or a door is open; doors are closed while moving. Away from a station, Manual opens either side at a stand. Before 2026-10-24: the dwell was the Train Model's, Automatic only, ended by the Track Signal; a beacon heard while running through a station armed a stop that could open the doors off a platform. |
+| Announcements | A command to the Train Model (M7), sent automatically in both modes: "The train *id* is arriving soon" at 3 blocks of authority, never at a station, and at a departure (from the yard, or from a station after "departing") at once with 3 blocks or fewer (2026-10-24); "The train *id* has arrived at *station*" on arrival; "The train *id* is departing from *station*" once the doors report closed for a new Track Signal, after the dwell. Each held 5 s of system time. In Manual the press repeats the last of them, held the same way. Before 2026-10-21: Automatic sent the station name on a new beacon; before 2026-10-24, the first authority a train received never announced. |
 | Lights | Automatic in both modes (M8, 2026-10-21): on with an underground beacon and at 18:00; off with a later not-underground beacon (unless night) and at 06:00 (unless underground). Only those changes act; the driver's own choice stands in between. A train spawns with nothing on, lights included, and one spawned at the yard between 18:00 and 06:00 has its lights set on (2026-10-21; before, lights started on). |
 | Operators and trains | No driver before a train's gains are set (M9, 2026-10-21): selecting an uncommissioned train signs the driver out, Driver is refused, and the sign-in view says the train is waiting for its gains. Spawning a train keeps the current selection. The gains hand-over signs a driver in only if the engineer is still signed in on the train just commissioned (2026-10-24; before, it signed one in unconditionally after 1.5 s). |
 | Emergency brake access | The driver only, to engage or release, in either mode (M2); a passenger pull still latches it. |
@@ -51,6 +51,9 @@ the 2026-10-21 changes.
 - Header names the train and shows Automatic / Manual only; an E-BRAKE badge
   for the emergency brake and one pill per reported failure, and a
   "Vitality breach" pill during a breach (M21, 2026-10-24).
+- The **Cab controls** panel (was Doors & cabin): its badge reads "Doors
+  free" or "Doors locked" in Manual, "Locked" in Automatic; greyed door
+  tiles are the only cue for what the driver cannot do (2026-10-24).
 - The numbers drawer's Motion card shows the three power calculations and
   the vote (2026-10-24). The drawer is to be removed in the final
   iteration (`OPEN_ISSUES.md`, Notes).
@@ -156,7 +159,11 @@ and the drawer rows on screen, not cut off; the gains hand-over signing
 nobody in after a sign-out or a pick of an uncommissioned train. The new
 checks step the controller tick by tick. Each fails on the commit before.
 `check.py` is a development self-check only: the integration does not
-run or ship it.
+run or ship it. Later the same day: arrival opening only the platform
+side, the 45 s dwell with a Track Signal waiting for it, the driver's
+lock-outs, no power until the doors report closed, no boarding off a
+station, the announcement sequence in both modes and from the yard, and
+the Cab controls badge.
 
 ### Repository
 
@@ -220,6 +227,8 @@ run or ship it.
 | `c3fc32f`, `c29be48` | 10-24 | M21: the power command calculated three times a tick and voted two out of three; a vitality breach sends 0 W, latches the e-brake and shows a pill until a tick agrees. `power_verified` on the commands; the numbers drawer shows the vote. |
 | `bf277b1` | 10-24 | The gains hand-over signs a driver in only on the train just commissioned, with the engineer still signed in (#16, M9). |
 | `7a1f581` | 10-24 | flake8 clean, no behaviour change. |
+| `619cdca` | 10-24 | M21 recorded in the documents; `OPEN_ISSUES.md` Notes. |
+| `a462964` | 10-24 | M6, M7: station boarding with the controller's 45 s dwell, in both modes; "arriving soon" never at a station and at a departure with 3 blocks or fewer; the Cab controls panel and its door badge. |
 
 ---
 
