@@ -2,7 +2,7 @@
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Last reviewed 2026-10-24 against `cfba866`
-(`REQUIREMENTS.md` M0–M20, revisions R2–R37; M5 is merged into M3).
+(`REQUIREMENTS.md` M0–M21, revisions R2–R37; M5 is merged into M3).
 
 ## Resolved 2026-10-24
 
@@ -58,7 +58,7 @@ picked up later. Last reviewed 2026-10-24 against `cfba866`
 
 ## Added 2026-10-16 (requirements review, `REQUIREMENTS.md`)
 
-19. **Module rules are not recorded outside this folder.** Rules M0–M20
+19. **Module rules are not recorded outside this folder.** Rules M0–M21
     in `REQUIREMENTS.md` are in neither truth's Train Controller contract
     (still a placeholder) nor the SRS. Update the documentation later.
 
@@ -255,3 +255,24 @@ picked up later. Last reviewed 2026-10-24 against `cfba866`
   the numbers engineers type.
 - **The root `requirements.txt` on this branch lacks the PySide6 pin** that
   `development` has (`PySide6==6.11.2`).
+
+## Notes
+
+Not issues: things to know.
+
+- **The "Show all numbers" drawer will be removed** in the final
+  iteration. Going with it, each commented in the code: the drawer
+  (`ui_parts/panels/NumbersDrawer.qml`) and its place in
+  `ui_parts/views/ConsoleView.qml`, with the hero row's `visible`
+  binding there; the snapshot keys only it reads (`accel_mps2`,
+  `authority_target`, `max_power_kw`, `power_channels`, `power_vote`) and
+  the backend's `_power_channels` and `_power_vote`;
+  `ControllerCore.last_vote`; and the drawer step in `check.py`. M12's
+  acceleration exception goes with it.
+- **The vote is shown failing only in `check.py`** (M21), which swaps
+  power channels for faulty ones. The bench has no row for it: it would
+  have to reach inside the controller (M0).
+- **`HARNESS_INTEGRATION.md` is to be updated** once this refactor
+  settles. Until then it does not list `power_verified` or the vitality
+  breach, and still says `check.py` must be on the path for the console
+  (no longer true).

@@ -2,7 +2,7 @@
 
 Everything changed in the HW Train Controller module since Ivan's last commit
 (`493f16e`, "update compiled Python bytecode for check.py"), up to the
-controller / test bench separation (2026-10-21). Work by Jonathan Tsang, with Claude. Open, unfixed items are in
+vital power command (2026-10-24). Work by Jonathan Tsang, with Claude. Open, unfixed items are in
 [`OPEN_ISSUES.md`](OPEN_ISSUES.md); rules and their status in
 [`REQUIREMENTS.md`](REQUIREMENTS.md).
 
@@ -34,21 +34,26 @@ the 2026-10-21 changes.
 | Doors | The controller's (M6): opened only at a stand; either side, except at a station (arrived, until it departs), where only the platform side opens (2026-10-21; before, the platform side only, anywhere). Automatic opens the platform side on arriving at a station (a station beacon heard, no authority left, stopped; before 2026-10-21, at any stop after a new beacon), closes when the Track Signal resumes, and leaves only once Door State reports them closed. |
 | Announcements | A command to the Train Model (M7), sent automatically in both modes (2026-10-21): "The train *id* is arriving soon" at 3 blocks of authority; "The train *id* has arrived at *station*" once a station beacon was heard and the train stands with no authority; "The train *id* is departing from *station*" once the doors report closed and the Track Signal resumes. Each held 5 s of system time. In Manual the press repeats the last of them, held the same way (2026-10-21; before, it sent the station name on a wall-clock timer). Before: Automatic sent the station name on a new beacon. |
 | Lights | Automatic in both modes (M8, 2026-10-21): on with an underground beacon and at 18:00; off with a later not-underground beacon (unless night) and at 06:00 (unless underground). Only those changes act; the driver's own choice stands in between. A train spawns with nothing on, lights included, and one spawned at the yard between 18:00 and 06:00 has its lights set on (2026-10-21; before, lights started on). |
-| Operators and trains | No driver before a train's gains are set (M9, 2026-10-21): selecting an uncommissioned train signs the driver out, Driver is refused, and the sign-in view says the train is waiting for its gains. Spawning a train keeps the current selection. |
+| Operators and trains | No driver before a train's gains are set (M9, 2026-10-21): selecting an uncommissioned train signs the driver out, Driver is refused, and the sign-in view says the train is waiting for its gains. Spawning a train keeps the current selection. The gains hand-over signs a driver in only if the engineer is still signed in on the train just commissioned (2026-10-24; before, it signed one in unconditionally after 1.5 s). |
 | Emergency brake access | The driver only, to engage or release, in either mode (M2); a passenger pull still latches it. |
 | Time | A fixed 0.1 s step (truth D017); 10× runs 100 ticks a second instead of a longer step. The system time is an input (M11, 2026-10-21): `step_all` takes it each tick, in seconds since midnight as `utils/system_clock.py` counts it, from the harness clock or the bench's own (from 05:00:00, simulated time). The console's clock shows the time the controller received. Pause on the bench holds every train and the bench clock. The bench clock starts at the first commissioning and then always runs, whichever train is selected (2026-10-21; before, only while the selected train was commissioned). |
 | Fleet input | `step_all(dt, inputs_by_id, time_s)` refuses a tick whose set is missing any signal sent every tick, so a stale brake state cannot read as a brake failure; any `dt` other than the fixed 0.1 s step; and a `time_s` that is not a finite time of at least 0. |
-| Outputs to the Train Model | `ControllerCore.commands()` returns `TrainModelCommands` in SI, one field per truth signal (power, service/emergency brake, door bool[2], light bool[2] interior/exterior, temperature setpoint °C, announcement); `commands_changed` emits on change for the central harness (D005). |
+| Outputs to the Train Model | `ControllerCore.commands()` returns `TrainModelCommands` in SI, one field per truth signal (power, service/emergency brake, door bool[2], light bool[2] interior/exterior, temperature setpoint °C, announcement), plus this module's `power_verified` (M21, 2026-10-24); `commands_changed` emits on change for the central harness (D005). |
+| Vital power command | Calculated three times a tick from the same inputs (`vital.py`) and used only if at least two results agree (M21, 2026-10-24). With no two equal, a vitality breach: 0 W, the emergency brake latched, `power_verified` false, and a "Vitality breach" pill until a tick agrees; the driver may release the brake only after that. Speed curves and every power command are unchanged (43 mph: 42.89 at 42.3 s; 60 mph: 60.11 at 120 s). |
 | Train Model interface | One way in, `read_inputs` through `step_all`: SI in truth shapes (signed actual speed, `emergency_brake_state` and `service_brake_state`, `door_state` / `light_state` bool[2], beacon station + side + underground); `failure_status` is gone (truth withdrew it). The whole set is checked before any of it is applied. The console's `apply_inputs` slot, a second way in, is gone (2026-10-21). |
 | Bench and controller | Separate (M0, 2026-10-21). `ControllerCore` holds only what it receives and sends: the toy plant, Murphy's injected failures and the plant's command edges moved to `train_ctrl/bench_sim.py` (`SimTrain`, no Qt). Standalone, the console steps the fleet the way the harness does: each train's signals from its `SimTrain`, one `step_all` with the bench clock, the commands back into the simulation. Speed curves are unchanged (0 → 43 mph reaches 42.9 mph at 42.3 s, and 11.18 / 22.37 / 33.55 mph at 10 / 20 / 30 s, before and after). |
 | Bench interface | `apply_bench_inputs` converts the bench's mph / °F once, checks the set with `read_inputs`, and edits the bench's simulation; the controller gets it on the next tick, as it would a harness signal. A set it cannot read is refused whole and shown as a "Not sent" callout on the bench; so is any edit to a train a harness drives. Clearing an injected failure still clears it in the controller too, until the controller detects resolution itself (`OPEN_ISSUES.md` #23). Gains are commissioned only from the engineer's pop-up. The bench cannot set the service brake state. |
 | Units on screen | Imperial throughout, conversion factors from truth `conventions/units.md`; acceleration in the numbers drawer is m/s², a debugging exception (M12). |
-| Code conventions | snake_case verb slots, unit-suffixed constants, no magic numbers, docstrings, `TrainControllerError` / `InvalidInputError`, flake8 79/72 with pep8-naming clean. |
+| Code conventions | snake_case verb slots, unit-suffixed constants, no magic numbers, docstrings, `TrainControllerError` / `InvalidInputError`, flake8 79/72 with pep8-naming clean (the whole folder since 2026-10-24). |
 
 ### Console UI (`ui_parts/`)
 
 - Header names the train and shows Automatic / Manual only; an E-BRAKE badge
-  for the emergency brake and one pill per reported failure.
+  for the emergency brake and one pill per reported failure, and a
+  "Vitality breach" pill during a breach (M21, 2026-10-24).
+- The numbers drawer's Motion card shows the three power calculations and
+  the vote (2026-10-24). The drawer is to be removed in the final
+  iteration (`OPEN_ISSUES.md`, Notes).
 - Searchable **train picker** (`components/TrainPicker.qml`) on the console and
   the bench: type a number, ID or line; All / Green / Red chips; ↑ ↓ Enter
   Esc; "N of M trains". The roster refreshes only when a train is added or
@@ -144,12 +149,22 @@ stopwatch (it failed 4 of 4 runs on Windows before).
   24 / 60 / 60, a scroll notch steps one, a drag moves them, and the time
   they show reaches the controller.
 
+2026-10-24: the vote's truth table; one faulty power channel outvoted with
+no change to the run; two giving a breach (0 W, the e-brake, unverified),
+the release refused during it and allowed after; the pill on both headers
+and the drawer rows on screen, not cut off; the gains hand-over signing
+nobody in after a sign-out or a pick of an uncommissioned train. The new
+checks step the controller tick by tick. Each fails on the commit before.
+`check.py` is a development self-check only: the integration does not
+run or ship it.
+
 ### Repository
 
 - `Train-Ctrl_HW/.gitignore`: `__pycache__/`, `.venv/`, `venv/`; the committed
   `__pycache__/check.cpython-314.pyc` was untracked.
 - Venv at `Train-Ctrl_HW/.venv` (PySide6 6.11.2, PyInstaller 6.22.2), per truth
   `conventions/toolchain.md`. Not committed.
+- The console no longer needs `check.py` on the import path (2026-10-24).
 - `OPEN_ISSUES.md` and this file added; `REQUIREMENTS.md` and
   `HARNESS_INTEGRATION.md` (how the central harness drives the fleet)
   added 2026-10-16.
@@ -190,7 +205,21 @@ stopwatch (it failed 4 of 4 runs on Windows before).
 | `5b99075` | 10-21 | Light tiles answer every press (fixes a lock after a bench light edit); door tiles back to Open/Close; automatic lights; automatic announcements in both modes and the bench `at_station` row; spawning keeps the selection; no driver before a train's gains. |
 | `a6366c8` | 10-21 | No text cut off (scan in the self-check; seven fixed); "Sending automatically"; bench announcement wraps; `at_station` under `authority_blocks`; bench Set time. |
 | `d8bd163` | 10-21 | Mode switching allowed during a failure; the bench's time on drag-and-scroll wheels. |
-| (next) | 10-21 | `REQUIREMENTS.md` checked against the code (R28) and the review's decisions recorded (R29); `OPEN_ISSUES.md` to match. M1: no 70 km/h cap; the Manual target follows a lowered commanded speed (R30). M2, M3: the e-brake can be released in Manual at a stand under a failure (R31). M4: brake failure on the next tick, service brake still commanded (R32). M6: Manual doors either side at a stand, platform side at a station (R33). M7: the Manual press repeats the last announcement on system time (R34). M8: lights set from the time of day at spawn; trains spawn with nothing on (R35, R36). M11: the bench clock runs from the first commissioning (R37). |
+| `95e8fe6`, `7820732` | 10-21 | `REQUIREMENTS.md` checked against the code (R28) and the review's decisions recorded (R29); `OPEN_ISSUES.md` to match. |
+| `0d0938a`, `33db86d` | 10-21 | M1: no 70 km/h cap; the Manual target follows a lowered commanded speed (R30), and the rule says so. |
+| `56b6a5d`, `80c02a7` | 10-21 | M2, M3: the e-brake can be released in Manual at a stand under a failure (R31); open issue #34 (e-brake left off in Automatic under a failure). |
+| `1aab718` | 10-21 | M4: brake failure on the next tick, service brake still commanded (R32). |
+| `cb71ff6` | 10-21 | M6: Manual doors either side at a stand, platform side at a station (R33). |
+| `ed63229` | 10-21 | M7: the Manual press repeats the last announcement on system time (R34). |
+| `289bf28`, `da532ac` | 10-21 | M8: lights set from the time of day at spawn; trains spawn with nothing on (R35, R36). |
+| `235fdc1` | 10-21 | M11: the bench clock runs from the first commissioning (R37). |
+| `3714edc` | 10-21 | `OPEN_ISSUES.md` #28: the engine rule measured against the Train Model's grades. |
+| `cfba866` | 10-22 | Ivan: `HARNESS_INTEGRATION.md` brought up to `3714edc`. |
+| `fd584ed` | 10-24 | `REQUIREMENTS.md` restructured (M5 merged into M3, status and notes split, revision log moved here as §4) and, with `OPEN_ISSUES.md`, brought up to date. |
+| `6d9e571` | 10-24 | The console starts without `check.py`: it is imported, and the snapshot contract checked, only under `--check`. |
+| `c3fc32f`, `c29be48` | 10-24 | M21: the power command calculated three times a tick and voted two out of three; a vitality breach sends 0 W, latches the e-brake and shows a pill until a tick agrees. `power_verified` on the commands; the numbers drawer shows the vote. |
+| `bf277b1` | 10-24 | The gains hand-over signs a driver in only on the train just commissioned, with the engineer still signed in (#16, M9). |
+| `7a1f581` | 10-24 | flake8 clean, no behaviour change. |
 
 ---
 

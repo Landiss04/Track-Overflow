@@ -42,6 +42,7 @@ module documentation is to be updated later (see §6).
 | M18 | **Brake State arrives as two separate inputs:** emergency brake state and service brake state, each what is engaged, not what was commanded. | Met | 2026-10-21: `emergency_brake_state` and `service_brake_state` |
 | M19 | **The controller assumes perfect movement.** It models no rolling resistance, grade, mass or brake rate; the speed error is what absorbs every outside force, and the physics is the Train Model's (or, on the bench, the bench's simulation). | Partial | Engine-failure detection still uses mass and `F = P/v` (§4) |
 | M20 | **Signal light ahead comes from the Track Model**, directly, on the tick the train enters a signal block. Display only. | Partial | Read as `signal_light_ahead`; not mapped from the Track Model yet (#27) |
+| M21 | **The power command is vital: three calculations, voted two out of three.** Each tick the power command (§3) is calculated three times, fresh, from the same inputs; nothing is kept per calculation. A result (the power and the integrator it carries to the next tick) that at least two agree on is used, and the command is marked verified. With no two equal it is a **vitality breach**: this tick's command is rejected and 0 W is sent, the emergency brake latches, the command is marked unverified, and a "Vitality breach" pill shows in the header with the failures. The breach clears on the next tick that agrees; the emergency brake stays on, and the driver may release it only after that (M2). The three calculations are identical, so the vote guards against a corrupted calculation or state, not against a design error common to all three. | Met | `vital.py` `compute_power`, `vote_2oo3`; `power_verified` on the commands (§3). The numbers drawer shows the three calculations and the vote. Shown failing only in `check.py`: the bench cannot reach inside the controller (M0) |
 
 ## 2. Course requirements (SRS §3.2.4 and rubric)
 
@@ -66,6 +67,7 @@ module documentation is to be updated later (see §6).
 | FUNC-001 / 002 | 1.2 / 1.4 | Run at 1× and 10× | Met | Fixed 0.1 s step; 10× is 100 ticks a second (M11) |
 | FUNC-003 | 1.3 | Pause | Met (bench) | Holds every train and the clock; the harness clock owns it when integrated |
 | INTF-001.6 | 9.0 (5) | A GUI for the HW Train Controller | Met | |
+| — | — | Vital architecture for the Train Controller (course deck; `documents/requirements-matrix.md` §3) | Met | M21: the power command, the only vital calculation, is voted two out of three. The SRS has no requirement for it yet (§6) |
 | INTF-004 | — | Consistent error messages | Met (bench) | Shared `Callout`, "Not sent"; the console cannot produce bad input |
 | INTF-007 | — | Separate hardware variation | Deferred | No hardware I/O layer yet |
 | INTF-010 | — | HW and SW interfaces equivalent | Not applicable | SW closed (M13) |
@@ -104,9 +106,11 @@ train enters a signal block (`TrackModelOutputs.signal_seen`; M20).
 
 **Out, to the Train Model, every tick:** power (W, ≥ 0), service brake,
 emergency brake, doors bool[2], lights bool[2], temperature setpoint
-(°C), announcement (text).
+(°C), announcement (text); and power verified (bool, this module's own:
+false on a vitality breach, M21).
 
-**Power** is the controller's only power calculation: velocity error
+**Power** is the controller's only power calculation, and its only vital
+one (M21): velocity error
 (commanded or setpoint minus actual) through Kp + Ki/s. Traction is cut to
 0 while any brake is applied (truth
 `arbitration/traction-cut-under-braking.md`); the Train Model does not cut
@@ -125,6 +129,10 @@ controller sends and receives (M0, M19).
 
 The engine window and threshold are not fixed yet (#28).
 
+A vitality breach (M21) is not a Train Model failure: it is the
+controller's own calculations disagreeing, and it clears on the next tick
+they agree.
+
 Known limits:
 - A brake failure is only seen when the service brake is asked for.
 - A cut from ≥ 2 blocks straight to 0 reads as a pickup failure.
@@ -142,6 +150,7 @@ The revisions R2–R37, each with what changed and where, are in
 ## 6. Later
 
 **Outside this folder (separate PR):**
+- SRS: add a requirement for the Train Controller's vital architecture (M21).
 - SRS: reword FUNC-038 to "detect, from the signals the Train Model returns, each failure and its resolution"; change NFR-001.1 to truth's 0.1 s tick.
 - Fill in the Train Controller section of `documents/test_plan.md`.
 - `development`: remove the stale `TrainController/` folder; update `TRAINS_PROJECT_CONTEXT.md` (gains are an Engineer pop-up).
