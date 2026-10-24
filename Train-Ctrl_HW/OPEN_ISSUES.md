@@ -226,6 +226,16 @@ change (M6, M7)
     again"). To decide after testing: keep it, or have Automatic engage
     it again while a failure is latched.
 
+35. **This module has diverged on `claude/quirky-fermi-sickg4`.** That
+    branch (`f6ed1a1`) runs this module as both Train Controller
+    variants (M13): `train_ctrl/module_process.py` for the harness, and
+    `common/hw_link` for the Pi. But its copy of `Train-Ctrl_HW` is
+    older than this branch's: the toy plant is still inside
+    `control.py`, its engine-failure rule is a different one (a steady
+    fall over 6 s), and it has none of M21, the M6 / M7 boarding or the
+    Cab controls panel. The two need reconciling before integration;
+    that touches another branch, so it waits for the owners.
+
 ## Carried over
 
 - **Rolling resistance.** Decided: the controller models no outside forces

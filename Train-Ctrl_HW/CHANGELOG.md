@@ -232,6 +232,8 @@ the Cab controls badge.
 | `7a1f581` | 10-24 | flake8 clean, no behaviour change. |
 | `619cdca` | 10-24 | M21 recorded in the documents; `OPEN_ISSUES.md` Notes. |
 | `a462964` | 10-24 | M6, M7: station boarding with the controller's 45 s dwell, in both modes; "arriving soon" never at a station and at a departure with 3 blocks or fewer; the Cab controls panel and its door badge. |
+| `40c1ee1` | 10-24 | M6, M7 recorded in the documents. |
+| `94dfd42` | 10-24 | The Station dwell pill in both headers. |
 
 ---
 
