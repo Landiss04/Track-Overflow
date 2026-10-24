@@ -138,21 +138,6 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     again"). To decide after testing: keep it, or have Automatic engage
     it again while a failure is latched.
 
-42. **Two ticks between a command and its report under the harness.**
-    Each module reads the others' outputs from the tick before (truth
-    D017), so a command sent on tick N reaches the Train Model on N+1 and
-    its report comes back on N+2. This controller expects the report on
-    the next tick, as the bench gives it. The brake-failure rule (M4:
-    last tick commanded the service brake, this tick's service brake
-    state still off) would then take every service brake application
-    for a failure and latch the emergency brake. The passenger-pull test
-    (M2) depends on the same timing; the dwell (M6) only starts two
-    ticks later. `claude/quirky-fermi-sickg4` passes the delay to its
-    older copy (`ECHO_TICKS = 2`, `TrainControllerFleet(echo_ticks=...)`).
-    To fix here, in code: wait for the report due for each command, two
-    ticks under the harness and one on the bench, with a check shown
-    failing on the old code first.
-
 ## Bench and console
 
 31. **Setting the bench clock is a jump.** The lights act only if the
@@ -199,8 +184,8 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     connected: it substitutes for every connected module. Where it falls
     short today:
     - **Timing.** It answers each command on the next tick; the harness
-      answers two ticks later (#42), so a rule can pass on the bench and
-      fail integrated.
+      answers two ticks later. The controller allows for it (`echo_ticks`,
+      #42), but a rule tested only on the bench is tested at one tick.
     - **Train Model physics.** The toy plant has no grade, no load and no
       rolling resistance outside an injected brake failure, so a dead
       engine coasts at constant speed and neither engine rule can trip at
@@ -324,6 +309,10 @@ One line each; the details are in `CHANGELOG.md`.
   Status column is the record.
 - **31 (first bullet).** The bench clock runs from the first
   commissioning (M11, R37).
+- **42.** Two ticks between a command and its report under the harness:
+  the fleet takes `echo_ticks` (ECHO_TICKS, 2, under the harness; 1 on
+  the bench), and the brake-failure rule (M4) and the passenger-pull
+  test (M2) use the report due for each command.
 - Emergency echo re-latching the brake: fixed (M2, R16).
 - `old_main.py`: removed in `c98393e`.
 - Rolling resistance: decided, the controller models none (M19); the

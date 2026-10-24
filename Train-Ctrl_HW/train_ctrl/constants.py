@@ -92,6 +92,13 @@ ANNOUNCE_ARRIVING_BLOCKS = 3
 ANNOUNCE_ARRIVING = "The train {train_id} is arriving soon"
 ANNOUNCE_ARRIVED = "The train {train_id} has arrived at {station}"
 ANNOUNCE_DEPARTING = "The train {train_id} is departing from {station}"
+# Ticks between a command and the Train Model's report of it. On the
+# bench the simulation answers on the next tick. Under the central
+# harness each module reads the others' outputs from the tick before
+# (truth D017): a command sent on one tick is acted on the next, and
+# its report arrives the tick after that.
+BENCH_ECHO_TICKS = 1
+ECHO_TICKS = 2
 # Station dwell, fixed (truth D007): the controller holds it
 # (REQUIREMENTS.md M6).
 DWELL_S = 45.0

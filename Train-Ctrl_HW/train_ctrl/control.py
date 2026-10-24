@@ -7,6 +7,7 @@ drives it. It knows only what it receives and what it sends
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Any
 
 from .constants import (
@@ -15,6 +16,7 @@ from .constants import (
     ANNOUNCE_ARRIVING_BLOCKS,
     ANNOUNCE_DEPARTING,
     ANNOUNCE_LOCKOUT_MS,
+    BENCH_ECHO_TICKS,
     DWELL_S,
     ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
@@ -41,9 +43,15 @@ class ControllerCore:
     correct, and it runs unchanged whether or not a console is open.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, echo_ticks: int = BENCH_ECHO_TICKS) -> None:
+        """``echo_ticks``: ticks between a command and its report.
+
+        BENCH_ECHO_TICKS on the bench, ECHO_TICKS under the central
+        harness (OPEN_ISSUES.md #42).
+        """
         self.state = State()
         self.dt = TICK_S                    # seconds of simulation
+        self.echo_ticks = echo_ticks
         self.integral = 0.0
         # The three channels of the vital power command
         # (REQUIREMENTS.md M21): one calculation, made three times a
@@ -88,11 +96,15 @@ class ControllerCore:
 
     def _clear_detection(self) -> None:
         # What detect_failures() carries from one tick to the next.
-        # Whether last tick's commands asked for the service brake with
-        # the emergency brake off, so this tick's service brake state
-        # answers it (the Train Model reports the service brake off
-        # while the emergency brake is engaged, OPEN_ISSUES.md #23).
-        self._service_asked = False
+        # The last echo_ticks commands, oldest first: whether each
+        # asked for the service brake with the emergency brake off,
+        # and whether each engaged the emergency brake. This tick's
+        # reports answer the oldest (the Train Model reports the
+        # service brake off while the emergency brake is engaged,
+        # OPEN_ISSUES.md #23).
+        empty = [False] * self.echo_ticks
+        self._service_asked = deque(empty, maxlen=self.echo_ticks)
+        self._emergency_sent = deque(empty, maxlen=self.echo_ticks)
         self._engine_stalled_s = 0.0
         self._engine_ref_mps = 0.0
         self._last_signal: tuple[float, int] | None = None
@@ -171,7 +183,8 @@ class ControllerCore:
 
         self.respond_to_failures()
         self.enforce_safety()
-        self._service_asked = s.service_brake and not s.emergency_brake
+        self._service_asked.append(s.service_brake and not s.emergency_brake)
+        self._emergency_sent.append(s.emergency_brake)
 
     def _vital_power(self) -> None:
         # REQUIREMENTS.md M21. The power command is calculated three
@@ -223,8 +236,11 @@ class ControllerCore:
         if service is not None:
             s.fb_service_brake = service
         if emergency is not None:
+            # A turn on within echo_ticks of this controller's own
+            # emergency brake command is that command coming back.
             pulled = emergency and not s.fb_emergency_brake
-            if pulled and not s.emergency_brake:
+            if (pulled and not s.emergency_brake
+                    and not any(self._emergency_sent)):
                 self.engage_emergency()
             s.fb_emergency_brake = emergency
 
@@ -236,10 +252,11 @@ class ControllerCore:
         signals it does return, against what this controller last
         commanded:
 
-            brake          last tick commanded the service brake,
-                           not the emergency brake, and this tick's
-                           service brake state still reads off
-                           (REQUIREMENTS.md M4)
+            brake          the command echo_ticks ago asked for the
+                           service brake, not the emergency brake,
+                           and this tick's service brake state, its
+                           report, still reads off (REQUIREMENTS.md
+                           M4)
             engine         the power commanded should have pulled at
                            least ENGINE_DETECT_ACCEL_MPS2, no brake is
                            on, and the actual speed has not risen for
@@ -253,7 +270,7 @@ class ControllerCore:
         """
         s = self.state
 
-        if self._service_asked and not s.fb_service_brake:
+        if self._service_asked[0] and not s.fb_service_brake:
             s.failures["brake"] = True
 
         v = s.actual_mps

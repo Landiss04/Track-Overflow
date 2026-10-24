@@ -1185,6 +1185,59 @@ def run_check(
     expect(breach.commands().power_w > 0.0,
            "no power after the release")
 
+    # Under the harness a command's report comes back two ticks later
+    # (truth D017, OPEN_ISSUES.md #42). With echo_ticks set to match, a
+    # working service brake is not a failure, a failed one still is,
+    # and the controller's own emergency brake coming back is not a
+    # passenger pull; a real pull still latches.
+    def late(core: Any, plant: SimTrain, ticks: int) -> None:
+        # The plant acts on each command a tick late, as the harness
+        # delivers it.
+        pending = None
+        for _ in range(ticks):
+            core.apply_staged(mod.read_inputs(plant.outputs()))
+            core.step()
+            if pending is not None:
+                plant.step(pending)
+            pending = core.commands()
+    for failed in (False, True):
+        echo = mod.ControllerCore(echo_ticks=mod.ECHO_TICKS)
+        echo.armed = True
+        echo.state.manual = True
+        plant = SimTrain()
+        plant.commanded_mps = plant.actual_mps = 10.0
+        plant.authority_blocks = 50
+        echo.state.target_mps = 10.0
+        late(echo, plant, 20)
+        plant.injected["brake"] = failed
+        echo.state.service_request = True
+        late(echo, plant, 10)
+        state = "failed" if failed else "working"
+        expect(echo.state.failures["brake"] == failed,
+               f"with reports two ticks late, a {state} service brake "
+               f"was {'not ' if failed else ''}taken for a failure")
+    echo = mod.ControllerCore(echo_ticks=mod.ECHO_TICKS)
+    echo.armed = True
+    plant = SimTrain()
+    plant.authority_blocks = 50
+    late(echo, plant, 3)
+    echo.engage_emergency()
+    late(echo, plant, 1)
+    echo.release_emergency()
+    late(echo, plant, 5)
+    expect(not echo.state.emergency_brake,
+           "the controller's own emergency brake, reported two ticks late, "
+           "was taken for a passenger pull")
+    plant.apply(mod.read_inputs({"emergency_brake_state": True}))
+    late(echo, plant, 3)
+    expect(echo.state.emergency_brake,
+           "with reports two ticks late, a passenger pull did not latch")
+    expect(mod.TrainControllerFleet(echo_ticks=mod.ECHO_TICKS).add("T-1")
+           .echo_ticks == mod.ECHO_TICKS
+           and mod.TrainControllerFleet().add("T-1").echo_ticks
+           == mod.BENCH_ECHO_TICKS,
+           "the fleet did not pass its echo ticks to its trains")
+
     # The controller only commands (REQUIREMENTS.md M0): stepping it
     # sends power and moves nothing it receives.
     core = mod.ControllerCore()

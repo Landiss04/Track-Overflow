@@ -67,9 +67,10 @@ from train_ctrl import TrainControllerFleet
 One fleet holds every train's controller, keyed by train ID. IDs are opaque strings (identifiers.md); the fleet never parses them.
 
 ```python
-from train_ctrl import TICK_S, TrainControllerFleet
+from train_ctrl import ECHO_TICKS, TICK_S, TrainControllerFleet
 
-fleet = TrainControllerFleet()
+# A command's report comes back two ticks later under the harness.
+fleet = TrainControllerFleet(echo_ticks=ECHO_TICKS)
 time_s = clock.sim_time_s               # utils/system_clock.py, this tick
 
 # A train enters service.
@@ -241,7 +242,7 @@ The controller infers failures from what the harness sends back, so three inputs
 
 | Failure inferred | Trigger | What the harness must send |
 | --- | --- | --- |
-| Brake | Last tick commanded the service brake with the e-brake off, and this tick's `service_brake_state` is false (M4). The service brake stays commanded under a brake failure. **Under the harness this misfires:** the Train Model's report of a command comes back two ticks later, not one (see Open issues) | The service brake's real applied state |
+| Brake | The command `echo_ticks` ago asked for the service brake with the e-brake off, and this tick's `service_brake_state`, its report, is false (M4). The service brake stays commanded under a brake failure | The service brake's real applied state, on the tick its report is due |
 | Engine | Power that should pull 0.1 m/s² or more, and `actual_speed` up by less than 0.05 m/s for 2 s. **Known false positive on grades:** against `development`'s Train Model it flags a healthy full train 2.4–2.9 s onto a +2 % or +5 % grade, latching the emergency brake. Kevin accepted a steady-fall rule to replace it (R91, `REQUIREMENTS.md` §4), built on `claude/quirky-fermi-sickg4`, not yet here (`OPEN_ISSUES.md` #28) | The real `actual_speed` every tick |
 | Signal pickup | `commanded_speed` and `authority_blocks` both drop to 0 in one update, from 2 or more blocks | Authority counting down normally, not a jump to 0 |
 
@@ -251,7 +252,7 @@ A detected failure latches until cleared; the harness has no call to clear one. 
 
 Open issues:
 
-- [ ] **Two ticks between a command and its report.** Each module reads the others' outputs from the tick before (D017), so a command sent on one tick reaches the Train Model on the next and its report comes back the tick after. This controller expects the report on the next tick, as the bench gives it: the brake-failure rule (M4) would take every service brake application for a failure, and latch the emergency brake. `claude/quirky-fermi-sickg4` passes the delay to its older copy (`TrainControllerFleet(echo_ticks=2)`); this branch has no such setting yet (`OPEN_ISSUES.md` #42).
+- [x] **Two ticks between a command and its report.** Each module reads the others' outputs from the tick before (D017), so a command sent on one tick reaches the Train Model on the next and its report comes back the tick after. Fixed Oct 24: build the fleet with `echo_ticks=ECHO_TICKS` (2); the bench's default is 1. Without it, the brake-failure rule (M4) takes every service brake application for a failure, and the controller's own emergency brake coming back reads as a passenger pull.
 - [ ] **The passenger brake release is not sent** (see Outputs; `OPEN_ISSUES.md` #25).
 - [ ] **Brake State on `claude/quirky-fermi-sickg4`.** That branch's harness edge sends one `brake_state` [emergency, service] input; this branch takes `emergency_brake_state` and `service_brake_state` (M18, `OPEN_ISSUES.md` #35).
 - [x] **Emergency echo re-latched the brake.** Fixed Oct 21: a pull is an `emergency_brake_state` that turns on while the controller isn't commanding it, so last tick's brake echoed back, or a passenger latch still held, does not undo the driver's release (M2). Still open with Kevin: what the Train Model reports after the driver's release, since only a test call clears its passenger latch (`OPEN_ISSUES.md` #25). One consequence: a pull reported within a tick or two of a release, before the reported state has gone false, is not seen.
