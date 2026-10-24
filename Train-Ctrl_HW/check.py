@@ -534,12 +534,22 @@ def run_check(
     _settle(app, 300)
     expect(not backend.snapshot["fb_doors_left"],
            "a door opened while the train was moving")
+    # The Cab controls badge says whether the driver may work the
+    # doors (REQUIREMENTS.md M6): locked while moving.
+    expect(on_screen(window, "Cab controls")
+           and on_screen(window, "Doors locked"),
+           "the Cab controls panel does not say the doors are locked "
+           "while moving")
     # Pressed again at a stand, the same command still opens it: the
     # tile re-sends a command the plant has already answered once.
     # The platform is on the right, but away from a station either
     # side opens (REQUIREMENTS.md M6).
     backend.toggle_emergency_brake()
     _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
+    _settle(app, 300)
+    expect(on_screen(window, "Doors free"),
+           "the Cab controls badge does not say the doors are free at a "
+           "stand")
     backend.set_door("left", True)
     _settle(app, 300)
     expect(backend.snapshot["fb_doors_left"],
@@ -994,69 +1004,123 @@ def run_check(
             expect(not quick.failed,
                    "a working service brake was taken for a failure")
 
-    # Doors are the controller's (REQUIREMENTS.md M6): never opened
-    # while moving; in Automatic, opened on the platform side at a new
-    # station once stopped, closed when the Track Signal resumes, and
-    # the train leaves only once Door State reports them closed.
+    # Doors and station boarding (REQUIREMENTS.md M6), in both modes.
+    # The bench plant stands in for the Train Model: its doors follow
+    # the commands, and its beacon is received only at a station.
+    def stopped(core: Any) -> bool:
+        return abs(core.state.actual_mps) < mod.STANDSTILL_MPS
+
+    def at_dormont(manual: bool) -> tuple[Any, SimTrain]:
+        # Out of the yard with 5 blocks, which says nothing, running
+        # at 10 m/s onto the last block, then arriving at a station
+        # whose platform is on the right.
+        core = mod.ControllerCore()
+        core.armed = True
+        core.state.manual = manual
+        core.state.train_id = "T-9"
+        plant = SimTrain()
+        plant.commanded_mps = plant.actual_mps = 10.0
+        plant.authority_blocks = 5
+        plant.beacon_side = "R"
+        core.state.target_mps = 10.0
+        drive(core, plant, 1.0)
+        plant.authority_blocks = 1
+        drive(core, plant, 0.5)
+        plant.beacon_station = "DORMONT"
+        plant.at_station = True
+        plant.commanded_mps, plant.authority_blocks = 0.0, 0
+        return core, plant
+
+    def through_dwell(core: Any, plant: SimTrain) -> None:
+        # Until the platform side has opened and closed again.
+        for opened in (True, False):
+            for _ in range(1000):
+                if plant.door_right == opened:
+                    break
+                drive(core, plant, 0.1)
+    for manual in (False, True):
+        mode = "Manual" if manual else "Automatic"
+        door, plant = at_dormont(manual)
+        expect(not door.driver_door("right", True),
+               f"{mode}: a door could be opened while moving")
+        door.command_door("left", True)
+        drive(door, plant, 0.1)
+        expect(not door.state.doors_left,
+               f"{mode}: a door commanded open while moving stayed open")
+        ticks = 0
+        while not plant.door_right and ticks < 400:
+            drive(door, plant, 0.1)
+            ticks += 1
+        expect(stopped(door) and plant.door_right and not plant.door_left,
+               f"{mode}: arriving did not open only the platform side")
+        expect(not door.driver_door("right", False)
+               and not door.driver_door("left", True),
+               f"{mode}: the driver worked the doors during the dwell")
+        # A Track Signal during the dwell waits for it to end.
+        held = 0
+        while plant.door_right and held < 600:
+            if held == 200:
+                plant.commanded_mps, plant.authority_blocks = 10.0, 3
+            drive(door, plant, 0.1)
+            held += 1
+            if plant.door_right:
+                expect(door.commands().power_w == 0.0,
+                       f"{mode}: power during the dwell")
+        expect(abs(held * door.dt - mod.DWELL_S) <= door.dt + 1e-9,
+               f"{mode}: the doors closed after {held * door.dt:.1f} s, "
+               f"not the {mod.DWELL_S:.0f} s dwell")
+    # After the dwell, before a new Track Signal: the platform side
+    # only (the driver's in Manual); a new Track Signal closes it and
+    # locks the doors, and there is no traction until Door State
+    # reports them closed.
+    door, plant = at_dormont(True)
+    through_dwell(door, plant)
+    expect(not plant.door_right and not door.may_open("left")
+           and door.driver_door("right", True),
+           "after the dwell the driver could not open only the platform "
+           "side")
+    drive(door, plant, 0.2)
+    expect(plant.door_right, "the platform side did not reopen")
+    plant.commanded_mps, plant.authority_blocks = 10.0, 3
+    door.apply_staged(mod.read_inputs(plant.outputs()))
+    door.step()
+    expect(not door.commands().door_command[1]
+           and not door.driver_door("right", True),
+           "a new Track Signal did not close the doors and lock them")
+    door.set_target_mps(8.0)
+    expect(door.commands().power_w == 0.0,
+           "power before Door State reported the doors closed")
+    drive(door, plant, 0.2)
+    door.set_target_mps(8.0)
+    drive(door, plant, 0.1)
+    expect(door.commands().power_w > 0.0,
+           "no power once the doors reported closed and the driver set "
+           "a speed")
+    # Automatic leaves by itself once the doors report closed.
+    door, plant = at_dormont(False)
+    through_dwell(door, plant)
+    plant.commanded_mps, plant.authority_blocks = 10.0, 3
+    drive(door, plant, 0.3)
+    expect(door.commands().power_w > 0.0,
+           "Automatic did not leave once the doors reported closed")
+    # No boarding without the beacon: a train that heard a station's
+    # beacon while running through it, then stops where its authority
+    # ends off a station, keeps its doors shut.
     door = mod.ControllerCore()
     door.armed = True
     plant = SimTrain()
     plant.commanded_mps = plant.actual_mps = 10.0
-    plant.authority_blocks = 999
-    plant.beacon_side = "R"
-    # Applied, not stepped: a step here would make the stop below a
-    # Track Signal falling to 0 from 999 blocks, a pickup failure.
-    door.apply_staged(mod.read_inputs(plant.outputs()))
-    door.command_door("right", True)
-    expect(not door.state.doors_right,
-           "a door was commanded open while moving")
-
-    def stopped() -> bool:
-        return abs(door.state.actual_mps) < mod.STANDSTILL_MPS
-    plant.beacon_station = "DORMONT"
+    plant.authority_blocks = 5
+    plant.beacon_station, plant.beacon_side = "DORMONT", "R"
     plant.at_station = True
-    plant.commanded_mps, plant.authority_blocks = 0.0, 0
-    drive(door, plant, 30)
-    expect(stopped() and door.state.fb_doors_right
-           and not door.state.fb_doors_left,
-           "Automatic did not open the platform side at the station")
-    # Fed by hand from here, so Door State says only what is sent.
-    door.apply_staged(mod.read_inputs({"commanded_speed": 10.0,
-                                       "authority_blocks": 3}))
-    door.step()
-    expect(not door.state.doors_right,
-           "the doors were not closed when the Track Signal resumed")
-    door.step()
-    expect(door.state.target_mps == 0.0,
-           "the train left before Door State reported the doors closed")
-    door.apply_staged(mod.read_inputs({"door_state": [False, False]}))
-    door.step()
-    expect(door.state.target_mps > 0.0,
-           "the train did not leave once the doors reported closed")
-    plant.actual_mps = 5.0
+    drive(door, plant, 2.0)
     plant.at_station = False
+    plant.authority_blocks = 1
+    drive(door, plant, 1.0)
     plant.commanded_mps, plant.authority_blocks = 0.0, 0
-    drive(door, plant, 30)
-    expect(stopped() and not door.state.doors_right,
-           "the doors opened at a stop with no new station")
-
-    # Manual, at a station: only the platform side opens
-    # (REQUIREMENTS.md M6).
-    door = mod.ControllerCore()
-    door.armed = True
-    door.state.manual = True
-    plant = SimTrain()
-    plant.commanded_mps = plant.actual_mps = 10.0
-    plant.authority_blocks = 999
-    plant.beacon_side = "R"
-    door.apply_staged(mod.read_inputs(plant.outputs()))
-    plant.beacon_station = "DORMONT"
-    plant.at_station = True
-    plant.commanded_mps, plant.authority_blocks = 0.0, 0
-    drive(door, plant, 30)
-    expect(stopped() and not door.command_door("left", True)
-           and door.command_door("right", True),
-           "at a station Manual did not open only the platform side")
+    drive(door, plant, 30.0)
+    expect(stopped(door) and not plant.door_right and not plant.door_left,
+           "the doors opened at a stop off a station")
 
     # The vital power command (REQUIREMENTS.md M21): the result at least
     # two of the three channels agree on passes; with no two equal,
@@ -1176,52 +1240,68 @@ def run_check(
     expect(fleet.get("T-1").state.time_s == 18 * 3600.0,
            "a refused time still reached the controller")
 
-    # Announcements are commands (REQUIREMENTS.md M7), in both modes:
-    # arriving soon at 3 blocks of authority; arrived once a station
-    # beacon was heard and the train stands with none left; departing
-    # once the doors report closed and the Track Signal resumes. Each
-    # is held for the lockout, then cleared. In Manual the driver may
-    # repeat the last one, not while one plays.
+    # Announcements are commands (REQUIREMENTS.md M7), in both modes,
+    # each held for the lockout, then cleared: arriving soon when the
+    # authority reaches 3, never at a station; arrived on arriving;
+    # departing once the doors report closed for a new Track Signal,
+    # after the dwell. At a departure, 3 blocks or fewer is announced
+    # at once, after "departing" from a station. In Manual the driver
+    # may repeat the last one, not while one plays.
+    soon = mod.ANNOUNCE_ARRIVING.format(train_id="T-9")
+    arrived = mod.ANNOUNCE_ARRIVED.format(train_id="T-9", station="DORMONT")
+    leaving = mod.ANNOUNCE_DEPARTING.format(train_id="T-9",
+                                            station="DORMONT")
+
+    def heard(core: Any, plant: SimTrain, seconds: float) -> list[str]:
+        # Every announcement sent while driving, in order.
+        said: list[str] = []
+        for _ in range(round(seconds / core.dt)):
+            drive(core, plant, 0.1)
+            text = core.commands().announcement
+            if text and (not said or said[-1] != text):
+                said.append(text)
+            elif not text and said and said[-1] != "":
+                said.append("")
+        return [text for text in said if text]
     for manual in (False, True):
         mode = "Manual" if manual else "Automatic"
-        talk = mod.ControllerCore()
-        talk.state.manual = manual
-        talk.state.train_id = "T-9"
-
-        def say(**values: Any) -> str:
-            talk.apply_staged(mod.read_inputs(values))
-            talk.step()
-            return talk.commands().announcement
-        say(commanded_speed=10.0, authority_blocks=4, actual_speed=10.0,
-            door_state=[False, False])
+        talk, plant = at_dormont(manual)
         expect(not talk.repeat_announcement(),
                f"{mode} repeated an announcement before any was sent")
-        expect(say(authority_blocks=3)
-               == mod.ANNOUNCE_ARRIVING.format(train_id="T-9"),
-               f"{mode} did not announce arriving soon at 3 blocks")
-        say(beacon_station="DORMONT", beacon_side="R")
-        say(authority_blocks=2)
-        say(authority_blocks=1)
-        arrived = mod.ANNOUNCE_ARRIVED.format(train_id="T-9",
-                                              station="DORMONT")
-        expect(say(commanded_speed=0.0, authority_blocks=0,
-                   actual_speed=5.0) != arrived,
-               f"{mode} announced the arrival while still moving")
-        expect(say(actual_speed=0.0) == arrived,
-               f"{mode} did not announce the arrival")
-        said = say(commanded_speed=10.0, authority_blocks=5)
-        expect(said == mod.ANNOUNCE_DEPARTING.format(train_id="T-9",
-                                                     station="DORMONT"),
-               f"{mode} did not announce the departure, said {said!r}")
-        expect(not talk.repeat_announcement(),
-               f"{mode} repeated an announcement while one played")
-        for _ in range(round(mod.ANNOUNCE_LOCKOUT_MS / 1000 / talk.dt) + 1):
-            talk.step()
-        expect(talk.commands().announcement == "",
-               f"{mode}'s announcement never cleared")
+        said = heard(talk, plant, 20.0)
+        expect(said == [arrived],
+               f"{mode} said {said} arriving, not the arrival")
+        # A new Track Signal of 3 blocks during the dwell: nothing
+        # until the dwell ends, then departing, then arriving soon.
+        plant.commanded_mps, plant.authority_blocks = 10.0, 3
+        said = heard(talk, plant, mod.DWELL_S + 12.0)
+        expect(said == [leaving, soon],
+               f"{mode} said {said} leaving, not departing then arriving "
+               f"soon")
         expect(talk.repeat_announcement() == manual
-               and talk.commands().announcement == (said if manual else ""),
+               and talk.commands().announcement == (soon if manual else ""),
                f"{mode} got the repeat of the last announcement wrong")
+        # Away from a station, arriving soon when the authority comes
+        # down to 3.
+        plant.authority_blocks = 4
+        heard(talk, plant, 6.0)
+        plant.authority_blocks = 3
+        expect(heard(talk, plant, 1.0) == [soon],
+               f"{mode} did not announce arriving soon at 3 blocks")
+    # Leaving the yard: 3 blocks or fewer is announced at once, also
+    # when the count arrived before the gains were set; more, only
+    # once it comes down to 3.
+    for blocks, expected in ((3, [soon]), (2, [soon]), (5, [])):
+        yard = mod.ControllerCore()
+        yard.state.train_id = "T-9"
+        plant = SimTrain()
+        plant.commanded_mps, plant.authority_blocks = 10.0, blocks
+        said = heard(yard, plant, 2.0)
+        yard.armed = True
+        said += heard(yard, plant, 2.0)
+        expect(said == expected,
+               f"leaving the yard with {blocks} blocks said {said}, not "
+               f"{expected}")
 
     # Automatic lights (REQUIREMENTS.md M8), in either mode: on with an
     # underground beacon and at 18:00; off with a later beacon saying

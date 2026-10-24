@@ -9,31 +9,32 @@ Panel {
     id: root
 
     readonly property var s: controller.snapshot
-    // What the train reports, which is what the driver should be
-    // looking at. The commands are the outputs beside them.
-    readonly property bool anyDoorOpen: s.fb_doors_left || s.fb_doors_right
 
-    title: qsTr("Doors & cabin")
+    title: qsTr("Cab controls")
     headerItems: [
+        // Whether the driver may work the doors now: a tile is live
+        // when it may be pressed, greyed when it may not, and the
+        // tiles say which side is open.
         StatusBadge {
+            readonly property bool free: root.s.door_left_live
+                || root.s.door_right_live
             label: !root.s.can_drive ? qsTr("Locked")
-                : root.anyDoorOpen ? qsTr("Open") : qsTr("Closed")
-            variant: !root.s.can_drive ? "idle"
-                : root.anyDoorOpen ? "info" : "ok"
+                : free ? qsTr("Doors free") : qsTr("Doors locked")
+            variant: root.s.can_drive && free ? "ok" : "idle"
         }
     ]
 
-    // Either side opens at a stand, only the platform side at a
-    // station (REQUIREMENTS.md M6); an open door can always be closed.
-    // A tile that cannot act now is greyed.
+    // REQUIREMENTS.md M6: either side opens at a stand away from a
+    // station; at a station the controller opens the platform side,
+    // closes it after the dwell, and closes any door for a new Track
+    // Signal. A tile that cannot act now is greyed.
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive
-                && (root.s.fb_doors_left || root.s.may_open_left)
+            enabled: root.s.door_left_live
             on: root.s.fb_doors_left
             tone: "info"
             text: root.s.fb_doors_left ? qsTr("Close left")
@@ -43,8 +44,7 @@ Panel {
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive
-                && (root.s.fb_doors_right || root.s.may_open_right)
+            enabled: root.s.door_right_live
             on: root.s.fb_doors_right
             tone: "info"
             text: root.s.fb_doors_right ? qsTr("Close right")

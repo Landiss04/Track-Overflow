@@ -92,6 +92,9 @@ ANNOUNCE_ARRIVING_BLOCKS = 3
 ANNOUNCE_ARRIVING = "The train {train_id} is arriving soon"
 ANNOUNCE_ARRIVED = "The train {train_id} has arrived at {station}"
 ANNOUNCE_DEPARTING = "The train {train_id} is departing from {station}"
+# Station dwell, fixed (truth D007): the controller holds it
+# (REQUIREMENTS.md M6).
+DWELL_S = 45.0
 
 # ----------------------------------------------------------- vocabulary
 ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]

@@ -348,9 +348,10 @@ class ConsoleBackend(QObject):
             "beacon_station": s.beacon_station,
             "beacon_side": s.beacon_side,
             "beacon_underground": s.beacon_underground,
-            "may_open_left": self.core.may_open("left"),
-            "may_open_right": self.core.may_open("right"),
-            "station_hold": self.core.station_hold,
+            # Whether the driver may press each door tile now
+            # (REQUIREMENTS.md M6): greyed otherwise.
+            "door_left_live": self._door_live("left"),
+            "door_right_live": self._door_live("right"),
             "announcement": s.announcement,
 
             # Identifiers and counts, so they are shown as they are.
@@ -389,6 +390,13 @@ class ConsoleBackend(QObject):
         # train; this only says what is locked and until when.
         return (f"{names[0].upper()}{names[1:]}. Driving resumes once "
                 "it clears.")
+
+    def _door_live(self, side: str) -> bool:
+        # Closing or opening that side, whichever the tile would do.
+        s = self.core.state
+        is_open = s.fb_doors_left if side == "left" else s.fb_doors_right
+        return self.can_drive and (
+            self.core.may_close if is_open else self.core.may_open(side))
 
     def _power_channels(self) -> str:
         # The three power calculations, for the numbers drawer only.
@@ -595,7 +603,7 @@ class ConsoleBackend(QObject):
         """
         if not self.can_drive:
             return
-        self.core.command_door(side, open_)
+        self.core.driver_door(side, open_)
         self._answer_press()
         self._publish()
 

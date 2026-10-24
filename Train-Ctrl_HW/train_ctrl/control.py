@@ -15,6 +15,7 @@ from .constants import (
     ANNOUNCE_ARRIVING_BLOCKS,
     ANNOUNCE_DEPARTING,
     ANNOUNCE_LOCKOUT_MS,
+    DWELL_S,
     ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
     ENGINE_RISE_MPS,
@@ -53,20 +54,23 @@ class ControllerCore:
         self.last_vote: VitalVote | None = None
         # Inert until an engineer commissions the gains.
         self.armed = False
-        # Station stop (REQUIREMENTS.md M6, M7): a station beacon
-        # heard and not yet served, the station it named, whether the
-        # train has arrived there, and, in Automatic, whether it is
-        # held there with the doors open and then while they close.
-        self._station_pending = False
+        # Station boarding (REQUIREMENTS.md M6), in both modes. The
+        # stop's phase: "" away from one; "opening" from arrival until
+        # Door State reports the doors open; "dwell" while the dwell
+        # runs; "boarded" after it, until a new Track Signal;
+        # "departing" while the doors close for it. The station is the
+        # one the beacon named on arrival.
+        self._phase = ""
         self._station_name = ""
-        self._at_station = False
-        self._dwelling = False
-        self._closing = False
-        # Whether last tick's inputs carried a beacon, so a beacon
-        # turning up is told apart from one heard every tick.
-        self._beacon_heard = False
+        self._dwell_ticks = 0
+        # Whether this tick's inputs carried a beacon: it is received
+        # only while the train is on a station's block.
+        self._beacon_now = False
         # The authority last acted on, for "arriving soon".
         self._last_authority: int | None = None
+        # Set at spawn and at each station departure: "arriving soon"
+        # is then decided at the departure itself (REQUIREMENTS.md M7).
+        self._departure_check = True
         # Seconds left on an announcement command.
         self._announce_left_s = 0.0
         # The last automatic announcement, which the driver may repeat
@@ -207,18 +211,11 @@ class ControllerCore:
         """
         s = self.state
         staged = dict(staged)
-        # A beacon is heard only near a station (truth beacon.md).
-        # One turning up, or naming a new station, means a station to
-        # serve once the train stops there; one heard every tick while
-        # the train stands there does not start another.
-        heard = any(key in staged for key in
-                    ("beacon_station", "beacon_side", "beacon_underground"))
-        station = staged.get("beacon_station", s.beacon_station)
-        new = not self._beacon_heard or station != s.beacon_station
-        if heard and new and station and not self._at_station:
-            self._station_pending = True
-            self._station_name = station
-        self._beacon_heard = heard
+        # The beacon is received only while the train is on a
+        # station's block (REQUIREMENTS.md M6).
+        self._beacon_now = any(
+            key in staged for key in
+            ("beacon_station", "beacon_side", "beacon_underground"))
         emergency = staged.pop("emergency_brake_state", None)
         service = staged.pop("service_brake_state", None)
         for attr, value in staged.items():
@@ -403,9 +400,14 @@ class ControllerCore:
         return abs(self.state.actual_mps) < STANDSTILL_MPS
 
     @property
-    def station_hold(self) -> bool:
-        """Whether an Automatic station stop is holding the train."""
-        return self._dwelling or self._closing
+    def dwell_left(self) -> float:
+        """The share of the station dwell still to run, 1 to 0.
+
+        0 outside the dwell (REQUIREMENTS.md M6).
+        """
+        if self._phase != "dwell":
+            return 0.0
+        return self._dwell_ticks / round(DWELL_S / self.dt)
 
     def _announce(self, text: str) -> None:
         # The controller sends the command; the Train Model plays it
@@ -435,77 +437,112 @@ class ControllerCore:
         return True
 
     def _station_stop(self) -> None:
-        # REQUIREMENTS.md M6, M7. Announcements in both modes:
-        # arriving soon when the authority comes down to
-        # ANNOUNCE_ARRIVING_BLOCKS; arrived once a station beacon has
-        # been heard and the train stands with no authority left;
-        # departing once the doors report closed and the Track Signal
-        # resumes. Automatic also opens the platform side on arrival
-        # and holds: the dwell is the Train Model's, so the controller
-        # holds until the Track Signal resumes, then closes the doors
-        # and departs only once Door State reports them closed.
+        # REQUIREMENTS.md M6, M7, in both modes. Arrival is a beacon
+        # received with no authority, no commanded speed and the train
+        # at a stand: the platform side opens, and the dwell runs from
+        # Door State reporting it open. At the end of the dwell the
+        # doors close; a new Track Signal then closes any the driver
+        # reopened, and the train leaves once Door State reports them
+        # closed. No traction while a stop holds it or a door is open.
         s = self.state
         authority = self.authority_blocks
-        if (authority == ANNOUNCE_ARRIVING_BLOCKS
-                and self._last_authority not in (None, authority)):
-            self._announce(ANNOUNCE_ARRIVING.format(train_id=s.train_id))
-        self._last_authority = authority
-        if s.manual:
-            self._dwelling = self._closing = False
-        if self._station_pending and authority == 0 and self.at_stand:
-            self._station_pending = False
-            self._at_station = True
+        resumed = self.commanded_mps > 0.0 and authority > 0
+        reported_shut = not (s.fb_doors_left or s.fb_doors_right)
+        if (not self._phase and self._beacon_now and authority == 0
+                and self.commanded_mps == 0.0 and self.at_stand):
+            self._phase = "opening"
+            self._station_name = s.beacon_station
             self._announce(ANNOUNCE_ARRIVED.format(
                 train_id=s.train_id, station=self._station_name))
-            if not s.manual:
-                self._dwelling = True
-                for side in ("left", "right"):
-                    if self.platform_on(side):
-                        self.command_door(side, True)
-        resumed = self.commanded_mps > 0.0 and authority > 0
-        if self._dwelling and resumed:
-            self._dwelling = False
-            self._closing = True
             for side in ("left", "right"):
-                self.command_door(side, False)
-        doors_shut = not s.fb_doors_left and not s.fb_doors_right
-        if self._closing and doors_shut:
-            self._closing = False
-        if (self._at_station and not self.station_hold and doors_shut
-                and resumed):
-            self._at_station = False
+                if self.platform_on(side):
+                    self.command_door(side, True)
+        if self._phase == "opening" and not reported_shut:
+            self._phase = "dwell"
+            self._dwell_ticks = round(DWELL_S / self.dt)
+        if self._phase == "dwell":
+            self._dwell_ticks -= 1
+            if self._dwell_ticks <= 0:
+                self._phase = "boarded"
+                self._close_doors()
+        if self._phase == "boarded" and resumed:
+            self._phase = "departing"
+            self._close_doors()
+        if self._phase == "departing" and reported_shut:
+            self._phase = ""
             self._announce(ANNOUNCE_DEPARTING.format(
                 train_id=s.train_id, station=self._station_name))
-        if self.station_hold:
+            self._departure_check = True
+        self._arriving_soon(authority, resumed and reported_shut)
+        if not self.at_stand:
+            # Doors stay closed while the train moves.
+            self._close_doors()
+        if (self._phase or not reported_shut
+                or s.doors_left or s.doors_right):
             # Held, not creeping on what the integrator carried in.
             s.target_mps = 0.0
             self.integral = 0.0
 
-    def may_open(self, side: str) -> bool:
-        """Whether one side's doors may be commanded open now.
-
-        At a stand, either side; at a station (arrived, until it
-        departs), only the platform side the beacon gave. The door
-        interlock is the controller's (REQUIREMENTS.md M6).
-        """
-        if not self.at_stand:
-            return False
-        return not self._at_station or self.platform_on(side)
-
-    def command_door(self, side: str, open_: bool) -> bool:
-        """Command one side's doors.
-
-        Opening follows may_open(). Closing is always allowed, so a
-        door is never stuck open. Returns whether it was sent.
-        """
+    def _arriving_soon(self, authority: int, departing: bool) -> None:
+        # REQUIREMENTS.md M7. Never at a station. At a departure (from
+        # the yard, or from a station once "departing" has played),
+        # 3 blocks or fewer is announced at once; otherwise it is
+        # announced when the authority reaches 3.
         s = self.state
-        if open_ and not self.may_open(side):
+        if self._departure_check:
+            if (departing and self.armed and not self._phase
+                    and not s.announcement):
+                self._departure_check = False
+                if authority <= ANNOUNCE_ARRIVING_BLOCKS:
+                    self._announce(
+                        ANNOUNCE_ARRIVING.format(train_id=s.train_id))
+        elif (not self._phase and authority == ANNOUNCE_ARRIVING_BLOCKS
+                and self._last_authority not in (None, authority)):
+            self._announce(ANNOUNCE_ARRIVING.format(train_id=s.train_id))
+        self._last_authority = authority
+
+    def _close_doors(self) -> None:
+        self.command_door("left", False)
+        self.command_door("right", False)
+
+    def may_open(self, side: str) -> bool:
+        """Whether the driver may open one side's doors now.
+
+        At a stand, and not while boarding runs: at a station after
+        the dwell, only the platform side the beacon gave; elsewhere,
+        either side (REQUIREMENTS.md M6).
+        """
+        if not self.at_stand or self._phase in (
+                "opening", "dwell", "departing"):
             return False
+        return self._phase != "boarded" or self.platform_on(side)
+
+    @property
+    def may_close(self) -> bool:
+        """Whether the driver may close doors now.
+
+        Not while boarding runs: the controller closes them at the end
+        of the dwell and for a new Track Signal (REQUIREMENTS.md M6).
+        """
+        return self._phase not in ("opening", "dwell", "departing")
+
+    def driver_door(self, side: str, open_: bool) -> bool:
+        """Open or close one side's doors for the driver.
+
+        Follows may_open() and may_close. Returns whether it was sent.
+        """
+        if not (self.may_open(side) if open_ else self.may_close):
+            return False
+        self.command_door(side, open_)
+        return True
+
+    def command_door(self, side: str, open_: bool) -> None:
+        """Command one side's doors, as the controller decides."""
+        s = self.state
         if side == "left":
             s.doors_left = open_
         else:
             s.doors_right = open_
-        return True
 
     def command_lights(self, interior: bool, exterior: bool) -> None:
         """Command the lights."""
