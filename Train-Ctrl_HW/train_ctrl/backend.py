@@ -307,6 +307,8 @@ class ConsoleBackend(QObject):
             # deliberate departure from units.md's ft/s^2. Not a signal
             # the controller receives: the bench simulation's, and 0
             # under a harness (debug drawer, REQUIREMENTS.md M12).
+            # Numbers drawer only: goes when the drawer is removed in
+            # the final iteration.
             "accel_mps2": sim.accel_mps2 if sim else 0.0,
             "dial_hint": self._dial_hint(),
             # Automatic is the console locked: the CTC owns the
@@ -314,7 +316,11 @@ class ConsoleBackend(QObject):
             "speed_source": "Driver" if s.manual else "Locked",
 
             "power_kw": s.power_w * W_TO_KW,
+            # Numbers drawer only, these three: they go when the
+            # drawer is removed in the final iteration.
             "max_power_kw": MAX_POWER_W * W_TO_KW,
+            "power_channels": self._power_channels(),
+            "power_vote": self._power_vote(),
             "service_brake": s.service_brake,
             "service_request": s.service_request,
             "emergency_brake": s.emergency_brake,
@@ -324,6 +330,8 @@ class ConsoleBackend(QObject):
             "fault_engine": s.failures["engine"],
             "fault_brake": s.failures["brake"],
             "fault_pickup": s.failures["signal_pickup"],
+            # No two power calculations agreed (REQUIREMENTS.md M21).
+            "vital_breach": s.vital_breach,
             # Injected into the bench's simulation (Murphy).
             "inject_engine": bool(sim and sim.injected["engine"]),
             "inject_brake": bool(sim and sim.injected["brake"]),
@@ -349,6 +357,8 @@ class ConsoleBackend(QObject):
             "authority_blocks": self.core.authority_blocks,
             "track_authority_blocks": (
                 sim.authority_blocks if sim else s.authority_blocks),
+            # Numbers drawer only: goes when the drawer is removed in
+            # the final iteration.
             "authority_target": s.authority_target,
 
             "cabin_temp_f": c_to_f(s.cabin_temp_c),
@@ -379,6 +389,24 @@ class ConsoleBackend(QObject):
         # train; this only says what is locked and until when.
         return (f"{names[0].upper()}{names[1:]}. Driving resumes once "
                 "it clears.")
+
+    def _power_channels(self) -> str:
+        # The three power calculations, for the numbers drawer only.
+        vote = self.core.last_vote
+        if vote is None:
+            return "--"
+        return " / ".join(f"{result.power_w * W_TO_KW:.1f}"
+                          for result in vote.results) + " kW"
+
+    def _power_vote(self) -> str:
+        # What the vote made of them, for the numbers drawer only. A
+        # train not yet commissioned commands 0 W without calculating.
+        vote = self.core.last_vote
+        if vote is None:
+            return "Not calculated yet"
+        if vote.agreed is None:
+            return "Breach: 0 W sent"
+        return f"{vote.agreeing} of 3 agree"
 
     def _dial_hint(self) -> str:
         # While a failure is up, the hint says why the train is
@@ -512,8 +540,8 @@ class ConsoleBackend(QObject):
 
         Engagement is immediate and unconfirmed, the one exception the
         style guide grants (section 7). Release is refused unless the
-        train is stopped, and, with a failure latched, unless it is in
-        Manual. The driver only.
+        train is stopped, during a vitality breach, and, with a
+        failure latched, unless it is in Manual. The driver only.
         """
         if not self.can_ebrake:
             return
@@ -528,6 +556,9 @@ class ConsoleBackend(QObject):
             self.brake_note = ""
         elif not self.core.at_stand:
             self.brake_note = "Cannot release: the train is still moving."
+        elif s.vital_breach:
+            self.brake_note = (
+                "Cannot release: waiting for a safe power command.")
         else:
             names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
             self.brake_note = f"Release it in Manual: {names} is still active."
@@ -725,7 +756,7 @@ class ConsoleBackend(QObject):
         sim.at_station = at_station
         # Clearing a failure on the bench resolves it in the controller
         # too, until the controller can see resolution for itself
-        # (REQUIREMENTS.md M5, OPEN_ISSUES.md #23).
+        # (REQUIREMENTS.md M3, OPEN_ISSUES.md #23).
         for name, on in injected.items():
             if not on:
                 self.core.clear_failure(name)

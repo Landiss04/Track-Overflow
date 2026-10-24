@@ -21,7 +21,6 @@ from .constants import (
     FAILURES,
     MASS_KG,
     MAX_FORCE_N,
-    MAX_POWER_W,
     NIGHT_END_S,
     NIGHT_START_S,
     PICKUP_DETECT_MIN_BLOCKS,
@@ -31,6 +30,7 @@ from .constants import (
     V_FLOOR_MPS,
 )
 from .state import State, TrainModelCommands
+from .vital import PowerInputs, VitalVote, compute_power, vote_2oo3
 
 class ControllerCore:
     """The PI speed law and the safety path.
@@ -43,6 +43,13 @@ class ControllerCore:
         self.state = State()
         self.dt = TICK_S                    # seconds of simulation
         self.integral = 0.0
+        # The three channels of the vital power command
+        # (REQUIREMENTS.md M21): one calculation, made three times a
+        # tick from the same inputs.
+        self.channels = (compute_power,) * 3
+        # The last vote, for the numbers drawer only: it goes when the
+        # drawer is removed in the final iteration.
+        self.last_vote: VitalVote | None = None
         # Inert until an engineer commissions the gains.
         self.armed = False
         # Station stop (REQUIREMENTS.md M6, M7): a station beacon
@@ -152,21 +159,7 @@ class ControllerCore:
             s.service_brake = (
                 error < -SERVICE_BAND_MPS or s.service_request or stopping
             )
-            if s.service_brake:
-                # Traction is cut whenever a brake is applied, and
-                # the integrator holds rather than winding up against
-                # the brake (arbitration/traction-cut-under-braking).
-                s.power_w = 0.0
-            else:
-                self.integral += error * self.dt
-                power = s.kp * error + s.ki * self.integral
-                if power > MAX_POWER_W:
-                    power = MAX_POWER_W
-                    self.integral -= error * self.dt
-                elif power < 0.0:
-                    power = 0.0
-                    self.integral -= error * self.dt
-                s.power_w = power
+            self._vital_power()
         else:
             s.power_w = 0.0
             s.service_brake = s.service_request
@@ -174,6 +167,30 @@ class ControllerCore:
         self.respond_to_failures()
         self.enforce_safety()
         self._service_asked = s.service_brake and not s.emergency_brake
+
+    def _vital_power(self) -> None:
+        # REQUIREMENTS.md M21. The power command is calculated three
+        # times from the same inputs and used only if at least two
+        # results agree. With no two equal, this tick's command is
+        # rejected: 0 W, the integrator as it was, and the emergency
+        # brake latched. The breach clears on the next tick that
+        # agrees; the driver then releases the brake (M2).
+        s = self.state
+        inputs = PowerInputs(
+            target_mps=s.target_mps, actual_mps=s.actual_mps,
+            kp=s.kp, ki=s.ki, dt=self.dt, braking=s.service_brake,
+            integral=self.integral)
+        a, b, c = (channel(inputs) for channel in self.channels)
+        vote = vote_2oo3((a, b, c))
+        self.last_vote = vote
+        s.vital_breach = vote.agreed is None
+        if vote.agreed is None:
+            s.power_w = 0.0
+            if not s.emergency_brake:
+                self.engage_emergency()
+            return
+        s.power_w = vote.agreed.power_w
+        self.integral = vote.agreed.integral
 
     def apply_staged(self, staged: dict[str, Any]) -> None:
         """Apply a set of Train Model signals read by read_inputs().
@@ -267,8 +284,8 @@ class ControllerCore:
         """Let go of one detected failure, once it has been resolved.
 
         The test bench decides that, by clearing the failure it
-        injected. The emergency brake stays on; the driver releases
-        it at a stand once no failure is left.
+        injected. The emergency brake stays on until the driver
+        releases it (release_emergency).
         """
         self.state.failures[name] = False
         if name == "engine":
@@ -350,13 +367,15 @@ class ControllerCore:
 
         With no failure latched, in either mode; with one still
         latched, only in Manual, so the driver can try the train
-        (REQUIREMENTS.md M2, M3). Asking a released brake to release
-        is not a refusal: it is already where the caller wants it.
+        (REQUIREMENTS.md M2, M3). Not during a vitality breach: only
+        once the power command agrees again (M21). Asking a released
+        brake to release is not a refusal: it is already where the
+        caller wants it.
         """
         s = self.state
         if not s.emergency_brake:
             return True
-        if abs(s.actual_mps) >= STANDSTILL_MPS:
+        if abs(s.actual_mps) >= STANDSTILL_MPS or s.vital_breach:
             return False
         if self.failed and not s.manual:
             return False
@@ -528,6 +547,7 @@ class ControllerCore:
             power_w=s.power_w,
             service_brake=s.service_brake,
             emergency_brake=s.emergency_brake,
+            power_verified=not s.vital_breach,
             door_command=(s.doors_left, s.doors_right),
             light_command=(s.interior_lights, s.exterior_lights),
             temperature_setpoint_c=s.target_temp_c,

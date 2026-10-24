@@ -36,7 +36,7 @@ from PySide6.QtTest import QTest
 
 import train_ctrl as mod
 from train_ctrl.bench_sim import SimTrain
-from train_ctrl.vital import PowerResult, vote_2oo3
+from train_ctrl.vital import PowerResult, compute_power, vote_2oo3
 
 
 # ========================================================== contract
@@ -158,6 +158,26 @@ def run_check(
                   "cabin_temperature": 21.0}
         values.update(changes)
         return values
+
+    def on_screen(win: Any, text: str) -> bool:
+        # Whether a visible item in the window shows this text, as its
+        # text or, for a StatusBadge, which draws it in capitals, as its
+        # label.
+        def walk(item: Any) -> bool:
+            if not item.isVisible():
+                return False
+            if text in (item.property("text"), item.property("label")):
+                return True
+            return any(walk(child) for child in item.childItems())
+        return walk(win.contentItem())
+
+    def off_by(watts: float) -> Any:
+        # A power channel that calculates the same and then adds this
+        # much: a fault for the vote to catch (REQUIREMENTS.md M21).
+        def channel(inputs: Any) -> PowerResult:
+            result = compute_power(inputs)
+            return PowerResult(result.power_w + watts, result.integral)
+        return channel
 
     def drive(core: Any, sim: SimTrain, seconds: float) -> None:
         # A controller and its simulated train, tick by tick, the way
@@ -369,6 +389,13 @@ def run_check(
         and abs(backend.sim.accel_mps2) < 0.02), 90)
     backend.set_sim_rate(mod.SIM_RATES.index(1))
     expect(settled, "the train never settled on its commanded speed")
+    # The three power calculations agreed on every tick at 1x and 10x
+    # (REQUIREMENTS.md M21): a breach would have latched the e-brake.
+    expect(backend.core.last_vote is not None
+           and backend.core.last_vote.agreeing == 3
+           and backend.core.commands().power_verified
+           and not backend.core.state.emergency_brake,
+           "the power calculations did not agree in normal running")
     expect(not backend.core.state.service_brake,
            "the service brake is fighting the speed law at target")
     # Automatic locks the console but never the driver's e-brake.
@@ -428,11 +455,14 @@ def run_check(
                "the dial's scale moved with the commanded speed")
         send({"commanded_speed": 43})
 
+    # The numbers drawer goes in the final iteration, and this with it.
     drawer = window.findChild(QObject, "numbersDrawer")
     expect(drawer is not None, "numbers drawer missing")
     if drawer is not None:
         drawer.setProperty("expanded", True)
         _settle(app, 300)
+        expect(on_screen(window, "3 of 3 agree"),
+               "the numbers drawer does not show the power vote")
         scan("05-numbers")
         if shots:
             window.grabWindow().save(str(shots / "05-numbers.png"))
@@ -1025,6 +1055,52 @@ def run_check(
                f"the vote on {results} passed {vote.agreed} with "
                f"{vote.agreeing} agreeing, not {agreed} with {agreeing}")
 
+    # Wired into the controller, tick by tick (REQUIREMENTS.md M21).
+    # One channel off by 50 kW is outvoted and the train runs as it
+    # would have; two that disagree with each other and the third are
+    # a vitality breach.
+    def vital_train() -> tuple[Any, SimTrain]:
+        core = mod.ControllerCore()
+        core.armed = True
+        plant = SimTrain()
+        plant.commanded_mps, plant.authority_blocks = 12.0, 999
+        return core, plant
+    healthy, plant = vital_train()
+    drive(healthy, plant, 20.0)
+    outvoted, plant = vital_train()
+    outvoted.channels = (compute_power, off_by(50_000.0), compute_power)
+    drive(outvoted, plant, 20.0)
+    expect(outvoted.state.actual_mps == healthy.state.actual_mps
+           and outvoted.last_vote.agreeing == 2
+           and outvoted.commands().power_verified
+           and not outvoted.state.emergency_brake,
+           "one faulty power channel changed how the train ran")
+    breach, plant = vital_train()
+    drive(breach, plant, 10.0)
+    breach.channels = (compute_power, off_by(50_000.0), off_by(-50_000.0))
+    drive(breach, plant, 0.1)
+    cmd = breach.commands()
+    expect(breach.state.vital_breach and cmd.power_w == 0.0
+           and cmd.emergency_brake and not cmd.power_verified,
+           "no two power calculations agreed, and the command was not "
+           "rejected for 0 W on the emergency brake")
+    drive(breach, plant, 30.0)
+    expect(breach.at_stand and not breach.release_emergency(),
+           "the emergency brake released during a vitality breach")
+    breach.channels = (compute_power,) * 3
+    drive(breach, plant, 0.1)
+    cmd = breach.commands()
+    expect(not breach.state.vital_breach and cmd.power_verified
+           and cmd.emergency_brake and cmd.power_w == 0.0,
+           "an agreeing tick did not clear the breach, or released the "
+           "emergency brake by itself")
+    expect(breach.release_emergency(),
+           "the driver could not release the emergency brake once the "
+           "power command agreed again")
+    drive(breach, plant, 0.1)
+    expect(breach.commands().power_w > 0.0,
+           "no power after the release")
+
     # The controller only commands (REQUIREMENTS.md M0): stepping it
     # sends power and moves nothing it receives.
     core = mod.ControllerCore()
@@ -1278,6 +1354,36 @@ def run_check(
            "the press did not repeat the last announcement")
     expect(_until(app, lambda: not backend.snapshot["announcing"], 10),
            "announcement never cleared")
+
+    # A vitality breach on the console: the header pill on both
+    # windows, the drawer's vote, and the e-brake held until the
+    # driver releases it (REQUIREMENTS.md M21).
+    vital = backend.core
+    vital.channels = (compute_power, off_by(50_000.0), off_by(-50_000.0))
+    tick()
+    backend._publish()
+    if drawer is not None:
+        drawer.setProperty("expanded", True)
+    _settle(app, 300)
+    expect(backend.snapshot["vital_breach"]
+           and on_screen(window, "Vitality breach")
+           and on_screen(bench, "Vitality breach"),
+           "the Vitality breach pill is not in both headers")
+    expect(on_screen(window, "Breach: 0 W sent"),
+           "the numbers drawer does not show the breach")
+    scan("vitality breach")
+    if shots:
+        window.grabWindow().save(str(shots / "10-vitality-breach.png"))
+    vital.channels = (compute_power,) * 3
+    tick()
+    backend._publish()
+    _settle(app, 300)
+    expect(not on_screen(window, "Vitality breach")
+           and backend.core.state.emergency_brake,
+           "the pill stayed after an agreeing tick, or the emergency "
+           "brake let go by itself")
+    if drawer is not None:
+        drawer.setProperty("expanded", False)
 
     for text, seen in sorted(cut.items()):
         expect(False, f"text cut off: {text!r} ({', '.join(seen[:3])})")

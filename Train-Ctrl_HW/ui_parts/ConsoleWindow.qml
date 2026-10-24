@@ -44,7 +44,8 @@ ScaledWindow {
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
                 window.s.fault_pickup ? qsTr("Signal pickup fault") : "",
-                window.s.fault_brake ? qsTr("Brake fault") : ""
+                window.s.fault_brake ? qsTr("Brake fault") : "",
+                window.s.vital_breach ? qsTr("Vitality breach") : ""
             ].filter(function (label) { return label !== ""; })
         }
 

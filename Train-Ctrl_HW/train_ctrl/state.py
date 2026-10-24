@@ -48,6 +48,9 @@ class State:
     # latched until the test bench clears them.
     failures: dict = field(
         default_factory=lambda: {name: False for name in FAILURES})
+    # No two of the power command's three calculations agreed on the
+    # last tick (REQUIREMENTS.md M21). Clears on the next that agrees.
+    vital_breach: bool = False
 
     # State reported back by the Train Model, as opposed to what this
     # controller commanded (truth door-state, light-state,
@@ -90,11 +93,19 @@ class TrainModelCommands:
     emergency-brake-command, door-command, light-command,
     temperature-setpoint and announcement. The central harness (D005)
     maps these onto the Train Model's own boundary types.
+
+    power_verified is this module's own: whether at least two of the
+    power command's three calculations agreed this tick
+    (REQUIREMENTS.md M21). False on a vitality breach, when power_w is
+    0 and the emergency brake is engaged. A train not yet
+    commissioned commands 0 W without calculating, which needs no
+    vote, so it reads True.
     """
 
     power_w: float
     service_brake: bool
     emergency_brake: bool
+    power_verified: bool
     door_command: tuple[bool, bool]         # (left, right)
     light_command: tuple[bool, bool]        # (interior, exterior)
     temperature_setpoint_c: float
