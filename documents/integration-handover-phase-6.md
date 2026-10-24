@@ -185,6 +185,13 @@ reuses `_Line` from the SW starter tests; CTC/SW owner rules are unchanged.
 
 ## 5. Open questions and remaining work
 
+**Current follow-up (2026-10-24):** [Module owner review](module-owner-review.md) is the
+single current writeup for all CTC and other module-owner findings, requested decisions
+and Kevin's answers. [Phase 7 prompt](phase-7-prompt.md) defines the approved next build
+scope. The table below preserves the Phase 6 evidence and owner questions as recorded;
+its historical approval/status wording does not establish Braden's acceptance. Kevin
+confirmed his own prior approval of neighbor closures; Braden remains a required reviewer.
+
 | Question or requirement | Owner / next evidence |
 | --- | --- |
 | Shared neighbor closure inputs | Approved by Kevin; implemented and verified by final HW suite and frozen bundle refresh |

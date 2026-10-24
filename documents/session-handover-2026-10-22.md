@@ -105,7 +105,21 @@ What failed:
   adds new N802 warnings.
 - **mypy:** `common/hw_link` is clean.
 
-## Open questions for Kevin (next step: ask, then write the next prompt)
+## Follow-up recorded 2026-10-24
+
+Kevin's answers and all CTC and other module-owner findings now live together in
+[Module owner review](module-owner-review.md). Use that file for the current owner review
+queue and [Phase 7 prompt](phase-7-prompt.md) for the next build phase. The questions below
+are the historical October 22 handover, not a request to repeat answered questions.
+
+Kevin confirmed he approved neighbor `CLOSED_n` before implementation; Braden has not
+accepted it. Functional review is 1x with `TIME_SLIPPED` retained as a fault; 10x is a
+separate measurement. The provisional review host is `kevin-framework` (Kevin: "for now
+the review will happen on this machine"). Kevin approved the HELLO/helper, reviewer and
+portable-path cleanup for Phase 7, and the human collision-resolution recommendation.
+No implementation or fresh suite results are claimed by this documentation update.
+
+## Historical open questions for Kevin (2026-10-22)
 
 1. Did you approve the neighbour `CLOSED_n` core input before it was written? Does Braden
    accept the change to his `wayside.py`?
