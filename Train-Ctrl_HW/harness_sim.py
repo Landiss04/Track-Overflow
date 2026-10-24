@@ -31,6 +31,7 @@ CABIN_TEMP_C = f_to_c(75)           # 75 °F
 AUTHORITY_BLOCKS = 20
 SIGNAL_AHEAD = "GREEN"
 
+
 class StandInHarness:
     """Spawns trains and plays a minimal Train Model for each."""
 
@@ -43,7 +44,7 @@ class StandInHarness:
         self.time_s = CLOCK_START_S
 
     def spawn(self, train_id: str) -> None:
-        core = self.fleet.add(train_id, "GREEN LINE")
+        self.fleet.add(train_id, "GREEN LINE")
         self.speed[train_id] = 0.0
         print(f"spawned {train_id}: {len(self.fleet)} train controllers")
 
@@ -86,7 +87,8 @@ class StandInHarness:
             elif cmd.service_brake:
                 a = -SERVICE_DECEL_MPS2
             else:
-                a = min(MAX_FORCE_N, cmd.power_w / max(v, V_FLOOR_MPS)) / MASS_KG
+                force = min(MAX_FORCE_N, cmd.power_w / max(v, V_FLOOR_MPS))
+                a = force / MASS_KG
             self.speed[train_id] = max(0.0, v + a * DT_S)
 
 

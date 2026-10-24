@@ -32,6 +32,7 @@ from .constants import (
 from .state import State, TrainModelCommands
 from .vital import PowerInputs, VitalVote, compute_power, vote_2oo3
 
+
 class ControllerCore:
     """The PI speed law and the safety path.
 
@@ -142,9 +143,9 @@ class ControllerCore:
         self._auto_lights()
         if self.armed:
             # The commanded speed is the only cap, in both modes: the
-            # controller cannot know the true limit (REQUIREMENTS.md M1).
-            # In Manual it lowers the driver's setpoint when it drops,
-            # rather than springing back when it rises again.
+            # controller cannot know the true limit (REQUIREMENTS.md
+            # M1). In Manual it lowers the driver's setpoint when it
+            # drops, rather than springing back when it rises again.
             if s.manual:
                 s.target_mps = min(s.target_mps, self.commanded_mps)
             else:
@@ -383,7 +384,7 @@ class ControllerCore:
         return True
 
     def set_target_mps(self, mps: float) -> None:
-        """Set the driver's target in m/s, capped at the commanded speed.
+        """Set the driver's target (m/s), capped at the commanded speed.
 
         The only cap (REQUIREMENTS.md M1); step() keeps it under the
         commanded speed as that changes.

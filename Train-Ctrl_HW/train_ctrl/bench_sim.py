@@ -1,4 +1,4 @@
-"""What the test bench simulates in place of the rest of the system. No Qt.
+"""What the bench simulates in place of the rest of the system. No Qt.
 
 The bench drives the controller the way the central harness does
 (REQUIREMENTS.md M0): each tick it hands every train the input dict
@@ -98,7 +98,7 @@ class SimTrain:
         self._acted_lights: tuple[bool, bool] | None = None
 
     def outputs(self) -> dict[str, Any]:
-        """This tick's signals to the controller, as the harness sends them."""
+        """This tick's signals to the controller, as from a harness."""
         pickup = self.injected["signal_pickup"]
         values = {
             "commanded_speed": 0.0 if pickup else self.commanded_mps,
@@ -118,7 +118,7 @@ class SimTrain:
         return values
 
     def apply(self, staged: dict[str, Any]) -> None:
-        """Take a bench edit, already read and checked by read_inputs()."""
+        """Take a bench edit, already checked by read_inputs()."""
         for key, value in staged.items():
             if key == "emergency_brake_state":
                 self._pull = self._pull or bool(value)

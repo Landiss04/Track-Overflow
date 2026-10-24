@@ -12,6 +12,7 @@ from .errors import (DuplicateTrainError, InvalidInputError,
 from .inputs import EVERY_TICK, read_inputs
 from .state import TrainModelCommands
 
+
 class TrainControllerFleet:
     """One controller per running train, held by train ID.
 

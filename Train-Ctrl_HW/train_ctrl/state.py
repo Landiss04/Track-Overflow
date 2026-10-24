@@ -13,6 +13,7 @@ from .constants import (
     FAILURES,
 )
 
+
 @dataclass
 class State:
     """Everything the console shows or the control law needs."""

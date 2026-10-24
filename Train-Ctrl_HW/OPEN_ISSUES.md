@@ -10,6 +10,11 @@ picked up later. Last reviewed 2026-10-24 against `cfba866`
   hand-over now signs a driver in only if the engineer is still signed
   in on the train just commissioned, so signing out or picking a train
   with no gains inside the 1.5 s signs nobody in (M9).
+- **20 (flake8).** flake8 (79 / 72) reports nothing in this folder: the
+  re-exports in `train_ctrl/__init__.py` are marked `noqa`, and the
+  newline, spacing and doc-length warnings are fixed, with no change to
+  the code (the docstring-stripped syntax trees are identical, bar the
+  unused variable removed from `harness_sim.py`).
 
 ## Resolved 2026-10-21
 
@@ -58,10 +63,7 @@ picked up later. Last reviewed 2026-10-24 against `cfba866`
     (still a placeholder) nor the SRS. Update the documentation later.
 
 20. **Leftovers on this branch.** `ui/__pycache__/*.cpython-314.pyc` is
-    committed; flake8 reports 42 lines in this folder (15 are the
-    deliberate re-exports in `__init__.py`; the rest are missing final
-    newlines, blank-line spacing, long doc lines and an unused variable in
-    `harness_sim.py`).
+    committed.
 
 21. **The self-check is timing-sensitive.** Several `check.py` sections
     wait on wall-clock deadlines (`_until`) while the control timer runs.

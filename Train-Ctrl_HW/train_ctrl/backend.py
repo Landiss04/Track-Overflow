@@ -1,4 +1,4 @@
-"""The Qt bridge: one snapshot out to QML, one slot per operator action."""
+"""Qt bridge: one snapshot out to QML, one slot per operator action."""
 
 from __future__ import annotations
 
@@ -160,7 +160,7 @@ class ConsoleBackend(QObject):
         self.spawn_note = f"{train_id} removed."
         self._sync_roster()
         return True
-    
+
     def _sync_roster(self) -> None:
         # The harness changes the fleet without telling the console,
         # so the roster is compared once per UI tick.
@@ -205,7 +205,7 @@ class ConsoleBackend(QObject):
 
     @property
     def sim(self) -> SimTrain | None:
-        """The bench's simulation of the selected train, if it has one."""
+        """The bench simulation of the selected train, if it has one."""
         return self.sims.get(self.selected)
 
     @property
@@ -685,7 +685,7 @@ class ConsoleBackend(QObject):
 
     @Slot("QVariantMap")
     def apply_bench_inputs(self, values: dict) -> None:
-        """Apply the bench's edited rows, or refuse them all and say why.
+        """Apply the bench's edits, or refuse them all and say why.
 
         A value that cannot be read leaves everything as it was and
         shows one message on the bench, in the shared Callout

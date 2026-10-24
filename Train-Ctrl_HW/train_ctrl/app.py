@@ -33,7 +33,7 @@ _TEST_QML = _UI_DIR / "TestWindow.qml"
 
 
 def run(console: bool, bench: bool, check: bool = False,
-        shots: Path | None = None, 
+        shots: Path | None = None,
         fleet: TrainControllerFleet | None = None) -> int:
     """Open the requested windows and run until they close.
 
