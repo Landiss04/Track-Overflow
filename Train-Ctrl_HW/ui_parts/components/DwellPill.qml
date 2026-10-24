@@ -21,12 +21,22 @@ Rectangle {
     border.width: 1
     clip: true
 
-    Rectangle {
+    // The filled share: a full-size pill cut off square at the share,
+    // so what is left keeps the pill's own curve as it empties. A
+    // rounded rectangle of the share's width would shrink its radius
+    // with it, and stand out of the curve near the end.
+    Item {
         id: fill
         width: root.width * Math.max(0, Math.min(1, root.share))
         height: root.height
-        radius: root.radius
-        color: theme.info
+        clip: true
+
+        Rectangle {
+            width: root.width
+            height: root.height
+            radius: root.radius
+            color: theme.info
+        }
     }
 
     Text {
