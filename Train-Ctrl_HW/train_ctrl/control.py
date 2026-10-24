@@ -265,13 +265,18 @@ class ControllerCore:
                            zero in one update, from at least
                            PICKUP_DETECT_MIN_BLOCKS of authority
 
-        A detected failure latches until it is cleared on the test
-        bench (clear_failure).
+        A brake failure resolves when the service brake answers
+        again: the command echo_ticks ago asked for it and this tick's
+        report reads it applied (REQUIREMENTS.md §4, M3). The others
+        latch until cleared on the test bench (clear_failure).
         """
         s = self.state
 
-        if self._service_asked[0] and not s.fb_service_brake:
-            s.failures["brake"] = True
+        if self._service_asked[0]:
+            if not s.fb_service_brake:
+                s.failures["brake"] = True
+            elif s.failures["brake"]:
+                s.failures["brake"] = False
 
         v = s.actual_mps
         force = min(MAX_FORCE_N, s.power_w / max(abs(v), V_FLOOR_MPS))

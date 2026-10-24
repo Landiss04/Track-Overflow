@@ -765,11 +765,13 @@ class ConsoleBackend(QObject):
         sim.apply(read_inputs(si))
         sim.injected.update(injected)
         sim.at_station = at_station
-        # Clearing a failure on the bench resolves it in the controller
-        # too, until the controller can see resolution for itself
+        # A brake failure the controller resolves itself, once the
+        # service brake answers again (REQUIREMENTS.md §4). Engine and
+        # signal pickup failures it cannot yet see resolved, so clearing
+        # one on the bench clears it in the controller too
         # (REQUIREMENTS.md M3, OPEN_ISSUES.md #23).
         for name, on in injected.items():
-            if not on:
+            if not on and name != "brake":
                 self.core.clear_failure(name)
 
     @Slot(float, float)

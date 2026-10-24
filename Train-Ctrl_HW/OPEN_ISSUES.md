@@ -27,8 +27,8 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     driver may release the e-brake in Manual with the failure still
     latched, and the failure does not engage it again. That lets a
     repaired service brake read applied, since the driver may command it
-    under a brake failure (M4, R32); nothing yet concludes from that
-    reading that the brake is resolved. It does not settle the engine: a
+    under a brake failure (M4, R32), and the controller then concludes
+    the brake failure resolved (#44). It does not settle the engine: a
     latched failure keeps the target at 0, so no power is commanded and
     §4's "commanded power gives rising speed again" cannot happen.
     Candidate approaches for the rest, none chosen:
@@ -47,17 +47,15 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     the controller (`common/harness/train_edges.py`). Closes when that
     branch merges.
 
-25. **The passenger emergency brake release is not sent.** Truth now has
-    `signals/passenger-brake-release` (2026-10-20): a one-shot from the
-    Train Controller to the Train Model, true on the tick the controller
-    releases a passenger pull, after which the Train Model clears the
-    pull. The Train Model on `claude/quirky-fermi-sickg4` takes it
-    (`passenger_brake_release`). This controller does not send it:
-    `TrainModelCommands` has no such field, so a Train Model latch stays
-    reporting the e-brake engaged after the driver's release. The
-    controller's own side of M2 is done (R16: only a turn on of the
-    reported state, while the controller is not commanding it, is a
-    pull). Still open as well:
+25. **The passenger emergency brake release: deferred to the Train
+    Model** (decided 2026-10-24). Truth has
+    `signals/passenger-brake-release`: a one-shot from the Train
+    Controller, true on the tick it releases a passenger pull, after
+    which the Train Model clears the pull. No such signal will be added:
+    the Train Model is to detect the release itself. Until it does, a
+    Train Model latch keeps reporting the e-brake engaged after the
+    driver's release. The controller's own side of M2 is done (R16; and
+    since #42, its own command coming back is not a pull). Still open:
     - A pull reported within a tick or two of a release, before the
       reported state has gone false, is not seen.
     - The bench's passenger pull is reported for one tick only, not
@@ -157,8 +155,9 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
       00:00, and 24:30 is not a time of day (R27).
     - Switching to Manual during a brake failure (R26) lets the driver ask
       for the service brake (the button is live, R32; the e-brake can be
-      released in Manual at a stand, R31), but nothing detects a
-      resolution yet (#23), so the bench still clears the failure.
+      released in Manual at a stand, R31); once the bench clears its
+      injected failure, the service brake answers and the controller
+      resolves the failure (#44).
     - With an uncommissioned train selected nobody is signed in, so
       nobody can reach its emergency brake from the console; it commands
       0 W and cannot move under its own power.
@@ -199,29 +198,14 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
       speed and the signal ahead only when edited, and the beacon only
       with the `at_station` row. Nothing moves the train through blocks,
       stations and signals as the rest of the system would.
-    - **Failures.** Clearing an injected failure clears it in the
-      controller directly (M0, M3), so the bench never exercises how the
-      integrated controller would see it resolved (#44).
+    - **Failures.** Clearing an injected engine or signal pickup
+      failure clears it in the controller directly (M0, M3), so the bench
+      never exercises how the integrated controller would see those
+      resolved (#23). A brake failure the controller resolves itself
+      (#44).
 
     Reusing the Train Model's physics (#26 (b)) would close the physics
     and report gaps; the track side needs a track to run on.
-
-44. **Integrated, a brake failure never resolves** (reported 2026-10-24).
-    The controller learns of a failure, and of its resolution, only from a
-    mismatch between what it commands and what comes back (M3, M4). It
-    detects the failure that way: the service brake commanded, and its
-    reported state still off. But nothing concludes the opposite: when
-    the commanded service brake reads applied again, the failure stays
-    latched. On the bench this is hidden: clearing the injected failure
-    clears it in the controller directly (`clear_failure`, against M0),
-    so the bench never exercises the integrated path. Under the harness
-    nothing does that, so a brake failure, once detected, latches for the
-    rest of the run. To build: conclude the brake failure resolved when
-    the service brake is commanded with the e-brake off and the report
-    due for that command (#42) reads applied; then drop the bench's
-    direct clear. The driver can already release the e-brake in Manual at
-    a stand and command the service brake (M2, M4, R31), so the reading
-    can happen (#23).
 
 ## Outside the style guide and shared UI
 
@@ -313,6 +297,10 @@ One line each; the details are in `CHANGELOG.md`.
   the fleet takes `echo_ticks` (ECHO_TICKS, 2, under the harness; 1 on
   the bench), and the brake-failure rule (M4) and the passenger-pull
   test (M2) use the report due for each command.
+- **44.** Integrated, a brake failure never resolved: the controller
+  now concludes it resolved when a service brake commanded with the
+  e-brake off reads applied in its report (§4), and the bench clears
+  only its own simulation's brake failure.
 - Emergency echo re-latching the brake: fixed (M2, R16).
 - `old_main.py`: removed in `c98393e`.
 - Rolling resistance: decided, the controller models none (M19); the

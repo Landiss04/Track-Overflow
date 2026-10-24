@@ -155,7 +155,7 @@ Rules:
 | `temperature_setpoint_c` | °C | temperature-setpoint |
 | `announcement` | str | announcement: a command for the Train Model to play, otherwise empty |
 
-Not sent yet: truth's `passenger-brake-release`, a one-shot true on the tick the controller releases a passenger pull, after which the Train Model clears it. Until it is, a Train Model latch keeps reporting the emergency brake engaged after the driver's release (`OPEN_ISSUES.md` #25).
+Not sent, by decision: truth's `passenger-brake-release`, a one-shot true on the tick the controller releases a passenger pull. Clearing the Train Model's passenger latch is deferred to the Train Model's own detection; until then a latch keeps reporting the emergency brake engaged after the driver's release (`OPEN_ISSUES.md` #25).
 
 - **Speed.** The commanded speed is the only cap (M1): Automatic targets it; in Manual it caps the driver's setpoint, also when it drops. There is no 70 km/h cap, since the controller cannot know the true limit; keeping under it is the wayside's, through the commanded speed.
 - **Traction** is 0 while either brake is commanded, while a station stop holds the train, and while a door is commanded or reported open (M6). A train that is not commissioned commands 0 W (see Commissioning).
@@ -246,14 +246,14 @@ The controller infers failures from what the harness sends back, so three inputs
 | Engine | Power that should pull 0.1 m/s² or more, and `actual_speed` up by less than 0.05 m/s for 2 s. **Known false positive on grades:** against `development`'s Train Model it flags a healthy full train 2.4–2.9 s onto a +2 % or +5 % grade, latching the emergency brake. Kevin accepted a steady-fall rule to replace it (R91, `REQUIREMENTS.md` §4), built on `claude/quirky-fermi-sickg4`, not yet here (`OPEN_ISSUES.md` #28) | The real `actual_speed` every tick |
 | Signal pickup | `commanded_speed` and `authority_blocks` both drop to 0 in one update, from 2 or more blocks | Authority counting down normally, not a jump to 0 |
 
-A detected failure latches until cleared; the harness has no call to clear one. Decided: the controller detects resolution itself (M3), not yet built, so under the harness a brake failure latches for the rest of the run (`OPEN_ISSUES.md` #44); it cannot see brake or engine resolution while the e-brake is on (#23). The failure latches the e-brake once, on detection; at a stand the driver may release it in Manual with the failure still latched, and `emergency_brake` then stays false.
+A brake failure resolves when a service brake, commanded with the e-brake off, reads applied in its report (`REQUIREMENTS.md` §4): once the train stands, the driver releases the e-brake in Manual and asks for the service brake. Engine and signal pickup failures latch for the run under the harness: the controller does not yet detect their resolution (M3), and the harness has no call to clear one (`OPEN_ISSUES.md` #23). The failure latches the e-brake once, on detection; at a stand the driver may release it in Manual with the failure still latched, and `emergency_brake` then stays false.
 
 `door_state` must be faithful too: an Automatic train leaves a station only once `door_state` reports both doors closed. If it never does, the train waits at the station.
 
 Open issues:
 
 - [x] **Two ticks between a command and its report.** Each module reads the others' outputs from the tick before (D017), so a command sent on one tick reaches the Train Model on the next and its report comes back the tick after. Fixed Oct 24: build the fleet with `echo_ticks=ECHO_TICKS` (2); the bench's default is 1. Without it, the brake-failure rule (M4) takes every service brake application for a failure, and the controller's own emergency brake coming back reads as a passenger pull.
-- [ ] **The passenger brake release is not sent** (see Outputs; `OPEN_ISSUES.md` #25).
+- [ ] **The passenger brake release is deferred to the Train Model** (see Outputs; `OPEN_ISSUES.md` #25).
 - [ ] **Brake State on `claude/quirky-fermi-sickg4`.** That branch's harness edge sends one `brake_state` [emergency, service] input; this branch takes `emergency_brake_state` and `service_brake_state` (M18, `OPEN_ISSUES.md` #35).
 - [x] **Emergency echo re-latched the brake.** Fixed Oct 21: a pull is an `emergency_brake_state` that turns on while the controller isn't commanding it, so last tick's brake echoed back, or a passenger latch still held, does not undo the driver's release (M2). Still open with Kevin: what the Train Model reports after the driver's release, since only a test call clears its passenger latch (`OPEN_ISSUES.md` #25). One consequence: a pull reported within a tick or two of a release, before the reported state has gone false, is not seen.
 - [ ] **The bench breaks a harness fleet.** A train spawned from the bench is unknown to the harness, so the next `step_all` raises. The bench now refuses edits to a harness's trains, but not spawning. Open the console only.

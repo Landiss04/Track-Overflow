@@ -934,20 +934,26 @@ def run_check(
                and state.actual_mps == 0.0,
                f"the train moved after the release during a {name}")
 
-        # The bench resolves it; the brake is already off.
+        # The bench clears its injected failure; the e-brake is already
+        # off. A brake failure the controller then resolves itself,
+        # once the service brake answers again (REQUIREMENTS.md §4);
+        # the others it cannot see resolved, so the bench clears them
+        # directly (M3, OPEN_ISSUES.md #23).
         backend.apply_bench_inputs({row: False})
-        expect(not backend.core.failed,
-               f"clearing the {name} on the bench did not resolve it")
         if key == "brake":
-            # The service brake answers again.
-            drive_off("after the brake failure cleared")
+            expect(state.failures[key],
+                   "clearing the brake failure on the bench cleared it in "
+                   "the controller directly")
             backend.toggle_service_brake()
-            expect(_until(app, lambda: state.fb_service_brake, 10),
-                   "the service brake did not work after the failure "
-                   "cleared")
+            expect(_until(app, lambda: not backend.core.failed, 10)
+                   and state.fb_service_brake,
+                   "the brake failure did not resolve once the service "
+                   "brake answered")
+            backend.toggle_service_brake()
+            drive_off("after the brake failure resolved")
+        else:
             expect(not backend.core.failed,
-                   "a working service brake was taken for a failure")
-            backend.toggle_service_brake()
+                   f"clearing the {name} on the bench did not resolve it")
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
     # An engine failure at a steady cruise shows only once traction is
