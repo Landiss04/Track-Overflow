@@ -34,6 +34,7 @@ ScaledWindow {
             underground: window.s.beacon_underground
             paused: window.s.paused
             faulted: window.s.emergency_brake
+            dwellLeft: window.s.dwell_left
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
                 window.s.fault_pickup ? qsTr("Signal pickup fault") : "",

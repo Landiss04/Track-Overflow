@@ -29,6 +29,8 @@ Rectangle {
     property bool paused: false
     //: Fault labels shown after the emergency badge, hidden when empty.
     property var alerts: []
+    //: Share of the station dwell still to run, 1 to 0; hidden at 0.
+    property real dwellLeft: 0
     //: Controls placed just before the clock (the bench's time setter).
     property alias clockTools: clockTools.data
     property var navigationEntries: []
@@ -92,6 +94,11 @@ Rectangle {
             label: "E-brake"
             variant: "fault"
             visible: root.faulted
+        }
+
+        DwellPill {
+            visible: root.dwellLeft > 0
+            share: root.dwellLeft
         }
 
         Repeater {

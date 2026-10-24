@@ -41,6 +41,7 @@ ScaledWindow {
             faulted: window.s.emergency_brake
             // One badge per subsystem the Train Model reports failed,
             // up only while the failure is up, like the e-brake's.
+            dwellLeft: window.s.dwell_left
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
                 window.s.fault_pickup ? qsTr("Signal pickup fault") : "",

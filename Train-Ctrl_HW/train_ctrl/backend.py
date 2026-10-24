@@ -330,6 +330,9 @@ class ConsoleBackend(QObject):
             "fault_engine": s.failures["engine"],
             "fault_brake": s.failures["brake"],
             "fault_pickup": s.failures["signal_pickup"],
+            # The station dwell still to run, 1 to 0 (REQUIREMENTS.md
+            # M6), for the header's pill.
+            "dwell_left": self.core.dwell_left,
             # No two power calculations agreed (REQUIREMENTS.md M21).
             "vital_breach": s.vital_breach,
             # Injected into the bench's simulation (Murphy).

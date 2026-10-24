@@ -54,6 +54,9 @@ the 2026-10-21 changes.
 - The **Cab controls** panel (was Doors & cabin): its badge reads "Doors
   free" or "Doors locked" in Manual, "Locked" in Automatic; greyed door
   tiles are the only cue for what the driver cannot do (2026-10-24).
+- A **Station dwell** pill in both headers during the dwell: filled when
+  it starts, emptying to white over the 45 s, at a fixed width so nothing
+  beside it moves (`components/DwellPill.qml`, 2026-10-24).
 - The numbers drawer's Motion card shows the three power calculations and
   the vote (2026-10-24). The drawer is to be removed in the final
   iteration (`OPEN_ISSUES.md`, Notes).

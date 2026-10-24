@@ -1455,6 +1455,47 @@ def run_check(
     expect(_until(app, lambda: not backend.snapshot["announcing"], 10),
            "announcement never cleared")
 
+    # The station dwell pill on both headers (REQUIREMENTS.md M6):
+    # full when the dwell starts, half after half of it, gone after.
+    # The last block first: both falling to 0 from 2 or more blocks
+    # at once would read as a lost pickup.
+    sim = backend.sim
+    sim.authority_blocks = 1
+    tick()
+    sim.commanded_mps, sim.authority_blocks = 0.0, 0
+    for _ in range(600):
+        if backend.core.at_stand:
+            break
+        tick()
+    sim.beacon_station, sim.beacon_side, sim.at_station = "DORMONT", "R", True
+    for _ in range(20):
+        if backend.core.dwell_left > 0:
+            break
+        tick()
+    backend._publish()
+    _settle(app, 300)
+    expect(backend.snapshot["dwell_left"] > 0.99
+           and on_screen(window, "Station dwell")
+           and on_screen(bench, "Station dwell"),
+           "the station dwell pill is not full on both headers as the "
+           "dwell starts")
+    scan("station dwell")
+    if shots:
+        window.grabWindow().save(str(shots / "11-station-dwell.png"))
+        bench.grabWindow().save(str(shots / "11-station-dwell-bench.png"))
+    for _ in range(round(mod.DWELL_S / 2 / mod.TICK_S)):
+        tick()
+    expect(abs(backend.core.dwell_left - 0.5) < 0.01,
+           f"the dwell pill read {backend.core.dwell_left:.2f} halfway "
+           f"through the dwell")
+    for _ in range(round(mod.DWELL_S / 2 / mod.TICK_S) + 2):
+        tick()
+    backend._publish()
+    _settle(app, 300)
+    expect(not on_screen(window, "Station dwell"),
+           "the station dwell pill stayed after the dwell")
+    sim.at_station = False
+
     # A vitality breach on the console: the header pill on both
     # windows, the drawer's vote, and the e-brake held until the
     # driver releases it (REQUIREMENTS.md M21).
@@ -1474,6 +1515,7 @@ def run_check(
     scan("vitality breach")
     if shots:
         window.grabWindow().save(str(shots / "10-vitality-breach.png"))
+        bench.grabWindow().save(str(shots / "10-vitality-breach-bench.png"))
     vital.channels = (compute_power,) * 3
     tick()
     backend._publish()
