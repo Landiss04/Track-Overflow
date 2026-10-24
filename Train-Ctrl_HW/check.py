@@ -550,6 +550,26 @@ def run_check(
            "the open left door could not be closed")
     backend.toggle_emergency_brake()
 
+    # The hand-over signs a driver in only if the engineer is still
+    # signed in on the train just commissioned: signing out, or picking
+    # a train with no gains, inside it signs nobody in (REQUIREMENTS.md
+    # M9).
+    for leave in ("signed out", "picked a train with no gains"):
+        console = type(backend)()
+        console.spawn_train(1, "GREEN LINE", "GREEN K")
+        console.spawn_train(2, "GREEN LINE", "GREEN K")
+        console.select_operator(console.ENGINEER_INDEX)
+        console.commission_gains(400000, 8000)
+        if leave == "signed out":
+            console.select_operator(-1)
+        else:
+            console.select_train(console.fleet.ids()[1])
+        _settle(app, mod.GAINS_HANDOVER_MS + 400)
+        expect(console.operator != "driver",
+               f"a driver was signed in after the engineer {leave} "
+               f"during the hand-over")
+        console.deleteLater()
+
     # Another train, running its own plant, with its own gains.
     # Spawning it leaves the console on the train it shows.
     first = backend.selected

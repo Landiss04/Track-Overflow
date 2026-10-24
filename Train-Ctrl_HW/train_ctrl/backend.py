@@ -785,11 +785,18 @@ class ConsoleBackend(QObject):
         self.gains_note = (
             f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. Fixed for this run."
         )
-        QTimer.singleShot(GAINS_HANDOVER_MS, self._retire_engineer)
+        train_id = self.selected
+        QTimer.singleShot(GAINS_HANDOVER_MS,
+                          lambda: self._retire_engineer(train_id))
         self._publish()
 
-    def _retire_engineer(self) -> None:
-        # Close the gains dialog and hand the console to the driver.
+    def _retire_engineer(self, train_id: str) -> None:
+        # Close the gains dialog and hand the console to the driver,
+        # only if the engineer is still signed in on the train just
+        # commissioned: signing out, or picking a train with no gains,
+        # inside the hand-over must not sign a driver in (M9).
+        if self.operator != "engineer" or self.selected != train_id:
+            return
         self.operator = "driver"
         self._publish()
 

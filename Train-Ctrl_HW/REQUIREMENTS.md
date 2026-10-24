@@ -155,7 +155,6 @@ The revisions R2–R37, each with what changed and where, are in
 - M12 shows acceleration in m/s².
 
 **Open, found in the 2026-10-16 review:**
-- The engineer hand-over still signs a driver in unasked (`OPEN_ISSUES.md` #16).
 - `ui/__pycache__/*.pyc` is committed (`OPEN_ISSUES.md` #20).
 - flake8 reports 42 lines in this folder: 15 are the deliberate re-exports in `train_ctrl/__init__.py`; the rest are missing final newlines, blank-line spacing, long doc lines and an unused variable in `harness_sim.py`. Not fixed here.
 - `check.py` is timing-sensitive under load (`OPEN_ISSUES.md` #21).

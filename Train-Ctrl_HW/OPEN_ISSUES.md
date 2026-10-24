@@ -4,6 +4,13 @@ Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Last reviewed 2026-10-24 against `cfba866`
 (`REQUIREMENTS.md` M0–M20, revisions R2–R37; M5 is merged into M3).
 
+## Resolved 2026-10-24
+
+- **16. The engineer hand-over signed a driver in unasked.** The
+  hand-over now signs a driver in only if the engineer is still signed
+  in on the train just commissioned, so signing out or picking a train
+  with no gains inside the 1.5 s signs nobody in (M9).
+
 ## Resolved 2026-10-21
 
 - **11. Block lengths unknown; overrun above 34.6 mph.** Authority is used
@@ -45,14 +52,6 @@ picked up later. Last reviewed 2026-10-24 against `cfba866`
   also read false while the e-brake is engaged (#23).
 
 ## Added 2026-10-16 (requirements review, `REQUIREMENTS.md`)
-
-16. **The engineer hand-over can still sign a driver in unasked.**
-    `train_ctrl/backend.py` — `_retire_engineer` runs 1.5 s after
-    commissioning and sets `operator = "driver"` unconditionally, on
-    whichever train is selected by then. Sign the console out inside that
-    window and a driver is signed in anyway, unlocking Manual controls.
-    Select an uncommissioned train inside it and a driver is signed in to
-    that train, against M9 (no driver before the gains).
 
 19. **Module rules are not recorded outside this folder.** Rules M0–M20
     in `REQUIREMENTS.md` are in neither truth's Train Controller contract
