@@ -66,7 +66,7 @@ module documentation is to be updated later (see §6).
 | FUNC-047 | 5.8 | Passenger emergency brake | Met | A reported pull latches the controller's e-brake (M2) |
 | FUNC-001 / 002 | 1.2 / 1.4 | Run at 1× and 10× | Met | Fixed 0.1 s step; 10× is 100 ticks a second (M11) |
 | FUNC-003 | 1.3 | Pause | Met (bench) | Holds every train and the clock; the harness clock owns it when integrated |
-| INTF-001.6 | 9.0 (5) | A GUI for the HW Train Controller | Met | |
+| INTF-001.6 / 001.7 | 9.0 (5) | A GUI for the HW and the SW Train Controller | Met | One GUI design for both (M13): the same console and test bench, on the PC for either variant |
 | — | — | Vital architecture for the Train Controller (course deck; `documents/requirements-matrix.md` §3) | Met | M21: the power command, the only vital calculation, is voted two out of three. The SRS has no requirement for it yet (§6) |
 | INTF-004 | — | Consistent error messages | Met (bench) | Shared `Callout`, "Not sent"; the console cannot produce bad input |
 | INTF-007 | — | Separate hardware variation | Partial | M13: the HW variant's I/O goes over USB to its Pi. The Pi link is not on this branch (#35) |
