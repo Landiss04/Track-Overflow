@@ -2,7 +2,7 @@
 
 Two of them, catching different kinds of breakage:
 
-    check_snapshot_contract   every start-up, in milliseconds: do the
+    check_snapshot_contract   with --check, in milliseconds: do the
                               views and this backend still agree on
                               what the snapshot contains?
     run_check                 python main.py --check: drive a whole
