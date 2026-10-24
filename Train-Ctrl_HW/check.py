@@ -36,6 +36,7 @@ from PySide6.QtTest import QTest
 
 import train_ctrl as mod
 from train_ctrl.bench_sim import SimTrain
+from train_ctrl.vital import PowerResult, vote_2oo3
 
 
 # ========================================================== contract
@@ -1006,6 +1007,23 @@ def run_check(
     expect(stopped() and not door.command_door("left", True)
            and door.command_door("right", True),
            "at a station Manual did not open only the platform side")
+
+    # The vital power command (REQUIREMENTS.md M21): the result at least
+    # two of the three channels agree on passes; with no two equal,
+    # nothing does. Agreeing means equal, power and integrator both.
+    good, bad, worse = (PowerResult(1000.0, 2.0), PowerResult(5000.0, 2.0),
+                        PowerResult(1000.0, 3.0))
+    for results, agreed, agreeing in (
+            ((good, good, good), good, 3),
+            ((bad, good, good), good, 2),
+            ((good, bad, good), good, 2),
+            ((good, good, bad), good, 2),
+            ((good, bad, worse), None, 0),
+            ((PowerResult(float("nan"), 2.0),) * 3, None, 0)):
+        vote = vote_2oo3(results)
+        expect(vote.agreed == agreed and vote.agreeing == agreeing,
+               f"the vote on {results} passed {vote.agreed} with "
+               f"{vote.agreeing} agreeing, not {agreed} with {agreeing}")
 
     # The controller only commands (REQUIREMENTS.md M0): stepping it
     # sends power and moves nothing it receives.
