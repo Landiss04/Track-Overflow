@@ -72,7 +72,6 @@ module documentation is to be updated later (see §6).
 | INTF-007 | — | Separate hardware variation | Partial | M13: the HW variant's I/O goes over USB to its Pi. The Pi link is not on this branch (#35) |
 | INTF-010 | — | HW and SW interfaces equivalent | Met | One module for both, consuming and producing the same I/O (M13, truth D021) |
 | INTF-013 / DSN-005 | — | One shared simulation clock | Met | M11: the harness passes `utils/system_clock.py`'s time to `step_all`; the bench passes its own |
-| INTF-015 / NFR-008 | — | CSV event log | Deferred | Not needed now |
 | INTF-017 | — | Track circuit carries speed and authority to the TC | Partial | Via the Train Model; wired at integration |
 | NFR-001.1 | — | Tick size | Met (truth) | Truth's 0.1 s, not the SRS's 1 ms (§6) |
 | NFR-003 / 004 | — | Validate input; reject without changing state | Met | All or nothing |
@@ -151,6 +150,7 @@ The revisions R2–R37, each with what changed and where, are in
 
 **Outside this folder (separate PR):**
 - SRS: add a requirement for the Train Controller's vital architecture (M21).
+- SRS: drop INTF-015 / NFR-008, the CSV event log, for this module: never made, and not a requirement.
 - SRS: reword FUNC-038 to "detect, from the signals the Train Model returns, each failure and its resolution"; change NFR-001.1 to truth's 0.1 s tick.
 - Fill in the Train Controller section of `documents/test_plan.md`.
 - `development`: remove the stale `TrainController/` folder; update `TRAINS_PROJECT_CONTEXT.md` (gains are an Engineer pop-up).
