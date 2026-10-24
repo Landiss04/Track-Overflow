@@ -1,8 +1,8 @@
 # Train-Ctrl_HW — open issues for review
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
-picked up later. Last reviewed 2026-10-21 (controller / test bench
-separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
+picked up later. Last reviewed 2026-10-24 against `cfba866`
+(`REQUIREMENTS.md` M0–M20, revisions R2–R37; M5 is merged into M3).
 
 ## Resolved 2026-10-21
 
@@ -12,8 +12,7 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
   is the rest of the system's, which lowers the commanded speed in time
   (M17).
 - **14. How a failure clears once integrated.** Decided: the controller
-  detects resolution from the returned signals, in both modes (M3, M5,
-  §4). Building it is blocked on #23.
+  detects resolution from the returned signals, in both modes (M3, §4). Building it is blocked on #23.
 - **17. No block-change dummy.** The controller needs none: the Train
   Model's block change goes to the Track Model, which sends the next
   count (`development` `TrainModel/train_model/interface.py`:
@@ -34,6 +33,9 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
 - **29. The dial's 70 km/h scale against M1.** Decided (R29, M14): the
   dial keeps its 70 km/h scale as display only, not a cap; a commanded
   speed above 43.5 mph cannot be set from the dial, and that is accepted.
+- **31 (first bullet). The bench clock** now starts at the first
+  commissioning and then always runs, whichever train is selected (M11,
+  R37).
 
 ## Added 2026-10-15
 
@@ -46,18 +48,21 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
 
 16. **The engineer hand-over can still sign a driver in unasked.**
     `train_ctrl/backend.py` — `_retire_engineer` runs 1.5 s after
-    commissioning and sets `operator = "driver"` unconditionally. Sign the
-    console out inside that window and a driver is signed in anyway,
-    unlocking Manual controls.
+    commissioning and sets `operator = "driver"` unconditionally, on
+    whichever train is selected by then. Sign the console out inside that
+    window and a driver is signed in anyway, unlocking Manual controls.
+    Select an uncommissioned train inside it and a driver is signed in to
+    that train, against M9 (no driver before the gains).
 
 19. **Module rules are not recorded outside this folder.** Rules M0–M20
     in `REQUIREMENTS.md` are in neither truth's Train Controller contract
     (still a placeholder) nor the SRS. Update the documentation later.
 
 20. **Leftovers on this branch.** `ui/__pycache__/*.cpython-314.pyc` is
-    committed; flake8 reports about 30 issues in the split files (unused
-    re-exports in `__init__.py`, missing final newlines, blank-line
-    spacing).
+    committed; flake8 reports 42 lines in this folder (15 are the
+    deliberate re-exports in `__init__.py`; the rest are missing final
+    newlines, blank-line spacing, long doc lines and an unused variable in
+    `harness_sim.py`).
 
 21. **The self-check is timing-sensitive.** Several `check.py` sections
     wait on wall-clock deadlines (`_until`) while the control timer runs.
@@ -70,7 +75,7 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
 ## Added 2026-10-21 (controller / test bench separation)
 
 23. **Brake and engine resolution cannot be seen while the emergency brake
-    is on.** Blocks M3–M5. On detection the controller latches the
+    is on.** Blocks M3. On detection the controller latches the
     e-brake, and the pills are meant to clear before the driver releases
     it. But on `development` (`TrainModel/docs/physics.md` §3–4):
     - the Train Model reports the service brake as **not engaged whenever
@@ -83,8 +88,9 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     time). Decided in part (R29, M2, M3): once the train stands, the
     driver may release the e-brake in Manual with the failure still
     latched, and the failure does not engage it again. That lets a
-    repaired service brake read applied, once the driver may command it
-    under a brake failure (M4). It does not settle the engine: a latched
+    repaired service brake read applied, since the driver may command it
+    under a brake failure (M4, R32); nothing yet concludes from that
+    reading that the brake is resolved. It does not settle the engine: a latched
     failure keeps the target at 0, so no power is commanded and §4's
     "commanded power gives rising speed again" cannot happen. Candidate
     approaches for the rest, none chosen:
@@ -170,13 +176,11 @@ separation, `REQUIREMENTS.md` M0–M20; R15–R29 done the same day).
     +2 % or +5 % grade.
 
 30. **Rules decided 2026-10-21 not yet in the code.** M3 (resolution not
-    detected, blocked on #23), M5 (#23), M19 (engine detection uses mass
+    detected, blocked on #23), M19 (engine detection uses mass
     and `F = P/v`, #28), M20 (signal light not mapped, #27). Update
     `HARNESS_INTEGRATION.md` and `CHANGELOG.md` with each.
 
 31. **Bench-side leftovers from the separation (R15–R17).**
-    - The bench clock now starts at the first commissioning and then
-      always runs, whichever train is selected (M11, R37).
     - Setting the bench clock is a jump: the lights act only if the jump
       changes night to day or back. 05:00 (the start) to 18:00 is night
       to night, so nothing changes; set a daytime first, or 17:59 and let

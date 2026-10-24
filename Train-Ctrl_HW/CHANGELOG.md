@@ -117,33 +117,32 @@ sending only edited rows, the roster signalling only on change, and the train
 picker's search. The 10× check waits on the speed gain instead of a 300 ms
 stopwatch (it failed 4 of 4 runs on Windows before).
 
-2026-10-21 (evening): the mode switches both ways during each failure;
-the time wheels run 24 / 60 / 60, a scroll notch steps one, a drag moves
-them, and the time they show reaches the controller.
+2026-10-21, in the order made:
 
-2026-10-21 (late afternoon): every checkpoint scans both windows for
-text cut off (elided, or past the window edge) and fails on any; it found
-seven on `5b99075`. New checks for the bench time setter, including noon
-then 18:00 turning the lights on.
-
-2026-10-21 (afternoon): new checks for a light tile answering after a
-bench light edit, underground lights from the bench, the beacon heard
-only at a station or once after a send, the three automatic announcements
-in each mode, automatic lights through 18:00 and 06:00, spawning keeping
-the selection, and no driver for an uncommissioned train. Each fails on
-`3dfdf09`.
-
-2026-10-21: the check drives the controller only through the bench
-simulation or `step_all`, never by writing its state. New checks: stepping
-the controller moves nothing it receives (M0); a held emergency report
-does not undo the driver's release, a new turn on does latch (M2); a tick
-missing either brake state is refused (M18); the harness's time reaches
-the controller and a bad time is refused (M11); a bench block change spends
-one block and the controller receives it (M16). Each fails on the previous
-commit. Two waits that timed out unchecked (the 35 mph climb before the
-slow-down test, which then sped up to 30 mph instead of slowing to it, and
-the dial-scale test) now send and tick first, and the climb is an
-`expect`.
+- The check drives the controller only through the bench simulation or
+  `step_all`, never by writing its state. New checks: stepping the
+  controller moves nothing it receives (M0); a held emergency report does
+  not undo the driver's release, a new turn on does latch (M2); a tick
+  missing either brake state is refused (M18); the harness's time reaches
+  the controller and a bad time is refused (M11); a bench block change
+  spends one block and the controller receives it (M16). Each fails on the
+  previous commit. Two waits that timed out unchecked (the 35 mph climb
+  before the slow-down test, which then sped up to 30 mph instead of
+  slowing to it, and the dial-scale test) now send and tick first, and the
+  climb is an `expect`.
+- New checks for a light tile answering after a bench light edit,
+  underground lights from the bench, the beacon heard only at a station or
+  once after a send, the three automatic announcements in each mode,
+  automatic lights through 18:00 and 06:00, spawning keeping the
+  selection, and no driver for an uncommissioned train. Each fails on
+  `3dfdf09`.
+- Every checkpoint scans both windows for text cut off (elided, or past
+  the window edge) and fails on any; it found seven on `5b99075`. New
+  checks for the bench time setter, including noon then 18:00 turning the
+  lights on.
+- The mode switches both ways during each failure; the time wheels run
+  24 / 60 / 60, a scroll notch steps one, a drag moves them, and the time
+  they show reaches the controller.
 
 ### Repository
 
@@ -233,3 +232,87 @@ Kept here so a reviewer reading old commits is not misled.
 - **Style-guide sizes** (36 px readouts, 36 px dial figures, 44 px tiles,
   13 px bench outputs, from `4bdb3b7`) — reverted to Ivan's sizes in
   `2fa4b6d`.
+
+---
+
+## 4. Revisions R2–R37
+
+Moved here from `REQUIREMENTS.md` §5 on 2026-10-24, which refers to
+them by number.
+
+### 2026-10-16
+
+All done on `Train_Ctrl_integration` from `d444312`. Each rule change has
+a `check.py` check, shown failing with the old rule and passing with the
+new one.
+
+| R | Change | Where |
+|---|---|---|
+| R2 | E-brake: the driver engages and releases; greyed, with the reason, for anyone else; a passenger pull still latches it | `backend.py` `can_ebrake`, `StopPanel.qml` |
+| R3 | Commanded speed is the only cap (M1); the speed limit input, bench row and drawer row removed. With it, the bench's cab column (M15) | `control.py`, `inputs.py`, `state.py`, `TestInputsPanel.qml` |
+| R4 | Dial: fixed 70 km/h scale (`dial_max_mph`); a press in the bottom gap reads 0, a drag past either end holds it; keyboard arrows and focus ring removed; whole mph | `SpeedDial.qml`, `SpeedPanel.qml`, `constants.py` `MAX_SPEED_MPS` |
+| R5 | Door logic in the controller (M6); door tiles say "stop first" while moving | `control.py` `_station_stop`, `command_door`; `CabinPanel.qml` |
+| R6 | Automatic announcement command on a new station beacon; labels say a command is sent | `control.py` `apply_staged`; `backend.py`; `AnnouncementPanel.qml` |
+| R7 | `TICK_S` 0.1 s; 10× = 10 ms ticks; clock from 05:00:00 on simulated time. Curves unchanged from the 0.05 s step (0 → 43 mph in 42.4 s; 35 → 30 mph settles at 30.08) | `constants.py`, `control.py`, `backend.py`, `harness_sim.py` |
+| R8 | Bench Pause holds every train and the clock; Paused pill in both headers | `backend.py` `set_paused`; `ConsoleHeader.qml`; `TestInputsPanel.qml` |
+| R9 | `step_all` refuses a tick missing any `EVERY_TICK` signal, and any `dt` other than `TICK_S` (0.1 s); `harness_sim.py` sends the full set | `inputs.py`, `fleet.py`, `harness_sim.py` |
+| R10 | A refused bench set shows a "Not sent" callout instead of raising from the slot | `backend.py` `apply_bench_inputs`; `TestInputsPanel.qml` |
+| R11 | `OPEN_ISSUES.md`: stale mass and SW references removed; items 16–22 added | `OPEN_ISSUES.md` |
+| R12 | Settle (30.08 mph) and detection delay (0.6 s = 0.5 s rule + one tick) agree across CHANGELOG, OPEN_ISSUES and code | `CHANGELOG.md`, `OPEN_ISSUES.md`, `constants.py` |
+
+### 2026-10-21
+
+From `c98393e`.
+
+| R | Change | Where |
+|---|---|---|
+| R13 | Authority used as given (M16): the toy plant's 100 m countdown, `BLOCK_LENGTH_M` and `block_progress_m` removed; the bench's **Block change** button sends the next count, one fewer, never below 0. The `check.py` check fails on the old plant (3 blocks became 1 over 250 m) and passes now | `control.py` `_plant`, `constants.py`, `state.py`, `backend.py` `bench_block_change`, `TestInputsPanel.qml`, `check.py` |
+| R14 | Rules M0–M20 and §3–§4 rewritten from the 2026-10-21 decisions; `OPEN_ISSUES.md` updated to match | `REQUIREMENTS.md`, `OPEN_ISSUES.md` |
+| R15 | Bench simulation out of the controller (M0): the toy plant, injected failures and command edges moved to `bench_sim.py` (`SimTrain`); the bench steps the fleet through `step_all` like the harness; the console's `apply_inputs` slot removed; bench edits go to the simulation, and edits to a harness's trains are refused. Speed curves unchanged before and after (0 → 43 mph reaches 42.9 mph at 42.3 s) | `bench_sim.py`, `control.py`, `state.py`, `constants.py`, `backend.py`, `check.py` |
+| R16 | Brake State split into `emergency_brake_state` and `service_brake_state` (M18); bench row renamed to match. A pull is a turn on of the emergency state while not commanded, so the driver's release overrides a held report (M2): without it, the bench driving through `step_all` re-latched the brake on its own echo | `inputs.py`, `control.py` `apply_staged`, `TestInputsPanel.qml`, `harness_sim.py` |
+| R17 | System time as a `step_all` input (`time_s`, M11), validated; the console's clock shows what the selected train received, under the bench or a harness | `fleet.py`, `state.py`, `backend.py`, `harness_sim.py` |
+
+From `3dfdf09`. Each item was shown failing on `3dfdf09` first.
+
+| R | Change | Where |
+|---|---|---|
+| R18 | A light or door tile press is answered by the bench's train even when the command is unchanged. A light state published on the bench (in Automatic, say) no longer locks the tiles once the driver is in Manual: a regression from R15, which had dropped the old plant's equivalent | `bench_sim.py` `answer_next`, `backend.py` |
+| R19 | Door tiles read "Open left" / "Close left" (and right) again, greyed when unavailable; the "stop first" text is gone (M6) | `CabinPanel.qml` |
+| R20 | Automatic lights, both modes (M8) | `control.py` `_auto_lights`, `constants.py` |
+| R21 | Automatic announcements, both modes: arriving soon at 3 blocks, arrived, departing (M7). A station is armed by a beacon turning up or naming a new station, not only by a new name; Automatic opens its doors on arrival. The old Automatic announcement of the station name on a new beacon is gone. Bench `at_station` row: the beacon is heard every tick at a station, once after a beacon row is sent (M15) | `control.py` `apply_staged`, `_station_stop`; `bench_sim.py`; `backend.py`; `TestInputsPanel.qml` |
+| R22 | Spawning keeps the selection; an uncommissioned train has no driver: picking it signs the driver out, Driver is refused, the sign-in view says it is waiting for its gains; the train picker works signed out (M9) | `backend.py`, `SignInView.qml`, `OperatorBar.qml` |
+
+From `5b99075`.
+
+| R | Change | Where |
+|---|---|---|
+| R23 | No text is cut off. The self-check now scans both windows at each checkpoint for text Qt elides and text drawn past the window edge, and found seven: the bench status line (95 px short), "Send station announcement" (28 px), "Sent automatically on approach" (66 px), "Stop the train" beside "BRAKE FAILURE" (2 px), and the bench's announcement row running off the screen. Fixed: the status line wraps to two lines; the announcement button wraps to two lines in a fixed two-line height; the Automatic label reads "Sending automatically"; the Stop panel's badge reads "Brake fault", as the header pill does; the bench's announcement value wraps in its column | `check.py` `scan`, `BenchBar.qml`, `AnnouncementPanel.qml`, `backend.py`, `StopPanel.qml`, `SignalEditRow.qml` `wrapValue`, `TestOutputsPanel.qml` |
+| R24 | Bench `at_station` row moved to the Train Model column, under `authority_blocks` (M15) | `TestInputsPanel.qml` |
+| R25 | Bench time setter beside the bench clock: HH:MM or HH:MM:SS, on the current simulated day; a time that is not one is refused with a "Not sent" note. Noon then 18:00 turns the lights on (M8, M15) | `TestWindow.qml`, `ConsoleHeader.qml` `clockTools`, `backend.py` `set_bench_time` |
+
+From `a6366c8`.
+
+| R | Change | Where |
+|---|---|---|
+| R26 | Mode switching allowed while a failure is latched (M3), both ways; the target stays refused and the emergency brake on. Shown refused on `a6366c8` | `backend.py` `set_manual`, `check.py` |
+| R27 | The bench's time is set on three wheels, hours 0–23, minutes and seconds 0–59, each wrapping; drag or scroll one number per notch; Set time applies them. Replaces the HH:MM text field | `components/TimeWheels.qml`, `TestWindow.qml`, `check.py` |
+
+From `d8bd163`. `REQUIREMENTS.md` only; no code changed.
+
+| R | Change | Where |
+|---|---|---|
+| R28 | Statuses checked line by line against the code. Recorded: M1's Manual setpoint is capped only when set; M7's "arriving soon" also fires on a rise to 3; M8's first tick also takes underground in; M11 is Partial (the bench clock runs only once the selected train is commissioned, #31; presses while paused act on resume); M15's first spawn is selected; M17's speed law also brakes at a target of 0; FUNC-037.2 met by M3, not M4; the console's "--" follows a detected pickup failure | `REQUIREMENTS.md` |
+| R29 | Decisions from that review: M2/M3, the driver may release the emergency brake in Manual at a stand with a failure still latched; M7, a rise to 3 announces too, and in Manual the driver may repeat any announcement once its state is met, until the next one is sent; M14, the dial keeps its 70 km/h scale as display only (#29); M8, a train spawned at the yard between 18:00 and 06:00 has its lights set to on; M11, the bench clock runs from the first commissioning on, whichever train is selected, and Pause is as built; M17, the service brake at authority 0 is a fail safe (now Met) | `REQUIREMENTS.md` |
+
+From `0f2e2d2`, one rule at a time.
+
+| R | Change | Where |
+|---|---|---|
+| R30 | M1: the 70 km/h cap removed (`speed_cap_mps` gone); the commanded speed is the only cap, and in Manual it lowers the driver's target when it drops. Commanded 60 mph now settles at 60.1 mph (was held at 43.6). Below 70 km/h the curves are unchanged (43 mph: 33.55 at 30 s, 43.1 at 60 s, before and after). The `check.py` check fails three ways on the old code | `control.py`, `constants.py`, `check.py` |
+| R31 | M2, M3: a failure latches the emergency brake once, on detection; at a stand the driver may release it in Manual with the failure still latched, and it is not engaged again; in Automatic the release is still refused ("Release it in Manual: …"). The dial hint no longer says brake release waits for the failure to clear. The `check.py` check fails on the old code for each failure ("could not release … in Manual", "engaged the emergency brake again") | `control.py` `respond_to_failures`, `release_emergency`; `backend.py`; `check.py` |
+| R32 | M4: a brake failure is concluded when last tick commanded the service brake (with the e-brake off) and this tick's service brake state still reads off: 0.2 s after the press on the bench (was 0.6 s, `BRAKE_DETECT_S` removed). The service brake stays commanded when asked for, failure or not, and the Stop panel's service button stays live. The `check.py` checks fail three ways on the old code | `control.py` `detect_failures`, `respond_to_failures`, `enforce_safety`; `constants.py`; `backend.py` `toggle_service_brake`; `StopPanel.qml`; `check.py` |
+| R33 | M6: in Manual either side opens at a stand, only the platform side at a station (arrived, until it departs); the door tiles grey from the same rule (`may_open_left` / `may_open_right` replace `platform_*` and `at_stand` in the snapshot). The `check.py` check fails on the old code ("Open left" at a stand, platform on the right) | `control.py` `may_open`, `command_door`; `backend.py`; `CabinPanel.qml`; `check.py` |
+| R34 | M7: in Manual the press repeats the last automatic announcement, held 5 s on system time like the automatic ones (was: the beacon's station name on a 5 s wall-clock timer in the console). Greyed while one plays and before any was sent; labels "Repeat last announcement", "Nothing to repeat yet". The console's `announcing` set and timer removed. On the old code the press sent "DORMONT" where the check expects the repeat | `control.py` `last_announcement`, `can_repeat`, `repeat_announcement`; `backend.py`; `AnnouncementPanel.qml`; `check.py` |
+| R35 | M8: a train's first tick (its spawn at the yard) sets its lights on between 18:00 and 06:00 and off by day (before: whatever it started with, on). The `check.py` check fails at 19:00, 05:00 and 12:00 on the old code | `control.py` `_auto_lights`; `check.py` |
+| R36 | M8: a train spawns with nothing on: the lights' defaults are now off, as everything else already was. The `check.py` check fails on the old defaults | `state.py`; `check.py` |
+| R37 | M11: the bench clock starts at the first commissioning and then always runs, whichever train is selected (was: only while the selected train was commissioned). The `check.py` check fails on the old code with an uncommissioned train selected | `backend.py` `_step_all`; `check.py` |
