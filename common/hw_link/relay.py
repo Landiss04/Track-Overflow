@@ -131,14 +131,13 @@ class HardwareRelay(QObject):
             return
         op = incoming["op"]
         if op == p.HELLO:
-            if (
-                incoming["module"] != self.module
-                or incoming["protocol"] != p.VERSION
-                or incoming["session"] != self.session
-                or incoming.get("agent_version") != AGENT_VERSION
-                or incoming.get("agent_hash") != self.expected_agent_hash
-                or not incoming.get("boot")
-            ):
+            if not p.matches_hello(
+                incoming,
+                module=self.module,
+                session=self.session,
+                agent_version=AGENT_VERSION,
+                agent_hash=self.expected_agent_hash,
+            ) or not incoming.get("boot"):
                 self.diagnosticEvent.emit(
                     "PI_HELLO_REJECTED "
                     "identity, version or bundle hash mismatch"
