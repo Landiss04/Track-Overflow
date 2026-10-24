@@ -123,10 +123,12 @@ controller sends and receives (M0, M19).
 | Failure | Detected when (decided) | Resolved when (decided) | Code today |
 |---|---|---|---|
 | Brake | The service brake was commanded, and the next tick's service brake state still reads off | The service brake state reads applied again when commanded | Detection as decided (R32); resolution not detected |
-| Engine | Power is commanded above 0; no brake, service or emergency, at any time in the window; speed has fallen by more than a small threshold over the window. Never while the speed is within the control band of the commanded speed. The window is a few seconds longer than 2 s, so a slow fall on the flat is caught without trips from tick noise | Commanded power gives rising speed again | "Should pull ≥ 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s", which false-positives; resolution not detected |
+| Engine | A steady fall (accepted by Kevin 2026-10-21, R91). Never within 0.05 m/s of the target. Otherwise, over a 6 s window of system time: power above 0 on every tick; no service or emergency brake commanded or reported on any tick (a brake or 0 W starts the window again); and the half-second speed means fall by more than 0.05 m/s from the first to the last, each within 10 % of that fall of the straight line between them. Falling speed, not speed that fails to rise | Commanded power gives rising speed again | Not on this branch: the old rule, "should pull ≥ 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s", which false-positives on grades. The accepted rule is built on `claude/quirky-fermi-sickg4` (#28, #35). Resolution not detected |
 | Signal pickup | Commanded speed and authority fall to 0 together from ≥ 2 blocks | A valid non-zero Track Signal resumes | Detection as decided; resolution not detected |
 
-The engine window and threshold are not fixed yet (#28).
+The straight-line check tells a sustained fall from the sag of a healthy
+train running onto a grade, which the PI recovers (about 0.51 m/s, back in
+about 3 s, at Green 7).
 
 A vitality breach (M21) is not a Train Model failure: it is the
 controller's own calculations disagreeing, and it clears on the next tick
@@ -135,6 +137,9 @@ they agree.
 Known limits:
 - A brake failure is only seen when the service brake is asked for.
 - A cut from ≥ 2 blocks straight to 0 reads as a pickup failure.
+- A dead engine on a standing train is not seen: its speed does not fall.
+- A heavily loaded train that cannot hold its speed on Green 7's 5 % grade
+  falls steadily and can be taken for an engine failure.
 - Brake and engine resolution cannot be seen while the emergency brake is
   on. Once the train stands, the driver may release it in Manual (M2, M3,
   R31); a repaired service brake can then read applied (M4), but nothing
