@@ -28,7 +28,8 @@ This lets a yard release proceed 9 → 10 and requires owner confirmation.
 ## 2026-10-22 — Green-style Red integration routing
 
 Kevin authorized reusing Braden's real Green PLC routing pattern in the
-Red integration test programs. All seven switches now obey CTC overrides when
+Red integration test programs, superseding the old instruction to wait for real
+Red programs. All seven switches now obey CTC overrides when
 free, otherwise select a reverse approach or route around a closed normal
 leg using AUTO/WANT logic. Occupied points hold their reported position;
 switches 15, 32 and 43 also retain the listed-joint lock used by Green's
@@ -38,16 +39,27 @@ blocked route, and show caution for reverse or maintenance.
 
 Switch 52 selects REVERSE for a train on 66 and returns to NORMAL for an
 outbound train on 51. No automatic train reversal or course data edit is
-added. All test-copy declarations and Braden owner-review requirements
-remain. The wayside split is unchanged: Red-1 1–24/73–76, Red-2
-25–45/67–72, Red-3 46–66.
+added. All test-copy declarations remain, and **Braden is the required
+reviewer of this Red integration work as his module's owner**; his acceptance
+remains pending. The wayside split is unchanged:
+Red-1 1–24/73–76, Red-2 25–45/67–72, Red-3 46–66.
 
-Kevin explicitly approved shared read-only neighbor closure inputs. The
-same adjacency helper now defines both `OCC_n` and `CLOSED_n` input scope;
-the scan image reads line-scoped full occupancy/closure sets. Switch 27
-therefore receives `CLOSED_76` and can route and protect its reverse leg.
-Foreign output ownership remains rejected. Missing occupancy still counts
-as clear under the existing contract; Braden and Harry's review remains.
+**Neighbor closure input extension and its review status.** The same
+adjacency helper now defines both `OCC_n` and `CLOSED_n` input scope; the
+scan image reads line-scoped full occupancy/closure sets. Switch 27 therefore
+receives `CLOSED_76` and can route and protect its reverse leg. Foreign
+output ownership remains rejected.
+
+- **Approval:** Kevin explicitly authorized these shared read-only neighbor
+  closure inputs before implementation, as confirmed on 2026-10-24.
+- **Required review:** Asked on 2026-10-24 whether Braden accepted, Kevin answered
+  "he didnt i did. ensure it is documented". Approval belongs to Kevin;
+  Braden's acceptance remains pending. Braden's owner
+  review of these test programs and the input extension is still required and
+  remains open (see HW-1 in [module owner review](../documents/module-owner-review.md)).
+
+Missing occupancy still counts as clear under the existing contract; Braden
+and Harry's review of that completeness question also remains (INPUT-1).
 
 Routing checks cover normal/automatic/CTC selection, blocked approaches,
 closed legs, occupied-point holds, selected-leg aspects and correspondence.

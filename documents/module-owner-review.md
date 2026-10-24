@@ -6,10 +6,25 @@ implementation, observations and requested decisions; it does not establish poli
 or authorize changes to owners' rules. Kevin requested these carryovers be written
 up for module owner review on 2026-10-24. No owner has been contacted by this document.
 
-Code references below were inspected for this writeup. Runtime results are the
+Code references below were inspected for the original writeup. Runtime results are the
 historical bounded observations in [Phase 6 evidence](review-scenario-evidence-2026-10-22.md)
-and the [Phase 6 handover](integration-handover-phase-6.md); no tests were rerun to
-prepare this document. Source line numbers refer to `f6ed1a1`.
+and the [Phase 6 handover](integration-handover-phase-6.md), except where the fresh
+Phase 7 evidence below is explicitly cited. Source line numbers refer to `f6ed1a1`.
+
+## Phase 7 verification follow-up
+
+The [Phase 7 handover](integration-handover-phase-7.md#fresh-verification) records
+post-cut verification of source now committed as `92e500b` on `kevin-framework`:
+1,958 tests passed, 13 existing skips and 50,899 passed subtests across the module,
+shared-Pi-link and utils suites. The shared-link suite passed all 71 tests;
+HELLO matching is shared between relay and bringup, with relay boot/recovery policy
+and bringup's optional boot preserved. The [process review evidence](integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements)
+is recorded separately from those module results. These checks do not resolve
+[physical Pi readiness](#pi-1-physical-pi-prerequisites) or any owner policy request.
+Both 1x process reviews passed; the fresh mixed-count 2/3 and Green-count 3
+failures remain CTC-1/CTC-2 below. Separate short 1x/10x host measurements do not
+resolve the real-Pi speed question. All twelve owner requests and pending proposal
+actions remain open; Kevin's answers below are unchanged.
 
 | Review | Owner / reviewer |
 | --- | --- |
@@ -84,6 +99,14 @@ emergency-brake or pickup assertion failed in those recorded runs. Completion an
 simultaneous Red acceptance still failed. Changing among the inspected destinations
 alone does not establish a route outside the shared zone.
 
+**Fresh Phase 7 observation:** On `92e500b`, the [complete harness run](integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements)
+retained both mixed-probe failures. Count 2 completed all four dwells but reached
+maximum Green/Red concurrency 2/1. Count 3 reached its 900-s simulation bound with
+G1/G2/R1/R2 completed, maximum counts 3/1, and endpoint G1=111, G2=65, G3=64,
+R2=48. No earlier separation, exclusive-authority, emergency or pickup assertion
+failed; the final fault-event assertion was not reached after the endpoint failure.
+These remain in-process owner probes, separate from the passing 1x process reviews.
+
 **Requested decision:** Confirm the intended Red dispatch/reservation behavior and
 how to satisfy simultaneous 2/3 trains while retaining the owner's separation and
 arbitration rules. Supply an approved scenario or specific rule change with its
@@ -118,6 +141,13 @@ The [current test](../common/harness/tests/test_review_scenarios.py#L295) runs c
 endpoint evidence does not capture the exact scheduler progress or authority hold
 reason at the bound; static reservation inspection alone does not establish the
 cause. The in-process limitation in [CTC-1](#ctc-1-red-concurrency) also applies.
+
+**Fresh Phase 7 observation:** On `92e500b`, Green-only count 2 passed. Count 3
+again reached the 2,400-s simulation bound with G1/G2 completed, G1 retired,
+G2=65 and G3=64; maximum active count was three. See the [fresh harness evidence](integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements).
+No earlier separation, exclusive-authority, emergency or pickup assertion failed;
+the final fault-event assertion was not reached. This repeats the bounded result
+without establishing its cause or permanent deadlock.
 
 **Requested decision:** Review the reservation span and departure/progress rules.
 Obtain the scheduled-run progress, authority hold reason and zone owners at the
