@@ -105,8 +105,7 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     6 s window, power is above 0 on every tick, no brake is commanded or
     reported on any tick, and the half-second speed means fall by more
     than 0.05 m/s, each within 10 % of that fall of a straight line. Port
-    it here (#35), and update `REQUIREMENTS.md` §4, which still describes
-    the earlier proposal. Its own limits: a stationary dead engine is not
+    it here (#35); `REQUIREMENTS.md` §4 states it. Its own limits: a stationary dead engine is not
     flagged, and a heavy train that cannot hold speed on Green 7's 5 %
     grade can be.
 
@@ -138,6 +137,21 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     service brake if it moves). That follows M3 ("does not engage it
     again"). To decide after testing: keep it, or have Automatic engage
     it again while a failure is latched.
+
+42. **Two ticks between a command and its report under the harness.**
+    Each module reads the others' outputs from the tick before (truth
+    D017), so a command sent on tick N reaches the Train Model on N+1 and
+    its report comes back on N+2. This controller expects the report on
+    the next tick, as the bench gives it. The brake-failure rule (M4:
+    last tick commanded the service brake, this tick's service brake
+    state still off) would then take every service brake application
+    for a failure and latch the emergency brake. The passenger-pull test
+    (M2) depends on the same timing; the dwell (M6) only starts two
+    ticks later. `claude/quirky-fermi-sickg4` passes the delay to its
+    older copy (`ECHO_TICKS = 2`, `TrainControllerFleet(echo_ticks=...)`).
+    To fix here, in code: wait for the report due for each command, two
+    ticks under the harness and one on the bench, with a check shown
+    failing on the old code first.
 
 ## Bench and console
 
@@ -178,6 +192,51 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     all showing, the bench's time wheels push its clock and **Set time**
     past the window edge. The console's header has no time wheels and
     fits.
+
+43. **The bench does not stand in for the rest of the system** (reported
+    2026-10-24). Its job is to simulate the controller's inputs, and how
+    they would behave with the whole system, without the other modules
+    connected: it substitutes for every connected module. Where it falls
+    short today:
+    - **Timing.** It answers each command on the next tick; the harness
+      answers two ticks later (#42), so a rule can pass on the bench and
+      fail integrated.
+    - **Train Model physics.** The toy plant has no grade, no load and no
+      rolling resistance outside an injected brake failure, so a dead
+      engine coasts at constant speed and neither engine rule can trip at
+      a cruise (#26, #28).
+    - **Train Model reports.** Its service brake state does not go false
+      while the e-brake is engaged, as the Train Model's does (#23); its
+      passenger pull lasts one tick and is never latched, and it has no
+      passenger-brake-release handshake (#25).
+    - **Track Model, Track Controller and CTC Office.** There is no track:
+      authority changes only with the Block change button, commanded
+      speed and the signal ahead only when edited, and the beacon only
+      with the `at_station` row. Nothing moves the train through blocks,
+      stations and signals as the rest of the system would.
+    - **Failures.** Clearing an injected failure clears it in the
+      controller directly (M0, M3), so the bench never exercises how the
+      integrated controller would see it resolved (#44).
+
+    Reusing the Train Model's physics (#26 (b)) would close the physics
+    and report gaps; the track side needs a track to run on.
+
+44. **Integrated, a brake failure never resolves** (reported 2026-10-24).
+    The controller learns of a failure, and of its resolution, only from a
+    mismatch between what it commands and what comes back (M3, M4). It
+    detects the failure that way: the service brake commanded, and its
+    reported state still off. But nothing concludes the opposite: when
+    the commanded service brake reads applied again, the failure stays
+    latched. On the bench this is hidden: clearing the injected failure
+    clears it in the controller directly (`clear_failure`, against M0),
+    so the bench never exercises the integrated path. Under the harness
+    nothing does that, so a brake failure, once detected, latches for the
+    rest of the run. To build: conclude the brake failure resolved when
+    the service brake is commanded with the e-brake off and the report
+    due for that command (#42) reads applied; then drop the bench's
+    direct clear. The driver can already release the e-brake in Manual at
+    a stand and command the service brake (M2, M4, R31), so the reading
+    can happen (#23).
 
 ## Outside the style guide and shared UI
 
@@ -240,13 +299,6 @@ Not issues: things to know.
   0. With 3 blocks or fewer, "The train *id* is arriving soon" is sent at
   once, also when the count arrived before the gains were set; with
   more, it is sent when the authority comes down to 3 (M7).
-- **`HARNESS_INTEGRATION.md` is to be updated** once this refactor
-  settles. Until then it does not list `power_verified` or the vitality
-  breach; still says `check.py` must be on the path for the console (no
-  longer true); still says the dwell is the Train Model's (it is the
-  controller's, M6); and says to send the beacon only on the tick the
-  train passes one, where M6 needs it every tick the train is on a
-  station's block and nothing otherwise.
 
 ## Resolved
 
