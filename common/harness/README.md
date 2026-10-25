@@ -805,3 +805,45 @@ does not change the core's occupancy handling.
 The profile-driven `c9498e4` change sends periodic Pi VIEW snapshots every
 200 ms instead of 100 ms, within K6's approved 100–200 ms range. STEP and
 ACTION ordering, durable journal synchronization and replay are unchanged.
+
+### Independent simulated Pis for testing
+
+Edit [config/pi-testing.json](../../config/pi-testing.json) to enable each
+simulated Pi independently, then launch from the repository root:
+
+```sh
+python track_overflow.py --pi-config config/pi-testing.json --load-starters
+```
+
+The supplied file enables both process simulators:
+
+```json
+{
+  "track-controller-hw": true,
+  "train-controller-hw": true
+}
+```
+
+Set either value to `false` to use that module's physical USB Pi. An omitted
+key also selects physical hardware. The configuration does not disable the
+module: the harness waits for its assigned physical Pi to become ready. Changing
+the selection requires restarting the run. No file is loaded automatically;
+launching without simulation options continues to select both physical Pis.
+
+For quick overrides, select each module directly:
+
+```sh
+# Simulate only the Track Controller Pi.
+python track_overflow.py --track-controller-pi process \
+  --train-controller-pi physical --load-starters
+# Simulate only the Train Controller Pi.
+python track_overflow.py --track-controller-pi physical \
+  --train-controller-pi process --load-starters
+```
+
+Individual options accept `physical`, `process`, or Linux-only `pty`.
+Selection precedence is physical defaults, then the config file, then the
+existing global `--test-pi process|pty` shortcut for both modules, then each
+individual option. A per-module `physical` override can therefore turn one
+simulator off even with `--test-pi process`. Malformed, unreadable or unknown-key
+configuration is rejected before modules start; values must be JSON Booleans.

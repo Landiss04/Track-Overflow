@@ -6,9 +6,12 @@ the time limit, or a confirmed window close. The harness window has no
 clock controls: Run, Pause and 1x / 10x are the CTC Office's.
 
 All seven modules run as themselves, each in its window. Each HW host
-waits for its assigned USB Pi; --test-pi selects a simulated Pi explicitly
-for tests and development. The
-clock starts paused (D017). In a window run the dispatcher presses Run
+waits for its assigned USB Pi by default. ``--pi-config PATH`` selects
+independent Boolean simulation toggles for tests; true uses the process
+simulator. ``--test-pi`` overrides both, and ``--track-controller-pi``
+or ``--train-controller-pi`` overrides that module's choice. No config
+is loaded automatically. The clock starts paused (D017).
+In a window run the dispatcher presses Run
 in the CTC Office's window (R83). A headless run, which has no window
 to press it in, has the CTC Office press Run as soon as it is ready
 (``--run-on-ready``), and so does a ``--stubs-only`` run, whose stub
@@ -54,6 +57,11 @@ from common.harness.modules import (
     ModuleSpec,
     stub_specs,
     system_specs,
+)
+from common.harness.pi_config import (
+    PI_MODES,
+    load_pi_config,
+    resolve_pi_modes,
 )
 from common.harness.supervisor import HarnessStartError
 from utils.event_log import EventLog
@@ -183,9 +191,9 @@ def _specs(
             module_options[name] += [
                 "--engineer-gains", *map(str, options.engineer_gains)
             ]
-    if options.test_pi:
-        for name in (TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW):
-            module_options[name] += ["--test-pi", options.test_pi]
+    for name, mode in options.pi_modes.items():
+        if mode != "physical":
+            module_options[name] += ["--test-pi", mode]
     specs = system_specs(module_options, wired=wired)
     return specs, SystemEdges(wired=wired)
 
@@ -298,15 +306,46 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help="run at 10x from the start",
     )
     parser.add_argument(
+        "--pi-config", type=Path, metavar="PATH",
+        help="tests/development: JSON Boolean toggles keyed by HW module "
+        "ID; true uses process simulation, false or omitted uses a "
+        "physical Pi; loaded only when explicitly supplied",
+    )
+    parser.add_argument(
         "--test-pi", choices=("process", "pty"),
-        help="tests/development only: explicitly simulate both Pis",
+        help="tests/development only: simulate both Pis, overriding "
+        "--pi-config",
+    )
+    parser.add_argument(
+        "--track-controller-pi", choices=PI_MODES,
+        help="select the Track Controller Pi mode, overriding "
+        "--pi-config and --test-pi for this module",
+    )
+    parser.add_argument(
+        "--train-controller-pi", choices=PI_MODES,
+        help="select the Train Controller Pi mode, overriding "
+        "--pi-config and --test-pi for this module",
     )
     parser.add_argument(
         "--stubs-only",
         action="store_true",
         help="run a stub for every module, as in Phase 0",
     )
-    return parser.parse_args(argv)
+    options = parser.parse_args(argv)
+    try:
+        config = (
+            load_pi_config(options.pi_config)
+            if options.pi_config is not None else {}
+        )
+        options.pi_modes = resolve_pi_modes(
+            config,
+            options.test_pi,
+            options.track_controller_pi,
+            options.train_controller_pi,
+        )
+    except ValueError as error:
+        parser.error(str(error))
+    return options
 
 
 def _default_log_dir() -> Path:
