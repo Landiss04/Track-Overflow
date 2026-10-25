@@ -1,0 +1,77 @@
+@startuml class_host_link
+!include ../style.iuml
+hide empty members
+left to right direction
+
+package "utils" {
+  class ModuleLink <<QObject>> {
+    +clockStateChanged: Signal
+    +quitRequested: Signal
+    +harnessLost: Signal
+    +connect_to_harness(): None
+    +announce_ready(): None
+    +reply_outputs(id, tick, outputs): bool
+    +reply_rejected(id, tick, reason): bool
+    +push_state(state: dict): None
+  }
+}
+
+package "common/hw_link (host process)" {
+  class HardwareRelay <<QObject>> {
+    +ready: Signal
+    +reply: Signal[dict]
+    +viewChanged: Signal[dict]
+    +diagnosticEvent: Signal[str]
+    +start(): None
+    +set_clock_state(state: dict): None
+    +submit_step(request): None
+    +call_action(name: str, args: dict): Any
+    +close(): None
+  }
+
+  class RemoteTrackController {
+    -relay: HardwareRelay
+    -_snapshot: TrackControllerSnapshot
+    +snapshot(): TrackControllerSnapshot
+    +load_territory(territory): tuple[str]
+    +load_program(wayside_id, source, file_name): ProgramInfo
+    +reset(): None
+    +step(dt, inputs): never, harness drives the Pi
+  }
+
+  abstract class ByteTransport <<QObject>> {
+    +start(): None
+    +write(data: bytes): None
+    +close(): None
+  }
+  class SerialTransport
+  class ProcessTransport
+  note bottom of SerialTransport
+    QSerialPort; finds the Pi by its
+    USB identity, never a COM number
+  end note
+
+  class codec <<module>> {
+    +pack(value): Any
+    +unpack(value): Any
+  }
+}
+
+interface TrackController <<Protocol>>
+class TrackControllerState
+
+package "Raspberry Pi 5" {
+  class PiLinkServer
+}
+
+ModuleLink --> HardwareRelay : STEP via submit_step
+HardwareRelay --> ModuleLink : OUTPUTS / REJECTED
+HardwareRelay --> ByteTransport
+ByteTransport <|-- SerialTransport
+ByteTransport <|-- ProcessTransport
+RemoteTrackController ..|> TrackController
+RemoteTrackController --> HardwareRelay : call_action
+RemoteTrackController ..> codec : unpack snapshots
+TrackControllerState --> TrackController
+SerialTransport ..> PiLinkServer : USB serial,\nnewline JSON
+@enduml

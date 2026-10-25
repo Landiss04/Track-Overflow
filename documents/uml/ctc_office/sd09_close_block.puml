@@ -1,0 +1,43 @@
+@startuml sd09_close_block
+!include ../style.iuml
+title SD-09 Close or reopen a block (UC-09)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "CloseBlockPanel /\nClosuresPanel (Maintenance)" as UI
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+D -> UI : Line, Block, Close block
+UI -> D : "Close Green 15? No train will be given authority over it ..."
+D -> UI : Yes, close block
+UI -> Host : closeBlock(line, block_id)
+Host -> Model : snapshot() (closureState)
+alt already closed or closing
+  Host --> UI : "Green 15 is already closed ..."
+else
+  Host -> Model : set_block_closed(line, block_id, True)
+  alt not in maintenance mode
+    Model --> Host : MaintenanceModeRequiredError
+  else block occupied
+    Model -> Model : pending closure;\ncancel orders into it ("block closing")
+  else clear
+    Model -> Model : closed;\ncancel orders into it ("block closed")
+  end
+  Host --> UI : "" or the reason
+end
+UI -> D : Active closures: "Closed", or\n"Closing — train in block"; a notice per cancelled order
+
+...each later step...
+Model -> Model : a pending closure whose block is clear closes
+
+== Reopen ==
+D -> UI : select the closure, Reopen block (or Cancel closing)
+UI -> Host : reopenBlock(line, block_id)
+Host -> Model : set_block_closed(line, block_id, False)
+Model -> Model : remove it from closed and pending
+Host --> UI : ""
+UI -> D : removed from Active closures
+@enduml

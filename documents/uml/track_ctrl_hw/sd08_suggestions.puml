@@ -1,0 +1,26 @@
+@startuml sd08_suggestions
+!include ../style.iuml
+autonumber
+
+participant "CTC Office" as CTC
+participant "Central\nHarness" as H
+participant "HwTrackController\n(on the Pi)" as Ctrl
+participant "Wayside" as W
+
+CTC -> H : outputs: suggestion per train\n(train, line, block, speed, authority)
+H -> H : map to per-block Suggestion,\nkeyed BlockRef; drop the train ID
+H -> Ctrl : STEP: ctc.suggestions\n(path as SD-07)
+Ctrl -> Ctrl : validate: whole m/s 0 to 31,\nauthority ≥ 0, keyed by BlockRef
+alt invalid
+  Ctrl --> H : REJECTED
+else valid
+  Ctrl -> W : scan(...)
+  W -> W : keep the suggestions\nfor this wayside's blocks
+  W -> W : SPD_n_0..4 = speed bits\n(1, 2, 4, 8, 16 m/s)
+  W -> W : keep authority aside\nuntil AUTH_n is known
+  note right of W
+    The program decides; the authority
+    goes out only if AUTH_n = 1 (SD-14).
+  end note
+end
+@enduml

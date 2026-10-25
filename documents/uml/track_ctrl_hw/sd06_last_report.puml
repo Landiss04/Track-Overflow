@@ -1,0 +1,19 @@
+@startuml sd06_last_report
+!include ../style.iuml
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "LastReportDialog\n(QML)" as Report
+participant "TrackControllerState" as State
+participant "views" as Views
+
+P -> QML : **View** on the CTC uplink strip
+QML -> Report : open()
+Report -> State : reportReadyText, report rows
+State -> Views : report_rows(wayside)
+Views --> State : one row per block: occupancy,\nswitch, signal, crossing
+State --> Report : values from the last refresh
+Report --> P : wayside ready (or why not)\nand every block as the\nCTC Office received it
+P -> Report : **Close**
+@enduml

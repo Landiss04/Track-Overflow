@@ -1,0 +1,24 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam sequenceMessageAlign left
+skinparam ParticipantPadding 20
+autonumber
+participant "Track Controller" as TC
+participant "Central harness" as H
+participant ":TrackModel" as TM
+TC --> H : signal aspects, crossing gates
+H -> H : track_controller_to_track_model()
+H -> TM : step(dt, inputs)
+TM -> TM : _validate()  // unknown signal or crossing: nothing changes
+TM -> TM : store signal and crossing commands
+TM -> TM : _signal_state(block)  // RED if the block has a power failure
+TM -> TM : _gate_closed(block)  // down if the block has a power failure
+TM --> H : signal_states, crossing_states (actual)
+H -> TC : read-back through track_model_to_track_controller()
+@enduml

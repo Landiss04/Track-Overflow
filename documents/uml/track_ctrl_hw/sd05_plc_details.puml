@@ -1,0 +1,24 @@
+@startuml sd05_plc_details
+!include ../style.iuml
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "PlcDetailsDialog\n(QML)" as Details
+participant "TrackControllerState" as State
+participant "views" as Views
+
+P -> QML : click **i** on the Wayside PLC strip
+QML -> Details : open()
+Details -> State : program, channelFault
+State -> Views : program_details(wayside)
+Views --> State : file, load time, checksum,\nBooleans, statements, warnings,\nchannel A/B agreement,\nwhy outputs are held
+State --> Details : values from the last refresh
+Details --> P : the running program and its health
+opt **New PLC** in the dialog
+  P -> Details : click **New PLC**
+  Details -> QML : loadRequested
+  ref over QML, State : SD-02 Load PLC program
+end
+P -> Details : **Close**
+@enduml

@@ -1,0 +1,40 @@
+@startuml sd15_notices_alerts
+!include ../style.iuml
+title SD-15 Handle notices and reversal alerts (UC-15)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "Notices\n(under the header)" as N
+participant "ReversalAlert" as A
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+loop after each step
+  N -> Host : notices
+  Host -> Model : snapshot()
+  Host --> N : "Track Controller not ready on Red (W2: ...)";\n"Order for T1 to Green block 15 cancelled: block closed.";\n"Track Controller update staged ..."
+  A -> Host : reversalAlerts
+  Host -> Model : snapshot() (authorities with reverse_at)
+  Host --> A : train, line, block to reverse at,\ndestination, what holds it
+end
+N -> D : notices
+D -> N : Dismiss
+N -> Host : dismissNotices()
+Host -> Host : the cancelled-order notices seen so far\nare not shown again
+
+A -> D : "T3 must reverse at Red block 16 ..."
+alt Select train
+  D -> A : Select train
+  A -> D : the train in Selected train (SD-13)
+else Dismiss
+  D -> A : Dismiss
+  A -> Host : dismissReversal(train_id)
+  Host -> Host : not shown again unless the situation\nclears and happens again
+end
+note over Model
+  The CTC Office never reverses a train:
+  it waits until the dispatcher acts or the way clears.
+end note
+@enduml

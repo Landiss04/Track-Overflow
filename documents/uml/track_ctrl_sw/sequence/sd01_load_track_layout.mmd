@@ -1,0 +1,37 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    participant L as layout
+    participant M as SwTrackController
+    participant W as TrackController (wayside)
+    P->>UI: click Load track...
+    UI-->>P: file dialog
+    P->>UI: choose green_line.json
+    UI->>S: inspectTrackConfig(url)
+    S->>L: load_layout_file(path)
+    alt not a layout, or a wayside database
+        L-->>S: LayoutError(reason)
+        S-->>UI: {ok: false, error}
+        UI-->>P: reason shown, nothing changes
+    else a valid layout
+        L-->>S: ParsedLayout
+        S-->>UI: line, blocks, switches, crossings, waysides (fixed), replaces
+        UI-->>P: confirmation, with the fixed wayside count
+        P->>UI: click Load
+        UI->>S: loadTrackConfig(url)
+        S->>L: build_line(parsed)
+        Note right of L: The number of waysides is fixed by the track (WAYSIDE_COUNTS), never chosen.
+        L-->>S: LineLayout (blocks divided among the waysides)
+        S->>M: load_track(line)
+        M->>M: drop the line of the same name, with its programs
+        loop each wayside of the line
+            M->>W: create (territory, no program)
+            W->>W: generate and compile the vital code
+        end
+        M-->>S: ids of the replaced waysides
+        S->>S: select the line and its first wayside, empty buffer
+        S-->>UI: selection, buffer, controller changed
+        UI-->>P: line and waysides listed, NOT READY
+    end

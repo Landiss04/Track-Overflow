@@ -1,0 +1,28 @@
+@startuml sd13_selected_train
+!include ../style.iuml
+title SD-13 View the selected train (UC-13)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "OccupancyWindow\nor ReversalAlert" as Pick
+participant "SelectedTrainPanel" as Sel
+participant "TrackMap" as Map
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+D -> Pick : Select train
+Pick -> Sel : trainId
+loop after each step
+  Sel -> Host : trainDetail(train_id), routeDetail(train_id)
+  Host -> Model : snapshot()
+  Model --> Host : the train's blocks, order, TrainAuthority\n(blocks, end block, reason, at, route,\nheld by, reverse at), suggestions, run
+  Host --> Sel : current block, next station, suggested speed (mph),\nauthority and "Authority to", "Limited by" (destination,\nblock occupied / closed / closing, switch not set,\nheld by another train), destination, arrival,\ndwell at next stop, route chips, reversal needed
+  Sel -> Map : routeStates(train_id)
+  Map -> D : route highlighted: within authority, beyond it
+end
+opt Manual mode
+  Sel -> D : Reroute, Cancel order (SD-05),\nReturn to yard (SD-06)
+end
+@enduml

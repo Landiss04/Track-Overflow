@@ -1,0 +1,19 @@
+@startuml sd12_signal_aspects
+!include ../style.iuml
+autonumber
+
+participant "Wayside" as W
+participant "PLC (user program\n+ vital block)" as PLC
+participant "Central\nHarness" as H
+participant "Track Model" as TM
+participant "Train Controller" as TC
+
+W -> PLC : scan both channels
+PLC --> W : SIG_s_R, SIG_s_Y,\nSIG_s_G, SIG_s_SG
+W -> W : decode_aspect: red if _R = 1 or none lit;\nelse the first lit of yellow, green, super green
+W --> H : signal_commands[s] = aspect
+H -> TM : (tick k+1) light the signal
+TM --> H : signal_aspects read-back
+H -> W : (next tick) read-back kept\nfor the CTC report
+TM -> TC : aspect ahead of the train\n(signal-aspect-ahead)
+@enduml

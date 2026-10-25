@@ -1,0 +1,77 @@
+@startuml system_deployment
+!include ../style.iuml
+left to right direction
+
+node "Host PC «device»\nWindows 11, one machine, no network" as PC {
+  artifact "TrackOverflow.exe\n(PyInstaller; entry track_overflow.py)" as Exe
+  node "Python runtime «execution environment»" as Py {
+    node "Central harness process" as HP {
+      component "Harness\nshared clock, edge mappings,\nharness window" as Harness
+    }
+    node "CTC Office process" as CTCP {
+      component "CtcOfficeProcess\n+ CTC Office window" as CTC
+    }
+    node "Track Controller SW process (Green)" as TCSWP {
+      component "TrackControllerProcess\n+ Track Controller window" as TCSW
+    }
+    node "Track Controller HW host process (Red)" as TCHWP {
+      component "Track Controller window\n+ RemoteTrackController\n+ HardwareRelay" as TCHW
+    }
+    node "Track Model process" as TMP {
+      component "TrackModelProcess\n+ Track Model window" as TM
+    }
+    node "Train Model process" as TrMP {
+      component "TrainModelProcess\n+ Train Model window" as TrM
+    }
+    node "Train Controller SW process (Green)" as TrSWP {
+      component "TrainControllerProcess\n+ console" as TrSW
+    }
+    node "Train Controller HW host process (Red)" as TrHWP {
+      component "RemoteTrainFleet\n+ HardwareRelay" as TrHW
+    }
+  }
+  folder "Data files" as Data {
+    file "TrackModel/*.json\ntrack layouts" as Layout
+    file "utils/schedule_v4.json\ntrain schedule" as Sched
+    file "TrackCtrlHw/data/\nwayside databases, PLC programs" as Wayside
+    file "event log (CSV)" as Log
+  }
+}
+
+node "Raspberry Pi 5 «device»\nTrack Controller HW" as Pi1 {
+  node "Raspberry Pi OS, Python 3 «execution environment»" as Os1 {
+    component "PiLinkServer + TrackCore\n→ HwTrackController\n(every Red Line wayside)" as Core1
+  }
+  artifact "/opt/track-overflow\n(agent bundle, request journal)" as B1
+}
+
+node "Raspberry Pi 5 «device»\nTrain Controller HW" as Pi2 {
+  node "Raspberry Pi OS, Python 3 «execution environment»" as Os2 {
+    component "PiLinkServer + TrainCore\n→ TrainControllerFleet\n(every Red Line train)" as Core2
+  }
+  artifact "/opt/track-overflow\n(agent bundle, request journal)" as B2
+}
+
+Exe ..> HP : starts; the harness runs the\nexecutable again per module
+Harness <--> CTC : QLocalSocket, newline JSON
+Harness <--> TCSW
+Harness <--> TCHW
+Harness <--> TM
+Harness <--> TrM
+Harness <--> TrSW
+Harness <--> TrHW
+Harness ..> Log
+TM ..> Layout : reads
+TCSW ..> Layout : reads
+CTC ..> Sched : reads
+TCHW ..> Wayside : Load database, New PLC
+TCHW <--> Core1 : USB 2.0 serial (CDC-ACM)\nnewline JSON (D027)
+TrHW <--> Core2 : USB 2.0 serial (CDC-ACM)
+
+note as PiNote
+  Each Pi 5 is a USB device on its USB-C port, which is also its
+  power input. The host finds it by its USB product name
+  ("Track Overflow Track / Train Controller HW"). If a Pi is lost,
+  its host holds the replies and the harness pauses the clock.
+end note
+@enduml

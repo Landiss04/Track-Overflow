@@ -1,0 +1,33 @@
+@startuml sd04_monitor
+!include ../style.iuml
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "TrackControllerState" as State
+participant "views / display\n/ schematic" as Views
+participant "RowsModel ×5" as Rows
+participant "RemoteTrackController" as Remote
+participant "HardwareRelay" as Relay
+box "Raspberry Pi 5" #F2F5F9
+participant "PiLinkServer\n+ TrackCore" as Pi
+end box
+
+loop at most every 200 ms, after a scan
+  Pi -> Relay : VIEW: packed snapshot (USB)
+  Relay -> Remote : viewChanged
+  Remote -> Remote : unpack, cache
+  Relay -> State : refresh()
+  State -> Remote : snapshot()
+  Remote --> State : cached snapshot
+  State -> Views : block, office, switch, device,\nreport rows; diagram
+  Views --> State : rows in mph and ft
+  State -> Rows : set_rows (rows change in place)
+  State --> QML : changed, diagramChanged
+  QML --> P : diagram, block occupancy, office\nsuggestions, switches, signals\nand crossings, Ready / Not ready
+end
+opt zoom in / out or **Fit**
+  P -> QML : zoom or fit
+  QML -> QML : rescale the diagram (QML only)
+end
+@enduml

@@ -1,0 +1,29 @@
+@startuml sd14_throughput
+!include ../style.iuml
+title SD-14 View throughput metrics (UC-14)
+autonumber
+
+actor Dispatcher as D
+box "CTC Office process" #F7F9FC
+participant "ThroughputPanel\n/ ThroughputHistory" as Thr
+participant "CtcHost" as Host
+participant "StubCtcOffice" as Model
+end box
+
+note over Host
+  Each step (SD-23) the host adds that step's ticket sales
+  to the clock hour they fall in, per line.
+end note
+loop after each step
+  Thr -> Host : throughput, throughputRows
+  Host -> Model : snapshot()
+  Model --> Host : tickets sold per station since 05:00;\nelapsed time
+  Host -> Host : per line: tickets ÷ hours elapsed\n("–" until a simulated minute has passed)
+  Host --> Thr : Tickets/hr, Green line and Red line
+  Thr -> Host : throughputHistory
+  Host --> Thr : 12 clock hours (HH:00), tickets per line\nper hour, shared peak, current hour
+  Thr -> D : tiles, per-line table, one bar chart per line
+end
+D -> Thr : hover a bar
+Thr -> D : tickets sold in that hour
+@enduml

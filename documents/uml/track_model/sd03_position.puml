@@ -1,0 +1,33 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam sequenceMessageAlign left
+skinparam ParticipantPadding 20
+autonumber
+participant "Train Model" as TRM
+participant "Central harness" as H
+participant ":TrackModel" as TM
+participant ":Layout" as L
+TRM --> H : block, offset (since entering the block), speed
+H -> TM : step(dt, inputs with TrainReport)
+TM -> TM : true offset = offset_m + carry_m
+alt true offset >= block length
+  TM -> L : next_block(block, came_from, switch positions)
+  L --> TM : next block (None = yard, same block = dead end)
+  TM -> TM : carry = overshoot, polarity flips, entered_this_tick = True
+else true offset < 0 (rolling back)
+  TM -> L : previous_block(block, came_from)
+  L --> TM : block rolled back into
+  TM -> TM : carry = new block length + offset
+else still inside the block
+  TM -> TM : no change
+end
+TM -> TM : _controller_outputs()  // occupied = a train is in the block or its circuit is dead
+TM --> H : block_occupancy, TrainFeed for the new block
+H -> TRM : feed (Train Model resets its offset to 0)
+@enduml
