@@ -36,6 +36,16 @@ records the completed verification separately. The [Phase 8 prompt](phase-8-prom
 scopes reusable diagnostic coverage and remaining evidence gaps. Temporary probe
 scripts/JSON are scratch artifacts; the essential method and outcomes are retained here.
 
+The reusable coverage follow-up below records Green first transitions, Red seeded
+scheduler snapshots and input/retention boundaries at sources `c4b3cce`
+(Green/input) and `3319d14` (Red).
+These are diagnostic observations, not new owner decisions. The three existing
+multi-train acceptance failures remain unchanged; the completed Phase 7 suites
+and process reviews were not repeated for this coverage-only change.
+All new checks ran on 2026-10-25 with offscreen Qt and bytecode disabled. For the
+recorded commands, `PYTHON=/home/kevin/ECE/Trains/.venv/bin/python`; the runbook
+retains portable interpreter selection for other checkouts.
+
 | Review | Owner / reviewer |
 | --- | --- |
 | [CTC-1: Red concurrency](#ctc-1-red-concurrency) | Landis, CTC Office |
@@ -148,6 +158,46 @@ These are deliberately seeded scheduler snapshots, not fresh physics or separati
 acceptance. Blocker-owner text is inferred from actual `_holds`/`_clear` predicates,
 not a public scheduler hold-reason event. No alternative route was tested as safe.
 
+**Reusable seeded diagnostic, 2026-10-25:** Source `3319d14`, on
+`kevin-framework`, adds
+[Red schedule/zone snapshots](../common/harness/tests/test_red_owner_diagnostics.py).
+Qwen drafted the tests; a sol subagent refined them to observe release and arrival
+transitions in one sequence per count. The orchestrator reviewed the actual source
+and ran the tests with project Python and offscreen Qt. The check reproduces the
+review schedule's two/three Red trains through the existing parser/planner and
+actual `AutoDispatcher` actions/progress. Its five synthetic World snapshots use
+offsets +400, +401, +446, +447 and +448 s; these are seeded time jumps, not a
+physics run or a change to the harness's 0.1-s clock.
+
+```sh
+QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m pytest -q \
+  -p no:cacheprovider common/harness/tests/test_red_owner_diagnostics.py
+```
+
+The direct Red check passed **4 tests in 0.08 s**. Plans retain 102 path entries,
+station index 7, yard index 101, and zone 9 covering 9…66 through span `(0, 101)`.
+The sequence starts QUEUED, observes R1's release and arrival, carries its actual
+orders forward, and locates the final block 9 without overwriting progress. R2
+receives its first order only when R1 becomes DONE at +448 s; R3 remains HELD by
+R2. This supplies reusable coverage of the historical snapshot table above.
+
+The sol subagent also ran, from `CTC-Office`,
+`"$PYTHON" -m pytest -q -p no:cacheprovider tests/test_ctc_scheduler.py::ZoneTest`:
+**3 passed in 0.14 s**.
+The orchestrator's final combined check of all four new diagnostic files, using
+`-m pytest -q -p no:cacheprovider`, passed **14 tests, 1 skipped in 1.51 s**.
+That skip is the dedicated opt-in Green capture, independently passed below;
+the two input files and Red tests run by default. Scoped Flake8 with
+`-j 1 --max-line-length=79` passed for all four files.
+
+**Decision packet:** Landis must decide whether this schedule should reserve zone
+9 through yard retirement and supply approved simultaneous 2/3-train behavior.
+The reproduced boundary alone does not select a different zone, route or release
+rule. Required validation after an approved change: these hold/release snapshots,
+the unchanged mixed-count acceptance tests with exclusive authority/separation,
+and the Red process/real-Pi route and fault checks with Braden's reviewed programs.
+Seeded release of R2 after R1 DONE is not simultaneous-Red acceptance.
+
 **Requested decision:** Confirm the intended Red dispatch/reservation behavior and
 how to satisfy simultaneous 2/3 trains while retaining the owner's separation and
 arbitration rules. Supply an approved scenario or specific rule change with its
@@ -235,6 +285,49 @@ an open interpretation, not a defect verdict or a physical-variant observation.
 The opt-in multi-train probe does not assert this zero-authority door case;
 the two passing process reviews retain their platform-door checks. This concerns
 beacon/arrival signaling, distinct from the aspect issue in [TM-2](#tm-2-light-ahead-b1).
+
+**Reusable transition diagnostic, 2026-10-25:** Source `c4b3cce`, on
+`kevin-framework` (Ubuntu 26.04.1; project Python 3.14.4, PySide6 6.11.2), adds
+[first-hold/grant coverage](../common/harness/tests/test_green_owner_diagnostics.py).
+It reuses `_Loop.step` and the Green half of `review_schedule(3)` unchanged.
+The sol subagent implemented and ran it; the orchestrator reviewed the source
+and independently ran the command below. Nine selected snapshots are retained
+as the `green_owner_diagnostics` JUnit property, with preceding ticks and the
+grant's next three ticks. The direct run passed **1 test in 38.04 s**. No endpoint
+acceptance requirement was weakened.
+
+```sh
+QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 \
+TRACK_OVERFLOW_GREEN_OWNER_DIAGNOSTICS=1 "$PYTHON" -m pytest -q \
+  -p no:cacheprovider -o junit_family=legacy \
+  --junitxml=/tmp/phase8-parent-green.xml \
+  common/harness/tests/test_green_owner_diagnostics.py
+```
+
+`PYTHON` is the project venv interpreter selected in the [runbook](review-runbook.md).
+The check has a 24,000-tick / 2,400-s simulation ceiling and stops at tick
+19,094 / 1,909.4 s after capturing the grant propagation. It retains separation,
+exclusive-authority, dwell, emergency/pickup and fault-event assertions, plus
+standstill and zero power when doors are open. It is opt-in independently of
+the unchanged multi-train acceptance tests.
+
+| Transition | Observation |
+| --- | --- |
+| 2,517 → 2,518 | G2 changes from dwelling to HELD; G1 owns zones 1 and 77, and G2's next leg is not clear. |
+| 3,867 → 3,868 | First simultaneous stand below 0.01 m/s at G2=65, front 84.983 m, and G3=64, front 43.798 m. G3's preceding speed was 0.013114 m/s. |
+| G3 at 3,868 | Current Track Info has no station name; beacon announces GLENBURY/right, scheduled station is 65. The controller emits `[False, True]`; the Train Model still consumes the preceding `[False, False]` and reports closed doors. |
+| 19,090 → 19,091 | CTC releases G2 TO_YARD, clear=True, holding zones 1 and 77; its fresh block-65 suggestion becomes 18 m/s and 35 blocks. SW still consumes the preceding zero grant on this tick. |
+| 19,092 → 19,094 | SW consumes the positive grant, but OCC64/OCC65 are true and OCC66 false; replayed AUTH65 is false, live block-65 output stays 0/0, and no vital override is reported. Block 66 passes 18 m/s and 34 blocks. G2's consumed Train Model signal remains 0/0. |
+
+**Decision packet:** Landis and Harry must coordinate admission with the starter
+separation gate; the earlier CTC reservation hold clears before the later starter
+denial. Train Controller/Track Model owners must resolve station eligibility on an
+approach stop, including the one-tick door-command handoff. Remaining gaps are
+approved behavior and a safe completion scenario, not another endpoint sample.
+Required validation after an owner-approved change: repeat this transition probe,
+the unchanged count-2/count-3 acceptance and separation checks, and the process
+platform-door/dwell review; then validate the relevant real-Pi path. This bounded
+in-process result establishes neither permanent deadlock nor process/Pi correctness.
 
 **Requested decision:** Landis and Harry should coordinate the queue/admission
 behavior with the starter's separation gate and define how all three trains
@@ -424,6 +517,57 @@ the producer's last completed outputs and log `TICK_REJECTED`
 (`core.py:535–544`). No rejected Track Model tick or live stale-producer sequence
 was injected. Repeated synthetic snapshots cannot distinguish a stationary train
 from stale physical information, and do not show that startup readiness is bypassed.
+
+**Reusable boundary and retention diagnostics, 2026-10-25:** Source
+`c4b3cce`, on the same `kevin-framework` environment above, adds
+[input boundary checks](../common/harness/tests/test_input_owner_diagnostics.py)
+and [bounded retention injections](../common/harness/tests/test_rejected_track_retention.py).
+The earlier paragraph describes the historical static-only gap; the new injection
+now observes it through the real Harness and `SystemEdges`. Fake producers reuse
+the existing local-socket `_Run`/`_FakeModule` facilities. A documented test-only
+adapter uses the runner's Train Model socket as an SW input consumer; it does not
+run a physical or production Track Controller on that socket. CTC closures remain
+an independent producer's output, separate from Track Model occupancy.
+
+The sol subagent ran the checks; the orchestrator reviewed both files and directly
+ran this affected set: **75 passed, 4 passed subtests in 7.72 s**. Local Qt sockets
+required sandbox escalation. All ten new diagnostic cases passed within that run.
+After tightening the rejection/disconnection event-order waits, the orchestrator
+directly reran the retention file alone: **3 passed in 1.35 s**. Scoped Flake8
+with `-j 1 --max-line-length=79` passed for the three new Green/input/retention
+files. No production source changed between those checks.
+
+```sh
+QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m pytest -q \
+  -p no:cacheprovider common/harness/tests/test_input_owner_diagnostics.py \
+  common/harness/tests/test_rejected_track_retention.py \
+  common/harness/tests/test_harness_faults.py \
+  common/harness/tests/test_harness_edges.py \
+  common/harness/tests/test_hw_wayside_edges.py
+```
+
+The input cases reproduce the nine ready HW steps with authority
+`3,0,0,0,0,0,0,3,3`, SW 28 versus unavailable 150, whole-field/codec rejection
+versus accepted empty lists, repeated membership, and normal complete Track Model
+output. The HW probe program exists only in memory; production PLCs are unchanged.
+Additional agent-run checks used `"$PYTHON" -m pytest -q -p no:cacheprovider`:
+from `TrackCtrlHw`, `tests/test_neighbor_inputs.py` passed **4 in 0.02 s**;
+from `TrackCtrlSW`, `tests/test_boundary.py::Wire` passed **5 in 0.03 s**.
+
+| Injection bound | Observed barrier and retained data |
+| --- | --- |
+| Rejected Track Model tick 3, release other reply, finish tick 4 | Exactly one `TICK_REJECTED`; tick 3 remains incomplete while another module's reply is pending. After that reply, tick 4's real SW edge inputs still contain OCC28 and independently sourced CTC CLOSED28. A new clear occupancy output commits only at tick 4 completion. No late/disconnect event. |
+| Missing Track Model reply at tick 3, 0.3-s reply timeout | Last completed occupancy retained; completed ticks remain 1/2, clock held at 3 and Track Model named late. No rejection or disconnect. |
+| Track Model disconnects at tick 3 | Last completed occupancy retained; tick 3 completes without the lost reply, and the down-module hold prevents tick 4. No rejection or late event. |
+
+**Decision packet:** Braden and Harry must define completeness/freshness guarantees,
+unknown-neighbor representation and cross-wayside namespace requirements, with
+Landis for closure/release effects. Remaining gaps include live partial/stale
+producers and the approved fail-safe response. Required validation after an owner
+decision: both variants' edge/codec/namespace and authority checks, these three
+distinct fault cases, relevant live producer sequences and real-board faults.
+Synthetic repeated snapshots and retained data do not establish physical freshness,
+movement safety, or Pi/USB acceptance; no new fail-safe policy is selected here.
 
 **Requested decision:** Define who guarantees completeness, how unknown/stale
 occupancy is represented and detected, and what PLCs should do when a required
