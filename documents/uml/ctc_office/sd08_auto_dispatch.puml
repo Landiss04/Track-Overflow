@@ -6,19 +6,24 @@ autonumber
 actor Dispatcher as D
 box "CTC Office process" #F7F9FC
 participant "AutoDispatchPanel\n(Automatic view)" as UI
+participant "AutomaticView /\nMain.qml" as Main
 participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
 loop after each step
-  UI -> Host : departures, dispatchRunning, dispatchPaused
+  Host -> Main : scheduleChanged()
+  Main -> Host : departures, dispatchRunning, dispatchPaused
   Host -> Model : snapshot()
   Model --> Host : scheduled_runs: status, stop, due time,\nstops done of total
-  Host --> UI : per run: train, due, status\n(Queued, Held, In yard, To X, At X, To yard, Done)
+  Host --> Main : per run: train, due, status\n(Queued, Held, In yard, To X, At X, To yard, Done)
+  Main -> UI : departures, running, paused
 end
 
-D -> UI : Pause dispatch
-UI -> Host : setDispatchPaused(True)
+D -> UI : "Pause dispatch".clicked()
+UI -> Main : pauseRequested()
+Main -> Main : dispatchPauseRequested(true)
+Main -> Host : setDispatchPaused(True)
 Host -> Model : set_dispatch_paused(True)
 UI -> D : "Paused: no run leaves the yard or a stop until\ndispatch resumes."
 note over Model
@@ -26,8 +31,12 @@ note over Model
   a run on its way carries on to its next stop,
   and every other run stays where it is.
 end note
-D -> UI : Resume dispatch
-UI -> Host : setDispatchPaused(False)
+D -> UI : "Resume dispatch".clicked()
+UI -> Main : resumeRequested()
+Main -> Main : dispatchPauseRequested(false)
+Main -> Host : setDispatchPaused(False)
 Host -> Model : set_dispatch_paused(False)
-Model -> Model : from the next step, runs that are due move on (SD-19)
+note over Model
+  From the next step, runs that are due move on (SD-19).
+end note
 @enduml

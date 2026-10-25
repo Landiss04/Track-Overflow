@@ -11,19 +11,24 @@ participant "StubCtcOffice" as Model
 end box
 
 note over Host
-  Each step (SD-23) the host adds that step's ticket sales
-  to the clock hour they fall in, per line.
+  Each step (SD-23) step_at calls _count_sales(sim_time_s, inputs):
+  that step's ticket sales go to the clock hour they fall in, per line.
 end note
 loop after each step
+  Host -> Thr : clockChanged()
   Thr -> Host : throughput, throughputRows
   Host -> Model : snapshot()
   Model --> Host : tickets sold per station since 05:00;\nelapsed time
-  Host -> Host : per line: tickets ÷ hours elapsed\n("–" until a simulated minute has passed)
+  note right of Host
+    Per line: tickets ÷ hours elapsed
+    ("–" until a simulated minute has passed).
+  end note
   Host --> Thr : Tickets/hr, Green line and Red line
   Thr -> Host : throughputHistory
   Host --> Thr : 12 clock hours (HH:00), tickets per line\nper hour, shared peak, current hour
   Thr -> D : tiles, per-line table, one bar chart per line
 end
-D -> Thr : hover a bar
+D -> Thr : MouseArea.containsMouseChanged()
+Thr -> Thr : hovered = slot.key\nhoverText()
 Thr -> D : tickets sold in that hour
 @enduml
