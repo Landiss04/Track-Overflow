@@ -201,3 +201,33 @@ one. The branch inbox retains 35 pending proposals, with four separately
 attributed to PR #43. Agents did not modify, delete, rename, renumber or promote
 existing proposals. All twelve owner requests and these human proposal actions
 remain open.
+
+## Independent Phase 7 verification receipt
+
+The follow-up check at `d606e05` on `kevin-framework` on 2026-10-24 reproduced
+**1,958 passed, 13 existing skips and 50,899 passed subtests** across module,
+utils and shared-link suites. The orchestrator directly ran the 71 shared-link
+tests and spot-checked both completed process-review event CSVs; the check-only
+verification subagent ran the remaining suites. The known timing-sensitive Train
+Model UI test ran and passed; its timing sensitivity is not thereby resolved.
+
+The full harness with both opt-in families produced **185 passed, 3 failed and
+497 passed subtests in 461.59 s**. Manual and scheduled 1x process reviews passed
+in **111.45 s** and **111.32 s**, within their 240-second bounds. The three
+preserved failures remain the mixed-count 2/3 concurrency/completion probes and
+Green-count 3 completion probe described in the shared owner-review queue.
+HW `main.py --check` exited 0 with zero QML warnings and behaviour problems.
+Scoped Flake8 passed with the existing N815 exception; three-file mypy passed.
+
+The commit/rule audit found no implementation-scope violations: no UI, protected
+course JSON, owner policy, preserved user file or inbox proposal changed. Two
+minor stale links were found in `module-owner-review.md` (then lines 90/137):
+test anchors 183/295 rather than 234/346. The documentation follow-up corrected
+those anchors on 2026-10-25; no code changed.
+
+Recovery on 2026-10-25 found the same branch/HEAD, remote alignment and five
+preserved untracked files, with no tracked changes. Toolchain minima still pass.
+The prior `/tmp/phase7verify-*` logs and event CSVs are no longer available; the
+recovery check did not rerun tests. These counts describe the completed October 24
+verification, not a new October 25 run. No Qwen diagnostic output was recovered.
+See [module owner review](module-owner-review.md) for the current owner requests.

@@ -9,7 +9,8 @@ up for module owner review on 2026-10-24. No owner has been contacted by this do
 Code references below were inspected for the original writeup. Runtime results are the
 historical bounded observations in [Phase 6 evidence](review-scenario-evidence-2026-10-22.md)
 and the [Phase 6 handover](integration-handover-phase-6.md), except where the fresh
-Phase 7 evidence below is explicitly cited. Source line numbers refer to `f6ed1a1`.
+Phase 7 evidence below is explicitly cited. Original source line numbers refer to
+`f6ed1a1`; relative test links were refreshed against `d606e05` on 2026-10-25.
 
 ## Phase 7 verification follow-up
 
@@ -26,10 +27,19 @@ failures remain CTC-1/CTC-2 below. Separate short 1x/10x host measurements do no
 resolve the real-Pi speed question. All twelve owner requests and pending proposal
 actions remain open; Kevin's answers below are unchanged.
 
+## Owner diagnostics follow-up, 2026-10-25
+
+Kevin answered **"No updates—continue owner diagnostics"**. Reviewed bounded
+observations now extend CTC-1, CTC-2 and INPUT-1 below; no owner policy changed
+and all twelve requests remain open. The [independent Phase 7 receipt](integration-handover-phase-7.md#independent-phase-7-verification-receipt)
+records the completed verification separately. The [Phase 8 prompt](phase-8-prompt.md)
+scopes reusable diagnostic coverage and remaining evidence gaps. Temporary probe
+scripts/JSON are scratch artifacts; the essential method and outcomes are retained here.
+
 | Review | Owner / reviewer |
 | --- | --- |
 | [CTC-1: Red concurrency](#ctc-1-red-concurrency) | Landis, CTC Office |
-| [CTC-2: Green three-train stall](#ctc-2-green-three-train-stall) | Landis, with Harry Tye for the wayside boundary |
+| [CTC-2: Green three-train stall](#ctc-2-green-three-train-stall) | Landis and Harry Tye, jointly across CTC admission and SW starter separation |
 | [CTC-3: Green follower at 75/76](#ctc-3-green-follower-at-7576) | Landis and Harry Tye |
 | [SW-1: PLC-only safety follow-up](#sw-1-plc-only-safety-follow-up) | Harry Tye; Braden for HW alignment |
 | [HW-1: Red PLC copies and real programs](#hw-1-red-plc-copies-and-real-programs) | Braden |
@@ -87,7 +97,7 @@ QT_QPA_PLATFORM=offscreen TRACK_OVERFLOW_MULTI_TRAIN=1 python -m pytest -q \
   common/harness/tests/test_review_scenarios.py::test_scheduled_multiple_trains_each_line
 ```
 
-The [test](../common/harness/tests/test_review_scenarios.py#L183) runs both counts,
+The [test](../common/harness/tests/test_review_scenarios.py#L234) runs both counts,
 uses Green destination 65 and Red 16, and stops after 9,000 ticks (900 simulated
 seconds). The [historical results](review-scenario-evidence-2026-10-22.md#bounded-tests)
 record maximum Green/Red counts of 2/1 and 3/1.
@@ -107,16 +117,49 @@ R2=48. No earlier separation, exclusive-authority, emergency or pickup assertion
 failed; the final fault-event assertion was not reached after the endpoint failure.
 These remain in-process owner probes, separate from the passing 1x process reviews.
 
+**Targeted diagnostic, 2026-10-25:** On `d606e05`, `kevin-framework`, a
+read-only scheduler probe reused `review_schedule`, `StubCtcOffice.load_schedule`
+and production `AutoDispatcher` for the Red half of the count-2/count-3 schedules
+(station 16; 180-s release spacing). Each plan has 102 path entries, station index
+7 and yard index 101: outbound 9→…→16, then 17→…→66→52→51→…→9. Reversed
+edge pairs connect 9…52; the planner's loop closure adds 53…66. Both counts
+therefore produce zone `9` covering 9…66 and span `(0, 101)` for every run.
+This is schedule-dependent: the existing default-course zone test expects 16…66.
+
+Five synthetic World snapshots exercised actual hold/release predicates:
+
+| Synthetic offset | R1 / zone `9` | Followers |
+| --- | --- | --- |
+| +400 s, all departures due, no heads | In yard, at −1, released to index 7; owns zone | R2/R3 HELD by R1 before its head is observed |
+| +401 s, head at 16 | Dwelling, at 7; owns zone | HELD by R1 |
+| +446 s, dwell expired | TO_YARD, released to 101; owns zone | HELD by R1 |
+| +447 s, head at yard entry 9 | TO_YARD, at 101; still owns zone | HELD by R1 |
+| +448 s, head absent and not lost | DONE, releases zone | R2 released to 7 and owns zone; R3 waits for R2 |
+
+Probe assertions passed for both counts. From `CTC-Office`, project Python
+`-m pytest -q -p no:cacheprovider tests/test_ctc_scheduler.py::ZoneTest` passed
+**3 tests in 0.14 s**. The probe used project Python, offscreen Qt and
+`PYTHONDONTWRITEBYTECODE=1`; its temporary entry point was
+`/tmp/track-overflow-owner-diagnostics-20261025/red-concurrency.py`.
+The focused tests were agent-run; the orchestrator reviewed and independently
+reran the probe, confirming both zone spans and final R1 DONE / R2 in-yard /
+R3 HELD states.
+These are deliberately seeded scheduler snapshots, not fresh physics or separation
+acceptance. Blocker-owner text is inferred from actual `_holds`/`_clear` predicates,
+not a public scheduler hold-reason event. No alternative route was tested as safe.
+
 **Requested decision:** Confirm the intended Red dispatch/reservation behavior and
 how to satisfy simultaneous 2/3 trains while retaining the owner's separation and
 arbitration rules. Supply an approved scenario or specific rule change with its
-safety rationale. Do not weaken the existing test to count sequential dispatch as
+safety rationale, including whether this schedule's zone should include yard 9
+and remain held through retirement. Do not weaken the existing test to count
+sequential dispatch as
 simultaneous operation. Related: [Green progress](#ctc-2-green-three-train-stall)
 and [Red routing copies](#hw-1-red-plc-copies-and-real-programs).
 
 ## CTC-2: Green three-train stall
 
-**Owner:** Landis; Harry Tye for any wayside contribution.
+**Owners:** Landis and Harry Tye, jointly across CTC admission and SW starter separation.
 
 **Evidence and current behavior:** The historical Green-only two-train run completed
 both dwells. Three trains became active, but at 1,200 simulated seconds G1 was at
@@ -134,7 +177,7 @@ QT_QPA_PLATFORM=offscreen TRACK_OVERFLOW_MULTI_TRAIN=1 python -m pytest -q \
   common/harness/tests/test_review_scenarios.py::test_green_scheduled_multiple_trains
 ```
 
-The [current test](../common/harness/tests/test_review_scenarios.py#L295) runs counts
+The [current test](../common/harness/tests/test_review_scenarios.py#L346) runs counts
 2 and 3 independently from Red, with a 24,000-tick (2,400-second) bound.
 
 **Limits:** This is a bounded stall, not proof of permanent deadlock. Historical
@@ -149,10 +192,55 @@ No earlier separation, exclusive-authority, emergency or pickup assertion failed
 the final fault-event assertion was not reached. This repeats the bounded result
 without establishing its cause or permanent deadlock.
 
-**Requested decision:** Review the reservation span and departure/progress rules.
-Obtain the scheduled-run progress, authority hold reason and zone owners at the
-65/64 hold before choosing a change. Define how all three should finish their
-45-second station dwells. Keep this separate from the seeded
+**Targeted diagnostic, 2026-10-25:** On `d606e05`, `kevin-framework`, an
+observation-only subclass of the existing real-core loop ran the unchanged
+Green count-3 test to its 24,000-tick / 2,400-s bound. The first trace took
+47.145 wall seconds; a second boundary capture took 46.887 s. Its temporary
+entry point was `/tmp/track-overflow-owner-diagnostics-20261025/green-stall.py`,
+run from the repo root with project Python `-B` and offscreen Qt. G2 was HELD by
+G1's zone 1 at tick 12,000, but was TO_YARD by the tick-20,000 sample. That
+earlier reservation hold had cleared; it does not explain the endpoint alone.
+
+| Endpoint boundary | Captured value |
+| --- | --- |
+| Trains / scheduler | G1 done; G2 at 65, G3 at 64; G2 clear=True, owns zones 77 and 1 |
+| CTC suggestions | Block 65: 18 m/s, 35 authority blocks; block 66: 18 m/s, 34 blocks |
+| GTC-03 input image | `OCC_64=True`, `OCC_65=True`, `OCC_66=False` |
+| Generated starter gate | `AUTH_65 := NOT (OCC_65 AND (OCC_64 OR OCC_66))` |
+| Raw PLC authority | `AUTH_64=False`, `AUTH_65=False`, `AUTH_66=True` |
+| SW outputs / overrides | 65: 0 m/s, 0 blocks; 66: 18 m/s, 34 blocks; no overrides |
+| Train Model G2 input | 0 m/s command, 0 authority blocks |
+
+Replaying the compiled starter source with the captured image reproduced the
+raw values; the orchestrator independently compiled and replayed that capture.
+At this endpoint, the boundary first loses the nonzero CTC grant at
+the SW starter AUTH gate, without a reported vital-layer override. This narrows the
+observation; it does not establish which queue/admission or separation policy
+the owners intend, or prove permanent deadlock. The trace and replay use cores
+in process and do not verify process/Pi protocol behavior.
+
+**Arrival/door follow-up:** The same capture has G3's front on block 64 at
+43.798 m, speed 0, with its model right door open and Green controller door
+command `[False, True]`; current `TrackInfo` is GREEN K-64 with no station name,
+while the approach beacon announces GLENBURY/right. Approach-beacon placement is
+expected by `TrackModel/track_model/layout.py:545–565` and `model.py:475–489`;
+front/current-block reporting is in `TrainModel/train_model/interface.py:198–203`
+and `model.py:588,620–622`. This in-process scenario imports shared `train_ctrl`
+from `Train-Ctrl_HW`: `train_ctrl/control.py:209–215,453–480` arms a pending
+beacon stop, opens at standstill without a station-block check, and keeps doors
+open until positive command/authority. Train Controller and Track Model owners
+should clarify whether an authority stop on the approach counts as arrival and
+how station eligibility is conveyed, coordinating with Landis and Harry; this is
+an open interpretation, not a defect verdict or a physical-variant observation.
+The opt-in multi-train probe does not assert this zero-authority door case;
+the two passing process reviews retain their platform-door checks. This concerns
+beacon/arrival signaling, distinct from the aspect issue in [TM-2](#tm-2-light-ahead-b1).
+
+**Requested decision:** Landis and Harry should coordinate the queue/admission
+behavior with the starter's separation gate and define how all three trains
+should finish their 45-second station dwells. Review the captured boundary before
+choosing a policy change; do not attribute the endpoint solely to mutual zone
+reservation. Keep this separate from the seeded
 [follower case](#ctc-3-green-follower-at-7576); no causal link has been established.
 
 ## CTC-3: Green follower at 75/76
@@ -285,17 +373,67 @@ warns that an omitted occupied block can consequently be read as clear.
 occupied block included in `track_model.occupied_blocks` against the same scan
 with that block omitted; inspect the associated `OCC_n` bit. SW can be inspected
 with a missing owned occupancy key. This is a targeted reproduction recipe, not
-a test executed for this writeup.
+an executed historical test; the fresh targeted probe below now exercises these boundaries.
 
 **Limits:** Complete data from the current harness does not define behavior for
 partial/stale input producers or different territory cuts. Kevin's CLOSED approval
 in [HW-1](#hw-1-red-plc-copies-and-real-programs) does not establish Braden's review
 or settle occupancy completeness.
 
+**Targeted diagnostic, 2026-10-25:** On `d606e05`, `kevin-framework`, a
+read-only synthetic probe exercised actual edges, codecs and controller/module
+steps. Normal Track Model output emits a Boolean for every loaded block
+(`TrackModel/track_model/model.py:501–508`). The edge keeps true members only;
+HW and SW scan inputs then use set membership. A missing occupied member in the
+probe is partial/malformed producer data, not demonstrated normal Track Model output.
+
+| Boundary case | Observed outcome |
+| --- | --- |
+| HW Red-2 own 25 / adjacent 76 | Both OCC/CLOSED names exist; adjacent input is read-only |
+| HW Red-2 `OCC_80` declaration | Outside namespace; PLC load raises `PlcError` |
+| SW GTC-02 own 28 / remote approach 150 | 28 exists; 150 is unavailable on this card and its declaration fails validation |
+| Individual upstream member omitted / explicitly false | Both edge variants produce identical positive-membership lists |
+| Entire upstream `block_occupancy` omitted | Edge raises `KeyError` |
+| Entire wire `occupied_blocks` / `closed_blocks` omitted | Both codecs reject with `WireFormatError` |
+| Valid empty OCC/CLOSED lists | Accepted; this does not certify physical completeness |
+| Repeated occupied or clear snapshots at later tick times | Bits remain unchanged; no per-field source age or completeness bitmap is available |
+
+A probe-only in-memory HW PLC used
+`AUTH_25 := NOT (OCC_25 OR CLOSED_25 OR OCC_76 OR CLOSED_76)` with suggested
+authority 3. Across nine ready controller steps, an empty snapshot passed 3;
+each own/neighbor occupied/closed member forced 0, repeated neighbor membership
+kept 0, and omission in a subsequent valid snapshot restored 3. SW's actual module
+likewise replaced own 28 membership on omission; remote 150 never appeared on
+GTC-02's card. This exposes membership semantics, not unsafe production movement.
+An unknown name in a fixed edge mapping was filtered out; normal live edges learn
+names from producer occupancy keys first, so that isolated case proves no normal-path loss.
+
+Focused existing checks used project Python, offscreen Qt,
+`PYTHONDONTWRITEBYTECODE=1` and `-m pytest -q -p no:cacheprovider`:
+`TrackCtrlHw/tests/test_neighbor_inputs.py` passed **4 in 0.02 s** and, from
+`TrackCtrlSW`, `tests/test_boundary.py::Wire` passed **5 in 0.03 s**.
+The synthetic assertions also passed; the temporary entry point was
+`/tmp/track-overflow-owner-diagnostics-20261025/input-completeness.py`.
+The focused tests were agent-run. The orchestrator reviewed and independently
+reran the synthetic probe, confirming authority sequence `3,0,0,0,0,0,0,3,3`,
+the codec rejection/empty-list distinction and SW's 28/150 namespace boundary.
+
+Static harness inspection separates retention from omission: rejected ticks keep
+the producer's last completed outputs and log `TICK_REJECTED`
+(`common/harness/core.py:423–445`); late or down modules hold the clock
+(`core.py:535–544`). No rejected Track Model tick or live stale-producer sequence
+was injected. Repeated synthetic snapshots cannot distinguish a stationary train
+from stale physical information, and do not show that startup readiness is bypassed.
+
 **Requested decision:** Define who guarantees completeness, how unknown/stale
 occupancy is represented and detected, and what PLCs should do when a required
-neighbor is unavailable. Review cross-wayside coverage and keep outputs owned by
-their wayside. Coordinate any change across both variants and the harness.
+neighbor is unavailable. Distinguish unavailable namespace, omitted members,
+valid sparse clear sets and retained rejected-tick snapshots. Decide whether SW
+needs remote approach inputs such as 150→28; HW adjacency is not automatically
+present on SW cards. Review cross-wayside coverage and keep outputs owned by their
+wayside. Coordinate any change across both variants, the harness and Landis where
+CTC closure/release behavior is affected. No extension or fail-safe policy change
+is authorized by these observations.
 
 ## SW-2: Green starter decisions
 
