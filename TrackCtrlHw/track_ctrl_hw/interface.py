@@ -93,8 +93,6 @@ class Block:
     key: BlockKey
     length_m: float
     speed_limit_mps: float
-    # Declared adjacent blocks, including read-only occupancy across waysides.
-    next_blocks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

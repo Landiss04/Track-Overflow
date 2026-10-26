@@ -1,9 +1,5 @@
 // Small operator tables, style guide 6.6. The host supplies scrolling.
 // ponytail: Repeater suits small tables; use TableView for virtualized datasets.
-// Rows are kept by index: a new rows array updates each row's cells in
-// place, and rows are made or dropped only when the count changes. A
-// Repeater over the array itself rebuilt every row on any change, which
-// took up to a second for the Track Model's 150 blocks.
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -66,13 +62,11 @@ ColumnLayout {
         }
     }
     Repeater {
-        model: root.rows ? root.rows.length : 0
+        model: root.rows
         delegate: Button {
             id: rowControl
             required property int index
-            // Empty for a moment while a shorter array replaces a
-            // longer one, until the count catches up.
-            readonly property var modelData: root.rows[index] ?? ({})
+            required property var modelData
             Layout.fillWidth: true
             implicitHeight: cells.implicitHeight
             padding: 0

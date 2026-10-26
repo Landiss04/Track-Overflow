@@ -79,10 +79,8 @@ other:
   its inputs again.
 - **Outputs** update live from the module, in display units (mph): what
   the CTC sends the Track Controller (per train, the block its head is
-  in with its suggested speed and authority, and while it has authority
-  the next block on its route with one block less, in the `next_...`
-  rows; closed blocks; switch commands) and the central harness (clock
-  speedup and clock pause), so
+  in with its suggested speed and authority; closed blocks; switch
+  commands) and the central harness (clock speedup and clock pause), so
   the effect of
   each action taken in the CTC window shows here.
 - Errors (an unknown block, a switch outside maintenance mode) show in
@@ -163,8 +161,7 @@ yet) through `ctc_ui/ctc_host.py`:
   sends to the Track Controller.
 - **Selected train** shows the train's live readouts, including why its
   authority ends where it does; in Manual mode it also reroutes the
-  train or cancels its order, and **Return to yard** sends a train on
-  the track back to the yard, where it is retired.
+  train or cancels its order.
 - **Close block** and **Active closures** (Maintenance only) close a
   block (with a confirmation step, style guide 7) and reopen it. A block
   with a train in it is listed as "Closing — train in block" and closes
@@ -250,7 +247,6 @@ yet) through `ctc_ui/ctc_host.py`:
 __main__.py             CTC Office entry point: builds theme, loads QML
 test_ui.py              test UI entry point (separate process)
 sim_clock.py            SimulationClockBridge: the shared clock for QML
-harness_clock.py        HarnessClockBridge: the harness's clock, under it
 clock_link.py           clock link between the CTC and the test UI
 ui/Main.qml             window, fixed 1440×900 canvas, mode + window state
 ui/views/*.qml          Automatic / Manual / Maintenance right-hand columns
@@ -324,16 +320,10 @@ the context-property pattern shared with the Train Model UI.
   authority counted in blocks
   (above) and a suggested speed 1 m/s under its head block's speed limit
   (whole m/s, rounded down), lower if it needs to stop within its
-  authority. Each suggestion carries the block it is for: the block the
-  train's head is in and, while its authority is at least 1, the next
-  block on its route with one block less (R49). The Track Controller
-  sees only occupancy, so that block says which track circuit the speed
-  and authority go down. A train still in the yard (a black box) gets
-  neither until it leaves. The CTC releases a waiting train from the
-  yard itself, one per line at a time, and reports it once in
-  `new_trains`; it reports a scheduled run that has come back and
-  stopped at the yard entry block once in `retired_trains` (D022). The
-  central harness applies both to its roster.
+  authority. Each suggestion carries the block the train's head is in:
+  the Track Controller sees only occupancy, so that block says which
+  track circuit the speed and authority go down. A train still in the yard (a black box) gets neither until
+  it leaves.
 - `ctc/tracking.py` follows the trains from block occupancy, and infers
   which occupied blocks have failed (above).
 - `ctc/scheduler.py` plans each run of the loaded schedule and, in
@@ -356,21 +346,6 @@ the context-property pattern shared with the Train Model UI.
   test UI connects with `SocketLink`, or uses `ctc/link.py`'s `LocalLink`
   with `--standalone`. At integration the central harness calls the
   module directly and the links are not used.
-
-## Under the central harness
-
-`ctc/module_process.py` is the process the central harness starts
-(`track_overflow.py --module ctc-office`). It hosts the one module in
-the CTC window, with no test link and no clock of its own: the harness
-owns the clock (D005, D017) and steps the module once per tick, with
-inputs in the JSON form of `ctc/wire.py`. `harness_clock.py`
-(`HarnessClockBridge`) stands in for `simClock`: the header shows the
-harness's time, and Run, Pause and 1× / 10× set `clock_paused` and
-`clock_speedup`, which also go to the harness at once, since nothing
-steps while the clock is paused. The window redraws at most every
-200 ms, after each reply. `--run-on-ready`, `--speedup-at-tick`,
-`--dispatch` and `--schedule` stand in for the dispatcher in tests and
-demonstrations only. Tests: `tests/test_module_process.py`.
 
 ## Clock link
 

@@ -28,14 +28,7 @@ from ctc.routing import (  # noqa: E402
     reversing_route,
 )
 from ctc.track_layout import Line, load_layout, load_line  # noqa: E402
-from tests.occupancy import (  # noqa: E402
-    DT_S,
-    At,
-    at,
-    own_block,
-    ready_office,
-    step_at,
-)
+from tests.occupancy import DT_S, At, at, ready_office, step_at  # noqa: E402
 
 _LAYOUT = load_layout()
 _GREEN = TrackGraph(_LAYOUT["Green"])
@@ -226,15 +219,14 @@ class StubAuthorityTest(unittest.TestCase):
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         out = step_at(ctc, _train("T1", "30"), _train("T2", "32"))
-        suggestion = own_block(out.track_controller.suggestions)
+        (suggestion,) = out.track_controller.suggestions
         self.assertEqual(suggestion.authority_blocks, 1)
         self.assertEqual(_authority(ctc), TrainAuthority(
             "T1", "Green", 1, "31", "occupied", "32", _GREEN_30_TO_37))
         # T2 moves on, past the destination: the authority grows back.
         out = step_at(ctc, _train("T1", "30"), _train("T2", "38"))
         self.assertEqual(
-            own_block(out.track_controller.suggestions).authority_blocks,
-            7)
+            out.track_controller.suggestions[0].authority_blocks, 7)
 
     def test_occupancy_no_train_explains_counts(self) -> None:
         ctc = ready_office()
@@ -253,8 +245,8 @@ class StubAuthorityTest(unittest.TestCase):
         ctc.set_block_closed("Green", "35", True)
         self.assertEqual(_authority(ctc), TrainAuthority(
             "T1", "Green", 4, "34", "closed", "35", _GREEN_30_TO_37))
-        self.assertEqual(own_block(ctc.snapshot().outputs.track_controller
-                                   .suggestions).authority_blocks, 4)
+        self.assertEqual(ctc.snapshot().outputs.track_controller
+                         .suggestions[0].authority_blocks, 4)
         ctc.set_block_closed("Green", "35", False)
         self.assertEqual(_authority(ctc).blocks, 7)
 
@@ -477,8 +469,9 @@ class SafeSpeedTest(unittest.TestCase):
     """Suggested speed lets the train stop within its authority."""
 
     def _speed(self, out) -> int:
-        return own_block(out.track_controller.suggestions,
-                         "T1").suggested_speed_mps
+        (suggestion,) = [s for s in out.track_controller.suggestions
+                         if s.train_id == "T1"]
+        return suggestion.suggested_speed_mps
 
     def test_capped_by_the_room_to_stop(self) -> None:
         ctc = ready_office()

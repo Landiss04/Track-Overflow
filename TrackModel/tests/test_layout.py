@@ -138,25 +138,3 @@ def test_beacons_flank_stations(layout: Layout) -> None:
     beacon = layout.beacons["GREEN A-3"]
     assert (beacon.station_name, beacon.platform_side) == ("PIONEER", "L")
     assert "GREEN A-2" not in layout.beacons
-
-
-def test_red_yard_interpretation_uses_exit_direction(layout: Layout) -> None:
-    """Yard entrants trail onto 10; returning trains can stop on 9."""
-    from track_model.layout import YARD
-
-    point, fixed, main = "RED C-9", "RED D-10", "RED C-8"
-    switch = layout.switches[point]
-    assert switch.from_yard
-    assert (switch.normal_block_id, switch.reverse_block_id) == (main, None)
-    for position in SwitchPosition:
-        states = {point: position}
-        assert layout.next_block(point, YARD, states) == fixed
-        assert layout.next_block(point, main, states) == fixed
-    assert layout.next_block(point, fixed, {}) == main
-    assert layout.next_block(
-        point, fixed, {point: SwitchPosition.REVERSE},
-    ) is None
-    assert None in layout.blocks[point].next_block_ids
-    assert all(None not in b.next_block_ids for b in layout.blocks.values()
-               if b.line == "RED" and b.block_id != point)
-    assert fixed in layout.signal_block_ids

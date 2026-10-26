@@ -5,7 +5,6 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 
 from __future__ import annotations
 
-import math
 import sys
 import unittest
 from pathlib import Path
@@ -14,11 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import ScheduledRun, SwitchReport  # noqa: E402
-from ctc.model import (  # noqa: E402
-    InvalidInputError,
-    InvalidTimeStepError,
-    StubCtcOffice,
-)
+from ctc.model import StubCtcOffice  # noqa: E402
 from ctc.routing import build_graphs  # noqa: E402
 from ctc.schedule import (  # noqa: E402
     Schedule,
@@ -284,63 +279,13 @@ class DispatchTest(unittest.TestCase):
         self.assertEqual(ctc.snapshot().lost_trains, ())
 
 
-class HarnessTimeTest(unittest.TestCase):
-    """Under the harness each step brings the simulation time (D017:
-    unwrapped seconds, at the end of the step), and the CTC Office's
-    time is that time. A tick it refused or never got does not put its
-    schedule behind the harness's."""
-
-    def test_its_time_is_the_harness_time(self) -> None:
-        ctc = _loaded()
-        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 0.1)
-        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 0.1)
-        # Three ticks it never saw: its time is the harness's still.
-        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 0.5)
-        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 0.5)
-        # Past midnight, unwrapped.
-        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 86_400)
-        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 86_400)
-
-    def test_a_refused_tick_does_not_put_the_schedule_behind(self) -> None:
-        # G2 is due out of the yard at 05:03:00.
-        ctc = _loaded()
-        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 179.9)
-        self.assertEqual(_run(ctc, "G2").status, "queued")
-        with self.assertRaises(InvalidInputError):
-            ctc.step(0.1, reports(occupied=[("Green", "999")]),
-                     sim_time_s=SIMULATION_START_S + 180.0)
-        self.assertEqual(_run(ctc, "G2").status, "queued")
-        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 180.1)
-        self.assertEqual(_run(ctc, "G2").status, "in yard")
-
-    def test_a_bad_time_is_refused_and_changes_nothing(self) -> None:
-        ctc = _loaded()
-        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 10)
-        before = ctc.snapshot()
-        for bad in (math.nan, math.inf, -math.inf, True, "18010.1",
-                    SIMULATION_START_S + 10, SIMULATION_START_S + 5):
-            with self.subTest(bad=bad):
-                with self.assertRaises(InvalidTimeStepError):
-                    ctc.step(0.1, reports(),
-                             sim_time_s=bad)  # type: ignore[arg-type]
-        self.assertEqual(ctc.snapshot(), before)
-
-    def test_on_its_own_it_counts_its_steps(self) -> None:
-        # The standalone window and the tests: no harness time.
-        ctc = _loaded()
-        ctc.step(1.0, reports())
-        ctc.step(2.0, reports())
-        self.assertEqual(ctc.snapshot().elapsed_s, 3.0)
-
-
 class _Railway:
-    """A stand-in for the rest of the system, for a whole run, as the
-    harness will be: each train the CTC releases (``new_trains``) is
-    put at its line's yard exit block, trains run at their suggested
-    speed within their authority (holding both blocks for one step as
-    they cross a boundary), the waysides throw switches for the trains'
-    routes where no train is on them or authorized over them, and each
-    train the CTC retires (``retired_trains``) is taken off the track."""
+    """A stand-in for the rest of the system, for a whole run: the yard
+    lets dispatched trains out, trains run at their suggested speed
+    within their authority (holding both blocks for one step as they
+    cross a boundary), the waysides throw switches for the trains' routes
+    where no train is on them or authorized over them, and a train at its
+    yard entry block with nowhere else to go drives into the yard."""
 
     def __init__(self, ctc: StubCtcOffice, line: str) -> None:
         self.ctc = ctc
@@ -352,15 +297,22 @@ class _Railway:
         self.trains: dict[str, list[str]] = {}
         self.progress: dict[str, float] = {}
         self.reported: set[str] = set()
-        # Every train released and retired, in order.
-        self.released: list[str] = []
-        self.retired: list[str] = []
 
     def occupied(self) -> set[str]:
         return {b for held in self.trains.values() for b in held}
 
     def step(self, dt: float) -> str | None:
         snap = self.ctc.snapshot()
+        runs = [r for r in snap.scheduled_runs if r.line == self.line]
+        exit_block = YARD_EXITS[self.line]
+        # The yard lets a train out onto a clear exit block that no
+        # train is authorized into (on Red it is the yard entry too).
+        authorized = {b for a in snap.authorities
+                      for b in a.route[1:a.blocks + 1]}
+        if (any(r.status == "in yard" for r in runs)
+                and exit_block not in (self.occupied() | self.reported
+                                       | authorized)):
+            self.trains["?"], self.progress["?"] = [exit_block], 0.0
         self._throw_switches(snap)
         self.reported = self.occupied()
         out = self.ctc.step(dt, reports(
@@ -370,21 +322,13 @@ class _Railway:
         snap = self.ctc.snapshot()
         followed = {t.train_id: list(t.blocks) for t in snap.trains
                     if t.line == self.line}
+        if "?" in self.trains:
+            (name,) = [t for t, held in followed.items()
+                       if t not in self.trains]
+            self.trains[name] = self.trains.pop("?")
+            self.progress[name] = self.progress.pop("?")
         if followed != self.trains:
             return f"the CTC has {followed}, trains are {self.trains}"
-        for gone in out.retired_trains:
-            # The harness takes a retired train off the track.
-            self.retired.append(gone.train_id)
-            del self.trains[gone.train_id]
-        exit_block = YARD_EXITS[self.line]
-        for new in out.new_trains:
-            # The harness puts a released train at the yard exit block,
-            # which the CTC made sure was clear and held for it.
-            if exit_block in self.occupied():
-                return f"{new.train_id} released onto occupied {exit_block}"
-            self.released.append(new.train_id)
-            self.trains[new.train_id] = [exit_block]
-            self.progress[new.train_id] = 0.0
         self._move(dt, out, snap)
         everything = [b for held in self.trains.values() for b in held]
         if len(set(everything)) != len(everything):
@@ -413,17 +357,21 @@ class _Railway:
                 self.switches[switch_id] = position
 
     def _move(self, dt: float, out, snap) -> None:
-        # The speed for the block each train is in.
         speeds = {s.train_id: s.suggested_speed_mps
-                  for s in out.track_controller.suggestions
-                  if s.block_id == self.trains.get(s.train_id, [""])[-1]}
+                  for s in out.track_controller.suggestions}
         limits = {a.train_id: a for a in snap.authorities}
+        runs = {r.train_id: r for r in snap.scheduled_runs}
         for train_id in sorted(self.trains):
             held = self.trains[train_id]
             if len(held) > 1:
                 held.pop(0)
                 continue
             limit = limits.get(train_id)
+            run = runs.get(train_id)
+            if (run is not None and run.status == "to yard" and limit
+                    and limit.blocks == 0 and limit.reason == "destination"):
+                del self.trains[train_id]           # into the yard
+                continue
             length = self.lengths[held[-1]]
             self.progress[train_id] = min(
                 length, self.progress[train_id]
@@ -477,9 +425,6 @@ class EndToEndTest(unittest.TestCase):
         statuses = {r.train_id: r.status for r in snap.scheduled_runs}
         self.assertEqual(set(statuses.values()), {"done"}, statuses)
         self.assertEqual(railway.trains, {})
-        # Each run released once and retired once (D022).
-        self.assertEqual(sorted(railway.released), sorted(dwells))
-        self.assertEqual(sorted(railway.retired), sorted(dwells))
         expected = GREEN_ORDER if line == "Green" else RED_ORDER
         for train_id, stops in dwells.items():
             with self.subTest(train=train_id):

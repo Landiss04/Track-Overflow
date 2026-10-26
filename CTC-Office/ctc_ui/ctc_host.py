@@ -13,12 +13,6 @@ same state:
 - Actions the test UI sends reach the window through the link server's
   ``changed`` signal, and every panel re-reads the module.
 
-Under the central harness (``ctc.module_process``) the harness owns the
-clock and steps the module (D005, D017), so the host opens no test link
-(D025: the test UI stands in for the Track Controller, which the harness
-runs itself). The process calls ``step_at`` once per tick and
-``refresh`` when the window is due a redraw, never inside a step.
-
 Values cross into QML in display units (mph); the module stays in SI.
 The Track Controller reports only occupancy, so trains are where the
 module has followed them to, and a block the module infers has failed
@@ -38,7 +32,6 @@ from ctc.interface import (
     BlockRef,
     CtcInputs,
     CtcOffice,
-    CtcOutputs,
     CtcSnapshot,
     DispatchOrder,
     ScheduledRun,
@@ -169,24 +162,16 @@ class CtcHost(QObject):
 
     def __init__(self, module: CtcOffice | None = None,
                  layout: Mapping[str, Line] | None = None,
-                 parent: QObject | None = None,
-                 serve_test_ui: bool = True) -> None:
-        """Host ``module``, or a new one on ``layout``.
-
-        ``serve_test_ui`` False opens no test link: under the harness
-        nothing but the harness drives the module (D005, D025).
-        """
+                 parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._layout = dict(load_layout() if layout is None else layout)
         # Each named station's line, for throughput per line.
         self._station_lines = station_lines(self._layout)
         self._module = (module if module is not None
                         else StubCtcOffice(layout=self._layout))
-        self._server: CtcLinkServer | None = None
-        if serve_test_ui:
-            self._server = CtcLinkServer(self._module, parent=self,
-                                         set_inputs=self._receive_inputs)
-            self._server.changed.connect(self._refresh)
+        self._server = CtcLinkServer(self._module, parent=self,
+                                     set_inputs=self._receive_inputs)
+        self._server.changed.connect(self._refresh)
         # The latest Track Controller and Track Model inputs, stepped
         # with on every tick.
         self._inputs = CtcInputs()
@@ -210,7 +195,7 @@ class CtcHost(QObject):
 
     def start(self) -> None:
         """Start serving the test UI. The window works either way."""
-        if self._server is not None and not self._server.listen():
+        if not self._server.listen():
             print("CTC test UI link unavailable: could not listen.",
                   file=sys.stderr)
 
@@ -221,8 +206,7 @@ class CtcHost(QObject):
 
     def stop(self) -> None:
         """Stop serving the test UI; call before the app shuts down."""
-        if self._server is not None:
-            self._server.close()
+        self._server.close()
 
     # -- Clock --------------------------------------------------------
 
@@ -234,7 +218,7 @@ class CtcHost(QObject):
             self.setClockSpeedup(clock.speed == SPEEDUP_FACTOR)
 
         def apply_paused() -> None:
-            self.setClockPaused(bool(clock.paused))
+            self.setClockPaused(clock.paused)
         clock.speedChanged.connect(apply_speed)
         clock.pausedChanged.connect(apply_paused)
         apply_speed()
@@ -251,53 +235,16 @@ class CtcHost(QObject):
             # Inputs are validated on arrival, so this is a module bug.
             print(f"CTC step failed: {error}", file=sys.stderr)
             return
-        self._count_sales(sim_time_s, self._inputs)
+        self._current_hour = _hour(sim_time_s)
+        for station, tickets in self._inputs.track_model.ticket_sales.items():
+            key = (self._current_hour, self._station_lines[station])
+            self._hourly_sales[key] = self._hourly_sales.get(key, 0) + tickets
         # Ticket sales count tickets sold since the previous tick, so a
         # sale is stepped with once.
         if self._inputs.track_model.ticket_sales:
             self._inputs = dataclasses.replace(
                 self._inputs, track_model=TrackModelInputs())
         self._refresh()
-
-    def _count_sales(self, sim_time_s: float, inputs: CtcInputs) -> None:
-        """Add a step's ticket sales to the hour it falls in."""
-        self._current_hour = _hour(sim_time_s)
-        for station, tickets in inputs.track_model.ticket_sales.items():
-            key = (self._current_hour, self._station_lines[station])
-            self._hourly_sales[key] = self._hourly_sales.get(key, 0) + tickets
-
-    # -- Under the central harness ------------------------------------
-
-    def start_at(self, sim_time_s: float) -> None:
-        """Start the throughput history at the harness's time, before
-        the first step: the hour the simulation starts in (D017)."""
-        self._first_hour = self._current_hour = _hour(sim_time_s)
-
-    def step_at(self, dt: float, sim_time_s: float,
-                inputs: CtcInputs) -> CtcOutputs:
-        """Step the module once for the harness, at its time.
-
-        The module takes ``sim_time_s`` as its time (D017), so a tick
-        it refused or never got does not put its schedule behind. Each
-        step's ticket sales are counted once, in the hour of
-        ``sim_time_s``. The window is not redrawn: call ``refresh``.
-
-        Raises:
-            CtcError: If the module rejects the step; nothing changed.
-        """
-        outputs = self._module.step(dt, inputs, sim_time_s)
-        self._inputs = inputs
-        self._count_sales(sim_time_s, inputs)
-        return outputs
-
-    def refresh(self) -> None:
-        """Redraw whatever changed since the last redraw."""
-        self._refresh()
-
-    @property
-    def module(self) -> CtcOffice:
-        """The CTC Office module this host holds."""
-        return self._module
 
     def _receive_inputs(self, inputs: CtcInputs) -> None:
         """New inputs from the test UI.
@@ -336,7 +283,7 @@ class CtcHost(QObject):
         if changed or new_second:
             # Throughput moves with time and with every sale.
             self.clockChanged.emit()
-        if (changed or new_second) and self._server is not None:
+        if changed or new_second:
             self._server.push()
 
     def _act(self, action: Any, *args: Any) -> str:
@@ -392,9 +339,6 @@ class CtcHost(QObject):
         return {order.train_id: order for order in snap.orders}
 
     def _suggestions(self, snap: CtcSnapshot) -> dict[str, TrainSuggestion]:
-        # Each train's suggestion for the block it is in. One with
-        # authority also has one for the next block (R49), listed
-        # before it, so the last per train is the one shown.
         return {s.train_id: s
                 for s in snap.outputs.track_controller.suggestions}
 
@@ -810,12 +754,6 @@ class CtcHost(QObject):
     @Slot(str, result=str)
     def cancelDispatch(self, train_id: str) -> str:  # noqa: N802
         return self._act(self._module.cancel_dispatch, train_id)
-
-    @Slot(str, result=str)
-    def returnToYard(self, train_id: str) -> str:  # noqa: N802
-        """Send a manual train back to the yard, where it is retired
-        (R66, D022); return the refusal's text, or ""."""
-        return self._act(self._module.return_to_yard, train_id)
 
     @Slot(str, str, result=str)
     def closeBlock(self, line: str, block_id: str) -> str:  # noqa: N802

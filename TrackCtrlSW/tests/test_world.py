@@ -111,20 +111,12 @@ class WorldAndController(unittest.TestCase):
         self.rig.tick()
         self.assertTrue(self.controller.outputs.crossings["19"])
 
-    def test_a_train_holds_the_train_beside_it(self) -> None:
-        # An empty block beside a train passes its suggestion: it is the
-        # block the CTC Office preloads for the train about to enter it.
+    def test_a_train_holds_the_blocks_beside_it(self) -> None:
+        self.assertEqual(self.circuit("5"), (12, 4))
         self.world.set_occupancy(self.key("6"), True)
         self.rig.tick()
-        self.assertEqual(self.circuit("5"), (12, 4))
-        self.assertEqual(self.circuit("6"), (12, 4))
-        self.assertEqual(self.circuit("7"), (12, 4))
-        # A train in the block beside it holds both.
-        self.world.set_occupancy(self.key("5"), True)
-        self.rig.tick()
         self.assertEqual(self.circuit("5"), (0, 0))
-        self.assertEqual(self.circuit("6"), (0, 0))
-        self.assertEqual(self.circuit("7"), (12, 4))
+        self.assertEqual(self.circuit("7"), (0, 0))
         # The vital layer does not count blocks: a block farther away
         # keeps the authority the CTC suggested.
         self.assertEqual(self.circuit("3"), (12, 4))
@@ -139,10 +131,8 @@ class WorldAndController(unittest.TestCase):
 
     def test_a_failed_block_is_only_an_occupied_one(self) -> None:
         # There is no failure input: the Track Model reports a broken
-        # rail as presence, and the controller reacts as to a train,
-        # holding a train beside it.
+        # rail as presence, and the controller reacts as to a train.
         self.world.set_occupancy(self.key("6"), True)
-        self.world.set_occupancy(self.key("5"), True)
         self.rig.tick()
         self.assertEqual(self.circuit("5"), (0, 0))
 
@@ -161,15 +151,14 @@ class WorldAndController(unittest.TestCase):
         self.assertEqual(self.world.switch_positions[self.key("12")], "reverse")
         self.assertNotIn("switch_moving", self.rules())
 
-    def test_the_boundary_has_no_fault_but_vital_still_holds_one(self) -> None:
-        # Nothing at the boundary can raise FAULT_; the vital rule is
-        # still there for any caller that does, such as a future harness.
-        self.commit(bare_program(self.controller))
-        self.controller.set_switch_fault("12", True)
-        self.controller.scan()
-        self.assertEqual(self.circuit("12"), (0, 0))
-        self.assertEqual(self.aspect(), "RED")
-        self.assertIn("switch_fault", self.rules())
+    def test_every_program_gets_the_vital_code_attached(self) -> None:
+        # The program throws switch 12 under a train; the vital code,
+        # PLC code attached after it, holds the switch where it is.
+        self.world.set_occupancy(self.key("12"), True)
+        self.commit(bare_program(self.controller, reverse_switch=True))
+        self.assertFalse(self.controller.outputs.switches["12"])
+        self.assertIn("switch_locked_under_train", self.rules())
+        self.assertIn("OUT_SW_12", self.controller.vital_source)
 
     def test_signals_and_crossings_come_back_as_readback(self) -> None:
         self.world.set_occupancy(self.key("18"), True)
@@ -205,13 +194,17 @@ class WorldAndController(unittest.TestCase):
         self.rig.tick()
         self.assertEqual(self.circuit("3"), (8, 1))
 
-    def test_suggestions_above_the_posted_limit_are_clamped(self) -> None:
-        self.world.set_suggestion(self.key("3"), speed_mps=15)
-        self.world.set_suggestion(self.key("14"), speed_mps=15)
-        self.rig.tick()
+    def test_the_stand_in_ctc_suggests_under_the_posted_limit(self) -> None:
+        # Keeping speed under the limit is the CTC's job, not the wayside's.
         self.assertEqual(self.circuit("3"), (12, 4))      # limit is 12
         self.assertEqual(self.circuit("14"), (15, 4))     # limit is 19
-        self.assertIn("speed_limit", self.rules())
+
+    def test_the_wayside_passes_a_suggestion_unchanged(self) -> None:
+        # No numeric rule in the wayside: a speed over the limit, or a
+        # speed with zero authority, goes down the circuit as sent.
+        self.world.set_suggestion(self.key("3"), 15, 0)
+        self.rig.tick()
+        self.assertEqual(self.circuit("3"), (15, 0))
 
     def test_a_suggestion_can_be_set_on_every_block_at_once(self) -> None:
         keys = [self.key(block.block_id) for block in self.controller.blocks]
@@ -230,12 +223,6 @@ class WorldAndController(unittest.TestCase):
         self.rig.tick()
         self.assertNotIn("3", self.controller.outputs.track_circuits)
         self.assertIn("4", self.controller.outputs.track_circuits)
-
-    def test_zero_authority_means_zero_speed(self) -> None:
-        self.world.set_suggestion(self.key("3"), 9, 0)
-        self.rig.tick()
-        self.assertEqual(self.circuit("3"), (0, 0))
-        self.assertIn("no_authority", self.rules())
 
     def test_a_program_that_withholds_a_block_sends_it_nothing(self) -> None:
         self.commit(bare_program(self.controller, gate=False))
@@ -305,14 +292,29 @@ class WorldAndController(unittest.TestCase):
         self.assertFalse(self.controller.outputs.switches["12"])
         self.assertIn("switch_locked_under_train", self.rules())
 
-    def test_a_per_controller_speed_limit_override_still_works(self) -> None:
-        # Not a boundary input; a configuration setting on the controller.
-        self.controller.set_speed_limit_override(5)
-        self.controller.scan()
-        self.assertEqual(self.circuit("14"), (5, 4))
-        self.controller.set_speed_limit_override(None)
-        self.controller.scan()
-        self.assertEqual(self.circuit("14"), (15, 4))
+    def test_yellow_halves_the_speed_of_its_block(self) -> None:
+        self.world.set_occupancy(self.key("14"), True)    # ahead: yellow
+        self.world.set_suggestion(self.key("12"), 11, 3)
+        self.rig.tick()
+        self.assertEqual(self.aspect(), "YELLOW")
+        self.assertEqual(self.circuit("12"), (5, 3))
+        self.assertIn("aspect_speed_cap", self.rules())
+
+    def test_a_wayside_with_no_program_transmits_nothing(self) -> None:
+        from rig import default_module
+        from track_ctrl.interface import TrackControllerInputs, CtcInputs
+        from track_ctrl.interface import BlockKey, Suggestion
+
+        module = default_module(programs=False)
+        out = module.step(0.1, TrackControllerInputs(
+            time_s=1.0,
+            ctc=CtcInputs(suggestions={
+                BlockKey("Green", "3"): Suggestion(9, 2)}),
+        ))
+        self.assertEqual(out.track_model.track_circuits, {})
+        self.assertEqual(out.track_model.switch_commands, {})
+        self.assertEqual(out.track_model.signal_commands, {})
+        self.assertEqual(out.track_model.crossing_commands, {})
 
 
 class TheWorldItself(unittest.TestCase):
@@ -327,7 +329,8 @@ class TheWorldItself(unittest.TestCase):
         first = controller.inputs.suggestions["1"]
         self.assertEqual(
             (first.speed_mps, first.authority_blocks),
-            (DEFAULT_SUGGESTED_SPEED_MPS, DEFAULT_SUGGESTED_AUTHORITY),
+            # Block 1 is posted at 12 m/s, under the default of 15.
+            (min(DEFAULT_SUGGESTED_SPEED_MPS, 12), DEFAULT_SUGGESTED_AUTHORITY),
         )
 
     def test_trains_move_by_simulated_time(self) -> None:

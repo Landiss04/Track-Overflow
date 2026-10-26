@@ -37,7 +37,6 @@ ScaledWindow {
             mode: window.s.has_train ? window.s.mode_label : ""
             clock: window.s.clock
             underground: window.s.beacon_underground
-            paused: window.s.paused
             faulted: window.s.emergency_brake
             // One badge per subsystem the Train Model reports failed,
             // up only while the failure is up, like the e-brake's.

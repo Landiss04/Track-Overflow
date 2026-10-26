@@ -1,6 +1,5 @@
 // Rotary speed dial. The centre reads the target; the ring fills to the
-// actual speed. Drag or press the ring to set the target in Manual, in
-// whole mph (REQUIREMENTS.md M14). No keyboard control, by decision.
+// actual speed. Drag or press the ring to set the target in Manual.
 //
 // Canvas angles run clockwise from +x with y pointing down, so the face
 // starts at the lower left (135 degrees) and sweeps 270 degrees round to
@@ -33,24 +32,33 @@ Item {
         return startDeg + span * sweepDeg;
     }
 
-    // Where the last pick fell on the face (0 to 1), so a drag that
-    // runs off either end into the dead zone stays at that end instead
-    // of wrapping round to the other.
-    property real lastSpan: 0
-
-    // A press in the dead zone is zero, both halves of it. A drag into
-    // it holds the end it left the face by.
-    function valueAt(degrees, dragging) {
-        const delta = (degrees - startDeg + 360) % 360;
-        let span = delta / sweepDeg;
-        if (delta > sweepDeg)
-            span = dragging && lastSpan >= 0.5 ? 1 : 0;
-        lastSpan = span;
-        return span * limit;
+    function valueFor(degrees) {
+        let delta = (degrees - startDeg + 360) % 360;
+        if (delta > sweepDeg + (360 - sweepDeg) / 2)
+            delta = 0;
+        return Math.max(0, Math.min(1, delta / sweepDeg)) * limit;
     }
 
-    function valueFor(degrees) {
-        return valueAt(degrees, false);
+    function nudge(step) {
+        if (root.interactive)
+            root.targetRequested(Math.max(0, Math.round(root.target) + step));
+    }
+
+    // Keyboard reach and a visible focus ring (guide 8): arrows step
+    // the target by one, the same request a drag makes.
+    activeFocusOnTab: root.interactive
+    Keys.onUpPressed: root.nudge(1)
+    Keys.onRightPressed: root.nudge(1)
+    Keys.onDownPressed: root.nudge(-1)
+    Keys.onLeftPressed: root.nudge(-1)
+
+    Rectangle {
+        anchors.fill: parent
+        visible: root.activeFocus && root.interactive
+        color: "transparent"
+        radius: width / 2
+        border.width: 2
+        border.color: theme.focus_ring
     }
 
     onTargetChanged: face.requestPaint()
@@ -120,15 +128,14 @@ Item {
     MouseArea {
         anchors.fill: parent
         enabled: root.interactive
-        onPressed: function (mouse) { root.pick(mouse, false); }
-        onPositionChanged: function (mouse) { root.pick(mouse, true); }
+        onPressed: function (mouse) { root.pick(mouse); }
+        onPositionChanged: function (mouse) { root.pick(mouse); }
     }
 
-    function pick(mouse, dragging) {
+    function pick(mouse) {
         const degrees = Math.atan2(mouse.y - height / 2, mouse.x - width / 2)
             * 180 / Math.PI;
-        root.targetRequested(
-            Math.round(valueAt((degrees + 360) % 360, dragging)));
+        root.targetRequested(Math.round(valueFor((degrees + 360) % 360)));
     }
 
     ColumnLayout {

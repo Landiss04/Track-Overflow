@@ -76,18 +76,3 @@ def test_non_finite_ambient_is_rejected(bad: float) -> None:
     with pytest.raises(InvalidInputError):
         model.set_ambient_temp(bad)
     assert model.snapshot().ambient_temp_c == 0.0
-
-
-def test_no_ambient_sent_keeps_the_current_one() -> None:
-    """Check a step with no temperature leaves ambient as it was.
-
-    The central harness sends none: the Track Model window is the
-    source of the ambient temperature.
-    """
-    model = make_model()
-    model.step(DT_S, make_inputs(ambient_temp_c=20.0))
-    model.step(DT_S, make_inputs(ambient_temp_c=None))
-    assert model.snapshot().ambient_temp_c == 20.0
-    model.set_ambient_temp(-5.0)
-    model.step(DT_S, make_inputs(ambient_temp_c=None))
-    assert model.snapshot().ambient_temp_c == -5.0

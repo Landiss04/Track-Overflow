@@ -6,9 +6,7 @@ destinations, entering a block only within their authority and holding
 both blocks for one step while they cross a boundary. More trains leave
 the yard, failures come and go on blocks no train is about to enter, and
 switches change position under no train and no authority. The CTC is
-given occupancy only. A train leaves the yard as the harness will let
-it out: placed at the exit block when the CTC releases it
-(``new_trains``). At every step no block may be within two trains'
+given occupancy only. At every step no block may be within two trains'
 authorities, no train may be authorized into an occupied block, no two
 trains (or a train and a failure) may share a block, and the CTC must
 have every train where it really is.
@@ -91,6 +89,15 @@ def _first_problem(seed: int, line: str) -> str | None:
             spare = [b for b in blocks if b not in taken | reported]
             if spare:
                 failures[rng.choice(spare)] = rng.randint(5, 30)
+        # The yard lets the next train out onto an exit block that was
+        # clear at the last report too.
+        waiting = sorted(o.train_id for o in snap.orders
+                         if o.train_id not in trains)
+        released = (step % 20 == 10 and waiting
+                    and exit_block not in taken | reported)
+        if released:
+            trains["?"], progress["?"], pace["?"] = [exit_block], 0.0, 0.8
+
         reported = occupied_by_trains() | set(failures)
         out = ctc.step(_DT_S, reports(
             occupied=[(line, b) for b in reported],
@@ -98,6 +105,14 @@ def _first_problem(seed: int, line: str) -> str | None:
                       for s, p in switches.items()]))
         snap = ctc.snapshot()
         followed = {t.train_id: list(t.blocks) for t in snap.trains}
+        if released:
+            # The yard sent the train the CTC took to have left.
+            (taken_out,) = [t for t, held in followed.items()
+                            if held == [exit_block] and t not in trains]
+            trains[taken_out] = trains.pop("?")
+            progress[taken_out] = progress.pop("?")
+            pace[taken_out] = pace.pop("?")
+
         if followed != trains:
             return f"{where}: the CTC has {followed}, trains are {trains}"
         if snap.lost_trains:
@@ -114,19 +129,9 @@ def _first_problem(seed: int, line: str) -> str | None:
                             f"occupied block {block}")
                 held[block] = a.train_id
 
-        # The yard lets out each train the CTC released, onto the exit
-        # block, which the CTC made sure was clear.
-        for new in out.new_trains:
-            if exit_block in occupied:
-                return (f"{where}: {new.train_id} released onto occupied "
-                        f"{exit_block}")
-            trains[new.train_id] = [exit_block]
-            progress[new.train_id], pace[new.train_id] = 0.0, 0.8
-        # The trains run until the next step, at the speed for the block
-        # each is in.
+        # The trains run until the next step.
         speeds = {s.train_id: s.suggested_speed_mps
-                  for s in out.track_controller.suggestions
-                  if s.block_id == trains.get(s.train_id, [""])[-1]}
+                  for s in out.track_controller.suggestions}
         limits = {a.train_id: a for a in snap.authorities}
         for train_id in sorted(trains):
             blocks_held = trains[train_id]

@@ -24,7 +24,7 @@ ScaledWindow {
             mode: !harness.connected ? harness.disconnectedReason
                 : harness.running ? qsTr("Running") : qsTr("Paused")
             clock: harness.elapsed
-            faulted: harness.emergencyBrakeActive
+            faulted: !harness.connected || harness.emergencyBrakeActive
 
             // Which train the page shows and edits, right after the
             // badges, as in the Train Model window. Every train is

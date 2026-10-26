@@ -283,7 +283,6 @@ class ClockDriverAccuracyTest(unittest.TestCase):
     def test_stall_drops_backlog_instead_of_bursting(self) -> None:
         """After a 2 s freeze at 10x, slip time instead of replaying."""
         self.clock.set_speed(10)
-        frozen_s = [0.0]
         bursts: list[int] = []
         last_wall_s = [-1.0]
 
@@ -297,34 +296,22 @@ class ClockDriverAccuracyTest(unittest.TestCase):
             last_wall_s[0] = now_s
 
         self.clock.add_tick_listener(note_burst)
-
-        def stall() -> None:
-            # Exclude the actual freeze, including scheduler overshoot.
-            started_s = self.recorder.now_s()
-            time.sleep(2.0)
-            frozen_s[0] = self.recorder.now_s() - started_s
-
-        started_s = self.recorder.now_s()
         _run([
             (0, self.clock.resume),
-            (300, stall),
+            (300, lambda: time.sleep(2.0)),
             (1000, _noop),
         ])
-        active_s = self.recorder.now_s() - started_s - frozen_s[0]
         stalled_ticks = round(2.0 / self.clock.tick_interval_s)
         if REPORT:
             print(
                 f"\n  stall: {stalled_ticks} ticks missed, largest burst "
                 f"{max(bursts)}, sim {self.clock.elapsed_s:.2f} s after "
-                f"{active_s:.2f} s of running"
+                f"1.3 s of running"
             )
         self.assertGreater(stalled_ticks, MAX_CATCH_UP_TICKS)
         self.assertLessEqual(max(bursts), MAX_CATCH_UP_TICKS)
-        # Script timers may wake late. Check the measured active wall
-        # time at 10x, with the freeze dropped, using the same tolerance.
-        self.assertAlmostEqual(
-            self.clock.elapsed_s, active_s * self.clock.speed, delta=0.5
-        )
+        # 0.3 s + 1 s of running at 10x; the frozen 2 s is dropped.
+        self.assertAlmostEqual(self.clock.elapsed_s, 13.0, delta=0.5)
 
 
 if __name__ == "__main__":

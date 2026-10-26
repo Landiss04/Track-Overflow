@@ -15,8 +15,6 @@ from __future__ import annotations
 import math
 import random
 
-from utils.beacon_codec import encode_beacon
-
 from train_model.interface import (
     ControllerOutputs,
     FailureState,
@@ -56,6 +54,11 @@ class InvalidTimeStepError(TrainModelError):
 
 class InvalidInputError(TrainModelError, ValueError):
     """Raised for invalid numeric inputs, before state is changed."""
+
+
+#: The most characters a beacon's station name may have: the serialized
+#: beacon is limited to 128 (``truth/signals/beacon.md``).
+MAX_BEACON_CHARS = 128
 
 
 def _is_number(value: object) -> bool:
@@ -101,7 +104,9 @@ def _brakes_engaged(
     # Brake failure blocks the service brake only; the emergency brake,
     # commanded or pulled by a passenger, still works.
     emergency = emergency_cmd or passenger_pulled
-    service = service_cmd and not brake_failed
+    # OPEN(5.8): the emergency brake supersedes the service brake, so
+    # the service brake is not engaged while the emergency brake is.
+    service = service_cmd and not emergency and not brake_failed
     return emergency, service
 
 
@@ -158,15 +163,13 @@ class TrainModel:
         self.validate_inputs(dt, inputs)
         cmd = inputs.controller
         track = inputs.track
-        if cmd.passenger_brake_release:
-            # The Train Controller releases a passenger pull
-            # (arbitration/passenger-emergency-brake). Its own
-            # emergency brake follows emergency_brake.
-            self._passenger_ebrake_pulled = False
 
-        # Train Controller owns the door interlock (October 20 review).
-        # Model follows commands at any speed; the disabled historical
-        # interlock below is not a pending ownership decision.
+        # The door interlock is commented out, not deleted: whether the
+        # Train Model enforces it is with the course instructor, and
+        # Kevin believes it does not (2026-10-06). Until that is
+        # settled the doors follow the commands, whatever the speed.
+        # Door interlock: a door can only open at 0 mph. An open command
+        # while moving is refused, and takes effect once the train stops.
         stopped = self._velocity_mps == 0.0
         # door_left = cmd.door_left_open and stopped
         # door_right = cmd.door_right_open and stopped
@@ -186,7 +189,8 @@ class TrainModel:
         grade_rad = math.radians(track.track_info.grade_deg)
         self._integrate(dt, inputs, grade_rad)
         if self._velocity_mps != 0.0:
-            # Historical model interlock, disabled; controller owns closure.
+            # Door interlock, commented out with the one above:
+            # The interlock holds: no door stays open once the train moves.
             # self._door_left_open = False
             # self._door_right_open = False
             self._stop_drawn = False
@@ -220,7 +224,6 @@ class TrainModel:
             "exterior_lights": cmd.exterior_lights,
             "door_left_open": cmd.door_left_open,
             "door_right_open": cmd.door_right_open,
-            "passenger_brake_release": cmd.passenger_brake_release,
             "polarity": track.track_info.polarity,
         }
         if track.beacon is not None:
@@ -258,13 +261,16 @@ class TrainModel:
             if not isinstance(text, str):
                 raise InvalidInputError(f"{name} must be text, got {text!r}")
         if track.beacon is not None:
-            try:
-                encode_beacon(
-                    track.beacon.station_name, track.beacon.platform_side,
-                    track.beacon.underground,
+            if track.beacon.platform_side not in ("L", "R", "LR"):
+                raise InvalidInputError(
+                    "beacon platform_side must be L, R or LR, got "
+                    f"{track.beacon.platform_side!r}"
                 )
-            except ValueError as error:
-                raise InvalidInputError(str(error)) from error
+            if len(track.beacon.station_name) > MAX_BEACON_CHARS:
+                raise InvalidInputError(
+                    "beacon station_name must be at most "
+                    f"{MAX_BEACON_CHARS} characters"
+                )
         if cmd.power_cmd_w < 0.0:
             raise InvalidInputError("power_cmd_w must be nonnegative")
         # Values with no physical meaning (Kevin 2026-10-06).
@@ -367,15 +373,18 @@ class TrainModel:
         return cfg.f_max_n if p_eff_w > 0.0 else 0.0
 
     def _brake_n(self, service: bool, emergency: bool) -> float:
-        # Brake forces come from m_ref, so the deceleration they
+        # OPEN(1): brake forces come from m_ref, so the deceleration they
         # produce scales with operating mass; no cap.
         cfg = self.config
         emergency_on, service_on = _brakes_engaged(
             service, emergency,
             self._passenger_ebrake_pulled, self._failures.brake,
         )
-        return ((cfg.f_emergency_n if emergency_on else 0.0)
-                + (cfg.f_service_n if service_on else 0.0))
+        if emergency_on:
+            return cfg.f_emergency_n
+        if service_on:
+            return cfg.f_service_n
+        return 0.0
 
     def _integrate(
         self, dt: float, inputs: TrainModelInputs, grade_rad: float
@@ -547,9 +556,9 @@ class TrainModel:
         if door_open and stopped and not self._stop_drawn:
             self._n_passengers -= self._rng.randint(0, self._n_passengers)
             self._stop_drawn = True
-        # Track Model sends boarding events only at stations. Train Model
-        # checks rest, doors, count and capacity without a station gate.
-        # An ineligible event boards nobody and is not retained.
+        # Passengers can only board at rest with a door open, station or
+        # not (Kevin 2026-10-07); a count received at any other time
+        # boards nobody.
         if not (stopped and (door_left or door_right)):
             return
         room = cfg.capacity - self._n_passengers
@@ -589,9 +598,9 @@ class TrainModel:
             speed_limit_mps = track.track_info.speed_limit_mps
             interior = cmd.interior_lights
             exterior = cmd.exterior_lights
-            # Pass this tick's beacon; None otherwise. Controller retains data.
+            # OPEN(5.7): pass through this tick's beacon; None otherwise.
             beacon = track.beacon
-            # Under signal pickup failure, commanded speed
+            # OPEN(5.3): under signal pickup failure, commanded speed
             # is 0.0 and authority is 0 blocks.
             if not failures.signal_pickup:
                 commanded_speed_mps = track.track_signal.commanded_speed_mps

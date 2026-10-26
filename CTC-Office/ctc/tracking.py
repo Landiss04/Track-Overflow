@@ -8,11 +8,9 @@ which occupied blocks are failures, by comparing each occupancy update
 with the last, its trains' routes and the speeds it suggested
 (``train-tracking-from-occupancy``, proposed on ``ctc-deployment``):
 
-- Leaving the yard: the model releases a waiting train onto its line's
-  yard exit block (D022) and passes it in as waiting. When that block
-  then becomes occupied, the released train has left the yard into it.
-  Only a released train is found this way; any other new occupancy of
-  the exit block is a failure.
+- Leaving the yard: when a line's yard exit block becomes occupied while
+  trains dispatched on that line wait in the yard, the most urgent of
+  them has left the yard into it.
 - Moving: a train moves into the next block of its route, if its
   authority lets it in, when that block becomes occupied, and leaves a
   block when it clears; while crossing a boundary it holds both blocks.

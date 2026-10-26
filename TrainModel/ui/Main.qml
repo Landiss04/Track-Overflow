@@ -111,48 +111,6 @@ ScaledWindow {
             }
         }
 
-        RowLayout {
-            id: clockDriftWarning
-
-            // Diagnostics belong to the selected train's Python snapshot.
-            // Older/standalone backends may not publish a check yet.
-            readonly property var drift: window.snapshot.clock_drift_s
-            readonly property var checkedTick: window.snapshot.clock_drift_checked_tick
-            readonly property string signedDrift: drift == null ? ""
-                : (drift >= 0 ? "+" : "") + Number(drift).toFixed(6)
-
-            objectName: "clockDriftWarning"
-            visible: drift != null && checkedTick != null
-                && window.snapshot.clock_drift_detected === true
-            Layout.fillWidth: true
-            Layout.leftMargin: theme.space_5
-            Layout.rightMargin: theme.space_5
-            Layout.topMargin: theme.space_2
-            spacing: theme.space_3
-            Accessible.role: Accessible.StaticText
-            Accessible.name: visible
-                ? qsTr("Clock drift: module minus harness %1 seconds; last checked tick %2")
-                    .arg(signedDrift).arg(checkedTick)
-                : ""
-
-            StatusBadge {
-                label: qsTr("Clock drift")
-                variant: "warning"
-            }
-
-            MonoText {
-                objectName: "clockDriftDetail"
-                text: clockDriftWarning.visible
-                    ? qsTr("Module − harness: %1 s · checked tick %2")
-                        .arg(clockDriftWarning.signedDrift)
-                        .arg(clockDriftWarning.checkedTick)
-                    : ""
-                color: theme.warning
-            }
-
-            Item { Layout.fillWidth: true }
-        }
-
         // This fills the fixed reference canvas; the canvas transform
         // scales the complete design uniformly with the window. The
         // test UI is a separate window in its own process (test_ui.py).

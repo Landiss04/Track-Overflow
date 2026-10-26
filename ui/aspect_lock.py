@@ -74,24 +74,11 @@ def constrain_drag(
         height_change = abs(client_h - current_client[1]) / ratio_h
         width_drives = width_change >= height_change
 
-    at_minimum = (
-        current_client[0] == min_client_width
-        and abs(current_client[1]
-                - round(min_client_width * ratio_h / ratio_w)) <= 1
-    )
-    shrinking = (client_w <= current_client[0] if width_drives
-                 else client_h <= current_client[1])
-    if at_minimum and shrinking:
-        # Fractional DPI can round the native minimum height up. Keep
-        # that exact rectangle instead of rounding it down and making
-        # Qt enlarge it again during the drag.
-        new_w, new_h = current_client
-    elif width_drives:
+    if width_drives:
         new_w = max(min_client_width, client_w)
-        new_h = round(new_w * ratio_h / ratio_w)
     else:
         new_w = max(min_client_width, round(client_h * ratio_w / ratio_h))
-        new_h = round(new_w * ratio_h / ratio_w)
+    new_h = round(new_w * ratio_h / ratio_w)
 
     if edge in _LEFT_EDGES:
         left = right - new_w - frame_w
@@ -197,37 +184,11 @@ def install_aspect_lock(
         return None
     ratio_w, ratio_h = ratio
     height = window.height()
-    width_limit = window.width()
-    screen = window.screen()
-    if screen is not None:
-        # Fit the whole native frame above the taskbar. Qt's initial
-        # client-size clamp can leave the frame behind the taskbar.
-        available = screen.availableGeometry()
-        margins = window.frameMargins()
-        width_limit = min(width_limit, max(
-            window.minimumWidth(),
-            available.width() - margins.left() - margins.right(),
-        ))
-        height = min(height, max(
-            window.minimumHeight(),
-            available.height() - margins.top() - margins.bottom(),
-        ))
     width = round(height * ratio_w / ratio_h)
-    if width > width_limit:
-        width = width_limit
+    if width > window.width():
+        width = window.width()
         height = round(width * ratio_h / ratio_w)
     window.resize(width, height)
-    if screen is not None:
-        window.setPosition(
-            max(available.left() + margins.left(), min(
-                window.x(),
-                available.right() + 1 - width - margins.right(),
-            )),
-            max(available.top() + margins.top(), min(
-                window.y(),
-                available.bottom() + 1 - height - margins.bottom(),
-            )),
-        )
     return WindowsAspectLock(window, ratio)
 
 

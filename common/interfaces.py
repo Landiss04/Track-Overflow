@@ -416,9 +416,8 @@ class TrainTrackReport:
 @dataclass
 class WaysideCommands:
     """Track Controller -> Track Model, every tick. Speed and authority
-    are per block: the track circuit signal covers the whole block. They
-    last one tick: a block not commanded on a tick reads zero."""
-    commanded_speed_mps: dict[str, float] = field(default_factory=dict)
+    are per block: the track circuit signal covers the whole block."""
+    commanded_speed_mps: dict[str, int] = field(default_factory=dict)
     authority_blocks: dict[str, int] = field(default_factory=dict)
     switch_positions: dict[str, SwitchPosition] = field(default_factory=dict)
     crossing_gates_closed: dict[str, bool] = field(default_factory=dict)
@@ -453,7 +452,7 @@ class TicketSales:
 class TrainTrackFeed:
     """Track Model -> Train Model, per train, every tick."""
     track_info: TrackInfo
-    commanded_speed_mps: float      # m/s, of the occupied block
+    commanded_speed_mps: int        # whole m/s, of the occupied block
     authority_blocks: int           # of the occupied block; 0 = stop
     beacon: Optional[Beacon]        # platform_side "L", "R" or "LR"
     passengers_boarded: int

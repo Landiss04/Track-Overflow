@@ -26,20 +26,17 @@ Panel {
         }
     ]
 
-    // Live for the driver only, in either mode; greyed for anyone
-    // else with the reason in its label. It engages the moment it is
-    // pressed; releasing is a second press, and the core refuses that
-    // until the train is stopped.
+    // Live for any signed-in operator, in either mode. It engages the
+    // moment it is pressed; releasing is a second press, and the core
+    // refuses that until the train is stopped.
     BrakeButton {
         Layout.fillWidth: true
         Layout.fillHeight: true
         Layout.preferredHeight: 170
         tone: "emergency"
-        enabled: root.s.can_ebrake
         applied: root.s.emergency_brake
-        text: !root.s.can_ebrake ? qsTr("Emergency brake (driver only)")
-            : root.s.emergency_brake ? qsTr("Release emergency brake")
-            : qsTr("Emergency brake")
+        text: root.s.emergency_brake ? qsTr("Release emergency brake")
+                                     : qsTr("Emergency brake")
         onClicked: controller.toggle_emergency_brake()
     }
 

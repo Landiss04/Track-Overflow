@@ -7,8 +7,7 @@ class steps the model and refreshes the snapshot after each tick.
 
 Every value in the snapshot is in its backend unit, per D002; the views
 convert for display. Unavailable identity, line and arrival metadata is
-shown as unknown. The clock shows harness time when integrated, with
-model elapsed time as the standalone fallback.
+shown as unknown. The simulation clock comes from the model's elapsed time.
 
 Signal names, units and directions follow the Train Model interface
 dictionary (v0.2). Deviations from the wireframes are recorded in
@@ -82,7 +81,6 @@ class TrainModelState(QObject):
         # The last beacon's station and platform side, kept until the
         # train is at that station: a beacon is sent only near it.
         self._next_station: tuple[str, str] | None = None
-        self._harness_time_s: float | None = None
         self._snapshot: dict[str, Any] = self._initial_snapshot()
         self._running = False
         self._idle: QTimer | None = None
@@ -95,9 +93,6 @@ class TrainModelState(QObject):
             "train_id": self._train_id or _NONE_SHOWN,
             "line": self._line or _NONE_SHOWN,
             "clock": "00:00:00",
-            "clock_drift_s": None,
-            "clock_drift_detected": False,
-            "clock_drift_checked_tick": None,
             "arrival": _NONE_SHOWN,
             "grade": 0.0,
             "elevation": 0.0,
@@ -137,27 +132,6 @@ class TrainModelState(QObject):
     def validate_inputs(self, dt: float, inputs: TrainModelInputs) -> None:
         """Raise as :meth:`step` would, without changing the train."""
         self._model.validate_inputs(dt, inputs)
-
-    @property
-    def elapsed_s(self) -> float:
-        """Accepted physics time, independent of presentation time."""
-        return self._model.snapshot().elapsed_s
-
-    def set_harness_time(self, sim_time_s: float) -> None:
-        """Publish global time on the owning Qt thread, even on rejection."""
-        self._harness_time_s = sim_time_s
-        self._refresh()
-
-    def set_clock_drift(self, drift_s: float, tick: int) -> bool:
-        """Publish the check and return whether it detected a discrepancy."""
-        detected = abs(drift_s) > 1e-6
-        self._snapshot.update({
-            "clock_drift_s": drift_s,
-            "clock_drift_detected": detected,
-            "clock_drift_checked_tick": tick,
-        })
-        self.snapshotChanged.emit()
-        return detected
 
     @property
     def train_id(self) -> str:
@@ -316,7 +290,7 @@ class TrainModelState(QObject):
 
     @Slot()
     def releaseEmergencyBrake(self) -> None:
-        """No window release action; controller releases the passenger latch."""
+        """Do nothing: normal UI release policy is still undecided."""
 
     def clear_passenger_brake_for_test(self) -> None:
         """Clear the passenger latch for an explicit harness override."""
@@ -337,17 +311,11 @@ class TrainModelState(QObject):
         trk = outputs.track
 
         block = trk.block_id or _NONE_SHOWN
-        clock_s = (snap.elapsed_s if self._harness_time_s is None
-                   else self._harness_time_s)
-        # Integrated time is unwrapped for checks; only display wraps.
-        total_s = int(clock_s + 1e-9)
-        hours = total_s // 3600
-        if self._harness_time_s is not None:
-            hours %= 24
         updates: dict[str, Any] = {
             "clock": (
-                f"{hours:02d}:{total_s // 60 % 60:02d}:"
-                f"{total_s % 60:02d}"
+                f"{int(snap.elapsed_s + 1e-9) // 3600:02d}:"
+                f"{int(snap.elapsed_s + 1e-9) // 60 % 60:02d}:"
+                f"{int(snap.elapsed_s + 1e-9) % 60:02d}"
             ),
             "actual_speed": ctl.actual_speed_mps,
             "commanded_speed": ctl.commanded_speed_mps,

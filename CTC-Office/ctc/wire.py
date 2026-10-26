@@ -19,8 +19,6 @@ from ctc.interface import (
     CtcOutputs,
     CtcSnapshot,
     DispatchOrder,
-    NewTrain,
-    RetiredTrain,
     ScheduledRun,
     SwitchCommand,
     SwitchReport,
@@ -35,22 +33,8 @@ from ctc.interface import (
 
 
 def to_wire(value: Any) -> Any:
-    """A boundary dataclass as JSON-ready dicts and lists.
-
-    ``dataclasses.asdict``, with every tuple made a list, so the result
-    is what the JSON carries even before it is encoded: the harness's
-    roster takes ``new_trains`` and ``retired_trains`` only as lists.
-    """
-    return _lists(dataclasses.asdict(value))
-
-
-def _lists(value: Any) -> Any:
-    """``value`` with every tuple, at any depth, made a list."""
-    if isinstance(value, dict):
-        return {key: _lists(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_lists(item) for item in value]
-    return value
+    """A boundary dataclass as JSON-ready dicts and lists."""
+    return dataclasses.asdict(value)
 
 
 class WireFormatError(ValueError):
@@ -101,10 +85,6 @@ def inputs_from_wire(data: Mapping[str, Any]) -> CtcInputs:
 
 
 def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
-    """``CtcOutputs`` from its JSON form. The train events are lists of
-    ``{"train_id", "line"}`` (``new_trains``) and ``{"train_id"}``
-    (``retired_trains``), as the harness's roster reads them; either
-    may be left out when empty."""
     track = data.get("track_controller", {})
     return CtcOutputs(
         track_controller=TrackControllerOutputs(
@@ -118,10 +98,6 @@ def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
         ),
         clock_speedup=bool(data.get("clock_speedup", False)),
         clock_paused=bool(data.get("clock_paused", True)),
-        new_trains=tuple(NewTrain(**t)
-                         for t in _items(data, "new_trains")),
-        retired_trains=tuple(RetiredTrain(**t)
-                             for t in _items(data, "retired_trains")),
     )
 
 

@@ -21,14 +21,10 @@ mode, carries the plans out:
 - **Stopping.** The CTC stops a train at each of its stops: it sends
   the train to the stop (its authority ends there), holds it for
   ``DWELL_S`` once it is there, then sends it to the next stop.
-- **The yard.** A run waits in the yard ("in yard") once its order is
-  given. The model releases it when the yard exit block is free
-  (D022); it has left once that block becomes occupied
-  (``ctc.tracking``). Outside automatic mode, or while dispatch is
-  paused, the schedule holds it in the yard. After its last stop it is
-  sent to the line's yard entry block; the model retires it once it has
-  stopped there, and once its block clears it is back in the yard and
-  the run is done.
+- **The yard.** A run leaves the yard when the dispatcher's order is
+  given and the yard exit becomes occupied (``ctc.tracking``). After
+  its last stop it is sent to the line's yard entry block; once its
+  blocks clear there it is back in the yard and the run is done.
 - **No head-on meets.** The runs must not be scheduled to meet head-on
   (asserted by Landis 2026-10-15; one that happens anyway is for the
   wayside controllers to handle). Where the runs' paths cross the same

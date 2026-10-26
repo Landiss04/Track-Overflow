@@ -184,16 +184,11 @@ def output_rows(outputs: CtcOutputs,
     the Track Controller and the central harness."""
     track = outputs.track_controller
     rows: list[dict[str, Any]] = []
-    trains = [suggestion.train_id for suggestion in track.suggestions]
-    for index, suggestion in enumerate(track.suggestions):
+    for suggestion in track.suggestions:
         # Where the Track Controller sends this train's speed and
-        # authority: the block its head is in. A train with authority
-        # has a second suggestion before that one, for the next block
-        # on its route (R49); its rows are named ``next_...``.
-        later = suggestion.train_id in trains[index + 1:]
-        prefix = "next_" if later else ""
+        # authority: the block its head is in.
         rows.append({
-            "name": f"{prefix}block[{suggestion.train_id}]",
+            "name": f"block[{suggestion.train_id}]",
             "kind": "string",
             "value": block_key(suggestion.line, suggestion.block_id),
             "unit": "",
@@ -201,13 +196,13 @@ def output_rows(outputs: CtcOutputs,
         # The type column shows the boundary type (whole m/s); the value
         # is shown in display units, mph.
         rows.append({
-            "name": f"{prefix}suggested_speed[{suggestion.train_id}]",
+            "name": f"suggested_speed[{suggestion.train_id}]",
             "kind": "int",
             "value": round(suggestion.suggested_speed_mps * MPS_TO_MPH, 1),
             "unit": "mph",
         })
         rows.append({
-            "name": f"{prefix}authority[{suggestion.train_id}]",
+            "name": f"authority[{suggestion.train_id}]",
             "kind": "int",
             "value": suggestion.authority_blocks,
             "unit": "blocks",

@@ -299,10 +299,10 @@ def test_passenger_bounds_and_capacity() -> None:
         (False, False, False, False, (False, False)),
         (True, False, False, False, (False, True)),
         (False, True, False, False, (True, False)),
-        # Both brakes may be engaged independently.
-        (True, True, False, False, (True, True)),
+        # The emergency brake supersedes the service brake.
+        (True, True, False, False, (True, False)),
         (False, False, True, False, (True, False)),
-        (True, False, True, False, (True, True)),
+        (True, False, True, False, (True, False)),
         # Brake failure blocks the service brake only.
         (True, False, False, True, (False, False)),
         (False, True, False, True, (True, False)),
@@ -332,7 +332,6 @@ def test_brake_state_matches_applied_force() -> None:
     cfg = TrainConfig()
     for service, emergency, failed in [(True, False, False),
                                        (False, True, False),
-                                       (True, True, False),
                                        (True, False, True),
                                        (True, True, True)]:
         model = TrainModel(cfg)
@@ -345,10 +344,12 @@ def test_brake_state_matches_applied_force() -> None:
         decel = -model.snapshot().acceleration_mps2
         mass = model.snapshot().mass_kg
         ctl = outputs.controller
-        f_expected = (
-            (cfg.f_emergency_n if ctl.emergency_brake_active else 0.0)
-            + (cfg.f_service_n if ctl.service_brake_active else 0.0)
-        )
+        if ctl.emergency_brake_active:
+            f_expected = cfg.f_emergency_n
+        elif ctl.service_brake_active:
+            f_expected = cfg.f_service_n
+        else:
+            f_expected = 0.0
         f_roll = cfg.c_rr * mass * cfg.g_mps2
         assert decel * mass == pytest.approx(f_expected + f_roll)
 

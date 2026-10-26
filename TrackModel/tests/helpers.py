@@ -60,14 +60,10 @@ def past_end(model: TrackModel, block_id: str) -> float:
 def make_inputs(
     trains: Mapping[str, TrainReport] | None = None,
     controller: TrackControllerCommands | None = None,
-    ambient_temp_c: float | None = 10.0,
+    ambient_temp_c: float = 10.0,
     sim_time_s: float | None = None,
 ) -> TrackModelInputs:
-    """Return a full input set.
-
-    Empty commands keep every device's last command, and command no
-    speed or authority: those last one tick.
-    """
+    """Return a full input set; empty commands keep the last values."""
     return TrackModelInputs(
         controller=controller or TrackControllerCommands(),
         trains=dict(trains or {}),

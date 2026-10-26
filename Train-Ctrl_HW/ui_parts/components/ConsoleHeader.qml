@@ -25,8 +25,6 @@ Rectangle {
     property bool faulted: false
     //: The last beacon said the station is underground.
     property bool underground: false
-    //: The simulation is paused from the bench.
-    property bool paused: false
     //: Fault labels shown after the emergency badge, hidden when empty.
     property var alerts: []
     property var navigationEntries: []
@@ -77,13 +75,6 @@ Rectangle {
             label: qsTr("Underground")
             variant: "info"
             visible: root.underground
-        }
-
-        // Neutral: nothing is wrong, the whole simulation is held.
-        StatusBadge {
-            label: qsTr("Paused")
-            variant: "idle"
-            visible: root.paused
         }
 
         StatusBadge {

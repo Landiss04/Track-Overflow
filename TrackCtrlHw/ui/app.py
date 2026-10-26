@@ -7,7 +7,6 @@ build it here, so what is captured is exactly what runs.
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
@@ -33,12 +32,7 @@ from ui.theme import build_theme  # noqa: E402
 class Window:
     """The application, its QML engine, the module and the window."""
 
-    def __init__(
-        self,
-        argv: list[str],
-        *,
-        state_factory: Callable[[], TrackControllerState] | None = None,
-    ) -> None:
+    def __init__(self, argv: list[str]) -> None:
         self.app = QGuiApplication(argv)
         self.app.setApplicationName("Track Controller")
         self.app.setOrganizationName("ECE1140 Team 3")
@@ -53,11 +47,7 @@ class Window:
         self.app.setFont(font)
 
         # Python must hold the state: QML keeps only a C++ pointer.
-        self.state = (
-            state_factory()
-            if state_factory is not None
-            else TrackControllerState()
-        )
+        self.state = TrackControllerState()
         self.engine = QQmlApplicationEngine()
         self.engine.addImportPath(str(UI_DIR))
         context = self.engine.rootContext()

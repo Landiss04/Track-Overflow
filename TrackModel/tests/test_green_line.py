@@ -71,17 +71,14 @@ def run_route(
     """Drive T1 from ``start`` one block per tick until it leaves.
 
     Acts as the Train Model: each tick it reports the block the feed
-    named, with an offset past that block's end. Acts as the Track
-    Controller too, sending ``commands`` every tick, since commanded
-    speed and authority last only the tick they are sent.
+    named, with an offset past that block's end.
     """
     out = model.step(DT_S, make_inputs({"T1": report(start, 1.0)},
                                        commands))
     path, history = [start], [out]
     for _ in range(max_ticks):
         block = path[-1]
-        out = model.step(DT_S, make_inputs({"T1": report(block, FAR_M)},
-                                           commands))
+        out = model.step(DT_S, make_inputs({"T1": report(block, FAR_M)}))
         history.append(out)
         feed = out.train_feeds.get("T1")
         if feed is None:
@@ -323,11 +320,11 @@ def test_train_out_of_the_yard_does_not_roll_back_into_it() -> None:
 def test_per_block_speed_and_authority_round_the_loop(green: Layout) -> None:
     """Command every Green block differently; check what the train gets.
 
-    Each block's commanded speed is its speed limit in m/s, and its
+    Each block's commanded speed is its speed limit in whole m/s, and its
     authority is a count that differs from block to block.
     """
-    speeds: Mapping[str, float] = {
-        b.block_id: b.speed_limit_mps for b in green.blocks.values()
+    speeds: Mapping[str, int] = {
+        b.block_id: int(b.speed_limit_mps) for b in green.blocks.values()
     }
     authority = {
         b.block_id: b.number % 7 for b in green.blocks.values()
@@ -341,7 +338,7 @@ def test_per_block_speed_and_authority_round_the_loop(green: Layout) -> None:
     for block, out in zip(path[:-1], history):
         signal = out.train_feeds["T1"].track_signal
         assert signal.commanded_speed_mps == speeds[block]
-        assert isinstance(signal.commanded_speed_mps, float)
+        assert isinstance(signal.commanded_speed_mps, int)
         assert signal.authority_blocks == authority[block]
 
 

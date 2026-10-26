@@ -185,17 +185,6 @@ ApplicationWindow {
                     onClicked: trackFile.open()
                 }
 
-                // Startup normally commits each wayside's own program
-                // from the Program tab. This is the shortcut for a demo.
-                AppButton {
-                    text: qsTr("Load starters")
-                    size: "small"
-                    visible: !wayside.ready
-                    tooltip: wayside.notReadyReason
-                        + qsTr(". Commit a generated starter program to every "
-                        + "wayside that has none.")
-                    onClicked: wayside.loadStarterPrograms()
-                }
 
                 // Maintenance mode belongs to the CTC Office. It is shown
                 // here and cannot be changed from this window.
@@ -215,9 +204,12 @@ ApplicationWindow {
                 // Startup: a vital controller stalls until a line is
                 // loaded and every wayside has a program.
                 StatusBadge {
-                    label: qsTr("Not ready")
+                    label: qsTr("NOT READY")
                     variant: "fault"
                     visible: !wayside.ready
+                    ToolTip.visible: notReadyHover.hovered
+                    ToolTip.text: wayside.notReadyReason
+                    HoverHandler { id: notReadyHover }
                 }
 
                 // A test UI owns the physical inputs while it is

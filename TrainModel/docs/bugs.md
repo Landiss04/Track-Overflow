@@ -23,7 +23,7 @@ integration), the **link** between the two processes, or the **UI** (QML).
 | [B6](#b6) | UI | Low | Long block or station names run off the Train Model window |
 | [B7](#b7) | UI | Low | A field shows "Enter a number." after accepting a value of 10²¹ or more |
 | [B8](#b8) | UI | Low | Integer fields call a too-large whole number "not a whole number" |
-| [B12](#b12) | Design clarification | — | Station eligibility belongs to Track Model; no model station gate |
+| [B12](#b12) | Model | Low | A station name of spaces counts as a station |
 | [B13](#b13) | Test UI | Low | The Blue Line never ends |
 | [B14](#b14) | Test UI | Low | The track stub moves at most one block per tick |
 | [B15](#b15) | Test UI | Low | A malformed layout file silently falls back to Manual |
@@ -138,11 +138,12 @@ Low.
 
 ### B12
 
-**Station eligibility belongs to the Track Model.** Resolved design clarification,
-October 20, 2026. The Train Model has no station-presence gate: it checks rest,
-open doors, count bounds and capacity. Boarding with blank station metadata
-is not a model defect. The Track Model sends boarding events only at stations;
-do not add a station-name predicate to model boarding.
+**A station name of spaces counts as a station.** Model, Low.
+
+- **Reproduce:** step with `station_name=" "`, a door open and a boarding
+  count. Passengers board.
+- **Cause:** the station test is `bool(station_name)`.
+- **Fix:** strip the name, or reject a blank one.
 
 ### B13
 
@@ -209,12 +210,12 @@ do not add a station-name predicate to model boarding.
   Tab follows creation order.
 - **Fix:** none planned; every row is still reached, in sight.
 
-## Resolved behavior and ownership
+## Behaviour to decide, not bugs today
 
-The October 20 review settles the following ownership; it is not a Train Model defect:
+These follow the current rules but came up in testing:
 
 - **A train can drive off with its doors open.** At rest, with power on, a
   door open and a boarding count, it boards and moves in the same tick, and
-  the door follows its command. The Train Controller owns the interlock and
-  must keep doors closed when required. Train Model follows commands; see
-  [resolved scope](open-issues.md#resolved-scope-and-ownership).
+  the door stays open as it moves. The door interlock is commented out of the
+  Train Model pending the course instructor (open-issues.md), so nothing keeps
+  a door shut while moving. Which module should is not settled.

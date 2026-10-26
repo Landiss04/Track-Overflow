@@ -83,7 +83,6 @@ from train_model.track_stub import TrackStub, load_blue_line
 # repository-level utils/ package.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.clock_driver import ClockDriver  # noqa: E402
-from utils.beacon_codec import encode_beacon  # noqa: E402
 from utils.system_clock import ALLOWED_SPEEDS, SystemClock  # noqa: E402
 
 #: Inputs, in interface-dictionary order. ``kind`` drives which editor
@@ -1005,7 +1004,6 @@ class TestHarnessState(QObject):
                 raise ValueError(
                     f"beacon_platform_side must be L, R or LR, got {side!r}"
                 )
-            encode_beacon(station, side, values["beacon_underground"])
             beacon = Beacon(
                 station_name=station,
                 platform_side=side,

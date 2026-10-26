@@ -14,7 +14,6 @@ from PySide6.QtQml import QQmlApplicationEngine
 # repository-level ui/ folder next to the shared QML components.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from ui.aspect_lock import install_window_scaling  # noqa: E402
-from ui.app_icon import install_app_icon  # noqa: E402
 from ui.theme import build_theme  # noqa: E402
 
 # The repository root, or in a PyInstaller build the bundle's root,
@@ -35,7 +34,6 @@ def run_window(
     """
     app = QGuiApplication(sys.argv)
     app.setApplicationName(name)
-    install_app_icon(app)
 
     theme = build_theme()
     font = QFont()

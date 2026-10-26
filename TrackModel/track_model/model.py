@@ -3,10 +3,7 @@
 One ``step`` per tick, in this order (see ``step``):
 
 1. Validate the whole input; reject it before anything changes.
-2. Store the Track Controller's commands. Commanded speed and
-   authority are this tick's alone: a block not commanded on this tick
-   reads zero, so each value is delivered once and then cleared
-   (truth ``signals/track-signal.md``).
+2. Store the Track Controller's commands.
 3. Work out each device's actual state: what was commanded, unless a
    failure overrides it.
 4. Warm or cool each section's track toward its target temperature.
@@ -124,8 +121,8 @@ class TrackModel:
     _track_temp_c: dict[str, float]              # by section
     _temps_started: bool
     _failures: dict[str, TrackFailure]
-    _commanded_speed: dict[str, float]           # this tick's only
-    _authority: dict[str, int]                   # this tick's only
+    _commanded_speed: dict[str, int]
+    _authority: dict[str, int]
     _trains: dict[str, _Train]
     _waiting: dict[str, int]
     _last_sales: dict[str, int]                  # this tick, by station
@@ -157,12 +154,11 @@ class TrackModel:
         self._sim_time_s = inputs.sim_time_s
         self._apply_commands(inputs.controller)
         # A temperature set in the Track Model window wins over the one
-        # a sender gives, until the module restarts. The central harness
-        # sends none: the window is the source (G-SIG-18).
-        if self._ambient_override_c is not None:
-            self._ambient_temp_c = self._ambient_override_c
-        elif inputs.ambient_temp_c is not None:
-            self._ambient_temp_c = inputs.ambient_temp_c
+        # the test UI sends, until the module restarts.
+        self._ambient_temp_c = (
+            inputs.ambient_temp_c if self._ambient_override_c is None
+            else self._ambient_override_c
+        )
         self._update_track_temps(dt)
         self._move_trains(inputs.trains)
         self._last_sales = self._sell_tickets()
@@ -282,14 +278,10 @@ class TrackModel:
     # ------------------------------------------------------------------ #
 
     def _apply_commands(self, commands: TrackControllerCommands) -> None:
-        # Store commands. Commanded speed and authority are replaced
-        # whole: the track circuit carries this tick's values alone, so
-        # a block not commanded now reads zero and a value delivered
-        # now is gone next tick. Device commands absent here keep their
-        # last value. A switch only moves to its command while its
-        # block has power.
-        self._commanded_speed = dict(commands.commanded_speed_mps)
-        self._authority = dict(commands.commanded_authority)
+        # Store commands; absent keys keep their last value. A switch
+        # only moves to its command while its block has power.
+        self._commanded_speed.update(commands.commanded_speed_mps)
+        self._authority.update(commands.commanded_authority)
         self._switch_cmd.update(commands.switch_commands)
         self._crossing_cmd.update(commands.crossing_commands)
         self._signal_cmd.update(commands.signal_commands)
@@ -461,14 +453,12 @@ class TrackModel:
 
     def _track_signal(self, block_id: str) -> TrackSignal:
         # What a block's track circuit carries, per block. A dead circuit
-        # carries no speed and no authority, and so does a block not
-        # commanded on this tick: stop.
+        # carries no speed and no authority, and so does a block that was
+        # never commanded: stop.
         if self._circuit_dead(block_id):
-            return TrackSignal(commanded_speed_mps=0.0, authority_blocks=0)
+            return TrackSignal(commanded_speed_mps=0, authority_blocks=0)
         return TrackSignal(
-            commanded_speed_mps=float(
-                self._commanded_speed.get(block_id, 0.0)
-            ),
+            commanded_speed_mps=self._commanded_speed.get(block_id, 0),
             authority_blocks=self._authority.get(block_id, 0),
         )
 
@@ -532,9 +522,7 @@ class TrackModel:
         # Reject the whole tick before any state changes.
         if not is_finite(dt) or dt <= 0.0:
             raise InvalidInputError(f"dt must be finite and positive: {dt}")
-        if inputs.ambient_temp_c is not None and not is_finite(
-            inputs.ambient_temp_c
-        ):
+        if not is_finite(inputs.ambient_temp_c):
             raise InvalidInputError("ambient temperature is not finite")
         if inputs.sim_time_s is not None and (
             not is_finite(inputs.sim_time_s) or inputs.sim_time_s < 0.0
@@ -546,10 +534,9 @@ class TrackModel:
         cmd = inputs.controller
         for block_id, speed in cmd.commanded_speed_mps.items():
             self._require_block(block_id)
-            # A bool is an int to Python, but no speed.
-            if isinstance(speed, bool) or not is_finite(speed) or speed < 0:
+            if not is_whole(speed) or speed < 0:
                 raise InvalidInputError(
-                    f"commanded speed for {block_id} must be a finite, "
+                    f"commanded speed for {block_id} must be a whole, "
                     f"non-negative m/s: {speed!r}"
                 )
         for block_id, authority in cmd.commanded_authority.items():

@@ -1,7 +1,5 @@
-// Station announcement. The controller only sends the command and the
-// Train Model makes the announcement (REQUIREMENTS.md M7). In Automatic
-// the command goes out on the approach to a station, so the control
-// reports that instead of inviting a press.
+// Station announcement. In Automatic the train announces itself, so the
+// control reports that instead of inviting a press.
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
@@ -14,7 +12,7 @@ Panel {
     title: qsTr("Announcements")
     headerItems: [
         StatusBadge {
-            label: qsTr("Sent")
+            label: qsTr("Announcing")
             variant: "info"
             visible: root.s.announcing
         }

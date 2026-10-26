@@ -1,26 +1,40 @@
-"""The fail-safe supervisor applied to every PLC result.
+"""The vital code attached to the end of every PLC program.
 
 The PLC program is written by a programmer and is therefore not trusted
-to be safe. This module sits between the program's outputs and the
-output card and can only ever make an output *more* restrictive: it
-lowers a speed, cuts an authority to zero, drops a signal to red and
-arms a crossing. It never raises a speed, extends an authority or
-clears a crossing the program left armed.
+to be safe. Every decision the wayside makes is PLC code, so the vital
+supervision is PLC code too: generated for each wayside from its own
+territory and attached to the end of whatever program is committed. The
+programmer's program runs first and writes its outputs (``AUTH_n``,
+``SW_s``, ``SIG_s_*``, ``XING_c``). The vital code then reads those and
+the inputs, and writes the final outputs, each prefixed ``OUT_``. Only
+the final outputs leave the wayside.
 
-That one-way property is what "vital" means here, and it is the reason
-a wrong program produces a stopped railway rather than a collision.
+The vital code can only make an output *more* restrictive: it drops an
+``AUTH`` to 0, a signal to red and arms a crossing. It never does the
+reverse, which is what "vital" means here, and why a wrong program
+produces a stopped railway rather than a collision.
 
-Speed and authority are per block (D015). The controller receives a
-suggestion for each block from the CTC Office, the program decides per
-block whether to pass it on (the ``AUTH_n`` outputs), and a train gets
-the values of the block it is in down that block's track circuit. Speeds
-are whole m/s and authorities are block counts (D013), so nothing in
-this module converts a unit; the display layer does that.
+The rules, as PLC code:
 
-Every override is reported as a :class:`VitalOverride` so the Program
-tab can show the programmer exactly which rule fired and why, rather
-than silently disagreeing with the code on screen. Overrides that apply
-to many blocks are reported once, naming the blocks.
+- a block the CTC closed gets no authority (``OUT_AUTH_n = 0``);
+- a block whose switch is not where it was commanded gets none;
+- in maintenance mode a switch follows the CTC's command, else the
+  programmer's hand-set position, else the program;
+- a switch on an occupied block stays where it actually is;
+- a signal showing no aspect or several, or on an occupied or closed
+  block, is red;
+- a train on a crossing's approach arms it;
+- a yellow signal halves its block's speed (``OUT_HALF_n = 1``).
+
+Speeds and authorities never enter the program: the OS passes a block's
+suggestion, or half its speed, or 0, as the bits say. Keeping a speed
+under the posted limit, and zero speed for zero authority, are the CTC
+Office's (truth ``suggested-speed-under-block-limit``,
+``suggested-speed-stops-within-authority``).
+
+This module also turns a scan into the overrides the Program tab shows,
+by comparing the program's outputs with the vital code's. That is for
+display only and decides nothing.
 """
 
 from __future__ import annotations
@@ -30,9 +44,11 @@ from typing import Mapping, Sequence
 
 from track_ctrl.layout import Block, ControllerConfig
 
-#: Aspect order, most restrictive first. A signal always falls back to
-#: the first entry.
+#: Aspect order, most restrictive first.
 ASPECTS: tuple[str, ...] = ("RED", "YELLOW", "GREEN", "SUPER GREEN")
+
+#: Prefix of the final outputs the vital code writes.
+OUT = "OUT_"
 
 #: Blocks named in one override message before the rest are counted.
 _NAMED_BLOCKS = 6
@@ -56,7 +72,7 @@ class TrackCircuit:
 
 @dataclass(frozen=True)
 class VitalOverride:
-    """One restriction the supervisor imposed on the program's output."""
+    """One place the vital code changed the program's output."""
 
     rule: str
     signal: str
@@ -69,7 +85,11 @@ class VitalOverride:
 
 @dataclass
 class ControllerOutputs:
-    """What the controller actually drives onto the output card."""
+    """What the OS encodes from the vital code's final outputs.
+
+    Every mapping can be empty: a wayside running no program transmits
+    nothing at all, because without a program it has nothing to send.
+    """
 
     #: Only for blocks the CTC Office sent a suggestion for.
     track_circuits: dict[str, TrackCircuit] = field(default_factory=dict)
@@ -79,317 +99,198 @@ class ControllerOutputs:
     overrides: tuple[VitalOverride, ...] = ()
 
 
-def restrictive_outputs(
-    config: ControllerConfig,
-    reason: str,
-    suggestions: Mapping[str, Suggestion] | None = None,
-    held_switches: Mapping[str, bool] | None = None,
-) -> ControllerOutputs:
-    """Return the state the wayside falls back to when it cannot trust
-    its own program: stop everywhere, all red, every crossing armed.
-
-    This is the output of a missing program or a failed scan. Switches
-    are held where they stand rather than thrown, since moving a switch
-    is not a safe way to fail.
-    """
-    held = held_switches or {}
+def idle_outputs(reason: str) -> ControllerOutputs:
+    """A wayside that runs no program: it transmits nothing."""
     return ControllerOutputs(
-        track_circuits={
-            block_id: TrackCircuit(0, 0)
-            for block_id in (suggestions or {})
-        },
-        switches={
-            switch.switch_id: held.get(switch.switch_id, False)
-            for switch in config.switches
-        },
-        aspects={signal.signal_id: "RED" for signal in config.signals},
-        crossings={crossing.crossing_id: True for crossing in config.crossings},
-        overrides=(VitalOverride("fail_safe", "ALL", reason),),
+        overrides=(VitalOverride("not_running", "ALL", reason),)
     )
 
 
-def _decode_aspect(
-    values: Mapping[str, bool], signal_names: tuple[str, str, str, str]
-) -> tuple[str, str | None]:
-    """Turn four aspect bits into one aspect, failing safe to red.
+# --- the vital code -----------------------------------------------------
 
-    A signal showing no aspect is dark and a signal showing more than
-    one is ambiguous; both are wrong-side failures if read
-    permissively, so both resolve to RED.
-    """
-    lit = [
-        aspect
-        for aspect, name in zip(ASPECTS, signal_names)
-        if values.get(name, False)
+def _owned(config: ControllerConfig, block_ids: Sequence[str]) -> list[str]:
+    return [b for b in block_ids if config.owns(b)]
+
+
+def _any(names: Sequence[str]) -> str:
+    return " OR ".join(names) if names else "0"
+
+
+def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
+    """Write the vital code for one wayside, from its own territory."""
+    numbers = [block.block_id for block in blocks]
+    lines = [
+        f"// Vital code for {config.controller_id}: attached to the end of",
+        "// every program. Reads the program's outputs, writes OUT_*.",
+        "",
+        "VAR_IN   " + " ".join(f"OCC_{n}" for n in numbers),
+        "VAR_IN   " + " ".join(f"CLOSED_{n}" for n in numbers),
+        "VAR_IN   " + " ".join(f"AUTH_{n}" for n in numbers),
+        "VAR_OUT  " + " ".join(f"{OUT}AUTH_{n}" for n in numbers),
     ]
-    if len(lit) == 1:
-        return lit[0], None
-    if not lit:
-        return "RED", "no aspect lit; signal would be dark"
-    return "RED", f"{len(lit)} aspects lit at once ({', '.join(lit)})"
+    for switch in config.switches:
+        s = switch.switch_id
+        lines.append(
+            f"VAR_IN   SW_{s} SWREV_{s} CTCCMD_{s} CTCREV_{s} "
+            f"HAND_{s} HANDREV_{s}"
+        )
+        lines.append(f"VAR_OUT  {OUT}SW_{s}")
+    for signal in config.signals:
+        lines.append("VAR_IN   " + " ".join(signal.aspect_signals))
+        lines.append("VAR_OUT  " + " ".join(
+            OUT + name for name in signal.aspect_signals))
+        lines.append(f"VAR_OUT  {OUT}HALF_{signal.block_id}")
+    for crossing in config.crossings:
+        lines.append(f"VAR_IN   {crossing.output_signal}")
+        lines.append(f"VAR_OUT  {OUT}{crossing.output_signal}")
+
+    moving: dict[str, str] = {}
+    for switch in config.switches:
+        s, b = switch.switch_id, switch.block_id
+        lines += [
+            "",
+            f"// Switch {s}: the CTC's command, else the hand-set position,",
+            "// else the program. Under a train it stays where it is.",
+            f"V_REQ_{s} := (CTCCMD_{s} AND CTCREV_{s}) OR "
+            f"(NOT CTCCMD_{s} AND HAND_{s} AND HANDREV_{s}) OR "
+            f"(NOT CTCCMD_{s} AND NOT HAND_{s} AND SW_{s})",
+            f"{OUT}SW_{s} := (OCC_{b} AND SWREV_{s}) OR "
+            f"(NOT OCC_{b} AND V_REQ_{s})",
+            f"V_MOV_{s} := {OUT}SW_{s} XOR SWREV_{s}",
+        ]
+        moving[b] = f"V_MOV_{s}"
+
+    for signal in config.signals:
+        s, b = signal.signal_id, signal.block_id
+        r, y, g, sg = signal.aspect_signals
+        pairs = " OR ".join(
+            f"({p} AND {q})"
+            for i, p in enumerate((r, y, g, sg))
+            for q in (r, y, g, sg)[i + 1:]
+        )
+        lines += [
+            "",
+            f"// Signal {s}: exactly one aspect, and red on a busy block.",
+            f"V_ONE_{s} := ({r} XOR {y} XOR {g} XOR {sg}) AND NOT ({pairs})",
+            f"V_OK_{s} := V_ONE_{s} AND NOT OCC_{b} AND NOT CLOSED_{b}",
+            f"{OUT}{r} := NOT V_OK_{s} OR {r}",
+            f"{OUT}{y} := V_OK_{s} AND {y}",
+            f"{OUT}{g} := V_OK_{s} AND {g}",
+            f"{OUT}{sg} := V_OK_{s} AND {sg}",
+            f"{OUT}HALF_{b} := {OUT}{y}",
+        ]
+
+    for crossing in config.crossings:
+        near = _owned(config, crossing.approach_block_ids)
+        lines += [
+            "",
+            f"// Crossing {crossing.crossing_id}: armed while a train is "
+            "on its approach.",
+            f"{OUT}{crossing.output_signal} := {crossing.output_signal} OR "
+            + _any([f"OCC_{n}" for n in near]),
+        ]
+
+    lines += ["", "// Authority: none into a closed block or a moving switch."]
+    for n in numbers:
+        body = f"AUTH_{n} AND NOT CLOSED_{n}"
+        if n in moving:
+            body += f" AND NOT {moving[n]}"
+        lines.append(f"{OUT}AUTH_{n} := {body}")
+    return "\n".join(lines) + "\n"
 
 
-def _blocks_text(block_ids: Sequence[str]) -> str:
-    """Name a few blocks and count the rest, for one-line messages."""
-    named = ", ".join(block_ids[:_NAMED_BLOCKS])
-    extra = len(block_ids) - _NAMED_BLOCKS
-    return f"{named} and {extra} more" if extra > 0 else named
+# --- what the vital code changed, for display ------------------------------
+
+def _blocks_text(names: Sequence[str]) -> str:
+    """Name a few and count the rest, for one-line messages."""
+    shown = ", ".join(names[:_NAMED_BLOCKS])
+    extra = len(names) - _NAMED_BLOCKS
+    return f"{shown} and {extra} more" if extra > 0 else shown
 
 
-def supervise(
+def report_overrides(
     config: ControllerConfig,
     blocks: Sequence[Block],
     values: Mapping[str, bool],
-    suggestions: Mapping[str, Suggestion],
-    occupancy: Mapping[str, bool],
-    closed: Mapping[str, bool],
-    maintenance: bool,
-    ctc_switch_commands: Mapping[str, bool],
-    manual_switches: Mapping[str, bool],
-    current_switches: Mapping[str, bool],
-    faulted_switches: Mapping[str, bool] | None = None,
-    moving_switches: Mapping[str, bool] | None = None,
-    speed_limit_override_mps: int | None = None,
-) -> ControllerOutputs:
-    """Clamp one scan's raw outputs down to something safe to drive.
+    suggested: Sequence[str],
+) -> tuple[VitalOverride, ...]:
+    """Say where the vital code's outputs differ from the program's.
 
-    ``values`` is everything the PLC program produced. ``suggestions``
-    holds the CTC Office's suggestion for each block it sent one for.
-    ``current_switches`` is where the switches stand now, which a switch
-    locked under a train is held at. ``faulted_switches`` and
-    ``moving_switches`` are the Track Model's physical switch flags, and
-    ``speed_limit_override_mps`` replaces the per-block posted limits
-    when the configuration supplies one.
-
-    In maintenance mode a switch follows the CTC Office's command if it
-    has sent one, else the programmer's hand-set position, else the
-    program. Outside maintenance only the program drives a switch.
+    ``values`` is everything the vital code's scan saw and wrote: the
+    inputs, the program's outputs and the final ``OUT_`` values.
+    ``suggested`` lists the blocks the CTC suggested something for.
     """
-    overrides: list[VitalOverride] = []
-    faulted = faulted_switches or {}
-    moving = moving_switches or {}
+    def on(name: str) -> bool:
+        return bool(values.get(name, False))
 
-    # A switch machine that reports a fault cannot be trusted to be in
-    # the position it was commanded to, so the block it sits on is
-    # treated like an unusable one for signals and track circuits.
-    fault_blocks = {
-        switch.block_id
-        for switch in config.switches
-        if faulted.get(switch.switch_id, False)
-    }
-    moving_blocks = {
-        switch.block_id
-        for switch in config.switches
-        if moving.get(switch.switch_id, False)
-    }
+    found: list[VitalOverride] = []
+    by_rule: dict[str, list[str]] = {}
 
-    # --- switches ----------------------------------------------------
-    switches: dict[str, bool] = {}
     for switch in config.switches:
-        switch_id = switch.switch_id
-        requested = values.get(switch.output_signal, False)
-        if maintenance and switch_id in ctc_switch_commands:
-            switches[switch_id] = ctc_switch_commands[switch_id]
-            overrides.append(
-                VitalOverride(
-                    "ctc_switch_command",
-                    f"SW_{switch_id}",
-                    "maintenance mode: the CTC Office's command is obeyed, "
-                    "the program's output ignored",
-                )
-            )
-        elif maintenance and switch_id in manual_switches:
-            switches[switch_id] = manual_switches[switch_id]
-            overrides.append(
-                VitalOverride(
-                    "manual_switch",
-                    f"SW_{switch_id}",
-                    "held by the programmer in maintenance mode, program "
-                    "output ignored",
-                )
-            )
-        else:
-            switches[switch_id] = requested
+        s, b = switch.switch_id, switch.block_id
+        if on(f"CTCCMD_{s}"):
+            found.append(VitalOverride(
+                "ctc_switch_command", f"SW_{s}",
+                "maintenance mode: the CTC Office's command is obeyed, "
+                "the program's output ignored"))
+        elif on(f"HAND_{s}"):
+            found.append(VitalOverride(
+                "manual_switch", f"SW_{s}",
+                "held by the programmer in maintenance mode, program "
+                "output ignored"))
+        if on(f"OCC_{b}") and on(f"V_REQ_{s}") != on(f"{OUT}SW_{s}"):
+            found.append(VitalOverride(
+                "switch_locked_under_train", f"SW_{s}",
+                f"block {b} is occupied; the switch is locked and will "
+                "not move"))
 
-    # A switch under a train must not move. The requested position is
-    # refused and the switch is held where it already stands.
-    for switch in config.switches:
-        if not occupancy.get(switch.block_id, False):
-            continue
-        held = current_switches.get(switch.switch_id, False)
-        if switches[switch.switch_id] != held:
-            overrides.append(
-                VitalOverride(
-                    "switch_locked_under_train",
-                    f"SW_{switch.switch_id}",
-                    f"block {switch.block_id} is occupied; the switch is "
-                    "locked and will not move",
-                )
-            )
-        switches[switch.switch_id] = held
-
-    # --- signals -----------------------------------------------------
-    aspects: dict[str, str] = {}
     for signal in config.signals:
-        aspect, problem = _decode_aspect(values, signal.aspect_signals)
-        if problem is not None:
-            overrides.append(
-                VitalOverride("signal_aspect", f"SIG_{signal.signal_id}",
-                              problem)
-            )
-        # A signal protecting an occupied, closed or faulted block is
-        # red no matter what the program computed.
-        if (
-            occupancy.get(signal.block_id, False)
-            or closed.get(signal.block_id, False)
-            or signal.block_id in fault_blocks
-        ):
-            if aspect != "RED":
-                overrides.append(
-                    VitalOverride(
-                        "signal_protects_block",
-                        f"SIG_{signal.signal_id}",
-                        f"block {signal.block_id} is occupied, closed or "
-                        f"holds a faulted switch; {aspect} dropped to RED",
-                    )
-                )
-            aspect = "RED"
-        aspects[signal.signal_id] = aspect
+        s, b = signal.signal_id, signal.block_id
+        if not on(f"V_ONE_{s}"):
+            lit = [a for a, name in zip(ASPECTS, signal.aspect_signals)
+                   if on(name)]
+            found.append(VitalOverride(
+                "signal_aspect", f"SIG_{s}",
+                "no aspect lit; signal would be dark" if not lit
+                else f"{len(lit)} aspects lit at once ({', '.join(lit)})"))
+        elif not on(f"V_OK_{s}") and not on(signal.aspect_signals[0]):
+            found.append(VitalOverride(
+                "signal_protects_block", f"SIG_{s}",
+                f"block {b} is occupied or closed; dropped to RED"))
 
-    # --- crossings ---------------------------------------------------
-    crossings: dict[str, bool] = {}
     for crossing in config.crossings:
-        requested = values.get(crossing.output_signal, False)
-        must_arm = any(
-            occupancy.get(block_id, False)
-            for block_id in crossing.approach_block_ids
-        )
-        crossings[crossing.crossing_id] = requested or must_arm
-        if must_arm and not requested:
-            overrides.append(
-                VitalOverride(
-                    "crossing_armed",
-                    f"XING_{crossing.crossing_id}",
-                    "a train is on the approach; gates forced down",
-                )
-            )
+        if on(f"{OUT}{crossing.output_signal}") and not on(
+            crossing.output_signal
+        ):
+            found.append(VitalOverride(
+                "crossing_armed", f"XING_{crossing.crossing_id}",
+                "a train is on the approach; gates forced down"))
 
-    # --- track circuits, one per block that has a suggestion -----------
-    circuits: dict[str, TrackCircuit] = {}
-    closed_hit: list[str] = []
-    fault_hit: list[str] = []
-    limit_hit: list[str] = []
-    moving_hit: list[str] = []
-    no_authority_hit: list[str] = []
-    yellow_hit: list[str] = []
-    yellow_blocks = {
-        signal.block_id for signal in config.signals
-        if aspects[signal.signal_id] == "YELLOW"
+    moving_blocks = {
+        switch.block_id for switch in config.switches
+        if on(f"V_MOV_{switch.switch_id}")
     }
     for block in blocks:
-        block_id = block.block_id
-        suggestion = suggestions.get(block_id)
-        if suggestion is None:
+        n = block.block_id
+        if n not in suggested:
             continue
+        if on(f"AUTH_{n}") and not on(f"{OUT}AUTH_{n}"):
+            rule = "closed_block" if on(f"CLOSED_{n}") else "switch_moving"
+            if rule == "switch_moving" and n not in moving_blocks:
+                continue
+            by_rule.setdefault(rule, []).append(n)
+        if on(f"{OUT}AUTH_{n}") and on(f"{OUT}HALF_{n}"):
+            by_rule.setdefault("aspect_speed_cap", []).append(n)
 
-        speed = max(0, int(suggestion.speed_mps))
-        authority = max(0, int(suggestion.authority_blocks))
-
-        # The program decides per block whether to pass the suggestion
-        # on. A block it does not address withholds it: fail safe.
-        if not values.get(f"AUTH_{block_id}", False):
-            circuits[block_id] = TrackCircuit(0, 0)
-            continue
-
-        if closed.get(block_id, False):
-            closed_hit.append(block_id)
-            circuits[block_id] = TrackCircuit(0, 0)
-            continue
-        if block_id in fault_blocks:
-            fault_hit.append(block_id)
-            circuits[block_id] = TrackCircuit(0, 0)
-            continue
-
-        limit = (
-            speed_limit_override_mps
-            if speed_limit_override_mps is not None
-            else block.whole_speed_limit_mps
-        )
-        if speed > limit:
-            limit_hit.append(block_id)
-            speed = limit
-
-        if block_id in yellow_blocks and speed > 0:
-            yellow_hit.append(block_id)
-            speed //= 2
-
-        if block_id in moving_blocks and speed > 0:
-            moving_hit.append(block_id)
-            speed = 0
-
-        # Zero authority means the train must stop, so it gets no speed.
-        if authority == 0 and speed > 0:
-            no_authority_hit.append(block_id)
-            speed = 0
-
-        circuits[block_id] = TrackCircuit(speed, authority)
-
-    if yellow_hit:
-        overrides.append(VitalOverride(
-            "aspect_speed_cap", "TRACK_CIRCUIT",
-            f"Yellow signal; speed halved (rounded down) for block(s) "
-            f"{_blocks_text(yellow_hit)}",
-        ))
-    if closed_hit:
-        overrides.append(
-            VitalOverride(
-                "closed_block",
-                "TRACK_CIRCUIT",
-                f"block(s) {_blocks_text(closed_hit)} closed by the CTC "
-                "Office; speed and authority zeroed",
-            )
-        )
-    if fault_hit:
-        overrides.append(
-            VitalOverride(
-                "switch_fault",
-                "TRACK_CIRCUIT",
-                f"block(s) {_blocks_text(fault_hit)} hold a faulted "
-                "switch; speed and authority zeroed",
-            )
-        )
-    if limit_hit:
-        overrides.append(
-            VitalOverride(
-                "speed_limit",
-                "TRACK_CIRCUIT",
-                f"block(s) {_blocks_text(limit_hit)} were suggested a "
-                "speed above the posted limit; clamped",
-            )
-        )
-    if moving_hit:
-        overrides.append(
-            VitalOverride(
-                "switch_moving",
-                "TRACK_CIRCUIT",
-                f"block(s) {_blocks_text(moving_hit)} hold a switch that "
-                "is mid-throw; speed zeroed",
-            )
-        )
-    if no_authority_hit:
-        overrides.append(
-            VitalOverride(
-                "no_authority",
-                "TRACK_CIRCUIT",
-                f"block(s) {_blocks_text(no_authority_hit)} have no "
-                "authority; speed zeroed",
-            )
-        )
-
-    return ControllerOutputs(
-        track_circuits=circuits,
-        switches=switches,
-        aspects=aspects,
-        crossings=crossings,
-        overrides=tuple(overrides),
-    )
+    text = {
+        "closed_block": "closed by the CTC Office; speed and authority "
+                        "zeroed",
+        "switch_moving": "hold a switch that is not where it was "
+                         "commanded; speed and authority zeroed",
+        "aspect_speed_cap": "show yellow; speed halved (rounded down)",
+    }
+    for rule, names in by_rule.items():
+        found.append(VitalOverride(
+            rule, "TRACK_CIRCUIT",
+            f"block(s) {_blocks_text(names)} {text[rule]}"))
+    return tuple(found)

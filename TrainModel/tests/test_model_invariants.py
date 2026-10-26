@@ -136,7 +136,7 @@ def force_bound_n(mass_kg: float, grade_deg: float) -> float:
     gravity = mass_kg * CFG.g_mps2 * (
         abs(math.sin(math.radians(grade_deg))) + CFG.c_rr
     )
-    return CFG.f_max_n + CFG.f_emergency_n + CFG.f_service_n + gravity
+    return CFG.f_max_n + CFG.f_emergency_n + gravity
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -179,7 +179,7 @@ def test_every_step_keeps_the_invariants(seed: int) -> None:
         emergency = cmd.emergency_brake or snap.passenger_ebrake_pulled
         assert ctl.emergency_brake_active == emergency, where
         assert ctl.service_brake_active == (
-            cmd.service_brake and not snap.failures.brake
+            cmd.service_brake and not emergency and not snap.failures.brake
         ), where
 
         if snap.failures.signal_pickup:

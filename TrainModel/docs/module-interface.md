@@ -2,12 +2,12 @@
 
 The boundary of the Train Model: what a caller constructs, calls, sends and
 receives. Defined in `train_model/interface.py` (types and the `TrainModel`
-protocol) and implemented in `train_model/model.py`. The accepted October 20 design and implementation boundaries are called out below.
-The Qt wrapper the system drives, `TrainModelState`, is in `train_model/state.py`.
+protocol) and implemented in `train_model/model.py`. The Qt wrapper the
+system drives, `TrainModelState`, is in `train_model/state.py`.
 
 Per D005, these are the Train Model's own boundary types. Other modules never
-import them; the central harness maps each producer directly to each consumer
-(D005). `common/interfaces.py` is stale and is not a mapping intermediate (D008). All values are in backend units
+import them; the central harness maps between them and the system catalog
+(`common/interfaces.py`, D008). All values are in backend units
 (`truth/conventions/units.md`): SI, with grade in degrees and temperature in
 °C.
 
@@ -50,7 +50,7 @@ Advances one tick. This is the only call the rest of the system needs.
 | `dt` | Tick length in seconds: the shared clock's fixed tick (`utils/system_clock.py`, 0.1 s). Constant for the whole run (D006). Fast-forward and pause change how often `step` is called, never `dt`. |
 | `inputs` | `TrainModelInputs` for this tick (section 4). Send a complete set every tick; nothing is remembered between calls except the train's own state. |
 | Returns | `TrainModelOutputs` for this tick (section 5). |
-| Raises | `InvalidTimeStepError` if `dt` is not a finite, positive number, or is longer than 60 s. `InvalidInputError` (also a `ValueError`) if an on/off input is not a `bool`, a numeric input is not a finite number (a `bool`, text or an integer too large for a float is not), a name or the announcement is not text, a beacon's platform side is not `L`, `R` or `LR` or its complete canonical payload exceeds 128 characters, power, `speed_limit_mps` or `commanded_speed_mps` is negative, `grade_deg` is not strictly between −90 and 90, `passengers_boarded` or `authority_blocks` is not an `int` from 0 to 2³¹ − 1, the largest count Qt and QML carry. Both are `TrainModelError`. A rejected step changes nothing. |
+| Raises | `InvalidTimeStepError` if `dt` is not a finite, positive number, or is longer than 60 s. `InvalidInputError` (also a `ValueError`) if an on/off input is not a `bool`, a numeric input is not a finite number (a `bool`, text or an integer too large for a float is not), a name or the announcement is not text, a beacon's platform side is not `L`, `R` or `LR` or its station name passes 128 characters, power, `speed_limit_mps` or `commanded_speed_mps` is negative, `grade_deg` is not strictly between −90 and 90, `passengers_boarded` or `authority_blocks` is not an `int` from 0 to 2³¹ − 1, the largest count Qt and QML carry. Both are `TrainModelError`. A rejected step changes nothing. |
 
 `TrainModelState.step(dt, inputs, *, override_passenger_brake=False)` has
 the same contract, also refreshes the window, and marks the module as
@@ -59,9 +59,7 @@ the same contract, also refreshes the window, and marks the module as
 ### `TrainModel.validate_inputs(dt, inputs) -> None` (static)
 
 Applies the same checks as `step` without touching any train. Use it to
-precheck a standalone utility tick before advancing its clock. In the integrated
-process, validation is per train on an already supplied harness tick; a rejected
-train retains its elapsed time while global time advances.
+reject a tick before advancing the shared clock.
 
 ### `snapshot() -> TrainModelSnapshot` (`TrainModel` only)
 
@@ -81,7 +79,7 @@ Train Model UI action happens (failure, passenger pull).
 |---|---|
 | `set_failures(FailureState)` / `TrainModelState.setFailure(name, active)` | Murphy fault injection from the Train Model window. Shown at once in `snapshot().failures`, never output; physical effect from the next step. |
 | `pull_passenger_emergency_brake()` / `TrainModelState.applyEmergencyBrake()` | A passenger pull. Latches; reported at once; force from the next step. |
-| `TrainModelState.releaseEmergencyBrake()` | Does nothing. The Train Model window offers no release (D011); the Train Controller releases a pull with `controller.passenger_brake_release`. |
+| `TrainModelState.releaseEmergencyBrake()` | Does nothing. The Train Model window offers no release (D011); how the Train Controller releases a pull is not settled. |
 | `clear_passenger_brake_for_test()` | **Test only.** Clears the latch. |
 | `TrainModelState.reset()` | **Test only.** Replaces the train with a fresh one. |
 
@@ -102,15 +100,14 @@ TrainModelInputs
 | Field | Type | Unit | Meaning |
 |---|---|---|---|
 | `power_cmd_w` | float | W | Commanded power, ≥ 0. Capped at 480 kW inside the model. |
-| `service_brake` | bool | | Service command unless service failure is active, independent of emergency. |
+| `service_brake` | bool | | Service brake command. |
 | `emergency_brake` | bool | | Emergency brake command (controller path only; a passenger pull is internal). |
 | `interior_lights` | bool | | Light Command, interior. |
 | `exterior_lights` | bool | | Light Command, exterior. |
-| `door_left_open` | bool | | Door Command, left. Obeyed at any speed: the door interlock is the Train Controller's (truth `door-command`). |
-| `door_right_open` | bool | | Door Command, right. Obeyed at any speed, as the left. |
+| `door_left_open` | bool | | Door Command, left. Obeyed only at 0 mph. |
+| `door_right_open` | bool | | Door Command, right. Obeyed only at 0 mph. |
 | `temp_setpoint_c` | float | °C | Cabin temperature setpoint. |
 | `announcement` | str | | Passed in; not used by the physics. |
-| `passenger_brake_release` | bool | | One-shot: true on the tick the Train Controller releases a passenger pull. The model clears the pull before it steps; the controller's own emergency brake follows `emergency_brake`. Optional, false by default. |
 
 ### `TrackInfo` (Track Model, every tick)
 
@@ -121,7 +118,7 @@ TrainModelInputs
 | `elevation_m` | float | m | Elevation. Validated, not used by the physics. |
 | `speed_limit_mps` | float | m/s | Nonnegative. Passed through to the Train Controller. |
 | `polarity` | bool | | Track-circuit polarity. A change from the previous tick is a block change. |
-| `station_name` | str \| None | | Station in this block for display, or `None`. Default `None`; not a Train Model boarding gate. |
+| `station_name` | str \| None | | Station in this block, or `None`. Default `None`. |
 
 ### `TrackSignal` (Track Model, every tick)
 
@@ -140,40 +137,14 @@ Both are reported as 0 while signal pickup has failed.
 | `platform_side` | `"L"`, `"R"` or `"LR"` | Platform side; `"LR"` when the station has platforms on both sides. |
 | `underground` | bool | Whether the station is underground. |
 
-Send `None` on every other tick. The Train Controller retains earlier beacon
-information when its control logic needs it.
-
-#### Beacon payload encoding
-
-Accepted design from [SDD v0.2](../../documents/Railway_Sim_SDD_Train_Model.md):
-logical array order is `[station_name, platform_side, underground]`.
-
-```python
-json.dumps(
-    [name, side, underground],
-    ensure_ascii=True,
-    separators=(",", ":"),
-    allow_nan=False,
-)
-```
-
-The entire serialized array is limited to 128 characters, including syntax,
-quotes and escapes. ASCII character and byte counts coincide. Reject overlength
-payloads before state mutation, without truncation. Keep typed `Beacon` and
-named outer harness fields: the canonical array bounds the logical payload,
-not the envelope. The inspected working tree uses `utils/beacon_codec.py`
-from model validation and local stand-ins; `wire.py` still transports named
-fields. Name length alone is insufficient. Production producers must apply the
-same complete-payload rule as their integration proceeds.
+Send `None` on every other tick.
 
 ### `passengers_boarded` (Track Model)
 
-An actual `int` in 0 through 2³¹ − 1, zero except on a boarding event.
-The Track Model sends these events only at stations and no more than the last
-reported `passenger_capacity`. The Train Model checks rest, open doors, valid
-counts and capacity, without a station-presence gate. It caps boarding at
-remaining capacity; an event sent while moving or with both doors closed boards
-nobody and is not retained. Send each event once.
+An `int`, 0 except on a boarding event, never negative. It boards only at a
+station with a door open, and never beyond capacity. It is consumed by the step that
+carries it: send it on one tick only, and never more than the
+`passenger_capacity` last reported.
 
 ## 5. Outputs: `TrainModelOutputs`
 
@@ -189,8 +160,8 @@ TrainModelOutputs
 |---|---|---|---|
 | `actual_speed_mps` | float | m/s | Signed; negative in rollback. |
 | `emergency_brake_active` | bool | | Brake State [0]: emergency brake **engaged** (commanded or passenger), not the command. |
-| `service_brake_active` | bool | | Brake State [1]: command AND no service failure; both brake outputs may be true. |
-| `door_left_open`, `door_right_open` | bool | | Door State follows Door Command. Train Controller owns the interlock. |
+| `service_brake_active` | bool | | Brake State [1]: service brake engaged. False while the emergency brake is engaged or the brakes have failed. |
+| `door_left_open`, `door_right_open` | bool | | Door State: follows Door Command; the interlock is commented out pending the instructor. |
 | `interior_lights_on`, `exterior_lights_on` | bool | | Light State: follows the command. |
 | `cabin_temp_c` | float | °C | Cabin temperature. |
 | `commanded_speed_mps` | float | m/s | Passed through; 0 under signal pickup failure. |
@@ -223,10 +194,7 @@ TrainModelOutputs
 | Exception | When | State after |
 |---|---|---|
 | `InvalidTimeStepError` | dt nonfinite, ≤ 0 or > 60 s | Unchanged |
-| `InvalidInputError` | On/off input not a `bool`; a number that is not a finite number; a name that is not text; a beacon side other than L, R or LR, or a complete canonical beacon payload over 128 characters; negative power, speed limit or commanded speed; grade not strictly between −90° and 90°; boarding count or authority not an int from 0 to 2³¹ − 1 | Unchanged |
-
-The error table describes validation in the inspected working tree, including
-the complete-payload codec introduced by concurrent backend work.
+| `InvalidInputError` | On/off input not a `bool`; a number that is not a finite number; a name that is not text; a beacon side other than L, R or LR, or a beacon name over 128 characters; negative power, speed limit or commanded speed; grade not strictly between −90° and 90°; boarding count or authority not an int from 0 to 2³¹ − 1 | Unchanged |
 
 Both derive from `TrainModelError`. A rejected step does not advance the
 train or its random generator. Decide in the harness what a rejection means
@@ -243,7 +211,6 @@ for the rest of the system (section 3 of [integration.md](integration.md)).
 | `door-command` | in | `controller.door_left_open`, `door_right_open` |
 | `temperature-setpoint` | in | `controller.temp_setpoint_c` |
 | `announcement` | in | `controller.announcement` |
-| `passenger-brake-release` | in | `controller.passenger_brake_release` |
 | `track-info` | in | `track.track_info` |
 | `track-signal` | in, passed out | `track.track_signal` → `commanded_speed_mps`, `authority_blocks` |
 | `beacon` | in, passed out | `track.beacon` → `controller.beacon` |
@@ -257,8 +224,8 @@ for the rest of the system (section 3 of [integration.md](integration.md)).
 | `block-change-event` | out | `track.block_changed` |
 | `passenger-capacity` | out | `track.passenger_capacity` |
 
-`TrackInfo.station_name` is the sixth field in promoted `track-info`. It supports
-station display; Train Model boarding does not depend on it.
+`TrackInfo.station_name` has no promoted truth signal yet: the Track Model
+must supply it for boarding to work.
 
 ## 9. Minimal example
 
