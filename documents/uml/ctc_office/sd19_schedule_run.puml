@@ -8,32 +8,38 @@ participant "StubCtcOffice" as Model
 participant "AutoDispatcher" as AD
 end box
 
+Model -> Model : _run_schedule()
 alt not Automatic mode, dispatch paused, or no schedule
-  Model -> Model : nothing: every run holds
+  note over Model : returns at once: every run holds
 else
-  Model -> AD : step(World(now, ready lines, train heads,\norders, lost trains))
+  Model -> AD : step(World(now_s, ready_lines,\nheads, orders, lost))
   loop each run
-    AD -> AD : locate: move its place along its path\nup to where its head is
+    AD -> AD : _locate(plan, world)
+    note right of AD : moves its place along its path\nup to where its head is
   end
   loop each run on a ready line
+    AD -> AD : _advance(plan, progress, world)
     alt queued and due (05:00 + departure)
-      AD -> AD : → in yard: Order to its first stop
+      AD -> AD : _out_of_yard(plan, progress, 0)
+      note right of AD : → in yard: Order to its first stop
     else en route and its head is at the stop
-      AD -> AD : → dwelling until now + 45 s
+      note right of AD : → dwelling until now + DWELL_S (45 s)
     else dwelling and the 45 s are up
-      AD -> AD : → en route: Order to the next stop,\nor to the yard entry after the last
+      AD -> AD : _release(plan, progress, leg + 1)
+      note right of AD : → en route: Order to the next stop,\nor to the yard entry after the last
     else due to move on, but a two-way zone ahead\nis in use the other way
-      AD -> AD : → held: waits at its stop or in the yard,\nor, turned round a loop, Order to\nthe loop's last block to wait there
+      AD -> AD : _blocking(plan, progress, target)
+      note right of AD : → held: waits at its stop or in the yard,\nor, turned round a loop, Order on with\nauthority stopping a block short of the\nloop's end (hold_at)
     else to yard and its blocks have cleared\nat the yard entry
-      AD -> AD : → done: Cancel its order
+      note right of AD : → done: Cancel(train)
     end
   end
-  AD --> Model : Order(train, line, block, due) / Cancel(train)
+  AD --> Model : [Order(train_id, line, block_id, due_s) | Cancel(train_id)]
   loop each action
     alt Order
-      Model -> Model : dispatch(train, line, block, due)
-      opt refused: the stop is closed or closing
-        Model -> AD : skip_stop(train)
+      Model -> Model : dispatch(train_id, line, block_id, due_s)
+      opt UnsafeActionError: the stop is closed or closing
+        Model -> AD : skip_stop(train_id)
         AD --> Model : Order to the next stop
       end
     else Cancel

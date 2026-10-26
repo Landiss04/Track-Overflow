@@ -5,29 +5,50 @@ autonumber
 
 box "CTC Office process" #F7F9FC
 participant "StubCtcOffice" as Model
-participant "TrackGraph" as G
+participant "routing\n(TrackGraph, authority)" as G
 end box
 participant "Central Harness" as H
 participant "Track Controller\n(the line's)" as TC
 
+Model -> Model : _authorities() → _compute_authorities()
 loop each train with an order that is on the track, on a ready line
-  Model -> G : route(head block, destination, avoid, came_from)\n— round closed, closing and failed blocks and\nstanding trains if the detour is at most 2x
+  Model -> Model : _choose_route(line, block_id, destination,\nunusable, stuck, came_from)
+  Model -> G : route(block_id, destination, avoid, came_from=came_from)
+  note right of G
+    Round closed, closing and failed blocks and
+    standing trains if the detour is at most 2x.
+  end note
   G --> Model : route (or none: authority 0, "no route")
 end
-Model -> Model : order the trains: most behind schedule first
+Model -> Model : movers.sort(key=_priority(order, line, route))
+note right of Model : most behind schedule first
 loop each train (twice: keep grants first, then extend)
-  Model -> G : authority(route, obstructions, reported switches,\nblocks other trains hold)
+  Model -> G : authority(graph, block_id, destination, obstructions,\nswitches, reserved, keep, route)
   G --> Model : AuthorityLimit: blocks, end block, reason\n(destination, occupied, closed, closing,\nswitch, reserved)
-  Model -> Model : the blocks within it are this train's\nuntil it has passed them
+  Model -> Model : holders[(line, block)] = train_id
+  note right of Model : the blocks within it are this train's\nuntil it has passed them
 end
+Model -> Model : _outputs()
 loop each train with an authority
   opt authority ≥ 1
-    Model -> Model : next block: speed for that block\nwith one block less; authority − 1
+    Model -> Model : _suggested_speed_mps(line, within[0], within[1:])
+    note right of Model : TrainSuggestion for the next block;\nauthority − 1
   end
-  Model -> Model : head block: speed = min(limit m/s rounded\ndown − 1, √(2 × 1.2 × length within authority));\nauthority = blocks
+  Model -> Model : _suggested_speed_mps(line, head, within)
+  note right of Model
+    Head block: speed = min(limit m/s rounded down − 1,
+    √(2 × 1.2 × length within authority)); authority = blocks.
+  end note
 end
-Model --> H : suggestions: (train, line, block, speed, authority)
-H -> H : ctc_to_track_controller(line): keep the line's,\nkey by block, drop the train ID; two for one block:\nthe lower speed and authority each
+Model --> H : track_controller.suggestions:\nTrainSuggestion(train, line, block, speed, authority)
+H -> H : ctc_to_track_controller(line)
+note right of H
+  Keep the line's, key by block, drop the train ID;
+  two for one block: the lower speed and authority each.
+end note
 H -> TC : (tick k+1) suggested speed and authority per block
-TC -> TC : the PLC program passes them, or 0,\ndown that block's track circuit
+note right of TC
+  The PLC program passes them, or 0,
+  down that block's track circuit.
+end note
 @enduml

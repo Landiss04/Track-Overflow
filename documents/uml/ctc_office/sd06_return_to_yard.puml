@@ -10,7 +10,8 @@ participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
-D -> UI : Return to yard
+D -> UI : "Return to yard".clicked()
+note right of D : Enabled only for a train on the track.
 UI -> Host : returnToYard(train_id)
 Host -> Model : return_to_yard(train_id)
 alt the train is not on the track
@@ -18,20 +19,24 @@ alt the train is not on the track
 else a run of the loaded schedule
   Model --> Host : InvalidInputError "G1 is a run of the loaded\nschedule; the schedule sends it back itself."
 else
-  Model -> Model : yard entry block of its line:\nGreen 57, Red 9
-  Model -> Model : dispatch(train_id, line, entry block)
+  note over Model
+    entries = YARD_ENTRIES[train.line]
+    (Green 57, Red 9)
+  end note
+  Model -> Model : dispatch(train_id, train.line, entries[0])
   alt refused (line not ready, entry block closed or closing)
     Model --> Host : UnsafeActionError
   else accepted
-    Model -> Model : mark the train as returning
+    Model -> Model : _returning.add(train_id)
     Model --> Host : ok
   end
 end
 Host --> UI : "" or the refusal's text
+UI -> UI : report(error, done)
 UI -> D : "T1 sent back to the yard." or the reason
 note over Model
   Once the train has stopped at the yard entry block with
   authority 0, it is retired like a scheduled run (SD-20).
-  A later order or a cancel withdraws the return.
+  A later order withdraws the return.
 end note
 @enduml

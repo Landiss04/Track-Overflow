@@ -21,6 +21,7 @@ only what is specific to the CTC Office.
 | Name | Date | Reason for changes | Version |
 |---|---|---|---|
 | Landis | 2026-10-22 | First CTC Office contribution, following the Track Controller (HW) contribution's layout. | 0.1 |
+| Landis | 2026-10-25 | Sequence diagrams name the signals and method calls; Cancel order removed from Selected train (UC-02, UC-05, UC-06, SD-05, SD-13). | 0.2 |
 
 ## References
 
@@ -194,10 +195,10 @@ stories cover every use case.
 |---|---|
 | **Actors** | Dispatcher |
 | **Description** | Changes where the selected train is going. The dispatcher cannot withdraw a train's order. |
-| **Data** | Train; new destination. |
-| **Stimulus** | **Reroute** in Selected train (Manual mode). |
-| **Response** | A reroute replaces the order; the route is worked out again from where the train is, carrying on the way it is going. |
-| **Alternatives** | A reroute is refused as UC-03 refuses. |
+| **Data** | Train; new destination; arrival time (optional). |
+| **Stimulus** | A new destination, then **Reroute** in Selected train (Manual mode). |
+| **Response** | The new order replaces the old one; the route is worked out again from where the train is, carrying on the way it is going. |
+| **Alternatives** | Refused as UC-03 refuses. |
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-05 |
 

@@ -11,24 +11,26 @@ participant "StubCtcOffice" as Model
 participant "TrackGraph" as G
 end box
 
-D -> UI : New destination, Reroute
-UI -> Host : dispatchTrain(train_id, line, block_id, "")
-Host -> Model : dispatch(train_id, line, block_id, None)
+D -> UI : rerouteSelect.committed(block_id)
+D -> UI : rerouteArrival.committed("HH:MM")
+note right of D : Arrival is optional.
+D -> UI : "Reroute".clicked()
+UI -> Host : dispatchTrain(train_id, line, block_id, "HH:MM")
+Host -> Model : dispatch(train_id, line, block_id, arrival_s)
 alt refused (as SD-03)
   Model --> Host : UnsafeActionError
-  Host --> UI : the reason
+  Host --> UI : the refusal's text
 else accepted
-  Model -> Model : the new order replaces the old one
+  note over Model
+    The new order replaces the old one.
+  end note
   Model --> Host : ok
   Host --> UI : ""
 end
+UI -> UI : report(error, done)
 UI -> D : "T1 rerouted." or the reason
 ...next step...
+Model -> Model : _choose_route(train, order)
 Model -> G : route(head block, new destination,\navoid, came_from)
 G --> Model : a route that carries on the way\nthe train is going (never back)
-
-note over D, UI
-  There is no Cancel order: the dispatcher may
-  replace a train's order, never withdraw it.
-end note
 @enduml

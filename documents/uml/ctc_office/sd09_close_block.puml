@@ -10,34 +10,47 @@ participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
-D -> UI : Line, Block, Close block
+D -> UI : lineSelect.committed(line)
+UI -> Host : blockOptions(line)
+Host --> UI : every block of the line
+D -> UI : blockSelect.committed(block_id)
+UI -> Host : closureState(line, block_id)
+Host -> Model : snapshot()
+Host --> UI : "closed", "closing" or ""
+D -> UI : "Close block".clicked()
 UI -> D : "Close Green 15? No train will be given authority over it ..."
-D -> UI : Yes, close block
+D -> UI : "Yes, close block".confirmed()
 UI -> Host : closeBlock(line, block_id)
-Host -> Model : snapshot() (closureState)
+Host -> Host : closureState(line, block_id)
 alt already closed or closing
-  Host --> UI : "Green 15 is already closed ..."
+  Host --> UI : "Green 15 is already closed."
 else
   Host -> Model : set_block_closed(line, block_id, True)
   alt not in maintenance mode
     Model --> Host : MaintenanceModeRequiredError
   else block occupied
-    Model -> Model : pending closure;\ncancel orders into it ("block closing")
+    Model -> Model : _pending.add(block)
+    Model -> Model : _cancel_orders_into(block, "block closing")
   else clear
-    Model -> Model : closed;\ncancel orders into it ("block closed")
+    Model -> Model : _closed.add(block)
+    Model -> Model : _cancel_orders_into(block, "block closed")
   end
   Host --> UI : "" or the reason
 end
 UI -> D : Active closures: "Closed", or\n"Closing — train in block"; a notice per cancelled order
 
 ...each later step...
-Model -> Model : a pending closure whose block is clear closes
+note over Model
+  A pending closure whose block is clear closes.
+end note
 
 == Reopen ==
-D -> UI : select the closure, Reopen block (or Cancel closing)
-UI -> Host : reopenBlock(line, block_id)
+D -> UI : DataTable.rowActivated(index, row)
+D -> UI : "Reopen block".clicked()
+note right of D : "Cancel closing" for a pending closure
+UI -> Host : reopenBlock(row.line, row.blockId)
 Host -> Model : set_block_closed(line, block_id, False)
-Model -> Model : remove it from closed and pending
+Model -> Model : _closed.discard(block)\n_pending.discard(block)
 Host --> UI : ""
 UI -> D : removed from Active closures
 @enduml
