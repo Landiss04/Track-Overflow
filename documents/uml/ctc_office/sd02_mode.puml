@@ -27,7 +27,7 @@ else Manual or Maintenance
   Model -> Model : every scheduled run holds where it is
 end
 Host --> Main : revision += 1
-Main -> D : Automatic view: Selected train, Load schedule,\nAuto dispatch, Throughput\nManual view: Dispatch train, Selected train\n(reroute, cancel, return to yard), Throughput\nMaintenance view: Close block, Set switch position,\nActive closures, Throughput
+Main -> D : Automatic view: Selected train, Load schedule,\nAuto dispatch, Throughput\nManual view: Dispatch train, Selected train\n(reroute, return to yard), Throughput\nMaintenance view: Close block, Set switch position,\nActive closures, Throughput
 note over Model
   The mode itself is sent to no module:
   the Track Controller gets the closed blocks instead.

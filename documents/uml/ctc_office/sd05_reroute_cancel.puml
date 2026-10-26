@@ -1,6 +1,6 @@
 @startuml sd05_reroute_cancel
 !include ../style.iuml
-title SD-05 Reroute or cancel a train's order (UC-05)
+title SD-05 Reroute a train (UC-05)
 autonumber
 
 actor Dispatcher as D
@@ -11,7 +11,6 @@ participant "StubCtcOffice" as Model
 participant "TrackGraph" as G
 end box
 
-== Reroute ==
 D -> UI : New destination, Reroute
 UI -> Host : dispatchTrain(train_id, line, block_id, "")
 Host -> Model : dispatch(train_id, line, block_id, None)
@@ -28,13 +27,8 @@ UI -> D : "T1 rerouted." or the reason
 Model -> G : route(head block, new destination,\navoid, came_from)
 G --> Model : a route that carries on the way\nthe train is going (never back)
 
-== Cancel ==
-D -> UI : Cancel order
-UI -> Host : cancelDispatch(train_id)
-Host -> Model : cancel_dispatch(train_id)
-Model -> Model : drop the order (and a "return to yard";\na lost train is forgotten with it)
-Host --> UI : ""
-UI -> D : "T1's order cancelled."
-...next step...
-Model -> Model : no order: authority 0, speed 0;\nthe train stops in its block
+note over D, UI
+  There is no Cancel order: the dispatcher may
+  replace a train's order, never withdraw it.
+end note
 @enduml

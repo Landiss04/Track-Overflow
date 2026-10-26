@@ -158,7 +158,7 @@ stories cover every use case.
 | **Description** | Chooses Automatic, Manual or Maintenance mode. |
 | **Data** | One mode at a time. |
 | **Stimulus** | OPERATING MODE toggle in the header. |
-| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train, and reroute, cancel or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
+| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train, and reroute or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
 | **Requirements** | Rubric 2.2; REQ-FUNC-006, 007, 008 |
 | **Sequence** | SD-02 |
 
@@ -188,15 +188,15 @@ stories cover every use case.
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-04 |
 
-### UC-05 Reroute or cancel a train's order
+### UC-05 Reroute a train
 
 | | |
 |---|---|
 | **Actors** | Dispatcher |
-| **Description** | Changes where the selected train is going, or withdraws its order. |
+| **Description** | Changes where the selected train is going. The dispatcher cannot withdraw a train's order. |
 | **Data** | Train; new destination. |
-| **Stimulus** | **Reroute** or **Cancel order** in Selected train (Manual mode). |
-| **Response** | A reroute replaces the order; the route is worked out again from where the train is, carrying on the way it is going. A cancel drops the order, so the train's authority is 0 from the next step and it stops. |
+| **Stimulus** | **Reroute** in Selected train (Manual mode). |
+| **Response** | A reroute replaces the order; the route is worked out again from where the train is, carrying on the way it is going. |
 | **Alternatives** | A reroute is refused as UC-03 refuses. |
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-05 |
@@ -209,8 +209,8 @@ stories cover every use case.
 | **Description** | Sends a manual train on the track back to the yard, where it is retired (D022). |
 | **Data** | Train. |
 | **Stimulus** | **Return to yard** in Selected train (Manual mode). |
-| **Response** | An order to the line's yard entry block (Green 57, Red 9). Once the train has stopped there with authority 0 it is retired (UC-20). A later order or a cancel withdraws it. |
-| **Alternatives** | Refused for a train not on the track (cancel its order instead), for a run of the loaded schedule (the schedule returns it), and as UC-03 refuses. |
+| **Response** | An order to the line's yard entry block (Green 57, Red 9). Once the train has stopped there with authority 0 it is retired (UC-20). A later order withdraws it. |
+| **Alternatives** | Refused for a train not on the track, for a run of the loaded schedule (the schedule returns it), and as UC-03 refuses. |
 | **Requirements** | D022 |
 | **Sequence** | SD-06 |
 
@@ -593,7 +593,7 @@ whole step, refers to the diagrams of the use cases it includes.
 | SD-02 | UC-02 Change operating mode |
 | SD-03 | UC-03 Dispatch a train to a station |
 | SD-04 | UC-04 Dispatch a train to a block |
-| SD-05 | UC-05 Reroute or cancel a train's order |
+| SD-05 | UC-05 Reroute a train |
 | SD-06 | UC-06 Return a train to the yard |
 | SD-07 | UC-07 Load a schedule |
 | SD-08 | UC-08 Monitor and pause automatic dispatch |
@@ -630,7 +630,7 @@ whole step, refers to the diagrams of the use cases it includes.
 
 ![SD-04](../uml/ctc_office/sd04_dispatch_block.png)
 
-### SD-05 Reroute or cancel a train's order
+### SD-05 Reroute a train
 
 ![SD-05](../uml/ctc_office/sd05_reroute_cancel.png)
 

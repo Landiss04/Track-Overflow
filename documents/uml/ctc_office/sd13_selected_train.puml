@@ -23,6 +23,6 @@ loop after each step
   Map -> D : route highlighted: within authority, beyond it
 end
 opt Manual mode
-  Sel -> D : Reroute, Cancel order (SD-05),\nReturn to yard (SD-06)
+  Sel -> D : Reroute (SD-05),\nReturn to yard (SD-06)
 end
 @enduml
