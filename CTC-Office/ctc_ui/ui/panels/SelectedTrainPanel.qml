@@ -230,31 +230,16 @@ Panel {
                     }
                 }
 
-                RowLayout {
+                AppButton {
                     Layout.fillWidth: true
-                    spacing: theme.space_2
-
-                    AppButton {
-                        Layout.fillWidth: true
-                        variant: "primary"
-                        text: qsTr("Reroute")
-                        enabled: rerouteSelect.value !== ""
-                        onClicked: root.report(
-                            root.host.dispatchTrain(root.trainId,
-                                root.train.line, rerouteSelect.value,
-                                rerouteArrival.text),
-                            qsTr("%1 rerouted.").arg(root.trainId))
-                    }
-
-                    AppButton {
-                        variant: "secondary"
-                        text: qsTr("Cancel order")
-                        enabled: root.train.destinationBlock !== undefined
-                            && root.train.destinationBlock !== ""
-                        onClicked: root.report(
-                            root.host.cancelDispatch(root.trainId),
-                            qsTr("%1's order cancelled.").arg(root.trainId))
-                    }
+                    variant: "primary"
+                    text: qsTr("Reroute")
+                    enabled: rerouteSelect.value !== ""
+                    onClicked: root.report(
+                        root.host.dispatchTrain(root.trainId,
+                            root.train.line, rerouteSelect.value,
+                            rerouteArrival.text),
+                        qsTr("%1 rerouted.").arg(root.trainId))
                 }
 
                 HelperText {

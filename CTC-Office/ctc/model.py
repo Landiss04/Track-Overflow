@@ -554,13 +554,6 @@ class StubCtcOffice:
         self._orders[train_id] = DispatchOrder(
             train_id, line, destination_block_id, arrival_s)
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        """Drop a train's dispatch order, if it has one. A train the CTC
-        had lost track of is forgotten with it."""
-        train_id = _trim(train_id)
-        self._orders.pop(train_id, None)
-        self._tracker.lost.discard(train_id)
-
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
         """Close or reopen a block; see ``CtcOffice.set_block_closed``."""
@@ -772,7 +765,9 @@ class StubCtcOffice:
         while pending:
             action = pending.pop(0)
             if isinstance(action, Cancel):
-                self.cancel_dispatch(action.train_id)
+                # The run is back in the yard: its order is done.
+                self._orders.pop(action.train_id, None)
+                self._tracker.lost.discard(action.train_id)
                 continue
             try:
                 self.dispatch(action.train_id, action.line, action.block_id,

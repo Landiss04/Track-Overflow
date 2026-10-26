@@ -373,10 +373,6 @@ class CtcOffice(Protocol):
         """
         ...
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        """Drop a train's dispatch order, if it has one."""
-        ...
-
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
         """Close a block for maintenance, or reopen it. Maintenance
