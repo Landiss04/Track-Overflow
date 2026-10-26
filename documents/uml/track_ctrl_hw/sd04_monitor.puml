@@ -5,7 +5,7 @@ autonumber
 actor Programmer as P
 participant "Main window\n(QML)" as QML
 participant "TrackControllerState" as State
-participant "views / display\n/ schematic" as Views
+participant "views / display" as Views
 participant "RowsModel ×5" as Rows
 participant "RemoteTrackController" as Remote
 participant "HardwareRelay" as Relay
@@ -13,21 +13,28 @@ box "Raspberry Pi 5" #F2F5F9
 participant "PiLinkServer\n+ TrackCore" as Pi
 end box
 
-loop at most every 200 ms, after a scan
-  Pi -> Relay : VIEW: packed snapshot (USB)
-  Relay -> Remote : viewChanged
-  Remote -> Remote : unpack, cache
-  Relay -> State : refresh()
-  State -> Remote : snapshot()
-  Remote --> State : cached snapshot
-  State -> Views : block, office, switch, device,\nreport rows; diagram
-  Views --> State : rows in mph and ft
-  State -> Rows : set_rows (rows change in place)
-  State --> QML : changed, diagramChanged
-  QML --> P : diagram, block occupancy, office\nsuggestions, switches, signals\nand crossings, Ready / Not ready
+loop after a request, when VIEW_INTERVAL_S (200 ms) has passed
+  Pi -> Relay : VIEW {tick, view={"snapshot": pack(snapshot())}}
+  Relay -> Relay : _take_view(view)
+  Relay -> Remote : viewChanged.emit(view)
+  Remote -> Remote : _view(): self._snapshot = unpack(view["snapshot"])
+end
+loop self._timer: every 100 ms
+  State -> State : _refresh_if_dirty()
+  State -> Remote : ticks
+  Remote --> State : self._snapshot.ticks
+  opt ticks != self._seen_ticks
+    State -> State : refresh()
+    State -> Remote : snapshot()
+    Remote --> State : TrackControllerSnapshot
+    State -> Views : wayside(snapshot, selected); block_rows(),\noffice_rows(), switch_rows(), device_rows(),\nreport_rows(); display.mph(), feet(), clock()
+    Views --> State : list[dict] per table, display units
+    State -> Rows : set_rows(rows) (updated in place)
+    State --> QML : changed.emit(); diagramChanged.emit()
+  end
 end
 opt zoom in / out or **Fit**
   P -> QML : zoom or fit
-  QML -> QML : rescale the diagram (QML only)
+  QML -> QML : diagram scale (QML only)
 end
 @enduml

@@ -2,17 +2,25 @@
 !include ../style.iuml
 autonumber
 
-participant "Track Model" as TM
 participant "Central\nHarness" as H
 participant "HwTrackController\n(on the Pi)" as Ctrl
 participant "Wayside" as W
 
-TM -> H : outputs: occupied blocks, switch positions,\ncrossing states, signal aspects lit
-H -> H : a failed block (broken rail, circuit,\npower) is folded into occupancy
-H -> Ctrl : STEP: track_model inputs\n(path as SD-07)
-Ctrl -> Ctrl : validate keys (BlockKey)\nand values
-Ctrl -> W : scan(...)
-W -> W : OCC_n = 1 for each occupied block\n(a train or a failure)
-W -> W : SWREV_s = 1 if switch s reports reverse
-W -> W : keep switch, crossing and signal\nread-back for the report (SD-15)\nand the agreement check (SD-11)
+H -> H : track_model_to_track_controller(tm_outputs,\n"Red", names, devices) → occupied_blocks,\nswitch_positions, crossings_active,\nsignal_aspects (keyed BlockKey)
+H -> Ctrl : STEP → step(dt, inputs) (path as SD-07)
+Ctrl -> Ctrl : _validate(inputs): keys are BlockKey;\nvalues in SWITCH_POSITIONS / SIGNAL_ASPECTS
+alt invalid
+  Ctrl --> H : raise InvalidInputError(reason) → REJECTED
+else valid
+  Ctrl -> W : scan(dt, time_s, ctc, track_model, stall)
+  W -> W : occupied = frozenset(key for key in keys\nif key in track_model.occupied_blocks)
+  W -> W : image[f"OCC_{n}"] = key in occupied\n(neighbours' OCC_n by BlockRef)
+  W -> W : image[f"SWREV_{s}"] =\ntrack_model.switch_positions.get(key) == "reverse"
+  W -> W : self._switch_reports, self._signal_reports,\nself._crossing_reports = read-back per device
+  W --> Ctrl : WaysideScan
+end
+note right of W
+  A failed block (broken rail, circuit, power)
+  arrives as an occupied block: OCC_n = 1.
+end note
 @enduml

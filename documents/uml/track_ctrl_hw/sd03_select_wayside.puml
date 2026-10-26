@@ -12,17 +12,21 @@ participant "RowsModel ×5" as Rows
 P -> QML : pick a wayside in the header
 QML -> State : selectWayside(wayside_id)
 State -> Remote : wayside_ids
-Remote --> State : from the cached snapshot
-alt not a loaded wayside
-  State -> State : ignore
+Remote --> State : tuple[str] (from the cached snapshot)
+alt wayside_id not in wayside_ids
+  State --> QML : (no change)
 else loaded
+  State -> State : self._selected = wayside_id
   State -> State : refresh()
   State -> Remote : snapshot()
-  Remote --> State : cached snapshot (no USB request)
-  State -> Views : rows for the selected wayside
-  Views --> State : rows in display units
+  Remote --> State : self._snapshot (cached, no USB request)
+  State -> Views : wayside(snapshot, self._selected)
+  Views --> State : WaysideSnapshot
+  State -> Views : block_rows(), office_rows(), switch_rows(),\ndevice_rows(), report_rows(), program_details()
+  Views --> State : list[dict] per table; details dict
   State -> Rows : set_rows(rows)
-  State --> QML : changed, diagramChanged
-  QML --> P : every panel shows that wayside
+  State -> Views : diagram(wayside, geometry)
+  Views --> State : diagram dict
+  State --> QML : changed.emit(); diagramChanged.emit()
 end
 @enduml

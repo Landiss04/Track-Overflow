@@ -1,13 +1,28 @@
+<div class="cover-page">
+
+<p class="cover-kicker">ECE 1140 &middot; Work Package 2 &middot; Design Review</p>
+
 # Software Design Description
+
 ## For the Railway Simulation Project
 
-| | |
-|---|---|
-| **Version** | 1.0 (Work Package 2) |
-| **Prepared by** | Team 3, Track Overflow: Braden Bosilovich (integration), Landis, Harry Tye, Deni Ephraim, Kevin Schillinger, Jonathan Tsang, Ivan Zheng |
-| **Organization** | University of Pittsburgh, ECE 1140, for the Port Authority of Allegheny County (customer) |
-| **Date modified** | 2026-10-22 |
-| **Status** | Issued for the design review of 2026-10-22 |
+<div class="cover-rule"></div>
+
+<p class="cover-meta">Version 1.0<br>Issued for the design review of 2026-10-22<br>IEEE Std 1016-2009</p>
+
+| Module | Owner |
+|--------|-------|
+| System integration | Braden Bosilovich |
+| CTC Office | Landis |
+| Track Controller (SW) | Harry Tye |
+| Track Controller (HW) | Braden Bosilovich |
+| Track Model | Deni Ephraim |
+| Train Model | Kevin Schillinger |
+| Train Controller (SW and HW) | Jonathan Tsang, Ivan Zheng |
+
+<p class="cover-org">Team 3, Track Overflow<br>University of Pittsburgh &middot; ECE 1140<br>Prepared for the Port Authority of Allegheny County</p>
+
+</div>
 
 ## Table of Contents
 
@@ -229,7 +244,7 @@ appendixes: the figure register and the requirements traceability index.
 
 | IEEE 1016 content | Where |
 |-------------------|-------|
-| Identification: date, status, scope, organization, authorship, change history (4.2) | Title block, Revision History, 1.2 |
+| Identification: date, status, scope, organization, authorship, change history (4.2) | Cover page, Revision History, 1.2 |
 | References, glossary, context (4.2) | 1.3, 1.4, 3.1 |
 | Stakeholders and design concerns (4.3) | 2.1 |
 | Design viewpoints (4.4) | 2.2 |
@@ -264,7 +279,7 @@ appendixes: the figure register and the requirements traceability index.
 | Logical | Classes and types | 3.3 Boundary types | Class diagrams |
 | Interface | What crosses each boundary | 3.4 Harness protocol and edges | Interface sections and dictionaries |
 | Interaction | How the parts cooperate over time | 3.5 Representative interaction | One sequence diagram per use case |
-| Deployment (user-defined, added for the rubric) | Where each process runs and how it is linked | 3.6 Deployment | (system view only) |
+| Deployment (user-defined, added for the rubric) | Where each part stands along the railway and how it is linked | 3.6 Deployment | (system view only) |
 | Algorithm, State dynamics | How the key decisions are computed | 3.7 System-wide concepts | CTC routing, Train Controller speed law, Track Model block states |
 
 Omitted: Physical, Structure, Dependency, Information, Concurrency, Patterns and Resources;
@@ -393,13 +408,24 @@ For each module, the modules whose outputs it reads (`PRODUCERS`, `common/harnes
 ### 3.6 006-deployment: Deployment
 
 - **Viewpoint:** Deployment (user-defined)
-- **Representation:** one Windows 11 host PC runs the executable as the harness and as
-  each module process; two Raspberry Pi 5 boards run the HW variants' cores and are linked
-  to their host processes by USB (D021, D027).
+- **Representation:** the system as it would stand along a real railway. The CTC Office
+  runs in the operations control center. A non-vital fiber network links it to the wayside
+  cabinets: six on the Green Line (software Track Controller) and three on the Red Line
+  (hardware Track Controller). Each cabinet is wired to the field equipment of its
+  territory: track circuits, switch machines, signals and crossings. A train receives
+  speed and authority only through the rails of the block it is in, and beacon data from
+  transponders near stations. Its carborne controller (Train Controller) commands the
+  vehicle (Train Model). Stations report ticket sales over the same network.
 
-![Deployment: the host PC, its processes and data files, and the two Raspberry Pi 5 boards](../uml/system/system_deployment.png)
+![Deployment: the operations control center, wayside cabinets, field equipment and a light rail vehicle](../uml/system/system_deployment.png)
 
-*Figure 5. Deployment: the host PC, its processes and data files, and the two Raspberry Pi 5 boards*
+*Figure 5. Deployment: the operations control center, wayside cabinets, field equipment and a light rail vehicle*
+
+- **More information:** in the simulation, one Windows 11 PC runs the harness and every
+  module process. It stands in for the control center, the Green Line cabinets, the track
+  and every vehicle. One Raspberry Pi 5 stands in for the three Red Line cabinets and
+  another for the Red Line carborne controllers; each is linked to the PC by USB (D021,
+  D027).
 
 ### 3.7 Key System-Wide Design Concepts
 
@@ -4320,7 +4346,7 @@ Every figure in this document, once. The owner keeps its source beside it.
 | 2 | Software architecture, part 1: the central harness, shared utilities and the seven module processes | 3.2 | Composition | Braden Bosilovich | `uml/system/system_classes_harness.png` |
 | 3 | Software architecture, part 2: module contracts, implementations, remote proxies and Pi cores | 3.2 | Composition | Braden Bosilovich | `uml/system/system_classes_modules.png` |
 | 4 | Representative interaction: movement authority from the CTC Office to the train, tick by tick | 3.5 | Interaction | Braden Bosilovich | `uml/system/system_seq_authority.png` |
-| 5 | Deployment: the host PC, its processes and data files, and the two Raspberry Pi 5 boards | 3.6 | Deployment | Braden Bosilovich | `uml/system/system_deployment.png` |
+| 5 | Deployment: the operations control center, wayside cabinets, field equipment and a light rail vehicle | 3.6 | Deployment | Braden Bosilovich | `uml/system/system_deployment.png` |
 | 6 | Use cases of the Dispatcher | 5.1.3 | Context | Landis | `uml/ctc_office/uc_dispatcher.png` |
 | 7 | Use cases of the Central Harness | 5.1.3 | Context | Landis | `uml/ctc_office/uc_harness.png` |
 | 8 | Use cases of the Track Controller | 5.1.3 | Context | Landis | `uml/ctc_office/uc_track_controller.png` |

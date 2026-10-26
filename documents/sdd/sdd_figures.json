@@ -348,7 +348,7 @@
   },
   {
    "number": 5,
-   "caption": "Deployment: the host PC, its processes and data files, and the two Raspberry Pi 5 boards",
+   "caption": "Deployment: the operations control center, wayside cabinets, field equipment and a light rail vehicle",
    "path": "uml/system/system_deployment.png",
    "chapter": "System",
    "section": "3.6",

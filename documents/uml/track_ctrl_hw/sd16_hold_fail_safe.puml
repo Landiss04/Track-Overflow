@@ -4,26 +4,35 @@ autonumber
 
 participant "HwTrackController" as Ctrl
 participant "Wayside" as W
-participant "User program\n(channels A, B)" as U
-participant "Track Controller\nwindow" as Win
+participant "Program\n(channels A, B)" as U
+participant "TrackControllerState\n(host PC)" as State
 
-Ctrl -> W : scan(..., stall)
-alt another wayside of the line is not ready
-  W -> W : hold: "Wayside X is not ready"
-else no program loaded
-  W -> W : hold: "No PLC program is loaded."
-else channel fault already latched
-  W -> W : hold: the channel fault
-else program runs
-  W -> U : scan_a(image), scan_b(image)
-  U --> W : outputs A, outputs B
-  opt A ≠ B
-    W -> W : latch channel fault naming the outputs;\nhold until a new program is loaded
+Ctrl -> Ctrl : stall = f"Wayside {id} is not ready: {reason}"\nfor the first wayside.not_ready_reason, else ""
+Ctrl -> W : scan(dt, time_s, ctc, track_model, stall)
+alt stall and not self.not_ready_reason
+  W -> W : values, holding = None, stall
+else
+  W -> W : _run_program(...)
+  alt self._scan_info.channel_fault
+    W -> W : return None, channel_fault
+  else self._program is None
+    W -> W : return None, "No PLC program is loaded."
+  else program runs
+    W -> U : scan_a(image); scan_b(image)
+    U --> W : channel_a, channel_b: dict[str, bool]
+    opt channel_a != channel_b
+      W -> W : self._scan_info = ScanInfo(channels_agree=False,\nchannel_fault="Channels A and B disagree on ...")
+      W -> W : return None, fault
+    end
   end
 end
-W -> W : _hold_restrictive(reason):\nevery signal red, every crossing active,\nspeed 0 and authority 0, switches stay
-W --> Ctrl : WaysideScan + CtcReport\n(ready = false, reason)
-W --> Win : header **Not ready**; PLC details\n"Held fail-safe: reason"
+opt values is None
+  W -> W : _hold_restrictive(holding): signals "red",\ncrossings True, TrackCircuitCommand(0, 0),\nswitches unchanged; self._holding = holding
+end
+W --> Ctrl : WaysideScan(report=CtcReport(\nready=not self.not_ready_reason, reason))
+State -> Ctrl : snapshot() (via the cached view, SD-04)
+Ctrl --> State : TrackControllerSnapshot(\nnot_ready=not_ready_reasons())
+State -> State : notReadyText = " ".join(snapshot.not_ready);\nprogram_details(wayside)["holding"]
 note over W, U
   A new program also holds until its first scan.
   Switches stay where they are: moving one is not a safe way to fail.

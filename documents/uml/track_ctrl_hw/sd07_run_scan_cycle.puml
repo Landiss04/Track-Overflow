@@ -5,7 +5,7 @@ autonumber
 participant "Central\nHarness" as H
 box "Host PC — Track Ctrl HW process" #F7F9FC
 participant "ModuleLink" as Link
-participant "HardwareRelay\n+ SerialTransport" as Relay
+participant "HardwareRelay" as Relay
 end box
 box "Raspberry Pi 5" #F2F5F9
 participant "PiLinkServer" as Pi
@@ -14,34 +14,41 @@ participant "HwTrackController" as Ctrl
 participant "Wayside ×N" as W
 end box
 
-H -> Link : STEP {id, tick k, dt 0.1,\nsim_time, inputs}
+H -> Link : STEP {id, tick, dt=0.1, sim_time_s, inputs}
 Link -> Relay : submit_step(request)
-Relay -> Pi : STEP over USB
+Relay -> Pi : transport.write(encode(request)) (USB)
+Pi -> Pi : handle(request) → _execute(request)
 Pi -> Core : step(request)
-Core -> Ctrl : step(dt, inputs)\ntime_s = sim_time
-Ctrl -> Ctrl : validate dt and every input
-alt invalid
-  Ctrl --> Pi : InvalidInputError
-  Pi --> Relay : REJECTED, reason
-  Relay --> Link : reply_rejected
-  Link --> H : REJECTED (tick logged)
+Core -> Ctrl : step(request["dt"], inputs_from_wire(inputs))
+Ctrl -> Ctrl : _validate(inputs)
+alt dt not finite and positive, or any input invalid
+  Ctrl --> Core : raise InvalidInputError(reason)
+  Core --> Pi : InvalidInputError
+  Pi --> Relay : REJECTED {id, tick, reason, error}
+  Relay --> Link : reply.emit(reply)\n→ reply_rejected(id, tick, reason)
+  Link --> H : REJECTED {id, tick, reason}
 else valid
-  Ctrl -> Ctrl : stall = first wayside not ready
-  loop every wayside of the line
-    Ctrl -> W : scan(dt, time_s, ctc, track_model, stall)
-    W -> W : input image (SD-08 to SD-10)
-    W -> W : user program on channels\nA and B; compare
-    W -> W : vital block on A and B\n<<planned>>
-    W -> W : drive outputs (SD-11 to SD-14)\nor hold fail-safe (SD-16)
-    W -> W : CtcReport (SD-15)
-    W --> Ctrl : WaysideScan
+  Ctrl -> Ctrl : stall = f"Wayside {id} is not ready: ..."\nfor the first wayside.not_ready_reason, else ""
+  loop for wayside in self._waysides.values()
+    Ctrl -> W : scan(dt, inputs.time_s, inputs.ctc,\ninputs.track_model, stall)
+    W -> W : values, holding = _run_program(occupied, closed,\nsuggestions, requests, track_model, ctc)
+    W -> W : program.scan_a(image); program.scan_b(image)
+    W -> W : vital.scan_a / scan_b <<planned>>
+    alt values is None
+      W -> W : _hold_restrictive(holding) (SD-16)
+    else
+      W -> W : _drive(values) (SD-11 to SD-14)
+    end
+    W -> W : report = CtcReport(...) (SD-15);\nself._scan_info = ScanInfo(scans + 1, ...)
+    W --> Ctrl : WaysideScan(track_circuits, switch_commands,\ncrossing_commands, signal_commands, report)
   end
-  Ctrl --> Core : TrackControllerOutputs
-  Core --> Pi : outputs_to_wire
-  Pi -> Pi : journal the reply
-  Pi --> Relay : OUTPUTS over USB
-  Relay --> Link : reply_outputs
-  Link --> H : OUTPUTS {id, tick k}
+  Ctrl -> Ctrl : self._time_s = inputs.time_s; self._ticks += 1
+  Ctrl --> Core : TrackControllerOutputs(track_model, ctc_reports)
+  Core --> Pi : outputs_to_wire(outputs)
+  Pi -> Pi : _record(request, reply) (journal)
+  Pi --> Relay : OUTPUTS {id, tick, outputs, metrics}
+  Relay --> Link : reply.emit(reply)\n→ reply_outputs(id, tick, outputs)
+  Link --> H : OUTPUTS {id, tick, outputs}
 end
 note over H, W
   The Pi has no clock. At 10x the harness sends 100 ticks per second and

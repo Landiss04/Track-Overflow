@@ -2,18 +2,20 @@
 !include ../style.iuml
 autonumber
 
-participant "Wayside" as W
-participant "PLC (user program\n+ vital block)" as PLC
 participant "Central\nHarness" as H
-participant "Track Model" as TM
-participant "Train Controller" as TC
+participant "Wayside" as W
+participant "Program\n(user + vital block)" as PLC
 
-W -> PLC : scan both channels
-PLC --> W : SIG_s_R, SIG_s_Y,\nSIG_s_G, SIG_s_SG
-W -> W : decode_aspect: red if _R = 1 or none lit;\nelse the first lit of yellow, green, super green
-W --> H : signal_commands[s] = aspect
-H -> TM : (tick k+1) light the signal
-TM --> H : signal_aspects read-back
-H -> W : (next tick) read-back kept\nfor the CTC report
-TM -> TC : aspect ahead of the train\n(signal-aspect-ahead)
+H -> W : step → scan(...)
+W -> PLC : scan_a(image); scan_b(image)
+PLC --> W : values: SIG_s_R, SIG_s_Y, SIG_s_G, SIG_s_SG
+W -> W : _drive(values): self._signal_commands[switch.key] =\ndecode_aspect(values, switch)
+note right of W
+  decode_aspect: "red" if SIG_s_R or none is 1,
+  else the first of yellow, green, super green that is 1.
+end note
+W --> H : WaysideScan.signal_commands\n→ OUTPUTS track_model.signal_commands (tick k)
+H -> H : track_controller_to_track_model(outputs,\nnames, devices)
+H -> W : next STEP → scan(...):\ntrack_model.signal_aspects[key]
+W -> W : self._signal_reports[key] = aspect;\nCtcReport.blocks[key].signal_aspect = aspect
 @enduml

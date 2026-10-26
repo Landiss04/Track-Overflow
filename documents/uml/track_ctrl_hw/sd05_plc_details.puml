@@ -8,17 +8,23 @@ participant "PlcDetailsDialog\n(QML)" as Details
 participant "TrackControllerState" as State
 participant "views" as Views
 
+note over State, Views
+  On every refresh(): self._details = views.program_details(wayside)
+end note
 P -> QML : click **i** on the Wayside PLC strip
 QML -> Details : open()
-Details -> State : program, channelFault
+Details -> State : program (property)
 State -> Views : program_details(wayside)
-Views --> State : file, load time, checksum,\nBooleans, statements, warnings,\nchannel A/B agreement,\nwhy outputs are held
-State --> Details : values from the last refresh
+Views --> State : dict: file_name, loaded_at, checksum,\nboolean_count, statement_count, warnings,\nchannels_agree, holding
+State --> Details : self._details
+Details -> State : channelFault (property)
+State --> Details : wayside.scan.channel_fault
 Details --> P : the running program and its health
 opt **New PLC** in the dialog
   P -> Details : click **New PLC**
-  Details -> QML : loadRequested
+  Details -> QML : loadRequested()
   ref over QML, State : SD-02 Load PLC program
 end
 P -> Details : **Close**
+Details -> Details : close()
 @enduml

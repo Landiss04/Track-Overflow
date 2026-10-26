@@ -2,27 +2,24 @@
 !include ../style.iuml
 autonumber
 
-participant "Wayside" as W
-participant "PLC (user program\n+ vital block)" as PLC
 participant "Central\nHarness" as H
-participant "Track Model" as TM
-participant "Track Controller\nwindow" as Win
+participant "Wayside" as W
+participant "Program\n(user + vital block)" as PLC
 
-W -> PLC : scan both channels\n(OCC, SWREV, CTCSW, CTCREV, ...)
-alt train on the switch's blocks
-  PLC --> W : SW_s = SWREV_s\n(locked where it reports)
+H -> W : step → scan(...): image with OCC_n,\nSWREV_s, CTCSW_s, CTCREV_s
+W -> PLC : scan_a(image); scan_b(image)
+alt a train on the switch's blocks
+  PLC --> W : values["SW_s"] = SWREV_s (locked)
 else clear
-  PLC --> W : SW_s from the program's rule;\nobeys CTCSW_s / CTCREV_s
+  PLC --> W : values["SW_s"] from the program's rule;\nobeys CTCSW_s / CTCREV_s
 end
-W -> W : _drive: switch s commanded\nreverse if SW_s, else normal
-W --> H : switch_commands (tick k outputs)
-H -> TM : (tick k+1) switch command
-TM -> TM : switch machine moves
-TM --> H : switch_positions read-back
-H -> W : (next tick) SWREV_s
-W -> W : agreeing = commanded = reported
-W --> Win : Switches table: commanded,\nreported, agreement
-note over PLC, W
+W -> W : _drive(values): self._commanded[switch.key] =\n"reverse" if values[f"SW_{s}"] else "normal"
+W --> H : WaysideScan.switch_commands\n→ OUTPUTS track_model.switch_commands (tick k)
+H -> H : track_controller_to_track_model(outputs,\nnames, devices)
+H -> W : next STEP → scan(...):\ntrack_model.switch_positions[key]
+W -> W : self._switch_reports[key] = reported position
+W -> W : snapshot(): SwitchState(switch, commanded,\nreported, agreeing=commanded == reported)
+note over W, PLC
   While SW_s and SWREV_s differ (moving or failed), the program
   turns the switch's signal red and zeroes authority over it.
 end note

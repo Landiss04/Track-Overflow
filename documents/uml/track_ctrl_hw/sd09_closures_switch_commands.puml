@@ -2,24 +2,32 @@
 !include ../style.iuml
 autonumber
 
-actor Dispatcher as D
-participant "CTC Office" as CTC
 participant "Central\nHarness" as H
 participant "HwTrackController\n(on the Pi)" as Ctrl
 participant "Wayside" as W
-participant "Track Controller\nwindow" as Win
+participant "TrackControllerState\n(host PC)" as State
+participant "views" as Views
 
-D -> CTC : close a block; in maintenance\nmode, set switch Red:15 reverse
-CTC -> H : outputs: closed blocks (full set),\nswitch commands (maintenance only)
-H -> Ctrl : STEP: ctc.closed_blocks,\nctc.switch_commands
-Ctrl -> Ctrl : validate keys (BlockRef)\nand positions
-Ctrl -> W : scan(...)
-W -> W : CLOSED_n = 1 for each\nclosed block it governs
-W -> W : CTCSW_15 = 1 (a command is in effect)\nCTCREV_15 = 1 (it is reverse)
+H -> H : ctc_to_track_controller(ctc_outputs, "Red")\n→ closed_blocks: [{line, block_id}],\nswitch_commands: [{line, switch_id, position}]
+H -> Ctrl : STEP → step(dt, inputs) (path as SD-07)
+Ctrl -> Ctrl : _validate(inputs): keys are BlockRef;\nposition in SWITCH_POSITIONS
+alt invalid
+  Ctrl --> H : raise InvalidInputError(reason) → REJECTED
+else valid
+  Ctrl -> W : scan(dt, time_s, ctc, track_model, stall)
+  W -> W : closed = frozenset(key for key in keys\nif key.ref in ctc.closed_blocks)
+  W -> W : requests = {switch.key: ctc.switch_commands[ref]\nfor switch in territory.switches if ref in ...}
+  W -> W : image[f"CLOSED_{n}"] = key in closed
+  W -> W : image[f"CTCSW_{s}"] = switch.key in requests\nimage[f"CTCREV_{s}"] = requests.get(key) == "reverse"
+  W -> W : self._closed = closed;\nself._switch_requests = requests
+  W --> Ctrl : WaysideScan
+end
+State -> Ctrl : snapshot() (via the cached view, SD-04)
+Ctrl --> State : WaysideSnapshot(closed_blocks, switch_requests)
+State -> Views : maintenance_text(wayside); switch_rows(wayside)
+Views --> State : banner text; rows with "CTC asks: reverse"
 note right of W
   No maintenance flag: a switch command
   in effect is maintenance mode.
 end note
-W -> W : record closures and requests\nin the snapshot
-W --> Win : (next view) "CTC asks: reverse";\nmaintenance banner lists closures\nand commands
 @enduml
