@@ -299,7 +299,8 @@ class TrainAuthority:
     end_block_id: str
     # "destination", "occupied" (a failed block too: the CTC never
     # shows one), "closed", "closing", "reserved" (within another
-    # train's authority), "switch" or "no route".
+    # train's authority), "switch", "held" (the schedule holds it there,
+    # round a loop, until the zone ahead is clear) or "no route".
     reason: str
     # The block or switch the reason names; "" for "destination" and
     # "no route".

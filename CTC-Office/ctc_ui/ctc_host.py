@@ -129,6 +129,8 @@ def _authority_limit(limit: TrainAuthority) -> str:
         return f"Block {limit.at} held by {limit.held_by}"
     if limit.reason == "not ready":
         return "Track Controller not ready"
+    if limit.reason == "held":
+        return f"Held at {limit.at} by the schedule"
     return "No route"
 
 
@@ -744,6 +746,8 @@ class CtcHost(QObject):
             "closing": f"block {limit.at} is closing",
             "reserved": f"block {limit.at} is held by {limit.held_by}",
             "switch": f"switch {limit.at} is not set for its route",
+            "held": (f"the schedule holds it at block {limit.at} until "
+                     "the trains going the other way are through"),
         }.get(limit.reason, "there is no route without reversing")
 
     @Property(list, notify=noticesChanged)

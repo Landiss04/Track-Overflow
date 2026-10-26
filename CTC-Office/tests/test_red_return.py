@@ -34,4 +34,6 @@ def test_red_return_requires_real_switch_routing_or_manual_reversal():
     outbound = graph.route("9", "16")
     assert outbound is not None
     zones = two_way_zones([outbound, route])
-    assert zones["9"] == zones["16"] == zones["66"]
+    # Out and back over 9 to 52 is one zone; the loop is one way.
+    assert zones["9"] == zones["16"] == zones["52"]
+    assert "66" not in zones

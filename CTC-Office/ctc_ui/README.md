@@ -221,12 +221,15 @@ yet) through `ctc_ui/ctc_host.py`:
   which block it came from), so the CTC never routes a train back the
   way it came.
 - Runs are never sent to meet head-on. Where their paths cross the same
-  track in both directions (Green 77 to 100 and 1 to 28, each run out
-  and back; Red from 16 out through the loop and back), that stretch is
-  a two-way zone that holds one scheduled train at a time. A train due
-  to enter a busy zone waits at its last stop, or in the yard, as
-  **Held**. On Red the zone is most of the line, so Red runs go about
-  one at a time. A head-on meet that happens anyway (a manual train, say)
+  track in both directions (Green 77 to 85 and 13 to 28; Red 16 to 52),
+  that stretch is a two-way zone, reserved by direction: any number of
+  scheduled trains may go through it the same way, never two opposite
+  ways. A train due to enter a zone in use the other way waits at its
+  last stop, or in the yard, as **Held**. A train that has turned round
+  a loop (Red 53 to 66) is held a block short of the loop's end
+  ("Held at … by the schedule") until the trains following it are
+  through, and no new train goes out while it waits there. A
+  head-on meet that happens anyway (a manual train, say)
   is for the wayside controllers to handle.
 - Trains per hour and the per-line trains and dwell columns stay empty:
   nothing reports that data yet.

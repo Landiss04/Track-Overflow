@@ -2,7 +2,11 @@
 
 Real schedule loading and AutoDispatcher transitions are exercised here.
 World heads are seeded; these tests establish neither continuous travel
-nor physics/separation acceptance, and change no scheduler policy.
+nor physics/separation acceptance. They check the reservation rule Landis
+decided on 2026-10-25: zone 9 (9…52) is reserved by direction, the loop
+53…66 is one way, a turned train waits round the loop (at 65, clear of
+switch 52) for its followers, and no train goes out while one waits to
+come back or until a returning train has retired.
 """
 
 import sys
@@ -28,6 +32,7 @@ from ctc.scheduler import (  # noqa: E402
     IN_YARD,
     Order,
     Progress,
+    QUEUED,
     SIMULATION_START_S,
     TO_YARD,
     World,
@@ -69,16 +74,24 @@ def _carry(orders, actions):
             del orders[action.train_id]
 
 
-def _assert_owner(auto, owner):
-    """Supplement public actions with the current zone owner."""
-    assert [
-        plan.train_id for plan in auto.plans if auto._holds(plan, ZONE)
-    ] == [owner]
+def _where(auto, train_id):
+    """A run's status, leg, place along its path and place to wait."""
+    progress = auto.progress[train_id]
+    return progress.status, progress.leg, progress.at, progress.wait
+
+
+def _holders(auto):
+    """The runs on, or sent on, a pass through zone 9."""
+    return [
+        plan.train_id
+        for plan in auto.plans
+        if auto._held_spans(plan, ZONE)
+    ]
 
 
 @pytest.mark.parametrize("count", [2, 3])
-def test_review_red_plans_share_one_zone_through_yard(count):
-    """The review schedule's full outbound/return path is zone 9."""
+def test_review_red_plans_out_and_back_over_zone_9(count):
+    """Out 9…52, round the loop one way, back 52…9."""
     auto = _dispatcher(count)
     assert [plan.train_id for plan in auto.plans] == [
         f"R{number}" for number in range(1, count + 1)
@@ -86,87 +99,127 @@ def test_review_red_plans_share_one_zone_through_yard(count):
     assert [plan.departure_s for plan in auto.plans] == [
         SIMULATION_START_S + 180 * index for index in range(count)
     ]
-    assert auto.zones["Red"] == {str(block): ZONE for block in range(9, 67)}
+    assert auto.zones["Red"] == {str(block): ZONE for block in range(9, 53)}
     for plan in auto.plans:
         assert len(plan.path) == 102
+        assert plan.path[:8] == tuple(str(n) for n in range(9, 17))
         assert plan.stop_indexes == (7,)
         assert plan.path[7] == plan.stops[0].block_id == "16"
+        assert plan.path[44:58] == tuple(str(n) for n in range(53, 67))
         assert plan.yard_index == 101
         assert plan.path[101] == plan.yard_block_id == "9"
-        assert auto._spans[plan.train_id] == ((ZONE, 0, 101),)
+        assert auto._spans[plan.train_id] == ((ZONE, 0, 43), (ZONE, 58, 101))
 
 
 @pytest.mark.parametrize("count", [2, 3])
-def test_review_red_follower_released_only_after_lead_is_done(count):
-    """Carry five Worlds forward without overwriting run progress."""
+def test_review_red_trains_go_out_together(count):
+    """All due runs go out the same way; the lead waits round the loop."""
     auto = _dispatcher(count)
     lead, follower = auto.plans[:2]
+    wait = lead.path.index("65")
     orders = {}
-    assert all(progress == Progress() for progress in auto.progress.values())
 
-    # All departures are due, but R1's release claims the whole zone.
+    # All departures are due and all go the same way: all are sent.
     actions = auto.step(_world(400, orders))
-    assert actions == [Order("R1", "Red", "16", lead.stops[0].due_s)]
+    assert actions == [
+        Order(plan.train_id, "Red", "16", plan.stops[0].due_s)
+        for plan in auto.plans
+    ]
     _carry(orders, actions)
-    assert orders == {"R1": "16"}
-    assert auto.progress["R1"] == Progress(IN_YARD, leg=0, at=-1)
-    assert auto._released_to(lead, auto.progress["R1"]) == 7
-    _assert_owner(auto, "R1")
-    for plan in auto.plans[1:]:
-        progress = auto.progress[plan.train_id]
-        assert progress == Progress(HELD, leg=0, at=-1)
-        assert not auto._clear(plan, progress, plan.stop_indexes[0])
+    assert all(
+        progress == Progress(IN_YARD, leg=0, at=-1)
+        for progress in auto.progress.values()
+    )
+    assert _holders(auto) == [plan.train_id for plan in auto.plans]
 
-    # Seed the head at 16; arrival at +401 starts a 45 s dwell to +446.
     actions = auto.step(_world(401, orders, {"R1": "16"}))
     assert actions == []
-    _carry(orders, actions)
     assert auto.progress["R1"] == Progress(
         DWELLING, leg=0, dwell_until_s=SIMULATION_START_S + 446, at=7
     )
-    _assert_owner(auto, "R1")
-    assert all(
-        auto.progress[plan.train_id] == Progress(HELD)
-        for plan in auto.plans[1:]
-    )
 
-    actions = auto.step(_world(446, orders, {"R1": "16"}))
+    # R1's dwell is up, but R2 is still on its way out behind it: R1 is
+    # ordered on to the yard, with its authority stopping at 65, a block
+    # short of the loop's end at 66 (by switch 52), where it waits.
+    actions = auto.step(_world(446, orders, {"R1": "16", "R2": "12"}))
     assert actions == [Order("R1", "Red", "9", lead.stops[0].due_s + 45)]
     _carry(orders, actions)
-    assert orders == {"R1": "9"}
-    assert auto.progress["R1"] == Progress(TO_YARD, leg=1, at=7)
-    assert auto._released_to(lead, auto.progress["R1"]) == 101
-    _assert_owner(auto, "R1")
-    assert all(
-        auto.progress[plan.train_id] == Progress(HELD)
-        for plan in auto.plans[1:]
-    )
+    assert _where(auto, "R1") == (HELD, 1, 7, wait)
+    assert auto.hold_at("R1") == "65"
+    # On its way round, it is not yet waiting to come back.
+    assert auto._waiting_span(lead) is None
 
-    # Forward location search must select the final 9, not index 0.
-    actions = auto.step(_world(447, orders, {"R1": "9"}))
+    # Waiting there, it holds nothing; the order is not given again.
+    actions = auto.step(_world(447, orders, {"R1": "65", "R2": "16"}))
     assert actions == []
-    _carry(orders, actions)
-    assert auto.progress["R1"] == Progress(TO_YARD, leg=1, at=101)
-    _assert_owner(auto, "R1")
-    assert all(
-        auto.progress[plan.train_id] == Progress(HELD)
-        for plan in auto.plans[1:]
-    )
-    assert not auto._clear(follower, auto.progress["R2"], 7)
+    assert _where(auto, "R1") == (HELD, 1, wait, wait)
+    assert auto._waiting_span(lead) == (ZONE, 58, 101)
+    assert "R1" not in _holders(auto)
+    assert "R2" in _holders(auto)
 
-    # Absence without a lost report completes R1 and releases R2.
-    actions = auto.step(_world(448, orders))
+    # The followers are round the loop too: R1 comes back, and each
+    # follower after it once it is at 65 in turn.
+    for offset, plan in enumerate(auto.plans[1:], start=1):
+        auto.progress[plan.train_id] = Progress(
+            HELD, leg=1, at=wait - offset, wait=wait
+        )
+    heads = {
+        plan.train_id: plan.path[wait - index]
+        for index, plan in enumerate(auto.plans)
+    }
+    actions = auto.step(_world(600, orders, heads))
+    assert actions == [Order("R1", "Red", "9", lead.stops[0].due_s + 45)]
+    _carry(orders, actions)
+    assert auto.progress["R1"].status == TO_YARD
+    for step, plan in enumerate(auto.plans[1:], start=1):
+        # Those already coming back are a block further on each step.
+        heads = {
+            ahead.train_id: ahead.path[wait + step - index]
+            for index, ahead in enumerate(auto.plans[:step])
+        }
+        heads[plan.train_id] = "65"
+        actions = auto.step(_world(600 + step, orders, heads))
+        assert actions == [
+            Order(plan.train_id, "Red", "9", plan.stops[0].due_s + 45)
+        ]
+        _carry(orders, actions)
+        assert auto.progress[plan.train_id].status == TO_YARD
+    assert follower.train_id in _holders(auto)
+
+
+def test_review_red_no_train_out_while_one_waits_to_come_back():
+    """R3 is due, but R1 waits round the loop: R3 stays in the yard."""
+    auto = _dispatcher(3)
+    lead = auto.plans[0]
+    wait = lead.path.index("65")
+    auto.progress["R1"] = Progress(HELD, leg=1, at=wait, wait=wait)
+    auto.progress["R2"] = Progress(DWELLING, leg=0, at=7,
+                                   dwell_until_s=SIMULATION_START_S + 900)
+    orders = {"R1": "9", "R2": "16"}
+    actions = auto.step(_world(400, orders, {"R1": "65", "R2": "16"}))
+    assert actions == []
+    assert auto.progress["R3"] == Progress(HELD, leg=0, at=-1)
+    assert auto.progress["R1"].status == HELD
+
+
+def test_review_red_yard_block_held_until_retired():
+    """A returning train holds zone 9 inbound until it is back in the
+    yard; only then does the next run go out."""
+    auto = _dispatcher(2)
+    lead, follower = auto.plans
+    auto.progress["R1"] = Progress(TO_YARD, leg=1, at=lead.yard_index)
+    orders = {"R1": "9"}
+    actions = auto.step(_world(400, orders, {"R1": "9"}))
+    assert actions == []
+    assert auto.progress["R2"] == Progress(HELD, leg=0, at=-1)
+    assert _holders(auto) == ["R1"]
+
+    # Its block clears without a lost report: done, and R2 goes out.
+    actions = auto.step(_world(401, orders))
     assert actions == [
         Cancel("R1"),
         Order("R2", "Red", "16", follower.stops[0].due_s),
     ]
-    _carry(orders, actions)
-    assert orders == {"R2": "16"}
-    assert auto.progress["R1"] == Progress(DONE, leg=1, at=101)
+    assert auto.progress["R1"] == Progress(DONE, leg=1, at=lead.yard_index)
     assert auto.progress["R2"] == Progress(IN_YARD, leg=0, at=-1)
-    assert auto._released_to(follower, auto.progress["R2"]) == 7
-    _assert_owner(auto, "R2")
-    assert auto._clear(follower, auto.progress["R2"], 7)
-    if count == 3:
-        assert auto.progress["R3"] == Progress(HELD, leg=0, at=-1)
-        assert not auto._clear(auto.plans[2], auto.progress["R3"], 7)
+    assert QUEUED not in {p.status for p in auto.progress.values()}

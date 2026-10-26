@@ -22,8 +22,8 @@ else
       AD -> AD : → dwelling until now + 45 s
     else dwelling and the 45 s are up
       AD -> AD : → en route: Order to the next stop,\nor to the yard entry after the last
-    else due to move on, but a two-way zone ahead\nholds another scheduled train
-      AD -> AD : → held: waits at its stop or in the yard
+    else due to move on, but a two-way zone ahead\nis in use the other way
+      AD -> AD : → held: waits at its stop or in the yard,\nor, turned round a loop, Order to\nthe loop's last block to wait there
     else to yard and its blocks have cleared\nat the yard entry
       AD -> AD : → done: Cancel its order
     end
@@ -37,13 +37,14 @@ else
         AD --> Model : Order to the next stop
       end
     else Cancel
-      Model -> Model : cancel_dispatch(train)
+      Model -> Model : drop the run's order\n(it is back in the yard)
     end
   end
 end
 note over AD
-  Two-way zones: Green 77–100 and 1–28, Red 16–66.
-  At most one scheduled train in each at a time,
-  so runs are never sent to meet head-on.
+  Two-way zones: Green 77–85 and 13–28, Red 16–52.
+  Reserved by direction: trains share a zone going
+  the same way, never opposite ways, so runs are
+  never sent to meet head-on. Loops are one way.
 end note
 @enduml

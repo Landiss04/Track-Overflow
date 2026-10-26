@@ -4,6 +4,30 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-10-25 — Owner review answers: zones by direction, Red yard exit
+
+From Landis's replies to `documents/module-owner-review.md` (CTC-1, SW-2,
+LAYOUT-1), relayed by Kevin.
+
+- `ctc/scheduler.py`: two-way zones are reserved by direction, not by train.
+  Trains going the same way share a zone; a train waits only for trains in it
+  the other way. Loops are no longer folded into a zone (Red 53–66, Green
+  86–100 and 1–12 are one way), so the zones are Green 77–85 and 13–28 and
+  Red 16–52 on the default schedule. A train that has turned keeps its order
+  on, but its authority stops round the loop a block short of the loop's end
+  (`AutoDispatcher.hold_at`, authority reason `held`; its route ends there so
+  it claims no switch beyond). It comes back into the zone once the trains
+  following it are through. While it waits there, no train enters the zone
+  the other way for the first time (no new release from the yard). A zone
+  that ends at the yard entry block is still held until the run is back in
+  the yard.
+- `ctc/tracking.py` (`YARD_EXIT_FROM`), `ctc/model.py`, `ctc/scheduler.py`: a
+  train leaving the yard heads out the fixed side of the yard switch, as the
+  Track Model runs it: Red 9 on to 10, never back to 8 (the Track Model's
+  layout reading is the master). The default Red run now goes 9→10…16, up to
+  52, round the loop, back down to 16 and through Shadyside (7) to 9; its
+  stations in track order are 16, 21, 25, 35, 45, 48, 60, 7.
+
 ## 2026-10-22 — Red yard return
 
 Correction commit: `5d51051` (course data restoration and reader agreement).

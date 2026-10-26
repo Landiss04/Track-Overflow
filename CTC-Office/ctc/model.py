@@ -94,6 +94,7 @@ from ctc.scheduler import (
 )
 from ctc.tracking import (
     YARD_ENTRIES,
+    YARD_EXIT_FROM,
     YARD_EXITS,
     Plan,
     Tracked,
@@ -833,7 +834,8 @@ class StubCtcOffice:
                 continue
             exit_block = YARD_EXITS.get(order.line)
             route = (self._graphs[order.line].route(
-                exit_block, order.destination_block_id)
+                exit_block, order.destination_block_id,
+                came_from=YARD_EXIT_FROM.get(order.line))
                 if exit_block is not None else None)
             waiting.append((self._priority(order, order.line,
                                            route or ()), order))
@@ -1226,6 +1228,18 @@ class StubCtcOffice:
                 self._graphs[line], block_id, order.destination_block_id,
                 obstructions[line], switches[line],
                 reserved_for(train_id, line), keep, route)
+            hold = (self._auto.hold_at(train_id)
+                    if self._auto is not None else None)
+            if hold is not None and hold in counted.route:
+                # The schedule holds it round a loop until the zone
+                # ahead is clear the other way (``ctc.scheduler``). Its
+                # route ends there, so it lays no claim to the switches
+                # beyond, which the trains it waits for need.
+                end = counted.route.index(hold)
+                counted = replace(counted, route=counted.route[:end + 1])
+                if counted.blocks >= end:
+                    counted = replace(counted, blocks=end, end_block_id=hold,
+                                      reason="held", at=hold, held_by="")
             for ahead in counted.route[1:counted.blocks + 1]:
                 holders[(line, ahead)] = train_id
             return TrainAuthority(

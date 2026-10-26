@@ -87,6 +87,21 @@ PR #43 files remain separately attributed. That new entry is a pending proposal,
 not promoted truth. The collision resolution and all proposal promotion remain
 pending human action. Agents do not delete, rename or promote existing proposals.
 
+## CTC owner answers, 2026-10-25
+
+Landis's replies to the CTC questions below, relayed by Kevin on 2026-10-25.
+Each reply is also recorded under its request. Pending truth proposals in this
+branch's inbox carry the normative parts; none is promoted.
+
+| Request | Landis's answer | Done on this branch |
+| --- | --- | --- |
+| [CTC-1](#ctc-1-red-concurrency) | Reserve by direction, not by train. Several trains may share a stretch they all travel the same way; a train that needs it the other way waits until it is empty. Make the loop 53–66 its own one-way section where a turned train waits until the trains following it have cleared the stretch outbound. Keep yard block 9 inside the reservation until the train retires. Once a train waits to come back, release no more outbound trains. | Implemented in `CTC-Office/ctc/scheduler.py`; proposal `20261025-2128-two-way-zone-direction-reservation.md` |
+| [CTC-2](#ctc-2-green-three-train-stall) | A Track Controller problem, not the CTC's. | Routed to Harry Tye; no CTC change |
+| [CTC-3](#ctc-3-green-follower-at-7576) | A Track Controller problem, not the CTC's. | Routed to Harry Tye; no CTC change |
+| [LAYOUT-1](#layout-1-red-block-9-interpretation) | The Track Model's `layout.py` is the master layout. A CTC reading that differs from it is wrong; where the Track Model's own reading is in question, the question is the Track Model owner's. The CTC does not update track information. | CTC adjacency matches the Track Model; the CTC's yard departure direction did not and is fixed. Proposal `20261025-2130-track-model-layout-is-master.md` |
+| [SW-2](#sw-2-green-starter-decisions) | Trains must not be dispatched into head-on deadlocks: a train waits to be released toward the yard until it is safe, or is routed around oncoming trains. | Covered by the CTC-1 rule and proposal |
+| [INPUT-1](#input-1-missing-occupancy-counts-as-clear) | CTC closures are set only in maintenance mode, and only the CTC reopens them, in maintenance mode. The Track Controllers have no authority over them. The CTC keeps the list of blocks and switches it controls in maintenance and sends it; a Track Controller checks the list before it sets a switch or closes or opens a block. | Proposal `20261025-2129-maintenance-closure-lock-switches.md`; occupancy completeness stays with Braden and Harry |
+
 ## CTC-1: Red concurrency
 
 **Owner:** Landis, CTC Office.
@@ -206,6 +221,39 @@ and remain held through retirement. Do not weaken the existing test to count
 sequential dispatch as
 simultaneous operation. Related: [Green progress](#ctc-2-green-three-train-stall)
 and [Red routing copies](#hw-1-red-plc-copies-and-real-programs).
+
+**Landis's answer (2026-10-25):** Reserve by direction, not by train; make the
+loop 53–66 its own one-way section where a turned train waits for its followers
+to clear 9–52 outbound; keep yard block 9 in the reservation until retirement;
+once a train waits to come back, release no more outbound trains.
+
+**Implementation, 2026-10-25:** `two_way_zones` no longer folds loops into a
+zone, and `AutoDispatcher` reserves each zone by direction (`opposed`): trains
+share a zone going the same way, never opposite ways. A train that has turned is
+sent to the loop's last block (53 on Red) and waits there (`Progress.wait`);
+while it waits no train enters that zone the other way for the first time. On the
+review schedule zone 9 covers 9…52 and is held inbound until retirement. On the
+default schedule the zones are Red 16…52 and Green 77…85 and 13…28. New
+`ZoneTest` cases cover direction sharing, the loop wait and the outbound hold;
+`EndToEndTest` now asserts no opposed passes and more than one train out at once.
+**Acceptance after the change, 2026-10-25** (`kevin-framework`, project Python,
+offscreen Qt, `TRACK_OVERFLOW_MULTI_TRAIN=1`): the CTC suite passed 266 tests and
+the rewritten [Red seeded diagnostics](../common/harness/tests/test_red_owner_diagnostics.py)
+6. In `test_review_scenarios.py` plus the Green diagnostics, 5 passed, 1 skipped
+and 2 failed in 328 s: `test_scheduled_multiple_trains_each_line[3]` and
+`test_green_scheduled_multiple_trains[3]`. Count 2 passed. A 3,000-s probe of the
+count-3 Red half reached **three Red trains out at once** (it was always one
+before). R1 waited at 65 while R2 and R3 came round the loop behind it, and was
+released at 664 s. It then got CTC authority to 66 but wayside authority 0. The
+Red integration-test PLC
+(`TrackCtrlHw/data/plc/red_wayside_3_integration_test.plc`) has
+`AUTH_65 := NOT (CLOSED_65 OR (OCC_65 AND (OCC_64 OR OCC_66)))`, so a train with
+a follower in the block behind it loses authority, and R1 at 65 with R2 at 64 stop
+for good. The CTC's own rules allow a follower one block behind
+(`one-train-per-block`, `authority-stops-before-obstruction`). This is the same
+adjacent-train pattern as CTC-2's Green endpoint (G2 at 65, G3 at 64). Per
+Landis it is a Track Controller question, for Braden (that PLC copy awaits his
+review) and Harry. No PLC was changed, and the acceptance test was not weakened.
 
 ## CTC-2: Green three-train stall
 
@@ -336,6 +384,11 @@ choosing a policy change; do not attribute the endpoint solely to mutual zone
 reservation. Keep this separate from the seeded
 [follower case](#ctc-3-green-follower-at-7576); no causal link has been established.
 
+**Landis's answer (2026-10-25):** A Track Controller problem rather than a CTC
+one. Harry Tye owns the follow-up. The CTC-1 change also lets same-direction Green
+trains share 77…85 and 13…28, which changes the admission this stall was
+measured under.
+
 ## CTC-3: Green follower at 75/76
 
 **Owners:** Landis and Harry Tye.
@@ -364,6 +417,9 @@ block versus points lock behavior, including how the follower can progress once
 the head clears. Do not move/remove the lock or change CTC rules as an incidental
 integration fix. Related: [SW safety scope](#sw-1-plc-only-safety-follow-up),
 [starter decisions](#sw-2-green-starter-decisions).
+
+**Landis's answer (2026-10-25):** Not a CTC issue; a Track Controller one.
+Harry Tye owns the listed-block versus points lock follow-up.
 
 ## SW-1: PLC-only safety follow-up
 
@@ -449,6 +505,21 @@ choice; immutable course data is not permission to encode the geometry as truth.
 
 **Requested decision:** Confirm or correct each of the point, two legs, fixed side,
 light placement and CTC return target. Retain the source data unchanged.
+
+**Landis's answer (2026-10-25):** The Track Model's `layout.py` is the master.
+If the CTC's layout differs from it, the CTC is wrong; if it matches, the question
+belongs to the Track Model owner. The CTC does not change track information.
+
+**Comparison, 2026-10-25:** The CTC reads the same unchanged
+`TrackModel/red_line.json` and `green_line.json`. Block adjacency matches the
+Track Model's for every Red and Green block, and both retire Red trains at 9.
+The CTC differed in one place: it let a train leave the Red yard toward 8, while
+the Track Model's `next_block` sends a train out of the yard through switch 9's
+yard leg out the fixed side, to 10. The CTC now does the same
+(`YARD_EXIT_FROM` in `CTC-Office/ctc/tracking.py`), so the default Red run starts
+9→10…16. The switch-9 reading itself (point 9, NORMAL 8, REVERSE yard, fixed
+side 10) is the Track Model's assumption in `_read_switches` and remains the
+Track Model owner's question.
 
 ## INPUT-1: Missing occupancy counts as clear
 
@@ -579,6 +650,16 @@ wayside. Coordinate any change across both variants, the harness and Landis wher
 CTC closure/release behavior is affected. No extension or fail-safe policy change
 is authorized by these observations.
 
+**Landis's answer (2026-10-25), closures:** CTC closures are set only in
+maintenance mode, and only the CTC reopens them, in maintenance mode. The Track
+Controllers have no authority over them. The CTC keeps the list of blocks and
+switches it controls in maintenance and sends it. Before a Track Controller sets
+a switch, or closes or opens a block, it checks that list. This extends the
+truth entry `maintenance-closure-lock` (blocks only) to switches. The CTC
+currently sends switch commands only while in maintenance mode and drops them
+when it ends, so persistence of the switch list is for Landis to confirm. The
+occupancy-completeness questions above stay with Braden and Harry.
+
 ## SW-2: Green starter decisions
 
 **Owners:** Harry Tye and Landis.
@@ -606,6 +687,11 @@ reopen the completed Green round-trip repair.
 points/listed-block lock policy and cross-wayside approach handling. Landis should
 confirm the CTC two-way-zone protection assumed at this boundary. Coordinate with
 [SW-1](#sw-1-plc-only-safety-follow-up) and [INPUT-1](#input-1-missing-occupancy-counts-as-clear).
+
+**Landis's answer (2026-10-25):** The CTC must not dispatch trains into head-on
+deadlocks. A train waits to be released toward the yard until that is safe, or is
+routed around oncoming trains. The CTC side is implemented with
+[CTC-1](#ctc-1-red-concurrency); the starter-input decisions stay with Harry.
 
 ## TM-1: Ticket rate
 
