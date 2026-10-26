@@ -59,8 +59,8 @@ software and a hardware variant, so seven module processes run:
 | Track Controller | HW | Red | Raspberry Pi 5, window on the host PC | Braden Bosilovich |
 | Track Model | one | Green and Red | Host PC | Deni Ephraim |
 | Train Model | one | Green and Red | Host PC | Kevin Schillinger |
-| Train Controller | SW | Green | Host PC | Jonathan Tsang, Ivan Zheng |
-| Train Controller | HW | Red | Raspberry Pi 5, window on the host PC | Jonathan Tsang, Ivan Zheng |
+| Train Controller | SW | Green | Host PC | Jonathan Tsang|
+| Train Controller | HW | Red | Raspberry Pi 5, window on the host PC | Ivan Zheng |
 
 A central harness, which is not a module, starts every module process, owns the one
 simulation clock, maps every module's outputs to its consumers' inputs and writes the event

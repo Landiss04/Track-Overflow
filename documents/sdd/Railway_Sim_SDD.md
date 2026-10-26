@@ -168,8 +168,8 @@ software and a hardware variant, so seven module processes run:
 | Track Controller | HW | Red | Raspberry Pi 5, window on the host PC | Braden Bosilovich |
 | Track Model | one | Green and Red | Host PC | Deni Ephraim |
 | Train Model | one | Green and Red | Host PC | Kevin Schillinger |
-| Train Controller | SW | Green | Host PC | Jonathan Tsang, Ivan Zheng |
-| Train Controller | HW | Red | Raspberry Pi 5, window on the host PC | Jonathan Tsang, Ivan Zheng |
+| Train Controller | SW | Green | Host PC | Jonathan Tsang|
+| Train Controller | HW | Red | Raspberry Pi 5, window on the host PC | Ivan Zheng |
 
 A central harness, which is not a module, starts every module process, owns the one
 simulation clock, maps every module's outputs to its consumers' inputs and writes the event
@@ -3714,7 +3714,7 @@ tick, when the harness steps the fleet and maps its commands (D005).
 | Use case | Apply service brake |
 | Actors | Driver |
 | Description | • In Manual, the driver toggles a service brake request.<br>• Also allowed under a brake failure, so the driver can try the brake (M4).<br>• While it is applied, traction is cut to 0 and the integrator holds.<br>• The Train Model reports back whether the brake is actually applied (Brake State). |
-| Data | Input: service brake press<br>Output: brake command [emergency, service] with service on; power 0 W |
+| Data | Input: service brake press<br>Output: service brake command on; power 0 W |
 | Stimulus | The driver presses the service brake. |
 | Response | The train slows at the service rate (1.2 m/s² on the data sheet) until the driver releases it. |
 
@@ -3766,7 +3766,7 @@ Announce station:
 | Use case | Engage the emergency brake |
 | Actors | Driver; Passenger (through the Train Model) |
 | Description | • The driver engages it in any mode; it acts at once and latches.<br>• A passenger pull arrives as Brake State from the Train Model and latches it too.<br>• While it is applied, traction is cut to 0.<br>• Only the driver can release it (use case 6, M2). |
-| Data | Input: emergency brake button; Brake State [emergency]<br>Output: brake command [emergency, service] with emergency on; power 0 W |
+| Data | Input: emergency brake button; Brake State [emergency]<br>Output: emergency brake command on; power 0 W |
 | Stimulus | The driver presses the emergency brake, or a passenger pulls it. |
 | Response | The train stops on the emergency brake (2.73 m/s² on the data sheet); the console shows it engaged. |
 
@@ -3782,7 +3782,7 @@ Announce station:
 | Use case | Release the emergency brake |
 | Actors | Driver |
 | Description | • Only the driver releases it (M2); passengers and the engineer cannot.<br>• Only below 0.1 m/s: with no failure latched, in either mode; with one latched, only in Manual, so the driver can try the train (M2, M3).<br>• A Train Model report of off never releases it.<br>• A refused release says why: still moving, or which failure is active. |
-| Data | Input: emergency brake button<br>Output: brake command with emergency off; brake message |
+| Data | Input: emergency brake button<br>Output: emergency brake command off; brake message |
 | Stimulus | The driver presses the emergency brake while it is engaged. |
 | Response | The brake releases, or the console says why it cannot. |
 
@@ -3888,7 +3888,7 @@ Announce station:
 
   | Responsibility                                            | Collaborator                                     |
   | --------------------------------------------------------- | ------------------------------------------------ |
-  | Add a train's controller when it enters service           | Central harness, ControllerCore                  |
+  | Add a train's controller when it enters service           | Central harness                                  |
   | Remove it when it leaves                                  | Central harness                                  |
   | Return one train's controller                             | ConsoleBackend                                   |
   | Read every train's inputs, then step every train, or none | Central harness, `read_inputs`, ControllerCore |
@@ -3962,9 +3962,8 @@ Announce station:
   | fleet            | The fleet shown: its own, or the harness's  |
   | selected         | The selected train                          |
   | operator         | Driver, engineer or nobody                  |
-  | sim_rate, paused | 1× or 10×, and Pause, for a fleet it owns |
-  | sims             | The bench's `SimTrain` per train          |
-  | time_s           | The clock shown                             |
+  | idle             | An unstepped controller, so the views have a shape to read while no train is in service |
+  | notes            | A message per train, shown on the console   |
 
   | Responsibility                                                                          | Collaborator                   |
   | --------------------------------------------------------------------------------------- | ------------------------------ |
@@ -4017,7 +4016,8 @@ Announce station:
   | Train Model      | Train Controller | Beacon                        | Station name, platform side, underground       |
   | Track Model      | Train Controller | Signal aspect ahead           | Red, Yellow, Green, Super Green                |
   | Train Controller | Train Model      | Power command                 | Power, W                                       |
-  | Train Controller | Train Model      | Brake command                 | Emergency, service                             |
+  | Train Controller | Train Model      | Service brake command         | On, off                                        |
+  | Train Controller | Train Model      | Emergency brake command       | On, off                                        |
   | Train Controller | Train Model      | Door command                  | Left, right                                    |
   | Train Controller | Train Model      | Light command                 | Interior, exterior                             |
   | Train Controller | Train Model      | Temperature setpoint          | °C                                            |
@@ -4063,14 +4063,12 @@ Announce station:
   | Field                      | Unit / shape                  | Truth signal                                           | Harness maps to (`ControllerCommands`) |
   | -------------------------- | ----------------------------- | ------------------------------------------------------ | ---------------------------------------- |
   | `power_w`                | W, 0–480,000                 | `power-command`                                      | `power_cmd_w`                          |
-  | `brake_command`          | `[emergency, service]` bool | `emergency-brake-command`, `service-brake-command` | `emergency_brake`, `service_brake`   |
+  | `service_brake`          | bool                     | `service-brake-command`   | `service_brake`                        |
+  | `emergency_brake`        | bool                     | `emergency-brake-command` | `emergency_brake`                      |
   | `door_command`           | `(left, right)`             | `door-command`                                       | `door_left_open`, `door_right_open`  |
   | `light_command`          | `(interior, exterior)`      | `light-command`                                      | `interior_lights`, `exterior_lights` |
   | `temperature_setpoint_c` | °C                           | `temperature-setpoint`                               | `temp_setpoint_c`                      |
   | `announcement`           | str, empty when none          | `announcement`                                       | `announcement`                         |
-
-  Code today sends two bools (`service_brake`, `emergency_brake`); to
-  change to `brake_command`.
 
   **Errors** (all derive from `TrainControllerError`; a failed
   `step_all` changes no train):
