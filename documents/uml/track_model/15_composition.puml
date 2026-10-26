@@ -1,0 +1,26 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam packageBackgroundColor white
+skinparam nodesep 40
+skinparam ranksep 50
+package "One executable" {
+  rectangle "Central harness\n(single driver, edge functions,\nshared clock, event log)" as H #EAF6EA
+  rectangle "CTC Office" as C1 #DCEBFA
+  rectangle "Track Controller\n(SW and HW variants)" as C2 #F8DCDC
+  rectangle "Track Model\n(detailed in this SDD)" as C3 #FFF1B8
+  rectangle "Train Model" as C4 #E9E4B8
+  rectangle "Train Controller\n(SW and HW variants)" as C5 #F8DCDC
+}
+H -down- C1 : JSON\nmessages
+H -down- C2
+H -down- C3
+H -down- C4
+H -down- C5
+note bottom of C3 : Each module defines only its own\nboundary types and never imports\nanother module.
+@enduml

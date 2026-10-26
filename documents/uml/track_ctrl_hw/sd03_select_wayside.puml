@@ -1,0 +1,32 @@
+@startuml sd03_select_wayside
+!include ../style.iuml
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "TrackControllerState" as State
+participant "RemoteTrackController" as Remote
+participant "views" as Views
+participant "RowsModel ×5" as Rows
+
+P -> QML : pick a wayside in the header
+QML -> State : selectWayside(wayside_id)
+State -> Remote : wayside_ids
+Remote --> State : tuple[str] (from the cached snapshot)
+alt wayside_id not in wayside_ids
+  State --> QML : (no change)
+else loaded
+  State -> State : self._selected = wayside_id
+  State -> State : refresh()
+  State -> Remote : snapshot()
+  Remote --> State : self._snapshot (cached, no USB request)
+  State -> Views : wayside(snapshot, self._selected)
+  Views --> State : WaysideSnapshot
+  State -> Views : block_rows(), office_rows(), switch_rows(),\ndevice_rows(), report_rows(), program_details()
+  Views --> State : list[dict] per table; details dict
+  State -> Rows : set_rows(rows)
+  State -> Views : diagram(wayside, geometry)
+  Views --> State : diagram dict
+  State --> QML : changed.emit(); diagramChanged.emit()
+end
+@enduml

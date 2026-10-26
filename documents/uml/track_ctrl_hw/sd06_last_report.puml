@@ -1,0 +1,27 @@
+@startuml sd06_last_report
+!include ../style.iuml
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "LastReportDialog\n(QML)" as Report
+participant "TrackControllerState" as State
+participant "views" as Views
+participant "RowsModel\n(report)" as Rows
+
+note over State, Rows
+  On every refresh(): _fill_tables(wayside)
+  → self._report.set_rows(views.report_rows(wayside))
+end note
+P -> QML : **View** on the CTC uplink strip
+QML -> Report : open()
+Report -> State : reportReadyText (property)
+State --> Report : "Ready" if report.ready\nelse f"Not ready: {report.reason}"
+Report -> State : report (property)
+State --> Report : RowsModel
+Report -> Rows : rowCount(); data(index, role)
+Rows --> Report : one row per block: occupied,\nswitch_position, signal_aspect,\ncrossing_active
+Report --> P : every block as the CTC Office received it
+P -> Report : **Close**
+Report -> Report : close()
+@enduml

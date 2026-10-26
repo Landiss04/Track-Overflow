@@ -1,0 +1,121 @@
+@startuml class_services
+!include ../style.iuml
+title CTC Office — Core classes: scheduling, routing and data (no Qt)
+hide empty members
+set separator none
+
+package "ctc.scheduler" {
+  class AutoDispatcher {
+    +plans: tuple[RunPlan, ...]
+    +progress: dict[str, Progress]
+    +zones: dict[line, dict[block, zone]]
+    +step(world: World): list[Order | Cancel]
+    +skip_stop(train_id): Order | None
+  }
+  class RunPlan <<frozen>> {
+    line, run_id, train_id: str
+    departure_s: float
+    stops: tuple[PlannedStop, ...]
+    yard_block_id: str
+    unreachable: tuple[str, ...]
+    path: tuple[str, ...]
+    stop_indexes: tuple[int, ...]
+    yard_index: int
+  }
+  class PlannedStop <<frozen>> {
+    block_id: str
+    station: str
+    due_s: float
+  }
+  class Progress <<frozen>> {
+    status: str
+    leg: int
+    dwell_until_s: float
+    at: int
+  }
+  class World <<frozen>> {
+    now_s: float
+    ready_lines: frozenset[str]
+    heads, orders: Mapping[str, str]
+    lost: frozenset[str]
+  }
+  class Order <<frozen>> {
+    train_id, line, block_id: str
+    due_s: float
+  }
+  class Cancel <<frozen>> {
+    train_id: str
+  }
+}
+
+package "ctc.routing" {
+  class TrackGraph {
+    +neighbors(block_id)
+    +leg(a, b): SwitchLeg | None
+    +can_run(here, after): bool
+    +turns_back(before, here, after): bool
+    +route(start, destination, avoid, came_from)
+  }
+  class SwitchLeg <<frozen>> {
+    switch_id: str
+    position: "normal" | "reverse"
+  }
+  class AuthorityLimit <<frozen>> {
+    blocks: int
+    end_block_id, reason, at: str
+    route: tuple[str, ...]
+    held_by, reverse_at: str
+  }
+}
+
+package "ctc.track_layout" {
+  class Line <<frozen>> {
+    name: str
+    blocks: tuple[Block, ...]
+    +sections()
+    +stations()
+    +switch_ids()
+    +crossing_ids()
+  }
+  class Block <<frozen>> {
+    line, block_id, section: str
+    length_m, speed_limit_kmh: float
+    station, switch: str | None
+    railway_crossing, underground: bool
+    next_blocks: tuple[str, ...] | None
+    to_yard: bool
+  }
+}
+
+package "ctc.schedule" {
+  class Schedule <<frozen>> {
+    source: str
+    trains: tuple[ScheduledTrain, ...]
+  }
+  class ScheduledTrain <<frozen>> {
+    line, train_id: str
+    stops: tuple[ScheduledStop, ...]
+    +departure_s(): int
+  }
+  class ScheduledStop <<frozen>> {
+    block_id: str
+    station: str | None
+    arrival_s: int
+  }
+}
+
+AutoDispatcher *-- "*" RunPlan
+AutoDispatcher *-- "*" Progress
+AutoDispatcher ..> World : reads
+AutoDispatcher ..> Order : gives
+AutoDispatcher ..> Cancel : gives
+RunPlan *-- "*" PlannedStop
+RunPlan ..> ScheduledTrain : plan_run()
+RunPlan ..> TrackGraph : routed on
+TrackGraph ..> SwitchLeg
+TrackGraph ..> AuthorityLimit : authority()
+TrackGraph ..> Line : built from
+Line *-- "*" Block
+Schedule *-- "*" ScheduledTrain
+ScheduledTrain *-- "*" ScheduledStop
+@enduml

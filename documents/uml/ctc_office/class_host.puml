@@ -1,0 +1,107 @@
+@startuml class_host
+!include ../style.iuml
+title CTC Office — Process and window classes (PySide6)
+hide empty members
+
+package "ctc.module_process" {
+  class CtcOfficeProcess <<QObject>> {
+    -_host: CtcHost
+    -_clock: HarnessClockBridge
+    -_link: ModuleLink
+    -_redraw: QTimer (200 ms)
+    +start()
+    +step(tick, dt, sim_time_s, inputs): dict
+    -_announce()
+    -_push_controls(controls)
+  }
+}
+
+package "utils (shared)" {
+  class ModuleLink <<QObject>> {
+    +announce_ready()
+    +push_state(controls)
+  }
+  class TickRejectedError <<exception>>
+}
+
+package "ctc.wire" {
+  class wire <<functions>> {
+    +inputs_from_wire(data): CtcInputs
+    +to_wire(value): Any
+  }
+}
+
+package "ctc_ui" {
+  class CtcHost <<QObject>> {
+    +revision: int
+    +trains, blockStates, crossingStates
+    +closures, throughput, departures, notices
+    +step_at(dt, sim_time_s, inputs): CtcOutputs
+    +dispatchTrain(train, line, block, arrival): str
+    +setAuthority(train, line, block): str
+    +cancelDispatch(train): str
+    +returnToYard(train): str
+    +closeBlock(line, block): str
+    +reopenBlock(line, block): str
+    +setSwitch(line, switch, position): str
+    +releaseSwitch(line, switch): str
+    +setMaintenanceMode(active)
+    +setAutomaticMode(active)
+    +loadSchedule(url)
+    +setDispatchPaused(paused)
+    +setClockSpeedup(active)
+    +setClockPaused(paused)
+    +trainDetail(train), routeDetail(train)
+    +switchDetail(line, switch)
+    +dismissNotices(), dismissReversal(train)
+  }
+  class HarnessClockBridge <<QObject>> {
+    +timeText: str
+    +paused: bool
+    +speed: int
+    +pause()
+    +resume()
+    +setSpeed(speed)
+    +show_time(sim_time_s)
+    +controls(): dict[str, bool]
+  }
+  class TrackMapModel <<QObject>> {
+    block and switch geometry
+    from the layout files
+  }
+  class display <<functions>> {
+    +MPS_TO_MPH
+    +parse_time_of_day(text): float
+    +format_time_of_day(seconds): str
+  }
+}
+
+package "QML (ctc_ui/ui)" {
+  class Main <<QML>>
+  class CtcHeader <<QML>> {
+    operating mode, clock controls, notices
+  }
+  class "AutomaticView / ManualView /\nMaintenanceView" as Views <<QML>>
+  class "Panels: TrackView, Dispatch,\nSelectedTrain, AutoDispatch,\nCloseBlock, Closures, Switch,\nThroughput, Occupancy, ReversalAlert" as Panels <<QML>>
+}
+
+package "ctc (core)" {
+  interface CtcOffice <<Protocol>>
+}
+
+CtcOfficeProcess *-- ModuleLink
+CtcOfficeProcess *-- HarnessClockBridge
+CtcOfficeProcess --> CtcHost
+CtcOfficeProcess ..> wire
+CtcOfficeProcess ..> TickRejectedError : raises
+HarnessClockBridge --> CtcHost : setClockPaused,\nsetClockSpeedup
+HarnessClockBridge ..> CtcOfficeProcess : on_change(controls)
+CtcHost --> CtcOffice : the one module
+CtcHost ..> display
+Main *-- CtcHeader
+Main *-- Views
+Views *-- Panels
+Main ..> CtcHost : context "ctc"
+Main ..> HarnessClockBridge : context "simClock"
+Panels ..> TrackMapModel
+@enduml

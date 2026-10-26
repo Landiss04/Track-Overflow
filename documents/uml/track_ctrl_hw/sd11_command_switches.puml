@@ -1,0 +1,26 @@
+@startuml sd11_command_switches
+!include ../style.iuml
+autonumber
+
+participant "Central\nHarness" as H
+participant "Wayside" as W
+participant "Program\n(user + vital block)" as PLC
+
+H -> W : step → scan(...): image with OCC_n,\nSWREV_s, CTCSW_s, CTCREV_s
+W -> PLC : scan_a(image); scan_b(image)
+alt a train on the switch's blocks
+  PLC --> W : values["SW_s"] = SWREV_s (locked)
+else clear
+  PLC --> W : values["SW_s"] from the program's rule;\nobeys CTCSW_s / CTCREV_s
+end
+W -> W : _drive(values): self._commanded[switch.key] =\n"reverse" if values[f"SW_{s}"] else "normal"
+W --> H : WaysideScan.switch_commands\n→ OUTPUTS track_model.switch_commands (tick k)
+H -> H : track_controller_to_track_model(outputs,\nnames, devices)
+H -> W : next STEP → scan(...):\ntrack_model.switch_positions[key]
+W -> W : self._switch_reports[key] = reported position
+W -> W : snapshot(): SwitchState(switch, commanded,\nreported, agreeing=commanded == reported)
+note over W, PLC
+  While SW_s and SWREV_s differ (moving or failed), the program
+  turns the switch's signal red and zeroes authority over it.
+end note
+@enduml
