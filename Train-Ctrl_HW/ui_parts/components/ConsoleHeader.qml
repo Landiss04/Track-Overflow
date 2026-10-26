@@ -25,8 +25,14 @@ Rectangle {
     property bool faulted: false
     //: The last beacon said the station is underground.
     property bool underground: false
+    //: The simulation is paused from the bench.
+    property bool paused: false
     //: Fault labels shown after the emergency badge, hidden when empty.
     property var alerts: []
+    //: Share of the station dwell still to run, 1 to 0; hidden at 0.
+    property real dwellLeft: 0
+    //: Controls placed just before the clock (the bench's time setter).
+    property alias clockTools: clockTools.data
     property var navigationEntries: []
     property int currentNavigationIndex: -1
     signal navigationActivated(int index)
@@ -77,10 +83,22 @@ Rectangle {
             visible: root.underground
         }
 
+        // Neutral: nothing is wrong, the whole simulation is held.
+        StatusBadge {
+            label: qsTr("Paused")
+            variant: "idle"
+            visible: root.paused
+        }
+
         StatusBadge {
             label: "E-brake"
             variant: "fault"
             visible: root.faulted
+        }
+
+        DwellPill {
+            visible: root.dwellLeft > 0
+            share: root.dwellLeft
         }
 
         Repeater {
@@ -128,6 +146,11 @@ Rectangle {
             text: root.line
             color: theme.text_muted
             visible: root.line !== ""
+        }
+
+        RowLayout {
+            id: clockTools
+            spacing: theme.space_2
         }
 
         MonoText {

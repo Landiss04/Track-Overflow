@@ -1,14 +1,11 @@
-// Everything that goes into the controller, in two columns of one
-// table: the signals the Train Model sends on the left, and the
-// controls a driver or an engineer would press at the console on the
-// right. The bench runs in its own window, so if a value is not here
-// there is no way to feed it in.
+// Everything the controller receives, in two columns of one table:
+// the signals the Train Model sends on the left, and Murphy's
+// injected failures and the Track Model's signal aspect on the right.
+// The cab is driven from the console itself, never from here.
 //
-// The two columns behave differently on purpose. Train Model signals
-// are staged: typing fills a draft, edited rows are marked, and Send
-// publishes the edited rows in one call, so the controller never sees
-// a half-typed set of signals. Cab controls act at once, because they
-// are buttons a hand presses, not a message being assembled.
+// Every row is staged: typing fills a draft, edited rows are marked,
+// and Send publishes the edited rows in one call, so the controller
+// never sees a half-typed set of signals.
 //
 // Units are the operator's throughout, in both columns: mph and
 // Fahrenheit, because a bench you type into all day is easier to
@@ -28,7 +25,6 @@ Panel {
 
     readonly property var s: controller.snapshot
     readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
-    readonly property var roles: ["Signed out", "Driver", "Engineer"]
     // Shown in words, sent as the beacon encodes them (truth
     // beacon.md), index for index.
     readonly property var sideLabels: ["Left", "Right", "Both"]
@@ -38,14 +34,13 @@ Panel {
     readonly property var live: ({
         "commanded_speed": Math.round(s.track_commanded_mph * 10) / 10,
         "actual_speed": Math.round(s.actual_mph * 10) / 10,
-        "speed_limit": Math.round(s.limit_mph),
         "authority_blocks": s.track_authority_blocks,
         "beacon_station": s.beacon_station,
         "beacon_side": s.beacon_side,
         "beacon_underground": s.beacon_underground,
         "cabin_temperature": Math.round(s.cabin_temp_f),
         "signal_light_ahead": s.next_signal,
-        "brake_state_emergency": s.fb_emergency_brake,
+        "emergency_brake_state": s.fb_emergency_brake,
         "door_state_left": s.fb_doors_left,
         "door_state_right": s.fb_doors_right,
         "light_state_interior": s.fb_interior_lights,
@@ -55,10 +50,8 @@ Panel {
         "failure_engine": s.inject_engine,
         "failure_signal_pickup": s.inject_pickup,
         "failure_brake": s.inject_brake,
-        // Staged like the rest, because sending is what commissions
-        // them, but typed in the cab column where they belong.
-        "kp": Math.round(s.kp),
-        "ki": Math.round(s.ki)
+        // The bench's own: whether the beacon is heard every tick.
+        "at_station": s.bench_at_station
     })
 
     // What is typed but not sent, and which rows were typed in. The
@@ -66,10 +59,11 @@ Panel {
     // instead of standing out as edits the moment the train moves.
     property var draft: live
     property var touched: ({})
-    // Paused, the rows stop following the running train, so a set of
-    // values can be typed out without the plant rewriting them
-    // underneath. Sending or discarding still works.
-    property bool paused: false
+    // Pause holds the whole simulation (REQUIREMENTS.md M11), and the
+    // rows stop following it, so a set of values can be typed out
+    // without the plant rewriting them underneath. Sending or
+    // discarding still works.
+    readonly property bool paused: s.paused
     readonly property bool dirty: {
         for (var key in touched)
             if (pending(key))
@@ -105,8 +99,8 @@ Panel {
 
     // Only the rows that were edited and still differ from what the
     // controller holds. Sending the whole draft would also write back
-    // rounded readings (actual speed to 0.1 mph, the limit to a whole
-    // mph) and, while paused, stale ones, such as an e-brake report
+    // rounded readings (actual speed to 0.1 mph) and, while paused,
+    // stale ones, such as an e-brake report
     // the driver has since released.
     function payload() {
         var edits = {};
@@ -133,11 +127,21 @@ Panel {
             label: root.dirty ? qsTr("Unsent edits") : qsTr("Sent")
             variant: root.dirty ? "warning" : "ok"
         },
+        // An event, not a row: the Track Model's next count, sent at
+        // once (REQUIREMENTS.md M16).
+        AppButton {
+            objectName: "blockChangeButton"
+            size: "small"
+            variant: "ghost"
+            enabled: root.s.has_train
+            text: qsTr("Block change")
+            onClicked: controller.bench_block_change()
+        },
         AppButton {
             size: "small"
             variant: root.paused ? "primary" : "ghost"
-            text: root.paused ? qsTr("Paused") : qsTr("Pause")
-            onClicked: root.paused = !root.paused
+            text: root.paused ? qsTr("Resume") : qsTr("Pause")
+            onClicked: controller.set_paused(!root.paused)
         },
         AppButton {
             size: "small"
@@ -161,6 +165,9 @@ Panel {
     RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
+        // The rows are shorter than the panel, and Panel centres
+        // whatever cannot grow; letting this grow keeps them on top.
+        Layout.maximumHeight: Number.POSITIVE_INFINITY
         spacing: theme.space_5
         // Nothing to read or write until a train exists.
         enabled: controller.snapshot.has_train
@@ -169,6 +176,8 @@ Panel {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
+            // An even split, whatever the widest divider label.
+            Layout.minimumWidth: 0
             Layout.alignment: Qt.AlignTop
             spacing: 0
 
@@ -219,23 +228,6 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "speed_limit"
-                kind: "int"
-                unit: "mph"
-                value: root.draft.speed_limit
-                pending: root.touched["speed_limit"] === true
-                    && root.pending("speed_limit")
-                onEdited: function (v) {
-                    root.stage("speed_limit", v);
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
                 name: "authority_blocks"
                 kind: "int"
                 unit: "blocks"
@@ -245,6 +237,22 @@ Panel {
                 onEdited: function (v) {
                     root.stage("authority_blocks", v);
                 }
+            }
+            // At a station the beacon rows below are heard every tick;
+            // otherwise only once, when one of them is sent.
+            SignalEditRow {
+                Layout.fillWidth: true
+                editable: true
+                showKind: false
+                rowHeight: 38
+                valueWidth: 160
+                unitWidth: 52
+                name: "at_station"
+                kind: "bool"
+                value: root.draft.at_station
+                pending: root.touched["at_station"] === true
+                    && root.pending("at_station")
+                onEdited: function (v) { root.stage("at_station", v); }
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -321,13 +329,13 @@ Panel {
                 rowHeight: 38
                 valueWidth: 160
                 unitWidth: 52
-                name: "brake_state_emergency"
+                name: "emergency_brake_state"
                 kind: "bool"
-                value: root.draft.brake_state_emergency
-                pending: root.touched["brake_state_emergency"] === true
-                    && root.pending("brake_state_emergency")
+                value: root.draft.emergency_brake_state
+                pending: root.touched["emergency_brake_state"] === true
+                    && root.pending("emergency_brake_state")
                 onEdited: function (v) {
-                    root.stage("brake_state_emergency", v);
+                    root.stage("emergency_brake_state", v);
                 }
             }
             SignalEditRow {
@@ -402,11 +410,21 @@ Panel {
                     root.stage("light_state_exterior", v);
                 }
             }
+        }
+
+        // ------------------------------- failures and the Track Model
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.preferredWidth: 1
+            // An even split, whatever the widest divider label.
+            Layout.minimumWidth: 0
+            Layout.alignment: Qt.AlignTop
+            spacing: 0
+
             LabeledDivider {
                 Layout.fillWidth: true
-                Layout.topMargin: theme.space_2
                 Layout.bottomMargin: theme.space_1
-                text: qsTr("Injected failures (controller must detect)")
+                text: qsTr("Injected failures")
             }
             SignalEditRow {
                 Layout.fillWidth: true
@@ -458,232 +476,6 @@ Panel {
                 }
             }
 
-        }
-
-        // ------------------------------------------------ the cab
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.preferredWidth: 1
-            Layout.alignment: Qt.AlignTop
-            spacing: 0
-
-            LabeledDivider {
-                Layout.fillWidth: true
-                Layout.bottomMargin: theme.space_1
-                text: qsTr("From the cab")
-            }
-
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                name: "operator"
-                kind: "enum"
-                options: root.roles
-                value: root.roles[root.s.operator_index + 1]
-                onEdited: function (v) {
-                    controller.select_operator(root.roles.indexOf(v) - 1);
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.signed_in
-                name: "operating_mode"
-                kind: "enum"
-                options: ["Automatic", "Manual"]
-                value: root.s.manual ? "Manual" : "Automatic"
-                onEdited: function (v) {
-                    controller.set_manual(v === "Manual");
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: !root.s.gains_locked
-                name: "kp"
-                kind: "float"
-                unit: "W per m/s"
-                value: root.draft.kp
-                pending: root.touched["kp"] === true && root.pending("kp")
-                onEdited: function (v) { root.stage("kp", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: !root.s.gains_locked
-                name: "ki"
-                kind: "float"
-                unit: "W per m"
-                value: root.draft.ki
-                pending: root.touched["ki"] === true && root.pending("ki")
-                onEdited: function (v) { root.stage("ki", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.can_drive
-                name: "target_speed"
-                kind: "float"
-                unit: "mph"
-                value: Math.round(root.s.target_mph)
-                onEdited: function (v) { controller.set_target_mph(v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.can_drive
-                name: "cabin_setpoint"
-                kind: "int"
-                unit: "\u00b0F"
-                value: Math.round(root.s.target_temp_f)
-                onEdited: function (v) { controller.set_target_temp_f(v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                // Off the platform side a door may only be closed.
-                enabled: root.s.can_drive
-                    && (root.s.platform_left || root.s.doors_left)
-                name: "door_command_left"
-                kind: "bool"
-                trueLabel: qsTr("On")
-                falseLabel: qsTr("Off")
-                value: root.s.doors_left
-                onEdited: function (v) { controller.set_door("left", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.can_drive
-                    && (root.s.platform_right || root.s.doors_right)
-                name: "door_command_right"
-                kind: "bool"
-                trueLabel: qsTr("On")
-                falseLabel: qsTr("Off")
-                value: root.s.doors_right
-                onEdited: function (v) { controller.set_door("right", v); }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.can_drive
-                name: "interior_lights_command"
-                kind: "bool"
-                trueLabel: qsTr("On")
-                falseLabel: qsTr("Off")
-                value: root.s.interior_lights
-                onEdited: function (v) {
-                    controller.set_interior_lights(v);
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.can_drive
-                name: "exterior_lights_command"
-                kind: "bool"
-                trueLabel: qsTr("On")
-                falseLabel: qsTr("Off")
-                value: root.s.exterior_lights
-                onEdited: function (v) {
-                    controller.set_exterior_lights(v);
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.signed_in
-                name: "emergency_brake"
-                kind: "bool"
-                value: root.s.emergency_brake
-                onEdited: function (v) {
-                    if (v !== root.s.emergency_brake)
-                        controller.toggle_emergency_brake();
-                }
-            }
-            SignalEditRow {
-                Layout.fillWidth: true
-                rule: false
-                editable: true
-                showKind: false
-                rowHeight: 38
-                valueWidth: 160
-                unitWidth: 52
-                enabled: root.s.can_drive && !root.s.fault_brake
-                name: "service_brake"
-                kind: "bool"
-                value: root.s.service_request
-                onEdited: function (v) {
-                    if (v !== root.s.service_request)
-                        controller.toggle_service_brake();
-                }
-            }
-
-            AppButton {
-                Layout.fillWidth: true
-                Layout.topMargin: theme.space_3
-                variant: "secondary"
-                enabled: root.s.can_drive && !root.s.announcing
-                text: root.s.announcing ? qsTr("Announcing\u2026")
-                                        : qsTr("Announce station")
-                onClicked: controller.announce()
-            }
-
-            HelperText {
-                Layout.fillWidth: true
-                Layout.topMargin: theme.space_2
-                text: root.s.gains_locked
-                    ? qsTr("Gains are set for this train.")
-                    : root.s.operator === "engineer"
-                        ? qsTr("Sending the inputs commissions the gains "
-                               + "and starts the run.")
-                        : qsTr("Sign in as the engineer to set the gains.")
-            }
-
             LabeledDivider {
                 Layout.fillWidth: true
                 Layout.topMargin: theme.space_3
@@ -705,6 +497,17 @@ Panel {
                 pending: root.touched["signal_light_ahead"] === true
                     && root.pending("signal_light_ahead")
                 onEdited: function (v) { root.stage("signal_light_ahead", v); }
+            }
+
+            // A refused send, in the shared format (REQ-INTF-004). It
+            // sits below every row, so nothing moves when it appears.
+            Callout {
+                Layout.fillWidth: true
+                Layout.topMargin: theme.space_3
+                visible: root.s.bench_error !== ""
+                variant: "warning"
+                heading: qsTr("Not sent")
+                body: root.s.bench_error
             }
         }
     }

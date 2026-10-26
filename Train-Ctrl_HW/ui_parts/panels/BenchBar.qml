@@ -135,14 +135,15 @@ Rectangle {
         }
 
         // --------------------------------------- status and time
-        // One line, elided: how many trains run, and what the last
-        // spawn or removal did. A wrapped line would grow the bar and
-        // push the bench's last rows off the window.
+        // How many trains run, and what the last spawn or removal did.
+        // Up to two lines, bottom-aligned: two lines are still shorter
+        // than the fields beside it, so the bar never grows with it.
         HelperText {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignBottom
             Layout.bottomMargin: theme.space_2
-            wrapMode: Text.NoWrap
+            wrapMode: Text.WordWrap
+            maximumLineCount: 2
             elide: Text.ElideRight
             text: (root.s.train_count === 0 ? qsTr("No trains yet")
                 : root.s.train_count === 1 ? qsTr("1 train running")
