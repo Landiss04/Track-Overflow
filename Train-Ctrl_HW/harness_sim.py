@@ -19,8 +19,9 @@ from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 from train_ctrl import (  # noqa: E402
-    EBRAKE_DECEL_MPS2, MASS_KG, MAX_FORCE_N, MPS_TO_MPH, SERVICE_DECEL_MPS2,
-    TICK_S, V_FLOOR_MPS, TrainControllerFleet, TrainModelCommands, f_to_c,
+    CLOCK_START_S, EBRAKE_DECEL_MPS2, MASS_KG, MAX_FORCE_N, MPS_TO_MPH,
+    SERVICE_DECEL_MPS2, TICK_S, V_FLOOR_MPS, TrainControllerFleet,
+    TrainModelCommands, f_to_c,
 )
 from train_ctrl.app import run  # noqa: E402
 
@@ -30,6 +31,7 @@ CABIN_TEMP_C = f_to_c(75)           # 75 °F
 AUTHORITY_BLOCKS = 20
 SIGNAL_AHEAD = "GREEN"
 
+
 class StandInHarness:
     """Spawns trains and plays a minimal Train Model for each."""
 
@@ -37,9 +39,12 @@ class StandInHarness:
         self.fleet = fleet
         self.speed: dict[str, float] = {}
         self.last: dict[str, TrainModelCommands] = {}
+        # Stands in for utils/system_clock.py: seconds since midnight,
+        # from 05:00:00, one tick at a time.
+        self.time_s = CLOCK_START_S
 
     def spawn(self, train_id: str) -> None:
-        core = self.fleet.add(train_id, "GREEN LINE")
+        self.fleet.add(train_id, "GREEN LINE")
         self.speed[train_id] = 0.0
         print(f"spawned {train_id}: {len(self.fleet)} train controllers")
 
@@ -63,7 +68,8 @@ class StandInHarness:
                 # Echo the service brake so it is not taken for a
                 # failure. Emergency is reported only for a passenger
                 # pull, which this stand-in never makes.
-                "brake_state": [False, bool(last and last.service_brake)],
+                "emergency_brake_state": False,
+                "service_brake_state": bool(last and last.service_brake),
                 # The fleet wants the full set every tick; doors and
                 # lights simply do what they were last told.
                 "door_state": (list(last.door_command) if last
@@ -71,7 +77,8 @@ class StandInHarness:
                 "light_state": (list(last.light_command) if last
                                 else [True, True]),
             }
-        commands = self.fleet.step_all(DT_S, inputs)
+        self.time_s += DT_S
+        commands = self.fleet.step_all(DT_S, inputs, self.time_s)
         for train_id, cmd in commands.items():
             self.last[train_id] = cmd
             v = self.speed[train_id]
@@ -80,7 +87,8 @@ class StandInHarness:
             elif cmd.service_brake:
                 a = -SERVICE_DECEL_MPS2
             else:
-                a = min(MAX_FORCE_N, cmd.power_w / max(v, V_FLOOR_MPS)) / MASS_KG
+                force = min(MAX_FORCE_N, cmd.power_w / max(v, V_FLOOR_MPS))
+                a = force / MASS_KG
             self.speed[train_id] = max(0.0, v + a * DT_S)
 
 

@@ -41,10 +41,12 @@ ScaledWindow {
             faulted: window.s.emergency_brake
             // One badge per subsystem the Train Model reports failed,
             // up only while the failure is up, like the e-brake's.
+            dwellLeft: window.s.dwell_left
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
                 window.s.fault_pickup ? qsTr("Signal pickup fault") : "",
-                window.s.fault_brake ? qsTr("Brake fault") : ""
+                window.s.fault_brake ? qsTr("Brake fault") : "",
+                window.s.vital_breach ? qsTr("Vitality breach") : ""
             ].filter(function (label) { return label !== ""; })
         }
 

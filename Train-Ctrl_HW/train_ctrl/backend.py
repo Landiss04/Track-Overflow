@@ -1,4 +1,4 @@
-"""The Qt bridge: one snapshot out to QML, one slot per operator action."""
+"""Qt bridge: one snapshot out to QML, one slot per operator action."""
 
 from __future__ import annotations
 
@@ -6,20 +6,27 @@ import math
 from dataclasses import asdict
 from typing import Any
 
-from PySide6.QtCore import (Property, QObject, Qt, QTime, QTimer, Signal,
-                            Slot)
+from PySide6.QtCore import Property, QObject, Qt, QTimer, Signal, Slot
 
-from .constants import (ANNOUNCE_LOCKOUT_MS, ASPECTS, ASPECT_TEXT,
-                        CABIN_MAX_F, CABIN_MIN_F, CLOCK_START, FAILURES,
+from .constants import (ASPECTS, ASPECT_TEXT,
+                        CABIN_MAX_F, CABIN_MIN_F, CLOCK_START_S, FAILURES,
                         FAILURE_TEXT, GAINS_HANDOVER_MS, LINES, MAX_POWER_W,
                         MAX_SPEED_MPS,
                         SIM_RATES, TICK_S, UI_HZ)
+from .bench_sim import SimTrain
 from .control import ControllerCore
 from .errors import InvalidInputError
 from .fleet import TrainControllerFleet
 from .inputs import _read_number, read_inputs
 from .state import TrainModelCommands
 from .units import MPS_TO_MPH, W_TO_KW, c_to_f, f_to_c
+
+
+def _clock_text(time_s: float) -> str:
+    """Show a system time as the time of day, HH:mm:ss."""
+    seconds = int(time_s) % 86400
+    return (f"{seconds // 3600:02d}:{seconds // 60 % 60:02d}:"
+            f"{seconds % 60:02d}")
 
 
 def normalize_block_letter(text: str) -> str:
@@ -52,6 +59,7 @@ class ConsoleBackend(QObject):
 
     #: Roles, by the index the Operator toggle uses. -1 is signed out.
     ROLES = ("driver", "engineer")
+    DRIVER_INDEX = ROLES.index("driver")
     ENGINEER_INDEX = ROLES.index("engineer")
 
     def __init__(self, parent: QObject | None = None, *,
@@ -66,16 +74,24 @@ class ConsoleBackend(QObject):
         self._roster: tuple[str, ...] = tuple(self.fleet.ids())
         self.selected = self._roster[0] if self._roster else ""
         self.notes: dict[str, str] = {}
-        self.announcing: set[str] = set()
         self.sim_rate = 1
         self.paused = False
         self.bench_error = ""
         self.spawn_note = ""
         self._last_commands: dict[str, TrainModelCommands] = {}
+        # Standalone, the bench stands in for the rest of the system:
+        # one simulated train per controller, and the bench clock.
+        # Given a harness fleet there are none; the harness sends the
+        # signals and the time (REQUIREMENTS.md M0, M11).
+        self.sims: dict[str, SimTrain] = {}
+        self.time_s = CLOCK_START_S
+        # The bench clock starts when the first train is commissioned
+        # and then always runs, whichever train is selected
+        # (REQUIREMENTS.md M11).
+        self._clock_started = False
 
         self.operator: str = ""         # "" | "driver" | "engineer"
         self.gains_note = ""
-        self.elapsed = QTime(*CLOCK_START)
 
         # Nothing runs until somebody spawns it. This one is never
         # stepped and never shown: it exists so that the snapshot and
@@ -96,7 +112,7 @@ class ConsoleBackend(QObject):
 
     # ---------------------------------------------------------- fleet
     def add_train(self, number: int, line: str, target: str) -> str:
-        """Put another train in the simulation and select it.
+        """Put another train in the simulation.
 
         The number is the operator's to choose; the prefix follows
         the line, which is how the CTC roster reads. Returns the id,
@@ -110,8 +126,13 @@ class ConsoleBackend(QObject):
 
         core = self.fleet.add(train_id, line)
         core.state.authority_target = normalize_block_letter(target)
+        if self._owns_fleet:
+            self.sims[train_id] = SimTrain()
         self.notes[train_id] = ""
-        self.selected = train_id
+        # The console stays on the train it shows; only the first train
+        # is selected for it.
+        if not self.has_train:
+            self.selected = train_id
         self.spawn_note = f"{train_id} spawned on the {line.lower()}."
         self._sync_roster()
         return train_id
@@ -128,8 +149,8 @@ class ConsoleBackend(QObject):
         index = self.fleet.ids().index(train_id)
         self.fleet.remove(train_id)
         self.notes.pop(train_id, None)
-        self.announcing.discard(train_id)
         self._last_commands.pop(train_id, None)
+        self.sims.pop(train_id, None)
         if self.selected == train_id:
             remaining = self.fleet.ids()
             self.selected = (
@@ -139,7 +160,7 @@ class ConsoleBackend(QObject):
         self.spawn_note = f"{train_id} removed."
         self._sync_roster()
         return True
-    
+
     def _sync_roster(self) -> None:
         # The harness changes the fleet without telling the console,
         # so the roster is compared once per UI tick.
@@ -152,16 +173,21 @@ class ConsoleBackend(QObject):
         self.roster_changed.emit()
 
     def _step_all(self) -> None:
+        # The bench drives the fleet the way the harness does: every
+        # train's signals from its simulation, one step_all with the
+        # bench clock, and the commands back into the simulation.
         if self.paused:
             return
-        # The clock is simulated time, one step per tick, once the
-        # selected train is running.
-        if self.core.armed:
-            self.elapsed = self.elapsed.addMSecs(round(TICK_S * 1000))
-        for core in self.fleet:
-            train_id = core.state.train_id
-            core.step()
-            commands = core.commands()
+        # The bench clock is simulated time, one step per tick.
+        if not self._clock_started:
+            self._clock_started = any(core.armed for core in self.fleet)
+        if self._clock_started:
+            self.time_s += TICK_S
+        inputs = {train_id: sim.outputs()
+                  for train_id, sim in self.sims.items()}
+        all_commands = self.fleet.step_all(TICK_S, inputs, self.time_s)
+        for train_id, commands in all_commands.items():
+            self.sims[train_id].step(commands)
             if self._last_commands.get(train_id) != commands:
                 self._last_commands[train_id] = commands
                 self.commands_changed.emit(
@@ -176,6 +202,11 @@ class ConsoleBackend(QObject):
     def core(self) -> ControllerCore:
         """The train the console and the bench are pointed at."""
         return self.fleet.get(self.selected) if self.has_train else self.idle
+
+    @property
+    def sim(self) -> SimTrain | None:
+        """The bench simulation of the selected train, if it has one."""
+        return self.sims.get(self.selected)
 
     @property
     def brake_note(self) -> str:
@@ -227,6 +258,7 @@ class ConsoleBackend(QObject):
     def snapshot(self) -> dict[str, Any]:
         """Every value the views read, rebuilt once per UI tick."""
         s = self.core.state
+        sim = self.sim
         return {
             "train_id": s.train_id,
             "has_train": self.has_train,
@@ -254,7 +286,8 @@ class ConsoleBackend(QObject):
             # follow that train's controller rather than the console.
             "gains_locked": self.core.armed,
             "gains_note": self.gains_note,
-            "clock": self.elapsed.toString("HH:mm:ss"),
+            # The system time the controller last received.
+            "clock": _clock_text(s.time_s),
 
             # Converted here and nowhere else. Keys carry the unit the
             # operator sees, so a reader can tell which side of the
@@ -265,20 +298,29 @@ class ConsoleBackend(QObject):
             "commanded_mph": self.core.commanded_mps * MPS_TO_MPH,
             # A fixed full scale for the dial, whatever is commanded.
             "dial_max_mph": MAX_SPEED_MPS * MPS_TO_MPH,
-            # What the Track Model sent, before the pickup: the bench's
-            # rows follow these.
-            "track_commanded_mph": s.commanded_mps * MPS_TO_MPH,
+            # What the bench sends as the Track Model's, before its
+            # injected pickup failure; under a harness, what arrived.
+            "track_commanded_mph": (
+                sim.commanded_mps if sim else s.commanded_mps) * MPS_TO_MPH,
             "target_mph": s.target_mps * MPS_TO_MPH,
             # Shown in SI by the team's choice for this module, a
-            # deliberate departure from units.md's ft/s^2.
-            "accel_mps2": s.accel_mps2,
+            # deliberate departure from units.md's ft/s^2. Not a signal
+            # the controller receives: the bench simulation's, and 0
+            # under a harness (debug drawer, REQUIREMENTS.md M12).
+            # Numbers drawer only: goes when the drawer is removed in
+            # the final iteration.
+            "accel_mps2": sim.accel_mps2 if sim else 0.0,
             "dial_hint": self._dial_hint(),
             # Automatic is the console locked: the CTC owns the
             # speed and the dial does nothing.
             "speed_source": "Driver" if s.manual else "Locked",
 
             "power_kw": s.power_w * W_TO_KW,
+            # Numbers drawer only, these three: they go when the
+            # drawer is removed in the final iteration.
             "max_power_kw": MAX_POWER_W * W_TO_KW,
+            "power_channels": self._power_channels(),
+            "power_vote": self._power_vote(),
             "service_brake": s.service_brake,
             "service_request": s.service_request,
             "emergency_brake": s.emergency_brake,
@@ -288,10 +330,18 @@ class ConsoleBackend(QObject):
             "fault_engine": s.failures["engine"],
             "fault_brake": s.failures["brake"],
             "fault_pickup": s.failures["signal_pickup"],
-            # Injected into the toy plant from the bench (Murphy).
-            "inject_engine": s.injected["engine"],
-            "inject_brake": s.injected["brake"],
-            "inject_pickup": s.injected["signal_pickup"],
+            # The station dwell still to run, 1 to 0 (REQUIREMENTS.md
+            # M6), for the header's pill.
+            "dwell_left": self.core.dwell_left,
+            # No two power calculations agreed (REQUIREMENTS.md M21).
+            "vital_breach": s.vital_breach,
+            # Injected into the bench's simulation (Murphy).
+            "inject_engine": bool(sim and sim.injected["engine"]),
+            "inject_brake": bool(sim and sim.injected["brake"]),
+            "inject_pickup": bool(sim and sim.injected["signal_pickup"]),
+            "bench_at_station": bool(sim and sim.at_station),
+            # Whether the bench keeps the clock (no harness).
+            "bench_clock": self._owns_fleet,
             "fb_doors_left": s.fb_doors_left,
             "fb_doors_right": s.fb_doors_right,
             "fb_interior_lights": s.fb_interior_lights,
@@ -301,15 +351,18 @@ class ConsoleBackend(QObject):
             "beacon_station": s.beacon_station,
             "beacon_side": s.beacon_side,
             "beacon_underground": s.beacon_underground,
-            "platform_left": self.core.platform_on("left"),
-            "platform_right": self.core.platform_on("right"),
-            "at_stand": self.core.at_stand,
-            "station_hold": self.core.station_hold,
+            # Whether the driver may press each door tile now
+            # (REQUIREMENTS.md M6): greyed otherwise.
+            "door_left_live": self._door_live("left"),
+            "door_right_live": self._door_live("right"),
             "announcement": s.announcement,
 
             # Identifiers and counts, so they are shown as they are.
             "authority_blocks": self.core.authority_blocks,
-            "track_authority_blocks": s.authority_blocks,
+            "track_authority_blocks": (
+                sim.authority_blocks if sim else s.authority_blocks),
+            # Numbers drawer only: goes when the drawer is removed in
+            # the final iteration.
             "authority_target": s.authority_target,
 
             "cabin_temp_f": c_to_f(s.cabin_temp_c),
@@ -319,8 +372,8 @@ class ConsoleBackend(QObject):
             "interior_lights": s.interior_lights,
             "exterior_lights": s.exterior_lights,
 
-            "announcing": (self.selected in self.announcing
-                           or bool(s.announcement)),
+            "announcing": bool(s.announcement),
+            "can_announce": self.core.can_repeat,
             "announce_label": self._announce_label(),
 
             "next_signal": s.next_signal,
@@ -338,8 +391,33 @@ class ConsoleBackend(QObject):
         names = ", ".join(FAILURE_TEXT[name] for name in failed)
         # The panel callouts say what each failure is doing to the
         # train; this only says what is locked and until when.
-        return (f"{names[0].upper()}{names[1:]}. Driving and brake "
-                "release resume once it clears.")
+        return (f"{names[0].upper()}{names[1:]}. Driving resumes once "
+                "it clears.")
+
+    def _door_live(self, side: str) -> bool:
+        # Closing or opening that side, whichever the tile would do.
+        s = self.core.state
+        is_open = s.fb_doors_left if side == "left" else s.fb_doors_right
+        return self.can_drive and (
+            self.core.may_close if is_open else self.core.may_open(side))
+
+    def _power_channels(self) -> str:
+        # The three power calculations, for the numbers drawer only.
+        vote = self.core.last_vote
+        if vote is None:
+            return "--"
+        return " / ".join(f"{result.power_w * W_TO_KW:.1f}"
+                          for result in vote.results) + " kW"
+
+    def _power_vote(self) -> str:
+        # What the vote made of them, for the numbers drawer only. A
+        # train not yet commissioned commands 0 W without calculating.
+        vote = self.core.last_vote
+        if vote is None:
+            return "Not calculated yet"
+        if vote.agreed is None:
+            return "Breach: 0 W sent"
+        return f"{vote.agreeing} of 3 agree"
 
     def _dial_hint(self) -> str:
         # While a failure is up, the hint says why the train is
@@ -355,12 +433,13 @@ class ConsoleBackend(QObject):
     def _announce_label(self) -> str:
         # The controller only sends the command; the Train Model
         # makes the announcement (REQUIREMENTS.md M7).
-        if (self.selected in self.announcing
-                or self.core.state.announcement):
+        if self.core.state.announcement:
             return "Announcement sent"
         if self.operator == "driver" and not self.core.state.manual:
-            return "Sent automatically on approach"
-        return "Send station announcement"
+            return "Sending automatically"
+        if not self.core.last_announcement:
+            return "Nothing to repeat yet"
+        return "Repeat last announcement"
 
     # ------------------------------------------------------ write side
     @Slot(int)
@@ -374,6 +453,12 @@ class ConsoleBackend(QObject):
         if index == self.ENGINEER_INDEX and self.core.armed:
             self._publish()
             return
+        # Nobody drives a train before its gains are set: the driver's
+        # console stays hidden until the engineer commissions it.
+        if index == self.DRIVER_INDEX and self.has_train \
+                and not self.core.armed:
+            self._publish()
+            return
         in_range = 0 <= index < len(self.ROLES)
         self.operator = self.ROLES[index] if in_range else ""
         if self.operator == "engineer":
@@ -384,27 +469,32 @@ class ConsoleBackend(QObject):
     def set_manual(self, manual: bool) -> None:
         """Switch the selected train between Manual and Automatic.
 
-        Refused while a failure is up: the train is being stopped,
-        and nothing may hand it back a speed until the failure clears.
+        Allowed during a failure too, so the driver can reach Manual to
+        try the train, the service brake say, and see whether a failure
+        has been resolved. The failure still holds the target at 0 and
+        the emergency brake on in whichever mode the train is.
         """
         if not self.has_train or not self.signed_in:
-            return
-        if self.core.failed:
-            self._publish()
             return
         self.core.state.manual = manual
         self._publish()
 
     @Slot(str)
     def select_train(self, train_id: str) -> None:
-        """Point the console and the bench at another train."""
+        """Point the console and the bench at another train.
+
+        A train whose gains are not set yet signs the driver out: its
+        console stays hidden until the engineer commissions it.
+        """
         if train_id in self.fleet:
             self.selected = train_id
+            if self.operator == "driver" and not self.core.armed:
+                self.operator = ""
         self._publish()
 
     @Slot(int, str, str)
     def spawn_train(self, number: int, line: str, target: str) -> None:
-        """Add a train to the simulation and select it.
+        """Add a train to the simulation, keeping the selection.
 
         It starts where every train starts: stopped, uncommissioned,
         with its own authority and destination, running its own
@@ -461,7 +551,8 @@ class ConsoleBackend(QObject):
 
         Engagement is immediate and unconfirmed, the one exception the
         style guide grants (section 7). Release is refused unless the
-        train is stopped and no failure is latched. The driver only.
+        train is stopped, during a vitality breach, and, with a
+        failure latched, unless it is in Manual. The driver only.
         """
         if not self.can_ebrake:
             return
@@ -474,21 +565,24 @@ class ConsoleBackend(QObject):
             )
         elif self.core.release_emergency():
             self.brake_note = ""
-        elif self.core.failed:
-            names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
-            self.brake_note = f"Cannot release: {names} is still active."
-        else:
+        elif not self.core.at_stand:
             self.brake_note = "Cannot release: the train is still moving."
+        elif s.vital_breach:
+            self.brake_note = (
+                "Cannot release: waiting for a safe power command.")
+        else:
+            names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
+            self.brake_note = f"Release it in Manual: {names} is still active."
         self._publish()
 
     @Slot()
     def toggle_service_brake(self) -> None:
         """Apply or release the driver's service brake request.
 
-        Refused while a brake failure is latched: the service brake
-        is the one that failed.
+        Also under a brake failure, so the driver can try the brake
+        (REQUIREMENTS.md M4).
         """
-        if not self.can_drive or self.core.state.failures["brake"]:
+        if not self.can_drive:
             return
         s = self.core.state
         s.service_request = not s.service_request
@@ -512,7 +606,8 @@ class ConsoleBackend(QObject):
         """
         if not self.can_drive:
             return
-        self.core.command_door(side, open_)
+        self.core.driver_door(side, open_)
+        self._answer_press()
         self._publish()
 
     @Slot(bool)
@@ -521,6 +616,7 @@ class ConsoleBackend(QObject):
         if not self.can_drive:
             return
         self.core.command_lights(on, self.core.state.exterior_lights)
+        self._answer_press()
         self._publish()
 
     @Slot(bool)
@@ -529,47 +625,78 @@ class ConsoleBackend(QObject):
         if not self.can_drive:
             return
         self.core.command_lights(self.core.state.interior_lights, on)
+        self._answer_press()
         self._publish()
+
+    def _answer_press(self) -> None:
+        # The bench's train acts on a pressed tile even when the command
+        # is unchanged, so a door or light state the bench published
+        # never locks the driver out. A real Train Model follows the
+        # command every tick.
+        if self.sim is not None:
+            self.sim.answer_next()
 
     @Slot()
     def announce(self) -> None:
-        """Send the station announcement command, then lock out."""
-        if not self.can_drive or self.selected in self.announcing:
-            return
-        train = self.selected
-        self.announcing.add(train)
-        self.core.state.announcement = self.core.state.beacon_station
-        QTimer.singleShot(ANNOUNCE_LOCKOUT_MS,
-                          lambda: self._announce_done(train))
-        self._publish()
+        """Repeat the last automatic announcement, in Manual.
 
-    def _announce_done(self, train: str) -> None:
-        self.announcing.discard(train)
-        if train in self.fleet:
-            self.fleet.get(train).state.announcement = ""
-        self._publish()
-
-    # ------------------------------------------------- Train Model
-    # Every signal the Train Model sends arrives through apply_inputs,
-    # in SI and in the shapes truth signals/ gives, as one coherent
-    # set rather than a slot per field. The bench reaches it through
-    # apply_bench_inputs, which converts from the operator's units.
-
-    @Slot("QVariantMap")
-    def apply_inputs(self, values: dict) -> None:
-        """Take a whole set of Train Model signals in one go, in SI.
-
-        See read_inputs() for the keys. A set with one bad value
-        changes nothing.
+        Held for the lockout on system time, as the automatic ones are
+        (REQUIREMENTS.md M7, M11).
         """
-        if not self.has_train:
+        if not self.can_drive:
             return
-        self.core.apply_staged(read_inputs(values))
+        self.core.repeat_announcement()
         self._publish()
+
+    # ------------------------------------------------------- bench
+    # The bench edits its simulation, never the controller: what it
+    # sets reaches the controller on the next tick, through step_all,
+    # as the harness's signals do (REQUIREMENTS.md M0).
+
+    @Slot(str)
+    def set_bench_time(self, text: str) -> None:
+        """Set the bench clock to a time of day, HH:MM or HH:MM:SS.
+
+        For testing what follows the time (REQUIREMENTS.md M8). Stays on
+        the current simulated day; the controllers receive it on the
+        next tick. Under a harness the harness's clock is the time, so
+        this does nothing.
+        """
+        if not self._owns_fleet:
+            return
+        parts = str(text).strip().split(":")
+        try:
+            numbers = [int(part) for part in parts]
+        except ValueError:
+            numbers = []
+        if (len(numbers) not in (2, 3) or not 0 <= numbers[0] < 24
+                or not all(0 <= n < 60 for n in numbers[1:])):
+            self.bench_error = f"time must be HH:MM or HH:MM:SS, not {text!r}"
+            self._publish()
+            return
+        hours, minutes, seconds = (numbers + [0])[:3]
+        day = int(self.time_s // 86400)
+        self.time_s = day * 86400 + hours * 3600 + minutes * 60 + seconds
+        self.bench_error = ""
+        self._publish()
+
+    @Slot()
+    def bench_block_change(self) -> None:
+        """Stand in for the Track Model as the train enters a block.
+
+        Integrated, the Train Model reports the block change to the
+        Track Model, which then sends the next block's authority; the
+        controller only ever sees the new count. The bench sends the
+        same from the next tick: one block fewer, never below 0
+        (REQUIREMENTS.md M16).
+        """
+        if self.sim is not None:
+            self.sim.block_change()
+            self._publish()
 
     @Slot("QVariantMap")
     def apply_bench_inputs(self, values: dict) -> None:
-        """Apply the bench's edited rows, or refuse them all and say why.
+        """Apply the bench's edits, or refuse them all and say why.
 
         A value that cannot be read leaves everything as it was and
         shows one message on the bench, in the shared Callout
@@ -588,13 +715,17 @@ class ConsoleBackend(QObject):
 
         The bench is a view, so it speaks the operator's units (mph,
         Fahrenheit) and one row per element. This converts once, here
-        on the display side, and hands apply_inputs the SI signals in
-        their truth shapes. Gains are not set here: the engineer's
-        pop-up on the console commissions them.
+        on the display side, checks the SI signals with read_inputs(),
+        and hands them to the bench's simulation. Gains are not set
+        here: the engineer's pop-up on the console commissions them.
         """
-        if not self.has_train:
+        sim = self.sim
+        if sim is None:
+            if self.has_train:
+                raise InvalidInputError(
+                    "the bench drives only trains it spawned, not a "
+                    "harness's")
             return
-        s = self.core.state
         si: dict[str, Any] = {}
         for key in ("commanded_speed", "actual_speed"):
             if key in values:
@@ -607,35 +738,40 @@ class ConsoleBackend(QObject):
                     "beacon_underground"):
             if key in values:
                 si[key] = values[key]
-        # The failure rows are Murphy injecting into the toy plant, not
-        # a Train Model signal: the controller has to detect them.
+        # The failure rows are Murphy injecting into the simulation,
+        # not a signal: the controller has to detect them.
         injected = {name: bool(values[f"failure_{name}"])
                     for name in FAILURES if f"failure_{name}" in values}
+        # Whether the train is at a station is the bench's: it decides
+        # whether the beacon is heard (bench_sim.py).
+        at_station = (bool(values["at_station"])
+                      if "at_station" in values else sim.at_station)
+        # The bench's emergency row is a passenger pull.
+        if "emergency_brake_state" in values:
+            si["emergency_brake_state"] = bool(
+                values["emergency_brake_state"])
         groups = (
-            ("brake_state",
-             ("brake_state_emergency",),
-             [s.fb_emergency_brake]),
             ("door_state",
              ("door_state_left", "door_state_right"),
-             [s.fb_doors_left, s.fb_doors_right]),
+             [sim.door_left, sim.door_right]),
             ("light_state",
              ("light_state_interior", "light_state_exterior"),
-             [s.fb_interior_lights, s.fb_exterior_lights]),
+             [sim.interior_lights, sim.exterior_lights]),
         )
         for signal, rows, current in groups:
             if any(row in values for row in rows):
                 si[signal] = [bool(values.get(row, now))
                               for row, now in zip(rows, current)]
-        if "brake_state" in si:
-            # The bench stands in for a passenger pull only; the
-            # service element is what the controller itself commanded.
-            si["brake_state"].append(s.fb_service_brake)
-        self.apply_inputs(si)
-        s.injected.update(injected)
-        # Clearing a failure on the bench is what resolves it; setting
-        # one only injects it, and the controller has to find it.
+        sim.apply(read_inputs(si))
+        sim.injected.update(injected)
+        sim.at_station = at_station
+        # A brake failure the controller resolves itself, once the
+        # service brake answers again (REQUIREMENTS.md §4). Engine and
+        # signal pickup failures it cannot yet see resolved, so clearing
+        # one on the bench clears it in the controller too
+        # (REQUIREMENTS.md M3, OPEN_ISSUES.md #23).
         for name, on in injected.items():
-            if not on:
+            if not on and name != "brake":
                 self.core.clear_failure(name)
 
     @Slot(float, float)
@@ -662,22 +798,24 @@ class ConsoleBackend(QObject):
         self.gains_note = (
             f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. Fixed for this run."
         )
-        QTimer.singleShot(GAINS_HANDOVER_MS, self._retire_engineer)
+        train_id = self.selected
+        QTimer.singleShot(GAINS_HANDOVER_MS,
+                          lambda: self._retire_engineer(train_id))
         self._publish()
 
-    def _retire_engineer(self) -> None:
-        # Close the gains dialog and hand the console to the driver.
+    def _retire_engineer(self, train_id: str) -> None:
+        # Close the gains dialog and hand the console to the driver,
+        # only if the engineer is still signed in on the train just
+        # commissioned: signing out, or picking a train with no gains,
+        # inside the hand-over must not sign a driver in (M9).
+        if self.operator != "engineer" or self.selected != train_id:
+            return
         self.operator = "driver"
         self._publish()
 
     # ----------------------------------------------------------- ticks
     def _tick(self) -> None:
         self._sync_roster()
-        if not self._owns_fleet and self.core.armed and not self.paused:
-            # An outside harness steps the trains; until it owns the
-            # clock too (D017) the console estimates it from here.
-            self.elapsed = self.elapsed.addMSecs(
-                int(1000 / UI_HZ) * self.sim_rate)
         if self.core.state.emergency_brake and not self.brake_note:
             self.brake_note = (
                 "Emergency brake engaged. "

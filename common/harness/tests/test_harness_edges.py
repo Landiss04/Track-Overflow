@@ -82,7 +82,7 @@ def commands(**changes: Any) -> dict[str, Any]:
         "light_command": [True, False],
         "temperature_setpoint_c": 22.2,
         "announcement": "GLENBURY",
-        "passenger_brake_release": False,
+        "power_verified": True,
         **changes,
     }
 
@@ -110,9 +110,9 @@ class TrainEdgesTest(unittest.TestCase):
     """Each field lands where the other module reads it."""
 
     def test_commands_to_the_train_model(self) -> None:
-        mapped = train_controller_to_train_model(
-            commands(passenger_brake_release=True)
-        )
+        # The Train Controller sends no passenger brake release
+        # (Train-Ctrl_HW OPEN_ISSUES.md #25): always false.
+        mapped = train_controller_to_train_model(commands())
         self.assertEqual(mapped, {
             "power_cmd_w": 1200.0,
             "service_brake": False,
@@ -123,7 +123,7 @@ class TrainEdgesTest(unittest.TestCase):
             "door_right_open": True,
             "temp_setpoint_c": 22.2,
             "announcement": "GLENBURY",
-            "passenger_brake_release": True,
+            "passenger_brake_release": False,
         })
 
     def test_report_to_the_train_controller(self) -> None:
@@ -131,7 +131,8 @@ class TrainEdgesTest(unittest.TestCase):
             "actual_speed": 4.5,
             "commanded_speed": 12.5,
             "authority_blocks": 3,
-            "brake_state": [True, False],
+            "emergency_brake_state": True,
+            "service_brake_state": False,
             "door_state": [False, True],
             "light_state": [True, False],
             "cabin_temperature": 21.5,

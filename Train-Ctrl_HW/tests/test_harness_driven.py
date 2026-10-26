@@ -36,6 +36,10 @@ from utils.module_link import TickRejectedError  # noqa: E402
 
 _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
+#: The simulation time each step is at: the shared clock's start, 05:00
+#: (truth D017).
+_START_S = 5 * 3600.0
+
 KP, KI = 400_000.0, 8_000.0
 
 
@@ -50,7 +54,8 @@ def report(
         "commanded_speed": commanded_mps,
         "authority_blocks": 4,
         "actual_speed": speed_mps,
-        "brake_state": [emergency, service],
+        "emergency_brake_state": emergency,
+        "service_brake_state": service,
         "door_state": [False, False],
         "light_state": [True, True],
         "cabin_temperature": 21.0,
@@ -74,7 +79,8 @@ class EchoTest(unittest.TestCase):
 
     def step(self, **values: Any) -> Any:
         """Step the train on one report; return its commands."""
-        return self.fleet.step_all(TICK_S, {"G1": report(**values)})["G1"]
+        return self.fleet.step_all(
+            TICK_S, {"G1": report(**values)}, _START_S)["G1"]
 
     def brake_then_release(self) -> None:
         """Engage at a stand, let the brake show, then release it."""
@@ -91,10 +97,13 @@ class EchoTest(unittest.TestCase):
             self.step(emergency=True)
             self.assertFalse(self.core.state.emergency_brake)
 
-    def test_a_pull_after_the_echo_latches(self) -> None:
+    def test_a_new_pull_after_the_echo_latches(self) -> None:
+        # A pull is the brake turning on while the controller is not
+        # commanding it (control.py): clear once, then on again.
         self.brake_then_release()
         for _ in range(ECHO_TICKS):
             self.step(emergency=True)
+        self.step()
         self.step(emergency=True)
         self.assertTrue(self.core.state.emergency_brake)
 
@@ -103,17 +112,8 @@ class EchoTest(unittest.TestCase):
         self.step(emergency=True, speed_mps=5.0)
         self.assertTrue(self.core.state.emergency_brake)
 
-    def test_release_is_sent_once(self) -> None:
-        self.brake_then_release()
-        first = self.step(emergency=True)
-        second = self.step(emergency=True)
-        self.assertTrue(first.passenger_brake_release)
-        self.assertFalse(first.emergency_brake)
-        self.assertFalse(second.passenger_brake_release)
-
-    def test_no_release_without_a_driver(self) -> None:
-        commands = [self.step() for _ in range(5)]
-        self.assertFalse(any(c.passenger_brake_release for c in commands))
+    # No passenger brake release is sent (OPEN_ISSUES.md #25), so
+    # there is nothing to test for it here.
 
 
 class LowerLimitAheadTest(unittest.TestCase):
@@ -138,7 +138,8 @@ class LowerLimitAheadTest(unittest.TestCase):
 
     def step(self, **values: Any) -> Any:
         """Step the train on one report; return its commands."""
-        return self.fleet.step_all(TICK_S, {"G1": report(**values)})["G1"]
+        return self.fleet.step_all(
+            TICK_S, {"G1": report(**values)}, _START_S)["G1"]
 
     def test_brakes_on_the_first_tick_in_the_slower_block(self) -> None:
         commands = self.step(speed_mps=17.9, commanded_mps=10.0)
@@ -169,9 +170,10 @@ class ConsoleFleetTest(unittest.TestCase):
         core = fleet.add("G1", "Green")
         arm(core)
         core.engage_emergency()
-        fleet.step_all(TICK_S, {"G1": report(emergency=True)})
+        fleet.step_all(TICK_S, {"G1": report(emergency=True)}, _START_S)
         self.assertTrue(core.release_emergency())
-        fleet.step_all(TICK_S, {"G1": report(emergency=True)})
+        fleet.step_all(TICK_S, {"G1": report()}, _START_S)
+        fleet.step_all(TICK_S, {"G1": report(emergency=True)}, _START_S)
         self.assertTrue(core.state.emergency_brake)
 
 
@@ -204,7 +206,7 @@ class ModuleProcessTest(unittest.TestCase):
         self.assertEqual(set(reply["trains"]["G1"]), {
             "power_w", "service_brake", "emergency_brake", "door_command",
             "light_command", "temperature_setpoint_c", "announcement",
-            "passenger_brake_release",
+            "power_verified",
         })
 
     def test_engineer_option_commissions_each_new_train(self) -> None:
@@ -216,7 +218,7 @@ class ModuleProcessTest(unittest.TestCase):
 
     def test_bad_inputs_reject_the_tick(self) -> None:
         values = report()
-        del values["brake_state"]
+        del values["service_brake_state"]
         with self.assertRaises(TickRejectedError):
             self.step({"G1": ("Green", values)})
         with self.assertRaises(TickRejectedError):

@@ -113,7 +113,8 @@ def test_action_cache_restores_actual_train_state(tmp_path):
                     "commanded_speed": 12,
                     "authority_blocks": 5,
                     "actual_speed": 0,
-                    "brake_state": [False, False],
+                    "emergency_brake_state": False,
+                    "service_brake_state": False,
                     "door_state": [False, False],
                     "light_state": [True, True],
                     "cabin_temperature": 21,
@@ -166,21 +167,13 @@ def test_replayed_station_dwell_integral_and_latches_match_reference(tmp_path):
     restored = PiLinkServer("train-controller-hw", tmp_path / "journal")
     after = restored.core.fleet.get("R1")
     assert vars(before.state) == vars(after.state)
-    for name in (
-        "_dwell_steps_left",
-        "integral",
-        "_brake_unanswered_s",
-        "_station_pending",
-        "_dwelling",
-        "_closing",
-        "_last_signal",
-        "_sent_emergency",
-        "_engine_window",
-    ):
-        assert getattr(before, name) == getattr(after, name)
-    count = after._dwell_steps_left
+    # Every latch, timer and integral the core keeps, whatever it names
+    # them.
+    kept = {k: v for k, v in vars(before).items() if k != "state"}
+    assert kept == {k: v for k, v in vars(after).items() if k != "state"}
+    count = after._dwell_ticks
     restored.handle(frame)
-    assert after._dwell_steps_left == count
+    assert after._dwell_ticks == count
 
 
 def test_agent_import_is_standard_library_only():

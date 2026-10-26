@@ -9,48 +9,46 @@ Panel {
     id: root
 
     readonly property var s: controller.snapshot
-    // What the train reports, which is what the driver should be
-    // looking at. The commands are the outputs beside them.
-    readonly property bool anyDoorOpen: s.fb_doors_left || s.fb_doors_right
 
-    title: qsTr("Doors & cabin")
+    title: qsTr("Cab controls")
     headerItems: [
+        // Whether the driver may work the doors now: a tile is live
+        // when it may be pressed, greyed when it may not, and the
+        // tiles say which side is open.
         StatusBadge {
+            readonly property bool free: root.s.door_left_live
+                || root.s.door_right_live
             label: !root.s.can_drive ? qsTr("Locked")
-                : root.anyDoorOpen ? qsTr("Open") : qsTr("Closed")
-            variant: !root.s.can_drive ? "idle"
-                : root.anyDoorOpen ? "info" : "ok"
+                : free ? qsTr("Doors free") : qsTr("Doors locked")
+            variant: root.s.can_drive && free ? "ok" : "idle"
         }
     ]
 
-    // Only the platform side opens, and only at a stand; an open door
-    // can always be closed, so a door left open when the platform side
-    // changes is not stuck. A moving train says why it will not open.
+    // REQUIREMENTS.md M6: either side opens at a stand away from a
+    // station; at a station the controller opens the platform side,
+    // closes it after the dwell, and closes any door for a new Track
+    // Signal. A tile that cannot act now is greyed.
     RowLayout {
         Layout.fillWidth: true
         spacing: theme.space_2
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive && (root.s.fb_doors_left
-                || (root.s.platform_left && root.s.at_stand))
+            enabled: root.s.door_left_live
             on: root.s.fb_doors_left
             tone: "info"
             text: root.s.fb_doors_left ? qsTr("Close left")
-                : root.s.at_stand ? qsTr("Open left")
-                : qsTr("Left: stop first")
+                                       : qsTr("Open left")
             onClicked: controller.set_door("left", !root.s.fb_doors_left)
         }
 
         ToggleTile {
             Layout.fillWidth: true
-            enabled: root.s.can_drive && (root.s.fb_doors_right
-                || (root.s.platform_right && root.s.at_stand))
+            enabled: root.s.door_right_live
             on: root.s.fb_doors_right
             tone: "info"
             text: root.s.fb_doors_right ? qsTr("Close right")
-                : root.s.at_stand ? qsTr("Open right")
-                : qsTr("Right: stop first")
+                                        : qsTr("Open right")
             onClicked: controller.set_door("right", !root.s.fb_doors_right)
         }
     }

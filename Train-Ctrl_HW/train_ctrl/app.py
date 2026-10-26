@@ -20,7 +20,6 @@ from PySide6.QtQml import QQmlApplicationEngine
 # windows QML creates expose grabWindow() to the self-check.
 from PySide6.QtQuick import QQuickWindow  # noqa: F401
 
-from check import check_snapshot_contract, run_check
 from ui.aspect_lock import install_window_scaling
 
 from .fleet import TrainControllerFleet
@@ -34,7 +33,7 @@ _TEST_QML = _UI_DIR / "TestWindow.qml"
 
 
 def run(console: bool, bench: bool, check: bool = False,
-        shots: Path | None = None, 
+        shots: Path | None = None,
         fleet: TrainControllerFleet | None = None) -> int:
     """Open the requested windows and run until they close.
 
@@ -67,7 +66,12 @@ def run(console: bool, bench: bool, check: bool = False,
 
     if not check_shared_library():
         return 1
-    contract_ok = check_snapshot_contract(backend, _UI_DIR)
+    # check.py is a development self-check and does not ship with the
+    # integration, so the console imports it only when asked to run it.
+    contract_ok = True
+    if check:
+        from check import check_snapshot_contract, run_check
+        contract_ok = check_snapshot_contract(backend, _UI_DIR)
 
     engine = QQmlApplicationEngine()
     # Keep our own copy of QML errors so a failed load explains

@@ -16,7 +16,13 @@ Train Controller -> Train Model, ``train_controller_to_train_model``::
     light_command [i, e]    -> interior_lights, exterior_lights
     temperature_setpoint_c  -> temp_setpoint_c
     announcement            -> announcement
-    passenger_brake_release -> passenger_brake_release
+    (not sent)              -> passenger_brake_release, always false
+
+The Train Controller does not send a passenger brake release, by its
+owner's decision (``Train-Ctrl_HW/HARNESS_INTEGRATION.md``, Outputs;
+``OPEN_ISSUES.md`` #25): clearing the Train Model's passenger latch is
+left to the Train Model. Its ``power_verified`` (M21) is its own and
+does not cross this edge.
 
 Train Model -> Train Controller, ``train_model_to_train_controller``,
 from the Train Model's ``controller`` outputs::
@@ -24,8 +30,8 @@ from the Train Model's ``controller`` outputs::
     actual_speed_mps            -> actual_speed
     commanded_speed_mps         -> commanded_speed
     authority_blocks            -> authority_blocks
-    emergency_brake_active,
-    service_brake_active        -> brake_state [emergency, service]
+    emergency_brake_active      -> emergency_brake_state
+    service_brake_active        -> service_brake_state
     door_left_open,
     door_right_open             -> door_state [left, right]
     interior_lights_on,
@@ -108,7 +114,7 @@ def train_controller_to_train_model(
         "door_right_open": right,
         "temp_setpoint_c": commands["temperature_setpoint_c"],
         "announcement": commands["announcement"],
-        "passenger_brake_release": commands["passenger_brake_release"],
+        "passenger_brake_release": False,
     }
 
 
@@ -128,10 +134,8 @@ def train_model_to_train_controller(
         "actual_speed": outputs["actual_speed_mps"],
         "commanded_speed": outputs["commanded_speed_mps"],
         "authority_blocks": outputs["authority_blocks"],
-        "brake_state": [
-            outputs["emergency_brake_active"],
-            outputs["service_brake_active"],
-        ],
+        "emergency_brake_state": outputs["emergency_brake_active"],
+        "service_brake_state": outputs["service_brake_active"],
         "door_state": [
             outputs["door_left_open"],
             outputs["door_right_open"],

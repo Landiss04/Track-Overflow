@@ -145,6 +145,9 @@ class SystemEdges:
         # stopped feeding: they left the track.
         self._on_track: set[str] = set()
         self._off_track: set[str] = set()
+        # Each train's last beacon, the block it was reported in, and
+        # the block the train went on into, once it has.
+        self._beacons: dict[str, tuple[Any, str, str | None]] = {}
 
     @property
     def roster(self) -> Roster:
@@ -395,7 +398,13 @@ class SystemEdges:
                 or train_id in self._off_track
             ):
                 continue
-            inputs = train_model_to_train_controller(report["controller"])
+            controller = dict(report["controller"])
+            block = (report.get("track") or {}).get("block_id")
+            if block:
+                controller["beacon"] = self._beacon(
+                    train_id, controller["beacon"], block
+                )
+            inputs = train_model_to_train_controller(controller)
             aspect = seen.get(train_id)
             if aspect is not None:
                 inputs["signal_light_ahead"] = aspect_to_train_controller(
@@ -403,6 +412,31 @@ class SystemEdges:
                 )
             trains[train_id] = {"line": entry.line, "inputs": inputs}
         return {"trains": trains}
+
+    def _beacon(self, train_id: str, beacon: Any, block: str) -> Any:
+        """The beacon to pass a train's Train Controller this tick.
+
+        The Train Model reports a station's beacon only in the block
+        before the station; the Train Controller needs it every tick
+        the train is on the station's block, to know it has arrived
+        (``Train-Ctrl_HW/HARNESS_INTEGRATION.md``, M6). So the last one
+        is passed on through the block the train goes on into, and
+        dropped once it leaves that. The same on a repeated call.
+        """
+        if beacon is not None:
+            self._beacons[train_id] = (beacon, block, None)
+            return beacon
+        held = self._beacons.get(train_id)
+        if held is None:
+            return None
+        last, reported_in, went_into = held
+        if block == reported_in or block == went_into:
+            return last
+        if went_into is None:
+            self._beacons[train_id] = (last, reported_in, block)
+            return last
+        del self._beacons[train_id]
+        return None
 
 
 def _wayside_mapping(module: str) -> Any:

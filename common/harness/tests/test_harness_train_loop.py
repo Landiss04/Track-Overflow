@@ -878,6 +878,11 @@ class EmergencyBrakeTest(unittest.TestCase):
             self.assertFalse(self.core.state.emergency_brake)
         self.assertTrue(self.loop.run_until(lambda: self.loop.speed_mps > 1))
 
+    # The Train Controller no longer sends a passenger brake release,
+    # by its owner's decision (Train-Ctrl_HW OPEN_ISSUES.md #25): the
+    # Train Model's latch stays on after the driver's release until the
+    # Train Model clears it itself.
+    @unittest.expectedFailure
     def test_passenger_pull_and_release(self) -> None:
         self.loop.model_fleet.get("G1").applyEmergencyBrake()
         self.assertTrue(self.loop.run_until(

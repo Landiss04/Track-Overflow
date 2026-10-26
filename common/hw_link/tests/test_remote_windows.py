@@ -42,20 +42,10 @@ def test_console_backend_direct_mutations_and_methods_reach_pi(tmp_path):
         assert state["manual"] and state["service_request"]
         assert not state["interior_lights"] and not state["exterior_lights"]
         assert state["target_mps"] > 0
-        # A station beacon is the Pi's input, then the driver's announcement
-        # assignment and clear timer both traverse RemoteState.
-        frame = request(2)
-        frame["inputs"]["trains"]["R1"]["inputs"]["beacon_station"] = "TEST"
-        relay.submit_step(frame)
-        until(lambda: len(replies) == 2)
-        relay.call_action(
-            "set_state",
-            {"train_id": "R1", "field": "announcement", "value": ""},
-        )
-        backend.announce()
-        assert views[-1]["trains"]["R1"]["state"]["announcement"] == "TEST"
-        backend._announce_done("R1")
-        assert views[-1]["trains"]["R1"]["state"]["announcement"] == ""
+        # The driver's repeat of the last automatic announcement runs on
+        # the Pi (REQUIREMENTS.md M7): with none made yet, it is refused
+        # there.
+        assert fleet.get("R1").repeat_announcement() is False
         assert backend.snapshot["train_count"] == 1
         assert not errors
         backend._ui.stop()
@@ -179,33 +169,3 @@ def test_engineer_compound_action_precedes_queued_next_step(tmp_path):
         backend._ui.stop()
     finally:
         relay.close()
-
-
-def test_late_window_announcement_timer_does_not_wait_on_closed_pi(tmp_path):
-    from PySide6.QtCore import QTimer
-    from train_ctrl.backend import ConsoleBackend
-
-    relay, replies, events, views, errors = make_relay(tmp_path)
-    fleet = RemoteTrainFleet(relay)
-    relay.submit_step(request(1))
-    until(lambda: "R1" in fleet)
-    backend = ConsoleBackend(fleet=fleet)
-    backend.announcing.add("R1")
-    relay.close()
-    queued_before = len(relay._queue)
-    completed = []
-    failures = []
-
-    def late_timer():
-        try:
-            backend._announce_done("R1")
-        except Exception as error:
-            failures.append(error)
-        completed.append(True)
-
-    QTimer.singleShot(0, late_timer)
-    until(lambda: bool(completed), timeout=1000)
-    assert not failures
-    assert len(relay._queue) == queued_before == 0
-    assert not errors
-    backend._ui.stop()
