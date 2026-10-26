@@ -4,6 +4,29 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-10-26 — Vital block and Braden's Red programs (Braden)
+
+Branch `feature/TrackCtrl-HW-vital`, from `claude/quirky-fermi-sickg4`.
+
+- New `track_ctrl_hw/vital.py`: a read-only vital block generated from each
+  wayside's database and scanned after the user's program on both channels
+  (Braden and Harry Tye, 2026-10-26: both variants append one). It only
+  restricts: closures, separation over `next_blocks` (route-aware at points),
+  moving switches, the speed limit, CTC switch commands and locking, one-aspect
+  signals and crossings. A vital channel disagreement is a latched channel
+  fault. Withdraws the 2026-10-16 "no vital layer" design (proposal D019).
+- `wayside.py` drives the vital block's `OUT_` outputs; the snapshot carries
+  `vital` (checksum, counts) and `overrides`; the PLC details window shows
+  both and the vital source.
+- The three Red PLCs are now Braden's (HW-1). File names are unchanged so the
+  harness and its tests are untouched. Against Kevin's copies: `AUTO_9 := 0`
+  replaces the undeclared `FALSE`; the points count only the leg the switch
+  reports; speed passes
+  through with authority and the vital block caps it; comments throughout.
+- Tests: `tests/test_vital.py`; `NothingAboveTheProgram` becomes
+  `VitalBlockOverAProgram`; a program can no longer ignore a CTC switch
+  command.
+
 ## 2026-10-22 — Red yard and integration inputs
 
 Correction commit: `5d51051` (course data restoration and reader agreement).
