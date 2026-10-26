@@ -425,10 +425,6 @@ class CtcOffice(Protocol):
         """
         ...
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        """Drop a train's dispatch order, if it has one."""
-        ...
-
     def return_to_yard(self, train_id: str) -> None:
         """Send a manual train on the track back to the yard (R66,
         D022): an order to its line's yard entry block (Green 57, Red

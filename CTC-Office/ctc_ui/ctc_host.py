@@ -808,10 +808,6 @@ class CtcHost(QObject):
                          None)
 
     @Slot(str, result=str)
-    def cancelDispatch(self, train_id: str) -> str:  # noqa: N802
-        return self._act(self._module.cancel_dispatch, train_id)
-
-    @Slot(str, result=str)
     def returnToYard(self, train_id: str) -> str:  # noqa: N802
         """Send a manual train back to the yard, where it is retired
         (R66, D022); return the refusal's text, or ""."""

@@ -246,16 +246,6 @@ Panel {
                             qsTr("%1 rerouted.").arg(root.trainId))
                     }
 
-                    AppButton {
-                        variant: "secondary"
-                        text: qsTr("Cancel order")
-                        enabled: root.train.destinationBlock !== undefined
-                            && root.train.destinationBlock !== ""
-                        onClicked: root.report(
-                            root.host.cancelDispatch(root.trainId),
-                            qsTr("%1's order cancelled.").arg(root.trainId))
-                    }
-
                     // Return to yard (R66, D022): an order to the yard
                     // entry block, where the train is retired. Only a
                     // train on the track can be sent back.

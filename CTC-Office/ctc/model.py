@@ -643,26 +643,18 @@ class StubCtcOffice:
         # A new order withdraws a "return to yard".
         self._returning.discard(train_id)
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        """Drop a train's dispatch order, if it has one. A train the CTC
-        had lost track of is forgotten with it."""
-        train_id = _trim(train_id)
-        self._orders.pop(train_id, None)
-        self._returning.discard(train_id)
-        self._tracker.lost.discard(train_id)
-
     def return_to_yard(self, train_id: str) -> None:
         """Send a manual train back to the yard (R66, D022).
 
         The train is ordered to its line's yard entry block (Green 57,
         Red 9), with no arrival time, in place of any order it had. Once
         it has stopped there with authority 0 it is retired as a run of
-        the schedule is (``retired_trains``). A later order or a cancel
-        withdraws it.
+        the schedule is (``retired_trains``). A later order withdraws
+        it.
 
         Refused (``InvalidInputError``) for a train the CTC is not
         following on the track (one waiting in the yard has nothing to
-        return from; cancel its order instead), and for a run of the
+        return from), and for a run of the
         loaded schedule, which the schedule sends back itself. Refused
         (safety) as ``dispatch`` refuses: the yard entry block closed or
         closing, or the line's Track Controller not ready.
@@ -991,7 +983,10 @@ class StubCtcOffice:
         while pending:
             action = pending.pop(0)
             if isinstance(action, Cancel):
-                self.cancel_dispatch(action.train_id)
+                # The run is back in the yard: its order is done.
+                self._orders.pop(action.train_id, None)
+                self._returning.discard(action.train_id)
+                self._tracker.lost.discard(action.train_id)
                 continue
             try:
                 self.dispatch(action.train_id, action.line, action.block_id,

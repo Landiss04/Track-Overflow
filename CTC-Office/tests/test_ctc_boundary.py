@@ -452,11 +452,6 @@ class HarnessSendTest(unittest.TestCase):
         self.assertEqual([o.train_id for o in snap.orders], ["T1"])
         self.assertTrue(snap.maintenance_mode)
 
-        # The order is cancelled in the window: its outputs go.
-        link.cancel_dispatch("T1")
-        harness.send()
-        self.assertNotIn("authority[T1]", _outputs(harness))
-
     def test_unknown_block_is_reported_and_not_stepped(self) -> None:
         # The table only offers real blocks; the module still checks.
         link = LocalLink()

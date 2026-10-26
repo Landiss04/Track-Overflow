@@ -197,9 +197,6 @@ class LostTest(unittest.TestCase):
         # Never taken to have left the yard.
         _occupied(ctc, "63")
         self.assertEqual(ctc.snapshot().trains, ())
-        # Cancelling its order forgets it.
-        ctc.cancel_dispatch("T1")
-        self.assertEqual(ctc.snapshot().lost_trains, ())
 
     def test_found_again_by_placing_it(self) -> None:
         ctc = ready_office()

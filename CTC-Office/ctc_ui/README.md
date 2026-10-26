@@ -163,8 +163,8 @@ yet) through `ctc_ui/ctc_host.py`:
   sends to the Track Controller.
 - **Selected train** shows the train's live readouts, including why its
   authority ends where it does; in Manual mode it also reroutes the
-  train or cancels its order, and **Return to yard** sends a train on
-  the track back to the yard, where it is retired.
+  train, and **Return to yard** sends a train on the track back to the
+  yard, where it is retired. The dispatcher cannot cancel a train's order.
 - **Close block** and **Active closures** (Maintenance only) close a
   block (with a confirmation step, style guide 7) and reopen it. A block
   with a train in it is listed as "Closing — train in block" and closes
@@ -235,7 +235,7 @@ yet) through `ctc_ui/ctc_host.py`:
 
 | Area | Hook |
 | --- | --- |
-| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `setAuthority`, `cancelDispatch`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
+| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `setAuthority`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
 | Track map | `panels/TrackViewPanel.qml` → `mapCanvas`; `blockStates` and `crossingStates` style the blocks. Set `mapAvailable` to enable zoom and fit. |
 | Selected train | `SelectedTrainPanel.trainId` and `host`; `canReroute` adds the reroute controls. |
 | Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` → `ctc.loadSchedule`; `scheduleFile`, `scheduleError`, `departures`, `dispatchRunning` and `dispatchPaused` come back from `ctc`; Pause / Resume call `ctc.setDispatchPaused`. The header's mode calls `ctc.setAutomaticMode`. |
