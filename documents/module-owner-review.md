@@ -430,6 +430,8 @@ one. Harry Tye owns the follow-up. The CTC-1 change also lets same-direction Gre
 trains share 77…85 and 13…28, which changes the admission this stall was
 measured under.
 
+Reply from Harry : This is a bug in the PLC program, not a bug of the Track Controller. You will need to let me know if we need completely functional PLC programs to do this first integratation but this is at least a week away. Also it will be hard to verify complete PLC correctness w/o integration so this is a chicken-egg issue if you require PLCs for integeration. 
+
 ## CTC-3: Green follower at 75/76
 
 **Owners:** Landis and Harry Tye.
@@ -462,6 +464,8 @@ integration fix. Related: [SW safety scope](#sw-1-plc-only-safety-follow-up),
 **Landis's answer (2026-10-25):** Not a CTC issue; a Track Controller one.
 Harry Tye owns the listed-block versus points lock follow-up.
 
+Reply from Harry : CTC should not be scheduling trains to follow within 1 block of each other for this specific reason. Head train requires a reverse switch and follower train does not; vital code ensures we don't set the switch for block 76 while a train is on it but b/c the train requires a normal switch, it waits. 
+
 ## SW-1: PLC-only safety follow-up
 
 **Owner:** Harry Tye; Braden for HW alignment.
@@ -487,6 +491,8 @@ Deleting supervision without an agreed replacement would affect more than the
 **Requested decision:** Harry should define and own the removal/migration scope,
 required PLC protections and validation, resolving the variant-policy conflict with
 Braden. Record that owner decision before implementing the follow-up.
+
+Reply form Harry: SW does not call vital.supervise, PLC vital code has been implemented and tested. 
 
 ## HW-1: Red PLC copies and real programs
 
@@ -561,6 +567,12 @@ yard leg out the fixed side, to 10. The CTC now does the same
 9→10…16. The switch-9 reading itself (point 9, NORMAL 8, REVERSE yard, fixed
 side 10) is the Track Model's assumption in `_read_switches` and remains the
 Track Model owner's question.
+
+**Track Model owner's answer (2026-10-26):** Confirmed as the Track Model's reading,
+and `layout.py` stays the master: point 9, NORMAL to 8, REVERSE to the yard, fixed
+side 10, light on 10. The source JSON stays unchanged. This comes from the owner's
+reading, not from a document or decision, so it is not recorded as truth until Kevin
+confirms the physical layout.
 
 ## INPUT-1: Missing occupancy counts as clear
 
@@ -701,6 +713,8 @@ currently sends switch commands only while in maintenance mode and drops them
 when it ends, so persistence of the switch list is for Landis to confirm. The
 occupancy-completeness questions above stay with Braden and Harry.
 
+Reply from Harry : Track model should be providing an updated view of block occupancy per tick in accordance with a physical system imo. The concept of stale block occupancy is purely simulation artifact. If a tick fails I am not sure if Track Controllers can communicate with each other or if they only communciate with CTC, this is an open question. 
+
 ## SW-2: Green starter decisions
 
 **Owners:** Harry Tye and Landis.
@@ -734,6 +748,8 @@ deadlocks. A train waits to be released toward the yard until that is safe, or i
 routed around oncoming trains. The CTC side is implemented with
 [CTC-1](#ctc-1-red-concurrency); the starter-input decisions stay with Harry.
 
+Reply from Harry : Not sure if we are allowed to receive the train direction from CTC or if this violates the system at all. If we are able to, then sure. Switches default to normal. 
+
 ## TM-1: Ticket rate
 
 **Owner:** Track Model owner.
@@ -752,6 +768,13 @@ sale delivery to CTC does not resolve the sales-generation rate.
 
 **Requested decision:** Confirm the intended demand rate and whether it should be
 per tick or time based. Keep the existing sales interface separate from that choice.
+
+**Track Model owner's answer (2026-10-26):** Sales are time-based, not per tick. The
+intended demand is about 12 tickets per simulated minute per station, which is what
+the current default gives at the 0.1 s system tick. The per-tick probability will be
+derived from `dt` so the rate holds at any tick length. The sales interface to the
+CTC is unchanged. Whether each count is a delta or a running total (open in
+`signals/ticket-sales`) is a separate decision.
 
 ## TM-2: Light ahead, B1
 
@@ -773,6 +796,14 @@ fresh visual or runtime reproduction was performed here.
 **Requested decision / owner work:** Resolve B1's per-tick, direction-aware light
 ahead behavior and confirm physical signal placement with the Track Controller
 owners (also SW discrepancy C6). Use the existing B1 issue for implementation detail.
+
+**Track Model owner's answer (2026-10-26):** B1 is a defect. Each tick the Track Model
+will send the light ahead that faces the train's direction of travel, as the
+`signal-aspect-ahead` entry describes, not only on the entry tick. Green 63→64 gets
+the light guarding 63→64, not the one for the opposite direction. This replaces the
+earlier note that a train sees the colour once on entry. The Track Controller owners
+are asked to confirm the physical light placement (SW discrepancy C6) before the
+code changes.
 
 ## TM-3: Automatic heaters
 
@@ -796,6 +827,12 @@ failure behavior. No new temperature experiment was run for this document.
 **Requested decision:** Specify the automatic switching rule and failure behavior,
 then implement it in the Track Model. Do not add a Track Controller heater command
 to bypass that owner decision.
+
+**Track Model owner's answer (2026-10-26):** The Track Model switches the heaters
+itself, per D026, with no Track Controller command. The rule is a single threshold: a
+section's heater is on when ambient temperature is at or below 0 °C, and off above it,
+with no hysteresis. If the ambient temperature is missing or not finite, the heaters
+keep their last state. Not yet implemented.
 
 ## PI-1: Physical Pi prerequisites
 
