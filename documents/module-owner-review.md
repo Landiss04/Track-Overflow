@@ -521,6 +521,12 @@ yard leg out the fixed side, to 10. The CTC now does the same
 side 10) is the Track Model's assumption in `_read_switches` and remains the
 Track Model owner's question.
 
+**Track Model owner's answer (2026-10-26):** Confirmed as the Track Model's reading,
+and `layout.py` stays the master: point 9, NORMAL to 8, REVERSE to the yard, fixed
+side 10, light on 10. The source JSON stays unchanged. This comes from the owner's
+reading, not from a document or decision, so it is not recorded as truth until Kevin
+confirms the physical layout.
+
 ## INPUT-1: Missing occupancy counts as clear
 
 **Owners:** Braden and Harry Tye.
@@ -712,6 +718,13 @@ sale delivery to CTC does not resolve the sales-generation rate.
 **Requested decision:** Confirm the intended demand rate and whether it should be
 per tick or time based. Keep the existing sales interface separate from that choice.
 
+**Track Model owner's answer (2026-10-26):** Sales are time-based, not per tick. The
+intended demand is about 12 tickets per simulated minute per station, which is what
+the current default gives at the 0.1 s system tick. The per-tick probability will be
+derived from `dt` so the rate holds at any tick length. The sales interface to the
+CTC is unchanged. Whether each count is a delta or a running total (open in
+`signals/ticket-sales`) is a separate decision.
+
 ## TM-2: Light ahead, B1
 
 **Owner:** Track Model owner; Track Controller owners for placement agreement.
@@ -732,6 +745,14 @@ fresh visual or runtime reproduction was performed here.
 **Requested decision / owner work:** Resolve B1's per-tick, direction-aware light
 ahead behavior and confirm physical signal placement with the Track Controller
 owners (also SW discrepancy C6). Use the existing B1 issue for implementation detail.
+
+**Track Model owner's answer (2026-10-26):** B1 is a defect. Each tick the Track Model
+will send the light ahead that faces the train's direction of travel, as the
+`signal-aspect-ahead` entry describes, not only on the entry tick. Green 63→64 gets
+the light guarding 63→64, not the one for the opposite direction. This replaces the
+earlier note that a train sees the colour once on entry. The Track Controller owners
+are asked to confirm the physical light placement (SW discrepancy C6) before the
+code changes.
 
 ## TM-3: Automatic heaters
 
@@ -755,6 +776,12 @@ failure behavior. No new temperature experiment was run for this document.
 **Requested decision:** Specify the automatic switching rule and failure behavior,
 then implement it in the Track Model. Do not add a Track Controller heater command
 to bypass that owner decision.
+
+**Track Model owner's answer (2026-10-26):** The Track Model switches the heaters
+itself, per D026, with no Track Controller command. The rule is a single threshold: a
+section's heater is on when ambient temperature is at or below 0 °C, and off above it,
+with no hysteresis. If the ambient temperature is missing or not finite, the heaters
+keep their last state. Not yet implemented.
 
 ## PI-1: Physical Pi prerequisites
 
