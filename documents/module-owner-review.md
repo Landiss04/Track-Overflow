@@ -389,6 +389,8 @@ one. Harry Tye owns the follow-up. The CTC-1 change also lets same-direction Gre
 trains share 77…85 and 13…28, which changes the admission this stall was
 measured under.
 
+Reply from Harry : This is a bug in the PLC program, not a bug of the Track Controller. You will need to let me know if we need completely functional PLC programs to do this first integratation but this is at least a week away. Also it will be hard to verify complete PLC correctness w/o integration so this is a chicken-egg issue if you require PLCs for integeration. 
+
 ## CTC-3: Green follower at 75/76
 
 **Owners:** Landis and Harry Tye.
@@ -421,6 +423,8 @@ integration fix. Related: [SW safety scope](#sw-1-plc-only-safety-follow-up),
 **Landis's answer (2026-10-25):** Not a CTC issue; a Track Controller one.
 Harry Tye owns the listed-block versus points lock follow-up.
 
+Reply from Harry : CTC should not be scheduling trains to follow within 1 block of each other for this specific reason. Head train requires a reverse switch and follower train does not; vital code ensures we don't set the switch for block 76 while a train is on it but b/c the train requires a normal switch, it waits. 
+
 ## SW-1: PLC-only safety follow-up
 
 **Owner:** Harry Tye; Braden for HW alignment.
@@ -446,6 +450,8 @@ Deleting supervision without an agreed replacement would affect more than the
 **Requested decision:** Harry should define and own the removal/migration scope,
 required PLC protections and validation, resolving the variant-policy conflict with
 Braden. Record that owner decision before implementing the follow-up.
+
+Reply form Harry: SW does not call vital.supervise, PLC vital code has been implemented and tested. 
 
 ## HW-1: Red PLC copies and real programs
 
@@ -666,6 +672,8 @@ currently sends switch commands only while in maintenance mode and drops them
 when it ends, so persistence of the switch list is for Landis to confirm. The
 occupancy-completeness questions above stay with Braden and Harry.
 
+Reply from Harry : Track model should be providing an updated view of block occupancy per tick in accordance with a physical system imo. The concept of stale block occupancy is purely simulation artifact. If a tick fails I am not sure if Track Controllers can communicate with each other or if they only communciate with CTC, this is an open question. 
+
 ## SW-2: Green starter decisions
 
 **Owners:** Harry Tye and Landis.
@@ -698,6 +706,8 @@ confirm the CTC two-way-zone protection assumed at this boundary. Coordinate wit
 deadlocks. A train waits to be released toward the yard until that is safe, or is
 routed around oncoming trains. The CTC side is implemented with
 [CTC-1](#ctc-1-red-concurrency); the starter-input decisions stay with Harry.
+
+Reply from Harry : Not sure if we are allowed to receive the train direction from CTC or if this violates the system at all. If we are able to, then sure. Switches default to normal. 
 
 ## TM-1: Ticket rate
 
