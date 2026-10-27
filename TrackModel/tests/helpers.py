@@ -18,9 +18,9 @@ MODULE_DIR = Path(__file__).resolve().parents[1]
 LAYOUT_PATHS = tuple(str(p) for p in sorted(MODULE_DIR.glob("*_line.json")))
 
 
-def make_model(ticket_probability: float = 0.0, seed: int = 0) -> TrackModel:
+def make_model(tickets_per_minute: float = 0.0, seed: int = 0) -> TrackModel:
     """Return a Track Model over every course line."""
-    return TrackModel(TrackConfig(LAYOUT_PATHS, ticket_probability, seed))
+    return TrackModel(TrackConfig(LAYOUT_PATHS, tickets_per_minute, seed))
 
 
 def report(

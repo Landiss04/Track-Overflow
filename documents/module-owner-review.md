@@ -776,6 +776,10 @@ derived from `dt` so the rate holds at any tick length. The sales interface to t
 CTC is unchanged. Whether each count is a delta or a running total (open in
 `signals/ticket-sales`) is a separate decision.
 
+**Implemented 2026-10-27:** `TrackConfig.tickets_per_minute` (default 12) replaces the
+per-tick `ticket_probability`; each tick's chance is `min(1, rate × dt / 60)`, 0.02 at
+0.1 s as before. A new test checks 11–13 a minute at both 0.1 s and 0.5 s ticks.
+
 ## TM-2: Light ahead, B1
 
 **Owner:** Track Model owner; Track Controller owners for placement agreement.
@@ -805,6 +809,12 @@ earlier note that a train sees the colour once on entry. The Track Controller ow
 are asked to confirm the physical light placement (SW discrepancy C6) before the
 code changes.
 
+**Not implemented yet (2026-10-27):** the Track Model places each light on the block
+before a switch, keyed by that block (`layout.py` `_signal_blocks`). Braden's TM-2 answer
+(signals at the switch, keyed by the switch's ID) would change signal IDs across the
+Track Model, both Track Controllers and the harness, and Harry has not confirmed SW
+discrepancy C6. Waiting on that placement decision.
+
 ## TM-3: Automatic heaters
 
 **Owner:** Track Model owner.
@@ -833,6 +843,10 @@ itself, per D026, with no Track Controller command. The rule is a single thresho
 section's heater is on when ambient temperature is at or below 0 °C, and off above it,
 with no hysteresis. If the ambient temperature is missing or not finite, the heaters
 keep their last state. Not yet implemented.
+
+**Implemented 2026-10-27:** `TrackModel._switch_heaters`: on at or below 0 °C ambient
+(`HEATER_ON_AT_C`), off above, no hysteresis, last state kept with no ambient. Heater
+commands are accepted but not applied. Track Model suite: 316 passed.
 
 ## PI-1: Physical Pi prerequisites
 

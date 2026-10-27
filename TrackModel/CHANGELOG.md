@@ -4,6 +4,24 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-10-27 — Owner answers TM-1 and TM-3
+
+From the Track Model owner's answers to `documents/module-owner-review.md`
+(2026-10-26), relayed by Kevin.
+
+- TM-1: ticket sales are time-based. `TrackConfig.ticket_probability` (a chance
+  per tick) is replaced by `tickets_per_minute` (default 12 per station); each
+  tick's chance is `min(1, tickets_per_minute * dt / 60)`, 0.02 at the 0.1 s
+  tick as before. Tests pass rates (600 and 300 a minute for the old 1.0 and
+  0.5), and a new test checks the rate at 0.1 s and 0.5 s ticks.
+- TM-3: the Track Model switches the heaters itself (D026): every section's
+  heater is on at or below 0 °C ambient (`HEATER_ON_AT_C`) and off above it,
+  with no hysteresis; a tick with no ambient keeps them as they were. Heater
+  commands are still accepted on the boundary but not applied. Heater tests
+  and manual test TC-27 are rewritten for the rule.
+- TM-2 (the light ahead every tick, facing the direction of travel) is not
+  done: the light placement it depends on is still to be confirmed.
+
 ## 2026-10-22 — Red yard and integration inputs
 
 Correction commit: `5d51051` (course data restoration and reader agreement).

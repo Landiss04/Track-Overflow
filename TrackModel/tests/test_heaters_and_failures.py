@@ -13,7 +13,12 @@ from track_model.interface import (
     TrackControllerCommands,
     TrackFailure,
 )
-from track_model.model import HEATER_RISE_C, TRACK_TIME_CONSTANT_S, TrackModel
+from track_model.model import (
+    HEATER_ON_AT_C,
+    HEATER_RISE_C,
+    TRACK_TIME_CONSTANT_S,
+    TrackModel,
+)
 from tests.helpers import DT_S, make_inputs, make_model, report
 
 FAR_M = 10_000.0
@@ -21,13 +26,16 @@ ALL_FAILURES = [TrackFailure.BROKEN_RAIL, TrackFailure.TRACK_CIRCUIT,
                 TrackFailure.POWER]
 
 
-def heat(model: TrackModel, sections: dict[str, bool], ambient: float,
-         ticks: int) -> None:
-    """Hold the heater commands and ambient for ``ticks`` steps."""
-    commands = TrackControllerCommands(heater_commands=sections)
+def heat(model: TrackModel, ambient: float | None, ticks: int) -> None:
+    """Hold the ambient for ``ticks`` steps. The Track Model switches the
+    heaters itself from it (D026, TM-3)."""
     for _ in range(ticks):
-        model.step(DT_S, make_inputs(controller=commands,
-                                     ambient_temp_c=ambient))
+        model.step(DT_S, make_inputs(ambient_temp_c=ambient))
+
+
+def heaters(model: TrackModel) -> set[bool]:
+    """Every section's heater state, as a set."""
+    return set(model.snapshot().outputs.controller.heater_states.values())
 
 
 def expected_rise(ticks: int) -> float:
@@ -58,51 +66,85 @@ def test_unknown_heater_section_is_rejected() -> None:
 
 
 def test_track_starts_at_ambient() -> None:
-    """Check the first step sets every section to the ambient temperature."""
-    out = make_model().step(DT_S, make_inputs(ambient_temp_c=-5.0))
-    assert set(out.controller.track_temp_c.values()) == {-5.0}
+    """Check the first step sets every section to the ambient temperature
+    (above freezing, so no heater runs)."""
+    out = make_model().step(DT_S, make_inputs(ambient_temp_c=5.0))
+    assert set(out.controller.track_temp_c.values()) == {5.0}
 
 
 def test_heater_warms_its_section_toward_ambient_plus_rise() -> None:
     """Check one time constant closes about 63% of the gap."""
     model = make_model()
     ticks = int(TRACK_TIME_CONSTANT_S / DT_S)
-    heat(model, {"GREEN B": True}, ambient=-5.0, ticks=ticks)
+    heat(model, ambient=-5.0, ticks=ticks)
     temps = model.snapshot().outputs.controller.track_temp_c
     assert temps["GREEN B"] == pytest.approx(-5.0 + expected_rise(ticks))
     assert temps["GREEN B"] - (-5.0) == pytest.approx(
         HEATER_RISE_C * 0.632, abs=0.01)
 
 
-def test_heater_does_not_change_ambient_or_other_sections() -> None:
-    """Check ambient stays the input, and unheated sections stay at it."""
+def test_heater_does_not_change_ambient() -> None:
+    """Check ambient stays the input while every section warms alike."""
     model = make_model()
-    heat(model, {"GREEN B": True}, ambient=-5.0, ticks=500)
+    heat(model, ambient=-5.0, ticks=500)
     snap = model.snapshot()
     assert snap.ambient_temp_c == -5.0
-    assert snap.outputs.controller.track_temp_c["GREEN C"] == -5.0
+    temps = snap.outputs.controller.track_temp_c
+    assert temps["GREEN C"] == temps["GREEN B"] > -5.0
+
+
+def test_heaters_switch_at_the_freezing_point() -> None:
+    """Check on at or below 0 C, off above it, with no hysteresis."""
+    model = make_model()
+    for ambient, on in ((5.0, False), (HEATER_ON_AT_C, True),
+                        (0.1, False), (-0.1, True), (0.01, False)):
+        heat(model, ambient=ambient, ticks=1)
+        assert heaters(model) == {on}, ambient
+
+
+def test_no_ambient_keeps_the_heaters_as_they_were() -> None:
+    """Check a tick with no ambient leaves the heaters in their last
+    state."""
+    model = make_model()
+    heat(model, ambient=-2.0, ticks=1)
+    heat(model, ambient=None, ticks=5)
+    assert heaters(model) == {True}
+    heat(model, ambient=3.0, ticks=1)
+    heat(model, ambient=None, ticks=5)
+    assert heaters(model) == {False}
+
+
+def test_a_heater_command_is_not_applied() -> None:
+    """Check the Track Model ignores Track Controller heater commands
+    (D026): they are accepted on the boundary but switch nothing."""
+    model = make_model()
+    out = model.step(DT_S, make_inputs(
+        controller=TrackControllerCommands(heater_commands={"GREEN B": True}),
+        ambient_temp_c=5.0))
+    assert out.controller.heater_states["GREEN B"] is False
 
 
 def test_track_follows_a_change_in_ambient_gradually() -> None:
     """Check the track lags a sudden ambient change, then catches up."""
     model = make_model()
-    heat(model, {}, ambient=10.0, ticks=1)
-    heat(model, {}, ambient=0.0, ticks=1)
+    # Both above freezing, so no heater runs.
+    heat(model, ambient=10.0, ticks=1)
+    heat(model, ambient=1.0, ticks=1)
     first = model.snapshot().outputs.controller.track_temp_c["GREEN A"]
     assert 9.9 < first < 10.0
-    heat(model, {}, ambient=0.0, ticks=30_000)
+    heat(model, ambient=1.0, ticks=30_000)
     assert model.snapshot().outputs.controller.track_temp_c[
-        "GREEN A"] == pytest.approx(0.0, abs=1e-3)
+        "GREEN A"] == pytest.approx(1.0, abs=1e-3)
 
 
 def test_heater_off_lets_the_track_cool_back() -> None:
-    """Check turning heaters off returns the track toward ambient."""
+    """Check heaters going off returns the track toward ambient."""
     model = make_model()
-    heat(model, {"GREEN B": True}, ambient=0.0, ticks=3000)
+    heat(model, ambient=0.0, ticks=3000)                 # on
     warm = model.snapshot().outputs.controller.track_temp_c["GREEN B"]
-    heat(model, {"GREEN B": False}, ambient=0.0, ticks=3000)
+    heat(model, ambient=0.5, ticks=3000)                 # off
     cooled = model.snapshot().outputs.controller.track_temp_c["GREEN B"]
-    assert warm > 6.0 and cooled < warm / 2
+    assert warm > 6.0 and cooled - 0.5 < (warm - 0.0) / 2
 
 
 # --------------------------------------------------------------------------- #
@@ -202,7 +244,7 @@ def test_power_failure_stops_its_sections_heaters() -> None:
     """Check heaters in a section with a powerless block stay off."""
     model = make_model()
     model.set_block_failure("GREEN B-5", TrackFailure.POWER)
-    heat(model, {"GREEN B": True, "GREEN C": True}, ambient=0.0, ticks=100)
+    heat(model, ambient=0.0, ticks=100)                  # heaters on
     out = model.snapshot().outputs.controller
     assert out.heater_states["GREEN B"] is False
     assert out.heater_states["GREEN C"] is True

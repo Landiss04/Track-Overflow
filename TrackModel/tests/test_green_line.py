@@ -373,7 +373,7 @@ def test_signals_seen_once_on_entry_round_the_loop(green: Layout) -> None:
 ])
 def test_boarding_at_green_stations(block_id: str, station: str) -> None:
     """Check a stopped train boards at a Green station, up to capacity."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     for _ in range(5):
         model.step(DT_S, make_inputs())
     out = model.step(DT_S, make_inputs(

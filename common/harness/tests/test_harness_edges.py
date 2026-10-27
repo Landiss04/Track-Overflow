@@ -779,7 +779,7 @@ class EdgeContractTest(unittest.TestCase):
         finally:
             sys.path.remove(str(_REPO / "CTC-Office"))
         model = TrackModel(TrackConfig(layout_paths(),
-                                       ticket_probability=1.0))
+                                       tickets_per_minute=600.0))
         outputs = encode_outputs(model.step(DT_S, decode_inputs(
             {"controller": {}, "trains": {}}, SIM_TIME_S
         )))

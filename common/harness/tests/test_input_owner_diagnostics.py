@@ -114,7 +114,7 @@ def test_missing_wire_fields_differ_from_valid_empty_lists(api, wire, error):
 
 
 def test_normal_track_model_emits_every_loaded_block():
-    model = TrackModel(TrackConfig(layout_paths(), ticket_probability=0.0))
+    model = TrackModel(TrackConfig(layout_paths(), tickets_per_minute=0.0))
     out = encode_outputs(
         model.step(
             0.1, decode_inputs({"controller": {}, "trains": {}}, 18000.1)

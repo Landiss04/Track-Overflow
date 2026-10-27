@@ -88,7 +88,9 @@ completed process integration:
 
 Ticket sales go to the CTC Office directly, as `(count, station)` pairs: the
 tickets sold this tick. The Track Model keeps no running total and
-sends none. The CTC Office reads everything else (occupancy, device state)
+sends none. Sales are time-based: about 12 tickets per simulated minute
+per station (`TrackConfig.tickets_per_minute`), the chance of a sale each
+tick being derived from the tick length so the rate holds at any tick. The CTC Office reads everything else (occupancy, device state)
 through the Track Controller.
 
 ## Behaviour
@@ -137,7 +139,10 @@ through the Track Controller.
   the line (`Yard-63`) counts as having come from the yard, so it heads
   onto the line (63 → 64) and does not roll back into the yard.
 - **Heaters and track temperature are per section** (e.g. `GREEN B`).
-  The Track Controller turns a section's heaters on or off. Each
+  The Track Model switches the heaters itself (D026): every section's
+  heater is on while ambient is at or below 0 °C and off above it, with
+  no hysteresis; a tick with no ambient keeps them as they were. A
+  Track Controller heater command is accepted but not applied. Each
   section's track temperature eases toward ambient, or ambient + 10 °C
   while its heaters run; ambient itself is only ever the input value.
   The Track Controller reads back which heaters actually run and each
@@ -154,9 +159,9 @@ through the Track Controller.
   delivered on the tick it is commanded and is gone the tick after.
   The Track Controller sends them again on every tick. Commanded speed
   is a float in m/s; authority is a whole count of blocks.
-- **Device commands persist:** a switch, crossing, signal or heater key
-  absent from a tick's commands keeps its last value. Devices start
-  safe: switches NORMAL, gates up, lights RED, heaters off.
+- **Device commands persist:** a switch, crossing or signal key absent
+  from a tick's commands keeps its last value. Devices start safe:
+  switches NORMAL, gates up, lights RED, heaters off.
 - **Invalid input is rejected whole**, before any state changes.
 - **The window shows each block's track circuit** (commanded speed in mph
   and authority in blocks): the **Cmd mph** and **Auth** columns, and the

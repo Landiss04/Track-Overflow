@@ -87,7 +87,7 @@ def test_round_trip_through_every_edge() -> None:
 
 def test_ticket_sales_reach_the_ctc_office_as_station_pairs() -> None:
     """Check the CTC edge carries (count, station) pairs and no total."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     for _ in range(2):
         out = model.step(DT_S, build_track_model_inputs(
             WaysideCommands(), {}, ambient_temp_c=0.0))
@@ -100,7 +100,7 @@ def test_ticket_sales_reach_the_ctc_office_as_station_pairs() -> None:
 
 def test_station_name_and_doors_cross_the_edges() -> None:
     """Check the station reaches the train and doors reach boarding."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     stopped = {"T1": TrainTrackReport(
         TrainPosition("GREEN A-2", 1.0), 0.0, False, 222, True)}
     out = model.step(DT_S, build_track_model_inputs(
