@@ -78,7 +78,7 @@ class AuthoritySafetyTest(unittest.TestCase):
         self.assertEqual(snap.cancelled_orders, ())
         (limit,) = snap.authorities
         self.assertEqual((limit.blocks, limit.reason, limit.at),
-                         (2, "occupied", "73"))
+                         (1, "occupied", "73"))
         # It clears: the train may go on in.
         step_at(ctc, at("T1", "70"))
         self.assertEqual(ctc.snapshot().authorities[0].blocks, 3)

@@ -1,8 +1,8 @@
 """Observe the existing Green follower rule for Harry and Landis's review.
 
 This seeds owner-boundary snapshots, rather than relocating a live train
-in the physics loop. It reuses the SW starter tick helper; no launcher or
-production routing rule is duplicated or changed.
+in the physics loop. It reuses the SW starter tick helper (``sw_line``);
+no launcher or production routing rule is duplicated or changed.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from ctc.interface import (  # noqa: E402
     WaysideStatus,
 )
 from ctc.model import StubCtcOffice  # noqa: E402
-from TrackCtrlSW.tests.test_starter_switches import _Line  # noqa: E402
+from common.harness.tests.sw_line import GreenLine as _Line  # noqa: E402
 
 
 def observe(follower: str):
@@ -48,16 +48,22 @@ def observe(follower: str):
     return suggestions, before["76"], after
 
 
+# Observed 2026-10-27 with Harry Tye's development TrackCtrlSW: switch 76
+# now commands normal throughout. With the integration branch's earlier
+# starter rules it stayed reverse (CTC-3, module-owner-review.md); whether
+# normal is what the follower needs is Harry's to say.
+
+
 def test_green_follower_75_observation():
     suggestions, switch, after = observe("75")
     assert suggestions["75"].authority_blocks == 1
     assert suggestions["76"].authority_blocks == 0
-    assert switch == "reverse"
-    assert after == ["reverse"] * 5
+    assert switch == "normal"
+    assert after == ["normal"] * 5
 
 
 def test_green_follower_76_observation():
     suggestions, switch, after = observe("76")
     assert suggestions["76"].authority_blocks == 0
-    assert switch == "reverse"
-    assert after == ["reverse"] * 5
+    assert switch == "normal"
+    assert after == ["normal"] * 5

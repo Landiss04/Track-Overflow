@@ -30,9 +30,9 @@ from track_ctrl.interface import (
     TrackControllerOutputs,
 )
 from track_ctrl.layout import (
-    LayoutError,
+    NEUTRAL_LINE_COLOR,
     LineLayout,
-    build_default_system,
+    LayoutError,
     build_line,
     default_layout_dir,
     load_layout_file,
@@ -42,6 +42,20 @@ from track_ctrl.stimulus import output_rows, suggestion_rows
 
 #: How often the views are refreshed while the clock runs, in ms.
 UI_REFRESH_MS = 200
+
+#: What the header shows before a track is loaded.
+_NO_CONTROLLER: dict[str, Any] = {
+    "id": "", "line": "", "file": "", "iteration": 0, "maintenance": False,
+    "mode": "No track loaded", "block_count": 0, "span": "", "circuits": 0,
+    "carrying": 0, "suggested_blocks": 0, "committed_at": "",
+    "override_count": 0,
+}
+
+#: Buffer name before a track, or a program, gives it one.
+UNTITLED = "untitled.plc"
+
+#: Explorer entry number for the attached vital code.
+VITAL_ENTRY = -1
 
 #: Lines kept in the terminal scrollback.
 TERMINAL_DEPTH = 200
@@ -69,18 +83,20 @@ class TrackControllerState(QObject):
         The module has no clock and no world of its own. Whatever drives
         it, the central harness or the test UI, calls :meth:`step` once
         per tick of the shared clock (D017), with the tick's inputs.
-        Until the first tick every wayside idles at its starter program.
+        It starts with no track and no program: the programmer loads a
+        track, then writes or loads a program for every wayside. Until
+        then it is not ready and the editor is empty.
 
         Args:
             parent: Optional Qt parent.
-            lines: The lines to start with, each divided among its
-                waysides; the default Green and Red when None. Under the
-                central harness this variant runs the Green Line only
-                (R77, ``track_ctrl.module_process``).
+            lines: Lines to load at once, in place of the programmer's
+                Load track; none when None. The central harness runs
+                this variant on the Green Line (R77,
+                ``track_ctrl.module_process``).
         """
         super().__init__(parent)
         self._system = SwTrackController()
-        for line in build_default_system() if lines is None else lines:
+        for line in lines or ():
             self._system.load_track(line)
 
         #: Only for the header badges: whether the sender's clock is held
@@ -90,9 +106,13 @@ class TrackControllerState(QObject):
         #: Whether a test UI or harness is connected to drive the module.
         self._driven = False
 
-        first_line = self._system.lines[0]
-        self._line_name = first_line.name
-        self._controller_id = first_line.controllers[0].controller_id
+        #: Empty until a track is loaded.
+        self._line_name = ""
+        self._controller_id = ""
+        if self._system.lines:
+            first = self._system.lines[0]
+            self._line_name = first.name
+            self._controller_id = first.controllers[0].controller_id
 
         self._buffer: str = ""
         self._buffer_file = ""
@@ -132,8 +152,9 @@ class TrackControllerState(QObject):
     # --- helpers -----------------------------------------------------
 
     @property
-    def _controller(self) -> TrackController:
-        return self._system.controllers[self._controller_id]
+    def _controller(self) -> TrackController | None:
+        """The selected controller, or None before a track is loaded."""
+        return self._system.controllers.get(self._controller_id)
 
     def _log(self, line: str) -> None:
         self._terminal.append(line)
@@ -148,23 +169,30 @@ class TrackControllerState(QObject):
         return clock_text(time_s)
 
     def _load_buffer_from_controller(self) -> None:
-        """Open the committed program of the selected controller."""
+        """Open the committed program of the selected controller.
+
+        A wayside with no program opens an empty buffer: nothing is
+        written for the programmer.
+        """
         controller = self._controller
-        program = controller.program
-        self._buffer = (
-            program.source if program is not None
-            else default_program_source(controller)
-        )
-        self._buffer_file = controller.file_name
         self._verified_source = None
         self._open_iteration = 0
         self._sandbox = {}
         self._diagnostics = []
         self._terminal = []
+        if controller is None:
+            self._buffer = ""
+            self._buffer_file = UNTITLED
+            self._log(f"[{self._stamp()}] no track is loaded")
+            return
+        program = controller.program
+        self._buffer = program.source if program is not None else ""
+        self._buffer_file = controller.file_name
         self._log(
             f"[{self._stamp()}] opened {controller.file_name} from "
             f"{controller.config.controller_id} "
-            f"(iteration #{controller.iteration})"
+            + (f"(iteration #{controller.iteration})" if program is not None
+               else "(no program yet)")
         )
 
     def step(
@@ -200,9 +228,11 @@ class TrackControllerState(QObject):
         more = len(reasons) - 1
         return reasons[0] + (f" (and {more} more)" if more else "")
 
-    @Slot()
-    def loadStarterPrograms(self) -> None:
-        """Commit a generated starter program to every wayside without one."""
+    def loadStarterPrograms(self) -> None:  # noqa: N802
+        """Commit the generated starter program to every wayside
+        without one, as a programmer loading each would. For the
+        harness and its tests, which have no programmer; the UI never
+        calls it (``track_ctrl.module_process`` ``--load-starters``)."""
         loaded = self._system.load_starter_programs()
         if not loaded:
             return
@@ -318,7 +348,20 @@ class TrackControllerState(QObject):
     @Property(str, notify=selectionChanged)
     def selectedLineColor(self) -> str:
         """Identity colour of the selected line."""
+        if not self._line_name:
+            return NEUTRAL_LINE_COLOR
         return self._system.line(self._line_name).color
+
+    @Property(bool, notify=selectionChanged)
+    def hasTrack(self) -> bool:
+        """Whether a track has been loaded."""
+        return self._controller is not None
+
+    @Property(bool, notify=controllerChanged)
+    def hasProgram(self) -> bool:
+        """Whether the selected wayside has a committed program running."""
+        controller = self._controller
+        return controller is not None and controller.program is not None
 
     @Property(QUrl, constant=True)
     def layoutFolder(self) -> QUrl:
@@ -362,6 +405,8 @@ class TrackControllerState(QObject):
     def controller(self) -> dict[str, Any]:
         """Header and summary values for the selected controller."""
         controller = self._controller
+        if controller is None:
+            return dict(_NO_CONTROLLER)
         outputs = controller.outputs
         carrying = sum(
             1 for circuit in outputs.track_circuits.values()
@@ -395,6 +440,8 @@ class TrackControllerState(QObject):
         """One row per block the selected controller owns."""
         controller = self._controller
         rows: list[dict[str, Any]] = []
+        if controller is None:
+            return rows
         for block in controller.blocks:
             occupied = controller.inputs.occupancy.get(block.block_id, False)
             closed = controller.inputs.closed.get(block.block_id, False)
@@ -439,6 +486,8 @@ class TrackControllerState(QObject):
     def blockCounts(self) -> dict[str, Any]:
         """How many blocks the selected controller owns, and their state."""
         controller = self._controller
+        if controller is None:
+            return {"total": 0, "occupied": 0, "closed": 0}
         return {
             "total": len(controller.blocks),
             "occupied": sum(
@@ -452,12 +501,14 @@ class TrackControllerState(QObject):
     @list_property(controllerChanged)
     def outputs(self) -> list[dict[str, Any]]:
         """Commanded outputs, as the View tab and watch pane list them."""
-        return output_rows(self._controller)
+        controller = self._controller
+        return [] if controller is None else output_rows(controller)
 
     @list_property(controllerChanged)
     def suggestionRows(self) -> list[dict[str, Any]]:
         """The CTC Office's suggestion for each block, as display rows."""
-        return suggestion_rows(self._controller)
+        controller = self._controller
+        return [] if controller is None else suggestion_rows(controller)
 
     @list_property(controllerChanged)
     def overrides(self) -> list[dict[str, Any]]:
@@ -468,7 +519,10 @@ class TrackControllerState(QObject):
                 "signal": override.signal,
                 "message": override.message,
             }
-            for override in self._controller.outputs.overrides
+            for override in (
+                () if self._controller is None
+                else self._controller.outputs.overrides
+            )
         ]
 
     # --- the editor --------------------------------------------------
@@ -492,8 +546,10 @@ class TrackControllerState(QObject):
         """
         if self._open_iteration != 0:
             return False
-        program = self._controller.program
-        return program is None or program.source != self._buffer
+        controller = self._controller
+        if controller is None or controller.program is None:
+            return bool(self._buffer)
+        return controller.program.source != self._buffer
 
     @Property(bool, notify=bufferChanged)
     def canCommit(self) -> bool:
@@ -512,11 +568,17 @@ class TrackControllerState(QObject):
     def files(self) -> list[dict[str, Any]]:
         """Explorer entries: the live file plus the committed history."""
         controller = self._controller
+        if controller is None:
+            return [{
+                "name": self._buffer_file, "detail": "NO TRACK",
+                "iteration": 0, "current": True, "readonly": False,
+            }]
         entries: list[dict[str, Any]] = [
             {
                 "name": controller.file_name,
                 "detail": (
-                    "COMMITTED" if self._open_iteration != 0
+                    "NOT COMMITTED" if controller.program is None
+                    else "COMMITTED" if self._open_iteration != 0
                     else "EDITED" if self.bufferDirty else "COMMITTED"
                 ),
                 "iteration": 0,
@@ -534,6 +596,17 @@ class TrackControllerState(QObject):
                     "readonly": True,
                 }
             )
+        # The vital code attached to every program on this wayside:
+        # shown so the programmer can read it, never edited.
+        entries.append(
+            {
+                "name": "vital.plc",
+                "detail": "ATTACHED TO EVERY PROGRAM",
+                "iteration": VITAL_ENTRY,
+                "current": self._open_iteration == VITAL_ENTRY,
+                "readonly": True,
+            }
+        )
         return entries
 
     @Property(bool, notify=bufferChanged)
@@ -574,8 +647,22 @@ class TrackControllerState(QObject):
     def openFile(self, iteration: int) -> None:
         """Open a history entry, or return to the live buffer."""
         controller = self._controller
+        if controller is None:
+            if iteration != 0:
+                raise KeyError("no track is loaded")
+            return
         if iteration == 0:
             self._load_buffer_from_controller()
+        elif iteration == VITAL_ENTRY:
+            self._buffer = controller.vital_source
+            self._buffer_file = "vital.plc"
+            self._verified_source = None
+            self._open_iteration = VITAL_ENTRY
+            self._log(
+                f"[{self._stamp()}] opened the vital code attached to "
+                f"every program on {controller.config.controller_id} "
+                "(read-only)"
+            )
         else:
             entry = next(
                 (item for item in controller.history
@@ -640,15 +727,18 @@ class TrackControllerState(QObject):
 
     @Slot()
     def newFile(self) -> None:
-        """Start a fresh program from the controller's own layout."""
+        """Start a fresh, empty program."""
         controller = self._controller
-        self._buffer = default_program_source(controller)
-        self._buffer_file = f"{controller.config.controller_id.lower()}_new.plc"
+        self._buffer = ""
+        self._buffer_file = (
+            UNTITLED if controller is None
+            else f"{controller.config.controller_id.lower()}_new.plc"
+        )
         self._verified_source = None
         self._open_iteration = 0
         self._sandbox = {}
         self._diagnostics = []
-        self._log(f"[{self._stamp()}] new buffer from the controller layout")
+        self._log(f"[{self._stamp()}] new, empty buffer")
         self.bufferChanged.emit()
         self.terminalChanged.emit()
 
@@ -665,6 +755,12 @@ class TrackControllerState(QObject):
         """
         controller = self._controller
         stamp = self._stamp()
+        if controller is None:
+            self._verified_source = None
+            self._log(f"[{stamp}] load a track first: there is no wayside "
+                      "to run this program against")
+            self.terminalChanged.emit()
+            return
         program = compile_program(self._buffer)
         # The compiler's own diagnostics, plus how the program fits this
         # controller: names it does not have, outputs it leaves undriven.
@@ -775,6 +871,10 @@ class TrackControllerState(QObject):
 
         controller = self._controller
         stamp = self._stamp()
+        if controller is None:
+            self._log(f"[{stamp}] commit refused — no track is loaded")
+            self.terminalChanged.emit()
+            return
         entry = controller.commit(self._buffer, self._buffer_file)
         controller.scan()
 
@@ -799,13 +899,16 @@ class TrackControllerState(QObject):
         Shown, never set, from this UI: the CTC Office owns maintenance
         mode and this module obeys it.
         """
-        return self._controller.maintenance
+        controller = self._controller
+        return False if controller is None else controller.maintenance
 
     @list_property(maintenanceChanged)
     def switches(self) -> list[dict[str, Any]]:
         """Switches the manual-switch dialog can set."""
         controller = self._controller
         rows: list[dict[str, Any]] = []
+        if controller is None:
+            return rows
         for switch in controller.config.switches:
             block = next(
                 block
@@ -837,6 +940,8 @@ class TrackControllerState(QObject):
     def setSwitch(self, switch_id: str, reverse: bool) -> None:
         """Hand-set one switch. Only while the CTC has maintenance on."""
         controller = self._controller
+        if controller is None:
+            raise KeyError("no track is loaded")
         if not controller.maintenance:
             raise RuntimeError(
                 "switches can only be set by hand while the CTC Office has "
@@ -863,6 +968,8 @@ class TrackControllerState(QObject):
     def releaseSwitch(self, switch_id: str) -> None:
         """Give one switch back to the program."""
         controller = self._controller
+        if controller is None:
+            return
         if controller.manual_switches.pop(switch_id, None) is None:
             return
         controller.scan()
@@ -944,16 +1051,15 @@ class TrackControllerState(QObject):
             "blocks": len(parsed.blocks),
             "switches": len(parsed.switches),
             "crossings": len(parsed.crossing_blocks),
-            "min": parsed.min_controllers,
-            "max": parsed.max_controllers,
-            "default": (
-                len(existing) if existing else parsed.default_controllers
-            ),
+            # Fixed by the track: the user does not choose it.
+            "controllers": parsed.default_controllers,
             "replaces": len(existing),
         }
 
-    def load_track_config(self, file_path: str, controllers: int) -> str:
-        """Load a track layout and divide it among ``controllers`` waysides.
+    def load_track_config(self, file_path: str) -> str:
+        """Load a track layout onto the waysides it is built with.
+
+        The number of waysides is fixed by the track, not chosen here.
 
         Replaces the line of the same name if there is one, and with it
         every controller on that line and the programs they hold: the
@@ -963,7 +1069,7 @@ class TrackControllerState(QObject):
         """
         try:
             parsed = load_layout_file(file_path)
-            line = build_line(parsed, controllers)
+            line = build_line(parsed)
         except LayoutError as error:
             self._log(f"[{self._stamp()}] track configuration refused: {error}")
             self.terminalChanged.emit()
@@ -998,7 +1104,7 @@ class TrackControllerState(QObject):
         """Preview a layout file chosen in the file dialog."""
         return self.inspect_track_config(url.toLocalFile())
 
-    @Slot(QUrl, int, result=str)
-    def loadTrackConfig(self, url: QUrl, controllers: int) -> str:
+    @Slot(QUrl, result=str)
+    def loadTrackConfig(self, url: QUrl) -> str:
         """Load a layout file chosen in the file dialog."""
-        return self.load_track_config(url.toLocalFile(), controllers)
+        return self.load_track_config(url.toLocalFile())

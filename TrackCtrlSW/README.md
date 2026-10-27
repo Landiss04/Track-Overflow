@@ -5,7 +5,7 @@ PySide6 + QML front-end for the ECE1140 wayside Track Controller, covering the
 maintenance-mode manual switch dialog.
 
 Unlike the Train Model stub, the logic behind this UI is real: the PLC language
-parses and executes, the vital supervisor clamps the result, and the run /
+parses and executes, the vital code attached to every program restricts the result, and the run /
 commit workflow is enforced rather than mocked. The module has no world and
 no clock of its own: whatever drives it, the central harness or the test UI,
 steps it once per tick with `step(dt, inputs)` and reads back the outputs. The
@@ -99,7 +99,7 @@ python -m venv .venv
 main.py                   entry point: theme, state, QML engine
 track_ctrl/layout.py      static blocks, sections, controller assignment
 track_ctrl/plc.py         the boolean-only PLC language: parse, compile, scan
-track_ctrl/vital.py       the fail-safe supervisor over every PLC result
+track_ctrl/vital.py       generates the vital PLC code attached to every program
 track_ctrl/controller.py  one wayside: I/O decode, scan, commit history
 track_ctrl/interface.py   the boundary contract: keyed types and the Protocol
 track_ctrl/module.py      SwTrackController: step(dt, inputs), snapshot(), no Qt
@@ -134,17 +134,16 @@ world do not, so they are tested headlessly.
 The controller is vital, so it does not run until it has been started up. The
 procedure is the programmer's, from the Track Controller UI:
 
-1. **Load the line.** The default Green and Red are loaded when the UI opens;
-   **Load track...** replaces either.
-2. **Load a PLC program on every wayside.** Open each wayside, RUN, COMMIT. The
-   editor already offers a generated program for a wayside that has none, but
-   nothing is committed for you.
+1. **Load the line.** The UI opens with no track at all. **Load track...** loads
+   a line onto the waysides it is built with.
+2. **Write or load a PLC program on every wayside.** Open each wayside, write
+   the program or **Load .plc file**, then RUN and COMMIT. A wayside with no
+   program opens an empty editor, and NEW gives an empty one too: nothing is
+   written or committed for you.
 
-Until both are done the module is **not ready**: no program runs, and every
-wayside drives its fail-safe outputs whatever the inputs say (stop everywhere,
-every signal red, every crossing armed, switches left where they stand). One
-unprogrammed wayside stalls them all. The header shows **Not ready** and says
-what is missing. Loading a new line, or `reset()`, makes a ready module not
+Until both are done the line is **not ready**: no wayside on it runs a program,
+and a wayside running nothing transmits nothing. One unprogrammed wayside stalls
+its whole line. The header shows **NOT READY**, with what is missing on hover. Loading a new line, or `reset()`, makes a ready module not
 ready again.
 
 Readiness is reported **per wayside, and so per line**: each wayside's
@@ -155,9 +154,8 @@ which waysides are not ready. There is no module-level flag on the wire.
 reports and all of them are ready, and `.not_ready()` lists the ones that are
 not. A wayside that is ready is still held while another is not, since the track
 is only safe with every wayside running. The CTC Office must dispatch nothing and
-send no speed or authority, on any line, until the whole is ready; the stand-in
-CTC in the test UI does exactly that. For a demo, **Load starters** in the header (or `python main.py
---load-starters`) commits a generated program to every wayside that has none.
+send no speed or authority on a line until its waysides are ready; the stand-in
+CTC in the test UI does exactly that.
 
 ## The module boundary
 
@@ -275,29 +273,34 @@ VAR_IN   OCC_12 .. OCC_38        // range shorthand, letters or digits
 VAR_OUT  AUTH_12..38 SW_12 XING_19
 
 AHEAD    := OCC_13 OR OCC_14
-SIG_12_R := FAULT_12 OR OCC_12
+SIG_12_R := OCC_12 OR CLOSED_12
 AUTH_20  := NOT (OCC_19 OR OCC_21)
 ```
 
-A program can only name what its own controller has. The inputs are `OCC_n`,
-`CLOSED_n` and `SUG_n` for each block it owns, `MAINT`, and `FAULT_s` /
-`MOVING_s` / `REV_s` for each switch. `SUG_n` is set while the CTC Office sends
-a suggestion for block `n`, whatever its value: a block with a suggestion and no
-train in it is the next block of the train about to enter it. `REV_s` is set
-while switch `s` stands reverse as the controller last drove it, the position the
-vital layer locks a switch under a train at (the Track Model's read-back arrives a
-tick later, and only feeds `MOVING_s`). The outputs are `AUTH_n` for each block, `SW_s` for each switch,
-`SIG_s_R` / `_O` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
+The language is the HW Track Controller's, so one program file runs on either
+variant (REQ-INTF-009). The two are written separately and share a language,
+not code, and `tests/test_hw_language.py` holds them to it: the same text is
+compiled by both and must give the same errors, the same names and the same
+scan, and HW's own sample programs must compile cleanly here.
+
+A program can only name what its own controller has, and the names are HW's.
+The inputs are `OCC_n`, `CLOSED_n` and `FAIL_n` for each block it owns, `SWREV_s`
+(the switch is reported reverse) for each switch, and `MAINT`. The outputs are
+`AUTH_n` for each block, `SW_s` for each switch (1 is reverse),
+`SIG_s_R` / `_Y` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
 each crossing. Block numbers are the track layout's own, and a switch, its signal
 and a crossing are named by the block they are listed on. A starter program for
 every wayside is generated from its territory, including waysides that own no
 switch or crossing at all.
 
+`FAIL_n` exists only so a program written for HW compiles. This wayside is told
+of no failures (a failed block reads occupied), so it is always 0.
+
 Every output a controller owns has to be driven, and every `VAR_IN` has to be
 something the controller provides. `RUN` checks the program against the selected
-controller, not just the language: a program written for another wayside, or for
-the hardware variant, compiles and is then flagged line by line for the names
-this controller does not have.
+controller, not just the language: a program written for another wayside
+compiles and is then flagged line by line for the names this controller does not
+have.
 
 Operators are `AND`, `OR`, `XOR`, `NOT` and parentheses. A scan evaluates
 assignments top to bottom exactly once, like a real scan cycle. Reading a name
@@ -322,41 +325,43 @@ factor from `units.md` (1 m/s = 2.236936 mph) and nowhere else. A speed typed in
 the test UI in mph becomes a whole m/s **rounded down**, so a typed speed can only
 become slower, never faster.
 
-### The vital supervisor
+### The vital code
 
-`vital.py` sits between the program's outputs and the output card and can only
-make an output *more* restrictive. It never raises a speed, extends an authority
-or clears a crossing the program left armed. That one-way property is what makes
-a wrong program produce a stopped railway rather than a collision:
+Every decision a wayside makes is PLC code: the OS only decodes inputs into bits
+and encodes the final bits into typed outputs, and decides nothing. So the vital
+supervision is PLC code too. `vital.py` generates it for each wayside from its
+own territory and **attaches it to the end of every committed program**. One
+scan runs the programmer's program, then the vital code, which reads the
+program's outputs (`AUTH_n`, `SW_s`, `SIG_s_*`, `XING_c`) and the inputs and
+writes the final `OUT_` bits. Only those leave the wayside. The Program tab
+lists it as a read-only `vital.plc`.
+
+It can only make an output *more* restrictive. It never extends an authority or
+clears a crossing the program left armed. That one-way property is what makes a
+wrong program produce a stopped railway rather than a collision:
 
 | Rule | Effect |
 |---|---|
 | `signal_aspect` | A signal showing zero or several aspects falls back to RED |
-| `signal_protects_block` | A signal on an occupied, closed or faulted block is RED |
-| `switch_locked_under_train` | A switch on an occupied block will not move |
+| `signal_protects_block` | A signal on an occupied or closed block is RED |
+| `switch_locked_under_train` | A switch on an occupied block stays where it is |
 | `crossing_armed` | Occupancy on the approach forces the gates down |
 | `closed_block` | A block the CTC closed gets speed 0 and authority 0 |
-| `switch_fault` | A faulted switch's block gets speed 0 and authority 0 |
-| `switch_moving` | A mid-throw switch's block gets speed 0 |
-| `speed_limit` | Each block's speed is clamped to its own posted limit |
-| `aspect_speed_cap` | Yellow halves the speed after the posted-limit clamp, rounded down to whole m/s |
-| `no_authority` | Zero authority zeroes the speed |
+| `switch_moving` | A switch not where it was commanded zeroes its block |
+| `aspect_speed_cap` | Yellow halves its block's speed, rounded down to whole m/s |
 | `ctc_switch_command` | In maintenance, a switch follows the CTC's command |
 | `manual_switch` | In maintenance, a hand-set switch is held (the CTC wins) |
-| `fail_safe` | No program, or a failed scan: stop, all red, all gates down |
 
-Overrides that apply to many blocks are reported once, naming the blocks.
+The OS passes a block's suggestion, or half its speed, or 0, as the bits say.
+Keeping a speed under the posted limit, and zero speed for zero authority, are
+the CTC Office's (truth `suggested-speed-under-block-limit`,
+`suggested-speed-stops-within-authority`); the wayside no longer has any numeric
+rule. A wayside running no program, or on a line that is not ready, runs nothing
+and **transmits nothing**.
 
-Authority lookahead currently follows the standalone simulator's increasing
-block order. It excludes the current block and checks switch connections using
-the final positions after occupancy locking. It never crosses a missing block,
-an inactive switch connection, or the end of the controller's known territory.
-Directional routes and authority across controller boundaries require route and
-neighbour-state inputs from the harness; they are not assumed clear.
-
-Every override is reported to the UI with the rule that fired and why, so the
-programmer can see exactly where the track disagrees with the code on screen
-instead of being silently overruled.
+Overrides are worked out by comparing the program's outputs with the vital
+code's, and shown in the UI with the rule and why, so the programmer can see
+exactly where the track disagrees with the code on screen. That is display only.
 
 ### Run then commit
 
@@ -420,15 +425,17 @@ switch and every CTC switch command.
 ## Track configuration
 
 **Load track...** in the header reads a track layout file (`TrackModel/*.json`),
-divides its blocks among the number of wayside controllers you choose, and
+divides its blocks among the wayside controllers the line is built with, and
 installs it. The dialog first reports the line, its blocks, switches and
 crossings, and what loading would replace.
 
 - A wayside owns a contiguous run of block numbers. That run need not match a
   section boundary, and a switch belongs to the wayside that owns the block it is
   listed on even when its legs lead into a neighbouring territory.
-- The count is configurable, from 2 (D014) up to one wayside per block. The
-  system starts with Green on 6 and Red on 5.
+- **The number of waysides is fixed by the track**, like its blocks; the user
+  cannot change it. Green has 6 and Red 5 (`WAYSIDE_COUNTS` in `layout.py`). A
+  line with no entry there gets 2, the fewest D014 allows. The dialog shows the
+  count but offers no control for it.
 - A line of the same name is **replaced**, with its controllers and every program
   and committed iteration they hold, because the territories they governed no
   longer exist. The dialog says so before it loads. A line with a new name is
@@ -461,23 +468,25 @@ recorded here.
    number (`OCC_51`). Numbering the signals is also what lets a declaration span
    a run of blocks across a section boundary.
 2. **Four aspects, four outputs.** Signals report Red, Yellow, Green and
-   Super Green. The legacy PLC suffix `_O` selects Yellow, preserving saved
-   programs; `_SG` selects Super Green. The starter program uses Red, Yellow
-   and Green and holds `_SG` at zero; a custom PLC can request Super Green.
-   The wireframe draws only `LT_E_R` / `LT_E_G`. Each aspect is its
-   own boolean so no single stuck bit can upgrade one aspect into a more
-   permissive one, and `vital` enforces that exactly one is lit.
-3. **The vital layer is an addition.** The wireframes show raw PLC outputs going
-   to track. Producing outputs "in a vital manner" is a stated requirement, so
-   the supervisor and its override reporting were designed here, not copied.
+   Super Green, as `_R`, `_Y`, `_G` and `_SG`, the names HW uses. The starter
+   program uses Red, Yellow and Green and holds `_SG` at zero; a custom PLC can
+   request Super Green. The wireframe draws only `LT_E_R` / `LT_E_G`. Each aspect
+   is its own boolean so no single stuck bit can upgrade one aspect into a more
+   permissive one, and the vital code enforces that exactly one is lit.
+3. **The vital layer is PLC code, attached to every program.** The wireframes
+   show raw PLC outputs going to track. Producing outputs "in a vital manner" is a
+   stated requirement, and the wayside can have only the OS (decode and encode)
+   and the PLC (every decision). So the vital supervision is generated PLC code
+   that runs after the programmer's program in the same scan; see **The vital
+   code**.
 4. **Maintenance mode is the CTC's and holds nothing.** Switch control gives
    the CTC's command precedence over a programmer's hand-set position, then
-   falls back to the PLC. The vital supervisor neither holds authority in
+   falls back to the PLC. The vital code neither holds authority in
    maintenance nor counts blocks ahead: a wayside knows neither the route nor
    the direction of travel, so authority is the CTC's to stop before a hazard
-   (`arbitration/authority-stops-before-obstruction`). The supervisor still
-   zeroes the block a closed, occupied-switch or mid-throw switch makes
-   unusable.
+   (`arbitration/authority-stops-before-obstruction`). It still zeroes the
+   authority of a block that is closed, or holds a switch that is not where it
+   was commanded.
 5. **Commit requires a clean run of the same buffer.** The wireframe shows RUN
    and COMMIT as peers. The described workflow is a safe debugger, so the
    dependency between them is enforced, and "clean" means no warnings either.
@@ -526,10 +535,11 @@ recorded here.
    Office's permission; block tiles are read-only. Closures arrive as a physical
    input, from the CTC in the integrated system and from the test UI's CTC
    section standing alone.
-9. **Controller counts are configurable, and so is the layout.** The system
-   starts from the real Green and Red layouts, divided 6 and 5 ways, and **Load
-   track...** replaces either with another count or another file. The generated
-   synthetic network of the first version is gone.
+9. **The layout is loaded; the wayside count is the track's.** The UI starts
+   empty and **Load track...** installs the real Green or Red layout on the 6 or
+   5 waysides it is built with. The user never chooses the count, since a
+   physical line comes with its waysides. The generated synthetic network of the
+   first version is gone.
 10. **Editor highlighting is in the gutter, not the text.** The language is
     small enough that the useful signal is which lines the compiler rejected, so
     failed lines are marked in the gutter and listed in the Parser pane rather
@@ -549,16 +559,18 @@ recorded here.
     keeps a maintenance switch, but all it does is let its commands through, as
     the real CTC does.
 14. **A switch that will not follow is "moving".** The Track Model reports each
-    switch's actual position; if it is not the one commanded last scan, the
-    switch is mid-throw and the PLC reads `MOVING_<switch>`. The vital layer
-    enforces it independently, so a program that ignores it is still held: the
-    block's commanded speed is zeroed. `FAULT_<switch>` is still in the PLC image
-    and the vital layer, but nothing at the boundary drives it: the controller
-    is told of no failures.
-15. **The speed-limit override is a controller setting, not an input.** The
-    posted limits come from the layout per block. `set_speed_limit_override` on a
-    controller replaces them for that controller and `None` restores them, but
-    the boundary carries no such field, so the test UI no longer offers it.
+    switch's actual position, which the PLC reads as `SWREV_<switch>` (HW's
+    name). The vital code compares it with the switch it is about to command: if
+    they differ the switch is mid-throw and its block's authority is zeroed, even
+    if the program ignores it. There is no `FAULT_<switch>`: the controller is
+    told of no failures.
+15. **No numeric rule lives in the wayside.** Clamping a speed to the posted
+    limit, and zero speed for zero authority, were Python rules in the old
+    supervisor. Only PLC code may decide, and numbers never enter the PLC (D016),
+    so both are the CTC Office's now (truth `suggested-speed-under-block-limit`,
+    `suggested-speed-stops-within-authority`). The stand-in CTC in the test UI
+    suggests under each block's limit. The per-controller speed-limit override is
+    gone.
 16. **A physical input is sent on the next step, not the next tick.** Editing
     the world in the test UI owes the controller one extra step straight away, so
     the effect shows in both windows without waiting up to a tick.
@@ -576,11 +588,10 @@ recorded here.
   layout, PLC image or outputs, and the module architecture diagram lists none,
   so there is nothing for those controls to act on and they were left out rather
   than shown dead.
-- **Switch FAULT has no source.** The controller is told of no failures, so
-  `FAULT_<switch>` is never raised from the boundary. Remove it from the PLC image
-  or keep it for a future source; it also differs from HW's `FAIL_n`.
+- **`FAIL_n` is always 0.** It is in the PLC image only so a program written for
+  HW compiles; this wayside is told of no failures.
 - **Signal and crossing read-back is only reported.** It goes to the CTC Office in
-  each wayside's report and into the snapshot, but does not feed the vital layer.
+  each wayside's report and into the snapshot, but does not feed the vital code.
 - **Block tiles show `TEST` as the train.** The boundary carries presence, not a
   train's identity.
 - Only the light theme of the style guide is implemented.

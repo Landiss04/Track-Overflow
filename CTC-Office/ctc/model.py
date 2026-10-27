@@ -6,7 +6,8 @@ occupancy, so the stub follows its own trains from it and infers which
 occupied blocks are failures (``ctc.tracking``). Each dispatched train it
 is following gets a suggested speed a little under its current block's
 speed limit, and an authority counted in blocks toward its destination
-that stops short of any occupied, closed, closing or failed block and of
+that stops short of any closed or closing block, a block sooner before an
+occupied or failed one (one empty block between trains), and short of
 any switch not reported set for its route (``ctc.routing``), recomputed
 every step. While that authority is at least 1 the train gets a second
 suggestion, for the next block on its route, with one block less
@@ -413,8 +414,9 @@ class StubCtcOffice:
 
     It does enforce the safety rules: no authority into a closed,
     closing or failed block or onto another line than the train's;
-    authority stops short of every such block, of occupied blocks and
-    of switches not set for the route; no switch thrown under a train.
+    authority stops short of every such block, a block sooner before
+    occupied blocks (one empty block between trains), and short of
+    switches not set for the route; no switch thrown under a train.
     Block closures are maintenance-mode only and wait for an occupied
     block to clear. Failed blocks are inferred from occupancy
     (``ctc.tracking``) and shown to the UIs only as occupied. Nothing is

@@ -52,25 +52,32 @@ someone else's work says what is left for them.
 - [x] **A4. PLC gating.** Numbers never enter the program; `AUTH_n` per block
   passes block *n*'s suggestion or sends 0, as in HW (**proposed** D016).
 
-- [ ] **A5. PLC I/O names still differ from HW.** The grammar is shared (HW
-  adopted ours).
-
-  | Meaning | Ours | HW |
-  |---|---|---|
-  | Occupancy | `OCC_n` | `OCC_n` |
-  | Closed | `CLOSED_n` | `CLOSED_n` |
-  | Authority gate | `AUTH_n` | `AUTH_n` |
-  | Maintenance | `MAINT` | `MAINT` |
-  | Switch command | `SW_n` | `SW_n` |
-  | Crossing | `XING_n` | `XING_n` |
-  | Signal aspects | `SIG_n_R/_O/_G/_SG` | `SIG_n_R/_Y/_G/_SG` |
-  | Track failure | *(none, by decision: see C1)* | `FAIL_n` |
-  | Switch read-back | `MOVING_n` (derived from read-back) | `SWREV_n` |
-  | Switch fault | `FAULT_n` (never driven, see C2) | *(none)* |
-
-  A program written for one variant is flagged line by line on the other for the
-  names it lacks. Settling this is a team decision (D016), and the yellow suffix
-  is B2.
+- [x] **A5. PLC language and I/O names now match HW's** (2026-10-20, so one
+  program file runs on either variant, REQ-INTF-009). Checked, not assumed:
+  `tests/test_hw_language.py` compiles the same text with both implementations
+  and compares errors, expanded names and scan results (1,200 random programs
+  plus edge cases), and runs HW's own sample programs on an equivalent software
+  territory. Findings:
+  - The grammar already matched. One rule differed: a letter range such as
+    `OCC_a..d` is case-preserving and both ends must be the same case. Fixed.
+  - Names are now HW's: inputs `OCC_n`, `CLOSED_n`, `FAIL_n`, `SWREV_s`, `MAINT`;
+    outputs `AUTH_n`, `SW_s`, `SIG_s_R/_Y/_G/_SG`, `XING_c`. `FAULT_s` and
+    `MOVING_s` are gone, the yellow suffix is `_Y`, and the vital code's own bits
+    (`CTCCMD`, `HAND` ...) cannot be declared by a program.
+  - **Open:** `FAIL_n` is in the image but always 0 here (**decided**: this
+    wayside is told of no failures), so a HW program that reacts to `FAIL_n` runs
+    but never sees one. The two variants behave the same only when a failed
+    block reads occupied, as the Track Model reports it.
+  - **Not copied, on purpose:** HW compiles every statement twice by different
+    algorithms and treats a disagreement as a latched vital fault. That is
+    implementation, not language; the variants share a language, not code, to stay
+    diverse. If the SRS wants the dual-channel check in this variant too, it
+    should be written separately, not copied.
+  - **Open:** HW's vital layer is still Python and still clamps speed and
+    truncates nothing; ours is PLC code attached to every program and has no
+    numeric rule (clamping and zero-authority-zero-speed are the CTC's). A
+    program behaves the same on both only where the CTC keeps speeds under the
+    limit.
 
 ---
 
@@ -83,11 +90,12 @@ someone else's work says what is left for them.
   (**truth** `arbitration/authority-stops-before-obstruction`). **proposed**
   below.
 
-- [ ] **B2. Aspect output suffix.** The display name is YELLOW everywhere here,
+- [x] **B2. Aspect output suffix.** Now `_Y`, as HW (2026-10-20).
+  (Was: The display name is YELLOW everywhere here,
   but the PLC output suffix is still `_O`; HW, the Track Model and the catalog
   use `_Y`. The earlier Orange/Yellow **conflict** in HW's
   `signal-light-command.md` is closed on our side; the suffix is the last piece
-  (our own proposal `signal-yellow` records the decision). Rename it with A5.
+  (our own proposal `signal-yellow` records the decision). Rename it with A5.)
 
 - [x] **B3. Maintenance mode** belongs to the CTC Office; this UI shows it and
   cannot change it. The CTC now sends **no mode flag at all**, only switch

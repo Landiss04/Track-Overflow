@@ -4,6 +4,18 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-10-27 — One empty block between trains
+
+From Braden Bosilovich and Harry Tye's answer to the module owner review
+(CTC-1, CTC-2), relayed by Kevin; Landis has not agreed yet.
+
+- `ctc/routing.py` `authority()`: before an occupied block (a train, or a
+  failed block) authority now ends two blocks short of it, so one empty block
+  stays between trains. A wayside has no direction or memory, so it holds a
+  train while a block it could move into is occupied; with no gap it holds a
+  follower and its leader together. Closed and closing blocks, another
+  train's authority and switches not set still stop it one block short.
+
 ## 2026-10-25 — Owner review answers: zones by direction, Red yard exit
 
 From Landis's replies to `documents/module-owner-review.md` (CTC-1, SW-2,

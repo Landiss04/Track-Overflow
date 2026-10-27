@@ -740,11 +740,6 @@ class TestClientState(QObject):
         self._user("release_switch", switch=switch_id)
 
     @Slot()
-    def loadStarterPrograms(self) -> None:
-        """Commit a starter program to every wayside that has none."""
-        self._user("load_starter_programs")
-
-    @Slot()
     def run(self) -> None:
         """Press RUN."""
         self._user("run")

@@ -286,9 +286,10 @@ class PanelDataTest(unittest.TestCase):
             [o["value"] for o in host.trainOptions("Green")], ["T1", "T3"])
 
     def test_selected_train_route(self) -> None:
-        # T1 on Green 30 toward 37, T2 standing on 32: authority 1.
+        # T1 on Green 30 toward 37, T2 standing on 33: authority 1,
+        # one empty block short of T2.
         host, module, clock = _host()
-        _report(host, module, at("T1", "30"), at("T2", "32"))
+        _report(host, module, at("T1", "30"), at("T2", "33"))
         clock.clock.tick()
         host.dispatchTrain("T1", "Green", "37", "")
         states = host.routeStates("T1")
@@ -300,7 +301,7 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(detail["chips"], [
             {"block": "30", "occupancy": "occupied"},
             {"block": "31", "occupancy": "free"},
-            {"block": "32", "occupancy": "occupied"}])
+            {"block": "33", "occupancy": "occupied"}])
         self.assertEqual(detail["summary"], "Authority ends at block 31; "
                          "6 more to its destination, block 37.")
         # No order, no route.

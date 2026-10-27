@@ -102,6 +102,47 @@ branch's inbox carry the normative parts; none is promoted.
 | [SW-2](#sw-2-green-starter-decisions) | Trains must not be dispatched into head-on deadlocks: a train waits to be released toward the yard until it is safe, or is routed around oncoming trains. | Covered by the CTC-1 rule and proposal |
 | [INPUT-1](#input-1-missing-occupancy-counts-as-clear) | CTC closures are set only in maintenance mode, and only the CTC reopens them, in maintenance mode. The Track Controllers have no authority over them. The CTC keeps the list of blocks and switches it controls in maintenance and sends it; a Track Controller checks the list before it sets a switch or closes or opens a block. | Proposal `20261025-2129-maintenance-closure-lock-switches.md`; occupancy completeness stays with Braden and Harry |
 
+## Track Controller owner answers, 2026-10-26
+
+Braden Bosilovich's answers are in [module-owner-review-braden.md](module-owner-review-braden.md)
+(branch `feature/TrackCtrl-HW-vital`, `a5bd465`, merged here). Applied on this
+branch on 2026-10-27:
+
+| Request | Answer | Done on this branch |
+| --- | --- | --- |
+| HW-1 | The Red programs are Braden's; a generated vital block runs after every program | Merged; `TrackCtrlHw` 104 tests pass |
+| CTC-1, CTC-2 | The CTC Office keeps one empty block between trains (Braden and Harry Tye) | `ctc/routing.py`: authority ends two blocks short of an occupied block. Kevin asked for it ahead of Landis's agreement; Conflict proposal for Landis |
+| SW-1 | Take Harry's `development` TrackCtrlSW (generated vital PLC code) | Taken, with one fix approved by Harry (below) |
+| INPUT-1 | An expected block that is not reported counts as occupied | Not done: needs the harness to carry every reported block. Proposal written |
+| LAYOUT-1, TM-2 | HW follows the Track Model; signals sit at switches | Proposal for TM-2; LAYOUT-1 stays the Track Model owner's |
+
+**SW-1 root cause (2026-10-27).** With Harry's code the Green train stopped for good
+in block 64. His generated separation rule was `AUTH_n := NOT (OCC_n-1 OR OCC_n+1)`,
+which holds the block a train is about to enter, because that block's neighbour is the
+train's own. Each module reads the others' outputs from the tick before, so the
+train read speed 0 and authority 0 for one tick on entering every block. The PR #50
+Train Controller latches that as a signal pickup failure (Braden's request 9) and
+brakes. Adding the missing term, `AUTH_n := NOT (OCC_n AND (OCC_n-1 OR OCC_n+1))`,
+made the same run reach Glenbury at tick 377 with no failure. Harry approved the fix.
+
+**Results, 2026-10-27.** On the working tree (Harry's SW with the fix, the CTC gap,
+Braden's HW), both 1x process reviews, the end-to-end and system tests and the train
+loop pass (55 passed, 481 subtests). A 3,000-s probe of the count-3 Red half had
+**three Red trains out at once and all three back in the yard by 1,090 s**, which
+meets CTC-1. Both count-3 acceptance tests still fail, now for a new reason: at tick
+4,740 G1, holding 5 m/s up Green 93's 2% grade, latches an engine failure. The PR #50
+detector flags one whenever the power commanded would give 0.1 m/s² on the flat and
+speed has not risen 0.05 m/s in 2 s. That is true of any train holding speed on a
+grade steeper than about 1%. This belongs to the Train Controller owners
+(`Train-Ctrl_HW/OPEN_ISSUES.md` #23); nothing was changed there.
+
+**Left for owners.** Harry: a not-ready SW wayside transmits nothing, so the Track
+Model keeps its crossings' last state (the harness crossing test is marked
+expected-failure), and `test_hw_language.py` fails 3 tests against Braden's new
+`CTCSW_s`/`CTCREV_s` names. Train Controller: request 9 and the grade false positive.
+Kevin: the `development` merge hazard (Braden's request 1), and regenerating the Pi
+bundles after this merge (request 7).
+
 ## CTC-1: Red concurrency
 
 **Owner:** Landis, CTC Office.

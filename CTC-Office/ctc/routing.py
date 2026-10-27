@@ -4,9 +4,11 @@ Authority is the number of blocks ahead of a train's current block that
 it may still enter (decision D013, proposed on ``ctc-interfacing``). The
 CTC recomputes it every step: the count runs along the train's route
 toward its destination and ends at the earliest of the destination, the
-block before the first occupied, closed, closing or failed block, and
-the block before a switch not reported set for the route
-(``authority-stops-before-obstruction``, proposed on ``ctc-interfacing``).
+block before the first closed or closing block, two blocks before the
+first occupied or failed one (one empty block between trains), and the
+block before a switch not reported set for the route
+(``authority-stops-before-obstruction``, proposed on ``ctc-interfacing``;
+the empty block decided by Braden Bosilovich and Harry Tye 2026-10-26).
 No block is within two trains' authorities (``exclusive-authority``):
 another train's blocks stop the count too.
 
@@ -341,8 +343,13 @@ def authority(graph: TrackGraph, start: str, destination: str,
 
     ``obstructions`` maps a block ID to why no train may enter it
     ("occupied", "closed" or "closing"); the train's own block
-    may be listed and is ignored. ``switches`` maps a switch ID to its
-    reported position; a switch not listed counts as not set.
+    may be listed and is ignored. Before an occupied block (a train,
+    or a failed block) the count stops a block sooner, so one empty
+    block stays between trains: a wayside cannot tell a leader from a
+    follower and holds both while they are next to each other
+    (Braden Bosilovich and Harry Tye 2026-10-26). ``switches`` maps a
+    switch ID to its reported position; a switch not listed counts as
+    not set.
     ``reserved`` maps a block ID to the other train whose authority
     holds it. With ``keep``, the count also stops at the first block
     not in it: the part of an earlier grant the train still has.
@@ -360,6 +367,10 @@ def authority(graph: TrackGraph, start: str, destination: str,
             return AuthorityLimit(count, here, "switch", leg.switch_id,
                                   path)
         reason = obstructions.get(after)
+        if reason == "occupied" and count > 0:
+            # One empty block between trains: stop short of ``here``.
+            return AuthorityLimit(count - 1, path[count - 1], reason,
+                                  after, path)
         if reason is not None:
             return AuthorityLimit(count, here, reason, after, path)
         holder = reserved.get(after)

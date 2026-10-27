@@ -380,8 +380,14 @@ def _expand_range(start: str, end: str, line: int) -> list[str]:
             raise PlcSyntaxError(line, f"range {start}..{end} runs backwards")
         return [f"{prefix}{value}" for value in range(low, high + 1)]
 
-    if len(first) == 1 and len(tail) == 1 and first.isalpha() and tail.isalpha():
-        low, high = ord(first.upper()), ord(tail.upper())
+    # Letters keep their case, and both ends must be the same case: the
+    # language is shared with the HW variant, which reads it the same way.
+    if (
+        len(first) == 1 and len(tail) == 1
+        and first.isalpha() and tail.isalpha()
+        and first.isupper() == tail.isupper()
+    ):
+        low, high = ord(first), ord(tail)
         if high < low:
             raise PlcSyntaxError(line, f"range {start}..{end} runs backwards")
         return [f"{prefix}{chr(value)}" for value in range(low, high + 1)]

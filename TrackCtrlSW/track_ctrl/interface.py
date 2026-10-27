@@ -247,7 +247,8 @@ class SwitchState:
     """One switch as the UI shows it."""
 
     switch: BlockKey
-    commanded: SwitchPosition
+    # None while the wayside runs no program and drives nothing.
+    commanded: SwitchPosition | None
     reported: SwitchPosition | None
 
 
