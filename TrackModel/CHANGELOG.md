@@ -19,8 +19,14 @@ From the Track Model owner's answers to `documents/module-owner-review.md`
   with no hysteresis; a tick with no ambient keeps them as they were. Heater
   commands are still accepted on the boundary but not applied. Heater tests
   and manual test TC-27 are rewritten for the rule.
-- TM-2 (the light ahead every tick, facing the direction of travel) is not
-  done: the light placement it depends on is still to be confirmed.
+- TM-2 (B1 fixed): signals sit at switches, one per switch at its point,
+  named by the switch's ID (`layout._signal_blocks`), as Braden relayed from the
+  professor. Every tick each train is sent the light ahead (`_signal_seen`): the
+  first switch along its way, with the switches as set, that it comes onto from
+  the point's fixed side, where the light faces. Tests are moved to the
+  switch-named lights and rewritten for the every-tick light; the harness
+  (`common/harness/track_devices.py`) now stands each light at its point.
+  Neither Track Controller changes: both already name signals by switch.
 
 ## 2026-10-22 — Red yard and integration inputs
 

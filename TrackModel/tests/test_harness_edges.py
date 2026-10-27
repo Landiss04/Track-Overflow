@@ -53,7 +53,7 @@ def test_round_trip_through_every_edge() -> None:
         authority_blocks={"BLUE A-4": 4},
         switch_positions={"BLUE A-5": SwitchPosition.REVERSE},
         crossing_gates_closed={"BLUE A-3": True},
-        signal_aspects={"BLUE A-4": SignalAspect.SUPER_GREEN},
+        signal_aspects={"BLUE A-5": SignalAspect.SUPER_GREEN},
         heaters_on={"BLUE B": True},
     )
     model.step(DT_S, build_track_model_inputs(commands, at("BLUE A-3", 1.0),
@@ -68,7 +68,7 @@ def test_round_trip_through_every_edge() -> None:
     assert readback.block_occupancy["BLUE A-4"]
     assert readback.switch_positions["BLUE A-5"] is SwitchPosition.REVERSE
     assert readback.crossing_gates_closed["BLUE A-3"] is True
-    assert readback.signal_aspects["BLUE A-4"] is SignalAspect.SUPER_GREEN
+    assert readback.signal_aspects["BLUE A-5"] is SignalAspect.SUPER_GREEN
     assert readback.failures["BLUE A-2"] is FailureMode.POWER_FAILURE
     assert readback.heaters_on["BLUE B"] is True
     # BLUE A-2 has lost power, so section A's heaters are off.

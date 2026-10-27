@@ -5,20 +5,21 @@ track layout file (``conventions/identifiers``): Green block 12 lists
 ``12-13; 1-13``, so its ID is ``("Green", "12")``. The Track Controller
 names it so, and names the switch's light after it too. The Track Model
 names a switch by its point, the block where its legs meet
-(``GREEN D-13``), and stands its light on the block before the point,
-on the side away from the legs (``GREEN D-14``). Neither module is
-wrong about the light: there is one per switch. The harness maps one to
-the other through the switch, with a ``SwitchPlace`` for each:
+(``GREEN D-13``), and its light the same: signals sit at switches, one
+per switch, at the switch (``decisions/signals-at-switches``, proposed;
+TM-2, 2026-10-27). The light faces a train coming onto the point from
+its fixed side. The harness maps one module's names to the other's
+through the switch, with a ``SwitchPlace`` for each:
 
 =========  =====  ======  =====
 line       ID     point   light
 =========  =====  ======  =====
-Green      12     13      14
-Green      28     28      27
-Green      58     57      56
-Green      62     63      64
-Green      76     77      78
-Green      85     85      84
+Green      12     13      13
+Green      28     28      28
+Green      58     57      57
+Green      62     63      63
+Green      76     77      77
+Green      85     85      85
 =========  =====  ======  =====
 
 Switch positions mean the same in both: NORMAL is the first connection
@@ -33,9 +34,9 @@ and Red), the same files both modules read, by the rules both apply:
 - the legs are the other ends; a yard switch's are the yard and the
   next block along the line, 58 for ``57-yard`` and 62 for
   ``Yard-63``;
-- the light stands on the point's neighbour that is neither leg, and
-  the neighbours are what each block's ``next_blocks`` joins it to,
-  either way.
+- the light stands at the point. The point has one neighbour that is
+  neither leg, its fixed side, where the light faces; the neighbours
+  are what each block's ``next_blocks`` joins it to, either way.
 
 The harness's tests check the places against both modules' own
 readings of the files.
@@ -83,7 +84,8 @@ class SwitchPlace:
             for it and for its light.
         point: The block where its legs meet: the Track Model's name
             for it.
-        light: The block its light stands on in the Track Model.
+        light: The block its light stands on in the Track Model: its
+            point, since signals sit at switches (TM-2).
     """
 
     line: str
@@ -134,10 +136,11 @@ def switch_places(layout: Mapping[str, Any]) -> tuple[SwitchPlace, ...]:
         beside = neighbours.get(point, set()) - legs
         if len(beside) != 1:
             raise ValueError(
-                f"{line} switch {block} ({text!r}): no one block for its "
-                f"light beside {point}, found {sorted(beside)}"
+                f"{line} switch {block} ({text!r}): no one fixed side for "
+                f"its light at {point}, found {sorted(beside)}"
             )
-        places.append(SwitchPlace(line, block, point, beside.pop()))
+        # The light stands at the switch, facing the fixed side.
+        places.append(SwitchPlace(line, block, point, point))
     return tuple(places)
 
 

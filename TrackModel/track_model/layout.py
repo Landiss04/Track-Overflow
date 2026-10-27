@@ -531,15 +531,15 @@ def _signal_blocks(
 ) -> tuple[str, ...]:
     """Return the blocks that carry a signal light.
 
-    One signal stands on each block right before a switch: the point's
-    neighbours on its fixed side, the side away from the legs.
+    Signals sit at switches: one per switch, at the switch, named by the
+    switch's ID, its point block (the professor, relayed by Braden
+    Bosilovich 2026-10-26; TM-2). The light faces a train coming onto
+    the point from its fixed side, the side away from the legs, where
+    the switch chooses the train's way.
     """
-    signals: set[str] = set()
-    for switch in switches.values():
-        legs = {switch.normal_block_id, switch.reverse_block_id}
-        signals |= set(neighbours[switch.point_block_id]) - legs
     order = list(blocks)
-    return tuple(sorted(signals, key=order.index))
+    return tuple(sorted((s.point_block_id for s in switches.values()),
+                        key=order.index))
 
 
 def _beacons(

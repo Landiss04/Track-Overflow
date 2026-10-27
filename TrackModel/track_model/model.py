@@ -516,12 +516,22 @@ class TrackModel:
         )
 
     def _signal_seen(self, train: _Train) -> SignalAspect | None:
-        # A train sees a light once, on the tick it enters that block.
-        if not train.entered_this_tick:
-            return None
-        if train.block_id not in self._signal_set:
-            return None
-        return self._signal_state(train.block_id)
+        # The light ahead of a train, every tick (TM-2, B1): walk the
+        # rails ahead of it its way, with the switches as set, to the
+        # first switch it comes onto from the point's fixed side, where
+        # the light faces it. None when it reaches the yard or a dead end
+        # first, or has gone round the whole line.
+        here, came_from = train.block_id, train.previous_block_id
+        for _ in range(len(self._blocks)):
+            ahead = self._layout.next_block(here, came_from, self._switches)
+            if ahead is None or ahead == here:
+                return None
+            switch = self._layout.switches.get(ahead)
+            if switch is not None and here not in (
+                    switch.normal_block_id, switch.reverse_block_id):
+                return self._signal_state(ahead)
+            here, came_from = ahead, here
+        return None
 
     def _controller_outputs(self) -> TrackControllerOutputs:
         # Everything the Track Controller reads back: actual states.

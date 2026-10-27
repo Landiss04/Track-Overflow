@@ -38,7 +38,7 @@ def test_inputs_round_trip() -> None:
             commanded_authority={"GREEN A-1": 3},
             switch_commands={"BLUE A-5": SwitchPosition.REVERSE},
             crossing_commands={"BLUE A-3": True},
-            signal_commands={"BLUE A-4": SignalAspect.YELLOW},
+            signal_commands={"BLUE A-5": SignalAspect.YELLOW},
             heater_commands={"GREEN A": False},
         ),
         ambient_temp_c=-7.5,

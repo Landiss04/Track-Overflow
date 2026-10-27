@@ -76,8 +76,13 @@ def test_train_travels_and_follows_the_switch(
 def test_green_train_leaves_the_yard_and_reaches_mt_lebanon(
     harness: Page,
 ) -> None:
-    """Drive T1 out of the yard at GREEN K-63 to N-78 through the link."""
-    harness.setInput("signal", "GREEN N-78", "GREEN")
+    """Drive T1 out of the yard at GREEN K-63 to N-78 through the link.
+
+    The light ahead of it at 78 is switch 85's (GREEN N-85), the first
+    it comes onto from the fixed side: it trails through switch 76 at
+    77 from a leg, where that light does not face it (TM-2).
+    """
+    harness.setInput("signal", "GREEN N-85", "GREEN")
     harness.addTrain("T1", "GREEN K-63")
     harness.setInput("train", "actual_speed_mps", 150.0)  # 15 m per tick
     visited: list[object] = []
@@ -94,9 +99,11 @@ def test_green_train_leaves_the_yard_and_reaches_mt_lebanon(
     assert rows["signal_seen"] == "GREEN"
 
 
-def test_signal_colour_is_kept_after_entry(harness: Page) -> None:
-    """Check the page keeps the colour a train saw entering BLUE A-4."""
-    harness.setInput("signal", "BLUE A-4", "YELLOW")
+def test_signal_colour_follows_the_light_ahead(harness: Page) -> None:
+    """Check a train sees the light ahead every tick, and a change to it
+    while it waits in the block before (TM-2, B1). BLUE A-5's light, at
+    the switch, faces a train coming from A-4, its fixed side."""
+    harness.setInput("signal", "BLUE A-5", "YELLOW")
     harness.addTrain("T1", "BLUE A-3")
     harness.setInput("train", "actual_speed_mps", 20.0)
     for _ in range(200):
@@ -104,12 +111,12 @@ def test_signal_colour_is_kept_after_entry(harness: Page) -> None:
         if feed_value(harness, "track_info.block_id") == "BLUE A-4":
             break
     rows = {r["id"]: r["value"] for r in harness.trainControllerRows}
-    assert "YELLOW" in rows.values()
-    harness.setInput("signal", "BLUE A-4", "GREEN")
+    assert rows["signal_seen"] == "YELLOW"
+    harness.setInput("train", "actual_speed_mps", 0.0)
+    harness.setInput("signal", "BLUE A-5", "GREEN")
     tick(harness)
     rows = {r["id"]: r["value"] for r in harness.trainControllerRows}
-    assert rows["signal_seen"] == "none"
-    assert "YELLOW" in rows.values()
+    assert rows["signal_seen"] == "GREEN"
 
 
 def test_reset_returns_device_commands_to_defaults(harness: Page) -> None:

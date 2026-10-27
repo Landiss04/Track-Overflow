@@ -115,7 +115,8 @@ class RedIntegration(unittest.TestCase):
                         block.key.block_id == "9",
                     )
         yard = devices.by_switch("Red", "9")
-        self.assertEqual((yard.point, yard.light), ("9", "10"))
+        # Signals sit at switches (Braden, TM-2): its light is at 9.
+        self.assertEqual((yard.point, yard.light), ("9", "9"))
 
     def test_every_five_bit_speed_is_capped_for_every_block(self) -> None:
         controller = loaded_red()

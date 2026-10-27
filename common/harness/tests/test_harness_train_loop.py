@@ -448,10 +448,11 @@ class StationStopTest(unittest.TestCase):
         self.assertGreater(boarded, 0)
 
     def test_the_driver_sees_the_light_the_wayside_set(self) -> None:
-        # The light on block 64 is the yard switch's (Green 62). The
-        # starter program shows it YELLOW while the blocks past it, 63
-        # and 64, are occupied, as they are while G1 enters 64.
-        self.assertEqual(self.core.state.next_signal, "YELLOW")
+        # Out of the yard, G1 runs 63 -> 64 past switch 62's point, whose
+        # light faces the other way (TM-2): the light ahead of it is the
+        # next it comes onto from the fixed side, switch 85's at 85. The
+        # starter program shows that GREEN, with no train near it.
+        self.assertEqual(self.core.state.next_signal, "GREEN")
 
     def test_every_ticket_sold_reaches_the_ctc_office_once(self) -> None:
         # The last tick's sales are still on their way.
@@ -755,10 +756,10 @@ class SwitchAndLightTest(unittest.TestCase):
 
     def test_each_light_shows_what_its_wayside_commands(self) -> None:
         # The Track Controller names a light by its switch's block, the
-        # Track Model by the block it stands on.
-        lights = {"12": "GREEN D-14", "28": "GREEN F-27",
-                  "58": "GREEN I-56", "62": "GREEN K-64",
-                  "76": "GREEN N-78", "85": "GREEN N-84"}
+        # Track Model by the switch's point, where it stands (TM-2).
+        lights = {"12": "GREEN D-13", "28": "GREEN F-28",
+                  "58": "GREEN I-57", "62": "GREEN K-63",
+                  "76": "GREEN N-77", "85": "GREEN N-85"}
         commands = {
             entry["block"]["block_id"]: entry["value"]
             for entry in self.loop.outputs[TRACK_CONTROLLER_SW][

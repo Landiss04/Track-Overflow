@@ -58,11 +58,11 @@ def test_commands_become_states() -> None:
     out = model.step(DT_S, make_inputs(controller=cmd(
         switch_commands={"BLUE A-5": SwitchPosition.REVERSE},
         crossing_commands={"BLUE A-3": True},
-        signal_commands={"BLUE A-4": SignalAspect.GREEN},
+        signal_commands={"BLUE A-5": SignalAspect.GREEN},
     ))).controller
     assert out.switch_states["BLUE A-5"] is SwitchPosition.REVERSE
     assert out.crossing_states["BLUE A-3"] is True
-    assert out.signal_states["BLUE A-4"] is SignalAspect.GREEN
+    assert out.signal_states["BLUE A-5"] is SignalAspect.GREEN
     # Heaters are the Track Model's own (D026): see test_heaters_and_failures.
 
 
@@ -352,29 +352,32 @@ def test_block_changed_is_recorded_not_used() -> None:
 # Signal seen on entry
 # --------------------------------------------------------------------------- #
 
-def test_signal_seen_only_on_the_entry_tick() -> None:
-    """Check the colour is sent once, and later changes do not reach it."""
+def test_signal_seen_every_tick_and_a_change_reaches_it() -> None:
+    """Check the light ahead is sent every tick, so a change to it reaches
+    the train while it is still in the block (TM-2, B1)."""
     model = make_model()
-    yellow = cmd(signal_commands={"BLUE A-4": SignalAspect.YELLOW})
+    yellow = cmd(signal_commands={"BLUE A-5": SignalAspect.YELLOW})
     drive(model, "T1", "BLUE A-3", 1.0, yellow)
     end = past_end(model, "BLUE A-3")
     out = model.step(DT_S, make_inputs({"T1": report("BLUE A-3", end)}))
     assert out.signal_seen["T1"] is SignalAspect.YELLOW
 
-    green = cmd(signal_commands={"BLUE A-4": SignalAspect.GREEN})
+    green = cmd(signal_commands={"BLUE A-5": SignalAspect.GREEN})
     out = model.step(DT_S, make_inputs(
         {"T1": report("BLUE A-4", 5.0)}, green))
-    assert out.signal_seen["T1"] is None
-    assert out.controller.signal_states["BLUE A-4"] is SignalAspect.GREEN
+    assert out.signal_seen["T1"] is SignalAspect.GREEN
+    assert out.controller.signal_states["BLUE A-5"] is SignalAspect.GREEN
 
 
-def test_no_signal_seen_in_a_block_without_a_light() -> None:
-    """Check entering an ordinary block sends no colour."""
+def test_an_ordinary_block_still_sees_the_light_ahead() -> None:
+    """Check a train in a block with no light sees the next one ahead:
+    BLUE A-5's, at the switch, facing it from A-4. Not commanded, it
+    shows RED."""
     model = make_model()
     drive(model, "T1", "BLUE A-2", 1.0)
     end = past_end(model, "BLUE A-2")
     out = model.step(DT_S, make_inputs({"T1": report("BLUE A-2", end)}))
-    assert out.signal_seen["T1"] is None
+    assert out.signal_seen["T1"] is SignalAspect.RED
 
 
 # --------------------------------------------------------------------------- #

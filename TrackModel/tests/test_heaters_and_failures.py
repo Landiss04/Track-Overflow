@@ -220,14 +220,15 @@ def test_power_failure_freezes_the_switch() -> None:
 
 
 def test_power_failure_turns_the_light_red_for_trains_too() -> None:
-    """Check a powerless light reads RED and a train entering sees RED."""
+    """Check a powerless light reads RED and a train heading for it sees
+    RED. The light at switch 12 stands on its point, D-13 (TM-2)."""
     model = make_model()
     green = TrackControllerCommands(
-        signal_commands={"GREEN D-14": SignalAspect.GREEN})
-    model.set_block_failure("GREEN D-14", TrackFailure.POWER)
+        signal_commands={"GREEN D-13": SignalAspect.GREEN})
+    model.set_block_failure("GREEN D-13", TrackFailure.POWER)
     model.step(DT_S, make_inputs({"T1": report("GREEN D-15", 1.0)}, green))
     out = model.step(DT_S, make_inputs({"T1": report("GREEN D-15", -1.0)}))
-    assert out.controller.signal_states["GREEN D-14"] is SignalAspect.RED
+    assert out.controller.signal_states["GREEN D-13"] is SignalAspect.RED
     assert out.signal_seen["T1"] is SignalAspect.RED
 
 
@@ -261,7 +262,7 @@ def test_other_failures_leave_devices_powered(failure: TrackFailure) -> None:
         model.set_block_failure(block, failure)
     out = model.step(DT_S, make_inputs(controller=TrackControllerCommands(
         switch_commands={"GREEN D-13": SwitchPosition.REVERSE},
-        signal_commands={"GREEN D-14": SignalAspect.GREEN})))
+        signal_commands={"GREEN D-13": SignalAspect.GREEN})))
     assert out.controller.switch_states["GREEN D-13"] is (
         SwitchPosition.REVERSE)
-    assert out.controller.signal_states["GREEN D-14"] is SignalAspect.GREEN
+    assert out.controller.signal_states["GREEN D-13"] is SignalAspect.GREEN

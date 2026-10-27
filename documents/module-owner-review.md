@@ -809,11 +809,15 @@ earlier note that a train sees the colour once on entry. The Track Controller ow
 are asked to confirm the physical light placement (SW discrepancy C6) before the
 code changes.
 
-**Not implemented yet (2026-10-27):** the Track Model places each light on the block
-before a switch, keyed by that block (`layout.py` `_signal_blocks`). Braden's TM-2 answer
-(signals at the switch, keyed by the switch's ID) would change signal IDs across the
-Track Model, both Track Controllers and the harness, and Harry has not confirmed SW
-discrepancy C6. Waiting on that placement decision.
+**Implemented 2026-10-27, at Kevin's direction ahead of Harry's C6 confirmation:**
+signals sit at switches, one per switch at its point, named by the switch's ID
+(Braden's TM-2 answer). Every tick each train gets the light ahead: the first switch
+along its way, with the switches as set, that it comes onto from the point's fixed
+side, where the light faces. A train trailing through from a leg does not see that
+switch's light. Both Track Controllers already named signals by switch, so only the
+Track Model and the harness device map changed; B1 is closed. Note for the Track
+Model owner: the LAYOUT-1 answer put Red switch 9's light "on 10" (the old placement);
+it now stands at the point, 9.
 
 ## TM-3: Automatic heaters
 

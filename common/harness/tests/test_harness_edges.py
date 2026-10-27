@@ -368,9 +368,11 @@ class TrackEdgesTest(unittest.TestCase):
 
 
 #: The Green Line's switches: ID, point and light (``track_devices``).
+# (ID, point, light): signals sit at switches, so a light stands at
+# its switch's point (TM-2).
 GREEN_SWITCHES = (
-    ("12", "13", "14"), ("28", "28", "27"), ("58", "57", "56"),
-    ("62", "63", "64"), ("76", "77", "78"), ("85", "85", "84"),
+    ("12", "13", "13"), ("28", "28", "28"), ("58", "57", "57"),
+    ("62", "63", "63"), ("76", "77", "77"), ("85", "85", "85"),
 )
 
 
@@ -450,10 +452,10 @@ class TrackDevicesTest(unittest.TestCase):
         )
 
     def test_lookups_by_each_name(self) -> None:
-        place = SwitchPlace("Green", "62", "63", "64")
+        place = SwitchPlace("Green", "62", "63", "63")
         self.assertEqual(self.devices.by_switch("Green", "62"), place)
         self.assertEqual(self.devices.by_point("Green", "63"), place)
-        self.assertEqual(self.devices.by_light("Green", "64"), place)
+        self.assertEqual(self.devices.by_light("Green", "63"), place)
         with self.assertRaises(KeyError):
             self.devices.by_switch("Red", "62")
 
@@ -474,13 +476,9 @@ class TrackDevicesTest(unittest.TestCase):
                 {place.light for place in places},
                 {names.block(block)[1] for block in layout.signal_block_ids},
             )
-            # Each light stands beside its own switch's point.
+            # Each light stands at its own switch's point.
             for place in places:
-                self.assertIn(
-                    names.track_model_name(line, place.point),
-                    layout.neighbours[
-                        names.track_model_name(line, place.light)],
-                )
+                self.assertEqual(place.light, place.point)
 
     def test_the_track_controller_reads_the_same_ids_and_points(
         self,
@@ -574,7 +572,7 @@ class WaysideEdgesTest(unittest.TestCase):
             # Switch Green 62 has its point on 63 and its light on 64.
             "switch_states": {"GREEN K-63": "REVERSE"},
             "crossing_states": {"GREEN K-65": True},
-            "signal_states": {"GREEN K-64": "SUPER_GREEN"},
+            "signal_states": {"GREEN K-63": "SUPER_GREEN"},
         }}, "Green", self.names, self.devices)
         self.assertEqual(mapped, {
             "occupied_blocks": [_green("63")],
@@ -598,7 +596,7 @@ class WaysideEdgesTest(unittest.TestCase):
             "commanded_authority": {"GREEN K-63": 2, "GREEN K-64": 1},
             "switch_commands": {"GREEN K-63": "NORMAL"},
             "crossing_commands": {},
-            "signal_commands": {"GREEN K-64": "YELLOW"},
+            "signal_commands": {"GREEN K-63": "YELLOW"},
         })
         # Commanded speed is a float on the track signal (R24).
         speed = mapped["commanded_speed_mps"]["GREEN K-63"]
@@ -729,7 +727,7 @@ class EdgeContractTest(unittest.TestCase):
                 "block_occupancy": {"GREEN K-63": True},
                 "switch_states": {"GREEN K-63": "NORMAL"},
                 "crossing_states": {"GREEN K-65": False},
-                "signal_states": {"GREEN K-64": "RED"},
+                "signal_states": {"GREEN K-63": "RED"},
             }}, "Green", self.names, self.devices),
         })))
         self.assertEqual(len(inputs.ctc.suggestions), 1)
@@ -858,7 +856,7 @@ class SystemEdgesTest(unittest.TestCase):
         self.assertEqual(controller["commanded_authority"],
                          {"GREEN K-63": 2})
         self.assertEqual(controller["signal_commands"],
-                         {"GREEN K-64": "GREEN"})
+                         {"GREEN K-63": "GREEN"})
         self.assertNotIn("heater_commands", controller)
 
     def test_track_controller_takes_the_track_models_read_back(

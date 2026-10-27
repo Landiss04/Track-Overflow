@@ -102,9 +102,13 @@ through the Track Controller.
   back to the block it came from. The new block reaches the Train Model in
   Track Info, with polarity reversed. `block_changed` is recorded, not
   used, because it follows the Track Model's own move.
-- **Signals** stand on the block before each switch. A train sees a light
-  once, on the tick it enters that block (`signal_seen`); the Train
-  Controller keeps it, and later changes do not reach the train.
+- **Signals sit at switches** (TM-2): one per switch, at its point, named
+  by the switch's ID (`GREEN D-13`). A light faces a train coming onto
+  the point from its fixed side. Every tick each train is sent the light
+  ahead of it (`signal_seen`): the first switch along its way, with the
+  switches as set, that it will come onto from the fixed side. A train
+  trailing through a switch from a leg does not see that switch's light.
+  `None` only when the yard or a dead end comes first.
 - **Commanded speed and authority are per block**, like the signal on
   the rails: the Track Controller knows which blocks are occupied, not
   which train is in them. A train receives the values of the block it is
@@ -213,8 +217,7 @@ runtime verification is claimed.
 
 ## Known bugs
 
-[`BUGS.md`](BUGS.md) lists them. B1: the light ahead reaches a train only as it enters a
-signal block, not on every tick as truth `signal-aspect-ahead` asks.
+[`BUGS.md`](BUGS.md) lists them.
 
 ## Provisional, pending decisions
 
