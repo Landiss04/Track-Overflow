@@ -107,8 +107,8 @@ right column scrolls on its own. The output table lists only the
 outputs the Train Model window does not show: position block and offset, and
 passenger capacity. The rest (emergency brake, door and light state, cabin
 temperature, actual speed, speed limit, and the commanded speed, authority
-and beacon passthroughs) are still outputs of the module and show on the
-Train Model window.
+passthroughs, and the beacon, reported on the station's own block) are still
+outputs of the module and show on the Train Model window.
 
 Once the system is integrated, the central harness calls the same
 `TrainModelState.step` the link calls; the test UI and the link are removed

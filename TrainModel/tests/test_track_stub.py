@@ -159,7 +159,9 @@ def test_the_train_runs_the_blue_line_to_station_b() -> None:
         })
     assert list(seen) == [str(n) for n in range(1, 11)]
     assert changes == 9
-    beacon = seen["9"]["beacon"]
+    # The beacon heard on 9 is reported on 10, the station's own block.
+    assert seen["9"]["beacon"] is None
+    beacon = seen["10"]["beacon"]
     assert beacon is not None and beacon.station_name == "Station B"
     assert seen["10"]["station"] == "Station B"
 

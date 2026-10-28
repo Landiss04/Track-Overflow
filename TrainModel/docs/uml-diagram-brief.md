@@ -30,8 +30,8 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
   ASCII JSON `[station_name, platform_side, underground]`, at most 128 characters
   including syntax and escapes, rejected without truncation. See the exact
   [serialization](module-interface.md#beacon-payload-encoding). The working tree
-  now has a complete-payload codec; station-name length alone is insufficient. Between beacons output
-  `None`; Train Controller retains prior information when needed.
+  now has a complete-payload codec; station-name length alone is insufficient. The Train
+  Model holds the last beacon heard and outputs it on that station's block, `None` elsewhere.
 - Signal pickup failure outputs null commanded speed and authority; terrain is
   unaffected. Train Controller owns the door interlock; model follows commands.
 - 480 kW is confirmed. Rolling resistance uses configured coefficient 0.002 and is

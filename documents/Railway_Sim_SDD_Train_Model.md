@@ -422,7 +422,7 @@ module. The normal passenger-release command is a controller input.
 | `interior_lights_on`, `exterior_lights_on` | bool each | Actual simulated light states. |
 | `cabin_temp_c` | float, °C | Simulated cabin temperature. |
 | `commanded_speed_mps`, `authority_blocks` | float m/s or null; int blocks or null | Track-signal pass-through; both become null under signal pickup failure, invalid data rather than a valid 0 (Kevin Schillinger 2026-10-28; zero before, R10). |
-| `beacon` | `Beacon` or `None` | Current tick's beacon; the consumer retains station information if needed. |
+| `beacon` | `Beacon` or `None` | The beacon of the block the train is on: the one heard on the block before a station, every tick the train is on that station's block, and `None` elsewhere (Kevin Schillinger 2026-10-28). |
 
 Failure flags are available to the Train Model window through its snapshot.
 They are not sent to the Train Controller. The controller must observe physical
@@ -456,8 +456,9 @@ before state mutation; names are never silently truncated.
 Existing typed `Beacon` objects and named fields in harness JSON envelopes remain
 the readable module boundary. Canonical array encoding defines the bounded beacon
 payload, not a replacement for the entire harness protocol. Producers and the
-Train Model must enforce the same rule. `None` remains the output between beacon
-ticks; the Train Controller retains the last beacon if its control logic needs it.
+Train Model must enforce the same rule. The Train Model holds the last beacon heard
+and outputs it while the train is on that beacon's station block, `None` elsewhere
+(Kevin Schillinger 2026-10-28).
 This encoding is specified here for follow-up implementation and documentation.
 
 #### Validation and units
@@ -615,12 +616,12 @@ presents the announcement without advancing physics independently.
 **Trigger:** A track input accompanies a tick.
 
 **Main success scenario:** Use grade in the force balance; detect a block transition
-from polarity; pass commanded speed, authority, and the current beacon
-to controller outputs; publish block, offset, and transition flag to the Track Model.
+from polarity; pass commanded speed and authority to controller outputs, and the
+beacon heard on the block before a station while the train is on that station; publish block, offset, and transition flag to the Track Model.
 
 **Alternate flows:** The first polarity sample establishes a baseline. Under pickup
 failure, commanded speed and authority become zero; terrain and beacon pass-through
-remain available. A tick without a beacon reports `None`.
+remain available. Off a station's block the beacon output is `None`.
 
 **Postcondition:** The controller receives the modeled pickup information, and the
 Track Model receives current position feedback.

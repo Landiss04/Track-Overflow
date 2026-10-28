@@ -38,7 +38,9 @@ def test_exact_boundary_counts_the_complete_encoding(
     data = dataclasses.asdict(inp(beacon=beacon))
     # The array is logical encoding; the harness still carries named fields.
     assert isinstance(data["track"]["beacon"], dict)
-    out = model.step(DT_S, decode_inputs(data))
+    # Heard on the block before the station; reported on the station.
+    assert model.step(DT_S, decode_inputs(data)).controller.beacon is None
+    out = model.step(DT_S, inp(station=name, polarity=False))
     assert out.controller.beacon == beacon
     assert encode_outputs(out)["controller"]["beacon"] == (
         dataclasses.asdict(beacon)

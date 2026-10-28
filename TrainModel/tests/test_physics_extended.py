@@ -1843,11 +1843,30 @@ def test_light_state_reported(interior: bool, exterior: bool) -> None:
     assert out.controller.exterior_lights_on is exterior
 
 
-def test_beacon_passes_through_only_on_its_tick() -> None:
-    """Check a beacon is reported on its tick and None after."""
+def test_beacon_is_reported_on_its_station_block() -> None:
+    """Check a beacon heard on the block before a station is reported
+    every tick the train is on the station's block, and not before or
+    after (Kevin Schillinger 2026-10-28)."""
     model = fresh()
     beacon = Beacon("Dormont", "R", underground=True)
-    assert model.step(DT_S, inp(beacon=beacon)).controller.beacon == beacon
+    assert model.step(DT_S, inp(beacon=beacon)).controller.beacon is None
+    assert model.step(DT_S, inp()).controller.beacon is None
+    for _ in range(3):
+        out = model.step(DT_S, inp(station="Dormont", polarity=False))
+        assert out.controller.beacon == beacon
+    assert model.step(DT_S, inp()).controller.beacon is None
+    out = model.step(DT_S, inp(station="Glenbury", polarity=False))
+    assert out.controller.beacon is None
+
+
+def test_a_beacon_heard_leaving_a_station_is_not_reported() -> None:
+    """Check the beacon on the block after a station, heard going away
+    from it, is not reported on the block after that."""
+    model = fresh()
+    beacon = Beacon("Dormont", "L", underground=False)
+    model.step(DT_S, inp(station="Dormont"))
+    assert model.step(DT_S, inp(beacon=beacon, polarity=False)
+                      ).controller.beacon is None
     assert model.step(DT_S, inp()).controller.beacon is None
 
 
@@ -1855,7 +1874,9 @@ def test_beacon_passes_through_only_on_its_tick() -> None:
 def test_every_platform_side_passes_through(side: str) -> None:
     """Check L, R and LR (platforms on both sides) are accepted as sent."""
     beacon = Beacon("Dormont", side, underground=False)  # type: ignore[arg-type]
-    out = fresh().step(DT_S, inp(beacon=beacon))
+    model = fresh()
+    model.step(DT_S, inp(beacon=beacon))
+    out = model.step(DT_S, inp(station="Dormont", polarity=False))
     assert out.controller.beacon == beacon
 
 

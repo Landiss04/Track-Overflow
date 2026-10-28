@@ -29,7 +29,9 @@ choosing a value. Nothing here is filled in silently.
 - Train Model: a passenger pull stays latched until the Train Controller's emergency brake goes from
   true to false. The one-shot `passenger_brake_release` is withdrawn (`bd72876`). On a signal-pickup
   failure the Train Model sends null commanded speed and authority (`661f249`). It sends no speed
-  limit (`a6c1eb3`).
+  limit (`a6c1eb3`). It reports a station's beacon on the station's own block, every tick the train
+  is there, not on the block before where it is heard; the harness's beacon bridge is removed
+  (Kevin Schillinger, 2026-10-28).
 - Track Controller HW: a generated, read-only vital PLC block runs after every program, and Braden's
   Red programs are merged in place of the integration test copies. The file names are unchanged
   (`a5bd465`; HW-1, 2026-10-26). The block is PLC code, so it keeps to R96: safety is done in
@@ -2422,7 +2424,7 @@ Signals are named by their `truth` key (`signals/<key>.md`).
 | Track Model → CTC Office | `ticket-sales` (per line) | Per station, as a mapping [P, R22, R52] | `track_edges.track_model_to_ctc` and `TicketSales`: sales per station since the last report, each sale once, a refused tick's sales sent again (Phase 4) |
 | Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | `track_edges.track_model_to_train_model` (Phase 2) |
 | Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | `track_edges.train_model_to_track_model`, with doors open from the door state (Phase 2) |
-| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; circuit/beacon passthrough | Independent brake states, pickup failure as null speed and authority (from 2026-10-28) and canonical logical beacon payload in October 20 proposals | `train_edges.train_model_to_train_controller`; the edge passes null speed and authority through (`661f249`) and sends no speed limit (`a6c1eb3`); controller retains prior beacon data |
+| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; circuit/beacon passthrough | Independent brake states, pickup failure as null speed and authority (from 2026-10-28) and canonical logical beacon payload in October 20 proposals | `train_edges.train_model_to_train_controller`; the edge passes null speed and authority through (`661f249`) and sends no speed limit (`a6c1eb3`); the Train Model reports the beacon heard on the block before a station while the train is on that station's block (2026-10-28; the harness bridge is removed) data |
 | Train Controller → Train Model | Power, separate brake commands, doors, lights, setpoint, announcement | Independent brake engagement and summed forces in October 20 proposal; controller owns door interlock | `train_edges.train_controller_to_train_model`; the emergency brake going from true to false clears a passenger pull |
 | Track Model → Train Controller | none | `signal-aspect-ahead`, the next light [P, R25, R39] | `signal_seen` through `train_edges.aspect_to_train_controller`, on entry to a signal block only (Phase 2); every tick, facing the train's direction, since `86f4658` (v0.17) |
 

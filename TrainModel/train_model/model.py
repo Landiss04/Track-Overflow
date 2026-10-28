@@ -18,6 +18,7 @@ import random
 from utils.beacon_codec import encode_beacon
 
 from train_model.interface import (
+    Beacon,
     ControllerOutputs,
     FailureState,
     TrainConfig,
@@ -123,6 +124,9 @@ class TrainModel:
         # Whether last tick's controller emergency brake was on while a
         # pull was latched. The pull clears when that command goes off.
         self._pull_held_by_controller = False
+        # The last beacon heard. A beacon comes on the block before a
+        # station and is reported while the train is on that station.
+        self._held_beacon: Beacon | None = None
         self._last_polarity: bool | None = None
         self._door_left_open = False
         self._door_right_open = False
@@ -168,6 +172,8 @@ class TrainModel:
             self._passenger_ebrake_pulled = False
         self._pull_held_by_controller = (
             cmd.emergency_brake and self._passenger_ebrake_pulled)
+        if track.beacon is not None:
+            self._held_beacon = track.beacon
 
         # Train Controller owns the door interlock (October 20 review).
         # Model follows commands at any speed; the disabled historical
@@ -592,8 +598,13 @@ class TrainModel:
             block_id = track.track_info.block_id
             interior = cmd.interior_lights
             exterior = cmd.exterior_lights
-            # Pass this tick's beacon; None otherwise. Controller retains data.
-            beacon = track.beacon
+            # The beacon of the block the train is on: the one heard on
+            # the block before, while this block is its station; None
+            # elsewhere (Kevin Schillinger 2026-10-28).
+            held = self._held_beacon
+            station = track.track_info.station_name
+            if held is not None and station == held.station_name:
+                beacon = held
             # Under signal pickup failure the track signal cannot be
             # read: commanded speed and authority are null, invalid
             # data, not a valid 0 (Kevin Schillinger 2026-10-28).

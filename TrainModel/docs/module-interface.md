@@ -139,8 +139,9 @@ Both are reported as null (`None`) while signal pickup has failed: invalid data,
 | `platform_side` | `"L"`, `"R"` or `"LR"` | Platform side; `"LR"` when the station has platforms on both sides. |
 | `underground` | bool | Whether the station is underground. |
 
-Send `None` on every other tick. The Train Controller retains earlier beacon
-information when its control logic needs it.
+Send `None` on every other tick. The Train Model keeps the last beacon heard and
+reports it to the Train Controller while the train is on that beacon's station (the
+block whose `station_name` matches), not on the block where it was heard.
 
 #### Beacon payload encoding
 
@@ -194,7 +195,7 @@ TrainModelOutputs
 | `cabin_temp_c` | float | °C | Cabin temperature. |
 | `commanded_speed_mps` | float or null | m/s | Passed through; null under signal pickup failure. |
 | `authority_blocks` | int or null | blocks | Passed through; null under signal pickup failure, 0 before the first step. |
-| `beacon` | Beacon \| None | | This tick's beacon, else `None`. |
+| `beacon` | Beacon \| None | | The beacon of the block the train is on: the one heard on the block before a station, every tick the train is on that station's block; `None` elsewhere (2026-10-28). |
 
 ### `TrackOutputs`
 
@@ -243,7 +244,7 @@ for the rest of the system (section 3 of [integration.md](integration.md)).
 | `announcement` | in | `controller.announcement` |
 | `track-info` | in | `track.track_info` |
 | `track-signal` | in, passed out | `track.track_signal` → `commanded_speed_mps`, `authority_blocks` |
-| `beacon` | in, passed out | `track.beacon` → `controller.beacon` |
+| `beacon` | in, held, out on the station block | `track.beacon` → `controller.beacon` |
 | `passengers-boarded` | in | `track.passengers_boarded` |
 | `actual-speed` | out | `controller.actual_speed_mps`, `track.actual_speed_mps` |
 | `brake-state` | out | `emergency_brake_active`, `service_brake_active` |

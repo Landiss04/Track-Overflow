@@ -144,10 +144,11 @@ def test_beacon_disappearance_and_clock_refresh(pair):
         "beacon_underground": True,
     })
     # The beacon is not in the test UI's output table; the Train Model
-    # window shows it, and the module still outputs it.
+    # window shows it. The module outputs it only on the station's own
+    # block, which this one is not.
     assert "beacon_station" not in outputs(harness)
     assert state.snapshot["next_station"] == "Station"
-    assert state.outputs().controller.beacon is not None
+    assert state.outputs().controller.beacon is None
     send(harness, {"beacon_station": "", "beacon_underground": False})
     for _ in range(8):
         harness.advanceTick()

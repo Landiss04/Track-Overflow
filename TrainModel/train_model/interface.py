@@ -189,7 +189,9 @@ class ControllerOutputs:
     authority_blocks: int | None    # 0 = must stop
     # No speed limit: the Train Controller takes commanded speed as its
     # limit (its owner, 2026-10-28).
-    beacon: Beacon | None           # None between ticks; controller retains data
+    # The station beacon of the block the train is on, every tick it is
+    # there (heard on the block before); None elsewhere.
+    beacon: Beacon | None
 
 
 @dataclass(frozen=True, slots=True)

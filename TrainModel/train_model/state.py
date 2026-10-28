@@ -388,10 +388,11 @@ class TrainModelState(QObject):
             inputs.track.track_info.station_name if inputs is not None
             else None
         ) or ""
-        if ctl.beacon is not None:
-            self._next_station = (
-                ctl.beacon.station_name, ctl.beacon.platform_side
-            )
+        # The beacon heard, on the block before a station: the
+        # controller output carries it only once the train is there.
+        heard = inputs.track.beacon if inputs is not None else None
+        if heard is not None:
+            self._next_station = (heard.station_name, heard.platform_side)
         if (self._next_station is not None
                 and station == self._next_station[0]):
             # Arrived: the station is now the current one.
