@@ -1,0 +1,21 @@
+sequenceDiagram
+    autonumber
+    participant M as SwTrackController
+    participant W as TrackController (wayside)
+    participant H as Central Harness
+    participant CTC as CTC Office
+    loop each wayside, every step (_outputs)
+        M->>M: _report(wayside_id, controller, time_s)
+        M->>W: program
+        W-->>M: return the committed Program, or None
+        M->>M: _report internal: CtcReport(wayside, line, sent_at_s, ready, reason, blocks from _readback)
+        Note right of M: Each block: occupied, and the Track Model's own switch, crossing and signal read-back. No failures, no trains.
+    end
+    M-->>H: return TrackControllerOutputs.ctc_reports
+    H->>H: _finish_tick internal: next tick, inputs_for(): track_controller_to_ctc(...)
+    H->>CTC: STEP: one report per wayside
+    alt every wayside on a line is ready
+        CTC->>CTC: step internal: the line is ready: dispatch, suggest speeds and authorities (UC-10)
+    else any is not
+        CTC->>CTC: step internal: send nothing on that line, show which waysides are not ready
+    end

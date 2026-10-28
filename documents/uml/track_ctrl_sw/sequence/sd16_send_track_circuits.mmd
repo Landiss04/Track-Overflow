@@ -1,0 +1,28 @@
+sequenceDiagram
+    autonumber
+    participant W as TrackController (wayside)
+    participant U as Program (user)
+    participant V as Program (vital code)
+    participant M as SwTrackController
+    participant H as Central Harness
+    participant TM as Track Model
+    Note over W,V: Inside TrackController.scan (UC-09).
+    W->>U: scan(image)
+    U-->>W: return AUTH_n
+    W->>V: scan(image + AUTH_n, SUGSPD_n_b)
+    V->>V: scan internal: OUT_AUTH_n := AUTH_n AND NOT CLOSED_n AND NOT V_MOV_s
+    V->>V: scan internal: OUT_SPD_n_b := SUGSPD_n_b clamped to the posted limit (V_GT_n)
+    V-->>W: return OUT_AUTH_n, OUT_SPD_n_b, OUT_HALF_n
+    loop each block in suggestions (encode_outputs)
+        alt OUT_AUTH_n
+            W->>W: encode_outputs internal: track_circuits[n] := (the clamped speed, halved if OUT_HALF_n, authority)
+        else not
+            W->>W: encode_outputs internal: track_circuits[n] := (0, 0)
+        end
+    end
+    W-->>M: read track_circuits
+    M->>M: _outputs internal: TrackCircuitCommand(*circuit), keyed by BlockKey
+    M-->>H: return TrackModelOutputs.track_circuits
+    H->>H: _finish_tick internal: next tick, inputs_for(): track_controller_to_track_model(...)
+    H->>TM: STEP: track circuit commands
+    Note right of TM: The train in the block gets them. A lower speed or authority is what brakes the train.

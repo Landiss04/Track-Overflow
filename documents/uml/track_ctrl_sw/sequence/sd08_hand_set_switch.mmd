@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    participant W as TrackController (wayside)
+    participant V as Program (vital code)
+    Note over P,UI: Only while the CTC Office has a switch command in effect (maintenance, UC-11).
+    P->>UI: click Set switch manually
+    UI->>S: switches
+    S-->>UI: return each switch, its position, legs and CTC command
+    P->>UI: choose a switch, Normal or Reverse, Apply
+    UI->>S: setSwitch(id, reverse)
+    alt controller.maintenance is false
+        S-->>UI: raise RuntimeError: only while the CTC has maintenance on
+    else maintenance
+        S->>S: setSwitch internal: controller.manual_switches[id] := reverse
+        S->>W: scan()
+        W->>W: build_scan_inputs internal: HAND_s, HANDREV_s, CTCCMD_s, CTCREV_s
+        W->>V: scan(image + the program's outputs)
+        V-->>W: return OUT_SW_s: CTC command, else hand-set, else program
+        S-->>UI: emit maintenanceChanged, controllerChanged
+        UI-->>P: switch shown as hand-set (the CTC command wins if any)
+    end
+    opt release
+        P->>UI: click Release
+        UI->>S: releaseSwitch(id)
+        S->>S: releaseSwitch internal: controller.manual_switches.pop(id)
+        S->>W: scan()
+    end
+    Note right of W: Sent to the Track Model on the next step (UC-13). set_maintenance(False) releases it.

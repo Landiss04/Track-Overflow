@@ -1,6 +1,6 @@
 """Track configuration: read a track layout file, divide it among waysides.
 
-The input is the course track layout (``TrackModel/*.json``): one JSON
+The input is the course track layout (``Track_layout/*.json``): one JSON
 file per line, listing every block with its section, length, grade and
 speed limit, and an optional ``infrastructure`` object that names a
 station, a switch or a railway crossing. This module reads it and
@@ -93,83 +93,120 @@ class Block:
 
 
 @dataclass(frozen=True)
-class Switch:
-    """A powered switch driven by one boolean PLC output.
-
-    ``False`` is the normal position and ``True`` is reverse. The id is
-    the block the switch is listed on.
-    """
-
-    switch_id: str
-    block_id: str
-    point: str
-    normal_end: str
-    reverse_end: str
-
-    @property
-    def output_signal(self) -> str:
-        """Name the PLC writes to throw this switch."""
-        return f"SW_{self.switch_id}"
-
-
-@dataclass(frozen=True)
-class WaysideSignal:
-    """A four-aspect wayside light, standing at a switch.
-
-    Each aspect is its own boolean output so a single stuck bit cannot
-    upgrade one aspect into a more permissive one; ``vital`` enforces
-    that exactly one of the four is lit.
-    """
-
-    signal_id: str
-    block_id: str
-
-    @property
-    def aspect_signals(self) -> tuple[str, str, str, str]:
-        """Red, yellow, green and super-green outputs, named as HW names them."""
-        return (
-            f"SIG_{self.signal_id}_R",
-            f"SIG_{self.signal_id}_Y",
-            f"SIG_{self.signal_id}_G",
-            f"SIG_{self.signal_id}_SG",
-        )
-
-
-@dataclass(frozen=True)
-class Crossing:
-    """A railway crossing: one output drives both lights and gates."""
-
-    crossing_id: str
-    block_id: str
-    #: Blocks whose occupancy must arm the crossing: its own block and
-    #: the ones beside it. The vital layer treats this as a floor.
-    approach_block_ids: tuple[str, ...]
-
-    @property
-    def output_signal(self) -> str:
-        """Name the PLC writes to arm this crossing."""
-        return f"XING_{self.crossing_id}"
-
-
-@dataclass(frozen=True)
 class ControllerConfig:
-    """Everything one wayside controller owns, fixed by the layout."""
+    """Everything one wayside controller owns, fixed by the layout.
+
+    A switch is named by the block it is listed on, a signal stands at
+    every switch and is named after it, and a crossing is named by its
+    block. So every id below is also the block its device stands on, and
+    the PLC names read ``SW_12``, ``SIG_12_R`` and ``XING_19``.
+    """
 
     controller_id: str
     line_name: str
     block_ids: tuple[str, ...]
-    switches: tuple[Switch, ...] = ()
-    signals: tuple[WaysideSignal, ...] = ()
-    crossings: tuple[Crossing, ...] = ()
+    #: Switch id -> ``(point, normal end, reverse end)``: the block the
+    #: points are at, and the blocks the switch joins it to when normal
+    #: and when reversed (``yard`` is not a block). ``False`` is the
+    #: normal position and ``True`` is reverse.
+    switches: Mapping[str, tuple[str, str, str]] = field(
+        default_factory=dict
+    )
+    #: Crossing ids: one output drives both lights and gates.
+    crossings: tuple[str, ...] = ()
     #: Every block of the line with the blocks a train in it may move
     #: on to (``Block.next_blocks``), for the whole line and not only
     #: this territory: the track chart a starter program is written
     #: from. Fixed by the layout; never an input.
     line_next_blocks: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
+    @property
+    def signals(self) -> tuple[str, ...]:
+        """Signal ids: a four-aspect light stands at every switch.
+
+        Each aspect is its own boolean output so a single stuck bit
+        cannot upgrade one aspect into a more permissive one; ``vital``
+        enforces that exactly one of the four is lit.
+        """
+        return tuple(self.switches)
+
     def owns(self, block_id: str) -> bool:
         """Return whether this controller is responsible for a block."""
         return block_id in self.block_ids
+
+    def switch_point(self, switch_id: str) -> str:
+        """The block a switch's points are at."""
+        return self.switches[switch_id][0]
+
+    def switch_normal_end(self, switch_id: str) -> str:
+        """Where a switch leads when normal."""
+        return self.switches[switch_id][1]
+
+    def switch_reverse_end(self, switch_id: str) -> str:
+        """Where a switch leads when reversed."""
+        return self.switches[switch_id][2]
+
+    @staticmethod
+    def switch_output(switch_id: str) -> str:
+        """Name the PLC writes to throw a switch."""
+        return f"SW_{switch_id}"
+
+    @staticmethod
+    def aspect_outputs(signal_id: str) -> tuple[str, str, str, str]:
+        """A signal's red, yellow, green and super-green outputs."""
+        return (
+            f"SIG_{signal_id}_R",
+            f"SIG_{signal_id}_Y",
+            f"SIG_{signal_id}_G",
+            f"SIG_{signal_id}_SG",
+        )
+
+    @staticmethod
+    def crossing_output(crossing_id: str) -> str:
+        """Name the PLC writes to arm a crossing."""
+        return f"XING_{crossing_id}"
+
+    def crossing_approach(self, crossing_id: str) -> tuple[str, ...]:
+        """Blocks whose occupancy must arm a crossing.
+
+        Its own block and the ones beside it that this wayside owns. The
+        vital layer treats this as a floor.
+        """
+        return tuple(sorted(
+            (each for each in (crossing_id, *self.neighbours(crossing_id))
+             if each in self.block_ids),
+            key=_block_order,
+        ))
+
+    def neighbours(self, block_id: str) -> tuple[str, ...]:
+        """Blocks physically joined to ``block_id``, whatever their ids.
+
+        A block's neighbours are the ones the layout joins to it, in
+        either direction of travel: those it lists in ``next_blocks`` and
+        those that list it. Block numbers say nothing about adjacency
+        (block 101 joins block 77). The yard is not a block.
+        """
+        found = set(self.next_blocks(block_id))
+        found.update(
+            candidate for candidate, after in self.line_next_blocks
+            if block_id in after
+        )
+        found.discard(YARD)
+        found.discard(block_id)
+        return tuple(sorted(found, key=_block_order))
+
+    def within(self, block_id: str, depth: int) -> tuple[str, ...]:
+        """Blocks within ``depth`` joins of ``block_id``, either way."""
+        seen = {block_id}
+        frontier = [block_id]
+        for _ in range(depth):
+            frontier = [
+                nxt for each in frontier for nxt in self.neighbours(each)
+                if nxt not in seen
+            ]
+            seen.update(frontier)
+        seen.discard(block_id)
+        return tuple(sorted(seen, key=_block_order))
 
     def next_blocks(self, block_id: str) -> tuple[str, ...]:
         """Where a train in ``block_id`` may move on to, per the layout.
@@ -183,19 +220,44 @@ class ControllerConfig:
         return ()
 
 
-@dataclass(frozen=True)
-class ParsedLayout:
-    """A track layout file, checked and read, before it is divided up."""
+@dataclass
+class LineLayout:
+    """One line: its blocks, switches and crossings, and its waysides.
+
+    A layout file reads into an undivided line (no ``controllers``);
+    :meth:`divide` gives the line the waysides the track is built with.
+    """
 
     key: str
     blocks: tuple[Block, ...]
-    switches: tuple[Switch, ...] = ()
-    crossing_blocks: tuple[str, ...] = ()
+    #: Switch id -> ``(point, normal end, reverse end)``, for the whole
+    #: line. See :attr:`ControllerConfig.switches`.
+    switches: Mapping[str, tuple[str, str, str]] = field(
+        default_factory=dict
+    )
+    #: Crossing ids for the whole line, by block number.
+    crossings: tuple[str, ...] = ()
+    controllers: tuple[ControllerConfig, ...] = field(default=())
 
     @property
     def name(self) -> str:
         """Display name of the line, e.g. ``Green Line``."""
         return f"{self.key} Line"
+
+    @property
+    def color(self) -> str:
+        """The line's identity colour; neutral for a line not charted."""
+        return LINE_COLORS.get(self.key, NEUTRAL_LINE_COLOR)
+
+    @property
+    def switch_count(self) -> int:
+        """Switches on the whole line."""
+        return len(self.switches)
+
+    @property
+    def crossing_count(self) -> int:
+        """Crossings on the whole line."""
+        return len(self.crossings)
 
     @property
     def max_controllers(self) -> int:
@@ -213,27 +275,6 @@ class ParsedLayout:
         wanted = WAYSIDE_COUNTS.get(self.key, MIN_CONTROLLERS)
         return max(self.min_controllers, min(wanted, self.max_controllers))
 
-
-@dataclass
-class LineLayout:
-    """One line: its blocks and the controllers it is divided among."""
-
-    name: str
-    key: str
-    color: str
-    blocks: tuple[Block, ...]
-    controllers: tuple[ControllerConfig, ...] = field(default=())
-
-    @property
-    def switch_count(self) -> int:
-        """Switches on the whole line."""
-        return sum(len(config.switches) for config in self.controllers)
-
-    @property
-    def crossing_count(self) -> int:
-        """Crossings on the whole line."""
-        return sum(len(config.crossings) for config in self.controllers)
-
     def block(self, block_id: str) -> Block:
         """Return one block by id."""
         for candidate in self.blocks:
@@ -248,10 +289,78 @@ class LineLayout:
                 return candidate
         raise KeyError(f"unknown controller: {controller_id}")
 
+    def divide(self, controller_count: int | None = None) -> "LineLayout":
+        """Divide the line's blocks among the waysides it is built with.
+
+        The number of waysides is fixed by the track (``WAYSIDE_COUNTS``),
+        so the user never chooses it. ``controller_count`` overrides it
+        for tests only.
+
+        Each wayside owns a contiguous run of block numbers. That run
+        does not have to line up with a section boundary, and a switch
+        belongs to the wayside that owns the block it is listed on, even
+        if the switch's legs lead into a neighbouring territory.
+
+        Raises:
+            LayoutError: If the count is outside what this line allows.
+        """
+        if controller_count is None:
+            controller_count = self.default_controllers
+        if isinstance(controller_count, bool) or not isinstance(
+            controller_count, int
+        ):
+            raise LayoutError(
+                "The number of controllers must be a whole number."
+            )
+        if not self.min_controllers <= controller_count <= (
+            self.max_controllers
+        ):
+            raise LayoutError(
+                f"{self.name} needs between {self.min_controllers} and "
+                f"{self.max_controllers} controllers, not "
+                f"{controller_count}."
+            )
+
+        prefix = self.key[:1].upper()
+        directions = tuple(
+            (block.block_id, block.next_blocks) for block in self.blocks
+        )
+        configs: list[ControllerConfig] = []
+        for position, (start, stop) in enumerate(
+            _partition(len(self.blocks), controller_count), start=1
+        ):
+            owned_ids = tuple(
+                block.block_id for block in self.blocks[start:stop]
+            )
+            configs.append(
+                ControllerConfig(
+                    controller_id=f"{prefix}TC-{position:02d}",
+                    line_name=self.name,
+                    block_ids=owned_ids,
+                    switches={
+                        block_id: self.switches[block_id]
+                        for block_id in owned_ids
+                        if block_id in self.switches
+                    },
+                    crossings=tuple(
+                        block_id for block_id in owned_ids
+                        if block_id in self.crossings
+                    ),
+                    line_next_blocks=directions,
+                )
+            )
+        return LineLayout(
+            key=self.key,
+            blocks=self.blocks,
+            switches=self.switches,
+            crossings=self.crossings,
+            controllers=tuple(configs),
+        )
+
 
 # --- reading a layout file ---------------------------------------------
 
-def load_layout_file(path: str | Path) -> ParsedLayout:
+def load_layout_file(path: str | Path) -> LineLayout:
     """Read and check one track layout file.
 
     Raises:
@@ -268,7 +377,7 @@ def load_layout_file(path: str | Path) -> ParsedLayout:
     return parse_layout(data, name)
 
 
-def parse_layout(data: Any, source: str = "layout") -> ParsedLayout:
+def parse_layout(data: Any, source: str = "layout") -> LineLayout:
     """Build a layout from a decoded track layout file.
 
     Raises:
@@ -357,18 +466,23 @@ def parse_layout(data: Any, source: str = "layout") -> ParsedLayout:
             crossings.append(block_id)
 
     blocks.sort(key=lambda block: block.index)
-    switches = tuple(
-        _parse_switch(block_id, text, source, next(
+    switches = {
+        block_id: _parse_switch(block_id, text, source, next(
             b.next_blocks for b in blocks if b.block_id == block_id
         ))
         for block_id, text in switch_text
-    )
-    return ParsedLayout(
+    }
+    return LineLayout(
         key=line.strip(),
         blocks=tuple(blocks),
         switches=switches,
-        crossing_blocks=tuple(sorted(crossings, key=int)),
+        crossings=tuple(sorted(crossings, key=int)),
     )
+
+
+def _block_order(block_id: str) -> tuple[int, str]:
+    """Sort key: numbered blocks by number, then anything else by name."""
+    return (int(block_id), "") if block_id.isdigit() else (1 << 30, block_id)
 
 
 def _next_blocks(value: Any, block_id: str, source: str) -> tuple[str, ...]:
@@ -420,8 +534,11 @@ def _connection(part: str, where: str) -> tuple[str, str]:
 
 def _parse_switch(
     block_id: str, text: str, source: str, next_blocks: tuple[str, ...] = ()
-) -> Switch:
-    """Read the switch string listed on ``block_id``."""
+) -> tuple[str, str, str]:
+    """Read the switch string listed on ``block_id``.
+
+    Returns ``(point, normal end, reverse end)``.
+    """
     where = f"{source}: switch on block {block_id} ({text.strip()!r})"
     parts = [part for part in text.split(";") if part.strip()]
     if not 1 <= len(parts) <= 2:
@@ -458,13 +575,7 @@ def _parse_switch(
         else:
             normal_end, reverse_end = block_id, YARD
 
-    return Switch(
-        switch_id=block_id,
-        block_id=block_id,
-        point=point,
-        normal_end=normal_end,
-        reverse_end=reverse_end,
-    )
+    return point, normal_end, reverse_end
 
 
 # --- dividing a line among waysides --------------------------------------
@@ -485,106 +596,18 @@ def _partition(count: int, parts: int) -> list[tuple[int, int]]:
     return spans
 
 
-def build_line(
-    parsed: ParsedLayout, controller_count: int | None = None
-) -> LineLayout:
-    """Divide a line's blocks among the waysides the track is built with.
-
-    The number of waysides is fixed by the track (``WAYSIDE_COUNTS``), so
-    the user never chooses it. ``controller_count`` overrides it for
-    tests only.
-
-    Each wayside owns a contiguous run of block numbers. That run does
-    not have to line up with a section boundary, and a switch belongs to
-    the wayside that owns the block it is listed on, even if the switch's
-    legs lead into a neighbouring territory.
-
-    Raises:
-        LayoutError: If the count is outside what this line allows.
-    """
-    if controller_count is None:
-        controller_count = parsed.default_controllers
-    if isinstance(controller_count, bool) or not isinstance(
-        controller_count, int
-    ):
-        raise LayoutError("The number of controllers must be a whole number.")
-    if not parsed.min_controllers <= controller_count <= (
-        parsed.max_controllers
-    ):
-        raise LayoutError(
-            f"{parsed.name} needs between {parsed.min_controllers} and "
-            f"{parsed.max_controllers} controllers, not {controller_count}."
-        )
-
-    prefix = parsed.key[:1].upper()
-    directions = tuple(
-        (block.block_id, block.next_blocks) for block in parsed.blocks
-    )
-    switches = {switch.block_id: switch for switch in parsed.switches}
-    crossing_blocks = set(parsed.crossing_blocks)
-    configs: list[ControllerConfig] = []
-    for position, (start, stop) in enumerate(
-        _partition(len(parsed.blocks), controller_count), start=1
-    ):
-        owned = parsed.blocks[start:stop]
-        owned_ids = tuple(block.block_id for block in owned)
-        owned_set = set(owned_ids)
-        owned_switches = tuple(
-            switches[block_id] for block_id in owned_ids
-            if block_id in switches
-        )
-        configs.append(
-            ControllerConfig(
-                controller_id=f"{prefix}TC-{position:02d}",
-                line_name=parsed.name,
-                block_ids=owned_ids,
-                switches=owned_switches,
-                signals=tuple(
-                    WaysideSignal(signal_id=s.switch_id,
-                                  block_id=s.block_id)
-                    for s in owned_switches
-                ),
-                crossings=tuple(
-                    Crossing(
-                        crossing_id=block_id,
-                        block_id=block_id,
-                        approach_block_ids=tuple(
-                            neighbour
-                            for neighbour in (
-                                str(int(block_id) - 1),
-                                block_id,
-                                str(int(block_id) + 1),
-                            )
-                            if neighbour in owned_set
-                        ),
-                    )
-                    for block_id in owned_ids
-                    if block_id in crossing_blocks
-                ),
-                line_next_blocks=directions,
-            )
-        )
-    return LineLayout(
-        name=parsed.name,
-        key=parsed.key,
-        color=LINE_COLORS.get(parsed.key, NEUTRAL_LINE_COLOR),
-        blocks=parsed.blocks,
-        controllers=tuple(configs),
-    )
-
-
 # --- the layouts the system starts with ------------------------------------
 
 def default_layout_dir() -> Path:
-    """The ``TrackModel`` folder, which holds the layouts.
+    """The ``Track_layout`` folder, which holds the layouts.
 
     In the repository, or in a built executable's bundle, which lays the
     folders out the same way (``track_overflow.py``).
     """
     root = getattr(sys, "_MEIPASS", None)
     if root is not None:
-        return Path(root) / "TrackModel"
-    return Path(__file__).resolve().parents[2] / "TrackModel"
+        return Path(root) / "Track_layout"
+    return Path(__file__).resolve().parents[2] / "Track_layout"
 
 
 def build_default_system() -> tuple[LineLayout, ...]:
@@ -598,5 +621,5 @@ def build_default_system() -> tuple[LineLayout, ...]:
         parsed = load_layout_file(
             default_layout_dir() / f"{key.lower()}_line.json"
         )
-        lines.append(build_line(parsed, parsed.default_controllers))
+        lines.append(parsed.divide())
     return tuple(lines)

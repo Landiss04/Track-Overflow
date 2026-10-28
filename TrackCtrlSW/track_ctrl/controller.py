@@ -3,11 +3,13 @@
 The controller is the bridge between typed module signals and the
 boolean-only PLC program. Everything it exchanges is keyed by block
 (D015). The CTC Office suggests a speed and an authority for each block
-it governs, in whole m/s and blocks. Numbers never enter the program:
-the input card gives it one bit per block for occupancy and closure, and
-the program answers with one bit per block, ``AUTH_n``, deciding whether
-that block's suggestion is passed down its track circuit (1) or replaced
-by speed 0 and authority 0 (0).
+it governs, in whole m/s and blocks. Numbers never enter the user's
+program: the input card gives it one bit per block for occupancy and
+closure, and the program answers with one bit per block, ``AUTH_n``,
+deciding whether that block's suggestion is passed down its track
+circuit (1) or replaced by speed 0 and authority 0 (0). The suggested
+speed reaches only the vital code, as bits the program cannot declare,
+and the vital code clamps it to the block's posted limit.
 
 The program also drives the wayside's switches, signals and crossings,
 all as bits. The vital code (:mod:`track_ctrl.vital`), PLC code too, is
@@ -16,7 +18,8 @@ writes the final ``OUT_`` bits, which can only be more restrictive.
 
 The rest of this class is the OS: it decodes the inputs into bits for
 the program and encodes the final bits into typed outputs. It decides
-nothing. A wayside running no program transmits nothing at all.
+nothing. A wayside running no program transmits nothing, except that
+its crossings stay armed: that is their default state.
 
 Maintenance mode is the CTC Office's: this module receives it as an
 input and obeys it. It has no control of its own to enter or leave it.
@@ -24,14 +27,16 @@ input and obeys it. It has no control of its own to enter or leave it.
 
 from __future__ import annotations
 
+import copy
 import math
-from dataclasses import dataclass, field
+from dataclasses import replace
 from datetime import datetime
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from track_ctrl import vital
 from track_ctrl.display import format_mph
-from track_ctrl.layout import Block, ControllerConfig
+from track_ctrl.interface import BlockKey
+from track_ctrl.layout import YARD, Block, ControllerConfig
 from track_ctrl.plc import (
     SEVERITY_ERROR,
     SEVERITY_WARNING,
@@ -40,7 +45,7 @@ from track_ctrl.plc import (
     blocks_commit,
     compile_program,
 )
-from track_ctrl.vital import ControllerOutputs, Suggestion, TrackCircuit
+from track_ctrl.vital import VitalOverride
 
 #: Per-switch bits only the attached vital code reads: the CTC's command
 #: and the hand-set position. A program cannot declare them.
@@ -70,79 +75,74 @@ def _whole(value: float, what: str) -> int:
     return int(value)
 
 
-@dataclass(frozen=True)
-class Iteration:
-    """One committed program, kept read-only for review."""
-
-    number: int
-    file_name: str
-    source: str
-    committed_at: str
-    boolean_count: int
-    line_count: int
-
-
-@dataclass
-class ControllerInputs:
-    """Everything arriving on the input card for one scan."""
-
-    occupancy: dict[str, bool] = field(default_factory=dict)
-    closed: dict[str, bool] = field(default_factory=dict)
-    #: The CTC Office's suggestion for each block. A block that is not
-    #: listed sends nothing, and gets no track circuit.
-    suggestions: dict[str, Suggestion] = field(default_factory=dict)
-    #: Block id -> train id, for display only. Not visible to the PLC.
-    trains: dict[str, str] = field(default_factory=dict)
-    #: Switch id -> the Track Model's read-back, True for reverse. A
-    #: switch with no report is decoded as normal.
-    switch_reverse: dict[str, bool] = field(default_factory=dict)
-    #: From the CTC Office, system-wide. Not a control of this module.
-    maintenance: bool = False
-    #: Switch id -> position the CTC Office commands, True for reverse.
-    #: Sent only in maintenance mode.
-    ctc_switch_commands: dict[str, bool] = field(default_factory=dict)
-
-    def copy(self) -> "ControllerInputs":
-        """Return an independent copy, for sandbox execution."""
-        return ControllerInputs(
-            occupancy=dict(self.occupancy),
-            closed=dict(self.closed),
-            suggestions=dict(self.suggestions),
-            trains=dict(self.trains),
-            switch_reverse=dict(self.switch_reverse),
-            maintenance=self.maintenance,
-            ctc_switch_commands=dict(self.ctc_switch_commands),
-        )
-
-
-@dataclass
-class ScanReport:
-    """The full result of one scan, live or sandboxed."""
-
-    outputs: ControllerOutputs
-    warnings: tuple[Diagnostic, ...] = ()
-    log: tuple[str, ...] = ()
-
-
 class TrackController:
-    """A single wayside controller and the program running on it."""
+    """A single wayside controller and the program running on it.
+
+    It holds its own input card and output state as attributes, so one
+    object is the whole wayside: what it is told (the ``occupancy``,
+    ``closed``, ``suggestions``, ``trains``, ``switch_reverse``,
+    ``maintenance`` and ``ctc_switch_commands`` below), the program it
+    runs, and what its last scan drove (``track_circuits``,
+    ``switch_commands``, ``aspects``, ``crossing_commands``,
+    ``overrides``, ``warnings`` and ``log``).
+
+    A committed program is a :class:`~track_ctrl.plc.Program`, stamped
+    with its iteration number, file name and commit time. ``history``
+    keeps the last few, newest first.
+    """
 
     def __init__(
-        self, config: ControllerConfig, blocks: tuple[Block, ...]
+        self,
+        config: ControllerConfig,
+        blocks: tuple[Block, ...],
+        line: str = "",
     ) -> None:
         self.config = config
         self.blocks = blocks
-        self.inputs = ControllerInputs(
-            occupancy={block.block_id: False for block in blocks},
-            closed={block.block_id: False for block in blocks},
-        )
+        #: The key of the line this wayside is on (``Green``), which is
+        #: what tells two waysides' block 12 apart at the boundary.
+        self.line = line
+
+        # --- the input card: what the wayside is told ---------------------
+        self.occupancy: dict[str, bool] = {
+            block.block_id: False for block in blocks
+        }
+        self.closed: dict[str, bool] = {
+            block.block_id: False for block in blocks
+        }
+        #: The CTC Office's suggestion for each block, as ``(speed in
+        #: m/s, authority in blocks)``. A block that is not listed sends
+        #: nothing, and gets no track circuit.
+        self.suggestions: dict[str, tuple[int, int]] = {}
+        #: Block id -> train id, for display only. Not visible to the PLC.
+        self.trains: dict[str, str] = {}
+        #: Switch id -> the Track Model's read-back, True for reverse. A
+        #: switch with no report is decoded as normal.
+        self.switch_reverse: dict[str, bool] = {}
+        #: From the CTC Office, system-wide. Not a control of this module.
+        self.maintenance = False
+        #: Switch id -> position the CTC Office commands, True for
+        #: reverse. Sent only in maintenance mode.
+        self.ctc_switch_commands: dict[str, bool] = {}
         self.manual_switches: dict[str, bool] = {}
-        self.history: list[Iteration] = []
-        self.outputs: ControllerOutputs = vital.idle_outputs(
-            "no program has been committed yet"
-        )
+
+        # --- the output state: what the last scan drove --------------------
+        #: Only for blocks the CTC Office sent a suggestion for, as
+        #: ``(speed in m/s, authority in blocks)``.
+        self.track_circuits: dict[str, tuple[int, int]] = {}
+        self.switch_commands: dict[str, bool] = {}
+        self.aspects: dict[str, str] = {}
+        self.crossing_commands: dict[str, bool] = {}
+        #: Where the vital code changed the program's output.
+        self.overrides: tuple[VitalOverride, ...] = ()
+        self.warnings: tuple[Diagnostic, ...] = ()
+        self.log: tuple[str, ...] = ()
+
+        self.history: list[Program] = []
+        self.idle("no program has been committed yet")
         #: The vital code attached to every program on this wayside.
         self.vital_source = vital.vital_source(config, blocks)
+        self._speed_width = vital.speed_width(blocks)
         self._vital = compile_program(self.vital_source)
         if self._vital.diagnostics:
             raise RuntimeError(
@@ -164,10 +164,9 @@ class TrackController:
         """Simulated time of day, or wall time before the first tick."""
         return self.time_text or datetime.now().strftime("%H:%M:%S")
 
-    @property
-    def maintenance(self) -> bool:
-        """Whether the CTC Office has the system in maintenance mode."""
-        return self.inputs.maintenance
+    def key(self, block_id: str) -> BlockKey:
+        """The boundary key of one of this wayside's blocks."""
+        return BlockKey(self.line, block_id)
 
     # --- the controller's I/O --------------------------------------------
 
@@ -178,17 +177,18 @@ class TrackController:
             names.add(f"OCC_{block.block_id}")
             names.add(f"CLOSED_{block.block_id}")
             names.add(f"FAIL_{block.block_id}")
-        for switch in self.config.switches:
-            names.add(f"SWREV_{switch.switch_id}")
+        for switch_id in self.config.switches:
+            names.add(f"SWREV_{switch_id}")
         return frozenset(names)
 
     def output_names(self) -> tuple[str, ...]:
         """Every output the controller owns, in a stable order."""
         names = [f"AUTH_{block.block_id}" for block in self.blocks]
-        names += [switch.output_signal for switch in self.config.switches]
-        for signal in self.config.signals:
-            names += list(signal.aspect_signals)
-        names += [crossing.output_signal for crossing in self.config.crossings]
+        config = self.config
+        names += [config.switch_output(s) for s in config.switches]
+        for signal_id in config.signals:
+            names += list(config.aspect_outputs(signal_id))
+        names += [config.crossing_output(c) for c in config.crossings]
         return tuple(names)
 
     def check_program(self, program: Program) -> tuple[Diagnostic, ...]:
@@ -277,7 +277,7 @@ class TrackController:
         """How many programs have been committed to this controller."""
         return self._iteration
 
-    def commit(self, source: str, file_name: str) -> Iteration:
+    def commit(self, source: str, file_name: str) -> Program:
         """Promote a program to the live controller.
 
         The caller is responsible for having run it first. A program
@@ -293,17 +293,15 @@ class TrackController:
                 + diagnostics[0].message
             )
 
-        self._program = program
         self._file_name = file_name
         self._iteration += 1
-        entry = Iteration(
+        entry = replace(
+            program,
             number=self._iteration,
             file_name=file_name,
-            source=source,
             committed_at=self.now_text(),
-            boolean_count=program.boolean_count,
-            line_count=program.line_count,
         )
+        self._program = entry
         # Newest first, and only the most recent few stay readable.
         self.history.insert(0, entry)
         del self.history[HISTORY_DEPTH:]
@@ -311,42 +309,56 @@ class TrackController:
 
     # --- scanning ----------------------------------------------------------
 
-    def build_scan_inputs(self, inputs: ControllerInputs) -> dict[str, bool]:
+    def build_scan_inputs(self) -> dict[str, bool]:
         """Assemble the boolean input image for one scan.
 
         Occupancy and closure become one bit per owned block, named by
         the block number: ``OCC_12``, ``CLOSED_12``. Numbering the
         signals is what lets a declaration span a run of blocks as
         ``OCC_1..20``.
+
+        The names are HW's, so one program runs on both variants:
+        ``FAIL_n`` is always 0 here (this wayside is told of no
+        failures, a failed block reads occupied), and ``SWREV_s`` is the
+        Track Model's read-back of switch ``s``. A program never sees a
+        suggestion's numbers.
         """
         image: dict[str, bool] = {}
         for block in self.blocks:
-            image[f"OCC_{block.block_id}"] = inputs.occupancy.get(
+            image[f"OCC_{block.block_id}"] = self.occupancy.get(
                 block.block_id, False
             )
-            image[f"CLOSED_{block.block_id}"] = inputs.closed.get(
+            image[f"CLOSED_{block.block_id}"] = self.closed.get(
                 block.block_id, False
             )
             # HW's program language has FAIL_n so one program runs on
             # both variants. This wayside is told of no failures (a
             # failed block reads occupied), so it is always 0 here.
             image[f"FAIL_{block.block_id}"] = False
-        for switch in self.config.switches:
-            sid = switch.switch_id
-            image[f"SWREV_{sid}"] = inputs.switch_reverse.get(sid, False)
-            image[f"CTCCMD_{sid}"] = sid in inputs.ctc_switch_commands
-            image[f"CTCREV_{sid}"] = inputs.ctc_switch_commands.get(
+            # The suggested speed, for the vital code only: a user
+            # program cannot declare these. Saturated to the bits it
+            # has, which still clamps to every posted limit.
+            suggestion = self.suggestions.get(block.block_id)
+            speed = 0 if suggestion is None else min(
+                suggestion[0], (1 << self._speed_width) - 1
+            )
+            for bit in range(self._speed_width):
+                image[vital.speed_bit(block.block_id, bit)] = bool(
+                    (speed >> bit) & 1
+                )
+        for sid in self.config.switches:
+            image[f"SWREV_{sid}"] = self.switch_reverse.get(sid, False)
+            image[f"CTCCMD_{sid}"] = sid in self.ctc_switch_commands
+            image[f"CTCREV_{sid}"] = self.ctc_switch_commands.get(
                 sid, False
             )
             image[f"HAND_{sid}"] = sid in self.manual_switches
             image[f"HANDREV_{sid}"] = self.manual_switches.get(sid, False)
-        image["MAINT"] = inputs.maintenance
+        image["MAINT"] = self.maintenance
         return image
 
-    def encode_outputs(
-        self, values: Mapping[str, bool], inputs: ControllerInputs
-    ) -> ControllerOutputs:
-        """Turn the vital code's final bits into typed outputs.
+    def encode_outputs(self, values: Mapping[str, bool]) -> None:
+        """Turn the vital code's final bits into this wayside's outputs.
 
         ``OUT_AUTH_n`` passes block *n*'s suggestion (halved where
         ``OUT_HALF_n`` is set) or sends 0. A block with no suggestion
@@ -354,94 +366,106 @@ class TrackController:
         its aspect bits is set; the vital code makes sure one is.
         """
         out = vital.OUT
-        circuits: dict[str, TrackCircuit] = {}
+        circuits: dict[str, tuple[int, int]] = {}
         for block in self.blocks:
             n = block.block_id
-            suggestion = inputs.suggestions.get(n)
+            suggestion = self.suggestions.get(n)
             if suggestion is None:
                 continue
             if values.get(f"{out}AUTH_{n}", False):
-                speed = suggestion.speed_mps
+                authority = suggestion[1]
+                speed = sum(
+                    1 << bit for bit in range(self._speed_width)
+                    if values.get(f"{out}SPD_{n}_{bit}", False)
+                )
                 if values.get(f"{out}HALF_{n}", False):
                     speed //= 2
-                circuits[n] = TrackCircuit(
-                    speed, suggestion.authority_blocks
-                )
+                circuits[n] = (speed, authority)
             else:
-                circuits[n] = TrackCircuit(0, 0)
+                circuits[n] = (0, 0)
         aspects: dict[str, str] = {}
-        for signal in self.config.signals:
+        for signal_id in self.config.signals:
             lit = [
                 aspect for aspect, name in zip(
-                    vital.ASPECTS, signal.aspect_signals
+                    vital.ASPECTS, self.config.aspect_outputs(signal_id)
                 )
                 if values.get(out + name, False)
             ]
             if len(lit) == 1:
-                aspects[signal.signal_id] = lit[0]
-        return ControllerOutputs(
-            track_circuits=circuits,
-            switches={
-                switch.switch_id: values.get(
-                    f"{out}SW_{switch.switch_id}", False
-                )
-                for switch in self.config.switches
-            },
-            aspects=aspects,
-            crossings={
-                crossing.crossing_id: values.get(
-                    out + crossing.output_signal, False
-                )
-                for crossing in self.config.crossings
-            },
-        )
-
-    def run_program(
-        self, program: Program, inputs: ControllerInputs
-    ) -> ScanReport:
-        """Scan ``program``, then the vital code, without side effects.
-
-        One scan: the program first, the attached vital code after it,
-        reading the program's outputs. This is also what the Program
-        tab's RUN uses: the controller's own committed program and live
-        outputs are untouched, so a broken candidate cannot reach the
-        track.
-        """
-        image = self.build_scan_inputs(inputs)
-        result = program.scan(image)
-        raw = {
-            name: result.values.get(name, False)
-            for name in self.output_names()
+                aspects[signal_id] = lit[0]
+        self.track_circuits = circuits
+        self.switch_commands = {
+            switch_id: values.get(f"{out}SW_{switch_id}", False)
+            for switch_id in self.config.switches
         }
-        final = self._vital.scan({**image, **raw})
-        outputs = self.encode_outputs(final.values, inputs)
-        outputs.overrides = vital.report_overrides(
-            self.config, self.blocks, final.values,
-            list(inputs.suggestions),
-        )
-        return ScanReport(
-            outputs=outputs,
-            warnings=tuple(result.warnings),
-            log=tuple(self._format_log(inputs, outputs, result.values)),
-        )
+        self.aspects = aspects
+        self.crossing_commands = {
+            crossing_id: values.get(
+                out + self.config.crossing_output(crossing_id), False
+            )
+            for crossing_id in self.config.crossings
+        }
 
-    def idle(self, reason: str) -> ScanReport:
+    def _run(self, program: Program) -> None:
+        """One scan of ``program`` and the vital code, onto the outputs.
+
+        The program runs first, the attached vital code after it,
+        reading the program's outputs. Decode, program, vital, encode:
+        the OS decides nothing.
+        """
+        image = self.build_scan_inputs()
+        result, warnings = program.scan(image)
+        raw = {name: result.get(name, False) for name in self.output_names()}
+        final, _ = self._vital.scan({**image, **raw})
+        self.encode_outputs(final)
+        self.overrides = vital.report_overrides(
+            self.config, self.blocks, final, list(self.suggestions),
+        )
+        self.warnings = tuple(warnings)
+        self.log = tuple(self._format_log(result))
+
+    def trial(self, program: Program) -> "TrackController":
+        """A copy of this wayside, with ``program`` scanned once on it.
+
+        This is what the Program tab's RUN uses. The copy has its own
+        input card and its own outputs, so the wayside's committed
+        program, its live outputs and the track are untouched and a
+        broken candidate cannot reach them. Read the result from the
+        copy's output attributes.
+        """
+        candidate = copy.copy(self)
+        for name in ("occupancy", "closed", "suggestions", "trains",
+                     "switch_reverse", "ctc_switch_commands",
+                     "manual_switches"):
+            setattr(candidate, name, dict(getattr(self, name)))
+        candidate.history = list(self.history)
+        candidate._run(program)
+        return candidate
+
+    def idle(self, reason: str) -> None:
         """Run nothing and transmit nothing.
 
-        A wayside with no program running has nothing to send: every
-        output is absent, not a safe default.
+        A wayside with no program running has nothing to send, except
+        that its crossings stay armed: every other output is absent, not
+        a safe default.
         """
-        self.outputs = vital.idle_outputs(reason)
-        return ScanReport(outputs=self.outputs)
+        self.track_circuits = {}
+        self.switch_commands = {}
+        self.aspects = {}
+        # The default state of a crossing is armed, lights on and gates
+        # down: it stays so until a program is running and says
+        # otherwise. Nothing else is sent.
+        self.crossing_commands = {c: True for c in self.config.crossings}
+        self.overrides = (VitalOverride("not_running", "ALL", reason),)
+        self.warnings = ()
+        self.log = ()
 
-    def scan(self) -> ScanReport:
+    def scan(self) -> None:
         """Run the committed program and drive the result to the track."""
         if self._program is None:
-            return self.idle("no program is loaded on this controller")
-
-        report = self.run_program(self._program, self.inputs)
-        self.outputs = report.outputs
-        return report
+            self.idle("no program is loaded on this controller")
+            return
+        self._run(self._program)
 
     # --- physical inputs ---------------------------------------------------
     #
@@ -456,7 +480,7 @@ class TrackController:
             )
 
     def _require_switch(self, switch_id: str) -> None:
-        if switch_id not in {s.switch_id for s in self.config.switches}:
+        if switch_id not in self.config.switches:
             raise KeyError(
                 f"{self.config.controller_id} has no switch {switch_id}"
             )
@@ -464,11 +488,11 @@ class TrackController:
     def set_occupancy(self, block_id: str, occupied: bool) -> None:
         """Set train presence on one owned block, from the Track Model."""
         self._require_block(block_id)
-        self.inputs.occupancy[block_id] = occupied
+        self.occupancy[block_id] = occupied
         if occupied:
-            self.inputs.trains.setdefault(block_id, EXTERNAL_TRAIN_ID)
+            self.trains.setdefault(block_id, EXTERNAL_TRAIN_ID)
         else:
-            self.inputs.trains.pop(block_id, None)
+            self.trains.pop(block_id, None)
 
     def clear_occupancy(self) -> None:
         """Mark every owned block clear."""
@@ -478,7 +502,7 @@ class TrackController:
     def set_closed(self, block_id: str, closed: bool) -> None:
         """Open or close one owned block, from the CTC Office."""
         self._require_block(block_id)
-        self.inputs.closed[block_id] = closed
+        self.closed[block_id] = closed
 
     def set_switch_position(
         self, switch_id: str, reverse: bool | None
@@ -489,9 +513,9 @@ class TrackController:
         """
         self._require_switch(switch_id)
         if reverse is None:
-            self.inputs.switch_reverse.pop(switch_id, None)
+            self.switch_reverse.pop(switch_id, None)
         else:
-            self.inputs.switch_reverse[switch_id] = reverse
+            self.switch_reverse[switch_id] = reverse
 
     def set_suggestion(
         self,
@@ -505,16 +529,16 @@ class TrackController:
         with no suggestion yet starts from zero for the part omitted.
         """
         self._require_block(block_id)
-        current = self.inputs.suggestions.get(block_id, Suggestion(0, 0))
+        current = self.suggestions.get(block_id, (0, 0))
         speed = (
-            current.speed_mps if speed_mps is None
+            current[0] if speed_mps is None
             else _whole(speed_mps, "suggested speed")
         )
         authority = (
-            current.authority_blocks if authority_blocks is None
+            current[1] if authority_blocks is None
             else _whole(authority_blocks, "suggested authority")
         )
-        self.inputs.suggestions[block_id] = Suggestion(speed, authority)
+        self.suggestions[block_id] = (speed, authority)
 
     def set_all_suggestions(
         self,
@@ -534,7 +558,7 @@ class TrackController:
     def clear_suggestion(self, block_id: str) -> None:
         """Remove a block's suggestion: the CTC Office sends nothing."""
         self._require_block(block_id)
-        self.inputs.suggestions.pop(block_id, None)
+        self.suggestions.pop(block_id, None)
 
     def set_maintenance(self, active: bool) -> None:
         """Apply the CTC Office's maintenance mode, system-wide.
@@ -542,10 +566,10 @@ class TrackController:
         Ending it releases every hand-set switch and every CTC switch
         command: both exist only while maintenance lasts.
         """
-        self.inputs.maintenance = active
+        self.maintenance = active
         if not active:
             self.manual_switches.clear()
-            self.inputs.ctc_switch_commands.clear()
+            self.ctc_switch_commands.clear()
 
     def set_ctc_switch_command(
         self, switch_id: str, reverse: bool | None
@@ -553,73 +577,68 @@ class TrackController:
         """Set, or with ``None`` withdraw, the CTC's command for a switch."""
         self._require_switch(switch_id)
         if reverse is None:
-            self.inputs.ctc_switch_commands.pop(switch_id, None)
+            self.ctc_switch_commands.pop(switch_id, None)
         else:
-            self.inputs.ctc_switch_commands[switch_id] = reverse
+            self.ctc_switch_commands[switch_id] = reverse
 
     # --- log ----------------------------------------------------------------
 
-    def _format_log(
-        self,
-        inputs: ControllerInputs,
-        outputs: ControllerOutputs,
-        values: Mapping[str, bool],
-    ) -> list[str]:
+    def _format_log(self, values: Mapping[str, bool]) -> list[str]:
         """Render one scan as terminal lines, inputs then outputs."""
         stamp = self.now_text()
         occupied = [
             block.label for block in self.blocks
-            if inputs.occupancy.get(block.block_id, False)
+            if self.occupancy.get(block.block_id, False)
         ]
         closed = [
             block.label for block in self.blocks
-            if inputs.closed.get(block.block_id, False)
+            if self.closed.get(block.block_id, False)
         ]
         passing = sum(
             1 for block in self.blocks
             if values.get(f"AUTH_{block.block_id}", False)
-            and block.block_id in inputs.suggestions
+            and block.block_id in self.suggestions
         )
         carried = [
-            circuit for circuit in outputs.track_circuits.values()
-            if circuit.speed_mps > 0
+            circuit for circuit in self.track_circuits.values()
+            if circuit[0] > 0
         ]
-        fastest = max((c.speed_mps for c in carried), default=0)
+        fastest = max((c[0] for c in carried), default=0)
 
         lines = [
             f"[{stamp}] IN   OCC = "
             f"{', '.join(occupied) if occupied else 'none'}",
             f"[{stamp}] IN   CLOSED = "
             f"{', '.join(closed) if closed else 'none'}",
-            f"[{stamp}] IN   MAINT = {int(inputs.maintenance)}   "
-            f"CTC suggestions for {len(inputs.suggestions)} block(s)",
+            f"[{stamp}] IN   MAINT = {int(self.maintenance)}   "
+            f"CTC suggestions for {len(self.suggestions)} block(s)",
             f"[{stamp}] PLC  AUTH passes {passing} of "
-            f"{len(inputs.suggestions)} suggested block(s)",
+            f"{len(self.suggestions)} suggested block(s)",
         ]
-        for override in outputs.overrides:
+        for override in self.overrides:
             lines.append(f"[{stamp}] {override.format()}")
 
         lines.append(
             f"[{stamp}] OUT  track circuits: {len(carried)} of "
-            f"{len(outputs.track_circuits)} block(s) carry a speed "
+            f"{len(self.track_circuits)} block(s) carry a speed "
             f"(fastest {format_mph(fastest)})"
         )
-        if outputs.switches:
+        if self.switch_commands:
             rendered = "   ".join(
                 f"SW_{name} = {'REVERSE' if state else 'NORMAL'}"
-                for name, state in outputs.switches.items()
+                for name, state in self.switch_commands.items()
             )
             lines.append(f"[{stamp}] OUT  {rendered}")
-        if outputs.aspects:
+        if self.aspects:
             rendered = "   ".join(
                 f"SIG_{name} = {aspect}"
-                for name, aspect in outputs.aspects.items()
+                for name, aspect in self.aspects.items()
             )
             lines.append(f"[{stamp}] OUT  {rendered}")
-        if outputs.crossings:
+        if self.crossing_commands:
             rendered = "   ".join(
                 f"XING_{name} = {'ACTIVE' if state else 'CLEAR'}"
-                for name, state in outputs.crossings.items()
+                for name, state in self.crossing_commands.items()
             )
             lines.append(f"[{stamp}] OUT  {rendered}")
         if occupied:
@@ -651,6 +670,146 @@ def _declare(keyword: str, prefix: str, numbers: list[int]) -> list[str]:
     return [f"{keyword:<8} {name}" for name in names]
 
 
+def _switch_rule(
+    config: ControllerConfig, sid: str, owned: set[int]
+) -> list[str]:
+    """The starter's lines for one switch: set it for the train coming.
+
+    A train comes to a switch's points from its fixed side (facing) or
+    from one of its legs (trailing). From the track chart, each way in
+    needs one position: a facing train takes the one leg it may run on
+    to, a trailing train needs the leg it comes from. The CTC Office
+    counts authority only up to a switch not set for the route, trailing
+    moves included (``arbitration/authority-stops-before-obstruction``),
+    so the wayside sets it first, from what it sees of the train:
+
+    - facing, from the fixed side: the train is on that block and the
+      points block, its next block, is clear
+      (``NOT OCC_p AND OCC_f``);
+    - trailing, from a one-way leg: the train is on the leg (``OCC_l``).
+      Where the leg is the block the switch is listed on, a train in it
+      locks the switch, so the train about to enter it is seen too:
+      where the block before the leg is this wayside's, that block
+      occupied counts as well.
+
+    The program reads only occupancy, closure, maintenance and the
+    switch's read-back (``SWREV_s``): HW's names, so the same program
+    runs on both variants. It never sees a suggestion.
+
+    A way in this wayside cannot see (its block is another wayside's)
+    is what the switch stands for while no train is seen. The switch is
+    held where it stands while its points are occupied and while trains
+    come for both positions. Otherwise it is normal in maintenance, as
+    before: the CTC Office's command or the programmer's hand-set
+    position drives it then (``vital.supervise``). The yard is not routed
+    (D022): a train is retired stopped at the yard entry block, so no
+    way in or out of it is set for.
+    """
+    out = config.switch_output(sid)
+    point, normal_end, reverse_end = config.switches[sid]
+    held = [f"{out} := SWREV_{sid}"]
+    legs = {
+        end: position
+        for end, position in ((normal_end, False), (reverse_end, True))
+        if end != YARD
+    }
+
+    def after(block_id: str) -> set[str]:
+        return set(config.next_blocks(block_id)) - {YARD}
+
+    def mine(block_id: str) -> bool:
+        return block_id.isdigit() and int(block_id) in owned
+
+    title = (
+        f"// Switch {sid}: points at {point}, normal to "
+        f"{normal_end}, reverse to {reverse_end}."
+    )
+    if not mine(point):
+        return [title, f"// Block {point} is another wayside's, so a train "
+                       "on the points cannot be", "// seen: held where it "
+                       "stands."] + held
+    if not after(point):
+        return [title, "// The layout gives no direction of travel: held "
+                       "where it stands."] + held
+    beside = (
+        after(point)
+        | {b for b, nexts in config.line_next_blocks if point in nexts}
+    ) - set(legs)
+    if len(beside) != 1:
+        return [title, "// No one fixed side to the points: held where "
+                       "it stands."] + held
+    fixed = beside.pop()
+
+    wants: dict[bool, list[str]] = {False: [], True: []}
+    unseen: set[bool] = set()
+    if point in after(fixed):
+        exits = [leg for leg in legs if leg in after(point)]
+        if len(exits) == 1:
+            position = legs[exits[0]]
+            if mine(fixed):
+                wants[position].append(
+                    f"NOT OCC_{point} AND OCC_{fixed}"
+                )
+            else:
+                unseen.add(position)
+    if fixed in after(point):
+        for leg, position in legs.items():
+            if point not in after(leg):
+                continue
+            if mine(leg) and after(leg) == {point}:
+                wants[position].append(_coming_off(config, sid, leg))
+            else:
+                unseen.add(position)
+    rest_reverse = unseen == {True}
+
+    def term(position: bool) -> str:
+        found = wants[position]
+        if not found:
+            return "0"
+        if len(found) == 1:
+            return found[0]
+        return " OR ".join(f"({each})" for each in found)
+
+    name = {False: "normal", True: "reverse"}
+    lines = [title]
+    lines.append(
+        f"// Stands {name[rest_reverse]} until a train is seen coming "
+        "for the other position;"
+    )
+    lines.append(
+        f"// held while {point} is occupied or trains come for both; "
+        "normal in maintenance."
+    )
+    if unseen - {rest_reverse}:
+        lines.append(
+            "// A train coming from another wayside's block for "
+            f"{name[not rest_reverse]} is not seen."
+        )
+    lines += [
+        f"WANT_N_{sid} := {term(False)}",
+        f"WANT_R_{sid} := {term(True)}",
+        f"HOLD_{sid} := OCC_{point} OR (WANT_N_{sid} AND WANT_R_{sid})",
+    ]
+    move = f"NOT WANT_N_{sid}" if rest_reverse else f"WANT_R_{sid}"
+    lines.append(
+        f"{out} := (HOLD_{sid} AND SWREV_{sid}) OR "
+        f"(NOT HOLD_{sid} AND NOT MAINT AND {move})"
+    )
+    return lines
+
+
+def _coming_off(config: ControllerConfig, sid: str, leg: str) -> str:
+    """The bits that show a train coming to the points off ``leg``."""
+    if leg != sid:
+        return f"OCC_{leg}"
+    before = [
+        block for block, nexts in config.line_next_blocks if leg in nexts
+    ]
+    if len(before) == 1 and config.owns(before[0]):
+        return f"OCC_{leg} OR OCC_{before[0]}"
+    return f"OCC_{leg}"
+
+
 def default_program_source(controller: TrackController) -> str:
     """Write a starter program for a controller from its own layout.
 
@@ -663,8 +822,9 @@ def default_program_source(controller: TrackController) -> str:
     numbers = sorted(int(block.block_id) for block in controller.blocks)
     owned = set(numbers)
 
-    def occupied(candidates: list[int]) -> str:
-        terms = [f"OCC_{n}" for n in candidates if n in owned]
+    def occupied(candidates: Iterable[str]) -> str:
+        terms = [f"OCC_{n}" for n in candidates if n.isdigit()
+                 and int(n) in owned]
         return " OR ".join(terms) if terms else "0"
 
     lines: list[str] = [
@@ -679,83 +839,72 @@ def default_program_source(controller: TrackController) -> str:
     lines += _declare("VAR_IN", "OCC", numbers)
     lines += _declare("VAR_IN", "CLOSED", numbers)
     lines.append("VAR_IN   MAINT")
+    if config.switches:
+        lines.append("VAR_IN   " + " ".join(
+            f"SWREV_{s}" for s in config.switches
+        ))
     lines += _declare("VAR_OUT", "AUTH", numbers)
     if config.switches:
         lines.append("VAR_OUT  " + " ".join(
-            s.output_signal for s in config.switches
+            config.switch_output(s) for s in config.switches
         ))
-    for signal in config.signals:
-        lines.append("VAR_OUT  " + " ".join(signal.aspect_signals))
+    for sid in config.signals:
+        lines.append("VAR_OUT  " + " ".join(config.aspect_outputs(sid)))
     if config.crossings:
         lines.append("VAR_OUT  " + " ".join(
-            c.output_signal for c in config.crossings
+            config.crossing_output(c) for c in config.crossings
         ))
 
-    for switch in config.switches:
-        sid = switch.switch_id
-        point = int(switch.block_id)
-        lines += ["", f"// Switch {sid}: hold normal. Throw reverse only "
-                      "while a train waits on the"]
-        lines.append("// reverse leg and the main line is clear, and "
-                     "never in maintenance mode.")
-        leg = int(switch.reverse_end) if switch.reverse_end.isdigit() else -1
-        if leg in owned:
-            clear = [f"NOT OCC_{point}"]
-            if (
-                switch.normal_end.isdigit()
-                and int(switch.normal_end) in owned
-                and int(switch.normal_end) != point
-            ):
-                clear.append(f"NOT OCC_{switch.normal_end}")
-            lines.append(
-                f"{switch.output_signal} := OCC_{leg} AND "
-                + " AND ".join(clear) + " AND NOT MAINT"
-            )
-        else:
-            lines.append(
-                f"{switch.output_signal} := 0    // the reverse leg "
-                "leaves this wayside"
-            )
+    for sid in config.switches:
+        lines.append("")
+        lines += _switch_rule(config, sid, owned)
 
-    for signal in config.signals:
-        sid = signal.signal_id
-        point = int(signal.block_id)
-        red, yellow, green, super_green = signal.aspect_signals
+    for sid in config.signals:
+        point = int(sid)
+        red, yellow, green, super_green = config.aspect_outputs(sid)
         lines += [
             "",
             f"// Signal {sid}: red on a bad block or switch, else yellow "
             "if the route ahead is",
             "// busy, else green. Exactly one aspect is lit for every input.",
-            f"AHEAD_{sid} := {occupied([point + 1, point + 2])}",
+            f"AHEAD_{sid} := {occupied(config.within(sid, 2))}",
             f"{red} := OCC_{point} OR CLOSED_{point}",
             f"{yellow} := NOT {red} AND AHEAD_{sid}",
             f"{green} := NOT {red} AND NOT AHEAD_{sid}",
             f"{super_green} := 0",
         ]
 
-    for crossing in config.crossings:
-        near = [int(b) for b in crossing.approach_block_ids]
+    for crossing_id in config.crossings:
+        near = config.crossing_approach(crossing_id)
         lines += [
             "",
-            f"// Crossing {crossing.crossing_id}: lights and gates while "
+            f"// Crossing {crossing_id}: lights and gates while "
             "a train is on it or beside it.",
-            f"{crossing.output_signal} := {occupied(near)}",
+            f"{config.crossing_output(crossing_id)} := {occupied(near)}",
         ]
 
-    # Only a block with a train in it is held. The block a train is
-    # about to enter has no train in it yet, but its neighbour (that
-    # train's block) is occupied; holding it would hand the train speed
-    # 0 and authority 0 as it enters, which the Train Controller reads as
-    # a signal pickup failure. (Root cause found 2026-10-27; approved by
-    # Harry Tye.)
-    lines += ["", "// Separation: hold a train whose neighbour is occupied."]
+    # Only a block with a train in it is held. A block with no train
+    # that still has a suggestion is the next block of the train beside
+    # it, preloaded by the CTC Office so the train finds its values
+    # there as it enters (truth signals/track-signal, suggested-speed).
+    # Holding it for that train's own occupancy would send it speed 0
+    # and authority 0 at every block it enters.
+    lines += [
+        "",
+        "// Separation: hold a train whose neighbour is occupied. A block "
+        "with no train",
+        "// in it passes its suggestion: it is the next block of the train "
+        "beside it.",
+    ]
     for number in numbers:
-        beside = [n for n in (number - 1, number + 1) if n in owned]
+        beside = [int(n) for n in config.neighbours(str(number))
+                  if n.isdigit() and int(n) in owned]
         if beside:
-            body = f"NOT (OCC_{number} AND " + (
+            others = (
                 f"OCC_{beside[0]}" if len(beside) == 1
                 else "(" + " OR ".join(f"OCC_{n}" for n in beside) + ")"
-            ) + ")"
+            )
+            body = f"NOT (OCC_{number} AND {others})"
         else:
             body = "1"
         lines.append(f"AUTH_{number} := {body}")

@@ -1,0 +1,21 @@
+sequenceDiagram
+    autonumber
+    participant CTC as CTC Office
+    participant H as Central Harness
+    participant M as SwTrackController
+    participant W as TrackController (wayside)
+    CTC-->>H: return closed_blocks, SwitchCommand(line, switch, position) (its STEP reply)
+    Note right of CTC: Switch commands are sent only in maintenance mode. There is no mode flag.
+    H->>H: ctc_to_track_controller internal: closures and commands keyed by block
+    H->>M: step(dt, inputs.ctc)
+    Note over H,M: step reaches SwTrackController through TrackControllerProcess.step and TrackControllerState.step (SD-09).
+    M->>M: step internal: maintenance := a command is in effect on a switch it governs
+    loop each wayside (_apply)
+        opt maintenance changed
+            M->>W: set_maintenance(active)
+            W->>W: set_maintenance internal: on ending, clear manual_switches and ctc_switch_commands
+        end
+        M->>W: set_closed(block, closed), for each block
+        M->>W: set_ctc_switch_command(switch, reverse or None)
+    end
+    Note right of W: build_scan_inputs gives the PLC CLOSED_n and MAINT, and the vital code CTCCMD_s and CTCREV_s.
