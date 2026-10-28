@@ -153,6 +153,11 @@ Kevin.
 | Passenger brake release (Train Controller #25) | "it is latched until the train controller sends ebreak = false" (Kevin) | The Train Model clears a pull when the controller's emergency brake goes from true to false; the one-shot `passenger_brake_release` is withdrawn. Harness release test passes. Proposals for `signals/passenger-brake-release` and `arbitration/passenger-emergency-brake` |
 | Pickup failure (Braden's request 9) | "send null for speed and authority on a signal pickup failure simulating invalid data" (Kevin); then "yes make this change" for the Train Controller to read null | The Train Model sends null for both, the harness passes it on, and the Train Controller flags a pickup failure on a null (`signal_lost`); its 0/0 rule is gone, so a valid stop never trips it. Proposal for `signals/track-signal` |
 | Train Controller #25 | "close this issue" (Kevin) | Closed in `Train-Ctrl_HW/OPEN_ISSUES.md` |
+| Light facing (TM-2) | "yes on the lights facing the oncoming train" (Track Model owner, relayed by Kevin) | Already as built (`86f4658`). Proposal `20261028-1335-signals-at-switches-facing.md` |
+| LAYOUT-1 | "yes on layout-01" (Kevin) | No code change. Proposal `20261028-1335-red-yard-connection-confirmed.md` |
+| C6 (SW signal placement) | "c6 confirmed" (Harry Tye) | Checked off in `TrackCtrlSW/INTEGRATION_DISCREPANCIES.md` |
+| SW vital output | "My current vital code will either send CTC speed, half speed, or nothing, it does not perform any clamping, I will change to match Braden" (Harry Tye) | Harry's change to make; nothing changed here |
+| CTC-3 switch lock | "previous block should key the switch" (Harry Tye) | Read as keeping the lock keyed by the block before the points, as now; no change |
 | Speed limit to the Train Controller | "Remove the speed limit send"; "The speed limit for me is the cmd speed" (Train Controller owner, relayed by Kevin) | `ControllerOutputs.speed_limit_mps` removed; the Train Model still shows the limit from Track Info. Controller #24 closed. Proposal for `signals/track-info` |
 | Gap between trains (CTC-1, CTC-2) | Keep the one-block gap; never give a train authority that would put it next to another train, since the waysides deadlock adjacent trains (Landis; Kevin: "the gap should be kept") | `ctc/routing.py` `keep_gap()`: no authority ends next to a block another train occupies or holds in its authority, on the route or off it. Two trains head on now stop one block apart. Proposal resolving the Conflict in `arbitration/authority-stops-before-obstruction` |
 
@@ -479,6 +484,12 @@ Harry Tye owns the listed-block versus points lock follow-up.
 
 Reply from Harry : CTC should not be scheduling trains to follow within 1 block of each other for this specific reason. Head train requires a reverse switch and follower train does not; vital code ensures we don't set the switch for block 76 while a train is on it but b/c the train requires a normal switch, it waits. 
 
+**Harry Tye, 2026-10-28 (relayed by Kevin):** "previous block should key the switch".
+Read here as: the lock stays keyed by the block before the points (76 for switch 76's
+points at 77), as the SW does now, so nothing changes. The CTC's gap rule (`57614d2`)
+keeps a follower out of the block next to the head, which is what Harry asked of the
+CTC.
+
 ## SW-1: PLC-only safety follow-up
 
 **Owner:** Harry Tye; Braden for HW alignment.
@@ -586,6 +597,9 @@ and `layout.py` stays the master: point 9, NORMAL to 8, REVERSE to the yard, fix
 side 10, light on 10. The source JSON stays unchanged. This comes from the owner's
 reading, not from a document or decision, so it is not recorded as truth until Kevin
 confirms the physical layout.
+
+**Confirmed 2026-10-28** (Kevin: "yes on layout-01"), with switch 9's light now at
+the point, 9 (TM-2). Proposal `20261028-1335-red-yard-connection-confirmed.md`.
 
 ## INPUT-1: Missing occupancy counts as clear
 
@@ -831,6 +845,10 @@ switch's light. Both Track Controllers already named signals by switch, so only 
 Track Model and the harness device map changed; B1 is closed. Note for the Track
 Model owner: the LAYOUT-1 answer put Red switch 9's light "on 10" (the old placement);
 it now stands at the point, 9.
+
+**Confirmed 2026-10-28:** the Track Model owner agrees the lights face the oncoming
+train (relayed by Kevin: "yes on the lights facing the oncoming train"), and Harry Tye
+confirms C6 ("c6 confirmed"). Proposal `20261028-1335-signals-at-switches-facing.md`.
 
 ## TM-3: Automatic heaters
 

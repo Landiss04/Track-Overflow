@@ -575,7 +575,7 @@ implied by the simulated software acceptance.
 
 - TM-1, time-based ticket sales: `tickets_per_minute`, default 12 per station; each tick's chance is `min(1, rate × dt / 60)` (`ef1dc26`).
 - TM-3, heaters: on at or below 0 °C ambient, off above, no hysteresis, last state kept when ambient is missing. Heater commands are accepted but not applied (`ef1dc26`).
-- TM-2, B1 closed: signals sit at switch points, and each train is sent the light ahead on every tick, facing its direction of travel (`86f4658`). The physical placement is still to be confirmed by the Track Controller owners (SW discrepancy C6).
+- TM-2, B1 closed: signals sit at switch points, and each train is sent the light ahead on every tick, facing its direction of travel (`86f4658`). The facing rule is confirmed by the Track Model owner and the placement by Harry Tye (C6), 2026-10-28.
 - Owner answers in `module-owner-review.md`: `c92f58f`.
 
 ### Train Model

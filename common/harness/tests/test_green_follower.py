@@ -50,8 +50,10 @@ def observe(follower: str):
 
 # Observed 2026-10-27 with Harry Tye's development TrackCtrlSW: switch 76
 # now commands normal throughout. With the integration branch's earlier
-# starter rules it stayed reverse (CTC-3, module-owner-review.md); whether
-# normal is what the follower needs is Harry's to say.
+# starter rules it stayed reverse (CTC-3, module-owner-review.md). Harry
+# Tye, 2026-10-28: the block before the points keys the switch, and the
+# CTC should not let a follower close to one block of the head, which
+# its gap rule now ensures.
 
 
 def test_green_follower_75_observation():

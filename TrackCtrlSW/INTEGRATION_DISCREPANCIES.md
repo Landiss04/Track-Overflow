@@ -165,7 +165,10 @@ someone else's work says what is left for them.
   block occupancy and the Track Model's own switch, crossing and signal
   read-back. It carries no failure (C1) and no train (B4).
 
-- [ ] **C6. Signal placement.** Ours and HW: one signal at every switch, named
+- [x] **C6. Signal placement.** Confirmed by Harry Tye 2026-10-28: one signal per
+  switch, at its point, named by the switch, and facing the oncoming train (TM-2,
+  `86f4658`). Before:
+  Ours and HW: one signal at every switch, named
   after the block it is on. Track Model: signals stand on the block **before**
   each switch. HW and the Track Model disagree with each other too. The harness
   maps each light through its switch (`common/harness/track_devices.py`): ours by
