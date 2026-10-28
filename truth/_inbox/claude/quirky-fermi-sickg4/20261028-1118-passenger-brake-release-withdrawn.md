@@ -1,7 +1,7 @@
 **Target:** truth/signals/passenger-brake-release.md
 **Action:** replace
 **Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-28, in chat: "it is latched until the train controller sends ebreak = false"; resolves the Conflict in proposal `20261025-2242-passenger-brake-release-conflict.md`
+**Provenance:** asserted by Kevin Schillinger 2026-10-28, in chat: "it is latched until the train controller sends ebreak = false"; replaces proposal `20261025-2242-passenger-brake-release-conflict.md` and resolves its Conflict. The "not sent" side is Train Controller HW `HARNESS_INTEGRATION.md` Outputs and `REQUIREMENTS.md` M2 ("Not sent, by decision") and `OPEN_ISSUES.md` #25 in PR #50 (Jg-6865)
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Status:** superseded
 **Owner:** Train Controller
-**Provenance:** asserted by Kevin Schillinger 2026-10-20; withdrawn by Kevin Schillinger 2026-10-28
+**Provenance:** asserted by Kevin Schillinger 2026-10-20 (the Train Controller sends the one-shot release when the driver releases a passenger pull); "not sent, by decision" in Train Controller HW `HARNESS_INTEGRATION.md` Outputs, `REQUIREMENTS.md` M2 and `OPEN_ISSUES.md` #25 (PR #50, Jg-6865); withdrawn by Kevin Schillinger 2026-10-28
 **Aliases:** passenger emergency brake release, release passenger brake, clear passenger brake, `clear_passenger_brake`
 **Last updated:** 2026-10-28
 

@@ -33,3 +33,10 @@ Each light faces the oncoming train: a train approaching the switch from its fix
   ([signal-aspect-ahead](../signals/signal-aspect-ahead.md)).
 - Track Controller signal outputs are per switch (`SIG_s_*`), in both the HW and the
   SW variant.
+
+## Supersedes
+
+- Next signal: previously the switches ahead of the train, with no facing rule
+  (`20261027-1836-signals-at-switches.md`); now the first switch ahead that the train
+  will enter from its fixed side, with the switches as set (facing confirmed
+  2026-10-28).

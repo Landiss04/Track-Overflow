@@ -1,7 +1,7 @@
 **Target:** truth/arbitration/authority-stops-before-obstruction.md
 **Action:** replace
 **Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** Landis's reply relayed by Kevin Schillinger 2026-10-28 ("we need to keep that one block gap and ensure that the two trains are never given authority that would put them in adjacent blocks"; "the CTC should prevent a train from receiving authority to move into a position that would eliminate the required gap"), and Kevin Schillinger 2026-10-28 ("the gap should be kept"); resolves the Conflict in proposal `20261027-1819-authority-one-empty-block-conflict.md`; rest of the entry as on origin/truth
+**Provenance:** Replaces proposal `20261027-1819-authority-one-empty-block-conflict.md` and resolves its Conflict. Landis's reply relayed by Kevin Schillinger 2026-10-28 ("we need to keep that one block gap and ensure that the two trains are never given authority that would put them in adjacent blocks"; "the CTC should prevent a train from receiving authority to move into a position that would eliminate the required gap"), and Kevin Schillinger 2026-10-28 ("the gap should be kept"); module owner review CTC-1 and CTC-2 (`documents/module-owner-review-braden.md`, branch `feature/TrackCtrl-HW-vital`, `a5bd465`), decision by Braden Bosilovich and Harry Tye 2026-10-26; the rest of the entry as on origin/truth, with the "other train moves on" sentence restored from origin/truth
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Status:** current
 **Owner:** Landis
-**Provenance:** asserted by Landis 2026-10-06 (authority shrinks for a train ahead that is not moving and for block closures; the CTC Office recomputes it from current train locations and occupied and closed blocks; switches count only as reported; manual Set authority picks a block); route follows the direction of travel in the layout files, supplied by Landis 2026-10-06; one empty block between trains, decided by Braden Bosilovich and Harry Tye 2026-10-26 and agreed by Landis 2026-10-28, relayed by Kevin Schillinger; no authority that would put two trains in adjacent blocks, asserted by Landis 2026-10-28
+**Provenance:** asserted by Landis 2026-10-06 (authority shrinks for a train ahead that is not moving and for block closures; the CTC Office recomputes it from current train locations and occupied and closed blocks; switches count only as reported; manual Set authority picks a block); route follows the direction of travel in the layout files, supplied by Landis 2026-10-06; one empty block between trains, decided by Braden Bosilovich and Harry Tye 2026-10-26 (module owner review CTC-1 and CTC-2, `documents/module-owner-review-braden.md`) and agreed by Landis 2026-10-28, relayed by Kevin Schillinger; no authority that would put two trains in adjacent blocks, asserted by Landis 2026-10-28
 **Aliases:** authority update, authority truncation, safe authority, blocks remaining, one empty block between trains, train separation gap, required gap
 **Last updated:** 2026-10-28
 
@@ -31,7 +31,8 @@ One empty block always stays between trains: no train receives authority that wo
 put it in a block adjacent to another train. Authority never ends in a block next to a
 block that another train occupies (or a failed block) or that another train's
 authority holds. A train in block 30 with another in block 32 and block 31 empty has
-an authority of 0; with the other in block 33, 1 (to 31).
+an authority of 0; with the other in block 33, 1 (to 31). When the other train moves
+on, the authority grows again.
 
 ## Notes
 

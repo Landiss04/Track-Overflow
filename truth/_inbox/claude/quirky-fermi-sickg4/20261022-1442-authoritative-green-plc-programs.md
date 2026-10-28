@@ -1,11 +1,11 @@
-**Target:** truth/decisions/D034-authoritative-green-plc-programs.md
+**Target:** truth/decisions/D037-authoritative-green-plc-programs.md
 **Action:** create
 **Proposed by:** Integration on claude/quirky-fermi-sickg4
 **Provenance:** asserted by Kevin Schillinger 2026-10-22: "Our branch's (PR #43)"; "Three that actually went into the waysides and examples/ has ones that give warnings and errors"
 
 ---
 
-# D034-authoritative-green-plc-programs
+# D037-authoritative-green-plc-programs
 
 **Status:** current
 **Owner:** Braden (Track Controller HW)

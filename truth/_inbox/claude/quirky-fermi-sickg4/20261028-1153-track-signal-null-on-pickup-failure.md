@@ -1,7 +1,7 @@
 **Target:** truth/signals/track-signal.md
 **Action:** replace
 **Proposed by:** Claude on claude/quirky-fermi-sickg4
-**Provenance:** asserted by Kevin Schillinger 2026-10-28 ("modify the train model to send null for speed and authority on a signal pickup failure simulating invalid data"); builds on pending proposal `20261020-1342-track-signal-sdd-review.md`, whose pickup-failure note it supersedes; rest of the entry as there
+**Provenance:** asserted by Kevin Schillinger 2026-10-28 ("modify the train model to send null for speed and authority on a signal pickup failure simulating invalid data"); replaces proposal `20261020-1342-track-signal-sdd-review.md` (Codex), whose pickup-failure note (zeros) it supersedes; the rest of the entry is carried over from that proposal and origin/truth
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Status:** current
 **Owner:** Track Model
-**Provenance:** `Train_Model_Backend_Design.pdf` §5.3 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; authority as a count of blocks per D013 (team decision including Kevin, asserted by Landis 2026-10-06); commanded speed and authority sent by the Track Controller to a block and cleared by the Track Model after delivery, and commanded speed as a float, asserted by Kevin Schillinger 2026-10-16; the next block preloaded, agreed in the CTC Office's answers of 2026-10-20, relayed by Kevin Schillinger; a block not commanded on the latest tick reading zero, accepted by Kevin Schillinger 2026-10-20; null output under signal pickup failure, asserted by Kevin Schillinger 2026-10-28
+**Provenance:** `Train_Model_Backend_Design.pdf` §5.3 (Locked) and Interfaces table, supplied by Kevin Schillinger 2026-09-30; authority as a count of blocks per D013 (team decision including Kevin, asserted by Landis 2026-10-06); commanded speed and authority sent by the Track Controller to a block and cleared by the Track Model after delivery, and commanded speed as a float, asserted by Kevin Schillinger 2026-10-16; the next block preloaded, agreed in the CTC Office's answers of 2026-10-20, relayed by Kevin Schillinger; a block not commanded on the latest tick reading zero, proposed in the per-module questions of `documents/system-integration-design.md` and accepted by Kevin Schillinger 2026-10-20 ("any other open question that was not directly addressed is that your suggestions were accepted"); Kevin Schillinger's October 20, 2026 SDD review; `documents/Railway_Sim_SDD_Train_Model.md` v0.2 §4.9; direct documentation request 2026-10-20; null output under signal pickup failure, asserted by Kevin Schillinger 2026-10-28
 **Aliases:** Track Signal, track circuit signal, track circuit data
 **Last updated:** 2026-10-28
 
@@ -44,6 +44,9 @@ did not command on the latest tick reads zero.
 
 ## Supersedes
 
-- Pickup failure output: previously commanded speed 0 m/s and authority 0 blocks
-  (Kevin Schillinger 2026-10-20); now null, so that a valid 0/0 cannot be taken for a
-  pickup failure (Kevin Schillinger 2026-10-28).
+- Pickup failure output: previously open between zeros and stale values (Kevin's SDD
+  review, 2026-10-20), which the review settled as commanded speed 0 m/s and authority
+  0 blocks; now null, so that a valid 0/0 cannot be taken for a pickup failure (Kevin
+  Schillinger 2026-10-28).
+- Authority: previously a block ID naming the destination block (Kevin Schillinger
+  2026-09-30); now a count of blocks, per D013 (2026-10-06).
