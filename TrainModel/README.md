@@ -386,9 +386,11 @@ door does not redraw until the train has moved.
 The test harness emergency-brake input can explicitly override the passenger
 latch. An injected brake failure blocks the service brake only; the emergency
 brake and a passenger pull still work. The overview offers
-no release action. Normal release is the Train Controller’s one-shot
-`passenger_brake_release`; it clears only the passenger latch, preserving an
-independently held controller emergency command. That path already exists. Its button always reads *Apply emergency brake* and is
+no release action. A pull stays latched until the Train Controller's
+`emergency_brake` goes from true to false: the controller takes the pull up
+as its own emergency brake, and the driver's release clears both (Kevin
+Schillinger 2026-10-28). A pull made after the controller's last true is
+kept. Its button always reads *Apply emergency brake* and is
 disabled while the emergency brake is engaged from any source (a Train
 Controller command from the test UI, or a pull) and while a pull is latched.
 

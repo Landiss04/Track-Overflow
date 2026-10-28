@@ -33,9 +33,9 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
 - Offset references the train’s front. Add no new rollback/block-crossing behavior.
 - Identity/line come from the fleet roster. Keep next station/platform; omit arrival
   from intended window labels. Current QML already omits arrival.
-- Show controller `passenger_brake_release: bool = False`, a one-shot clearing only
-  the passenger latch. An independently held controller emergency command remains
-  active; the window has no release action. This command already exists.
+- Do not show `passenger_brake_release`: it was withdrawn on 2026-10-28. A pull
+  clears when the controller's `emergency_brake` goes from true to false; the
+  window has no release action.
 - Integrated deployment has separate module processes, direct harness mappings
   between module-owned types, and one harness-owned clock (D005/D008/D017).
   `common/interfaces.py` is stale, never an intermediate catalog.
@@ -172,8 +172,8 @@ You need this background to label things correctly. It isn't something to draw.
     the Train Controller.
   - Failures are **not** reported to the Train Controller.
 - **Passenger emergency brake.** A passenger can pull it from the window. It latches.
-  The Train Controller sends one-shot `passenger_brake_release` to clear the
-  latch; a held controller emergency command remains active. The window has no release.
+  It clears when the Train Controller's `emergency_brake` goes from true to
+  false. The window has no release.
 - **Units and terms.** Backend values are SI, with grade in degrees and temperature in
   °C. Field names carry their units (`power_cmd_w`, `grade_deg`). The track signal
   carries **commanded speed**, never "suggested speed".
@@ -256,7 +256,6 @@ otherwise.
   - `+door_right_open: bool`
   - `+temp_setpoint_c: float`
   - `+announcement: str`
-    - `+passenger_brake_release: bool = False`
 - **TrackInputs**:
   - `+passengers_boarded: int`
 - **ControllerOutputs**:

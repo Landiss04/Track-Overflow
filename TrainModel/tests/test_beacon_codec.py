@@ -83,17 +83,11 @@ def test_rejection_preserves_state_latch_and_random_sequence() -> None:
     before = model.snapshot()
     invalid = inp(beacon=Beacon("S" * 114, "LR", False),
                   door_left=True, boarded=50, polarity=False)
-    invalid = dataclasses.replace(invalid, controller=dataclasses.replace(
-        invalid.controller, passenger_brake_release=True,
-    ))
     with pytest.raises(InvalidInputError, match="129"):
         model.step(DT_S, invalid)
     assert model.snapshot() == before
-    release = dataclasses.replace(inp(), controller=dataclasses.replace(
-        inp().controller, passenger_brake_release=True,
-    ))
     for _ in range(5):
-        for inputs in (release, inp(480_000.0), inp(emergency=True),
+        for inputs in (inp(), inp(480_000.0), inp(emergency=True),
                        inp(emergency=True, door_left=True, boarded=50)):
             assert model.step(DT_S, inputs) == control.step(DT_S, inputs)
             assert model.snapshot() == control.snapshot()

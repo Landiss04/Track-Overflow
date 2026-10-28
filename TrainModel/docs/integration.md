@@ -154,15 +154,14 @@ while local developer utilities still use it.
 
 ### Passenger brake release
 
-A passenger pull latches. Truth (`arbitration/passenger-emergency-brake.md`,
-D011) says the **Train Controller** releases it, with the one-shot
-`passenger-brake-release` command. The Train Model takes it as
-`ControllerCommands.passenger_brake_release` (2026-10-20), and the Train
-Controller sends it on the tick after the driver releases the emergency
-brake. The one-shot clears only the passenger latch: an independently held
-controller `emergency_brake` stays active. This path exists in `model.py` and
-`train_edges.py`; the window has no release action. Once the test UI is gone,
-nothing calls the test-only override.
+A passenger pull latches. The **Train Controller** releases it (D011): the
+pull stays latched until the controller's `emergency_brake` goes from true to
+false (Kevin Schillinger 2026-10-28). The controller takes a pull up as its
+own emergency brake, so the driver's release clears both. A pull made after
+the controller's last true is kept. There is no separate release command; the
+one-shot `passenger_brake_release` (2026-10-20) is withdrawn. The window has
+no release action. Once the test UI is gone, nothing calls the test-only
+override.
 
 ### 2.5 Update the README
 
@@ -232,7 +231,6 @@ the train's line. The Train Model's side of each edge:
 | `door_left_open`, `door_right_open` | door command | The model enforces no interlock; the Train Controller holds it (truth `door-command`). |
 | `temp_setpoint_c` | temperature setpoint | °C. |
 | `announcement` | announcement | `""` if none. |
-| `passenger_brake_release` | passenger brake release | One-shot; clears a passenger pull. |
 
 ### Track Model → Train Model (`TrackInputs`)
 

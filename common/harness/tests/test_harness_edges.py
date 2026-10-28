@@ -123,7 +123,6 @@ class TrainEdgesTest(unittest.TestCase):
             "door_right_open": True,
             "temp_setpoint_c": 22.2,
             "announcement": "GLENBURY",
-            "passenger_brake_release": False,
         })
 
     def test_report_to_the_train_controller(self) -> None:

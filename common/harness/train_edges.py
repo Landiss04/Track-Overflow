@@ -16,13 +16,11 @@ Train Controller -> Train Model, ``train_controller_to_train_model``::
     light_command [i, e]    -> interior_lights, exterior_lights
     temperature_setpoint_c  -> temp_setpoint_c
     announcement            -> announcement
-    (not sent)              -> passenger_brake_release, always false
 
-The Train Controller does not send a passenger brake release, by its
-owner's decision (``Train-Ctrl_HW/HARNESS_INTEGRATION.md``, Outputs;
-``OPEN_ISSUES.md`` #25): clearing the Train Model's passenger latch is
-left to the Train Model. Its ``power_verified`` (M21) is its own and
-does not cross this edge.
+There is no passenger brake release: a passenger pull stays latched in
+the Train Model until the Train Controller's emergency brake goes from
+true to false (Kevin Schillinger 2026-10-28). The Train Controller's
+``power_verified`` (M21) is its own and does not cross this edge.
 
 Train Model -> Train Controller, ``train_model_to_train_controller``,
 from the Train Model's ``controller`` outputs::
@@ -77,7 +75,6 @@ INERT_COMMANDS: Mapping[str, Any] = {
     "door_right_open": False,
     "temp_setpoint_c": 21.0,
     "announcement": "",
-    "passenger_brake_release": False,
 }
 
 # The light ahead as the Track Model spells it (signal-aspect-ahead,
@@ -114,7 +111,6 @@ def train_controller_to_train_model(
         "door_right_open": right,
         "temp_setpoint_c": commands["temperature_setpoint_c"],
         "announcement": commands["announcement"],
-        "passenger_brake_release": False,
     }
 
 

@@ -282,8 +282,8 @@ The harness maps module-owned types directly (D005/D008); `common/interfaces.py`
 is stale. Phase 2 wires the Track Model process through the direct edges in
 `track_edges.py`. Track Model owns station eligibility for boarding; Train Model checks
 rest, doors, valid count and capacity without a station gate. Position offset
-references the train’s front. Controller one-shot `passenger_brake_release` clears
-only the passenger latch; a held controller emergency command remains active.
+references the train’s front. A passenger pull stays latched until the Train
+Controller's emergency brake goes from true to false (2026-10-28).
 
 Existing tests are local developer verification utilities.
 

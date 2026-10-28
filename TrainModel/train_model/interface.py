@@ -119,9 +119,6 @@ class ControllerCommands:
     door_right_open: bool
     temp_setpoint_c: float
     announcement: str
-    # One-shot: true on the tick the Train Controller releases a
-    # passenger pull (signals/passenger-brake-release).
-    passenger_brake_release: bool = False
 
 
 @dataclass(frozen=True, slots=True)

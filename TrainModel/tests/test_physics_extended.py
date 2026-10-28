@@ -783,23 +783,33 @@ def test_combined_brake_force_and_stop(
     assert model.snapshot().outputs.track.offset_m == held_offset
 
 
-def test_controller_and_passenger_brakes_release_independently() -> None:
+def test_pull_holds_until_the_controller_brake_goes_off() -> None:
+    """Check a pull stays latched until the controller's emergency brake
+    goes from true to false (Kevin Schillinger 2026-10-28)."""
     model = fresh()
     model.pull_passenger_emergency_brake()
+    # The controller sending false before it has taken the pull up
+    # does not release it.
+    for _ in range(3):
+        out = model.step(DT_S, inp(service=True)).controller
+        assert out.emergency_brake_active
     out = model.step(DT_S, inp(service=True, emergency=True)).controller
-    assert out.emergency_brake_active and out.service_brake_active
-    # Releasing the controller command leaves the passenger latch engaged.
+    assert out.emergency_brake_active
+    assert model.snapshot().passenger_ebrake_pulled
     out = model.step(DT_S, inp(service=True)).controller
-    assert out.emergency_brake_active and out.service_brake_active
-    release = inp(service=True, emergency=True)
-    release = dataclasses.replace(release, controller=dataclasses.replace(
-        release.controller, passenger_brake_release=True,
-    ))
-    out = model.step(DT_S, release).controller
     assert not model.snapshot().passenger_ebrake_pulled
-    assert out.emergency_brake_active and out.service_brake_active
-    out = model.step(DT_S, inp(service=True)).controller
     assert not out.emergency_brake_active and out.service_brake_active
+
+
+def test_a_pull_during_the_release_is_kept() -> None:
+    """Check a pull made after the controller's last true survives the
+    controller's brake going off."""
+    model = fresh()
+    model.step(DT_S, inp(emergency=True))
+    model.pull_passenger_emergency_brake()
+    out = model.step(DT_S, inp()).controller
+    assert out.emergency_brake_active
+    assert model.snapshot().passenger_ebrake_pulled
 
 
 def test_passenger_brake_latches_and_holds() -> None:

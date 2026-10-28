@@ -103,10 +103,9 @@ recorded in SDD v0.2. In the inspected working tree, `_brakes_engaged` reports
 independent states and `_brake_n` sums the engaged configured forces. These
 concurrent backend edits were not made by this documentation task.
 
-The passenger pull latches until the controller sends a one-shot
-`passenger_brake_release`. Clearing it does not cancel an independently held
-controller emergency command. This release path already exists in `model.py`;
-the window has no release action. A separate test-only clear hook remains for
+The passenger pull latches until the controller's emergency brake goes from
+true to false (Kevin Schillinger 2026-10-28). A pull made after the
+controller's last true is kept. The window has no release action. A separate test-only clear hook remains for
 the developer utility.
 
 ## 5. Integration
@@ -186,8 +185,8 @@ or the static rule of section 6 at v = 0.
 `step(dt, inputs)` does, in order:
 
 1. Validate dt and inputs (section 14). On rejection, nothing changes.
-2. Clear the passenger latch if `passenger_brake_release` is true, without
-   changing an independently held controller emergency command. Then update
+2. Clear the passenger latch if the controller's emergency brake was true on
+   the last tick with the pull latched and is false now. Then update
    doors and passengers, from the speed at the **start** of the tick
    (sections 8 and 9).
 3. Block change: if polarity differs from the previous tick, offset resets

@@ -40,9 +40,9 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
 - Offset references the train’s front. Add no new rollback/block-crossing behavior.
 - Identity/line come from the fleet roster. Keep next station/platform; omit arrival
   from intended window labels. Current QML already omits arrival.
-- Show controller `passenger_brake_release: bool = False`, a one-shot clearing only
-  the passenger latch. An independently held controller emergency command remains
-  active; the window has no release action. This command already exists.
+- Do not show `passenger_brake_release`: it was withdrawn on 2026-10-28. A pull
+  clears when the controller's `emergency_brake` goes from true to false; the
+  window has no release action.
 - Integrated deployment has separate module processes, direct harness mappings
   between module-owned types, and one harness-owned clock (D005/D008/D017).
   `common/interfaces.py` is stale, never an intermediate catalog.
@@ -89,9 +89,8 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
   Model window, by "Murphy". They are **not** sent to the Train Controller.
   The `failure-status` signal is withdrawn.
 - The passenger emergency brake is pulled from the Train Model window and
-  latches. The window has no release. The Train Controller releases the latch
-  through one-shot `passenger_brake_release`, already implemented. A held
-  controller emergency command stays active.
+  latches. The window has no release. The latch clears when the Train
+  Controller's `emergency_brake` goes from true to false.
 
 ## 2. Use case diagram
 
@@ -145,7 +144,7 @@ aren't named.
 - **FailureState**: `engine`, `signal_pickup`, `brake`, all `bool`.
 - **ControllerCommands**: `power_cmd_w`, `service_brake`, `emergency_brake`,
   `interior_lights`, `exterior_lights`, `door_left_open`, `door_right_open`,
-  `temp_setpoint_c`, `announcement`, `passenger_brake_release: bool = False`.
+  `temp_setpoint_c`, `announcement`.
 - **TrackInfo**: `block_id`, `grade_deg`, `elevation_m`, `speed_limit_mps`,
   `polarity`, `station_name: str | None`.
 - **TrackSignal**: `commanded_speed_mps`, `authority_blocks: int`.

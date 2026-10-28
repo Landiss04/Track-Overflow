@@ -120,6 +120,9 @@ class TrainModel:
         self._cabin_temp_c = INITIAL_CABIN_TEMP_C
         self._failures = FailureState()
         self._passenger_ebrake_pulled = False
+        # Whether last tick's controller emergency brake was on while a
+        # pull was latched. The pull clears when that command goes off.
+        self._pull_held_by_controller = False
         self._last_polarity: bool | None = None
         self._door_left_open = False
         self._door_right_open = False
@@ -158,11 +161,13 @@ class TrainModel:
         self.validate_inputs(dt, inputs)
         cmd = inputs.controller
         track = inputs.track
-        if cmd.passenger_brake_release:
-            # The Train Controller releases a passenger pull
-            # (arbitration/passenger-emergency-brake). Its own
-            # emergency brake follows emergency_brake.
+        if self._pull_held_by_controller and not cmd.emergency_brake:
+            # A passenger pull stays latched until the Train Controller
+            # sends emergency brake false (Kevin Schillinger
+            # 2026-10-28). A pull made since its last true is kept.
             self._passenger_ebrake_pulled = False
+        self._pull_held_by_controller = (
+            cmd.emergency_brake and self._passenger_ebrake_pulled)
 
         # Train Controller owns the door interlock (October 20 review).
         # Model follows commands at any speed; the disabled historical
@@ -220,7 +225,6 @@ class TrainModel:
             "exterior_lights": cmd.exterior_lights,
             "door_left_open": cmd.door_left_open,
             "door_right_open": cmd.door_right_open,
-            "passenger_brake_release": cmd.passenger_brake_release,
             "polarity": track.track_info.polarity,
         }
         if track.beacon is not None:
@@ -333,6 +337,7 @@ class TrainModel:
     def clear_passenger_brake_for_test(self) -> None:
         """Clear the latch for testing, without defining normal UI release."""
         self._passenger_ebrake_pulled = False
+        self._pull_held_by_controller = False
         self._refresh_discrete_outputs()
 
     def _refresh_discrete_outputs(self) -> None:

@@ -293,8 +293,9 @@ the stale `common/interfaces.py` catalog (D008).
 > **DIAGRAM PLACEHOLDER TM-3:** Insert the existing class diagram. Keep the
 > protocol and concrete `TrainModel` distinguishable by package name. Mark frozen
 > dataclasses, Qt objects, multiplicities, and test-only classes. Check whether
-> the existing drawing includes the newer fleet/process adapter and
-> `passenger_brake_release` field before insertion.
+> the existing drawing includes the newer fleet/process adapter before
+> insertion, and that it shows no `passenger_brake_release` field (withdrawn
+> 2026-10-28).
 
 #### Vehicle configuration and mass
 
@@ -395,7 +396,6 @@ module. The normal passenger-release command is a controller input.
 | `door_left_open`, `door_right_open` | bool each | Requested door states. |
 | `temp_setpoint_c` | finite float, °C | Cabin temperature target. |
 | `announcement` | str | Passenger announcement text. |
-| `passenger_brake_release` | bool, default false | One-shot release of the passenger latch; does not cancel the controller emergency command. |
 
 #### Track Model to Train Model: `TrackInputs`
 
@@ -648,20 +648,24 @@ with that count. Station scheduling and the 45 s dwell remain control/test dutie
 #### UC-TM-06: Pull and release the passenger emergency brake
 
 **Primary actor:** Passenger. **Supporting actor:** Train Controller.
-**Requirement:** REQ-FUNC-047; promoted `passenger-brake-release` signal.
+**Requirement:** REQ-FUNC-047; release rule asserted by Kevin Schillinger
+2026-10-28.
 
 **Preconditions:** The selected train exists. **Trigger:** The passenger activates
 the emergency-brake button in the Train Model window.
 
 **Main success scenario:** Latch the passenger pull; report emergency brake active
 immediately; apply its physical braking force on subsequent steps. The Train
-Controller later sends a one-shot `passenger_brake_release` to clear the pull.
+Controller takes the pull up as its own emergency brake; when the driver
+releases it, the controller's `emergency_brake` goes from true to false and the
+pull clears.
 
-**Alternate flows:** A brake failure does not disable the emergency brake. A held
-controller emergency command keeps emergency braking active after passenger
-release. The module window provides no passenger-release action.
+**Alternate flows:** A brake failure does not disable the emergency brake. A pull
+made after the controller's last true is kept through that release. The module
+window provides no passenger-release action.
 
-**Postcondition:** The pull remains latched until the release command is accepted.
+**Postcondition:** The pull remains latched until the Train Controller's
+emergency brake goes from true to false.
 
 #### UC-TM-07: Inject or clear a failure
 

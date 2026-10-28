@@ -4,7 +4,7 @@ The process's step is called directly, as the harness's ``STEP`` would
 call it: which trains it adds and removes, how each steps, and how it
 rejects one train's inputs without holding back the others. The JSON
 form of the inputs and outputs is checked here too, and the
-passenger-brake-release command.
+passenger pull's release.
 """
 
 from __future__ import annotations
@@ -77,11 +77,12 @@ def test_malformed_inputs_are_refused(change: Any, message: str) -> None:
         decode_inputs(data)
 
 
-def test_release_command_is_optional_in_json() -> None:
-    """Check inputs with no release field do not release."""
+def test_a_release_field_is_refused() -> None:
+    """Check the withdrawn one-shot release is an unknown field."""
     data = dataclasses.asdict(make_inputs())
-    del data["controller"]["passenger_brake_release"]
-    assert not decode_inputs(data).controller.passenger_brake_release
+    data["controller"]["passenger_brake_release"] = True
+    with pytest.raises(InvalidInputError, match="unknown"):
+        decode_inputs(data)
 
 
 def test_roster_follows_the_inputs() -> None:
@@ -139,24 +140,19 @@ def test_inputs_without_trains_reject_the_tick() -> None:
         process.step(1, DT_S, SIM_TIME_S, {})
 
 
-def test_release_command_clears_a_passenger_pull() -> None:
-    """Check the release clears a pull, not the controller's brake."""
+def test_controller_brake_going_off_clears_a_passenger_pull() -> None:
+    """Check a pull holds while the controller sends false, and clears
+    when the controller's emergency brake goes from true to false."""
     process, fleet = make_process()
     process.step(1, DT_S, SIM_TIME_S, {"trains": {"G1": wire_inputs()}})
     fleet.get("G1").applyEmergencyBrake()
-    reply = process.step(2, DT_S, SIM_TIME_S, {"trains": {
-        "G1": wire_inputs(),
-    }})
-    assert reply["trains"]["G1"]["controller"]["emergency_brake_active"]
-    reply = process.step(3, DT_S, SIM_TIME_S, {"trains": {
-        "G1": wire_inputs(passenger_brake_release=True),
-    }})
-    assert not reply["trains"]["G1"]["controller"]["emergency_brake_active"]
-    reply = process.step(4, DT_S, SIM_TIME_S, {"trains": {
-        "G1": wire_inputs(emergency_brake=True,
-                          passenger_brake_release=True),
-    }})
-    assert reply["trains"]["G1"]["controller"]["emergency_brake_active"]
+    for tick, ebrake, active in ((2, False, True), (3, True, True),
+                                 (4, False, False)):
+        reply = process.step(tick, DT_S, SIM_TIME_S, {"trains": {
+            "G1": wire_inputs(emergency_brake=ebrake),
+        }})
+        assert reply["trains"]["G1"]["controller"][
+            "emergency_brake_active"] is active, tick
 
 
 def test_overlength_beacon_rejects_only_its_train_before_mutation() -> None:
@@ -168,7 +164,7 @@ def test_overlength_beacon_rejects_only_its_train_before_mutation() -> None:
     state.applyEmergencyBrake()
     before = state.outputs()
     elapsed = state.elapsed_s
-    invalid = wire_inputs(passenger_brake_release=True, door_left_open=True)
+    invalid = wire_inputs(emergency_brake=True, door_left_open=True)
     invalid["track"]["beacon"] = {
         "station_name": "S" * 115, "platform_side": "L",
         "underground": False,

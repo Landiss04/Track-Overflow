@@ -53,8 +53,9 @@ speed regulation and enforcement (D009); do not add a physics velocity clamp.
   open doors, valid counts and capacity without a station gate.
 - Pickup failure already outputs commanded speed 0 m/s and authority 0 blocks,
   leaving terrain unaffected. Offset references the front of the train.
-- Controller `passenger_brake_release` already clears the passenger latch without
-  canceling its independently held emergency command. The window has no release.
+- A passenger pull clears when the controller's emergency brake goes from true
+  to false (2026-10-28); the one-shot release is withdrawn. The window has no
+  release.
 - Train identity and line come from the fleet/harness roster. Arrival sourcing
   is no longer requested.
 
