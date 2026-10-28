@@ -138,7 +138,7 @@ grade steeper than about 1%. This belongs to the Train Controller owners
 
 **Left for owners.** Harry: a not-ready SW wayside transmits nothing, so the Track
 Model keeps its crossings' last state (the harness crossing test is marked
-expected-failure; Harry will arm crossings by default, 2026-10-28), and `test_hw_language.py` fails 3 tests against Braden's new
+expected-failure; fixed by Harry's `e5e51d4`, 2026-10-28), and `test_hw_language.py` fails 3 tests against Braden's new
 `CTCSW_s`/`CTCREV_s` names. Train Controller: request 9 and the grade false positive.
 Kevin: the `development` merge hazard (Braden's request 1), and regenerating the Pi
 bundles after this merge (request 7).
@@ -156,13 +156,13 @@ Kevin.
 | Light facing (TM-2) | "yes on the lights facing the oncoming train" (Track Model owner, relayed by Kevin) | Already as built (`86f4658`). Proposal `20261028-1335-signals-at-switches-facing.md` |
 | LAYOUT-1 | "yes on layout-01" (Kevin) | No code change. Proposal `20261028-1335-red-yard-connection-confirmed.md` |
 | C6 (SW signal placement) | "c6 confirmed" (Harry Tye) | Checked off in `TrackCtrlSW/INTEGRATION_DISCREPANCIES.md` |
-| SW vital output | "My current vital code will either send CTC speed, half speed, or nothing, it does not perform any clamping, I will change to match Braden" (Harry Tye) | Harry's change to make; nothing changed here |
+| SW vital output | "My current vital code will either send CTC speed, half speed, or nothing, it does not perform any clamping, I will change to match Braden" (Harry Tye) | Done by Harry in `e5e51d4` (`Track-Ctrl-SW`), cherry-picked here: the vital code clamps a suggestion to the block's posted limit (`speed_clamped`). Proposal `20261028-1626-track-circuit-speed-under-block-limit.md` |
 | CTC-3 switch lock | "previous block should key the switch" (Harry Tye) | Read as keeping the lock keyed by the block before the points, as now; no change |
 | Beacon block | "the train model should be modified to report the beacon of the block that it is on not report the beacon of the next block" (Kevin) | The Train Model holds the beacon heard on the block before a station and reports it every tick the train is on that station's block; the harness bridge is removed |
 | Speed limit to the Train Controller | "Remove the speed limit send"; "The speed limit for me is the cmd speed" (Train Controller owner, relayed by Kevin) | `ControllerOutputs.speed_limit_mps` removed; the Train Model still shows the limit from Track Info. Controller #24 closed. Proposal for `signals/track-info` |
 | Gap between trains (CTC-1, CTC-2) | Keep the one-block gap; never give a train authority that would put it next to another train, since the waysides deadlock adjacent trains (Landis; Kevin: "the gap should be kept") | `ctc/routing.py` `keep_gap()`: no authority ends next to a block another train occupies or holds in its authority, on the route or off it. Two trains head on now stop one block apart. Proposal resolving the Conflict in `arbitration/authority-stops-before-obstruction` |
 | `SUPER_GREEN` spelling | "SUPER_GREEN accepted by train model and train control" (Kevin) | The HW Train Controller takes `SUPER_GREEN` (`constants.py`; the driver's panel still shows it as words), and the harness passes the light through unchanged. Controller #27 closed. Truth already spells it so; no proposal |
-| Crossings while a SW wayside is not ready | "module currently does not arm crossings by default but will in the future" (Harry Tye) | Harry's change to make. The harness crossing test stays an expected failure until it lands |
+| Crossings while a SW wayside is not ready | "module currently does not arm crossings by default but will in the future" (Harry Tye) | Done by Harry in `e5e51d4`, cherry-picked here: a wayside with no program or not ready commands every crossing active. The harness crossing test passes and is no longer an expected failure |
 
 ## CTC-1: Red concurrency
 
@@ -492,6 +492,10 @@ Read here as: the lock stays keyed by the block before the points (76 for switch
 points at 77), as the SW does now, so nothing changes. The CTC's gap rule (`57614d2`)
 keeps a follower out of the block next to the head, which is what Harry asked of the
 CTC.
+
+**After Harry's `e5e51d4` (2026-10-28):** his `Track-Ctrl-SW` starter is back, and with
+it switch 76 stays REVERSE for all five ticks again, held while the follower is on 76.
+The observation test records that.
 
 ## SW-1: PLC-only safety follow-up
 

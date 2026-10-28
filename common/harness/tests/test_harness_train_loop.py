@@ -781,14 +781,10 @@ class SwitchAndLightTest(unittest.TestCase):
             {switch: commands[switch] for switch in lights},
         )
 
-    # Harry's Track Controller SW transmits nothing until it is started
-    # up (TrackCtrlSW README, Startup), so the Track Model keeps its
-    # crossings' last state (up) instead of holding them down. Speed and
-    # authority are still fail-safe (a block not commanded reads 0/0).
-    # Harry (2026-10-28): the module does not arm its crossings by
-    # default yet, but will. This test expects that behaviour, so it
-    # stays an expected failure until his change lands.
-    @unittest.expectedFailure
+    # Not ready, Harry's Track Controller SW sends no switches, signals
+    # or track circuits, but commands every crossing active (e5e51d4,
+    # 2026-10-28). Speed and authority are fail-safe: a block not
+    # commanded reads 0/0.
     def test_crossings_follow_their_wayside(self) -> None:
         # Not ready, every wayside holds its crossings down: fail-safe.
         # The Red Line's have no Track Controller yet, and stay up.

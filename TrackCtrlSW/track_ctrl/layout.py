@@ -1,6 +1,6 @@
 """Track configuration: read a track layout file, divide it among waysides.
 
-The input is the course track layout (``Track_layout/*.json``): one JSON
+The input is the course track layout (``TrackModel/*.json``): one JSON
 file per line, listing every block with its section, length, grade and
 speed limit, and an optional ``infrastructure`` object that names a
 station, a switch or a railway crossing. This module reads it and
@@ -599,15 +599,15 @@ def _partition(count: int, parts: int) -> list[tuple[int, int]]:
 # --- the layouts the system starts with ------------------------------------
 
 def default_layout_dir() -> Path:
-    """The ``Track_layout`` folder, which holds the layouts.
+    """The ``TrackModel`` folder, which holds the layouts.
 
     In the repository, or in a built executable's bundle, which lays the
     folders out the same way (``track_overflow.py``).
     """
     root = getattr(sys, "_MEIPASS", None)
     if root is not None:
-        return Path(root) / "Track_layout"
-    return Path(__file__).resolve().parents[2] / "Track_layout"
+        return Path(root) / "TrackModel"
+    return Path(__file__).resolve().parents[2] / "TrackModel"
 
 
 def build_default_system() -> tuple[LineLayout, ...]:

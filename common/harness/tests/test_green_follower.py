@@ -48,24 +48,24 @@ def observe(follower: str):
     return suggestions, before["76"], after
 
 
-# Observed 2026-10-27 with Harry Tye's development TrackCtrlSW: switch 76
-# now commands normal throughout. With the integration branch's earlier
-# starter rules it stayed reverse (CTC-3, module-owner-review.md). Harry
-# Tye, 2026-10-28: the block before the points keys the switch, and the
-# CTC should not let a follower close to one block of the head, which
-# its gap rule now ensures.
+# Observed 2026-10-28 with Harry Tye's Track-Ctrl-SW starter (e5e51d4):
+# switch 76 stays reverse throughout, held while the follower is on 76,
+# the block before its points. Harry Tye, 2026-10-28: "previous block
+# should key the switch", and the CTC should not let a follower close to
+# one block of the head, which its gap rule now ensures. (With his
+# development starter, 2026-10-27, it commanded normal.)
 
 
 def test_green_follower_75_observation():
     suggestions, switch, after = observe("75")
     assert suggestions["75"].authority_blocks == 1
     assert suggestions["76"].authority_blocks == 0
-    assert switch == "normal"
-    assert after == ["normal"] * 5
+    assert switch == "reverse"
+    assert after == ["reverse"] * 5
 
 
 def test_green_follower_76_observation():
     suggestions, switch, after = observe("76")
     assert suggestions["76"].authority_blocks == 0
-    assert switch == "normal"
-    assert after == ["normal"] * 5
+    assert switch == "reverse"
+    assert after == ["reverse"] * 5

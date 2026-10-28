@@ -26,7 +26,6 @@ from common.harness.track_devices import TrackDevices  # noqa: E402
 from common.harness.track_edges import BlockNames  # noqa: E402
 from track_ctrl import interface as sw_api  # noqa: E402
 from track_ctrl import wire as sw_wire  # noqa: E402
-from track_ctrl.controller import ControllerInputs  # noqa: E402
 from track_ctrl.errors import WireFormatError as SwWireError  # noqa: E402
 from track_ctrl.layout import build_default_system  # noqa: E402
 from track_ctrl.module import SwTrackController  # noqa: E402
@@ -256,12 +255,11 @@ def test_sw_own_members_replace_prior_snapshot_remote_namespace_unavailable(
             }
         )
         assert module.step(0.1, inputs).ready
-        image = card.build_scan_inputs(card.inputs)
+        image = card.build_scan_inputs()
         bits.append((image["OCC_28"], image["CLOSED_28"]))
         assert "OCC_150" not in image and "CLOSED_150" not in image
     assert bits == [(True, True), (True, True), (False, False), (False, False)]
-    assert card.build_scan_inputs(
-        ControllerInputs()
-    ) == card.build_scan_inputs(
-        ControllerInputs(occupancy={"28": False}, closed={"28": False})
-    )
+    # A block missing from the input card reads clear, as one sent clear.
+    sent_clear = card.build_scan_inputs()
+    del card.occupancy["28"], card.closed["28"]
+    assert card.build_scan_inputs() == sent_clear

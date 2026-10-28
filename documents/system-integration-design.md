@@ -1652,9 +1652,9 @@ Controller HW. In order:
   brake and no latch, and goes on once the rail is repaired. The failure reaches the CTC
   Office's input only as occupancy (R69).
 - Not ready, every wayside holds its crossings down (fail-safe). Once started up, they
-  lift. Not yet so: a not-ready SW wayside sends nothing, so its crossings keep their last
-  state, and the harness test is an expected failure. Harry Tye, 2026-10-28: the module
-  "does not arm crossings by default but will in the future".
+  lift. So since Harry's `e5e51d4` (2026-10-28): a SW wayside with no program, or not
+  ready, commands every crossing active. Before, it sent nothing and its crossings kept
+  their last state.
 - No heater commands go to the Track Model (D026). It runs heaters only when commanded,
   so they never run.
 

@@ -53,7 +53,9 @@ already did on `development`.
 Superseded on 2026-10-28 by Harry's `e5e51d4`, cherry-picked from
 `Track-Ctrl-SW`: his starter switch rules and `tests/test_starter_switches.py`
 are back, with HW's input names, and a not-ready wayside now arms its
-crossings. The separation rule above is his too.
+crossings. The separation rule above is his too. On this branch the layouts stay
+in `TrackModel/`, as on `development`: `default_layout_dir()` points there, not at
+`Track_layout/`, which came from `Train_Ctrl_integration`.
 
 ---
 
