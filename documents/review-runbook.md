@@ -114,7 +114,7 @@ block, clock time and log records for the owner. Do not bypass owner rules.
 
 ## Evidence and remaining questions
 
-[Current Phase 7 source verification](integration-handover-phase-7.md) records the
+[Current Phase 7 source verification](integration-handover.md#phase-7-handover) records the
 current commands, results and limitations. The
 [2026-10-22 evidence](review-scenario-evidence-2026-10-22.md) is historical Phase 6
 verification and Linux build/smoke evidence. Build with `PYTHON="$PYTHON" bash

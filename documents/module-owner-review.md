@@ -8,18 +8,18 @@ up for module owner review on 2026-10-24. No owner has been contacted by this do
 
 Code references below were inspected for the original writeup. Runtime results are the
 historical bounded observations in [Phase 6 evidence](review-scenario-evidence-2026-10-22.md)
-and the [Phase 6 handover](integration-handover-phase-6.md), except where the fresh
+and the [Phase 6 handover](integration-handover.md#phase-6-handover), except where the fresh
 Phase 7 evidence below is explicitly cited. Original source line numbers refer to
 `f6ed1a1`; relative test links were refreshed against `d606e05` on 2026-10-25.
 
 ## Phase 7 verification follow-up
 
-The [Phase 7 handover](integration-handover-phase-7.md#fresh-verification) records
+The [Phase 7 handover](archive/handover/integration-handover-phase-7.md#fresh-verification) records
 post-cut verification of source now committed as `92e500b` on `kevin-framework`:
 1,958 tests passed, 13 existing skips and 50,899 passed subtests across the module,
 shared-Pi-link and utils suites. The shared-link suite passed all 71 tests;
 HELLO matching is shared between relay and bringup, with relay boot/recovery policy
-and bringup's optional boot preserved. The [process review evidence](integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements)
+and bringup's optional boot preserved. The [process review evidence](archive/handover/integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements)
 is recorded separately from those module results. These checks do not resolve
 [physical Pi readiness](#pi-1-physical-pi-prerequisites) or any owner policy request.
 Both 1x process reviews passed; the fresh mixed-count 2/3 and Green-count 3
@@ -31,8 +31,8 @@ actions remain open; Kevin's answers below are unchanged.
 
 Kevin answered **"No updates—continue owner diagnostics"**. Reviewed bounded
 observations now extend CTC-1, CTC-2 and INPUT-1 below; no owner policy changed
-and all twelve requests remain open. The [independent Phase 7 receipt](integration-handover-phase-7.md#independent-phase-7-verification-receipt)
-records the completed verification separately. The [Phase 8 prompt](phase-8-prompt.md)
+and all twelve requests remain open. The [independent Phase 7 receipt](archive/handover/integration-handover-phase-7.md#independent-phase-7-verification-receipt)
+records the completed verification separately. The [Phase 8 prompt](integration-handover.md#phase-8-prompt)
 scopes reusable diagnostic coverage and remaining evidence gaps. Temporary probe
 scripts/JSON are scratch artifacts; the essential method and outcomes are retained here.
 
@@ -79,7 +79,7 @@ human review; the twelve owner requests below remain open where stated.
 | Consolidation | "put the ctc and other module owner review things in the same place": this document holds both sets of requests. |
 | Proposal collisions | "ues": consolidate the duplicate Red-routing D033 entries; withdraw the D034 Phase 6 scope proposal because it records a plan, retaining authoritative-Green-programs D034; retain both distinct D035 decisions and renumber one. These are instructions for human resolution. |
 
-The [session handover](session-handover-2026-10-22.md) recorded 34 pre-existing
+The [session handover](integration-handover.md#session-handover-2026-10-22) recorded 34 pre-existing
 proposals in this branch's inbox plus four from PR #43. The new
 [functional-review-speed proposal](../truth/_inbox/claude/quirky-fermi-sickg4/20261024-1023-review-functional-speed.md)
 brings the branch directory to 35 proposal files, as counted on 2026-10-24; the four
@@ -188,7 +188,7 @@ emergency-brake or pickup assertion failed in those recorded runs. Completion an
 simultaneous Red acceptance still failed. Changing among the inspected destinations
 alone does not establish a route outside the shared zone.
 
-**Fresh Phase 7 observation:** On `92e500b`, the [complete harness run](integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements)
+**Fresh Phase 7 observation:** On `92e500b`, the [complete harness run](archive/handover/integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements)
 retained both mixed-probe failures. Count 2 completed all four dwells but reached
 maximum Green/Red concurrency 2/1. Count 3 reached its 900-s simulation bound with
 G1/G2/R1/R2 completed, maximum counts 3/1, and endpoint G1=111, G2=65, G3=64,
@@ -317,7 +317,7 @@ review) and Harry. No PLC was changed, and the acceptance test was not weakened.
 both dwells. Three trains became active, but at 1,200 simulated seconds G1 was at
 133 returning to the yard, G2 at 65 after its dwell and G3 at 64. At the longer
 2,400-second bound G1 had retired; G2 remained at 65 and G3 at 64. The
-[handover](integration-handover-phase-6.md#3-final-validation-and-acceptance-limits)
+[handover](archive/handover/integration-handover-phase-6.md#3-final-validation-and-acceptance-limits)
 reports static inspection that departure from 65 reserves upcoming zones 77…100 and
 1…28. The current [_clear/_release logic](../CTC-Office/ctc/scheduler.py#L388)
 checks every zone entered before the leg target and holds the run if another owns one.
@@ -339,7 +339,7 @@ cause. The in-process limitation in [CTC-1](#ctc-1-red-concurrency) also applies
 
 **Fresh Phase 7 observation:** On `92e500b`, Green-only count 2 passed. Count 3
 again reached the 2,400-s simulation bound with G1/G2 completed, G1 retired,
-G2=65 and G3=64; maximum active count was three. See the [fresh harness evidence](integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements).
+G2=65 and G3=64; maximum active count was three. See the [fresh harness evidence](archive/handover/integration-handover-phase-7.md#process-reviews-and-separate-performance-measurements).
 No earlier separation, exclusive-authority, emergency or pickup assertion failed;
 the final fault-event assertion was not reached. This repeats the bounded result
 without establishing its cause or permanent deadlock.
@@ -466,7 +466,7 @@ QT_QPA_PLATFORM=offscreen python -m pytest -q common/harness/tests/test_green_fo
 **Limits:** These are owner-boundary snapshots using the existing SW `_Line` helper,
 not a continuous physics loop. The transition to the head on 101 is seeded, not
 observed travel. Five held ticks do not prove a permanent wait. See the historical
-[Phase 6 follower description](integration-handover-phase-6.md#4-measurement-conditions).
+[Phase 6 follower description](archive/handover/integration-handover-phase-6.md#4-measurement-conditions).
 
 **Requested decision:** Agree the intended follower admission/authority and listed
 block versus points lock behavior, including how the follower can progress once
@@ -484,8 +484,8 @@ Reply from Harry : CTC should not be scheduling trains to follow within 1 block 
 **Owner:** Harry Tye; Braden for HW alignment.
 
 **Evidence and current behavior:** Kevin's both-variant K3b policy is recorded in
-[Phase 5](integration-handover-phase-5.md#4-open-questions-and-owner-review)
-and [Phase 6 scope](phase-6-prompt.md#questions-to-put-to-kevin-and-owners-as-they-come-up-dont-decide).
+[Phase 5](archive/handover/integration-handover-phase-5.md#4-open-questions-and-owner-review)
+and [Phase 6 scope](archive/handover/phase-6-prompt.md#questions-to-put-to-kevin-and-owners-as-they-come-up-dont-decide).
 The separate SW implementation follow-up remains open: SW still scans the PLC and
 calls [vital.supervise](../TrackCtrlSW/track_ctrl/controller.py#L353), including
 [listed-block switch locking](../TrackCtrlSW/track_ctrl/vital.py#L217).
@@ -520,7 +520,7 @@ test copies. They reuse the Green AUTO/WANT/LOCK pattern for switches 9, 15, 27,
 selects reverse for occupancy at 66 and locks on 52. The split remains Red-1
 1–24/73–76, Red-2 25–45/67–72 and Red-3 46–66. The authoritative source for the
 reused pattern is this branch's three `green_wayside_*.plc` programs in
-`TrackCtrlHw/data/plc/`, as specified in [Phase 6](phase-6-prompt.md#kevins-answers-of-2026-10-22).
+`TrackCtrlHw/data/plc/`, as specified in [Phase 6](archive/handover/phase-6-prompt.md#kevins-answers-of-2026-10-22).
 
 **Reproduce:** Inspect all three copies and run the existing
 `TrackCtrlHw/tests/test_red_integration.py` and `TrackCtrlHw/tests/test_red_routing_loop.py`
@@ -746,8 +746,8 @@ a switch's approach is outside its wayside. Reuse [CTC-3](#ctc-3-green-follower-
 for the 75/76 case rather than creating a second follower writeup.
 
 **Limits:** E7 contains historical engine-detector and Red-normal-only statements;
-the later [Phase 4](integration-handover-phase-4.md) and
-[Phase 6](integration-handover-phase-6.md) handovers supersede those integration
+the later [Phase 4](integration-handover.md#phase-4) and
+[Phase 6](integration-handover.md#phase-6-handover) handovers supersede those integration
 status descriptions. E7's owner-review questions remain; this document does not
 reopen the completed Green round-trip repair.
 
@@ -767,7 +767,7 @@ Reply from Harry : Not sure if we are allowed to receive the train direction fro
 
 **Owner:** Track Model owner.
 
-**Evidence and current behavior:** [Q-P4-7](integration-handover-phase-4.md#4-open-questions)
+**Evidence and current behavior:** [Q-P4-7](archive/handover/integration-handover-phase-4.md#4-open-questions)
 was kept open at Kevin's request. [TrackConfig](../TrackModel/track_model/interface.py#L137)
 defaults `ticket_probability` to 0.02; [_sell_tickets](../TrackModel/track_model/model.py#L437)
 rolls once per station per tick, independent of `dt`. At the 0.1-second system tick
@@ -797,7 +797,7 @@ per-tick `ticket_probability`; each tick's chance is `min(1, rate × dt / 60)`, 
 
 **Owner:** Track Model owner; Track Controller owners for placement agreement.
 
-**Evidence and current behavior:** [B1](../TrackModel/BUGS.md#b1) documents that
+**Evidence and current behavior:** [B1](../TrackModel/BUGS.md) documents that
 [_signal_seen](../TrackModel/track_model/model.py#L493) only sends the entered
 block's light on the entry tick. It returns `None` on subsequent ticks and does
 not select the next light facing the train. Green 63→64 receives block 64's light,

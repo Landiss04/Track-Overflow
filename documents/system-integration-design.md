@@ -1015,7 +1015,7 @@ seven module exits at code 0 and no fault events. This is a startup/release
 smoke, while source-process tests establish station stops. Physical Pi
 performance and USB behavior remain unverified. Completed evidence and
 remaining owner questions are tracked in
-[`integration-handover-phase-6.md`](integration-handover-phase-6.md).
+[`integration-handover-phase-6.md`](integration-handover.md#phase-6-handover).
 No optimization-derived speed improvement or real Pi execution is inferred
 from the simulated measurements.
 
@@ -1225,7 +1225,7 @@ and zero behaviour problems.
 
 Profiling identifies substantial VIEW snapshot unpack/refresh work and
 material instrumentation overhead; inclusive component numbers are in
-[the Phase 5 handover](integration-handover-phase-5.md#6-october-22-correction-and-revalidation).
+[the Phase 5 handover](archive/handover/integration-handover-phase-5.md#6-october-22-correction-and-revalidation).
 `c9498e4` changes periodic VIEW from 100 ms to 200 ms within K6. It leaves
 STEP/ACTION ordering and K7 journaling, fsync and replay intact. The final
 measurements do not demonstrate an end-to-end performance improvement.

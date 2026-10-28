@@ -366,7 +366,7 @@ Phases 1 to 4 add three layers of tests:
   the orchestrator's targeted check of 2026-10-21 (the earlier environment took about
   140 s). Kevin Schillinger accepted the extra steady-fall detector criterion as
   built on 2026-10-21 (design R91); its known limits remain recorded in
-  `documents/integration-handover-phase-4.md` section 6. This is not a whole-suite rerun or a new timing-budget measurement.
+  `documents/integration-handover.md#phase-4` section 6. This is not a whole-suite rerun or a new timing-budget measurement.
 - `test_harness_system.py`: the real CTC Office, Track Controller SW, Track Model, Train
   Model and Train Controller processes and two stubs, with the starter programs loaded.
   It runs the Iteration 3 scenario: G1 dispatched from the yard to GLENBURY, placed at
@@ -715,7 +715,7 @@ of the source checkout.
 
 ## Phase 5 as built: Red and Pi relays
 
-See [the Phase 5 handover](../../documents/integration-handover-phase-5.md)
+See [the Phase 5 handover](../../documents/integration-handover.md#phase-5-handover)
 and design §5.6 for the final acceptance evidence. All seven modules are
 real by default; the two HW hosts wait for their USB Pis with no fallback.
 CLOCK_STATE is implemented in `9325523` for authoritative loss-time metadata.
