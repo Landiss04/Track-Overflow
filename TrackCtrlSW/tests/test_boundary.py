@@ -490,7 +490,7 @@ class Programs(unittest.TestCase):
     def test_good_program_is_committed(self) -> None:
         module = _green()
         wayside = module.wayside_ids[0]
-        source = module._waysides[wayside].controller.history[0].source
+        source = module._waysides[wayside].history[0].source
         info = module.load_program(wayside, source, "again.plc")
         self.assertEqual(info.file_name, "again.plc")
         self.assertEqual(info.iteration, 2)

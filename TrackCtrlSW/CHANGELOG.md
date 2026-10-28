@@ -4,6 +4,90 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-10-28 — vital code clamps the speed; crossings default to armed
+
+`track_ctrl/vital.py`, `track_ctrl/controller.py` and the tests.
+
+- **Posted-limit clamp in the vital code.** A suggestion over a block's posted
+  limit used to pass down the circuit unchanged (the CTC Office was to keep it
+  under). The vital program now clamps it. `build_scan_inputs` gives the vital
+  code the suggested speed as bits no user program can declare (`SUGSPD_n_b`,
+  whole m/s, least significant first, saturated to the width the fastest posted
+  limit needs); the vital code compares it with the block's limit in Boolean
+  code (`V_GT_n`) and writes `OUT_SPD_n_b`; `encode_outputs` reads the speed from
+  those bits, then halves it under yellow as before. RUN shows the override
+  `speed_clamped`. A user program still never sees or sets a speed.
+- **Crossings default to armed.** `TrackController.idle()` (no program, or the
+  line not ready) now commands every crossing active, lights on and gates down.
+  Switches, signals and track circuits are still absent.
+- `test_world.py`: the clamp is checked against `min(speed, limit)` for every
+  block and speed; the crossing default is checked; two tests that asserted the
+  old behaviour were rewritten.
+
+---
+
+## 2026-10-23 — data-only classes folded into the classes that own them
+
+`track_ctrl/controller.py`, `vital.py`, `plc.py`, `layout.py`, `module.py`,
+`state.py`, `stimulus.py`, `module_process.py` and the tests. No behaviour
+changes; the boundary types in `interface.py` are untouched.
+
+A class that only held fields (or fields and a naming property) is now an
+attribute set on the class that uses it:
+
+- `ControllerInputs`, `ControllerOutputs`, `TrackCircuit`, `ScanReport` and
+  the wayside's own `Suggestion` are attributes of `TrackController`
+  (`occupancy`, `suggestions`, `track_circuits`, `switch_commands`,
+  `crossing_commands`, `aspects`, `overrides`, `warnings`, `log`, ...). A
+  suggestion and a track circuit are `(speed_mps, authority_blocks)` tuples.
+  RUN's sandbox is `TrackController.trial(program)`, which returns a copy of
+  the wayside scanned once, in place of `run_program(program, inputs.copy())`.
+- `Iteration` is folded into `Program`, which now carries `number`,
+  `file_name` and `committed_at`; the history is a list of `Program`s.
+- `Assignment` and `ScanResult` are folded into `Program` (`scan` returns
+  `(values, warnings)`).
+- `_Wayside` is folded into `TrackController` (`line`, `key()`).
+- `Switch`, `WaysideSignal` and `Crossing` are folded into `ControllerConfig`,
+  which holds ids (a switch maps to `(point, normal end, reverse end)`) and
+  names the PLC outputs (`switch_output`, `aspect_outputs`, `crossing_output`,
+  `crossing_approach`). Each id is the block the device stands on.
+- `ParsedLayout` is folded into `LineLayout`: a layout file reads into an
+  undivided line, and `LineLayout.divide()` replaces `build_line()`.
+
+Kept, because they do more than hold data: `Diagnostic` and `VitalOverride`
+(each formats itself for the terminal), `Block` (its label and whole-m/s
+limit), `Program`, `LineLayout`, `ControllerConfig`, and every type in
+`interface.py` (the contract with the harness and the HW variant).
+
+`common/harness/tests/test_harness_edges.py` read `ParsedLayout.switches`; it
+now reads the folded form.
+
+---
+
+## 2026-10-22 — PLC input names back to HW's
+
+`track_ctrl/controller.py`, `track_ctrl/layout.py`, `tests/test_starter_switches.py`.
+
+The Q7 starter-switch merge (`629fe07`) replaced the HW-matching inputs
+(`FAIL_n`, `SWREV_s`, `MAINT`) with `SUG_n`, `FAULT_s`, `MOVING_s` and `REV_s`,
+which HW's programs do not have (REQ-INTF-009), and left `build_scan_inputs`
+reading an `inputs.switch_moving` that `ControllerInputs` does not have, so no
+scan could run. Restored:
+
+- `input_names` and `build_scan_inputs` are HW's again, with the hand-set bits
+  `HAND_s` and `HANDREV_s` that the merge had dropped for the vital code.
+- The starter reads `SWREV_s` where it read `REV_s`, and no longer reads a
+  suggestion: facing is `NOT OCC_p AND OCC_f`, and a trailing leg also counts
+  the block before it. It cannot tell which way a train on a leg is heading, so
+  three direction tests in `test_starter_switches.py` were changed to say so.
+- `default_layout_dir()` points at `Track_layout/`, where the layouts now live.
+
+HW's own language has since changed (`SPD_n_b`, `CMD_n_b`, `CTCSW_s`, no
+`FAIL_n` or `MAINT`), so three tests that compare the two variants still fail
+until the owners agree one language.
+
+---
+
 ## 2026-10-22 — Red yard and integration inputs
 
 Correction commit: `5d51051` (course data restoration and reader agreement).

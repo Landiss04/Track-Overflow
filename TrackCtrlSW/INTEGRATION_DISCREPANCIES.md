@@ -269,17 +269,21 @@ someone else's work says what is left for them.
   moves included: a train coming back round the line waited at 77, then at 150,
   for good, and never reached the yard entry block 57. Changed on 2026-10-21 in
   `track_ctrl/controller.py`, `track_ctrl/layout.py`:
-  - **Two new PLC inputs.** `SUG_n`: the CTC Office sends a suggestion for block
-    `n` (with no train in it, it is the next block of the train about to enter
-    it, truth `track-signal`). `REV_s`: switch `s` stands reverse as this
-    controller last drove it. Neither crosses the boundary; both are read from
-    what the module already has. Existing programs are unaffected.
+  - **Two new PLC inputs.** *(Withdrawn 2026-10-22: they were not HW's names,
+    so one program no longer ran on both variants, REQ-INTF-009. The inputs are
+    HW's again, `OCC_n`, `CLOSED_n`, `FAIL_n`, `SWREV_s`, `MAINT`; the starter
+    uses `SWREV_s` where it used `REV_s` and no longer reads a suggestion, so it
+    cannot tell which way a train on a leg is heading.)* `SUG_n`: the CTC Office
+    sends a suggestion for block `n` (with no train in it, it is the next block
+    of the train about to enter it, truth `track-signal`). `REV_s`: switch `s`
+    stands reverse as this controller last drove it.
   - **The direction of travel.** Every controller carries its line's
     `next_blocks` from the layout file, for the starter only.
   - **The rule** (see the README, design decision 6): set each switch for the
-    train coming to its points, facing (`SUG_p AND NOT OCC_p AND OCC_f`) or
-    trailing off a one-way leg (`OCC_l`; and `SUG_l` where the leg is the block
-    the switch is listed on); stand for a way in the wayside cannot see (Green
+    train coming to its points, facing (`NOT OCC_p AND OCC_f`; was
+    `SUG_p AND NOT OCC_p AND OCC_f`) or trailing off a one-way leg (`OCC_l`;
+    and the block before it where the leg is the block the switch is listed
+    on); stand for a way in the wayside cannot see (Green
     28 stands reverse); hold the switch where it stands while its points are
     occupied or trains come for both positions; normal in maintenance unless
     held. The vital layer is unchanged.

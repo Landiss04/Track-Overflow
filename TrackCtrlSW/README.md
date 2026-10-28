@@ -278,13 +278,11 @@ AUTH_20  := NOT (OCC_19 OR OCC_21)
 ```
 
 A program can only name what its own controller has. The inputs are `OCC_n`,
-`CLOSED_n` and `SUG_n` for each block it owns, `MAINT`, and `FAULT_s` /
-`MOVING_s` / `REV_s` for each switch. `SUG_n` is set while the CTC Office sends
-a suggestion for block `n`, whatever its value: a block with a suggestion and no
-train in it is the next block of the train about to enter it. `REV_s` is set
-while switch `s` stands reverse as the controller last drove it, the position the
-vital layer locks a switch under a train at (the Track Model's read-back arrives a
-tick later, and only feeds `MOVING_s`). The outputs are `AUTH_n` for each block, `SW_s` for each switch,
+`CLOSED_n` and `FAIL_n` for each block it owns, `MAINT`, and `SWREV_s` for each
+switch: HW's names, so one program runs on both variants. `FAIL_n` is always 0
+here (this wayside is told of no failures; a failed block reads occupied), and
+`SWREV_s` is the Track Model's read-back of switch `s`. A suggestion's numbers
+never enter a user program; only the vital code sees the speed. The outputs are `AUTH_n` for each block, `SW_s` for each switch,
 `SIG_s_R` / `_O` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
 each crossing. Block numbers are the track layout's own, and a switch, its signal
 and a crossing are named by the block they are listed on. A starter program for
@@ -313,7 +311,7 @@ changes. Speeds are whole m/s and authorities are block counts, the system's
 backend units (D013, `truth/conventions/units.md`). Nothing inside the module is
 in mph.
 
-Numbers never enter the PLC program. It answers with one bit per block,
+Numbers never enter the user's PLC program. It answers with one bit per block,
 `AUTH_n`: pass block *n*'s suggestion down its track circuit (1), or send speed 0
 and authority 0 (0). The controller sends a track circuit only for blocks the CTC
 suggested something for.
@@ -350,12 +348,16 @@ wrong program produce a stopped railway rather than a collision:
 | `ctc_switch_command` | In maintenance, a switch follows the CTC's command |
 | `manual_switch` | In maintenance, a hand-set switch is held (the CTC wins) |
 
-The OS passes a block's suggestion, or half its speed, or 0, as the bits say.
-Keeping a speed under the posted limit, and zero speed for zero authority, are
-the CTC Office's (truth `suggested-speed-under-block-limit`,
-`suggested-speed-stops-within-authority`); the wayside no longer has any numeric
-rule. A wayside running no program, or on a line that is not ready, runs nothing
-and **transmits nothing**.
+The OS passes a block's speed, or half of it, or 0, as the bits say. The speed is
+the CTC Office's suggestion **clamped to the block's posted limit by the vital
+code**: the vital code reads the suggested speed as bits no user program can
+declare (`SUGSPD_n_b`, whole m/s, least significant first) and writes
+`OUT_SPD_n_b`, comparing against the limit in Boolean code, and RUN lists it as the
+override `speed_clamped`. Zero speed for zero authority is still the CTC Office's
+(truth `suggested-speed-stops-within-authority`). A wayside running no program, or
+on a line that is not ready, runs nothing and transmits nothing, except that its
+**crossings are armed** (lights on, gates down): that is their default state until
+a program is running and says otherwise.
 
 Overrides are worked out by comparing the program's outputs with the vital
 code's, and shown in the UI with the rule and why, so the programmer can see
@@ -501,17 +503,21 @@ recorded here.
    a switch not set for the route, trailing moves included, so the switch is set
    first:
 
-   - facing: the train is on the fixed-side block and the points block is
-     preloaded (`SUG_p AND NOT OCC_p AND OCC_f`);
+   - facing: the train is on the fixed-side block and the points block is clear
+     (`NOT OCC_p AND OCC_f`);
    - trailing, off a one-way leg: the train is on the leg (`OCC_l`). Where the
      leg is the block the switch is listed on, a train in it locks the switch,
-     so the train about to enter it counts too (`SUG_l`, with the block before
-     it occupied where that block is the wayside's own);
+     so the block before it occupied counts too, where that block is the
+     wayside's own;
    - a way in through another wayside's block cannot be seen, so the switch
      stands for it while no train is seen: Green 28 stands reverse for a train
      coming off 150, and goes normal for a train on 27 about to enter 28.
 
-   A switch is held where it stands (`REV_s`) while its points block is occupied,
+   The program cannot see which way a train is heading (that needs a suggestion
+   bit, which HW's language does not have), so a train on a leg is taken to be
+   coming for the points.
+
+   A switch is held where it stands (`SWREV_s`) while its points block is occupied,
    whichever block the switch is listed on (Green 12's points are 13, Green 76's
    are 77), and while trains come for both positions. In maintenance it is
    normal unless held, as before; the CTC Office's command or a hand-set position
@@ -562,11 +568,13 @@ recorded here.
     they differ the switch is mid-throw and its block's authority is zeroed, even
     if the program ignores it. There is no `FAULT_<switch>`: the controller is
     told of no failures.
-15. **No numeric rule lives in the wayside.** Clamping a speed to the posted
-    limit, and zero speed for zero authority, were Python rules in the old
-    supervisor. Only PLC code may decide, and numbers never enter the PLC (D016),
-    so both are the CTC Office's now (truth `suggested-speed-under-block-limit`,
-    `suggested-speed-stops-within-authority`). The stand-in CTC in the test UI
+15. **The posted-limit clamp is vital PLC code.** Zero speed for zero authority
+    is the CTC Office's (truth `suggested-speed-stops-within-authority`). The clamp
+    to the posted limit was once a Python rule in the old supervisor, then the CTC
+    Office's; since 2026-10-28 it is generated Boolean code in the vital program
+    (a comparison against the limit for each block, on speed bits only the vital
+    code can read), so only PLC code decides and a user program still never sees or
+    sets a speed. The stand-in CTC in the test UI
     suggests under each block's limit. The per-controller speed-limit override is
     gone.
 16. **A physical input is sent on the next step, not the next tick.** Editing

@@ -489,8 +489,8 @@ class TrackDevicesTest(unittest.TestCase):
         for line, file_name in LAYOUT_FILES.items():
             parsed = load_layout_file(layout_dir() / file_name)
             self.assertEqual(
-                {(switch.switch_id, switch.point)
-                 for switch in parsed.switches},
+                {(switch_id, legs[0])
+                 for switch_id, legs in parsed.switches.items()},
                 {(place.switch_id, place.point)
                  for place in self.devices.places(line)},
             )

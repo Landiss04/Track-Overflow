@@ -34,7 +34,6 @@ from track_ctrl.layout import (
     LayoutError,
     LineLayout,
     build_default_system,
-    build_line,
     default_layout_dir,
     load_layout_file,
 )
@@ -262,13 +261,13 @@ class TrackControllerState(QObject):
             occupied = sum(
                 1
                 for controller in self._system.controllers_for(line.name)
-                for flag in controller.inputs.occupancy.values()
+                for flag in controller.occupancy.values()
                 if flag
             )
             closed = sum(
                 1
                 for controller in self._system.controllers_for(line.name)
-                for state in controller.inputs.closed.values()
+                for state in controller.closed.values()
                 if state
             )
             summary.append(
@@ -294,7 +293,7 @@ class TrackControllerState(QObject):
             occupied = sum(
                 1
                 for block in blocks
-                if controller.inputs.occupancy.get(block.block_id, False)
+                if controller.occupancy.get(block.block_id, False)
             )
             rows.append(
                 {
@@ -383,10 +382,9 @@ class TrackControllerState(QObject):
         controller = self._controller
         if controller is None:
             return dict(_NO_CONTROLLER)
-        outputs = controller.outputs
         carrying = sum(
-            1 for circuit in outputs.track_circuits.values()
-            if circuit.speed_mps > 0
+            1 for circuit in controller.track_circuits.values()
+            if circuit[0] > 0
         )
         return {
             "id": controller.config.controller_id,
@@ -403,13 +401,13 @@ class TrackControllerState(QObject):
                 f"{controller.blocks[0].label} – "
                 f"{controller.blocks[-1].label}"
             ),
-            "circuits": len(outputs.track_circuits),
+            "circuits": len(controller.track_circuits),
             "carrying": carrying,
-            "suggested_blocks": len(controller.inputs.suggestions),
+            "suggested_blocks": len(controller.suggestions),
             "committed_at": (
                 controller.history[0].committed_at if controller.history else ""
             ),
-            "override_count": len(outputs.overrides),
+            "override_count": len(controller.overrides),
         }
 
     def _block_rows(self) -> list[dict[str, Any]]:
@@ -419,18 +417,15 @@ class TrackControllerState(QObject):
         if controller is None:
             return rows
         for block in controller.blocks:
-            occupied = controller.inputs.occupancy.get(block.block_id, False)
-            closed = controller.inputs.closed.get(block.block_id, False)
+            occupied = controller.occupancy.get(block.block_id, False)
+            closed = controller.closed.get(block.block_id, False)
             feature = ""
-            for switch in controller.config.switches:
-                if switch.block_id == block.block_id:
-                    feature = "SWITCH"
-            for crossing in controller.config.crossings:
-                if crossing.block_id == block.block_id:
-                    feature = "XING"
-            for signal in controller.config.signals:
-                if signal.block_id == block.block_id:
-                    feature = "SIGNAL"
+            if block.block_id in controller.config.switches:
+                feature = "SWITCH"
+            if block.block_id in controller.config.crossings:
+                feature = "XING"
+            if block.block_id in controller.config.signals:
+                feature = "SIGNAL"
             if block.station is not None:
                 feature = "STATION"
 
@@ -442,7 +437,7 @@ class TrackControllerState(QObject):
                     "number": block.index,
                     "occupied": occupied,
                     "closed": closed,
-                    "train": controller.inputs.trains.get(block.block_id, ""),
+                    "train": controller.trains.get(block.block_id, ""),
                     "feature": feature,
                     "speedLimit": round(mps_to_mph(block.speed_limit_mps)),
                     "station": block.station or "",
@@ -467,10 +462,10 @@ class TrackControllerState(QObject):
         return {
             "total": len(controller.blocks),
             "occupied": sum(
-                1 for flag in controller.inputs.occupancy.values() if flag
+                1 for flag in controller.occupancy.values() if flag
             ),
             "closed": sum(
-                1 for flag in controller.inputs.closed.values() if flag
+                1 for flag in controller.closed.values() if flag
             ),
         }
 
@@ -497,7 +492,7 @@ class TrackControllerState(QObject):
             }
             for override in (
                 () if self._controller is None
-                else self._controller.outputs.overrides
+                else self._controller.overrides
             )
         ]
 
@@ -769,7 +764,7 @@ class TrackControllerState(QObject):
             self.terminalChanged.emit()
             return
 
-        report = controller.run_program(program, controller.inputs.copy())
+        trial = controller.trial(program)
 
         # Warnings found while scanning are added to the compiler's, so
         # the parser pane and the commit gate see one list. The static
@@ -777,7 +772,7 @@ class TrackControllerState(QObject):
         # A line the compiler already flagged is not reported twice: the
         # scan's undefined-read warning is the same problem seen later.
         seen = {item.line for item in found if item.line > 0}
-        for warning in report.warnings:
+        for warning in trial.warnings:
             if warning.line not in seen:
                 seen.add(warning.line)
                 self._diagnostics.append(
@@ -793,13 +788,13 @@ class TrackControllerState(QObject):
         # an output or input does something other than the code says.
         clean = not self._diagnostics
         self._verified_source = self._buffer if clean else None
-        circuits = report.outputs.track_circuits
+        circuits = trial.track_circuits
         self._sandbox = {
             "circuits": len(circuits),
-            "carrying": sum(1 for c in circuits.values() if c.speed_mps > 0),
+            "carrying": sum(1 for c in circuits.values() if c[0] > 0),
             "booleans": program.boolean_count,
             "lines": program.line_count,
-            "overrides": len(report.outputs.overrides),
+            "overrides": len(trial.overrides),
         }
 
         self._log(
@@ -809,7 +804,7 @@ class TrackControllerState(QObject):
         )
         self._log(f"[{stamp}] sandbox scan on duplicate state — live "
                   "outputs untouched")
-        for line in report.log:
+        for line in trial.log:
             self._log(line)
         for entry in self._diagnostics:
             self._log(
@@ -885,29 +880,31 @@ class TrackControllerState(QObject):
         rows: list[dict[str, Any]] = []
         if controller is None:
             return rows
-        for switch in controller.config.switches:
+        for switch_id in controller.config.switches:
             block = next(
                 block
                 for block in controller.blocks
-                if block.block_id == switch.block_id
+                if block.block_id == switch_id
             )
-            command = controller.inputs.ctc_switch_commands.get(
-                switch.switch_id
-            )
+            command = controller.ctc_switch_commands.get(switch_id)
             rows.append(
                 {
-                    "id": switch.switch_id,
+                    "id": switch_id,
                     "block": block.label,
-                    "reverse": controller.outputs.switches.get(
-                        switch.switch_id, False
+                    "reverse": controller.switch_commands.get(
+                        switch_id, False
                     ),
-                    "manual": switch.switch_id in controller.manual_switches,
+                    "manual": switch_id in controller.manual_switches,
                     "ctc_command": (
                         "" if command is None
                         else "REVERSE" if command else "NORMAL"
                     ),
-                    "normal_to": switch.normal_end,
-                    "reverse_to": switch.reverse_end,
+                    "normal_to": controller.config.switch_normal_end(
+                        switch_id
+                    ),
+                    "reverse_to": controller.config.switch_reverse_end(
+                        switch_id
+                    ),
                 }
             )
         return rows
@@ -923,14 +920,13 @@ class TrackControllerState(QObject):
                 "switches can only be set by hand while the CTC Office has "
                 "the system in maintenance mode"
             )
-        known = {switch.switch_id for switch in controller.config.switches}
-        if switch_id not in known:
+        if switch_id not in controller.config.switches:
             raise KeyError(f"unknown switch: {switch_id}")
 
         controller.manual_switches[switch_id] = reverse
         controller.scan()
         note = ""
-        if switch_id in controller.inputs.ctc_switch_commands:
+        if switch_id in controller.ctc_switch_commands:
             note = "; the CTC Office's command for it takes precedence"
         self._log(
             f"[{self._stamp()}] {switch_id} set to "
@@ -1026,7 +1022,7 @@ class TrackControllerState(QObject):
             "line": parsed.name,
             "blocks": len(parsed.blocks),
             "switches": len(parsed.switches),
-            "crossings": len(parsed.crossing_blocks),
+            "crossings": len(parsed.crossings),
             # Fixed by the track: the user does not choose it.
             "controllers": parsed.default_controllers,
             "replaces": len(existing),
@@ -1045,7 +1041,7 @@ class TrackControllerState(QObject):
         """
         try:
             parsed = load_layout_file(file_path)
-            line = build_line(parsed)
+            line = parsed.divide()
         except LayoutError as error:
             self._log(f"[{self._stamp()}] track configuration refused: {error}")
             self.terminalChanged.emit()

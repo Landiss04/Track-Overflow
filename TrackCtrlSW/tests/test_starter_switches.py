@@ -20,11 +20,12 @@ switch point needs                                   seen by
 85     85    reverse for 100 -> 84; normal for 84 -> 86 GTC-04
 ====== ===== ======================================= =================
 
-A wayside sees only its own blocks: which are occupied, and which the
-CTC Office sends a suggestion for. A block with a suggestion and no
-train in it is the next block of the train about to enter it
-(``signals/track-signal``). These tests drive the Green module at its
-boundary, as the harness does, with the generated starter programs.
+A wayside sees only its own blocks, and a program reads only HW's
+names (``OCC_n``, ``CLOSED_n``, ``SWREV_s``, ``MAINT``), so it cannot
+see which way a train is heading: a suggestion never enters the PLC. A
+train on a leg is taken to be coming for the points. These tests drive
+the Green module at its boundary, as the harness does, with the
+generated starter programs.
 """
 
 from __future__ import annotations
@@ -139,14 +140,15 @@ class Switch76(unittest.TestCase):
             "reverse",
         )
 
-    def test_a_train_on_78_going_the_other_way_leaves_it_normal(
+    def test_a_train_on_78_is_taken_to_be_coming_whichever_way_it_heads(
         self,
     ) -> None:
-        # Out from 77 toward 79: its next block is 79, not 77.
+        # The program cannot see the suggestion that would say it is
+        # heading out from 77 toward 79, so it takes it to be coming in.
         line = _Line()
         self.assertEqual(
             line.tick(occupied={"78"}, suggested={"78", "79"})["76"],
-            "normal",
+            "reverse",
         )
 
     def test_held_reverse_while_the_train_is_on_the_points(self) -> None:
@@ -189,7 +191,7 @@ class Switch76(unittest.TestCase):
     def test_two_trains_coming_for_both_legs_hold_it(self) -> None:
         line = _Line()
         self.assertEqual(
-            line.tick(occupied={"78"}, suggested={"78", "77", "76"})["76"],
+            line.tick(occupied={"76", "78"})["76"],
             "normal",
         )
 
@@ -212,15 +214,17 @@ class Switch28(unittest.TestCase):
         self.assertEqual(line.tick(occupied={"29"}, suggested={"29"})["28"],
                          "reverse")
 
-    def test_a_train_from_150_runs_on_through_27(self) -> None:
+    def test_a_train_from_150_is_held_reverse_while_it_is_on_28(self) -> None:
         line = _Line()
         line.tick()
         self.assertEqual(line.tick(occupied={"28"}, suggested={"28", "27"})
                          ["28"], "reverse")
-        # On 27 going away from 28, its next block is 26.
+        # With no suggestion bit the wayside cannot tell which way a train
+        # on 27 is heading, so it takes it to be coming for the points
+        # from the one-way leg: normal.
         self.assertEqual(
             line.tick(occupied={"27"}, suggested={"27", "26"})["28"],
-            "reverse",
+            "normal",
         )
 
 
@@ -317,16 +321,19 @@ class InputImage(unittest.TestCase):
     def setUp(self) -> None:
         self.controller = _green().controller("GTC-04")
 
-    def test_suggestion_and_switch_position_bits(self) -> None:
+    def test_the_inputs_are_hws_and_carry_no_suggestion(self) -> None:
         names = self.controller.input_names()
-        self.assertIn("SUG_77", names)
-        self.assertIn("REV_76", names)
-        self.assertNotIn("SUG_101", names)
+        self.assertIn("SWREV_76", names)
+        self.assertIn("FAIL_77", names)
+        self.assertNotIn("SUG_77", names)
+        self.assertNotIn("REV_76", names)
+        self.assertNotIn("MOVING_76", names)
+        self.assertNotIn("OCC_101", names)
         self.controller.set_suggestion("77", 10, 1)
-        image = self.controller.build_scan_inputs(self.controller.inputs)
-        self.assertTrue(image["SUG_77"])
-        self.assertFalse(image["SUG_78"])
-        self.assertFalse(image["REV_76"])
+        image = self.controller.build_scan_inputs()
+        self.assertFalse(any(name.startswith("SUG_") for name in image))
+        self.assertFalse(image["SWREV_76"])
+        self.assertFalse(image["FAIL_77"])
 
     def test_every_generated_program_compiles_clean(self) -> None:
         for line in build_default_system():

@@ -57,7 +57,6 @@ from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
 from track_ctrl.errors import TrackControllerError  # noqa: E402
 from track_ctrl.layout import (  # noqa: E402
     LineLayout,
-    build_line,
     default_layout_dir,
     load_layout_file,
 )
@@ -94,7 +93,7 @@ def green_line() -> LineLayout:
         LayoutError: If the layout file is missing or malformed.
     """
     parsed = load_layout_file(default_layout_dir() / GREEN_LAYOUT)
-    return build_line(parsed, parsed.default_controllers)
+    return parsed.divide()
 
 
 class TrackControllerProcess(QObject):

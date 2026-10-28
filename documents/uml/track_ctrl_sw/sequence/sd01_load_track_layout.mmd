@@ -3,35 +3,42 @@ sequenceDiagram
     actor P as Programmer
     participant UI as Track Controller UI (QML)
     participant S as TrackControllerState
-    participant L as layout
+    participant L as layout / LineLayout
     participant M as SwTrackController
     participant W as TrackController (wayside)
-    P->>UI: click Load track...
-    UI-->>P: file dialog
-    P->>UI: choose green_line.json
+    P->>UI: click Load track..., choose green_line.json
     UI->>S: inspectTrackConfig(url)
+    S->>S: inspect_track_config(path)
     S->>L: load_layout_file(path)
+    L->>L: load_layout_file internal: json.load, then parse_layout(data, name)
     alt not a layout, or a wayside database
-        L-->>S: LayoutError(reason)
-        S-->>UI: {ok: false, error}
-        UI-->>P: reason shown, nothing changes
+        L-->>S: raise LayoutError(reason)
+        S-->>UI: return {ok: false, error}
+        UI-->>P: the reason is shown, nothing changes
     else a valid layout
-        L-->>S: ParsedLayout
-        S-->>UI: line, blocks, switches, crossings, waysides (fixed), replaces
+        L-->>S: return LineLayout (undivided)
+        S->>M: controllers_for(line.name)
+        M-->>S: return the waysides it would replace
+        S-->>UI: return {line, blocks, switches, crossings, controllers: default_controllers, replaces}
         UI-->>P: confirmation, with the fixed wayside count
         P->>UI: click Load
         UI->>S: loadTrackConfig(url)
-        S->>L: build_line(parsed)
-        Note right of L: The number of waysides is fixed by the track (WAYSIDE_COUNTS), never chosen.
-        L-->>S: LineLayout (blocks divided among the waysides)
+        S->>S: load_track_config(path)
+        S->>L: load_layout_file(path)
+        L-->>S: return LineLayout (undivided)
+        S->>L: divide()
+        Note right of L: The count is default_controllers (WAYSIDE_COUNTS), fixed by the track, never chosen.
+        L-->>S: return LineLayout with one ControllerConfig per wayside
         S->>M: load_track(line)
-        M->>M: drop the line of the same name, with its programs
-        loop each wayside of the line
-            M->>W: create (territory, no program)
-            W->>W: generate and compile the vital code
+        M->>M: load_track internal: drop the waysides of the same line, with their programs
+        loop each ControllerConfig (_install)
+            M->>W: TrackController(config, blocks, line.key)
+            W->>W: __init__ internal: vital_source(config, blocks), then compile_program
+            M->>W: scan()
+            W->>W: scan internal: no program yet, so idle(reason)
         end
-        M-->>S: ids of the replaced waysides
-        S->>S: select the line and its first wayside, empty buffer
-        S-->>UI: selection, buffer, controller changed
+        M-->>S: return the ids of the replaced waysides
+        S->>S: load_track_config internal: select the line and its first wayside, _load_buffer_from_controller()
+        S-->>UI: emit selectionChanged, bufferChanged, controllerChanged
         UI-->>P: line and waysides listed, NOT READY
     end
