@@ -48,15 +48,15 @@ commanded speed as its limit (``Train-Ctrl_HW/REQUIREMENTS.md`` M1; its
 owner, 2026-10-28).
 
 The light ahead goes from the Track Model to the Train Controller
-directly (``signals/signal-aspect-ahead``), through
-``aspect_to_train_controller``.
+directly (``signals/signal-aspect-ahead``), unchanged: both spell the
+fourth aspect ``SUPER_GREEN`` (the Train Model and Train Controller
+owners, 2026-10-28).
 """
 
 from __future__ import annotations
 
 __all__ = [
     "INERT_COMMANDS",
-    "aspect_to_train_controller",
     "train_controller_to_train_model",
     "train_model_to_train_controller",
 ]
@@ -80,16 +80,6 @@ INERT_COMMANDS: Mapping[str, Any] = {
     "door_right_open": False,
     "temp_setpoint_c": 21.0,
     "announcement": "",
-}
-
-# The light ahead as the Track Model spells it (signal-aspect-ahead,
-# all caps), and as the Train Controller reads it. The Train
-# Controller still spells the fourth aspect with a space.
-_ASPECTS = {
-    "RED": "RED",
-    "YELLOW": "YELLOW",
-    "GREEN": "GREEN",
-    "SUPER_GREEN": "SUPER GREEN",
 }
 
 
@@ -153,12 +143,3 @@ def train_model_to_train_controller(
         inputs["beacon_side"] = beacon["platform_side"]
         inputs["beacon_underground"] = beacon["underground"]
     return inputs
-
-
-def aspect_to_train_controller(aspect: str) -> str:
-    """Map the light ahead to the Train Controller's spelling.
-
-    Raises:
-        KeyError: If ``aspect`` is not one of the four aspects.
-    """
-    return _ASPECTS[aspect]

@@ -126,7 +126,7 @@ Each train's input dict uses the keys and shapes in truth `signals/`, in SI. The
 | `beacon_station` | str | Station name |
 | `beacon_side` | `"L"`, `"R"`, `"LR"` | Any other value is ignored |
 | `beacon_underground` | bool | Turns the lights on when true, off when a later beacon says false (unless night; M8) |
-| `signal_light_ahead` | `"RED"`, `"YELLOW"`, `"GREEN"`, `"SUPER GREEN"` | Shown only; any other value is ignored. From the Track Model directly (truth `signals/signal-aspect-ahead`; M20). Truth spells the fourth aspect `SUPER_GREEN`, so the harness converts it; mapped on `claude/quirky-fermi-sickg4` (`OPEN_ISSUES.md` #27) |
+| `signal_light_ahead` | `"RED"`, `"YELLOW"`, `"GREEN"`, `"SUPER_GREEN"` | Shown only; any other value is ignored. From the Track Model directly, unchanged (truth `signals/signal-aspect-ahead`; M20). This controller takes truth's `SUPER_GREEN` (Kevin 2026-10-28; `OPEN_ISSUES.md` #27) |
 
 **Send the beacon keys every tick the train is on a station's block, and leave all three out otherwise** (M6). Arrival at a station is the beacon received with `authority_blocks` 0, `commanded_speed` 0 and the train at a stand, so a beacon sent only on the tick the train passes it would never coincide with the stop. The Train Model now sends it this way: the beacon heard on the block before a station, every tick the train is on that station's block (Kevin Schillinger 2026-10-28). Truth's `beacon.md` does not say what the Train Model sends between beacons; this is what the controller needs. The last values are kept between beacons, for the lights (M8).
 

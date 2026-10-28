@@ -103,12 +103,12 @@ ECHO_TICKS = 2
 DWELL_S = 45.0
 
 # ----------------------------------------------------------- vocabulary
-ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
+ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER_GREEN"]
 ASPECT_TEXT = {
     "RED": "Stop.",
     "YELLOW": "Slow down.",
     "GREEN": "Continue to cruise.",
-    "SUPER GREEN": "All clear ahead.",
+    "SUPER_GREEN": "All clear ahead.",
 }
 
 #: The Train Model's three failures (truth modules/train-model.md),

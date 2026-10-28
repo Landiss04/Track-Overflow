@@ -785,8 +785,9 @@ class SwitchAndLightTest(unittest.TestCase):
     # up (TrackCtrlSW README, Startup), so the Track Model keeps its
     # crossings' last state (up) instead of holding them down. Speed and
     # authority are still fail-safe (a block not commanded reads 0/0).
-    # For Harry: whether a not-ready wayside should hold its crossings
-    # down, as this test expects.
+    # Harry (2026-10-28): the module does not arm its crossings by
+    # default yet, but will. This test expects that behaviour, so it
+    # stays an expected failure until his change lands.
     @unittest.expectedFailure
     def test_crossings_follow_their_wayside(self) -> None:
         # Not ready, every wayside holds its crossings down: fail-safe.

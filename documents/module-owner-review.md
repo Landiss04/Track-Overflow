@@ -138,7 +138,7 @@ grade steeper than about 1%. This belongs to the Train Controller owners
 
 **Left for owners.** Harry: a not-ready SW wayside transmits nothing, so the Track
 Model keeps its crossings' last state (the harness crossing test is marked
-expected-failure), and `test_hw_language.py` fails 3 tests against Braden's new
+expected-failure; Harry will arm crossings by default, 2026-10-28), and `test_hw_language.py` fails 3 tests against Braden's new
 `CTCSW_s`/`CTCREV_s` names. Train Controller: request 9 and the grade false positive.
 Kevin: the `development` merge hazard (Braden's request 1), and regenerating the Pi
 bundles after this merge (request 7).
@@ -161,6 +161,8 @@ Kevin.
 | Beacon block | "the train model should be modified to report the beacon of the block that it is on not report the beacon of the next block" (Kevin) | The Train Model holds the beacon heard on the block before a station and reports it every tick the train is on that station's block; the harness bridge is removed |
 | Speed limit to the Train Controller | "Remove the speed limit send"; "The speed limit for me is the cmd speed" (Train Controller owner, relayed by Kevin) | `ControllerOutputs.speed_limit_mps` removed; the Train Model still shows the limit from Track Info. Controller #24 closed. Proposal for `signals/track-info` |
 | Gap between trains (CTC-1, CTC-2) | Keep the one-block gap; never give a train authority that would put it next to another train, since the waysides deadlock adjacent trains (Landis; Kevin: "the gap should be kept") | `ctc/routing.py` `keep_gap()`: no authority ends next to a block another train occupies or holds in its authority, on the route or off it. Two trains head on now stop one block apart. Proposal resolving the Conflict in `arbitration/authority-stops-before-obstruction` |
+| `SUPER_GREEN` spelling | "SUPER_GREEN accepted by train model and train control" (Kevin) | The HW Train Controller takes `SUPER_GREEN` (`constants.py`; the driver's panel still shows it as words), and the harness passes the light through unchanged. Controller #27 closed. Truth already spells it so; no proposal |
+| Crossings while a SW wayside is not ready | "module currently does not arm crossings by default but will in the future" (Harry Tye) | Harry's change to make. The harness crossing test stays an expected failure until it lands |
 
 ## CTC-1: Red concurrency
 

@@ -24,7 +24,7 @@ Panel {
     objectName: "testInputs"
 
     readonly property var s: controller.snapshot
-    readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
+    readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER_GREEN"]
     // Shown in words, sent as the beacon encodes them (truth
     // beacon.md), index for index.
     readonly property var sideLabels: ["Left", "Right", "Both"]

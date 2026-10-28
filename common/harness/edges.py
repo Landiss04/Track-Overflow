@@ -86,7 +86,6 @@ from common.harness.track_edges import (
 )
 from common.harness.train_edges import (
     INERT_COMMANDS,
-    aspect_to_train_controller,
     train_controller_to_train_model,
     train_model_to_train_controller,
 )
@@ -401,9 +400,7 @@ class SystemEdges:
             inputs = train_model_to_train_controller(report["controller"])
             aspect = seen.get(train_id)
             if aspect is not None:
-                inputs["signal_light_ahead"] = aspect_to_train_controller(
-                    aspect
-                )
+                inputs["signal_light_ahead"] = aspect
             trains[train_id] = {"line": entry.line, "inputs": inputs}
         return {"trains": trains}
 

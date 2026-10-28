@@ -40,13 +40,6 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     - (c) Ask Kevin to report the service brake's state independently of
       the e-brake.
 
-27. **Signal light ahead** (M20). Mapped on `claude/quirky-fermi-sickg4`,
-    from the Track Model directly (`aspect_to_train_controller`), and truth
-    now has `signals/signal-aspect-ahead`. Truth spells the fourth aspect
-    `SUPER_GREEN`; this controller accepts only `"SUPER GREEN"`, so the
-    harness converts it. Closes when that branch merges, unless the
-    controller takes truth's spelling.
-
 35. **This module has diverged on `claude/quirky-fermi-sickg4`.** That
     branch runs this module as both Train Controller variants (M13):
     `train_ctrl/module_process.py` for the harness, and `common/hw_link`
@@ -291,6 +284,7 @@ One line each; the details are in `CHANGELOG.md`.
 - `old_main.py`: removed in `c98393e`.
 - Rolling resistance: decided, the controller models none (M19); the
   bench simulation's goes with #26.
-- Signal aspect had no truth entry: truth has `signals/signal-aspect-ahead`
-  (#27).
+- **27.** Signal light ahead (M20): truth has `signals/signal-aspect-ahead`,
+  and this controller takes its `SUPER_GREEN` spelling (Kevin, 2026-10-28),
+  so the harness passes the light through unchanged.
 - "Arriving soon" on a rise to 3 blocks: accepted (M7, R29).

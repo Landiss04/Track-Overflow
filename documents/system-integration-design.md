@@ -594,7 +594,8 @@ branch, and no document says what runs on a Pi (G-HW-1).
 - Light ahead: the input is taken only if it is `"RED"`, `"YELLOW"`, `"GREEN"` or
   `"SUPER GREEN"`, with a space. Anything else is dropped without an error
   (`train_ctrl/inputs.py:69-70`; `main.py:196`). R39 fixes the spelling as `SUPER_GREEN`,
-  which the code as written would drop.
+  which the code as written would drop. Superseded 2026-10-28: the controller takes
+  `SUPER_GREEN` (Kevin: "SUPER_GREEN accepted by train model and train control").
 - A train applies no power until an engineer commissions its gains in the UI. That stays:
   the UI runs on the host PC for the HW variant too (R42), so each new train waits for its
   gains.
@@ -853,8 +854,9 @@ modules and the USB hops are still to measure (G-CLK-6).
   (`"GREEN K-63"`) and the Track Controller HW's Track Model side (with the section letter)
   need translating.
 - Every enumerated value is all caps (R17). The CTC Office and both Track Controllers spell
-  theirs in lower case today. The Track Model is all caps. The Train Controller spells the
-  fourth aspect `"SUPER GREEN"`, with a space, where R39 fixes `SUPER_GREEN`.
+  theirs in lower case today. The Track Model is all caps. The Train Controller spelled the
+  fourth aspect `"SUPER GREEN"`, with a space, where R39 fixes `SUPER_GREEN`; it takes
+  `SUPER_GREEN` since 2026-10-28.
 - Suggestions: the CTC Office sends up to two `TrainSuggestion`s per train, one for the
   block it is in and one for the next block on its route (R7, R49). The Track Controllers
   read the block and speed (R20), and the harness drops the train ID on the way (R48).
@@ -1650,7 +1652,9 @@ Controller HW. In order:
   brake and no latch, and goes on once the rail is repaired. The failure reaches the CTC
   Office's input only as occupancy (R69).
 - Not ready, every wayside holds its crossings down (fail-safe). Once started up, they
-  lift.
+  lift. Not yet so: a not-ready SW wayside sends nothing, so its crossings keep their last
+  state, and the harness test is an expected failure. Harry Tye, 2026-10-28: the module
+  "does not arm crossings by default but will in the future".
 - No heater commands go to the Track Model (D026). It runs heaters only when commanded,
   so they never run.
 
@@ -1983,8 +1987,9 @@ with their windows offscreen, one train running, five stubs, 15 s each.
 - **Testing hook:** `--engineer-gains KP KI` on the Train Controller's process plays the
   engineer, for tests and measurements only. A real run never passes it, so every train
   waits for an engineer (D024).
-- **Light ahead:** the Train Controller still spells the fourth light `SUPER GREEN`, so the
-  harness maps `SUPER_GREEN` on the way in (`Train-Ctrl_HW/OPEN_ISSUES.md` #24).
+- **Light ahead:** the harness passes the light through unchanged. The Train Controller
+  takes `SUPER_GREEN`, and the harness's spelling map is gone (2026-10-28;
+  `Train-Ctrl_HW/OPEN_ISSUES.md` #27).
 - **Dwell:** the Train Controller holds a station stop until the track signal resumes,
   not for D007's 45 s dwell. Under the fixed feed the signal resumes after about 50 s,
   so Phase 1 does not show the gap (`Train-Ctrl_HW/OPEN_ISSUES.md` #23).
@@ -2153,7 +2158,7 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-SIG-7 | Partly (R22, R52, R67; rate by TM-1, `ef1dc26`) | A mapping from station to count, zeros optional, as sales since the last report, passed on exactly once. The Track Model does not load the Blue Line, so no unknown station reaches the CTC Office ([P] D023). Built in Phase 4: `track_edges.TicketSales` passes each sale on exactly once, across refused and missed ticks (section 5.5). The rate was answered by the Track Model owner on 2026-10-26 (TM-1): time-based, about 12 a simulated minute per station, implemented in `ef1dc26`. Left: whether each count is a delta or a running total (open in `signals/ticket-sales`). | signal owner Track Model |
 | G-SIG-8 | Resolved (R33, R69) | A failed block reads as occupied, and the Track Controller reports it to the CTC Office as occupied, with no closure ([P] `block-occupancy`; pending D015). Built in Phase 3: a broken rail ahead stops the train short on the service brake, with no latch (section 5.4). | Track Controller owners |
 | G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Built in Phase 2: the Track Model's commanded speed is a float, and the harness maps doors open from the Train Model's door state, either door, without a new Train Model output (section 5.3). | signal owner Track Model; Train Model owner Kevin Schillinger |
-| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN`; `constants.py` still spells `SUPER GREEN`, and the harness maps it meanwhile. The Track Model sends the light ahead of each train on every tick, facing its direction of travel (TM-2, `86f4658`; B1 closed in v0.17). Before that it sent the light only as a train entered a signal block (section 5.3). | signal owner Track Model |
+| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). The Train Controller takes `SUPER_GREEN`, and the harness passes the light through unchanged (2026-10-28). The Track Model sends the light ahead of each train on every tick, facing its direction of travel (TM-2, `86f4658`; B1 closed in v0.17). Before that it sent the light only as a train entered a signal block (section 5.3). | signal owner Track Model |
 | G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Built in Phase 2: the harness maps the Track Model's block names, `GREEN K-63`, both ways (section 5.3). Phase 5 maps HW section keys directly through BlockNames (section 5.6). | identifiers owner Kevin |
 | G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Built in Phase 2: each tick's commands replace the last (section 5.3). | Track Model owner |
 | G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). Phase 2 maps the Track Model's edges to the trains directly (`track_edges.py`); the legacy `track_model_edges.py` stays for the Track Model's own tests, and other modules still import `common/interfaces.py`. | D008 owner Kevin |

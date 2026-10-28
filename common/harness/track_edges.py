@@ -37,9 +37,9 @@ stands in for that report, so the Track Model puts the train on the
 block and starts its feed.
 
 Track Model -> Train Controller: the light ahead of a train, every tick
-(the Track Model's ``signal_seen``; TM-2), in the Train Controller's
-spelling (``train_edges.aspect_to_train_controller``). With no light
-ahead it is not sent, and the Train Controller keeps the last one.
+(the Track Model's ``signal_seen``; TM-2), unchanged: both spell the
+fourth aspect ``SUPER_GREEN``. With no light ahead it is not sent, and
+the Train Controller keeps the last one.
 
 Track Model -> CTC Office, ``track_model_to_ctc``, the CTC Office's
 ``track_model`` input::

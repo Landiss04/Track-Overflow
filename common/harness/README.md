@@ -184,11 +184,10 @@ exactly once.
   field, with the block named by its number. A beacon passes unchanged: the Train Model
   checks its payload (`utils/beacon_codec.py`) and rejects a train whose beacon is
   malformed, so only that train misses the tick.
-- **Track Model → Train Controller.** The light a train saw as it entered a block with a
-  signal (`signal_seen`), sent on that tick only, with `SUPER_GREEN` spelled the Train
-  Controller's way. The Train Controller keeps the last light it was given. Truth's
-  `signal-aspect-ahead` asks for the next light ahead on every tick; the Track Model
-  reports it only on entry so far.
+- **Track Model → Train Controller.** The light ahead of each train (`signal_seen`), on
+  every tick (TM-2), passed unchanged: both modules spell the fourth aspect `SUPER_GREEN`.
+  With no light ahead nothing is sent, and the Train Controller keeps the last light it
+  was given.
 - **Train Controller ↔ Train Model.** As in Phase 1 (`train_edges.py`). Until a train's
   first commands arrive, the Train Model gets `INERT_COMMANDS`: no power, the service
   brake on, doors shut.

@@ -562,7 +562,7 @@ implied by the simulated software acceptance.
 
 - Harry Tye's development SW is taken, with generated vital PLC code attached to every program: `7120fee` (applied from `f796f49` on `origin/development`). Harry Tye's replies are recorded in `8a860fb`.
 - Separation holds only a block with a train in it: `AUTH_n := NOT (OCC_n AND (OCC_n-1 OR OCC_n+1))` (`7120fee`). `test_starter_switches.py` is removed.
-- Open, as recorded in `7120fee`: a not-ready wayside transmits nothing, and the crossing test that expects them held down is marked expected-failure. `test_hw_language.py` fails three tests against the Red programs' new `CTCSW_s` and `CTCREV_s` names.
+- Open, as recorded in `7120fee`: a not-ready wayside transmits nothing, and the crossing test that expects them held down is marked expected-failure. Harry Tye (2026-10-28): the module does not arm crossings by default yet, but will. `test_hw_language.py` fails three tests against the Red programs' new `CTCSW_s` and `CTCREV_s` names.
 
 ### Track Controller HW
 
@@ -590,7 +590,8 @@ implied by the simulated software acceptance.
 - The PR #50 Train Controller is pulled in: `74159e9`, from `Train_Ctrl_integration` `e0e142d`.
 - A null commanded speed or authority is read as a signal-pickup failure. The 0 and 0 rule is removed (`a6c1eb3`).
 - `Train-Ctrl_HW/OPEN_ISSUES.md` #24 (speed limit) and #25 (passenger brake release) are closed (`a6c1eb3`).
-- Open: `constants.py` still spells `SUPER GREEN`. The engine-failure latch on a grade is recorded as `OPEN_ISSUES.md` #23 in the 2026-10-27 owner answer.
+- The controller takes `SUPER_GREEN`, and the harness no longer converts the light ahead (Kevin, 2026-10-28; #27 closed).
+- Open: the engine-failure latch on a grade is recorded as `OPEN_ISSUES.md` #23 in the 2026-10-27 owner answer.
 
 ### Harness
 

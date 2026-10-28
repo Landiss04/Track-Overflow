@@ -23,7 +23,8 @@ Panel {
     Text {
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter
-        text: root.s.next_signal
+        // The driver reads the aspect as words: SUPER_GREEN, SUPER GREEN.
+        text: root.s.next_signal.replace("_", " ")
         color: theme.text_primary
         font.family: theme.mono_family
         font.pixelSize: theme.size_h2

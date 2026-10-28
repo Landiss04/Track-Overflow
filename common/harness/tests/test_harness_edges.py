@@ -49,7 +49,6 @@ from common.harness.track_edges import (  # noqa: E402
 )
 from common.harness.train_edges import (  # noqa: E402
     INERT_COMMANDS,
-    aspect_to_train_controller,
     train_controller_to_train_model,
     train_model_to_train_controller,
 )
@@ -160,14 +159,6 @@ class TrainEdgesTest(unittest.TestCase):
         del broken["power_w"]
         with self.assertRaises(KeyError):
             train_controller_to_train_model(broken)
-
-    def test_lights_ahead_in_the_controllers_spelling(self) -> None:
-        self.assertEqual(
-            aspect_to_train_controller("SUPER_GREEN"), "SUPER GREEN"
-        )
-        self.assertEqual(aspect_to_train_controller("RED"), "RED")
-        with self.assertRaises(KeyError):
-            aspect_to_train_controller("SUPER GREEN")
 
     def test_inert_commands_hold_the_train(self) -> None:
         self.assertEqual(INERT_COMMANDS["power_cmd_w"], 0.0)
@@ -998,7 +989,7 @@ class SystemEdgesTest(unittest.TestCase):
         self.assertEqual(set(trains), {"G1"})
         self.assertEqual(trains["G1"]["line"], "Green")
         self.assertEqual(
-            trains["G1"]["inputs"]["signal_light_ahead"], "SUPER GREEN"
+            trains["G1"]["inputs"]["signal_light_ahead"], "SUPER_GREEN"
         )
         self.assertEqual(trains["G1"]["inputs"]["actual_speed"], 4.5)
 
