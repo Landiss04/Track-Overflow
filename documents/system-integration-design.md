@@ -2,16 +2,62 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.16. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5); Phase 5 software steps 1–9 and documentation step 13 are built and verified with simulated Pis (section 5.6); Phase 6 review path is built; multi-train acceptance remains incomplete (section 5.7). Real-Pi steps 10–11 await hardware, and Windows packaging remains deferred. Not normative. |
-| **Date** | 2026-10-22 |
+| **Status** | Draft v0.17. Every question in section 1.5 is answered; the phase handovers' open questions are listed after them (section 1.5). Phases 0 to 4 are built (sections 5.1 to 5.5); Phase 5 software steps 1–9 and documentation step 13 are built and verified with simulated Pis (section 5.6); Phase 6 review path is built; multi-train acceptance remains incomplete (section 5.7). Real-Pi steps 10–11 await hardware, and Windows packaging remains deferred. Work through `7d9b47e` (2026-10-28) is in v0.17: the CTC gap and direction rules, the Train Controller's null pickup failure, the Train Model's passenger-pull latch, the owners' answers, the Track Model's TM-1 to TM-3 and the Pi startup configuration. Phases 7 and 8 are recorded in `integration-handover.md`. Not normative. |
+| **Date** | 2026-10-28 |
 | **Requested by** | Kevin Schillinger |
 | **Prepared by** | Claude (Claude Code session) |
-| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1); Phase 1 on the same branch, with the Train Controller of PR #44 (section 5.2); Phase 2 on the same branch, with the `track-model` branch merged, and Kevin Schillinger's operator window and Train Model review merged from the same branch (sections 5.1 and 5.3); Phase 3 on the same branch, with its tests and measurements of 2026-10-20 (section 5.4); Phase 4 on the same branch, with its tests, measurements and frozen build of 2026-10-20 (section 5.5); the answers of 2026-10-21 and the work on the same branch since `a55b8b9` (`0305d05` to `460579b`), with its tests of 2026-10-21 (section 5.5); `truth` after the promotion of 2026-10-19 (`84c7d44`) |
+| **Basis** | `development` at `1aaa9a8`; `truth` at `f7c52c1`; all remote branches and open pull requests as fetched on 2026-10-16 at about 23:00 UTC; the team's review of v0.1 on 2026-10-16; the answers of 2026-10-17 and 2026-10-20; test runs of 2026-10-16; the Phase 0 harness on `claude/quirky-fermi-sickg4`, with its tests and measurements of 2026-10-20 (section 5.1); Phase 1 on the same branch, with the Train Controller of PR #44 (section 5.2); Phase 2 on the same branch, with the `track-model` branch merged, and Kevin Schillinger's operator window and Train Model review merged from the same branch (sections 5.1 and 5.3); Phase 3 on the same branch, with its tests and measurements of 2026-10-20 (section 5.4); Phase 4 on the same branch, with its tests, measurements and frozen build of 2026-10-20 (section 5.5); the answers of 2026-10-21 and the work on the same branch since `a55b8b9` (`0305d05` to `460579b`), with its tests of 2026-10-21 (section 5.5); `truth` after the promotion of 2026-10-19 (`84c7d44`); this branch from 2026-10-22 through `7d9b47e` (2026-10-28), with the owner answers of 2026-10-24 to 2026-10-28 in `module-owner-review.md` (section "Changes in v0.17") |
 
 The `truth` branch is the authoritative record. This document cites it by shard path
 (`origin/truth:truth/<path>`, shortened below to the shard name) and does not override it.
 Where a fact is missing or contested, the document records a gap (section 6) instead of
 choosing a value. Nothing here is filled in silently.
+
+**Changes in v0.17**
+
+- CTC Office: the dispatcher's Cancel order action is removed from the code, the UML and the SDD
+  (`fcb0ed5`, `e7dcea2`, `b9befc6`).
+- CTC Office: two-way zones are reserved by direction, not by train. A train leaving the yard heads
+  out the fixed side of the yard switch, as the Track Model runs it (`31ed67c`; CTC-1 and LAYOUT-1,
+  answers of 2026-10-25).
+- CTC Office: authority keeps one empty block between trains (`7120fee`, `1adef08`), and then keeps
+  that gap against every other train, on the route or off it. No authority ends next to another
+  train's block or authority (`57614d2`, `keep_gap`; Landis, 2026-10-28).
+- Train Controller: the PR #50 controller is pulled in (`74159e9`, from `Train_Ctrl_integration`
+  `e0e142d`). A null commanded speed or authority is a signal-pickup failure. The 0 and 0 rule is
+  removed, and issues #24 and #25 are closed (`a6c1eb3`).
+- Train Model: a passenger pull stays latched until the Train Controller's emergency brake goes from
+  true to false. The one-shot `passenger_brake_release` is withdrawn (`bd72876`). On a signal-pickup
+  failure the Train Model sends null commanded speed and authority (`661f249`). It sends no speed
+  limit (`a6c1eb3`).
+- Track Controller HW: a generated, read-only vital PLC block runs after every program, and Braden's
+  Red programs are merged in place of the integration test copies. The file names are unchanged
+  (`a5bd465`; HW-1, 2026-10-26). The block is PLC code, so it keeps to R96: safety is done in
+  the PLC programs.
+- Track Controller SW: Harry Tye's development SW is taken, with the separation rule
+  `AUTH_n := NOT (OCC_n AND (OCC_n-1 OR OCC_n+1))`, which holds only a block with a train in it
+  (`7120fee`, `8a860fb`; the generated code is from `f796f49` on `origin/development`; SW-1,
+  2026-10-27).
+- Track Model: ticket sales are time-based, 12 a simulated minute per station by default (`ef1dc26`;
+  TM-1). Heaters switch on at or below 0 °C ambient and off above it, with no hysteresis (`ef1dc26`;
+  TM-3). Signals sit at switch points, and each train is sent the light ahead on every tick, facing
+  its direction of travel. B1 is closed (`86f4658`; TM-2).
+- Harness: the Train Model and Train Controller edges pass a null through, carry no
+  `passenger_brake_release` and send no speed limit (`common/harness/train_edges.py`; `661f249`,
+  `bd72876`, `a6c1eb3`). Simulated Pis are configured per module at startup, with physical hardware
+  as the default (`8110e88`; `config/pi-testing.json`). The Pi HELLO identity check is one helper,
+  `matches_hello` (`92e500b`).
+- Phases 7 and 8: a 1x functional station review, and shared HELLO checks (`92e500b`, `d606e05`).
+  Bounded owner diagnostics for the Green trace, the Red schedule snapshots and input completeness
+  (`c4b3cce`, `3319d14`, `e58011a`, `c10a5c6`). The Phase 8 prompt authorises no owner-policy change.
+- Documents: the handovers and phase prompts are consolidated in `integration-handover.md`, with the
+  originals in `archive/handover/` (`a21bf64`). The owner review queue, `module-owner-review.md`,
+  records the owner answers. The CTC Office design, use-case and sequence diagrams are added
+  (`c9cd437`, `f6ed1a1`, `b9befc6`), and so are the Train Model UML exports (`e8aad02`, `59d5bf7`).
+- Repository: three Train Model prompt files committed by mistake in `a6c1eb3` are untracked again in
+  `7d9b47e`.
+- Truth proposals filed since 2026-10-22 are listed in `integration-summary.md`. They await human
+  promotion.
 
 **Changes in v0.16**
 
@@ -300,7 +346,7 @@ is the first train run, graded on 2026-11-12, and "Full" is the complete system.
 | Q25 | The D019 ID clash. | Answered (R68): the re-filed CTC proposal becomes D025. | G-TR-3 | none |
 
 The phase handovers keep their own questions, numbered apart from the ones above. Of the
-Phase 3 handover's (`documents/integration-handover-phase-3.md`, section 3), four are
+Phase 3 handover's (`documents/integration-handover.md#phase-3`, section 3), four are
 settled; Q1 to Q6 and Q8 to Q12 stay open there.
 
 | # | Question | Status |
@@ -310,7 +356,7 @@ settled; Q1 to Q6 and Q8 to Q12 stay open there.
 | Phase 3 Q14 | The CTC Office's outputs have no `new_trains` or `retired_trains`, which the roster needs (R35, R46, D022). | Resolved by the same direction. Added in `9c440d6` (section 5.5). |
 | Phase 3 Q15 | The Phase 0 console test's startup-timeout race. | Fixed in `428852b` (section 5.5). |
 
-The Phase 4 handover's questions (`documents/integration-handover-phase-4.md`, section
+The Phase 4 handover's questions (`documents/integration-handover.md#phase-4`, section
 4) were answered by Kevin Schillinger on 2026-10-21 (R83 to R90). Q-P4-7 stays open,
 and Q-P4-8 is resolved by `460579b`. Kevin accepted the extra detector criterion and
 the stubs-only automatic Run exception on 2026-10-21 (R91/R92).
@@ -323,7 +369,7 @@ the stubs-only automatic Run exception on 2026-10-21 (R91/R92).
 | Q-P4-4 | Nothing slows a train before a block with a lower limit: G1 enters block 67 (40 km/h) at 18 m/s. | Landis (CTC), Train Controller owners | Answered (R87): the Train Controller slows the train once it is in the slower block; the CTC Office does not cap ahead. Already true (section 5.5). | none |
 | Q-P4-5 | The CTC Office keeps its own elapsed time and does not read the step's `sim_time_s`; a refused tick puts its schedule a tick behind for good. | Landis | Answered (R88): it uses the harness's clock, in `4cc873b`. | none |
 | Q-P4-6 | The test UI and `ctc_host._suggestions` key suggestions by train; the test UI names the next block's rows `next_...`. | Landis | Answered (R89): no further UI changes; the naming stays. | none |
-| Q-P4-7 | The Track Model sells tickets with probability 0.02 per station per tick, about 12 a simulated minute per station. Is that the intended rate? | Track Model owner | Open (R90). | none |
+| Q-P4-7 | The Track Model sells tickets with probability 0.02 per station per tick, about 12 a simulated minute per station. Is that the intended rate? | Track Model owner | Answered 2026-10-26 by the Track Model owner (TM-1): time-based, about 12 a simulated minute per station; implemented in `ef1dc26` (v0.17). Left: whether each count is a delta or a running total (open in `signals/ticket-sales`). | none |
 | Q-P4-8 | The old detector falsely latched an engine failure at steady 5 m/s on Green 93, blocking the full round trip. | Train Controller owners (unassigned) | Resolved by `460579b` (G-NEW-6): the full Green round trip and retirement at 57 pass. Kevin accepted the extra steady-fall criterion as built on 2026-10-21 (R91); see section 5.5 and `Train-Ctrl_HW/OPEN_ISSUES.md` #26. | none |
 
 ### 1.6 Questions for the Track Controller owners
@@ -523,6 +569,7 @@ branch, and no document says what runs on a Pi (G-HW-1).
   - Databases and programs load from the window (`loadDatabase`, `loadProgram` in
     `track_ctrl_hw/state.py`). On `development` the link cannot load them (R18, Q13).
   - It has no USB or Pi code (R5).
+- Changed after this check (v0.17): the dispatcher's Cancel order is removed (`fcb0ed5`); two-way zones are reserved by direction (`31ed67c`); authority keeps one empty block, and then none next to another train (`7120fee`, `1adef08`, `57614d2`). The line references above are as checked on 2026-10-16.
 - One test fails on `development` (section 3.5).
 
 **Train Controller** (`Train-Ctrl_HW/`; one code base for SW and HW, R15)
@@ -533,11 +580,15 @@ branch, and no document says what runs on a Pi (G-HW-1).
   light_command, temperature_setpoint_c, announcement)`. Doors are (left, right) and lights
   are (interior, exterior). The announcement keeps the Train Model's name, `announcement`
   (R37). R15 wants the brakes as `bool[2]`; which element is which is Q8.
-- Signal-pickup detection: if the received (speed, authority) becomes exactly (0.0, 0)
-  right after a nonzero speed with authority of at least 2 blocks, the controller latches a
-  signal-pickup failure. That cuts power and latches the emergency brake until the failure
-  clears (`train_ctrl/control.py:219-223`; on `development`, `main.py:575-579`). See
-  G-NEW-1.
+- Signal-pickup detection, as checked on 2026-10-16: if the received (speed, authority) becomes
+  exactly (0.0, 0) right after a nonzero speed with authority of at least 2 blocks, the controller
+  latches a signal-pickup failure (`train_ctrl/control.py:219-223`; on `development`,
+  `main.py:575-579`). See G-NEW-1.
+- Changed in v0.17 (`a6c1eb3`; owner answer of 2026-10-28): the 0 and 0 rule is removed. A null
+  commanded speed or authority is the signal-pickup failure (`train_ctrl/inputs.py:61-67`,
+  `train_ctrl/control.py:295-296`), so a valid 0 and 0 latches nothing. With the failure latched,
+  the controller acts on speed 0 and authority 0 (`control.py:127-142`) and stays latched until it
+  is cleared. The controller is the PR #50 controller (`74159e9`).
 - Light ahead: the input is taken only if it is `"RED"`, `"YELLOW"`, `"GREEN"` or
   `"SUPER GREEN"`, with a space. Anything else is dropped without an error
   (`train_ctrl/inputs.py:69-70`; `main.py:196`). R39 fixes the spelling as `SUPER_GREEN`,
@@ -565,13 +616,14 @@ branch, and no document says what runs on a Pi (G-HW-1).
   Office's per-station mapping.
 - `origin/track-model` (`3e7c15f`) adds `INTEGRATION.md` and an optional `sim_time_s` input
   (R2).
+- Changed after this check (v0.17): ticket sales are time-based, `tickets_per_minute` (default 12), so each tick's chance is `min(1, rate × dt / 60)` (`ef1dc26`, TM-1). Heaters switch on at or below 0 °C ambient and off above it, with no hysteresis (`ef1dc26`, TM-3). Signals sit at switch points, and each train gets the light ahead on every tick (`86f4658`, TM-2; B1 closed).
 
-**Train Model** (`TrainModel/`, unchanged since v0.1)
+**Train Model** (`TrainModel/`, changed since v0.1; see v0.17)
 - `TrainModelFleet.add(train_id, line)`, `remove(train_id)` and `step_all(dt, inputs_by_id)`,
   on one thread. It takes dt only (R2).
 - It has no doors-open output (R24). The light ahead does not pass through it (R39).
 - One invalid input rejects the whole fleet's tick (Q18).
-- Passenger emergency brake release has no mechanism (G-SIG-16). The test UI holds the dwell
+- On 2026-10-16 passenger emergency brake release had no mechanism (G-SIG-16). Since v0.17 the pull is latched until the controller's emergency brake goes from true to false (`bd72876`), and the one-shot release is withdrawn. Null speed and authority go out on pickup failure (`661f249`); no speed limit is sent (`a6c1eb3`). The test UI holds the dwell
   today. R12 removes the test UI, and R43 moves the dwell to the Train Controller.
 - Its link (`train_model/link.py`) assigns train IDs `T-n` itself (`:170-189`) and refuses
   to remove the last train (`:191-197`). `main.py` creates `T-1` at startup, and `step` must
@@ -756,7 +808,7 @@ the train's old block. With each module seeing the previous tick's outputs (R1):
 | *j* | The Train Model moves the train into B. |
 | *j*+1 | The Track Model puts the train in B and sends it B's values: 0 m/s and 0 blocks. It reports B occupied. |
 | *j*+2 | The Train Model passes 0 and 0 on. The Track Controller reports B occupied to the CTC Office. |
-| *j*+3 | The Train Controller reads 0 and 0 right after reading, say, 18 m/s and 2 blocks. It latches a signal-pickup failure and the emergency brake. The CTC Office moves the train's suggestion to B. |
+| *j*+3 | The Train Controller reads 0 and 0 right after reading, say, 18 m/s and 2 blocks. As checked on 2026-10-16 it latched a signal-pickup failure and the emergency brake. Since v0.17 (`a6c1eb3`) a valid 0 and 0 latches nothing. The CTC Office moves the train's suggestion to B. |
 | *j*+4 | The Track Controller sends B's values. |
 | *j*+5 | The Track Model delivers them to the train. |
 | *j*+6 | The Train Model passes them on. |
@@ -783,6 +835,8 @@ the table:
   `train_ctrl/control.py`), so every block change would jolt it.
 - The Track Model keeps delivering a train's last values after it enters a new block, until
   that block's own values arrive. This changes R10's clearing to zero.
+
+Changed in v0.17 (`a6c1eb3`, `661f249`): a pickup failure is now a null speed and authority, and the Train Controller no longer counts a valid 0 and 0 as one, so the second way's debounce no longer applies. The preload is still what keeps a train from reading zero authority, and braking, at each block change.
 
 Budget: at 10x a tick comes every 10 ms of real time. Seven module processes make 700 step
 messages a second, two of them over USB. Measured with seven stub processes (section 5.1),
@@ -1018,6 +1072,8 @@ remaining owner questions are tracked in
 [`integration-handover-phase-6.md`](integration-handover.md#phase-6-handover).
 No optimization-derived speed improvement or real Pi execution is inferred
 from the simulated measurements.
+
+**Superseded in v0.17.** The one-train Red limit above is the 2026-10-22 state. The two-way zone rule is now reserved by direction (`31ed67c`; CTC-1, 2026-10-25). In the Track Controller owner probe of 2026-10-27, three Red trains were out at once and all were back in the yard by 1,090 s. The count-3 acceptance tests still fail, for another reason: a grade engine-failure latch on Green G1 (`Train-Ctrl_HW/OPEN_ISSUES.md` #23, as recorded in `module-owner-review.md`). Phase 7 (1x functional review and shared HELLO checks, `92e500b`, `d606e05`) and Phase 8 (owner diagnostics, `c4b3cce`, `3319d14`, `e58011a`, `c10a5c6`) are recorded in `integration-handover.md`.
 
 ### 5.6 Phase 5 as built (steps 1–9) [C]
 
@@ -1259,7 +1315,7 @@ Phase 6 authorization and completed test-copy routing supersede that wait
 ### 5.5 Phase 4 as built [C]
 
 Built on this branch on 2026-10-20. `common/harness/README.md` describes the CTC Office
-process, its edges and how a run starts. `documents/integration-handover-phase-4.md`
+process, its edges and how a run starts. `documents/integration-handover.md#phase-4`
 lists every changed file and the questions left open. The CTC Office's own changes for
 the next-block suggestion and the train events (Phase 3 handover Q13, Q14) were made in
 `9c440d6`, at Kevin Schillinger's direction of 2026-10-20: "fix Q13 and Q14 in the CTC".
@@ -1525,7 +1581,7 @@ subtests; `CTC-Office/tests` 259; `TrackCtrlSW/tests` 213; `Train-Ctrl_HW/tests`
 ### 5.4 Phase 3 as built [C]
 
 Built on this branch on 2026-10-20. `common/harness/README.md` described the edges, the
-scripted CTC Office and how a run starts, until Phase 4 retired the stand-in. `documents/integration-handover-phase-3.md`
+scripted CTC Office and how a run starts, until Phase 4 retired the stand-in. `documents/integration-handover.md#phase-3`
 lists every changed file and the questions left open.
 
 **What runs.** `python track_overflow.py` starts the harness, with its operator window
@@ -1603,7 +1659,7 @@ Controller HW. In order:
   train read 0 and 0 at every block it entered, and the Train Controller latched a
   pickup failure. Now only a block with a train in it is held:
   `AUTH_n := NOT (OCC_n AND (OCC_n-1 OR OCC_n+1))`. Two trains side by side are still
-  both held, and stay held.
+  both held, and stay held. Superseded in v0.17 (`7120fee`): Harry Tye's generated vital code carries the same rule, and the starter program is no longer loaded automatically.
 - **Switch dialog.** Its `applied` signal clashed with `Dialog.applied()`, and PySide6
   6.11 warned on every launch; the harness's tests need an empty stderr. Renamed
   `switchApplied`, and `released` `switchReleased`.
@@ -1805,7 +1861,7 @@ Alone, the bundled Track Model process found its layouts and window.
   `signal-aspect-ahead` asks for the next light ahead on every tick (G-SIG-10). The
   Track Model shows a train the light of any signal block it enters, whichever way it
   runs: block 64's light guards the switch at 63 for trains heading toward it. Logged
-  as a Track Model bug (`TrackModel/BUGS.md` B1).
+  as a Track Model bug (`TrackModel/BUGS.md` B1). Closed in v0.17 (`86f4658`, TM-2).
 - **Ambient temperature:** the harness sends none, so it starts at 0 °C until someone
   sets it in the Track Model window (R28).
 - **Beacons:** the edge passes each one unchanged, and the Train Model checks it
@@ -1931,7 +1987,7 @@ with their windows offscreen, one train running, five stubs, 15 s each.
   not for D007's 45 s dwell. Under the fixed feed the signal resumes after about 50 s,
   so Phase 1 does not show the gap (`Train-Ctrl_HW/OPEN_ISSUES.md` #23).
 - **Speed limit:** the Train Model passes the speed limit through. The Train Controller
-  takes commanded speed as its limit (its rule M1), so the edge drops the speed limit.
+  takes commanded speed as its limit (its rule M1), so the edge drops the speed limit. Superseded in v0.17 (`a6c1eb3`): the Train Model sends no speed limit.
 - **Hidden windows:** a module window, once closed, hides. The harness window's **Show
   window** brings it back (section 5.1).
 
@@ -2086,24 +2142,24 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-SIG-1 | Partly (R10, R39, R45, R74) | Track Controller → Track Model. Commanded speed and authority go per block ([P] `track-signal`), and the aspects are `RED`, `YELLOW`, `GREEN` and `SUPER_GREEN`. The switch, signal and crossing commands have no `truth` entries, and the Track Controller owners will not file them (R74); the harness mappings follow the code. Built in Phase 3 (`wayside_edges.track_controller_to_track_model`): a switch goes from the block it is listed on to the Track Model's point, and a light through its switch to the block it stands on (`track_devices`, section 5.4). Left: whether the light mapping is right (handover Q4), and Red `75-yard` (Q5). | unassigned |
+| G-SIG-1 | Partly (R10, R39, R45, R74) | Track Controller → Track Model. Commanded speed and authority go per block ([P] `track-signal`), and the aspects are `RED`, `YELLOW`, `GREEN` and `SUPER_GREEN`. The switch, signal and crossing commands have no `truth` entries, and the Track Controller owners will not file them (R74); the harness mappings follow the code. Built in Phase 3 (`wayside_edges.track_controller_to_track_model`): a switch goes from the block it is listed on to the Track Model's point, and a light through its switch to the block it stands on (`track_devices`, section 5.4). Light placement is now at the switch point (TM-2, `86f4658`). Left: the Track Controller owners' confirmation of the physical placement (SW discrepancy C6), and Red `75-yard` (Q5). | unassigned |
 | G-SIG-2 | Partly (R33, R69, R73, R74) | Track Model → Track Controller. Failures arrive as occupancy, and no heater commands go the other way. Occupancy and the read-back states have no `truth` entries (R74); the mappings follow the code. Built in Phase 3 (`wayside_edges.track_model_to_track_controller`): occupancy, with a failed block occupied, and switch, crossing and light read-back by the Track Controller's names (section 5.4). | unassigned |
 | G-SIG-3 | Resolved (R7, R20, R48) | One suggestion per train, naming the block. Only the per-train modules need the train ID, and they get it from the new-train event; the harness drops it on the way to the Track Controller. Built in Phase 3 (`wayside_edges.ctc_to_track_controller`), fed by a scripted CTC Office (section 5.4). Built in Phase 4: the CTC Office's own suggestions, for the train's block and the next one (R49; `9c440d6`), reach the Track Controller over that edge (section 5.5). | signal owner CTC Office |
 | G-SIG-4 | Closed (R21) | Track Controller → CTC Office reports. The team ruled it stale. The crossing spelling difference (`"active"` against a bool) falls under R17 and the mappings. | none |
 | G-SIG-5 | Resolved (R8, R44, R70, R71) | A 2-D array, gated per line. A wayside is ready when its database and PLC program are loaded by hand, every wayside is reported from startup, and readiness never holds the clock ([P] `track-controller-ready`). Built in Phase 3 for the SW variant: each wayside's readiness reaches the CTC Office's input, the harness logs `WAYSIDES_NOT_READY` and `WAYSIDES_READY`, and the scripted CTC Office releases nothing until the line is ready (section 5.4). In Phase 4 the CTC Office itself sends nothing for a line, and refuses a dispatch on it, until the line is ready; the readiness events come from the Track Controller's own outputs (section 5.5). Left: the HW variant (Phase 5). | Track Controller owners |
 | G-SIG-6 | Resolved (R9, R35, R46, R47, R66) | The CTC Office creates a train when it releases it from the yard and retires it at the yard entry block; a "return to yard" action covers manual trains. Both go out as one-time events, applied exactly once, and the CTC Office's IDs are the train IDs ([P] D022, `identifiers`). Built in Phase 4: the CTC Office reports each release once in `new_trains` and each retirement in `retired_trains` (`9c440d6`), and the harness's roster applies each once (section 5.5). The "return to yard" action and its button (`4cc873b`, R85), and a starter program that sets the switches round to the yard entry block (`234c353`, R86), are built. The full Green round trip now completes and retires at 57 after `460579b` (Q-P4-8, G-NEW-6); the opt-in five-test check passes. | identifiers owner Kevin |
-| G-SIG-7 | Resolved (R22, R52, R67) | A mapping from station to count, zeros optional, as sales since the last report, passed on exactly once. The Track Model does not load the Blue Line, so no unknown station reaches the CTC Office ([P] D023). Built in Phase 4: `track_edges.TicketSales` passes each sale on exactly once, across refused and missed ticks (section 5.5). Left: whether the Track Model's sales rate is intended (Q-P4-7, open by R90). | signal owner Track Model |
+| G-SIG-7 | Partly (R22, R52, R67; rate by TM-1, `ef1dc26`) | A mapping from station to count, zeros optional, as sales since the last report, passed on exactly once. The Track Model does not load the Blue Line, so no unknown station reaches the CTC Office ([P] D023). Built in Phase 4: `track_edges.TicketSales` passes each sale on exactly once, across refused and missed ticks (section 5.5). The rate was answered by the Track Model owner on 2026-10-26 (TM-1): time-based, about 12 a simulated minute per station, implemented in `ef1dc26`. Left: whether each count is a delta or a running total (open in `signals/ticket-sales`). | signal owner Track Model |
 | G-SIG-8 | Resolved (R33, R69) | A failed block reads as occupied, and the Track Controller reports it to the CTC Office as occupied, with no closure ([P] `block-occupancy`; pending D015). Built in Phase 3: a broken rail ahead stops the train short on the service brake, with no latch (section 5.4). | Track Controller owners |
 | G-SIG-9 | Resolved (R24, R38, R40, R64) | Six-field `track-info`, a float commanded speed, doors open from the Train Model, and each beacon sent once, on block entry. Built in Phase 2: the Track Model's commanded speed is a float, and the harness maps doors open from the Train Model's door state, either door, without a new Train Model output (section 5.3). | signal owner Track Model; Train Model owner Kevin Schillinger |
-| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN` (the harness maps it meanwhile), and the Track Model must produce the light ahead of each train on every tick; it sends the light only as a train enters a signal block (section 5.3), logged as a bug on 2026-10-20 (`TrackModel/BUGS.md` B1). | signal owner Track Model |
+| G-SIG-10 | Resolved (R25, R39, R45) | The next light goes from the Track Model to the Train Controller directly: `RED`, `YELLOW`, `GREEN` or `SUPER_GREEN` ([P] `signal-aspect-ahead`). Left: the Train Controller must accept `SUPER_GREEN`; `constants.py` still spells `SUPER GREEN`, and the harness maps it meanwhile. The Track Model sends the light ahead of each train on every tick, facing its direction of travel (TM-2, `86f4658`; B1 closed in v0.17). Before that it sent the light only as a train entered a signal block (section 5.3). | signal owner Track Model |
 | G-SIG-11 | Resolved (R6, R50) | Blocks are named as the CTC Office names them. Line names match exactly (`Green`); station names are written as in the layout files (`GLENBURY`) ([P] `identifiers`). Built in Phase 2: the harness maps the Track Model's block names, `GREEN K-63`, both ways (section 5.3). Phase 5 maps HW section keys directly through BlockNames (section 5.6). | identifiers owner Kevin |
 | G-SIG-12 | Resolved (R10, R64) | The Track Model clears values after delivery, and a block not commanded on the latest tick reads zero ([P] `track-signal`). Built in Phase 2: each tick's commands replace the last (section 5.3). | Track Model owner |
 | G-SIG-13 | Resolved (R11, R64) | Each edge maps straight from producer to consumer types. The six Track Model edges are rewritten that way, and `common/interfaces.py` goes ([P] D005). Phase 2 maps the Track Model's edges to the trains directly (`track_edges.py`); the legacy `track_model_edges.py` stays for the Track Model's own tests, and other modules still import `common/interfaces.py`. | D008 owner Kevin |
 | G-SIG-14 | Partial: Phases 1 to 4 built | Mapped directly: Train Model ↔ Train Controller (Phase 1), Track Model ↔ Train Model and Track Model → Train Controller (Phase 2), and Track Controller ↔ Track Model, CTC Office → Track Controller and Track Controller → CTC Office (Phase 3, `wayside_edges.py`). `ModuleLink` supplies the shared time. Phase 4 puts the CTC Office's own process on the CTC Office's edges in place of Phase 3's scripted stand-in, adds Track Model → CTC Office (ticket sales, `track_edges.py`), and takes the roster from the CTC Office's events (section 5.5). Phase 5 adds the HW edges and merges the per-line commands/reports (section 5.6). | module owners |
-| G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Kevin Schillinger set on 2026-10-20 that the CTC Office schedules the dwell and the Train Controller enforces it ([P] D007 update, section 7.1). Built: the Train Controller holds the doors open at least 45 s, however soon its authority comes back (`Train-Ctrl_HW/CHANGELOG.md`). Left: a station the train runs through stays pending until its next stop (`Train-Ctrl_HW/OPEN_ISSUES.md` #25). | D007 owner Kevin |
-| G-SIG-16 | Resolved (R61, R79) | The Train Controller releases a passenger pull by turning its emergency brake off; the Train Model clears the pull when that command goes from true to false (2026-10-28; the one-shot `passenger-brake-release` is withdrawn), and enforces the door interlock: doors open only when stopped, on the platform side, and no power while a door is open ([P] `door-command`). | Train Controller |
+| G-SIG-15 | Resolved (R26, R43, R56, R65) | A train stops only at its scheduled stations, where the Train Controller holds the 45 s dwell and departs once commanded speed is above zero ([P] D007, D020). Kevin Schillinger set on 2026-10-20 that the CTC Office schedules the dwell and the Train Controller enforces it ([P] D007 update, section 7.1). Built: the Train Controller holds the doors open at least 45 s, however soon its authority comes back (`Train-Ctrl_HW/CHANGELOG.md`). Left: a station the train runs through stays pending until its next stop (`Train-Ctrl_HW/OPEN_ISSUES.md`; the numbering changed in `a6c1eb3`, and #25 now records the closed passenger-release item). | D007 owner Kevin |
+| G-SIG-16 | Resolved (R61, R79) | The Train Controller releases a passenger pull by turning its emergency brake off; the Train Model clears the pull when that command goes from true to false (2026-10-28, `bd72876`; the one-shot `passenger-brake-release` is withdrawn), and enforces the door interlock: doors open only when stopped, on the platform side, and no power while a door is open ([P] `door-command`). | Train Controller |
 | G-SIG-17 | Resolved (R27, R72) | Maintenance is `closed-blocks`, with no boolean. The SW variant's maintenance state follows the CTC Office's commands, as it already does. Left: SRS REQ-FUNC-057 still names maintenance mode. | signal owner CTC Office |
-| G-SIG-18 | Resolved (R28, R64, R73) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Built in Phase 2: the input is optional, and the harness sends none. Phase 3 sends the Track Model no heater commands, so its heaters, which run only when commanded, never run. Left: the Track Model's switching rule (handover Q6). | Track Model owner |
+| G-SIG-18 | Resolved (R28, R64, R73; TM-3, `ef1dc26`) | Ambient temperature comes from the Track Model UI, and that input becomes optional. The Track Model switches the heaters itself ([P] D026). Built in Phase 2: the input is optional, and the harness sends none. Phase 3 sends the Track Model no heater commands, so its heaters, which then ran only when commanded, never ran. Since v0.17 the Track Model switches them itself (TM-3). The switching rule was answered on 2026-10-26 (TM-3): on at or below 0 °C ambient, off above, no hysteresis, and the last state is kept when ambient is missing. Heater commands are accepted but not applied (`ef1dc26`). | Track Model owner |
 | G-SIG-19 | Resolved (R37, R54), clarified by October 20 SDD review | Brake commands remain separate booleans; independent engaged states may both be true and their configured forces sum. Service failure blocks service only. The inspected working-tree `model.py` implements that rule. `announcement` keeps the Train Model field name. | Train Controller / Train Model |
 
 ### 6.3 Lifecycle
@@ -2133,8 +2189,8 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 
 | ID | Status | Gap, and what remains | Owner |
 |---|---|---|---|
-| G-HW-1 | Shared plumbing implemented; real USB pending | Shared common.hw_link agent/transports, provisioning bundles, HELLO source manifests, echo/replay probes and existing-test fault selectors are implemented. Process and Linux pty checks, twelve short echo cases and four recorded 658-STEP replays provide software evidence only (section 5.7 and Pi bring-up checks). Owners still provision real Pi 5 boards; USB buffering, power loss, cold boot and actual throughput are unverified. | module owners |
-| G-HW-2 | Red/HW and Green/SW integrated; Red copies await review | Red uses HW Track/Train Controller variants with explicit simulated Pi transport; Green uses SW. All seven Red test switches use the approved Green-style routing pattern and shared read-only neighbor closure inputs. Red outbound and return via 66 → 52 → 9 pass without automatic reversal. Braden must review or replace the marked test copies; Red-9 geometry remains an owner assumption. Physical Pi execution is pending (section 5.7). | Braden; Track Model owner; Kevin |
+| G-HW-1 | Shared plumbing implemented; real USB pending | Shared common.hw_link agent/transports, provisioning bundles, HELLO source manifests, echo/replay probes and existing-test fault selectors are implemented. The HELLO identity check is one helper, `matches_hello` (`92e500b`). Process and Linux pty checks, twelve short echo cases and four recorded 658-STEP replays provide software evidence only (section 5.7 and Pi bring-up checks). Owners still provision real Pi 5 boards; USB buffering, power loss, cold boot and actual throughput are unverified. | module owners |
+| G-HW-2 | Red/HW and Green/SW integrated; Red programs now Braden's (`a5bd465`), Red-9 reading open | Red uses HW Track/Train Controller variants with explicit simulated Pi transport; Green uses SW. All seven Red test switches use the approved Green-style routing pattern and shared read-only neighbor closure inputs. Red outbound and return via 66 → 52 → 9 pass without automatic reversal. Braden's Red programs are merged in place of the test copies (`a5bd465`; HW-1, 2026-10-26). The Red-9 reading follows the Track Model's `layout.py` (LAYOUT-1, 2026-10-25; `31ed67c`); the Track Model owner confirms it. Physical Pi execution is pending (section 5.7). | Braden; Track Model owner; Kevin |
 | G-HW-3 | Resolved (R32, R75) | The interfaces are to be identical, and Harry Tye owns the Track Controller contract shard ([P]). Both variants already name blocks to the CTC Office by line and number. | Harry Tye |
 
 ### 6.6 Truth and process
@@ -2154,10 +2210,12 @@ of: **Resolved** (by a decision; any leftover work is noted), **Partly** resolve
 | G-NEW-2 | Resolved (R70). Every wayside is reported from startup and is not ready until loaded, so a line cannot read ready early ([P] `track-controller-ready`). | `ctc/model.py:346-351`; `track_ctrl_hw/controller.py:67-76` on PR #43 | Track Controller |
 | G-NEW-3 | Resolved (R60), built. Only the train whose input is invalid misses the tick ([P] `modules/train-model.md`). The Train Model's process steps each train on its own and names a rejected one (section 5.2). | `TrainModel/train_model/module_process.py` | Train Model owner Kevin Schillinger |
 | G-NEW-4 | Closed (R42). Gains are set in the UI, which runs on the host PC for the HW variant too. Each new train still waits for an engineer to set its gains before it moves. | Section 3.3 | Train Controller |
-| G-NEW-5 | Software built (R34/K4). Red integration test databases/PLCs cover all 76 blocks; owner approval/replacement remains (section 5.6). | `TrackCtrlHw/data/` | Track Controller HW |
+| G-NEW-5 | Resolved by the owner's answer (HW-1, 2026-10-26; `a5bd465`): the Red programs are Braden's, merged in place of the test copies. The databases and PLCs cover all 76 blocks; the file names still say integration test (section 5.6). | `TrackCtrlHw/data/` | Track Controller HW |
 | G-NEW-6 | Resolved by `460579b` (Q-P4-8). The old detector falsely latched at steady speed on Green 93. The full Green round trip now completes and retires at 57 (five opt-in tests pass). Kevin accepted the extra steady-fall criterion as built on 2026-10-21 (R91); the dead-engine-at-stand and heavily-loaded-grade limits remain (section 5.5). | `Train-Ctrl_HW/train_ctrl/constants.py`, `control.py`; `ReturnToYardTest` in `common/harness/tests/test_harness_train_loop.py` | Train Controller (unassigned) |
 
 ## 7. Truth proposals
+
+Proposals filed after 2026-10-22 are listed in `integration-summary.md` under "Changes since the summary". They await human promotion.
 
 ### 7.1 Filed from this work (under `truth/_inbox/claude/quirky-fermi-sickg4/`)
 
@@ -2359,14 +2417,14 @@ Signals are named by their `truth` key (`signals/<key>.md`).
 | CTC Office → harness | `clock-speedup` | `clock-pause`; roster events under D022 | The CTC Office's process (Phase 4): `clock_paused` and `clock_speedup` from its outputs and its `STATE`; `SystemEdges`/`Roster` take `new_trains` and `retired_trains` from its outputs, each once |
 | CTC Office → Track Controller | `suggested-speed`, `suggested-authority`, `closed-blocks`, `switch-command` | Suggestions carry the block, up to two per train with the second for the next block [P, R7, R49]; the speed stays an int [R38] | `wayside_edges.ctc_to_track_controller`, SW only, from the CTC Office's outputs (Phase 4; built in Phase 3 on a scripted stand-in) |
 | Track Controller → CTC Office | `block-occupancy` | A failed block reads occupied [P, R69]; `track-controller-ready` [P, R8, R70, R71] | `wayside_edges.track_controller_to_ctc`: occupancy, switches, crossings, waysides (Phase 3); every wired Track Controller's report joined by `merge_ctc_inputs` into the CTC Office's input (Phase 4) |
-| Track Controller → Track Model | none (`track-signal` runs Track Model → Train Model) | `track-signal` values come from the Track Controller, per block, cleared after delivery, zero when not commanded [P, R10, R64]; `signal-light-command` [P] | `wayside_edges.track_controller_to_track_model`: per-block speed and authority, switches by point, lights by block through the switch (`track_devices`), crossings; no heaters (Phase 3) |
+| Track Controller → Track Model | none (`track-signal` runs Track Model → Train Model) | `track-signal` values come from the Track Controller, per block, cleared after delivery, zero when not commanded [P, R10, R64]; `signal-light-command` [P] | `wayside_edges.track_controller_to_track_model`: per-block speed and authority, switches by point, lights by switch point (`track_devices`; since `86f4658`, v0.17), crossings; no heaters (Phase 3) |
 | Track Model → Track Controller | none | Failures arrive as occupancy [R33, R69]; no heater commands the other way [P, R73]; no `truth` entries planned [R74] | `wayside_edges.track_model_to_track_controller`: occupancy, switch, crossing and light read-back by the Track Controller's names (Phase 3) |
 | Track Model → CTC Office | `ticket-sales` (per line) | Per station, as a mapping [P, R22, R52] | `track_edges.track_model_to_ctc` and `TicketSales`: sales per station since the last report, each sale once, a refused tick's sales sent again (Phase 4) |
 | Track Model → Train Model | `track-info`, `track-signal`, `beacon`, `passengers-boarded` | `track-info` with six fields [P, R24] | `track_edges.track_model_to_train_model` (Phase 2) |
 | Train Model → Track Model | `train-position`, `block-change-event`, `actual-speed`, `passenger-capacity` | `door-state` [P, R24] | `track_edges.train_model_to_track_model`, with doors open from the door state (Phase 2) |
-| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; circuit/beacon passthrough | Independent brake states, pickup-failure zeros and canonical logical beacon payload in October 20 proposals | `train_edges.train_model_to_train_controller`; current edge drops separate speed limit per controller boundary; controller retains prior beacon data |
+| Train Model → Train Controller | `actual-speed`, `brake-state`, `door-state`, `light-state`, `cabin-temperature`; circuit/beacon passthrough | Independent brake states, pickup failure as null speed and authority (from 2026-10-28) and canonical logical beacon payload in October 20 proposals | `train_edges.train_model_to_train_controller`; the edge passes null speed and authority through (`661f249`) and sends no speed limit (`a6c1eb3`); controller retains prior beacon data |
 | Train Controller → Train Model | Power, separate brake commands, doors, lights, setpoint, announcement | Independent brake engagement and summed forces in October 20 proposal; controller owns door interlock | `train_edges.train_controller_to_train_model`; the emergency brake going from true to false clears a passenger pull |
-| Track Model → Train Controller | none | `signal-aspect-ahead`, the next light [P, R25, R39] | `signal_seen` through `train_edges.aspect_to_train_controller`, on entry to a signal block only (Phase 2) |
+| Track Model → Train Controller | none | `signal-aspect-ahead`, the next light [P, R25, R39] | `signal_seen` through `train_edges.aspect_to_train_controller`, on entry to a signal block only (Phase 2); every tick, facing the train's direction, since `86f4658` (v0.17) |
 
 `failure-status` and `maintenance-mode` are superseded on `truth`.
 

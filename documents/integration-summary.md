@@ -516,7 +516,7 @@ A	utils/tests/test_protocol_faults.py
 
 This section is additional to the audited Phase 3/4 range above. The Phase 5
 session starts at `aa7776c`. The full ruling record and acceptance limits are
-in `system-integration-design.md` §5.6 and `integration-handover-phase-5.md`.
+in `system-integration-design.md` §5.6 and `documents/integration-handover.md#phase-5-handover`.
 
 | Area | What changed / why | Commits / covering evidence |
 | --- | --- | --- |
@@ -544,3 +544,97 @@ Green round trip: 5 passed. Full Pi suite: 31 passed. The handover lists all
 module counts, independent acceptance slices and the known preexisting
 harness Qt argument type-check mismatch. No actual Pi/USB/Windows result is
 implied by the simulated software acceptance.
+
+## Changes since the summary (2026-10-22 to 2026-10-28)
+
+**Scope:** the 33 non-merge commits dated 2026-10-22 or later, `25cc37a` through `7d9b47e`, on `claude/quirky-fermi-sickg4`, and the consolidation commit `a21bf64`. The audited range above is not repeated. The sources are the commit messages, the commits named below, and the owner answers in `module-owner-review.md`. This section records changes. It changes no code.
+
+### CTC Office
+
+- Dispatcher Cancel order removed from the actions, code, tests, panel, SDD and UML: `fcb0ed5`, `e7dcea2`, `b9befc6`. The CTC still clears an order when its run is back in the yard (`fcb0ed5`).
+- Two-way zones reserved by direction, not by train; a train leaving the yard heads out the fixed side of the yard switch, as the Track Model runs it: `31ed67c` (CTC-1 and LAYOUT-1 answers, 2026-10-25).
+- One empty block between trains: `7120fee` (`ctc/routing.py`), with `1adef08` in the SDD.
+- The gap is kept against every other train, on the route or off it: `57614d2` (`keep_gap()`; Landis, 2026-10-28).
+- Owner answers and proposals: `bf43321`; owner review write-up and Phase 8 scope in `e58011a` and `c10a5c6`. CTC-2 and CTC-3 are routed to the Track Controller owners, with no CTC change.
+- Diagnostics: Red scheduler snapshots made reproducible (`3319d14`); bounded Green and input diagnostics (`c4b3cce`).
+
+### Track Controller SW
+
+- Harry Tye's development SW is taken, with generated vital PLC code attached to every program: `7120fee` (applied from `f796f49` on `origin/development`). Harry Tye's replies are recorded in `8a860fb`.
+- Separation holds only a block with a train in it: `AUTH_n := NOT (OCC_n AND (OCC_n-1 OR OCC_n+1))` (`7120fee`). `test_starter_switches.py` is removed.
+- Open, as recorded in `7120fee`: a not-ready wayside transmits nothing, and the crossing test that expects them held down is marked expected-failure. `test_hw_language.py` fails three tests against the Red programs' new `CTCSW_s` and `CTCREV_s` names.
+
+### Track Controller HW
+
+- A generated read-only vital PLC block runs after every program, on both channels. It is in `track_ctrl_hw/vital.py` and `wayside.py`, and the snapshot carries its checksum and overrides: `a5bd465`.
+- Braden's three Red programs are merged in place of the integration test copies. The file names are unchanged (`a5bd465`; HW-1 answer, 2026-10-26).
+- Signals sit at switch points in the Red integration test (`86f4658`).
+- The vital block is PLC code, so it keeps to the no-vital ruling R96 ("everything is done by the plc code"): safety stays in the PLC programs.
+
+### Track Model
+
+- TM-1, time-based ticket sales: `tickets_per_minute`, default 12 per station; each tick's chance is `min(1, rate × dt / 60)` (`ef1dc26`).
+- TM-3, heaters: on at or below 0 °C ambient, off above, no hysteresis, last state kept when ambient is missing. Heater commands are accepted but not applied (`ef1dc26`).
+- TM-2, B1 closed: signals sit at switch points, and each train is sent the light ahead on every tick, facing its direction of travel (`86f4658`). The physical placement is still to be confirmed by the Track Controller owners (SW discrepancy C6).
+- Owner answers in `module-owner-review.md`: `c92f58f`.
+
+### Train Model
+
+- Passenger pull stays latched until the Train Controller's emergency brake goes from true to false. The one-shot `passenger_brake_release` is withdrawn (`bd72876`). The test-only `clear_passenger_brake` override remains in `train_model/link.py`.
+- On a signal-pickup failure the Train Model sends null commanded speed and authority (`661f249`).
+- No speed limit is sent to the Train Controller: `ControllerOutputs.speed_limit_mps` is removed (`a6c1eb3`). The Train Model still receives the limit in Track Info and shows it in its window; only the test UI's stand-in speed limiter acts on it (`train_model/harness.py`). The Train Model itself does not govern speed (D009).
+- Documents follow the changes: `bd72876`, `661f249`, `a6c1eb3`.
+
+### Train Controller
+
+- The PR #50 Train Controller is pulled in: `74159e9`, from `Train_Ctrl_integration` `e0e142d`.
+- A null commanded speed or authority is read as a signal-pickup failure. The 0 and 0 rule is removed (`a6c1eb3`).
+- `Train-Ctrl_HW/OPEN_ISSUES.md` #24 (speed limit) and #25 (passenger brake release) are closed (`a6c1eb3`).
+- Open: `constants.py` still spells `SUPER GREEN`. The engine-failure latch on a grade is recorded as `OPEN_ISSUES.md` #23 in the 2026-10-27 owner answer.
+
+### Harness
+
+- `common/harness/train_edges.py`: a null passes through, `passenger_brake_release` is not carried, and no speed limit is sent (`661f249`, `bd72876`, `a6c1eb3`).
+- Simulated Pis are configured per module at startup. A true toggle in `config/pi-testing.json` selects the simulator; a missing key means physical hardware (`8110e88`; `common/harness/pi_config.py`).
+- The Pi HELLO identity check is one helper, `matches_hello`, used by the relay and by bring-up (`92e500b`; `common/hw_link/tests/test_hello.py`).
+- Phase 7 review scenarios run at 1x (`92e500b`, `d606e05`). Owner diagnostic tests are added in `c4b3cce` and `3319d14`.
+
+### Documents
+
+- Handovers and phase prompts are consolidated in `documents/integration-handover.md`, with the originals in `documents/archive/handover/` (`a21bf64`).
+- Phase 6 evidence and limits (`25cc37a`, `a23bc22`); Phase 7 (`022608a`, `d606e05`); Phase 8 (`c10a5c6`); the 2026-10-22 session handover (`5050a30`).
+- The shared owner review queue, `documents/module-owner-review.md`, records the answers (`022608a`, `c92f58f`, `8a860fb`, `e58011a`, `c10a5c6`, `d606e05`). Braden's answers are in `documents/module-owner-review-braden.md` (`a5bd465`).
+- CTC Office design, use-case and sequence diagrams (`c9cd437`, `f6ed1a1`, `b9befc6`, `e7dcea2`); Train Model UML exports (`e8aad02`, `59d5bf7`).
+- `7d9b47e` untracks three Train Model prompt files that `a6c1eb3` committed by mistake.
+
+### Truth proposals
+
+Twenty-one proposals were added under `truth/_inbox/` on this branch since 2026-10-22. Twenty are in `truth/_inbox/claude/quirky-fermi-sickg4/`, and one is in `truth/_inbox/feature/ctc-remove-cancel-order/`. Each is a proposal awaiting human promotion. None is promoted, and agents do not promote them. Targets are as written in each file.
+
+- `20261024-1023-review-functional-speed.md` → `truth/decisions/review-functional-speed.md` (`022608a`)
+- `20261025-1509-independent-simulated-pis.md` → `truth/decisions/independent-simulated-pis.md` (`8110e88`)
+- `20261025-2128-two-way-zone-direction-reservation.md` → `truth/arbitration/two-way-zone-direction-reservation.md` (`bf43321`)
+- `20261025-2129-maintenance-closure-lock-switches.md` → `truth/arbitration/maintenance-closure-lock.md` (`bf43321`)
+- `20261025-2130-track-model-layout-is-master.md` → `truth/decisions/track-model-layout-is-master.md` (`bf43321`)
+- `20261025-2242-beacon-on-station-block.md` → `truth/signals/beacon.md` (`74159e9`)
+- `20261025-2242-passenger-brake-release-conflict.md` → `truth/signals/passenger-brake-release.md` (`74159e9`)
+- `20261027-1819-authority-one-empty-block-conflict.md` → `truth/arbitration/authority-stops-before-obstruction.md` (`7120fee`)
+- `20261027-1836-missing-occupancy-counts-occupied.md` → `truth/arbitration/missing-occupancy-counts-occupied.md` (`7120fee`)
+- `20261027-1836-signals-at-switches.md` → `truth/decisions/signals-at-switches.md` (`7120fee`)
+- `20261027-1836-track-controller-hw-variant.md` → `truth/modules/track-controller/track-controller-hw.md` (`7120fee`)
+- `20261027-1836-track-controller-vital-plc-block.md` → `truth/decisions/track-controller-vital-plc-block.md` (`7120fee`)
+- `20261027-1847-D026-heater-rule.md` → `truth/decisions/D026-track-model-switches-heaters.md` (`ef1dc26`)
+- `20261027-1847-signal-aspect-ahead-direction.md` → `truth/signals/signal-aspect-ahead.md` (`ef1dc26`)
+- `20261027-1847-ticket-sales-time-based.md` → `truth/signals/ticket-sales.md` (`ef1dc26`)
+- `20261028-1118-passenger-brake-release-withdrawn.md` → `truth/signals/passenger-brake-release.md` (`bd72876`)
+- `20261028-1119-passenger-emergency-brake-release.md` → `truth/arbitration/passenger-emergency-brake.md` (`bd72876`)
+- `20261028-1152-authority-gap-kept.md` → `truth/arbitration/authority-stops-before-obstruction.md` (`57614d2`)
+- `20261028-1153-track-signal-null-on-pickup-failure.md` → `truth/signals/track-signal.md` (`661f249`)
+- `20261028-1208-track-info-speed-limit-not-sent.md` → `truth/signals/track-info.md` (`a6c1eb3`)
+- `feature/ctc-remove-cancel-order/20261025-2000-no-dispatcher-order-cancel.md` → `truth/decisions/D028-no-dispatcher-order-cancel.md` (`fcb0ed5`)
+
+Points for human review before promotion:
+
+- Two proposals target `truth/signals/passenger-brake-release.md`, and two target `truth/arbitration/authority-stops-before-obstruction.md`. In each pair the 2026-10-28 proposal resolves the earlier one's Conflict and supersedes it.
+- The cancel-order proposal targets `D028`. The Red yard-connection proposal `20261021-1808-red-yard-connection.md` also targets `truth/decisions/D028-red-yard-connection.md`.
+- The cancel-order proposal was committed under `truth/_inbox/feature/ctc-remove-cancel-order/`, not under this branch's directory. `AGENTS.md` names `truth/_inbox/<current-branch>/` as the write location.
