@@ -249,7 +249,8 @@ the train's line. The Train Model's side of each edge:
 ### Train Model → Train Controller (`ControllerOutputs`)
 
 Actual speed, Brake State, Door State, Light State, cabin temperature,
-and the passed-through commanded speed, authority, speed limit and beacon.
+and the passed-through commanded speed, authority and beacon. No speed limit:
+the Train Controller takes commanded speed as its limit (2026-10-28).
 Failure status is not sent. See [module-interface.md](module-interface.md#5-outputs-trainmodeloutputs).
 
 ### Train Model → Track Model (`TrackOutputs`)

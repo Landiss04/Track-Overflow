@@ -1516,8 +1516,7 @@ def run_check(
 
     # The station dwell pill on both headers (REQUIREMENTS.md M6):
     # full when the dwell starts, half after half of it, gone after.
-    # The last block first: both falling to 0 from 2 or more blocks
-    # at once would read as a lost pickup.
+    # The last block, then a stop.
     sim = backend.sim
     sim.authority_blocks = 1
     tick()

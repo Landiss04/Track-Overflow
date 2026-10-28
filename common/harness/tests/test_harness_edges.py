@@ -100,7 +100,6 @@ def report(**changes: Any) -> dict[str, Any]:
         "cabin_temp_c": 21.5,
         "commanded_speed_mps": 12.5,
         "authority_blocks": 3,
-        "speed_limit_mps": 19.4,
         "beacon": None,
         **changes,
     }
@@ -135,15 +134,14 @@ class TrainEdgesTest(unittest.TestCase):
             "cabin_temperature": 21.5,
         })
 
-    def test_a_null_track_signal_reaches_the_controller_as_zero(
-            self) -> None:
-        # Pickup failure: the Train Model sends null; the Train
-        # Controller does not read null yet.
+    def test_a_null_track_signal_reaches_the_controller(self) -> None:
+        # Pickup failure: the Train Model sends null, and the Train
+        # Controller reads it as one.
         mapped = train_model_to_train_controller(report(
             commanded_speed_mps=None, authority_blocks=None))
         self.assertEqual(
             (mapped["commanded_speed"], mapped["authority_blocks"]),
-            (0.0, 0))
+            (None, None))
 
     def test_a_beacon_is_passed_on_while_reported(self) -> None:
         mapped = train_model_to_train_controller(report(beacon={

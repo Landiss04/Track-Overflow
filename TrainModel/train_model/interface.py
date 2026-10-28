@@ -187,8 +187,8 @@ class ControllerOutputs:
     # invalid data rather than a valid 0.
     commanded_speed_mps: float | None
     authority_blocks: int | None    # 0 = must stop
-    # Passed through from TrackInfo; terrain unaffected by pickup failure.
-    speed_limit_mps: float
+    # No speed limit: the Train Controller takes commanded speed as its
+    # limit (its owner, 2026-10-28).
     beacon: Beacon | None           # None between ticks; controller retains data
 
 

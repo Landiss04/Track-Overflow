@@ -16541,23 +16541,6 @@
 											"height": 13,
 											"text": "+authority_blocks: int | None",
 											"horizontalAlignment": 0
-										},
-										{
-											"_type": "UMLAttributeView",
-											"_id": "AAAAAAGTrM0000000001247=",
-											"_parent": {
-												"$ref": "AAAAAAGTrM0000000001236="
-											},
-											"model": {
-												"$ref": "AAAAAAGTrM0000000000786="
-											},
-											"font": "Arial;13;0",
-											"left": 705,
-											"top": 683,
-											"width": 229,
-											"height": 13,
-											"text": "+speed_limit_mps: float",
-											"horizontalAlignment": 0
 										}
 									],
 									"font": "Arial;13;0",
@@ -34465,16 +34448,6 @@
 									"name": "authority_blocks",
 									"visibility": "public",
 									"type": "int | None"
-								},
-								{
-									"_type": "UMLAttribute",
-									"_id": "AAAAAAGTrM0000000000786=",
-									"_parent": {
-										"$ref": "AAAAAAGTrM0000000000775="
-									},
-									"name": "speed_limit_mps",
-									"visibility": "public",
-									"type": "float"
 								}
 							],
 							"ownedElements": [

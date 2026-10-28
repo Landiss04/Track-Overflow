@@ -93,7 +93,7 @@ and a stability analysis of Kp and Ki.
 | Door State | bool[2] [left, right] | |
 | Light State | bool[2] [interior, exterior] | Cabin and headlights |
 | Cabin temperature | °C | |
-| Track Signal | commanded speed m/s; authority int blocks (D013) | Passed through. Lost pickup arrives as zeros; once a pickup failure is detected (§4) the console shows "--" |
+| Track Signal | commanded speed m/s; authority int blocks (D013) | Passed through. Lost pickup arrives as null (Kevin Schillinger 2026-10-28); once a pickup failure is detected (§4) the console shows "--" |
 | Beacon | station, side `L`/`R`/`LR`, underground | Every tick while the train is on a station's block, nothing otherwise (M6) |
 
 Not used: the speed limit the Train Model also passes through (M1, #24).
@@ -124,7 +124,7 @@ controller sends and receives (M0, M19).
 |---|---|---|---|
 | Brake | The service brake was commanded, and the report of that command (`echo_ticks` later) still reads it off | The service brake state reads applied again when commanded | Detection and resolution as decided, each on the report due for its command (R32; resolution 2026-10-24). The resolution is seen once the driver has released the e-brake in Manual and asked for the service brake (#23) |
 | Engine | A steady fall (accepted by Kevin 2026-10-21, R91). Never within 0.05 m/s of the target. Otherwise, over a 6 s window of system time: power above 0 on every tick; no service or emergency brake commanded or reported on any tick (a brake or 0 W starts the window again); and the half-second speed means fall by more than 0.05 m/s from the first to the last, each within 10 % of that fall of the straight line between them. Falling speed, not speed that fails to rise | Commanded power gives rising speed again | Not on this branch: the old rule, "should pull ≥ 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s", which false-positives on grades. The accepted rule is built on `claude/quirky-fermi-sickg4` (#28, #35). Resolution not detected |
-| Signal pickup | Commanded speed and authority fall to 0 together from ≥ 2 blocks | A valid non-zero Track Signal resumes | Detection as decided; resolution not detected |
+| Signal pickup | Commanded speed or authority arrives null (Kevin Schillinger 2026-10-28; before: both falling to 0 together from ≥ 2 blocks, which a valid stop could trip) | A valid Track Signal resumes | Detection as decided; resolution not detected |
 
 The straight-line check tells a sustained fall from the sag of a healthy
 train running onto a grade, which the PI recovers (about 0.51 m/s, back in
@@ -136,7 +136,6 @@ they agree.
 
 Known limits:
 - A brake failure is only seen when the service brake is asked for.
-- A cut from ≥ 2 blocks straight to 0 reads as a pickup failure.
 - A dead engine on a standing train is not seen: its speed does not fall.
 - A heavily loaded train that cannot hold its speed on Green 7's 5 % grade
   falls steadily and can be taken for an engine failure.

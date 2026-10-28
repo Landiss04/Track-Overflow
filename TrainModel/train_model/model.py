@@ -580,7 +580,6 @@ class TrainModel:
         emergency_cmd = False
         commanded_speed_mps: float | None = 0.0
         authority_blocks: int | None = 0
-        speed_limit_mps = 0.0
         block_id = _NO_BLOCK_ID
         interior = False
         exterior = False
@@ -591,7 +590,6 @@ class TrainModel:
             service_cmd = cmd.service_brake
             emergency_cmd = cmd.emergency_brake
             block_id = track.track_info.block_id
-            speed_limit_mps = track.track_info.speed_limit_mps
             interior = cmd.interior_lights
             exterior = cmd.exterior_lights
             # Pass this tick's beacon; None otherwise. Controller retains data.
@@ -622,7 +620,6 @@ class TrainModel:
                 cabin_temp_c=self._cabin_temp_c,
                 commanded_speed_mps=commanded_speed_mps,
                 authority_blocks=authority_blocks,
-                speed_limit_mps=speed_limit_mps,
                 beacon=beacon,
             ),
             track=TrackOutputs(

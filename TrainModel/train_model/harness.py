@@ -225,7 +225,6 @@ def _output_values(outputs: TrainModelOutputs) -> dict[str, Any]:
         "actual_speed": ctl.actual_speed_mps,
         "passenger_capacity": trk.passenger_capacity,
         "block_changed": trk.block_changed,
-        "speed_limit": ctl.speed_limit_mps,
     }
 
 

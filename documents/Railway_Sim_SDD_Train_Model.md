@@ -404,7 +404,7 @@ module. The normal passenger-release command is a controller input.
 | `track_info.block_id` | str | Current block identifier. |
 | `track_info.grade_deg` | finite float, degrees, strictly between -90 and 90 | Positive uphill; source layout grade percent is converted upstream. |
 | `track_info.elevation_m` | finite float, m | Terrain metadata. |
-| `track_info.speed_limit_mps` | finite float, m/s, >= 0 | Block limit passed through in model outputs. |
+| `track_info.speed_limit_mps` | finite float, m/s, >= 0 | Block limit, shown in the Train Model window; not sent to the Train Controller (2026-10-28). |
 | `track_info.polarity` | bool | Flip on block entry; a change resets offset and raises the block-change event. |
 | `track_info.station_name` | str or `None` | Station in the current block; implementation uses `None` off-station. |
 | `track_signal.commanded_speed_mps` | finite float, m/s, >= 0 | Track-circuit commanded speed passed to the controller. |
@@ -422,7 +422,6 @@ module. The normal passenger-release command is a controller input.
 | `interior_lights_on`, `exterior_lights_on` | bool each | Actual simulated light states. |
 | `cabin_temp_c` | float, °C | Simulated cabin temperature. |
 | `commanded_speed_mps`, `authority_blocks` | float m/s or null; int blocks or null | Track-signal pass-through; both become null under signal pickup failure, invalid data rather than a valid 0 (Kevin Schillinger 2026-10-28; zero before, R10). |
-| `speed_limit_mps` | float, m/s | Block speed limit, unaffected by pickup failure. The current controller edge drops this field because that consumer has no separate speed-limit input. |
 | `beacon` | `Beacon` or `None` | Current tick's beacon; the consumer retains station information if needed. |
 
 Failure flags are available to the Train Model window through its snapshot.
@@ -616,7 +615,7 @@ presents the announcement without advancing physics independently.
 **Trigger:** A track input accompanies a tick.
 
 **Main success scenario:** Use grade in the force balance; detect a block transition
-from polarity; pass commanded speed, authority, speed limit, and the current beacon
+from polarity; pass commanded speed, authority, and the current beacon
 to controller outputs; publish block, offset, and transition flag to the Track Model.
 
 **Alternate flows:** The first polarity sample establishes a baseline. Under pickup

@@ -351,7 +351,9 @@ class TrainModelState(QObject):
             ),
             "actual_speed": ctl.actual_speed_mps,
             "commanded_speed": ctl.commanded_speed_mps,
-            "speed_limit": ctl.speed_limit_mps,
+            # Track Info, shown here; not sent to the Train Controller.
+            "speed_limit": (inputs.track.track_info.speed_limit_mps
+                            if inputs is not None else 0.0),
             "authority": ctl.authority_blocks,
             "acceleration": snap.acceleration_mps2,
             "passengers": snap.n_passengers,

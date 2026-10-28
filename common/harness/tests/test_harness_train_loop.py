@@ -385,8 +385,8 @@ class StationStopTest(unittest.TestCase):
 
     def test_authority_never_falls_from_two_blocks_to_none(self) -> None:
         # The preloaded next block carries the train's values as it
-        # enters; without it the Train Controller would read a pickup
-        # failure at every block (R49).
+        # enters; without it the train would read a stop at every
+        # block (R49).
         authority = [report["authority_blocks"]
                      for _, _, report, _, _ in self.trace]
         for before, after in zip(authority, authority[1:]):
@@ -861,6 +861,29 @@ class FailureTest(unittest.TestCase):
         self.assertTrue(loop.run_until(
             lambda: loop.followed[-1:] == ("69",), limit_s=1.0
         ))
+
+
+class SignalPickupTest(unittest.TestCase):
+    """A pickup failure injected in the Train Model reaches the Train
+    Controller as null, and it stops the train (Kevin Schillinger
+    2026-10-28)."""
+
+    def test_null_track_signal_stops_the_train(self) -> None:
+        loop = _Loop(dispatches=(Dispatch("G1", "Green", DORMONT),))
+        self.assertTrue(loop.run_until(
+            lambda: loop.has(TRAIN_MODEL) and loop.speed_mps > 5
+        ))
+        core = loop.controller_fleet.get("G1")
+        self.assertFalse(core.state.failures["signal_pickup"])
+        loop.model_fleet.get("G1").setFailure("signal_pickup_failure", True)
+        self.assertTrue(loop.run_until(
+            lambda: core.state.failures["signal_pickup"],
+            limit_s=4 * ECHO_TICKS * DT_S,
+        ))
+        self.assertIsNone(loop.report["commanded_speed_mps"])
+        self.assertIsNone(loop.report["authority_blocks"])
+        self.assertTrue(core.state.emergency_brake)
+        self.assertTrue(loop.run_until(lambda: loop.speed_mps == 0.0))
 
 
 class EmergencyBrakeTest(unittest.TestCase):

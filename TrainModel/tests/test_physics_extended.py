@@ -1809,8 +1809,15 @@ def test_signal_pickup_failure_blanks_only_the_track_signal() -> None:
                                speed_limit_mps=12.0, block_id="C3"))
     assert out.controller.commanded_speed_mps is None
     assert out.controller.authority_blocks is None
-    assert out.controller.speed_limit_mps == 12.0
     assert out.track.block_id == "C3"
+
+
+def test_no_speed_limit_goes_to_the_controller() -> None:
+    """Check the speed limit stays in the Train Model: the Train
+    Controller takes commanded speed as its limit (its owner,
+    2026-10-28)."""
+    out = fresh().step(DT_S, inp(speed_limit_mps=12.0))
+    assert not hasattr(out.controller, "speed_limit_mps")
 
 
 @pytest.mark.parametrize("engine", [False, True])

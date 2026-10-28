@@ -40,27 +40,6 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     - (c) Ask Kevin to report the service brake's state independently of
       the e-brake.
 
-24. **The Train Model passes a speed limit to the controller**
-    (`ControllerOutputs.speed_limit_mps`, from `TrackInfo`). The
-    controller ignores it (M1; `read_inputs` drops unknown keys).
-    Settled on `claude/quirky-fermi-sickg4`: the harness drops it before
-    the controller (`common/harness/train_edges.py`). Closes when that
-    branch merges.
-
-25. **The passenger emergency brake release: deferred to the Train
-    Model** (decided 2026-10-24). Truth has
-    `signals/passenger-brake-release`: a one-shot from the Train
-    Controller, true on the tick it releases a passenger pull, after
-    which the Train Model clears the pull. No such signal will be added:
-    the Train Model is to detect the release itself. Until it does, a
-    Train Model latch keeps reporting the e-brake engaged after the
-    driver's release. The controller's own side of M2 is done (R16; and
-    since #42, its own command coming back is not a pull). Still open:
-    - A pull reported within a tick or two of a release, before the
-      reported state has gone false, is not seen.
-    - The bench's passenger pull is reported for one tick only, not
-      latched as the Train Model's is.
-
 27. **Signal light ahead** (M20). Mapped on `claude/quirky-fermi-sickg4`,
     from the Track Model directly (`aspect_to_train_controller`), and truth
     now has `signals/signal-aspect-ahead`. Truth spells the fourth aspect
@@ -191,8 +170,9 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
       a cruise (#26, #28).
     - **Train Model reports.** Its service brake state does not go false
       while the e-brake is engaged, as the Train Model's does (#23); its
-      passenger pull lasts one tick and is never latched, and it has no
-      passenger-brake-release handshake (#25).
+      passenger pull lasts one tick and is never latched, where the
+      Train Model's holds until the e-brake command goes off (#25,
+      closed).
     - **Track Model, Track Controller and CTC Office.** There is no track:
       authority changes only with the Block change button, commanded
       speed and the signal ahead only when edited, and the beacon only
@@ -285,6 +265,12 @@ One line each; the details are in `CHANGELOG.md`.
   are left alone by decision.
 - **22.** Harness-spawned trains never armed: decided, the engineer
   commissions every train (M9).
+- **24.** The Train Model's speed limit: no longer sent (2026-10-28, on
+  this owner's word, relayed by Kevin); commanded speed is the limit (M1).
+- **25.** The passenger brake release: closed by Kevin 2026-10-28. No
+  release signal; the Train Model holds a passenger pull until the
+  controller's emergency brake command goes from true to false, which the
+  driver's release does (M2).
 - **26 (most of it).** The bench's simulation moved out of the
   controller (M0, R15); the choice of simulator is still open (#26).
 - **29.** The dial's 70 km/h scale against M1: display only, accepted

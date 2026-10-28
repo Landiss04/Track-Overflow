@@ -118,7 +118,7 @@ TrainModelInputs
 | `block_id` | str | | Block the train is in. |
 | `grade_deg` | float | deg | Grade, positive uphill in the direction of travel. Strictly between −90 and 90. Layout files give percent; the loader converts. |
 | `elevation_m` | float | m | Elevation. Validated, not used by the physics. |
-| `speed_limit_mps` | float | m/s | Nonnegative. Passed through to the Train Controller. |
+| `speed_limit_mps` | float | m/s | Nonnegative. Shown in the Train Model window; not sent to the Train Controller, which takes commanded speed as its limit (2026-10-28). |
 | `polarity` | bool | | Track-circuit polarity. A change from the previous tick is a block change. |
 | `station_name` | str \| None | | Station in this block for display, or `None`. Default `None`; not a Train Model boarding gate. |
 
@@ -194,7 +194,6 @@ TrainModelOutputs
 | `cabin_temp_c` | float | °C | Cabin temperature. |
 | `commanded_speed_mps` | float or null | m/s | Passed through; null under signal pickup failure. |
 | `authority_blocks` | int or null | blocks | Passed through; null under signal pickup failure, 0 before the first step. |
-| `speed_limit_mps` | float | m/s | Passed through from `TrackInfo`. |
 | `beacon` | Beacon \| None | | This tick's beacon, else `None`. |
 
 ### `TrackOutputs`

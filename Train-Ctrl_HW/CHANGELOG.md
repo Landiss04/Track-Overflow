@@ -239,6 +239,7 @@ the Cab controls badge.
 | `83f7c7c` | 10-24 | `HARNESS_INTEGRATION.md` brought up to date; open issues #42–#44. |
 | `6def698` | 10-24 | Reports judged against the command they answer: `echo_ticks` (2 under the harness, 1 on the bench) for the brake-failure rule and the passenger-pull test (#42). |
 | (next) | 10-24 | The controller resolves a brake failure itself when the service brake answers again, and the bench clears only its own simulation's (#44); #25 deferred to the Train Model. |
+| (integration) | 10-28 | On Kevin's word, on `claude/quirky-fermi-sickg4`: a signal pickup failure is a null `commanded_speed` or `authority_blocks` (`read_inputs` stages `signal_lost`); the rule "both fall to 0 from ≥ 2 blocks" is gone, so a valid 0/0 never trips it (Braden's request 9). The bench sends null on an injected pickup failure. #24 and #25 closed: the Train Model sends no speed limit, and holds a passenger pull until `emergency_brake` goes off. |
 
 ---
 

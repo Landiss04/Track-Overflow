@@ -46,13 +46,14 @@ KP, KI = 400_000.0, 8_000.0
 def report(
     emergency: bool = False,
     speed_mps: float = 0.0,
-    commanded_mps: float = 10.0,
+    commanded_mps: float | None = 10.0,
     service: bool = False,
+    authority: int | None = 4,
 ) -> dict:
     """One tick's Train Model report, every key the fleet needs."""
     return {
         "commanded_speed": commanded_mps,
-        "authority_blocks": 4,
+        "authority_blocks": authority,
         "actual_speed": speed_mps,
         "emergency_brake_state": emergency,
         "service_brake_state": service,
@@ -112,8 +113,44 @@ class EchoTest(unittest.TestCase):
         self.step(emergency=True, speed_mps=5.0)
         self.assertTrue(self.core.state.emergency_brake)
 
-    # No passenger brake release is sent (OPEN_ISSUES.md #25), so
-    # there is nothing to test for it here.
+    # No passenger brake release is sent: the Train Model holds a pull
+    # until the emergency brake command goes off (#25, closed).
+
+
+class SignalPickupTest(unittest.TestCase):
+    """A null Track Signal is a signal pickup failure; a valid 0 is
+    not (Kevin Schillinger 2026-10-28; Braden's request 9)."""
+
+    def setUp(self) -> None:
+        self.fleet = TrainControllerFleet(echo_ticks=ECHO_TICKS)
+        self.core = self.fleet.add("G1", "Green")
+        arm(self.core)
+
+    def step(self, **values: Any) -> Any:
+        """Step the train on one report; return its commands."""
+        return self.fleet.step_all(
+            TICK_S, {"G1": report(**values)}, _START_S)["G1"]
+
+    def test_a_valid_stop_is_not_a_pickup_failure(self) -> None:
+        # Running with 4 blocks, then authority and speed cut to 0 at
+        # once: a stop order, not a lost signal.
+        for _ in range(3):
+            self.step(speed_mps=8.0)
+        for _ in range(3):
+            self.step(speed_mps=8.0, commanded_mps=0.0, authority=0)
+            self.assertFalse(self.core.state.failures["signal_pickup"])
+
+    def test_null_is_a_pickup_failure(self) -> None:
+        for key in ("commanded_mps", "authority"):
+            with self.subTest(null=key):
+                self.setUp()
+                self.step(speed_mps=8.0)
+                commands = self.step(speed_mps=8.0, **{key: None})
+                self.assertTrue(self.core.state.failures["signal_pickup"])
+                self.assertTrue(commands.emergency_brake)
+                self.assertEqual(commands.power_w, 0.0)
+                self.assertEqual((self.core.commanded_mps,
+                                  self.core.authority_blocks), (0.0, 0))
 
 
 class LowerLimitAheadTest(unittest.TestCase):

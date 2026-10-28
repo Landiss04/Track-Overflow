@@ -155,7 +155,7 @@ aren't named.
 - **ControllerOutputs**: `actual_speed_mps`, `emergency_brake_active`,
   `service_brake_active`, `door_left_open`, `door_right_open`,
   `interior_lights_on`, `exterior_lights_on`, `cabin_temp_c`,
-  `commanded_speed_mps`, `authority_blocks`, `speed_limit_mps`,
+  `commanded_speed_mps`, `authority_blocks`,
   `beacon: Beacon | None`.
 - **TrackOutputs**: `block_id`, `offset_m`, `actual_speed_mps`,
   `block_changed`, `passenger_capacity`.

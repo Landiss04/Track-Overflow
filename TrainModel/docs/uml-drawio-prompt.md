@@ -269,7 +269,6 @@ otherwise.
   - `+cabin_temp_c: float`
   - `+commanded_speed_mps: float`
   - `+authority_blocks: int`
-  - `+speed_limit_mps: float`
 - **TrackOutputs**:
   - `+block_id: str`
   - `+offset_m: float`
