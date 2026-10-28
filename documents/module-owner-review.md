@@ -143,6 +143,17 @@ expected-failure), and `test_hw_language.py` fails 3 tests against Braden's new
 Kevin: the `development` merge hazard (Braden's request 1), and regenerating the Pi
 bundles after this merge (request 7).
 
+## Answers, 2026-10-28
+
+Kevin's answers to the open questions, and Landis's reply on the gap, relayed by
+Kevin.
+
+| Question | Answer | Done on this branch |
+| --- | --- | --- |
+| Passenger brake release (Train Controller #25) | "it is latched until the train controller sends ebreak = false" (Kevin) | The Train Model clears a pull when the controller's emergency brake goes from true to false; the one-shot `passenger_brake_release` is withdrawn. Harness release test passes. Proposals for `signals/passenger-brake-release` and `arbitration/passenger-emergency-brake` |
+| Pickup failure (Braden's request 9) | "send null for speed and authority on a signal pickup failure simulating invalid data" (Kevin) | The Train Model sends null for both. The Train Controller does not read null yet (one null refuses every train's tick), so the harness edge still gives it 0/0 until it does. Proposal for `signals/track-signal` |
+| Gap between trains (CTC-1, CTC-2) | Keep the one-block gap; never give a train authority that would put it next to another train, since the waysides deadlock adjacent trains (Landis; Kevin: "the gap should be kept") | `ctc/routing.py` `keep_gap()`: no authority ends next to a block another train occupies or holds in its authority, on the route or off it. Two trains head on now stop one block apart. Proposal resolving the Conflict in `arbitration/authority-stops-before-obstruction` |
+
 ## CTC-1: Red concurrency
 
 **Owner:** Landis, CTC Office.

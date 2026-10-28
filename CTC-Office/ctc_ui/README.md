@@ -182,10 +182,11 @@ yet) through `ctc_ui/ctc_host.py`:
 - **Authority** is the number of blocks ahead of the train's current
   block it may still enter (0: stop before leaving it), recomputed every
   step. It runs toward the destination and stops before the first
-  closed or closing block, two blocks before the first occupied one
-  (failed ones included), leaving one empty block between trains, and
-  before any switch the Track Controller has not reported set for the
-  route.
+  closed or closing block and before any switch the Track Controller has
+  not reported set for the route. It never ends next to a block another
+  train occupies (failed ones included) or holds in its authority, on
+  the route or off it: one empty block always stays between trains, as
+  the waysides hold any two trains side by side.
   Routes go round failed and closed blocks where the detour is short
   enough.
 - **Set switch position** (Maintenance) shows each switch's two

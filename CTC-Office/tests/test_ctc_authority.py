@@ -229,6 +229,42 @@ class CountTest(unittest.TestCase):
         self.assertEqual((limit.blocks, limit.reason), (4, "destination"))
 
 
+class GapTest(unittest.TestCase):
+    """No authority ends next to another train's block or authority:
+    the waysides would hold both trains (Landis 2026-10-28)."""
+
+    def test_no_move_into_the_one_empty_block(self) -> None:
+        # Landis's example: 30 and 32 occupied, 31 empty. The train in
+        # 30 may not take 31, next to 32.
+        limit = authority(_GREEN, "30", "37", {"32": "occupied"}, {})
+        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
+                          limit.at), (0, "30", "occupied", "32"))
+
+    def test_not_next_to_a_train_past_the_destination(self) -> None:
+        limit = authority(_GREEN, "30", "37", {"38": "occupied"}, {})
+        self.assertEqual((limit.blocks, limit.end_block_id, limit.at),
+                         (6, "36", "38"))
+
+    def test_not_next_to_a_train_on_a_switchs_other_leg(self) -> None:
+        # 28 joins 27, 29 and 150: a train in 150 is next to 28 though
+        # the route runs 27 to 28 to 29.
+        for obstructions, reserved, reason, held_by in (
+                ({"150": "occupied"}, {}, "occupied", ""),
+                ({}, {"150": "T9"}, "reserved", "T9")):
+            with self.subTest(reason=reason):
+                limit = authority(_GREEN, "26", "28", obstructions,
+                                  {"28": "normal"}, reserved)
+                self.assertEqual(
+                    (limit.blocks, limit.end_block_id, limit.reason,
+                     limit.at, limit.held_by),
+                    (1, "27", reason, "150", held_by))
+
+    def test_a_closed_block_ahead_needs_no_gap(self) -> None:
+        # Only trains hold each other; a closed block holds no one.
+        limit = authority(_GREEN, "30", "37", {"33": "closed"}, {})
+        self.assertEqual((limit.blocks, limit.end_block_id), (2, "32"))
+
+
 class StubAuthorityTest(unittest.TestCase):
     """The stub recomputes authority from the reports every step."""
 
@@ -241,8 +277,15 @@ class StubAuthorityTest(unittest.TestCase):
         self.assertEqual(suggestion.authority_blocks, 1)
         self.assertEqual(_authority(ctc), TrainAuthority(
             "T1", "Green", 1, "31", "occupied", "33", _GREEN_30_TO_37))
-        # T2 moves on, past the destination: the authority grows back.
+        # T2 moves on to 38, just past the destination: T1 may not
+        # end in 37, next to it (Landis 2026-10-28).
         out = step_at(ctc, _train("T1", "30"), _train("T2", "38"))
+        self.assertEqual(
+            own_block(out.track_controller.suggestions).authority_blocks,
+            6)
+        self.assertEqual(_authority(ctc).at, "38")
+        # Once T2 is a block further on, the authority grows back.
+        out = step_at(ctc, _train("T1", "30"), _train("T2", "39"))
         self.assertEqual(
             own_block(out.track_controller.suggestions).authority_blocks,
             7)
@@ -331,10 +374,12 @@ class ExclusiveAuthorityTest(unittest.TestCase):
         ctc = self._head_on()
         step_at(ctc, *self._FACING)
         t1, t2 = _authority(ctc, "T1"), _authority(ctc, "T2")
-        # No arrival times: T1 first, by train ID.
+        # No arrival times: T1 first, by train ID. T2 stops at 26,
+        # one empty block short of T1's authority: ending in 25, next
+        # to T1 in 24, would hold both trains (Landis 2026-10-28).
         self.assertEqual((t1.blocks, t1.reason), (4, "destination"))
-        self.assertEqual((t2.blocks, t2.reason, t2.at, t2.held_by),
-                         (3, "reserved", "24", "T1"))
+        self.assertEqual((t2.blocks, t2.end_block_id, t2.reason, t2.at,
+                          t2.held_by), (2, "26", "reserved", "24", "T1"))
         ahead = set(t1.route[1:t1.blocks + 1])
         self.assertFalse(ahead & set(t2.route[1:t2.blocks + 1]))
 
@@ -345,7 +390,7 @@ class ExclusiveAuthorityTest(unittest.TestCase):
         self.assertEqual(_authority(ctc, "T2").blocks, 4)
         t1 = _authority(ctc, "T1")
         self.assertEqual((t1.blocks, t1.reason, t1.held_by),
-                         (3, "reserved", "T2"))
+                         (2, "reserved", "T2"))
 
     def test_less_slack_goes_first(self) -> None:
         ctc = self._head_on()

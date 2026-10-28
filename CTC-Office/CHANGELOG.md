@@ -4,6 +4,20 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-10-28 — The gap is kept against every other train
+
+From Landis's reply, relayed by Kevin: keep the one empty block, and never
+give a train authority that would put it next to another train; the
+waysides hold two adjacent trains, which deadlocks them.
+
+- `ctc/routing.py` `keep_gap()`: an authority is pulled back until its last
+  block is next to no block another train occupies (or a failed block) and
+  none another train's authority holds, along the route or off it (a
+  switch's other leg). This now covers another train's authority (two
+  trains head on stopped one block apart before), a train just past the
+  destination, and the hold round a loop (`ctc/model.py`). The reason names
+  the block the authority would have been next to.
+
 ## 2026-10-27 — One empty block between trains
 
 From Braden Bosilovich and Harry Tye's answer to the module owner review
