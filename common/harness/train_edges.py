@@ -38,6 +38,12 @@ from the Train Model's ``controller`` outputs::
     beacon, when over one       -> beacon_station, beacon_side,
                                    beacon_underground
 
+Under a signal pickup failure the Train Model sends commanded speed and
+authority as null, invalid data rather than a valid 0 (Kevin Schillinger
+2026-10-28). The Train Controller does not read null yet: one null input
+refuses every train's tick (``read_inputs``). Until it does, this edge
+gives it 0 m/s and 0 blocks for a null, as the Train Model sent before.
+
 The Train Model also passes the block's speed limit through; the
 Train Controller takes commanded speed as its limit and has no input
 for it (``Train-Ctrl_HW/REQUIREMENTS.md`` M1), so this edge drops it.
@@ -128,8 +134,8 @@ def train_model_to_train_controller(
     """
     inputs = {
         "actual_speed": outputs["actual_speed_mps"],
-        "commanded_speed": outputs["commanded_speed_mps"],
-        "authority_blocks": outputs["authority_blocks"],
+        "commanded_speed": _or_zero(outputs["commanded_speed_mps"], 0.0),
+        "authority_blocks": _or_zero(outputs["authority_blocks"], 0),
         "emergency_brake_state": outputs["emergency_brake_active"],
         "service_brake_state": outputs["service_brake_active"],
         "door_state": [
@@ -148,6 +154,12 @@ def train_model_to_train_controller(
         inputs["beacon_side"] = beacon["platform_side"]
         inputs["beacon_underground"] = beacon["underground"]
     return inputs
+
+
+def _or_zero(value: Any, zero: Any) -> Any:
+    # A null track signal (pickup failure) as the Train Controller
+    # still reads it, until it takes null.
+    return zero if value is None else value
 
 
 def aspect_to_train_controller(aspect: str) -> str:

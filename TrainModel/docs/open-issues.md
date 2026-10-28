@@ -51,8 +51,8 @@ speed regulation and enforcement (D009); do not add a physics velocity clamp.
   ownership is settled by Kevin’s review.
 - Track Model sends boarding events only at stations. Train Model checks rest,
   open doors, valid counts and capacity without a station gate.
-- Pickup failure already outputs commanded speed 0 m/s and authority 0 blocks,
-  leaving terrain unaffected. Offset references the front of the train.
+- Pickup failure outputs null commanded speed and authority (2026-10-28; was
+  0 m/s and 0 blocks), leaving terrain unaffected. Offset references the front of the train.
 - A passenger pull clears when the controller's emergency brake goes from true
   to false (2026-10-28); the one-shot release is withdrawn. The window has no
   release.

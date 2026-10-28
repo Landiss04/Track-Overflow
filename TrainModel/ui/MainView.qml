@@ -118,7 +118,9 @@ ScrollView {
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Commanded")
-                        value: root.fixed(root.mph(root.s.commanded_speed), 1)
+                        // Null under signal pickup failure: no valid reading.
+                        value: root.s.commanded_speed == null ? "—"
+                            : root.fixed(root.mph(root.s.commanded_speed), 1)
                         unit: "mph"
                     }
 
@@ -133,7 +135,8 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Authority")
-                    value: root.s.authority
+                    value: root.s.authority == null ? "—"
+                        : root.s.authority
                         + (root.s.authority === 1 ? qsTr(" block") : qsTr(" blocks"))
                 }
 

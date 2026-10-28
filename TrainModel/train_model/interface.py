@@ -183,9 +183,10 @@ class ControllerOutputs:
     interior_lights_on: bool
     exterior_lights_on: bool
     cabin_temp_c: float
-    # Commanded speed and authority both become zero under pickup failure.
-    commanded_speed_mps: float
-    authority_blocks: int           # passed through; 0 = must stop
+    # Passed through; both None (null) under signal pickup failure,
+    # invalid data rather than a valid 0.
+    commanded_speed_mps: float | None
+    authority_blocks: int | None    # 0 = must stop
     # Passed through from TrackInfo; terrain unaffected by pickup failure.
     speed_limit_mps: float
     beacon: Beacon | None           # None between ticks; controller retains data

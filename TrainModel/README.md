@@ -170,8 +170,9 @@ are outside this model.
 Both brakes may engage simultaneously and their configured forces sum. Emergency
 follows the controller command or passenger latch; service follows its command
 unless service failure is active. The inspected working tree implements
-independent engagement and summed forces. Pickup failure already outputs zero
-commanded speed and authority while leaving terrain unaffected. Position offset
+independent engagement and summed forces. Pickup failure outputs null
+commanded speed and authority, invalid data rather than a valid 0
+(2026-10-28), while leaving terrain unaffected. Position offset
 references the front of the train; this decision adds no block-crossing behavior.
 
 ## Reference mass and operating mass

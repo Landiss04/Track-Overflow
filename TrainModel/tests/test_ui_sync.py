@@ -87,7 +87,8 @@ def test_failure_state_and_affected_values_change_while_paused(pair, failure):
     # There is no power output, so engine failure changes no control.
     fields = {
         "engine_failure": {},
-        "signal_pickup_failure": {"commanded_speed": 0, "authority": 0},
+        # Null readbacks leave the entered values (pickup sends null).
+        "signal_pickup_failure": {},
         "brake_failure": {"service_brake_command": False},
     }[failure]
     for name, value in fields.items():
@@ -231,7 +232,9 @@ def test_the_rows_show_the_starting_values_until_the_first_tick(pair):
     assert ctl.actual_speed_mps == 0.0
     assert state.snapshot["next_station"] == "Station B"
     # From the first tick on, the rows read the module back.
+    # A null readback (signal pickup failure) keeps the entered value.
+    entered = harness.inputValues["commanded_speed"]
     state.setFailure("signal_pickup_failure", True)
-    assert harness.inputValues["commanded_speed"] == 0
+    assert harness.inputValues["commanded_speed"] == entered is not None
     harness.resetModule()
     assert harness.inputValues["interior_light_command"]

@@ -578,8 +578,8 @@ class TrainModel:
         failures = self._failures
         service_cmd = False
         emergency_cmd = False
-        commanded_speed_mps = 0.0
-        authority_blocks = 0
+        commanded_speed_mps: float | None = 0.0
+        authority_blocks: int | None = 0
         speed_limit_mps = 0.0
         block_id = _NO_BLOCK_ID
         interior = False
@@ -596,9 +596,13 @@ class TrainModel:
             exterior = cmd.exterior_lights
             # Pass this tick's beacon; None otherwise. Controller retains data.
             beacon = track.beacon
-            # Under signal pickup failure, commanded speed
-            # is 0.0 and authority is 0 blocks.
-            if not failures.signal_pickup:
+            # Under signal pickup failure the track signal cannot be
+            # read: commanded speed and authority are null, invalid
+            # data, not a valid 0 (Kevin Schillinger 2026-10-28).
+            if failures.signal_pickup:
+                commanded_speed_mps = None
+                authority_blocks = None
+            else:
                 commanded_speed_mps = track.track_signal.commanded_speed_mps
                 authority_blocks = track.track_signal.authority_blocks
         ebrake, service = _brakes_engaged(

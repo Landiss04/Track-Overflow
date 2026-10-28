@@ -16522,7 +16522,7 @@
 											"top": 653,
 											"width": 229,
 											"height": 13,
-											"text": "+commanded_speed_mps: float",
+											"text": "+commanded_speed_mps: float | None",
 											"horizontalAlignment": 0
 										},
 										{
@@ -16539,7 +16539,7 @@
 											"top": 668,
 											"width": 229,
 											"height": 13,
-											"text": "+authority_blocks: int",
+											"text": "+authority_blocks: int | None",
 											"horizontalAlignment": 0
 										},
 										{
@@ -34454,7 +34454,7 @@
 									},
 									"name": "commanded_speed_mps",
 									"visibility": "public",
-									"type": "float"
+									"type": "float | None"
 								},
 								{
 									"_type": "UMLAttribute",
@@ -34464,7 +34464,7 @@
 									},
 									"name": "authority_blocks",
 									"visibility": "public",
-									"type": "int"
+									"type": "int | None"
 								},
 								{
 									"_type": "UMLAttribute",

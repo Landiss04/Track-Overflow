@@ -421,7 +421,7 @@ module. The normal passenger-release command is a controller input.
 | `door_left_open`, `door_right_open` | bool each | Actual simulated door states. |
 | `interior_lights_on`, `exterior_lights_on` | bool each | Actual simulated light states. |
 | `cabin_temp_c` | float, °C | Simulated cabin temperature. |
-| `commanded_speed_mps`, `authority_blocks` | float m/s; int blocks | Track-signal pass-through; both become zero under signal pickup failure, as confirmed in R10. |
+| `commanded_speed_mps`, `authority_blocks` | float m/s or null; int blocks or null | Track-signal pass-through; both become null under signal pickup failure, invalid data rather than a valid 0 (Kevin Schillinger 2026-10-28; zero before, R10). |
 | `speed_limit_mps` | float, m/s | Block speed limit, unaffected by pickup failure. The current controller edge drops this field because that consumer has no separate speed-limit input. |
 | `beacon` | `Beacon` or `None` | Current tick's beacon; the consumer retains station information if needed. |
 
@@ -681,7 +681,7 @@ next step. Multiple independent flags may be active together.
 | Failure | Simulated effect |
 |---------|------------------|
 | Engine | Zero traction despite a nonzero power command. |
-| Signal pickup | Zero commanded speed and authority in controller feedback. |
+| Signal pickup | Null commanded speed and authority in controller feedback. |
 | Brake | Block service braking; emergency braking remains available. |
 
 **Alternate flows:** Clearing a failure restores the relevant command path.
@@ -832,7 +832,7 @@ SDD-only session. No item below is a request to implement product changes now.
 | Simultaneous brakes | Both brakes can apply simultaneously; service failure disables service only. The selected physical realization adds the two engaged brake forces. | Backend: remove service suppression, align force and state reporting, and update focused tests. |
 | Station restriction on boarding | Track Model sends boarding events only at stations. Train Model enforces rest, doors, counts, and capacity without a station gate. | Documentation: clarify responsibility in the boarding signal and module descriptions. |
 | Beacon encoding and between-beacon behavior | Canonical compact ASCII-escaped JSON array `[station_name, platform_side, underground]`, maximum 128 characters for the complete payload. Keep `None` between beacon ticks. | Backend: enforce complete payload length consistently. Documentation: record encoding and retention responsibility. |
-| Pickup failure output | Keep commanded speed zero and authority zero. | Documentation: record the settled choice; preserve existing implementation. |
+| Pickup failure output | Keep commanded speed zero and authority zero. Superseded 2026-10-28: both null. | Documentation: record the settled choice; preserve existing implementation. |
 | Door interlock | Train Controller ensures doors remain closed when required. Train Model follows door commands. | Documentation: remove unresolved ownership language; preserve existing Train Model behavior. |
 | Vehicle parameters | 480 kW is confirmed. Rolling resistance is the only passive resistance term in scope; grade and brake forces still apply. | Documentation: remove provisional-power and extra-resistance calibration requests. |
 | Position reference | Use the front of the train for offset. | Documentation: align interface comments, position signal, physics, and integration text. |

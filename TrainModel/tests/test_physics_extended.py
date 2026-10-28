@@ -1801,13 +1801,14 @@ def test_the_limits_themselves_are_accepted(
 
 
 def test_signal_pickup_failure_blanks_only_the_track_signal() -> None:
-    """Check pickup failure blanks the signal but not the track info."""
+    """Check pickup failure sends null for the track signal, invalid
+    data rather than a valid 0, and leaves the track info."""
     model = fresh()
     model.set_failures(FailureState(signal_pickup=True))
     out = model.step(DT_S, inp(cmd_speed_mps=13.5, authority=12,
                                speed_limit_mps=12.0, block_id="C3"))
-    assert out.controller.commanded_speed_mps == 0.0
-    assert out.controller.authority_blocks == 0
+    assert out.controller.commanded_speed_mps is None
+    assert out.controller.authority_blocks is None
     assert out.controller.speed_limit_mps == 12.0
     assert out.track.block_id == "C3"
 

@@ -110,8 +110,6 @@ class TrainEdgesTest(unittest.TestCase):
     """Each field lands where the other module reads it."""
 
     def test_commands_to_the_train_model(self) -> None:
-        # The Train Controller sends no passenger brake release
-        # (Train-Ctrl_HW OPEN_ISSUES.md #25): always false.
         mapped = train_controller_to_train_model(commands())
         self.assertEqual(mapped, {
             "power_cmd_w": 1200.0,
@@ -136,6 +134,16 @@ class TrainEdgesTest(unittest.TestCase):
             "light_state": [True, False],
             "cabin_temperature": 21.5,
         })
+
+    def test_a_null_track_signal_reaches_the_controller_as_zero(
+            self) -> None:
+        # Pickup failure: the Train Model sends null; the Train
+        # Controller does not read null yet.
+        mapped = train_model_to_train_controller(report(
+            commanded_speed_mps=None, authority_blocks=None))
+        self.assertEqual(
+            (mapped["commanded_speed"], mapped["authority_blocks"]),
+            (0.0, 0))
 
     def test_a_beacon_is_passed_on_while_reported(self) -> None:
         mapped = train_model_to_train_controller(report(beacon={

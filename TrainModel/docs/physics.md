@@ -258,7 +258,7 @@ next step. Failure status is not sent to the Train Controller.
 | Failure | Effect |
 |---|---|
 | Engine | Traction is 0 (P treated as 0). |
-| Signal pickup | Commanded speed and authority are both reported as 0. Track Info (block, grade, speed limit) is unaffected. |
+| Signal pickup | Commanded speed and authority are both reported as null, invalid data rather than a valid 0 (2026-10-28). Track Info (block, grade, speed limit) is unaffected. |
 | Brake | The service brake is blocked. The emergency brake, commanded or pulled, still works. |
 
 ## 13. Outputs

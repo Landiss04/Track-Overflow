@@ -32,7 +32,7 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
   [serialization](module-interface.md#beacon-payload-encoding). The working tree
   now has a complete-payload codec; station-name length alone is insufficient. Between beacons output
   `None`; Train Controller retains prior information when needed.
-- Signal pickup failure outputs zero commanded speed and authority; terrain is
+- Signal pickup failure outputs null commanded speed and authority; terrain is
   unaffected. Train Controller owns the door interlock; model follows commands.
 - 480 kW is confirmed. Rolling resistance uses configured coefficient 0.002 and is
   the only passive resistance term; grade and commanded brake forces remain.
@@ -114,7 +114,7 @@ utility is excluded from the product boundary and actor inventory.
 | Receive terrain, circuit and beacon | Track Model. REQ-FUNC-042/046; commanded speed and integer block authority, not CTC suggested speed. |
 | Board and disembark passengers | Passenger/Track Model. REQ-FUNC-041.2; station eligibility owned by Track Model, rest/doors/count/capacity by Train Model. |
 | Pull and release passenger emergency brake | Passenger applies; Train Controller releases via one-shot command. REQ-FUNC-047. No window release control. |
-| Inject / clear failure | Murphy. REQ-FUNC-048.1/048.2/048.3. Engine zeroes traction; service failure blocks only service; pickup zeroes circuit outputs. |
+| Inject / clear failure | Murphy. REQ-FUNC-048.1/048.2/048.3. Engine zeroes traction; service failure blocks only service; pickup makes circuit outputs null. |
 
 Keep module actors outside the Train Model subject. Use include/extend relations
 only when they clarify shared behavior; label any failure extension point on the
