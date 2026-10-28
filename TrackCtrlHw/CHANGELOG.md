@@ -4,6 +4,16 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-10-28 — Red switch test reads the SW layout's new form (integration)
+
+`tests/test_red_integration.py` only. Harry's `e5e51d4` folds the SW reader's
+`Switch` class into a `(point, normal end, reverse end)` tuple per switch id, so
+the test that checks every Red switch against all the readers now compares with
+that tuple. Nothing it checks has changed, and no module code was touched. For
+Braden to review.
+
+---
+
 ## 2026-10-26 — Vital block and Braden's Red programs (Braden)
 
 Branch `feature/TrackCtrl-HW-vital`, from `claude/quirky-fermi-sickg4`.

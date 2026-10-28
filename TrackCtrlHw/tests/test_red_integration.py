@@ -75,7 +75,8 @@ class RedIntegration(unittest.TestCase):
         track = load_layout([ROOT / "TrackModel/red_line.json"])
         devices = TrackDevices.load()
         software = load_layout_file(ROOT / "TrackModel/red_line.json")
-        sw_by_id = {s.switch_id: s for s in software.switches}
+        # The SW reader keeps each switch as (point, normal end, reverse end).
+        sw_by_id = software.switches
         for wayside in controller.snapshot().waysides:
             territory = wayside.territory
             self.assertEqual(
@@ -102,9 +103,8 @@ class RedIntegration(unittest.TestCase):
                         number(model.reverse_block_id),
                     ),
                 )
-                sw = sw_by_id[switch.switch_id]
                 self.assertEqual(
-                    (sw.point, sw.normal_end, sw.reverse_end),
+                    tuple(sw_by_id[switch.switch_id]),
                     (switch.point, switch.normal_end, switch.reverse_end),
                 )
         for wayside in controller.snapshot().waysides:
