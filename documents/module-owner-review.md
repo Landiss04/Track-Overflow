@@ -162,7 +162,8 @@ Kevin.
 | Speed limit to the Train Controller | "Remove the speed limit send"; "The speed limit for me is the cmd speed" (Train Controller owner, relayed by Kevin) | `ControllerOutputs.speed_limit_mps` removed; the Train Model still shows the limit from Track Info. Controller #24 closed. Proposal for `signals/track-info` |
 | Gap between trains (CTC-1, CTC-2) | Keep the one-block gap; never give a train authority that would put it next to another train, since the waysides deadlock adjacent trains (Landis; Kevin: "the gap should be kept") | `ctc/routing.py` `keep_gap()`: no authority ends next to a block another train occupies or holds in its authority, on the route or off it. Two trains head on now stop one block apart. Proposal resolving the Conflict in `arbitration/authority-stops-before-obstruction` |
 | `SUPER_GREEN` spelling | "SUPER_GREEN accepted by train model and train control" (Kevin) | The HW Train Controller takes `SUPER_GREEN` (`constants.py`; the driver's panel still shows it as words), and the harness passes the light through unchanged. Controller #27 closed. Truth already spells it so; no proposal |
-| CTC-3 switch 76 positions | The follower needs NORMAL; only a train from 77 into 101 needs REVERSE; with the head in 101 and the follower on 76, REVERSE leaves it stuck (Landis) | The starter does set REVERSE for the head, from occupancy; the stuck state is the vital listed-block lock, reachable through the gap rule. Decided in the next row |
+| CTC-3 switch 76 positions | The follower needs NORMAL; only a train from 77 into 101 needs REVERSE; with the head in 101 and the follower on 76, REVERSE leaves it stuck (Landis) | The starter does set REVERSE for the head, from occupancy; the stuck state is the vital listed-block lock, reachable through the gap rule. Decided in the "CTC-3 decision" row |
+| CTC-3 starter check (does the program set REVERSE for the head?) | "the starter code is irrelevant" (Kevin) | Closed with no change: the starter is a sample, so its switch rules are no contract and need no confirmation from Harry |
 | CTC-3 decision | "The CTC treats a switch's blocks as neighbours whatever position it reports, so the follower waits on 75 while the head is on 77": "both harry and landis agree to this option" (Kevin) | `ctc/routing.py` `authority()` keeps the gap when a count stops at a switch. `test_green_follower.py` follows the case through to the follower running on; the vital lock is unchanged. Proposal `20261028-2104-authority-gap-at-switches.md` |
 | Crossings while a SW wayside is not ready | "module currently does not arm crossings by default but will in the future" (Harry Tye) | Done by Harry in `e5e51d4`, cherry-picked here: a wayside with no program or not ready commands every crossing active. The harness crossing test passes and is no longer an expected failure |
 
@@ -519,7 +520,12 @@ Landis's check for Harry: does the program still throw 76 to REVERSE while a tra
 77 is heading for 101? The CTC sends no authority naming 101 until the switch already
 reports REVERSE, so a program keyed on the suggestion would never see the request.
 
-**Checked against the SW starter (2026-10-28, not yet confirmed by Harry):**
+**Checked against the SW starter (2026-10-28):**
+
+**Kevin, 2026-10-28:** "the starter code is irrelevant". The starter is a sample
+program, so what it does with switch 76 is no contract, and Landis's check needs no
+answer from Harry: it is closed. Setting 76 REVERSE for the head is the job of
+whatever program the wayside runs. The reading below is kept only as a record.
 
 - Yes for the head. The starter sets REVERSE while a train on 78 comes for 77
   (`WANT_R_76 := NOT OCC_77 AND OCC_78`) and holds it while 77 is occupied. It reads
@@ -542,8 +548,8 @@ switch's blocks as neighbours whatever position it reports, so the follower wait
 while the head is on 77. Done in `ctc/routing.py` `authority()`: a count that stops at a
 switch not set for the route now keeps the gap, as every other stop did. The
 [observation](../common/harness/tests/test_green_follower.py) now follows the case
-through: the follower gets 0 on 75, the head runs into 101, the starter sets 76 NORMAL,
-and the follower gets 10 blocks, to 85. The vital lock is unchanged; whether the SW lock
+through, with the starter standing in for a wayside program: the follower gets 0 on 75,
+the head runs into 101, the starter sets 76 NORMAL, and the follower gets 10 blocks, to 85. The vital lock is unchanged; whether the SW lock
 should also read the points block stays open for Harry.
 
 ## SW-1: PLC-only safety follow-up
