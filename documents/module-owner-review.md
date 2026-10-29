@@ -162,6 +162,7 @@ Kevin.
 | Speed limit to the Train Controller | "Remove the speed limit send"; "The speed limit for me is the cmd speed" (Train Controller owner, relayed by Kevin) | `ControllerOutputs.speed_limit_mps` removed; the Train Model still shows the limit from Track Info. Controller #24 closed. Proposal for `signals/track-info` |
 | Gap between trains (CTC-1, CTC-2) | Keep the one-block gap; never give a train authority that would put it next to another train, since the waysides deadlock adjacent trains (Landis; Kevin: "the gap should be kept") | `ctc/routing.py` `keep_gap()`: no authority ends next to a block another train occupies or holds in its authority, on the route or off it. Two trains head on now stop one block apart. Proposal resolving the Conflict in `arbitration/authority-stops-before-obstruction` |
 | `SUPER_GREEN` spelling | "SUPER_GREEN accepted by train model and train control" (Kevin) | The HW Train Controller takes `SUPER_GREEN` (`constants.py`; the driver's panel still shows it as words), and the harness passes the light through unchanged. Controller #27 closed. Truth already spells it so; no proposal |
+| CTC-3 switch 76 positions | The follower needs NORMAL; only a train from 77 into 101 needs REVERSE; with the head in 101 and the follower on 76, REVERSE leaves it stuck (Landis) | No change. The starter does set REVERSE for the head, from occupancy; the stuck state is the vital listed-block lock, reachable through the gap rule. Routed to Landis and Harry for a decision ([CTC-3](#ctc-3-green-follower-at-7576)) |
 | Crossings while a SW wayside is not ready | "module currently does not arm crossings by default but will in the future" (Harry Tye) | Done by Harry in `e5e51d4`, cherry-picked here: a wayside with no program or not ready commands every crossing active. The harness crossing test passes and is no longer an expected failure |
 
 ## CTC-1: Red concurrency
@@ -494,8 +495,46 @@ keeps a follower out of the block next to the head, which is what Harry asked of
 CTC.
 
 **After Harry's `e5e51d4` (2026-10-28):** his `Track-Ctrl-SW` starter is back, and with
-it switch 76 stays REVERSE for all five ticks again, held while the follower is on 76.
-The observation test records that.
+it switch 76 stays REVERSE for all five ticks again. With the head in 101 the starter
+asks for NORMAL (`WANT_N_76 := OCC_76`), but the vital lock reads only the listed block
+76, which the follower is on, so the switch cannot move. The observation test records
+this stall; it is not the intended behaviour.
+
+**Landis, 2026-10-28 (relayed by Kevin):** the follower on 75 or 76 needs NORMAL (76 to
+77); only a train going from 77 into 101 needs REVERSE. The CTC never sets the switch
+outside maintenance mode, and stops a train's authority at a switch not reported set
+for its route. Landis's CTC-only run of this test's setup:
+
+| Head | Follower | Switch 76 | Head's authority | Follower's authority |
+| --- | --- | --- | --- | --- |
+| 77 | 75 | reverse | 1 block, into 101 | 1, stops at 76 (switch) |
+| 77 | 75 | normal | 0, stops at 77 (switch) | 1, stops at 76 (77 occupied) |
+| 77 | 76 | reverse | 1 block, into 101 | 0 (switch) |
+| 77 | 76 | normal | 0 (switch) | 0 (77 occupied) |
+| 101 | 76 | reverse | at its destination | 0 (switch): stuck |
+| 101 | 76 | normal | at its destination | 9 blocks, to 85 |
+
+Landis's check for Harry: does the program still throw 76 to REVERSE while a train on
+77 is heading for 101? The CTC sends no authority naming 101 until the switch already
+reports REVERSE, so a program keyed on the suggestion would never see the request.
+
+**Checked against the SW starter (2026-10-28, not yet confirmed by Harry):**
+
+- Yes for the head. The starter sets REVERSE while a train on 78 comes for 77
+  (`WANT_R_76 := NOT OCC_77 AND OCC_78`) and holds it while 77 is occupied. It reads
+  occupancy only, never the suggestion, so the CTC's routing needs no change for that.
+  A train on 78 and one on 76 at once hold the switch where it stands.
+- The stall is reachable from Landis's first row: with the switch REVERSE, 76 does not
+  lead to 77, so the gap rule lets the follower into 76; once the head leaves for 101
+  the listed-block lock keeps the switch REVERSE under the follower, which is the
+  "stuck" row. Harry's position is that the CTC should not let the follower that
+  close; the CTC's gap rule follows the reported switch, so it does not see 76 as next
+  to 77. A decision between Landis and Harry is needed: the CTC treats a switch's
+  blocks as adjacent whatever its position, or the lock keys on the points block.
+- Separately, for Harry: the SW vital lock reads only the listed block, so a train on
+  the points block does not lock the switch when they differ (Green 12, 58, 62, 76;
+  Red 15, 32, 43). The starter holds its own switches there (`HOLD_76 := OCC_77`), but a
+  user program is not trusted. The HW lock reads both blocks.
 
 ## SW-1: PLC-only safety follow-up
 

@@ -563,7 +563,7 @@ implied by the simulated software acceptance.
 - Harry Tye's development SW is taken, with generated vital PLC code attached to every program: `7120fee` (applied from `f796f49` on `origin/development`). Harry Tye's replies are recorded in `8a860fb`.
 - Separation holds only a block with a train in it: `AUTH_n := NOT (OCC_n AND (OCC_n-1 OR OCC_n+1))` (`7120fee`). `test_starter_switches.py` is removed.
 - Open, as recorded in `7120fee`: a not-ready wayside transmits nothing, and the crossing test that expects them held down is marked expected-failure. Fixed by Harry's `e5e51d4` (2026-10-28, cherry-picked): a not-ready wayside arms its crossings, and the test passes. `test_hw_language.py` fails three tests against the Red programs' new `CTCSW_s` and `CTCREV_s` names.
-- Harry's `e5e51d4` is cherry-picked from `Track-Ctrl-SW` (2026-10-28). The vital code clamps a suggestion to the block's posted limit, and a not-ready wayside arms its crossings. His starter switch rules and `test_starter_switches.py` come back with it, so switch 76 stays reverse in the CTC-3 observation again. The layouts stay in `TrackModel/`.
+- Harry's `e5e51d4` is cherry-picked from `Track-Ctrl-SW` (2026-10-28). The vital code clamps a suggestion to the block's posted limit, and a not-ready wayside arms its crossings. His starter switch rules and `test_starter_switches.py` come back with it, so switch 76 stays reverse in the CTC-3 observation again: the starter asks for normal once the head is in 101, but the vital lock reads the listed block 76, which the follower is on. Landis (2026-10-28) confirms that state leaves the follower stuck; a decision between Landis and Harry is open. The layouts stay in `TrackModel/`.
 
 ### Track Controller HW
 

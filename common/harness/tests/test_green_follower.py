@@ -49,11 +49,13 @@ def observe(follower: str):
 
 
 # Observed 2026-10-28 with Harry Tye's Track-Ctrl-SW starter (e5e51d4):
-# switch 76 stays reverse throughout, held while the follower is on 76,
-# the block before its points. Harry Tye, 2026-10-28: "previous block
-# should key the switch", and the CTC should not let a follower close to
-# one block of the head, which its gap rule now ensures. (With his
-# development starter, 2026-10-27, it commanded normal.)
+# switch 76 stays reverse throughout. Once the head is in 101 the starter
+# asks for normal (WANT_N_76 := OCC_76), but the vital lock reads the
+# listed block 76, which the follower is on, so the switch cannot move.
+# Landis, 2026-10-28: with the head in 101 and the follower on 76, reverse
+# leaves the follower no authority, for good. This records the stall; it
+# is not the intended behaviour. (With his development starter,
+# 2026-10-27, it commanded normal.)
 
 
 def test_green_follower_75_observation():
