@@ -1,5 +1,8 @@
 # Review runbook
 
+For everyday runs, the event log and troubleshooting, see
+[the harness runbook](../common/harness/RUNBOOK.md).
+
 From the repository root, use the project environment. These commands start the
 existing harness and seven real modules with two explicit simulated Pi processes;
 they verify integration, not physical USB timing.

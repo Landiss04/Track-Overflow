@@ -1,5 +1,6 @@
 # Central harness
 
+To start, operate, stop or troubleshoot a run, see [the harness runbook](RUNBOOK.md).
 For the current manual/scheduled two-line review commands, recovery steps and
 Linux build recipe, see [the review runbook](../../documents/review-runbook.md).
 `utils/build_linux.sh` includes all seven modules, HW data and the Pi manifest;
