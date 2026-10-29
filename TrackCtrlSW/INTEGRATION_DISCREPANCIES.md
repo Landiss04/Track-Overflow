@@ -304,7 +304,11 @@ someone else's work says what is left for them.
       77 bound for 101 enters 76 with the switch reverse and waits there for good.
       Locking on the points block as well would be more restrictive, not less;
       moving the lock off the listed block would be less restrictive and would
-      clear that case. Not changed here.
+      clear that case. Not changed here. The waiting case is closed from the
+      CTC side instead (Landis and Harry Tye, 2026-10-28, relayed by Kevin): the
+      CTC counts a switch's blocks as next to each other whatever position it
+      reports, so a follower stays on 75 while a train is on 77. The lock is
+      unchanged, and the points-block question for a user program stays open.
     - A way in from another wayside's block is not seen. Green's default
       division has only one (150 to 28), which switch 28 stands for. Another
       division can have more; a cross-wayside input (the neighbour's occupancy

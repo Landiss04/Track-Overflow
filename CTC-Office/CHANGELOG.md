@@ -4,6 +4,18 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-10-28 — The gap is kept at a switch set against the route
+
+From Landis and Harry Tye's agreement on CTC-3, relayed by Kevin: a
+switch's blocks are next to each other whatever position it reports.
+
+- `ctc/routing.py` `authority()`: an authority that stops at a switch not
+  set for the route now keeps the gap too. Before, it returned without
+  `keep_gap()`. With switch 76 reverse and a train on 77, a follower on 75
+  was given 76, where the wayside's switch lock on 76 then held the switch
+  reverse under it for good once the head left for 101. It now waits on 75.
+- `tests/test_ctc_authority.py`: `GapTest` gains the case.
+
 ## 2026-10-28 — The gap is kept against every other train
 
 From Landis's reply, relayed by Kevin: keep the one empty block, and never

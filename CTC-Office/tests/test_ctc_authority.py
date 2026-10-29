@@ -259,6 +259,19 @@ class GapTest(unittest.TestCase):
                      limit.at, limit.held_by),
                     (1, "27", reason, "150", held_by))
 
+    def test_not_next_to_a_train_beyond_a_switch_set_against(self) -> None:
+        # CTC-3: switch 76 reversed joins 77 to 101, not 76. A train
+        # on 77 is still next to 76, so the follower on 75 waits there
+        # (Landis and Harry Tye 2026-10-28).
+        limit = authority(_GREEN, "75", "85", {"77": "occupied"},
+                          {"76": "reverse"})
+        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
+                          limit.at), (0, "75", "occupied", "77"))
+        # With 77 clear, the count still stops at the switch.
+        limit = authority(_GREEN, "75", "85", {}, {"76": "reverse"})
+        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
+                          limit.at), (1, "76", "switch", "76"))
+
     def test_a_closed_block_ahead_needs_no_gap(self) -> None:
         # Only trains hold each other; a closed block holds no one.
         limit = authority(_GREEN, "30", "37", {"33": "closed"}, {})

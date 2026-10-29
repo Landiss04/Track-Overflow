@@ -364,8 +364,9 @@ def authority(graph: TrackGraph, start: str, destination: str,
     for count, after in enumerate(path[1:]):
         leg = graph.leg(here, after)
         if leg is not None and switches.get(leg.switch_id) != leg.position:
-            return AuthorityLimit(count, here, "switch", leg.switch_id,
-                                  path)
+            return keep_gap(graph, AuthorityLimit(
+                count, here, "switch", leg.switch_id, path),
+                obstructions, reserved)
         reason = obstructions.get(after)
         if reason is not None:
             return keep_gap(graph, AuthorityLimit(
@@ -396,8 +397,11 @@ def keep_gap(graph: TrackGraph, limit: AuthorityLimit,
     next to a block another train occupies (or a failed block, which
     reads occupied) or another train's authority holds, along the
     route or off it, as on a switch's other leg (Landis 2026-10-28;
-    Braden Bosilovich and Harry Tye 2026-10-26). Each block given up
-    is named, as "occupied" or "reserved", by the block it was next to.
+    Braden Bosilovich and Harry Tye 2026-10-26). A switch's blocks are
+    next to each other whatever position it reports, so an authority
+    that stops at a switch keeps the gap too (Landis and Harry Tye
+    2026-10-28). Each block given up is named, as "occupied" or
+    "reserved", by the block it was next to.
     """
     route, blocks = limit.route, limit.blocks
     while blocks > 0:
