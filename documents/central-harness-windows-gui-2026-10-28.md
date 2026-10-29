@@ -73,7 +73,7 @@ the 10× stretch.
 | F20 | CTC | Suggested speed and authority stay "—" after line, train and destination are chosen, though the hint says choosing them computes both. They appear only after Dispatch. |
 | F21 | CTC | The "'99:99' is not a valid time of day" error stays after the field is corrected, until Dispatch. |
 | F26 | Train Controller | Acceleration reads 0.00 m/s² while the train speeds up. The Train Model shows 1.98 ft/s² at the same moment. |
-| F25 | Train Controller | *Stop the train* shows BRAKING while both brakes read Released and the train holds its target. |
+| F25 | Train Controller | *Stop the train* shows BRAKING while both brakes read Released and the train holds its target. Reproduction steps and cause are in [F25 reproduction](#f25-reproduction). |
 | F32 | CTC | After confirming a closure of an occupied block, the panel says "Green 73 closed." while Active closures says "Closing — train in …". The "closed" line stays after reopening. |
 | F33 | CTC | Notices push the whole layout down about 56 px mid-interaction. Clicks land on the wrong control. |
 | F34 | CTC | A switch command held by the vital layer (Red 15 with a train on its points block, 16) shows commanded reverse and reported normal, with no reason given. The hold itself is correct. |
@@ -123,3 +123,112 @@ the 10× stretch.
   Manual.
 - **Ending the run:** asks first (*Keep running* / *End run*), and all seven
   modules exit with code 0.
+
+## F25 reproduction
+
+**What you see:** in the HW Train Controller window, the *Stop the train* badge
+flickers between BRAKING and RUNNING while a train holds its speed on a downhill.
+At the same moment, *Show all numbers* → *Engine & brakes* reads *Service brake:
+Released*. The two never agree: when the badge says BRAKING the row says
+Released, and when the row says Engaged the badge says RUNNING.
+
+**When:** only on a downhill grade. On flat track or uphill the train holds its
+speed with power alone and the badge stays RUNNING. In the walkthrough this was
+T2 on Red blocks 11 to 15 (−0.5% to −2%) on its way to Herron Ave. T1's Green
+run to Dormont is flat, so it never showed.
+
+### Steps
+
+1. Launch with simulated Pis:
+   `python track_overflow.py --test-pi process`.
+   - Shortcut for the setup in steps 2, 4 and 5: add `--load-starters
+     --engineer-gains 400000 8000 --dispatch R1:Red:16`.
+2. In the HW Track Controller window, load and commit a program on all three Red
+   waysides, until the log shows `WAYSIDES_READY` for Red.
+3. In the CTC Office, press **Run** at 1x.
+4. In the CTC Office, switch to Manual and dispatch a Red train from the yard to
+   Herron Ave (block 16).
+5. In the HW Train Controller window, select that train and set its gains to
+   Kp 400000, Ki 8000.
+6. Leave the train in Automatic. Press **Show all numbers** at the top of the
+   console.
+7. Wait until the train reaches block 11 (the Track Model or the CTC Office
+   shows its block). It is at its target, the commanded 22 mph, by then.
+8. Watch the *Stop the train* badge and the *Service brake* row in *Engine &
+   brakes* through blocks 11 to 15.
+
+**Expected:** the badge and the *Service brake* row agree, each either braking
+or not.
+
+**Actual:** the badge shows BRAKING for about 0.2 s every 0.6 to 0.8 s, each
+time while the row reads Released. The row reads Engaged for about 0.2 s just
+before, while the badge reads RUNNING.
+
+### Seen again in the VM, 2026-10-29
+
+Reproduced on `win11` with the same tree, using the shortcut flags for the
+setup, Run pressed in the CTC Office, the Driver selected, and *Show all
+numbers* open. Over 60 screenshots taken back to back while R1 held 22 mph on
+the downhill towards Herron Ave (05:00:38 to 05:00:50):
+
+- The badge read BRAKING in 5 frames, and the row read Released in all 5.
+- The row read Engaged in 10 frames, and the badge read RUNNING in all 10.
+
+The two frames below are consecutive, both at 05:00:44. In the first the row reads
+Engaged and the badge RUNNING. In the next the row reads Released and the badge
+BRAKING.
+
+| Engaged, RUNNING | Released, BRAKING |
+| --- | --- |
+| ![](windows-gui-2026-10-28/f25_engaged_running.png) | ![](windows-gui-2026-10-28/f25_released_braking.png) |
+
+### Cause
+
+The badge and the row read different signals:
+
+| Readout | Source | Meaning |
+| --- | --- | --- |
+| *Stop the train* badge (`StopPanel.qml`) | `fb_service_brake` | The Train Model's *Brake State*, the report of the command it received |
+| *Service brake* row (`NumbersDrawer.qml`) | `service_brake` | The controller's own command this tick |
+
+On a downhill, power alone can't hold the target, so the controller holds it
+with the service brake. It applies the brake once the train is more than
+`SERVICE_BAND_MPS` (0.05 m/s) over target and releases it as soon as it isn't.
+That makes 2 ticks of brake every 6 to 8 ticks. Under the harness the report
+comes back `ECHO_TICKS` (2) ticks after the command. So the badge shows each
+brake pulse just after the command has ended, and the two readouts are always
+out of phase.
+
+The brake itself works, and the train holds its speed within about 0.3 m/s. So
+F25 is two readouts that disagree, plus a badge that flickers. Whether it should
+be fixed in the badge, the row, or the brake law is for the Train Controller
+owners.
+
+### Confirmed in simulation
+
+Confirmed with a closed loop of the real `ControllerCore` (Train-Ctrl_HW,
+`ECHO_TICKS`) and the real `TrainModel`, wired through
+`common/harness/train_edges.py` as the harness wires them. The setup was gains
+400000 / 8000 and a commanded speed of 40 km/h. Each run measured the last 30 s
+of a 120 s run (300 ticks):
+
+| Grade | Ticks with badge BRAKING | Of those, with the row reading Released |
+| --- | --- | --- |
+| 0% | 0 | — |
+| +1% | 0 | — |
+| −0.5% (Red 11) | 36 | 36 |
+| −1% (Red 12, 15) | 46 | 46 |
+| −1.25% (Red 14) | 50 | 50 |
+| −2% (Red 13) | 61 | 61 |
+
+Six ticks at −2%:
+
+```
+tick  speed m/s  command  report  badge
+ 906    11.138   off      off     RUNNING
+ 907    11.165   on       off     RUNNING   <- row says Engaged
+ 908    11.189   on       off     RUNNING   <- row says Engaged
+ 909    11.057   off      on      BRAKING   <- row says Released
+ 910    10.925   off      on      BRAKING   <- row says Released
+ 911    10.957   off      off     RUNNING
+```
