@@ -124,6 +124,70 @@ the 10× stretch.
 - **Ending the run:** asks first (*Keep running* / *End run*), and all seven
   modules exit with code 0.
 
+## Native Windows check, 2026-10-29
+
+Kevin checked the findings on a native Windows PC (1920 px wide, 1140 px usable
+height), to see which ones came from the VM. None of the findings is a difference
+between Linux and Windows code paths. Most are not caused by the VM either.
+
+**Caused by Windows itself:**
+
+- **F7:** Windows stops one program from bringing another program's window to the
+  front. It happens on a native PC too, and doesn't on Linux. The suggested
+  `AllowSetForegroundWindow` fix is Windows-only.
+- **F35:** partly Windows. Each tick takes about 1.4 to 1.5× longer on Windows than
+  on Linux. Even Linux falls a little short at 10×, and the 4-CPU VM made it worse. The Linux figures come from older code
+  (`integration-handover.md`), so treat this as a rough comparison.
+
+  | | Linux | Native Windows | VM |
+  | --- | --- | --- | --- |
+  | 1×, mean round trip per tick | 20.7 ms | 30.1 ms | fine |
+  | 10×, mean round trip per tick | 10.0 ms | 14.0 ms | 31.7 ms |
+  | 10×, speed actually reached | 9.7× | 7.0× | about 5× |
+
+**Confirmed on native Windows, so these happen on any OS:**
+
+- **F1:** the SW Track Controller opens at 1802×1197, taller than the 1140 px
+  usable height. *Set switch manually* sits under the taskbar.
+- **F3:** the CTC Office's lower panels are cut off.
+- **F2:** both Train Controller windows are titled "HW Train Controller",
+  including the SW one driving the Green train.
+- **F15:** the HW Track Controller title comes from `TrackCtrlHw/ui/Main.qml:12`.
+- **F24:** R1 read "0 to block GREEN K". The text is a default in `Train-Ctrl_HW/train_ctrl/state.py:41`
+  that is never updated.
+- **F25:** BRAKING on the badge with *Service brake: Released*, this time with R1
+  **stopped at a station**. The downhill cause above doesn't explain this case.
+- **F4, F5:** the Last outputs hint text crosses the box's border, and the picker
+  has no placeholder.
+- **F10:** the vital file still reads "vi…lc" after the program is committed. The
+  walkthrough had it cut only while NOT READY showed.
+- **F11, F12:** the clock reads `--:--:--` while paused, and a line number ("23")
+  is drawn below the editor.
+- **F17, F18:** the Wayside picker shows "Re…", and "XING-11 · DOWN" is drawn over
+  signal 9's label.
+- **F33:** when the notice went away, the layout jumped about 86 px.
+- **F27:** the Flock Safety logo shows in the Train Model header.
+- **F8, F30, F37:** confirmed in the code:
+  - no *Load starters* button, and only GTC-01 has a sample program;
+  - "En route" for any train with an order and a known position
+    (`CTC-Office/ctc_ui/ctc_host.py:113`);
+  - the pickup latch waits for a test bench the harness doesn't have.
+- **F23:** not tested by hand. The number check uses a fixed locale, so it behaves
+  the same on any OS.
+
+**Probably caused by the VM's small screen:**
+
+- **F16:** at 1920 px wide, the HW Track Controller heading didn't run into its
+  badge.
+- **F13/F14, F22, F29, F32b:** these depend on a small window. They weren't checked
+  at full size.
+
+**Not checked natively:** F6, F9, F19, F20, F21, F26, F31, F32, F34, F36, F38.
+
+**New:** a Green train was well over its speed limit about 50 s after dispatch.
+This is logged as
+[TC-1](module-owner-review.md#tc-1-green-train-over-its-limit-after-dispatch).
+
 ## F25 reproduction
 
 **What you see:** in the HW Train Controller window, the *Stop the train* badge

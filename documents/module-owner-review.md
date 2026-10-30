@@ -60,6 +60,7 @@ retains portable interpreter selection for other checkouts.
 | [TM-2: Light ahead, B1](#tm-2-light-ahead-b1) | Track Model owner; Track Controller owners for placement agreement |
 | [TM-3: Automatic heaters](#tm-3-automatic-heaters) | Track Model owner |
 | [PI-1: Physical Pi prerequisites](#pi-1-physical-pi-prerequisites) | Both HW module owners; Kevin for performance choice |
+| [TC-1: Green train over its limit after dispatch](#tc-1-green-train-over-its-limit-after-dispatch) | Train Controller SW owner |
 
 The cited records identify Landis, Harry and Braden. They do not establish a named
 Track Model owner or Train Controller HW owner for these requests; Kevin must route
@@ -973,3 +974,29 @@ and measuring 10x separately; that does not waive physical measurements.
 measurements before choosing optimization or a 10x tradeoff. Kevin's standing
 instruction is "wait for pi measurements". Confirm the Train Controller HW review
 contact and physical readiness before scheduling the hardware run.
+
+## TC-1: Green train over its limit after dispatch
+
+**Owner:** Train Controller SW owner (`TrainController/`, which drives the Green
+trains).
+
+**Observation, 2026-10-29:** Kevin checked the
+[Windows GUI report](central-harness-windows-gui-2026-10-28.md) on a native Windows
+PC. About 50 s after dispatch, the Green train G1 was doing **34.9 mph against a
+24.9 mph speed limit**, with a commanded speed of 22.4 mph and its service brake on.
+Each reading was taken once, so it isn't known how long it stayed over.
+
+**Possible explanation, not checked:** Green 63 to 66, the first blocks after the
+yard, are 70 km/h (43.5 mph). Block 67 drops to 40 km/h (24.9 mph). A train that
+reaches 67 still going the earlier block's speed, then brakes at the service rate
+(1.2 m/s²), would read like this for a few seconds. That would be a short overshoot
+on leaving the yard, and the controller doesn't slow down ahead of a lower limit.
+It hasn't been reproduced here.
+
+**Reproduce:** Dispatch a Green train from the yard at 1x. Watch its Train
+Controller's speed, commanded speed and speed limit as it goes from block 66 into
+block 67, about 50 s after dispatch.
+
+**Requested decision:** Is a train allowed over the speed limit while it brakes down
+from a higher block's limit? If not, should the controller slow before a lower limit
+or a lower commanded speed, or is this a different fault?
