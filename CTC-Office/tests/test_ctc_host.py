@@ -183,16 +183,16 @@ class PanelDataTest(unittest.TestCase):
         _report(host, module, occupied=[("Green", "1"), ("Green", "2")],
                 crossings=[CrossingReport("Green", "19", "active")])
         clock.clock.tick()
-        # Green 1 is occupied, so its closure waits; Green 5 is clear.
+        # Green 1 is occupied and Green 5 clear: both close at once.
         self.assertEqual(host.closeBlock("Green", "1"), "")
         self.assertEqual(host.closeBlock("Green", "5"), "")
         # Occupancy is drawn as trains, not a block state.
-        self.assertEqual(host.blockStates, {"Green:5": "closed"})
+        self.assertEqual(host.blockStates,
+                         {"Green:1": "closed", "Green:5": "closed"})
         self.assertEqual(host.crossingStates, {"Green:19": "active"})
         self.assertEqual(
             [(r["block"], r["state"]) for r in host.closures],
-            [("Green 1", "Closing \u2014 train in block"),
-             ("Green 5", "Closed")])
+            [("Green 1", "Closed"), ("Green 5", "Closed")])
         self.assertEqual(
             [(t["train"], t["block"]) for t in host.mapTrains],
             [("", "1"), ("", "2")])
@@ -246,6 +246,35 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(host.dispatchTrain("T1", "Green", "65", "08:30"),
                          "")
         self.assertEqual(module.snapshot().orders[0].arrival_s, 30600.0)
+
+    def test_dispatch_preview(self) -> None:
+        # Shown before Dispatch; nothing is ordered by it.
+        host, module, _ = _host()
+        self.assertEqual(host.dispatchPreview("T1", "Green", "73"), {
+            "suggestedSpeed": "40.3", "authorityBlocks": "10",
+            "error": ""})
+        self.assertEqual(module.snapshot().orders, ())
+        host.setMaintenanceMode(True)
+        host.closeBlock("Green", "73")
+        preview = host.dispatchPreview("T1", "Green", "73")
+        self.assertEqual((preview["suggestedSpeed"],
+                          preview["authorityBlocks"]), ("—", "—"))
+        self.assertIn("closed", preview["error"])
+
+    def test_switches_are_labelled_by_both_legs(self) -> None:
+        # Yard switches the file lists by one leg get their main-line
+        # leg too, so every switch reads "normal; reverse".
+        host, _, _ = _host()
+        self.assertEqual(
+            [o["text"] for o in host.switchOptions("Red")][:2],
+            ["9  (8-9; yard-9)", "15  (15-16; 1-16)"])
+        self.assertIn("58  (57-58; 57-yard)",
+                      [o["text"] for o in host.switchOptions("Green")])
+        self.assertIn("62  (62-63; yard-63)",
+                      [o["text"] for o in host.switchOptions("Green")])
+        detail = host.switchDetail("Red", "9")
+        self.assertEqual((detail["normal"], detail["reverse"]),
+                         ("8-9", "yard-9"))
 
     def test_return_to_yard(self) -> None:
         # Selected train's Return to yard: an order to the yard entry.
@@ -374,13 +403,13 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(host.closureState("Green", "5"), "closed")
         self.assertEqual(host.closeBlock("Green", "5"),
                          "Green 5 is already closed.")
-        # A block with a train in it is closing until the train leaves.
+        # A block with a train in it closes at once too.
         _report(host, module, at("T1", "9"))
         clock.clock.tick()
         self.assertEqual(host.closeBlock("Green", "9"), "")
-        self.assertEqual(host.closureState("Green", "9"), "closing")
+        self.assertEqual(host.closureState("Green", "9"), "closed")
         self.assertEqual(host.closeBlock("Green", "9"),
-                         "Green 9 is already closing.")
+                         "Green 9 is already closed.")
 
     def test_authority_limit_at_the_destination(self) -> None:
         host, module, clock = _host()
@@ -448,18 +477,18 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(seen, [True])
         self.assertEqual(host.blockStates, {"Red:2": "closed"})
 
-    def test_closing_block_is_shown_once_and_not_as_closed(self) -> None:
-        # closed_blocks lists a closing block too; the window still
-        # shows it once, as closing, with its train on the map.
+    def test_occupied_block_is_shown_closed(self) -> None:
+        # Closed at once, with its train still on the map.
         host, module, clock = _host()
         _report(host, module, at("T1", "65"))
         clock.clock.tick()
         module.set_maintenance_mode(True)
         module.set_block_closed("Green", "65", True)
         self.assertEqual(
-            [(r["block"], r["pending"]) for r in host.closures],
-            [("Green 65", True)])
-        self.assertEqual(host.blockStates, {})
+            [(r["block"], r["state"]) for r in host.closures],
+            [("Green 65", "Closed")])
+        self.assertEqual(host.blockStates, {"Green:65": "closed"})
+        self.assertEqual([t["train"] for t in host.mapTrains], ["T1"])
         self.assertTrue(host.maintenanceMode)
 
 

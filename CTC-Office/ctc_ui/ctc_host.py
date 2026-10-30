@@ -73,15 +73,28 @@ _SWITCH_POSITIONS = ("normal", "reverse")
 _BLOCKED_LABELS = {
     "occupied": "occupied",
     "closed": "closed",
-    "closing": "closing",
 }
 
 
-def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
-    """Closed blocks, without the ones still closing: ``closed_blocks``
-    lists both, since the Track Controller is locked out of either."""
-    pending = set(snap.pending_closures)
-    return [b for b in snap.closed_blocks if b not in pending]
+def _switch_legs(line: str, block_id: str, text: str) -> tuple[str, str]:
+    """A switch's normal and reverse connections from its layout text,
+    as ``("12-13", "1-13")``: normal first, as the Track Model reads
+    the file. A yard switch the file lists by its yard leg alone gets
+    its main-line leg too: ``"57-yard"`` is 57-58 or 57 to the yard,
+    ``"Yard-63"`` is 62-63 or the yard to 63, and Red 9's ``"75-yard"``
+    is 8-9 or the yard to 9 (D028, proposed)."""
+    if line == "Red" and block_id == "9" and text.strip() == "75-yard":
+        text = "Yard-9"
+    legs = ["-".join(end.strip() for end in part.split("-"))
+            for part in text.split(";")]
+    if len(legs) == 2:
+        return legs[0], legs[1]
+    first, last = (end.strip() for end in legs[0].split("-"))
+    if last.lower() == "yard":
+        return f"{first}-{int(first) + 1}", f"{first}-yard"
+    if first.lower() == "yard":
+        return f"{int(last) - 1}-{last}", f"yard-{last}"
+    return legs[0], NO_VALUE
 
 
 def _wayside_waiting(status: WaysideStatus) -> str:
@@ -375,7 +388,9 @@ class CtcHost(QObject):
         if layout_line is None:
             return []
         return [{"value": block.block_id,
-                 "text": f"{block.block_id}  ({block.switch})"}
+                 "text": "{}  ({}; {})".format(
+                     block.block_id,
+                     *_switch_legs(line, block.block_id, block.switch))}
                 for block in layout_line.blocks if block.switch]
 
     @Slot(str, result=list)
@@ -565,7 +580,7 @@ class CtcHost(QObject):
         """
         snap = self._module.snapshot()
         return {block_key(block.line, block.block_id): "closed"
-                for block in _closed_only(snap)}
+                for block in snap.closed_blocks}
 
     @Property(list, notify=stateChanged)
     def mapTrains(self) -> list[dict[str, Any]]:  # noqa: N802
@@ -601,19 +616,11 @@ class CtcHost(QObject):
 
     @Property(list, notify=stateChanged)
     def closures(self) -> list[dict[str, Any]]:
-        """Closed and closing blocks, for Active closures."""
-        snap = self._module.snapshot()
-        rows: list[dict[str, Any]] = []
-        for block in _closed_only(snap):
-            rows.append({"block": f"{block.line} {block.block_id}",
-                         "state": "Closed", "line": block.line,
-                         "blockId": block.block_id, "reopenable": True,
-                         "pending": False})
-        for block in snap.pending_closures:
-            rows.append({"block": f"{block.line} {block.block_id}",
-                         "state": "Closing \u2014 train in block",
-                         "line": block.line, "blockId": block.block_id,
-                         "reopenable": True, "pending": True})
+        """Closed blocks, for Active closures."""
+        rows: list[dict[str, Any]] = [
+            {"block": f"{block.line} {block.block_id}", "state": "Closed",
+             "line": block.line, "blockId": block.block_id}
+            for block in self._module.snapshot().closed_blocks]
         rows.sort(key=lambda r: (r["line"], _block_number(r["blockId"])))
         return rows
 
@@ -625,15 +632,15 @@ class CtcHost(QObject):
         block = layout_line.block(switch_id) if layout_line else None
         if block is None or not block.switch:
             return {}
-        connections = [part.strip() for part in block.switch.split(";")]
+        normal, reverse = _switch_legs(line, switch_id, block.switch)
         reported = {(s.line, s.switch_id): s.position
                     for s in self._applied().track_controller.switches}
         commanded = {
             (c.line, c.switch_id): c.position
             for c in self._module.snapshot().switch_commands}
         return {
-            "normal": connections[0],
-            "reverse": connections[1] if len(connections) > 1 else NO_VALUE,
+            "normal": normal,
+            "reverse": reverse,
             "reported": reported.get((line, switch_id), NO_VALUE),
             "commanded": commanded.get((line, switch_id), NO_VALUE),
         }
@@ -743,7 +750,6 @@ class CtcHost(QObject):
             return f"block {limit.at} is occupied"
         return {
             "closed": f"block {limit.at} is closed",
-            "closing": f"block {limit.at} is closing",
             "reserved": f"block {limit.at} is held by {limit.held_by}",
             "switch": f"switch {limit.at} is not set for its route",
             "held": (f"the schedule holds it at block {limit.at} until "
@@ -804,6 +810,21 @@ class CtcHost(QObject):
         return self._act(self._module.dispatch, train_id, line, block_id,
                          arrival)
 
+    @Slot(str, str, str, result="QVariantMap")
+    def dispatchPreview(self, train_id: str, line: str,  # noqa: N802
+                        block_id: str) -> dict[str, str]:
+        """The suggested speed and authority a dispatch would lead to,
+        for the readouts before Dispatch; ``error`` says why there are
+        none."""
+        try:
+            preview = self._module.preview_dispatch(train_id, line, block_id)
+        except CtcError as error:
+            return {"suggestedSpeed": NO_VALUE, "authorityBlocks": NO_VALUE,
+                    "error": str(error)}
+        return {"suggestedSpeed": _mph(preview.suggested_speed_mps),
+                "authorityBlocks": str(preview.authority_blocks),
+                "error": ""}
+
     @Slot(str, str, str, result=str)
     def setAuthority(self, train_id: str, line: str,  # noqa: N802
                      block_id: str) -> str:
@@ -819,8 +840,8 @@ class CtcHost(QObject):
 
     @Slot(str, str, result=str)
     def closeBlock(self, line: str, block_id: str) -> str:  # noqa: N802
-        """Close a block; says so instead if it already is (or is
-        closing), which the module would otherwise do silently."""
+        """Close a block; says so instead if it already is, which the
+        module would otherwise do silently."""
         state = self.closureState(line, block_id)
         if state:
             return f"{line} {block_id} is already {state}."
@@ -829,14 +850,10 @@ class CtcHost(QObject):
 
     @Slot(str, str, result=str)
     def closureState(self, line: str, block_id: str) -> str:  # noqa: N802
-        """``closed``, ``closing`` (a train is still in it), or ""."""
-        snap = self._module.snapshot()
+        """``closed``, or "" for an open block."""
         block = BlockRef(line, block_id)
-        if block in snap.pending_closures:
-            return "closing"
-        if block in snap.closed_blocks:
-            return "closed"
-        return ""
+        return ("closed" if block in self._module.snapshot().closed_blocks
+                else "")
 
     @Slot(str, str, result=str)
     def reopenBlock(self, line: str, block_id: str) -> str:  # noqa: N802

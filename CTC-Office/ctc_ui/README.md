@@ -130,12 +130,12 @@ yet) through `ctc_ui/ctc_host.py`:
   Automatic, Manual, and Maintenance views. Maintenance lets the
   dispatcher close blocks and set switches; leaving it releases every
   switch command. The mode itself is not sent to the Track Controller:
-  it gets `closed_blocks`, every block closed (or closing) in
+  it gets `closed_blocks`, every block closed in
   maintenance mode, and may not override a listed block until the
   dispatcher reopens it.
 - **Notices** under the header tell the dispatcher about a Track
   Controller update staged while the clock is paused, and about orders
-  the CTC cancelled itself (a block closed or closing).
+  the CTC cancelled itself (a block closed).
   **Dismiss** clears the cancellations.
 - The **Track view** colors each line (`--line-green`, `--line-red`) and
   draws each train the CTC is following as a small `--info` car in the
@@ -153,36 +153,46 @@ yet) through `ctc_ui/ctc_host.py`:
   requested arrival and status (En route, In yard, Not located, No
   order). Filter by line, status or train ID;
   click a row and **Select train** to load it into Selected train.
-  "Keep open at bottom" or the minimize button docks it over the track
-  view. Escape, the close button, or clicking the scrim closes it.
+  "Keep open at bottom" or the minimize button docks it in the track
+  view's bottom row, beside the hint, clear of the map and its legend. Escape, the close button, or clicking the scrim closes it.
 - **Dispatch train** (Manual): pick a line, a train (or a new one) and a
   destination station, with an optional arrival time (`HH:MM`). Picking a
   train that already has an order reroutes it. **Set authority** sends
   the train straight to a block instead; the CTC turns it into a count
   of blocks. The readouts show the suggested speed and authority the CTC
-  sends to the Track Controller.
+  sends to the Track Controller: as soon as line, train and destination
+  are picked, what a dispatch would send (from the yard exit block for a
+  train in the yard), then the train's live values once it runs to that
+  destination. An error (such as an invalid arrival time) clears as soon
+  as any field changes. Block fields take a typed block number, or a
+  pick from the list.
 - **Selected train** shows the train's live readouts, including why its
   authority ends where it does; in Manual mode it also reroutes the
   train, and **Return to yard** sends a train on the track back to the
   yard, where it is retired. The dispatcher cannot cancel a train's order.
 - **Close block** and **Active closures** (Maintenance only) close a
   block (with a confirmation step, style guide 7) and reopen it. A block
-  with a train in it is listed as "Closing — train in block" and closes
-  by itself once the train has left; **Cancel closing** withdraws it.
+  closes at once, even with a train in it (`block-closure`).
+- **Set switch position** lists each switch by its two connections,
+  normal then reverse ("12  (12-13; 1-13)"); a yard switch the layout
+  file lists by its yard leg alone gets its main-line leg too ("9
+  (8-9; yard-9)").
+- **Throughput metrics** shows tickets per hour on each line as whole
+  numbers; trains per hour is in the per-line table.
 - Dropdowns show only what the dispatcher picked: choosing a line never
   pre-selects a block, station or switch, so no action is enabled with a
   value nobody chose.
 - **Safety rules** the CTC enforces (refused with a message): no
-  authority into a closed, closing or failed block; no train sent to a
+  authority into a closed or failed block; no train sent to a
   block on another line than the one it is on; no switch moved while its
-  block is occupied. Orders into a block that closes or starts closing
-  are cancelled, with a notice. An order into a block the CTC takes for
+  block is occupied. Orders into a block that closes are cancelled, with
+  a notice. An order into a block the CTC takes for
   a failure is kept, since it never shows one: the train waits short of
   it until it clears.
 - **Authority** is the number of blocks ahead of the train's current
   block it may still enter (0: stop before leaving it), recomputed every
   step. It runs toward the destination and stops before the first
-  closed or closing block and before any switch the Track Controller has
+  closed block and before any switch the Track Controller has
   not reported set for the route. It never ends next to a block another
   train occupies (failed ones included) or holds in its authority, on
   the route or off it: one empty block always stays between trains, as
@@ -216,7 +226,7 @@ yet) through `ctc_ui/ctc_host.py`:
   number, which a train cannot always run), stops 45 s at each (D007),
   then returns to the yard. The CTC does the stopping: it sends the train to
   its next station, holds it there for the dwell, then sends it on. A
-  station that is closed or closing is skipped. **Departures** shows
+  station that is closed is skipped. **Departures** shows
   every run's due time and where it has got to; **Pause dispatch**
   holds them all, and so does leaving Automatic mode: no run leaves the
   yard or a station until dispatch resumes.

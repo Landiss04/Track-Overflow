@@ -20,7 +20,7 @@ from ctc.interface import (  # noqa: E402
     SwitchReport,
     TrainAuthority,
 )
-from ctc.model import StubCtcOffice  # noqa: E402
+from ctc.model import StubCtcOffice, UnsafeActionError  # noqa: E402
 from ctc.routing import (  # noqa: E402
     TrackGraph,
     authority,
@@ -326,7 +326,8 @@ class StubAuthorityTest(unittest.TestCase):
         ctc.set_block_closed("Green", "35", False)
         self.assertEqual(_authority(ctc).blocks, 7)
 
-    def test_a_closing_block_shortens_authority(self) -> None:
+    def test_an_occupied_closed_block_shortens_authority(self) -> None:
+        # A block closes at once, even with a train in it.
         ctc = ready_office()
         ctc.set_maintenance_mode(True)
         ctc.dispatch("T1", "Green", "37")
@@ -334,7 +335,7 @@ class StubAuthorityTest(unittest.TestCase):
         ctc.set_block_closed("Green", "33", True)
         limit = _authority(ctc)
         self.assertEqual((limit.blocks, limit.reason, limit.at),
-                         (2, "closing", "33"))
+                         (2, "closed", "33"))
 
     def test_switches_count_only_as_reported(self) -> None:
         ctc = ready_office()
@@ -570,6 +571,45 @@ class SafeSpeedTest(unittest.TestCase):
         self.assertEqual(self._speed(out), 0)
         ctc.dispatch("T1", "Green", "63")
         self.assertEqual(self._speed(ctc.snapshot().outputs), 0)
+
+
+class PreviewTest(unittest.TestCase):
+    """Before Dispatch, the CTC shows what a dispatch would send."""
+
+    def _suggestion(self, ctc: StubCtcOffice) -> tuple[int, int]:
+        sent = own_block(ctc.snapshot().outputs.track_controller.suggestions)
+        return sent.suggested_speed_mps, sent.authority_blocks
+
+    def test_preview_matches_what_dispatch_sends(self) -> None:
+        ctc = ready_office()
+        step_at(ctc, _train("T1", "30"), _train("T2", "34"))
+        preview = ctc.preview_dispatch("T1", "Green", "37")
+        # Nothing ordered by previewing.
+        self.assertEqual(ctc.snapshot().orders, ())
+        self.assertEqual((preview.block_id, preview.authority_blocks),
+                         ("30", 2))
+        ctc.dispatch("T1", "Green", "37")
+        step_at(ctc, _train("T1", "30"), _train("T2", "34"))
+        self.assertEqual(self._suggestion(ctc),
+                         (preview.suggested_speed_mps,
+                          preview.authority_blocks))
+
+    def test_a_train_in_the_yard_counts_from_the_yard_exit(self) -> None:
+        ctc = ready_office()
+        step_at(ctc)
+        preview = ctc.preview_dispatch("T9", "Green", "73")
+        self.assertEqual((preview.block_id, preview.authority_blocks),
+                         ("63", 10))
+        self.assertGreater(preview.suggested_speed_mps, 0)
+
+    def test_refused_as_dispatch_is(self) -> None:
+        ctc = ready_office()
+        step_at(ctc)
+        ctc.set_maintenance_mode(True)
+        ctc.set_block_closed("Green", "73", True)
+        with self.assertRaisesRegex(UnsafeActionError, "closed"):
+            ctc.preview_dispatch("T9", "Green", "73")
+        self.assertEqual(ctc.snapshot().orders, ())
 
 
 if __name__ == "__main__":
