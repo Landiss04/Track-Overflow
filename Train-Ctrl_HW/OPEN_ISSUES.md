@@ -189,8 +189,8 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
 
 38. **Other sizes kept to Ivan's design but outside the style guide**
     (restored 2026-10-07 at Jonathan's request): the speed and temperature
-    dial figures are computed from the dial radius (`Math.max(32, r * 0.6)`
-    and `Math.max(30, r * 0.66)`) rather than a token, and the door and
+    dial figures are computed from the dial radius (`Math.max(24, r * 0.45)`,
+    sized for "43.5", and `Math.max(30, r * 0.66)`) rather than a token, and the door and
     light tiles are 52 px tall (the guide's control heights are 28 / 36 /
     44) with Label-token text instead of the button type scale.
 

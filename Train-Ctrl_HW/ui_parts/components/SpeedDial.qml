@@ -1,6 +1,7 @@
 // Rotary speed dial. The centre reads the target; the ring fills to the
 // actual speed. Drag or press the ring to set the target in Manual, in
-// whole mph (REQUIREMENTS.md M14). No keyboard control, by decision.
+// tenths of a mph (REQUIREMENTS.md M14). No keyboard control, by
+// decision.
 //
 // Canvas angles run clockwise from +x with y pointing down, so the face
 // starts at the lower left (135 degrees) and sweeps 270 degrees round to
@@ -17,7 +18,7 @@ Item {
     property real actual: 0
     property real limit: 70
     property bool interactive: false
-    signal targetRequested(int mph)
+    signal targetRequested(real mph)
 
     readonly property real startDeg: 135
     readonly property real sweepDeg: 270
@@ -128,7 +129,7 @@ Item {
         const degrees = Math.atan2(mouse.y - height / 2, mouse.x - width / 2)
             * 180 / Math.PI;
         root.targetRequested(
-            Math.round(valueAt((degrees + 360) % 360, dragging)));
+            Math.round(valueAt((degrees + 360) % 360, dragging) * 10) / 10);
     }
 
     ColumnLayout {
@@ -142,10 +143,12 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: Math.round(root.target)
+            text: Number(root.target).toFixed(1)
             color: theme.text_primary
             font.family: theme.mono_family
-            font.pixelSize: Math.max(32, root.radius * 0.6)
+            // Sized for the widest reading, "43.5", so the figure fits
+            // inside the ring and never changes size as it changes.
+            font.pixelSize: Math.max(24, root.radius * 0.45)
             font.weight: theme.weight_bold
         }
 

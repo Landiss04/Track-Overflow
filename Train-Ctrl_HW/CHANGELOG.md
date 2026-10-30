@@ -243,6 +243,7 @@ the Cab controls badge.
 | (integration) | 10-28 | On Kevin's word ("SUPER_GREEN accepted by train model and train control"): the fourth aspect is `SUPER_GREEN`, as truth spells it, in `ASPECTS`, `ASPECT_TEXT` and the test inputs; the driver's signal panel still shows it as SUPER GREEN. The harness no longer converts it (#27). |
 | `f05053b` | 10-30 | The module brought up to `claude/quirky-fermi-sickg4` `51eca3b`: the two rows above, `train_ctrl/module_process.py` and `tests/test_harness_driven.py`. |
 | (next) | 10-30 | SW and HW consoles under the harness (M13, Kevin's F2): titled "SW Train Controller — Green Line" and "HW Train Controller — Red Line", each listing and picking only its line's trains (R38). |
+| (next) | 10-30 | The dial sets the target in 0.1 mph steps; the target, your speed and the commanded speed read to one decimal place (M14, R39). |
 
 ---
 
@@ -369,3 +370,4 @@ From `0f2e2d2`, one rule at a time.
 | R36 | M8: a train spawns with nothing on: the lights' defaults are now off, as everything else already was. The `check.py` check fails on the old defaults | `state.py`; `check.py` |
 | R37 | M11: the bench clock starts at the first commissioning and then always runs, whichever train is selected (was: only while the selected train was commissioned). The `check.py` check fails on the old code with an uncommissioned train selected | `backend.py` `_step_all`; `check.py` |
 | R38 | M13: `run(variant=…)`, "HW" by default (the HW host calls it without one), "SW" from `module_process.py`. Under a harness the console's title and header name the variant and its line, its roster and selection hold only that line's trains, the line chips give way to a caption, and the empty state points at the CTC Office (was: both titled "HW Train Controller", every line listed). Standalone unchanged. The `check.py` check fails on the old code (no variant) | `constants.py` `VARIANT_LINES`; `app.py`; `backend.py` `same_line`, `_on_line`; `module_process.py`; `ConsoleWindow.qml`; `TrainPicker.qml`; `OperatorBar.qml`; `check.py` |
+| R39 | M14: a dial press or drag asks for the nearest 0.1 mph (was: whole mph, the signal typed `int`); the dial's centre, "Your speed" and "Commanded speed" read one decimal place; the dial figure is sized for "43.5" so it fits the ring at any reading. The `check.py` press at 22.4 mph set 22.00 on the old code | `SpeedDial.qml`; `ConsoleView.qml`; `check.py` |

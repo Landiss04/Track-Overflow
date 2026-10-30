@@ -16,6 +16,7 @@ second copy of the application module.
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -454,6 +455,29 @@ def run_check(
         expect(dial.property("limit") == top,
                "the dial's scale moved with the commanded speed")
         send({"commanded_speed": 43})
+        _settle(app, 100)
+        tile = window.findChild(QObject, "commandedReadout")
+        shown = tile.property("value") if tile else None
+        expect(shown == "43.0",
+               f"the commanded speed read {shown!r}, not '43.0'")
+
+        # A press sets the target in tenths of a mph (M14). A pixel is
+        # about 0.1 mph on the ring, so near 22.4 rather than on it.
+        wanted = 22.4
+        angle = math.radians(135 + wanted / top * 270)
+        ring = dial.property("radius") - dial.property("ringWidth") / 2
+        at = dial.mapToScene(QPointF(
+            dial.width() / 2 + ring * math.cos(angle),
+            dial.height() / 2 + ring * math.sin(angle)))
+        QTest.mouseClick(window, Qt.MouseButton.LeftButton,
+                         Qt.KeyboardModifier.NoModifier, at.toPoint())
+        _settle(app, 50)
+        got = backend.snapshot["target_mph"]
+        expect(abs(got * 10 - round(got * 10)) < 1e-6
+               and got != round(got) and abs(got - wanted) <= 0.15,
+               f"a press at {wanted} mph on the dial set {got:.2f} mph, "
+               "not a tenth near it")
+        backend.set_target_mph(30)
 
     # The numbers drawer goes in the final iteration, and this with it.
     drawer = window.findChild(QObject, "numbersDrawer")

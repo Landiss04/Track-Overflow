@@ -40,7 +40,7 @@ Item {
                 HeroReadout {
                     Layout.fillWidth: true
                     label: qsTr("Your speed")
-                    value: Math.round(root.s.actual_mph)
+                    value: Number(root.s.actual_mph).toFixed(1)
                     unit: "mph"
                 }
 
@@ -51,7 +51,7 @@ Item {
                     Layout.fillWidth: true
                     label: qsTr("Commanded speed")
                     value: root.s.fault_pickup
-                        ? "--" : Math.round(root.s.commanded_mph)
+                        ? "--" : Number(root.s.commanded_mph).toFixed(1)
                     unit: "mph"
                 }
 
