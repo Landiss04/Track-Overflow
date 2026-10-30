@@ -78,7 +78,6 @@ SETTLE_MPS = 0.12
 ENGINE_DETECT_ACCEL_MPS2 = 0.1
 ENGINE_DETECT_S = 2.0
 ENGINE_RISE_MPS = 0.05
-PICKUP_DETECT_MIN_BLOCKS = 2
 
 # ---------------------------------------------------------------- gains
 # Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three
@@ -104,12 +103,12 @@ ECHO_TICKS = 2
 DWELL_S = 45.0
 
 # ----------------------------------------------------------- vocabulary
-ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
+ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER_GREEN"]
 ASPECT_TEXT = {
     "RED": "Stop.",
     "YELLOW": "Slow down.",
     "GREEN": "Continue to cruise.",
-    "SUPER GREEN": "All clear ahead.",
+    "SUPER_GREEN": "All clear ahead.",
 }
 
 #: The Train Model's three failures (truth modules/train-model.md),

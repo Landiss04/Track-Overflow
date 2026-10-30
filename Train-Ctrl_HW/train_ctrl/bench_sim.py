@@ -61,7 +61,7 @@ class SimTrain:
     applied coasts forever, so the only ways down are the two brakes.
     An injected engine failure zeroes traction; an injected brake
     failure blocks the service brake only, and only then does rolling
-    resistance act. An injected signal pickup failure sends zeros for
+    resistance act. An injected signal pickup failure sends null for
     commanded speed and authority, as the Train Model does.
     """
 
@@ -101,8 +101,8 @@ class SimTrain:
         """This tick's signals to the controller, as from a harness."""
         pickup = self.injected["signal_pickup"]
         values = {
-            "commanded_speed": 0.0 if pickup else self.commanded_mps,
-            "authority_blocks": 0 if pickup else self.authority_blocks,
+            "commanded_speed": None if pickup else self.commanded_mps,
+            "authority_blocks": None if pickup else self.authority_blocks,
             "actual_speed": self.actual_mps,
             "emergency_brake_state": self.emergency_brake or self._pull,
             "service_brake_state": self.service_brake,

@@ -26,7 +26,6 @@ from .constants import (
     MAX_FORCE_N,
     NIGHT_END_S,
     NIGHT_START_S,
-    PICKUP_DETECT_MIN_BLOCKS,
     SERVICE_BAND_MPS,
     STANDSTILL_MPS,
     TICK_S,
@@ -107,7 +106,6 @@ class ControllerCore:
         self._emergency_sent = deque(empty, maxlen=self.echo_ticks)
         self._engine_stalled_s = 0.0
         self._engine_ref_mps = 0.0
-        self._last_signal: tuple[float, int] | None = None
 
     @property
     def failed(self) -> list[str]:
@@ -118,8 +116,9 @@ class ControllerCore:
     def received_signal(self) -> tuple[float, int]:
         """The Track Signal as it reached the controller.
 
-        Commanded speed (m/s) and authority (blocks), as received. A
-        lost pickup arrives as zeros (Train Model, development).
+        Commanded speed (m/s) and authority (blocks), the last values
+        received. A lost pickup arrives as null (``signal_lost``), and
+        these keep the values before it.
         """
         s = self.state
         return s.commanded_mps, s.authority_blocks
@@ -261,9 +260,10 @@ class ControllerCore:
                            least ENGINE_DETECT_ACCEL_MPS2, no brake is
                            on, and the actual speed has not risen for
                            ENGINE_DETECT_S
-            signal pickup  commanded speed and authority both fell to
-                           zero in one update, from at least
-                           PICKUP_DETECT_MIN_BLOCKS of authority
+            signal pickup  commanded speed or authority arrived null:
+                           the Train Model could not read the Track
+                           Signal (Kevin Schillinger 2026-10-28). A
+                           valid 0 is never taken for one
 
         A brake failure resolves when the service brake answers
         again: the command echo_ticks ago asked for it and this tick's
@@ -292,13 +292,8 @@ class ControllerCore:
             if self._engine_stalled_s >= ENGINE_DETECT_S:
                 s.failures["engine"] = True
 
-        signal = self.received_signal
-        last = self._last_signal
-        if (last is not None and last[0] > 0.0
-                and last[1] >= PICKUP_DETECT_MIN_BLOCKS
-                and signal == (0.0, 0)):
+        if s.signal_lost:
             s.failures["signal_pickup"] = True
-        self._last_signal = signal
 
     def clear_failure(self, name: str) -> None:
         """Let go of one detected failure, once it has been resolved.
@@ -311,8 +306,6 @@ class ControllerCore:
         if name == "engine":
             self._engine_stalled_s = 0.0
             self._engine_ref_mps = self.state.actual_mps
-        else:
-            self._last_signal = None
 
     def respond_to_failures(self) -> None:
         """Stop the train while any detected failure is latched.
