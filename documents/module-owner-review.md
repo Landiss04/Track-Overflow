@@ -185,6 +185,23 @@ and without his changes, for environment reasons:
 - Some tests save to `/tmp/...`.
 - The bundle "shell parses" tests need bash.
 
+## Track Controller SW changes, 2026-10-30
+
+Harry Tye pushed `829c842` to `Track-Ctrl-SW` to be cherry-picked here. Its
+TrackCtrlSW changes are taken (`TrackCtrlSW/CHANGELOG.md`, 2026-10-30):
+- the program obeys the CTC Office's switch command;
+- the switch lock covers the points block;
+- the window scales;
+- a `loadStarterPrograms` slot is added;
+- `STARTER_LOG.md` records the starter fingerprints, and all 11 match here.
+
+**Question for Harry Tye and Braden:** on the SW, the CTC Office's switch command is
+now the program's to obey, and the vital code no longer applies it. The HW vital code
+still applies it (`V_REQ_s` reads `CTCSW_s` first). So in maintenance mode, a CTC
+switch command moves a HW wayside's switch whatever its program does. It moves a SW
+wayside's switch only if the program obeys it, as the starter does. Is that
+difference intended? If not, which way should both variants go?
+
 ## CTC-1: Red concurrency
 
 **Owner:** Landis, CTC Office.

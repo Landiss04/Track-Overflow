@@ -4,6 +4,36 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-10-30 — Harry's `829c842` taken: CTC switch command, points lock, window
+
+Cherry-picked from `Track-Ctrl-SW` (`829c842`), TrackCtrlSW files only.
+The commit's shared `ui/` changes only cleared merge-conflict markers on
+Harry's branch. The result is identical to this branch's `ui/`, so they
+were left out.
+
+- **The program obeys the CTC Office's switch command.** The CTC's command
+  is now a program input, `CTCSW_s` and `CTCREV_s` (Braden's HW names).
+  The starter obeys it before anything else. The vital code no longer
+  applies it, and only the programmer's hand-set position overrides the
+  program.
+- **The switch lock covers the points block.** The vital code holds a
+  switch while a train is on its listed block or on its points block
+  (`V_LOCK_s`), as the HW vital code does. This replaces the local branch
+  `claude/sw-points-block-lock`, which was waiting for Harry's yes.
+- **The window scales.** It is now the shared `ScaledWindow`, with the
+  16:10 aspect lock installed in `main.py` and `module_process.py`. It no
+  longer opens at a fixed 1440 × 926 (GUI report F1/F38).
+- **`loadStarterPrograms` slot** on the window's state. No control in the
+  window calls it yet (GUI report F8).
+- **`STARTER_LOG.md`.** Harry keeps the current starter, and the log
+  records its fingerprint per wayside. All 11 fingerprints match on this
+  branch.
+- Tests: SW suite 222 passed. The same 3 `test_hw_language` failures as
+  before remain (HW programs use `SPD_n_b` and `FAIL_n`, which are not SW
+  inputs). Harry's own tree fails 9.
+
+---
+
 ## 2026-10-28 — vital code clamps the speed; crossings default to armed
 
 `track_ctrl/vital.py`, `track_ctrl/controller.py` and the tests.
