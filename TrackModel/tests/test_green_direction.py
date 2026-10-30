@@ -240,3 +240,19 @@ def test_block_with_no_way_in_is_rejected(tmp_path: Path) -> None:
     data["blocks"][129]["next_blocks"] = [129]      # 130 -> 129, not 131
     with pytest.raises(LayoutError, match=r"no block leads into.*W-131"):
         load_layout([write(tmp_path, data)])
+
+
+def test_missing_green_yard_return_is_rejected(tmp_path: Path) -> None:
+    """A yard-entry exception must not excuse a missing exit at Green 57."""
+    data = raw_green()
+    data["blocks"][56]["next_blocks"] = [58]
+    with pytest.raises(LayoutError, match="switch leads to the yard"):
+        load_layout([write(tmp_path, data)])
+
+
+def test_green_yard_entry_cannot_gain_a_return_leg(tmp_path: Path) -> None:
+    """The Red-9 interpretation does not permit Green-63 yard returns."""
+    data = raw_green()
+    data["blocks"][62]["next_blocks"].append("yard")
+    with pytest.raises(LayoutError, match="no switch there leads into it"):
+        load_layout([write(tmp_path, data)])

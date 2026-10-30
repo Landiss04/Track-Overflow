@@ -4,26 +4,28 @@ sequenceDiagram
     participant UI as Track Controller UI (QML)
     participant S as TrackControllerState
     participant W as TrackController (wayside)
-    participant V as attached vital code
+    participant V as Program (vital code)
     Note over P,UI: Only while the CTC Office has a switch command in effect (maintenance, UC-11).
     P->>UI: click Set switch manually
     UI->>S: switches
-    S-->>UI: each switch, its position and the CTC command
-    P->>UI: choose a switch, Normal or Reverse
+    S-->>UI: return each switch, its position, legs and CTC command
+    P->>UI: choose a switch, Normal or Reverse, Apply
     UI->>S: setSwitch(id, reverse)
-    alt not in maintenance
-        S-->>UI: refused: only while the CTC has maintenance on
+    alt controller.maintenance is false
+        S-->>UI: raise RuntimeError: only while the CTC has maintenance on
     else maintenance
-        S->>W: manual_switches[id] := reverse
+        S->>S: setSwitch internal: controller.manual_switches[id] := reverse
         S->>W: scan()
-        W->>V: HAND_s, HANDREV_s, CTCCMD_s
-        V-->>W: OUT_SW_s: CTC command, else hand-set, else program
-        S-->>UI: terminal (the CTC's command wins if it has one)
-        UI-->>P: switch shown as hand-set
+        W->>W: build_scan_inputs internal: HAND_s, HANDREV_s, CTCCMD_s, CTCREV_s
+        W->>V: scan(image + the program's outputs)
+        V-->>W: return OUT_SW_s: CTC command, else hand-set, else program
+        S-->>UI: emit maintenanceChanged, controllerChanged
+        UI-->>P: switch shown as hand-set (the CTC command wins if any)
     end
     opt release
-        P->>UI: Release
+        P->>UI: click Release
         UI->>S: releaseSwitch(id)
-        S->>W: drop the hand-set position, scan()
+        S->>S: releaseSwitch internal: controller.manual_switches.pop(id)
+        S->>W: scan()
     end
-    Note right of W: Sent to the Track Model on the next scan (UC-13). Ending maintenance releases it.
+    Note right of W: Sent to the Track Model on the next step (UC-13). set_maintenance(False) releases it.

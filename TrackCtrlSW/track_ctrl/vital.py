@@ -24,12 +24,18 @@ The rules, as PLC code:
 - a signal showing no aspect or several, or on an occupied or closed
   block, is red;
 - a train on a crossing's approach arms it;
-- a yellow signal halves its block's speed (``OUT_HALF_n = 1``).
+- a yellow signal halves its block's speed (``OUT_HALF_n = 1``);
+- a suggested speed over the block's posted limit is clamped to it.
 
-Speeds and authorities never enter the program: the OS passes a block's
-suggestion, or half its speed, or 0, as the bits say. Keeping a speed
-under the posted limit, and zero speed for zero authority, are the CTC
-Office's (truth ``suggested-speed-under-block-limit``,
+A user program never sees a speed or an authority: it decides only
+``AUTH_n``. The suggested speed does enter the vital code, as bits the
+program cannot declare (``SUGSPD_n_b``, the whole m/s speed, least
+significant bit first), and the clamped speed leaves it as
+``OUT_SPD_n_b``. The clamp is a comparison against the block's posted
+limit, written out in Boolean code for each block, so a program can
+only pass the suggestion or stop. The OS then passes that speed (halved
+where ``OUT_HALF_n`` is set) and the CTC Office's authority, or 0.
+Zero speed for zero authority is still the CTC Office's (truth
 ``suggested-speed-stops-within-authority``).
 
 This module also turns a scan into the overrides the Program tab shows,
@@ -39,7 +45,7 @@ display only and decides nothing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 from track_ctrl.layout import Block, ControllerConfig
@@ -54,20 +60,39 @@ OUT = "OUT_"
 _NAMED_BLOCKS = 6
 
 
-@dataclass(frozen=True)
-class Suggestion:
-    """What the CTC Office suggests for one block."""
+def speed_width(blocks: Sequence[Block]) -> int:
+    """How many bits carry a speed: enough for the fastest posted limit.
 
-    speed_mps: int
-    authority_blocks: int
+    A suggestion above what the bits can hold is saturated to it before
+    it is decoded, which is still at or over every limit, so the clamp
+    gives the same answer as it would on the full number.
+    """
+    return max(1, max(b.whole_speed_limit_mps for b in blocks).bit_length())
 
 
-@dataclass(frozen=True)
-class TrackCircuit:
-    """What is sent down one block's track circuit to the train in it."""
+def speed_bit(block_id: str, bit: int) -> str:
+    """Name of one bit of a block's suggested speed, as the vital code
+    reads it."""
+    return f"SUGSPD_{block_id}_{bit}"
 
-    speed_mps: int
-    authority_blocks: int
+
+def _greater_than(n: str, limit: int, width: int) -> str:
+    """PLC expression: the suggested speed of block ``n`` exceeds ``limit``.
+
+    Compares from the most significant bit down: the speed is greater at
+    the first bit where it is 1 and the limit is 0, provided every bit
+    above it matches.
+    """
+    terms: list[str] = []
+    for i in range(width - 1, -1, -1):
+        if (limit >> i) & 1:
+            continue
+        factors = [speed_bit(n, i)]
+        for j in range(width - 1, i, -1):
+            bit = speed_bit(n, j)
+            factors.append(bit if (limit >> j) & 1 else f"NOT {bit}")
+        terms.append("(" + " AND ".join(factors) + ")")
+    return " OR ".join(terms) if terms else "0"
 
 
 @dataclass(frozen=True)
@@ -83,34 +108,7 @@ class VitalOverride:
         return f"VITAL  {self.rule}  {self.signal}: {self.message}"
 
 
-@dataclass
-class ControllerOutputs:
-    """What the OS encodes from the vital code's final outputs.
-
-    Every mapping can be empty: a wayside running no program transmits
-    nothing at all, because without a program it has nothing to send.
-    """
-
-    #: Only for blocks the CTC Office sent a suggestion for.
-    track_circuits: dict[str, TrackCircuit] = field(default_factory=dict)
-    switches: dict[str, bool] = field(default_factory=dict)
-    aspects: dict[str, str] = field(default_factory=dict)
-    crossings: dict[str, bool] = field(default_factory=dict)
-    overrides: tuple[VitalOverride, ...] = ()
-
-
-def idle_outputs(reason: str) -> ControllerOutputs:
-    """A wayside that runs no program: it transmits nothing."""
-    return ControllerOutputs(
-        overrides=(VitalOverride("not_running", "ALL", reason),)
-    )
-
-
 # --- the vital code -----------------------------------------------------
-
-def _owned(config: ControllerConfig, block_ids: Sequence[str]) -> list[str]:
-    return [b for b in block_ids if config.owns(b)]
-
 
 def _any(names: Sequence[str]) -> str:
     return " OR ".join(names) if names else "0"
@@ -128,25 +126,32 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
         "VAR_IN   " + " ".join(f"AUTH_{n}" for n in numbers),
         "VAR_OUT  " + " ".join(f"{OUT}AUTH_{n}" for n in numbers),
     ]
-    for switch in config.switches:
-        s = switch.switch_id
+    width = speed_width(blocks)
+    for n in numbers:
+        lines.append("VAR_IN   " + " ".join(
+            speed_bit(n, b) for b in range(width)))
+        lines.append("VAR_OUT  " + " ".join(
+            f"{OUT}SPD_{n}_{b}" for b in range(width)))
+    for s in config.switches:
         lines.append(
             f"VAR_IN   SW_{s} SWREV_{s} CTCCMD_{s} CTCREV_{s} "
             f"HAND_{s} HANDREV_{s}"
         )
         lines.append(f"VAR_OUT  {OUT}SW_{s}")
-    for signal in config.signals:
-        lines.append("VAR_IN   " + " ".join(signal.aspect_signals))
-        lines.append("VAR_OUT  " + " ".join(
-            OUT + name for name in signal.aspect_signals))
-        lines.append(f"VAR_OUT  {OUT}HALF_{signal.block_id}")
-    for crossing in config.crossings:
-        lines.append(f"VAR_IN   {crossing.output_signal}")
-        lines.append(f"VAR_OUT  {OUT}{crossing.output_signal}")
+    for s in config.signals:
+        aspects = config.aspect_outputs(s)
+        lines.append("VAR_IN   " + " ".join(aspects))
+        lines.append("VAR_OUT  " + " ".join(OUT + name for name in aspects))
+        lines.append(f"VAR_OUT  {OUT}HALF_{s}")
+    for c in config.crossings:
+        lines.append(f"VAR_IN   {config.crossing_output(c)}")
+        lines.append(f"VAR_OUT  {OUT}{config.crossing_output(c)}")
 
+    # A switch, its signal and a crossing are each named by the block
+    # they stand on, so an id is also that block.
     moving: dict[str, str] = {}
-    for switch in config.switches:
-        s, b = switch.switch_id, switch.block_id
+    for s in config.switches:
+        b = s
         lines += [
             "",
             f"// Switch {s}: the CTC's command, else the hand-set position,",
@@ -160,9 +165,9 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
         ]
         moving[b] = f"V_MOV_{s}"
 
-    for signal in config.signals:
-        s, b = signal.signal_id, signal.block_id
-        r, y, g, sg = signal.aspect_signals
+    for s in config.signals:
+        b = s
+        r, y, g, sg = config.aspect_outputs(s)
         pairs = " OR ".join(
             f"({p} AND {q})"
             for i, p in enumerate((r, y, g, sg))
@@ -180,13 +185,13 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
             f"{OUT}HALF_{b} := {OUT}{y}",
         ]
 
-    for crossing in config.crossings:
-        near = _owned(config, crossing.approach_block_ids)
+    for c in config.crossings:
+        near = config.crossing_approach(c)
+        out = config.crossing_output(c)
         lines += [
             "",
-            f"// Crossing {crossing.crossing_id}: armed while a train is "
-            "on its approach.",
-            f"{OUT}{crossing.output_signal} := {crossing.output_signal} OR "
+            f"// Crossing {c}: armed while a train is on its approach.",
+            f"{OUT}{out} := {out} OR "
             + _any([f"OCC_{n}" for n in near]),
         ]
 
@@ -196,6 +201,17 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
         if n in moving:
             body += f" AND NOT {moving[n]}"
         lines.append(f"{OUT}AUTH_{n} := {body}")
+
+    lines += ["", "// Speed: the suggestion, clamped to the block's posted limit."]
+    for block in blocks:
+        n, limit = block.block_id, block.whole_speed_limit_mps
+        lines.append(f"V_GT_{n} := {_greater_than(n, limit, width)}")
+        for k in range(width):
+            bit = speed_bit(n, k)
+            if (limit >> k) & 1:
+                lines.append(f"{OUT}SPD_{n}_{k} := V_GT_{n} OR {bit}")
+            else:
+                lines.append(f"{OUT}SPD_{n}_{k} := NOT V_GT_{n} AND {bit}")
     return "\n".join(lines) + "\n"
 
 
@@ -226,8 +242,8 @@ def report_overrides(
     found: list[VitalOverride] = []
     by_rule: dict[str, list[str]] = {}
 
-    for switch in config.switches:
-        s, b = switch.switch_id, switch.block_id
+    for s in config.switches:
+        b = s
         if on(f"CTCCMD_{s}"):
             found.append(VitalOverride(
                 "ctc_switch_command", f"SW_{s}",
@@ -244,32 +260,28 @@ def report_overrides(
                 f"block {b} is occupied; the switch is locked and will "
                 "not move"))
 
-    for signal in config.signals:
-        s, b = signal.signal_id, signal.block_id
+    for s in config.signals:
+        b = s
+        aspects = config.aspect_outputs(s)
         if not on(f"V_ONE_{s}"):
-            lit = [a for a, name in zip(ASPECTS, signal.aspect_signals)
-                   if on(name)]
+            lit = [a for a, name in zip(ASPECTS, aspects) if on(name)]
             found.append(VitalOverride(
                 "signal_aspect", f"SIG_{s}",
                 "no aspect lit; signal would be dark" if not lit
                 else f"{len(lit)} aspects lit at once ({', '.join(lit)})"))
-        elif not on(f"V_OK_{s}") and not on(signal.aspect_signals[0]):
+        elif not on(f"V_OK_{s}") and not on(aspects[0]):
             found.append(VitalOverride(
                 "signal_protects_block", f"SIG_{s}",
                 f"block {b} is occupied or closed; dropped to RED"))
 
-    for crossing in config.crossings:
-        if on(f"{OUT}{crossing.output_signal}") and not on(
-            crossing.output_signal
-        ):
+    for c in config.crossings:
+        out = config.crossing_output(c)
+        if on(f"{OUT}{out}") and not on(out):
             found.append(VitalOverride(
-                "crossing_armed", f"XING_{crossing.crossing_id}",
+                "crossing_armed", f"XING_{c}",
                 "a train is on the approach; gates forced down"))
 
-    moving_blocks = {
-        switch.block_id for switch in config.switches
-        if on(f"V_MOV_{switch.switch_id}")
-    }
+    moving_blocks = {s for s in config.switches if on(f"V_MOV_{s}")}
     for block in blocks:
         n = block.block_id
         if n not in suggested:
@@ -279,6 +291,8 @@ def report_overrides(
             if rule == "switch_moving" and n not in moving_blocks:
                 continue
             by_rule.setdefault(rule, []).append(n)
+        if on(f"{OUT}AUTH_{n}") and on(f"V_GT_{n}"):
+            by_rule.setdefault("speed_clamped", []).append(n)
         if on(f"{OUT}AUTH_{n}") and on(f"{OUT}HALF_{n}"):
             by_rule.setdefault("aspect_speed_cap", []).append(n)
 
@@ -288,6 +302,8 @@ def report_overrides(
         "switch_moving": "hold a switch that is not where it was "
                          "commanded; speed and authority zeroed",
         "aspect_speed_cap": "show yellow; speed halved (rounded down)",
+        "speed_clamped": "suggested over the posted limit; speed clamped "
+                         "to it",
     }
     for rule, names in by_rule.items():
         found.append(VitalOverride(

@@ -103,7 +103,7 @@ a selected wayside, and UC-02 needs a loaded track.
 |---|---|
 | **Actors** | Programmer |
 | **Description** | Loads one line of the course layout and divides it among that line's waysides. |
-| **Data** | Track layout (JSON): the line, and for each block its section, number, length, grade, speed limit, station, switch and railway crossing. A file in the shape of the course layout, for example `TrackModel/green_line.json`. |
+| **Data** | Track layout (JSON): the line, and for each block its section, number, length, grade, speed limit, station, switch and railway crossing. A file in the shape of the course layout, for example `Track_layout/green_line.json`. |
 | **Stimulus** | The programmer clicks **Load track…**, picks a file, checks the summary and clicks **Load**. |
 | **Response** | The summary lists the line, block, switch and crossing counts and the number of waysides, which the track fixes (`WAYSIDE_COUNTS`, six for Green). On **Load**, the line's blocks are divided among the waysides, each wayside is created with no program, and its vital code is generated and compiled. The line and its first wayside are selected, the editor is empty and the header reads **NOT READY**. Loading a line that is already loaded replaces it and drops its programs. |
 | **Alternatives** | A file that cannot be read, is not a layout, or is a single wayside's database is refused with the reason, and nothing changes. |
@@ -220,7 +220,7 @@ a selected wayside, and UC-02 needs a loaded track.
 | **Description** | Takes the CTC Office's suggested speed and authority for each block. |
 | **Data** | Per block: `Suggestion(speed_mps, authority_blocks)`, both whole numbers of 0 or more (D013). The CTC Office sends `TrainSuggestion(train_id, line, block_id, suggested_speed_mps, authority_blocks)`. The harness (`ctc_edges`) keys it by block and drops the train ID. If two suggestions name one block, the more restrictive speed and authority win. |
 | **Stimulus** | Every tick. |
-| **Response** | Each suggestion is stored on the wayside that governs the block. The numbers never enter the PLC: the program decides only `AUTH_n`, pass or stop (UC-16). A block with no suggestion gets no track-circuit command. |
+| **Response** | Each suggestion is stored on the wayside that governs the block. The numbers never enter the user's program: it decides only `AUTH_n`, pass or stop (UC-16). The speed reaches only the vital code. A block with no suggestion gets no track-circuit command. |
 | **Alternatives** | A negative or fractional value rejects the tick. Blocks no wayside governs are ignored. |
 | **Requirements** | Rubric 6.0; REQ-FUNC-049, REQ-INTF-019 |
 | **Sequence** | SD-10 |
@@ -293,7 +293,7 @@ a selected wayside, and UC-02 needs a loaded track.
 | **Description** | Sends each block that has a suggestion its commanded speed and authority. |
 | **Data** | `OUT_AUTH_n = AUTH_n AND NOT CLOSED_n AND NOT (its switch moving)`; `OUT_HALF_n`. |
 | **Stimulus** | Each scan. |
-| **Response** | Each block with a suggestion gets one track-circuit command: the suggestion when `OUT_AUTH_n` is 1 (half the speed if `OUT_HALF_n` is set), else speed 0 and authority 0. The CTC Office keeps speeds under the posted limit and gives zero speed for zero authority. |
+| **Response** | Each block with a suggestion gets one track-circuit command: the suggestion when `OUT_AUTH_n` is 1, with its speed first clamped by the vital code to the block's posted limit (`OUT_SPD_n_b`, from the vital-only inputs `SUGSPD_n_b`) and halved if `OUT_HALF_n` is set, else speed 0 and authority 0. The CTC Office gives zero speed for zero authority. |
 | **Requirements** | Rubric 6.0, 6.9; REQ-INTF-017, REQ-FUNC-058.1 |
 | **Sequence** | SD-16 |
 
@@ -317,7 +317,7 @@ a selected wayside, and UC-02 needs a loaded track.
 | **Description** | A line where any wayside has no program runs nothing and transmits nothing. |
 | **Data** | Why: no track loaded, or a wayside on the line has no PLC program. |
 | **Stimulus** | Either condition at a scan. |
-| **Response** | Every wayside of that line idles. It sends no switch, signal, crossing or track-circuit command. Its outputs are absent, not safe defaults, because a wayside running no program cannot drive anything. The reports say not ready and why, the window shows **NOT READY** with the reason, and the CTC Office holds the line. Another, ready line is not held. |
+| **Response** | Every wayside of that line idles. It sends no switch, signal or track-circuit command: those outputs are absent, not safe defaults, because a wayside running no program cannot drive anything. Its crossings are the exception: their default state is armed, so they are commanded active (lights on, gates down). The reports say not ready and why, the window shows **NOT READY** with the reason, and the CTC Office holds the line. Another, ready line is not held. |
 | **Requirements** | Rubric 6.9; REQ-FUNC-058 |
 | **Sequence** | SD-18 |
 
@@ -351,12 +351,12 @@ Design choices:
   object, so what the window shows is what was sent.
 - **The core is Qt-free.** `interface`, `module`, `controller`, `plc`, `vital`, `layout`,
   `wire`, `stimulus`, `display` and `errors` import no Qt, and are unit-tested headlessly
-  (191 tests).
+  (218 tests at `2d3dd86`, 207 passing; see the test plan, section 7).
 - **Validate, then change.** `step` rejects a bad tick before any state changes. The window
   rejects a bad file or program before anything changes.
 - **Run before commit.** A program reaches a wayside only after a clean sandbox run of
   exactly that text, and it is checked again at commit.
-- **No safe defaults.** A wayside with no program transmits nothing, and its line reports
+- **No safe defaults, except crossings.** A wayside with no program transmits nothing but armed crossings, and its line reports
   not ready.
 
 ---
@@ -369,28 +369,37 @@ All four diagrams are in one StarUML project, `track_ctrl_sw_classes.mdj`.
 
 ![Core classes](../uml/track_ctrl_sw/class_core.png)
 
-- **`SwTrackController`** holds one `_Wayside` per wayside of every loaded line, and scans
-  each once per `step`. While any wayside of a line has no program, every wayside of that
-  line idles.
-- **`TrackController`** is one wayside.
-  - It owns its territory (`ControllerConfig`, `Block`s), its `ControllerInputs`, the user's
-    `Program`, and the compiled vital `Program`.
-  - `scan` decodes the inputs, runs both programs and encodes the `OUT_` bits into
-    `ControllerOutputs`.
-  - `run_program` does the same on a copy of the inputs (UC-05).
-  - `commit` installs a program as a new `Iteration`, keeping the last five.
+- **`SwTrackController`** holds one `TrackController` per wayside of every loaded line, and
+  scans each once per `step`. While any wayside of a line has no program, every wayside of
+  that line idles.
+- **`TrackController`** is one wayside, and the one object for all of it. A class that only
+  held data does not get its own type: the wayside carries its input card (`occupancy`,
+  `closed`, `suggestions`, `trains`, `switch_reverse`, `maintenance`, `ctc_switch_commands`)
+  and the result of its last scan (`track_circuits`, `switch_commands`, `aspects`,
+  `crossing_commands`, `overrides`, `warnings`, `log`) as its own attributes.
+  - It owns its territory (`ControllerConfig`, `Block`s), the user's `Program`, and the
+    compiled vital `Program`.
+  - `scan` decodes the inputs, runs both programs and encodes the `OUT_` bits into its
+    output attributes.
+  - `trial` is the sandbox of UC-05: it returns a copy of the wayside, with the candidate
+    program scanned once on it. The live wayside is untouched.
+  - `commit` installs a program as the next numbered iteration, keeping the last five.
 - **`Program`** is immutable: a compiled program never changes while it is scanned.
-  `diagnostics` lists any problems; any diagnostic blocks a commit.
+  `diagnostics` lists any problems; any diagnostic blocks a commit. A committed program is
+  stamped with its iteration `number`, `file_name` and `committed_at`, so the history is a
+  list of programs.
 
 ### 5.2 Track layout
 
 ![Track layout](../uml/track_ctrl_sw/class_layout.png)
 
-- `layout.parse_layout` reads the course layout into a `ParsedLayout`.
-- `build_line` divides its blocks among the fixed number of waysides (`WAYSIDE_COUNTS`)
-  into `ControllerConfig`s, so that every switch lies inside one wayside.
-- `Switch`, `WaysideSignal` and `Crossing` name their PLC outputs (`SW_s`, `SIG_s_*`,
-  `XING_c`).
+- `layout.parse_layout` reads the course layout into a `LineLayout` with no waysides yet.
+- `LineLayout.divide` divides its blocks among the fixed number of waysides
+  (`WAYSIDE_COUNTS`) into `ControllerConfig`s, so that every switch lies inside one wayside.
+- A switch, its signal and a crossing are each named by the block they stand on, so
+  `ControllerConfig` holds them as ids (a switch maps to its point and two legs) and names
+  their PLC outputs itself (`switch_output`, `aspect_outputs`, `crossing_output`). They have
+  no classes of their own.
 
 ### 5.3 Boundary types
 
@@ -502,7 +511,7 @@ Startup, numbered as in the figure:
 - The Track Ctrl SW host process (`main.py`) shows the window and runs every Green Line
   wayside in the same process. There is no separate hardware.
 - The track layout and the PLC programs are files on the PC, picked in the window. Layouts
-  default to the `TrackModel/` folder.
+  default to the `Track_layout/` folder.
 - The test UI (`test_main.py`) is a debugging tool.
   - It plays the clock, the CTC Office and the Track Model, and connects over a named pipe.
   - It is not packaged and the harness never starts it, so it is not part of the deployment.
@@ -516,13 +525,13 @@ Startup, numbered as in the figure:
 |---|---|---|
 | 1 | D021 gives the software variant the Green Line only, but the module and window still load any line, Red included (`WAYSIDE_COUNTS` has Red: 5). Decide whether to refuse other lines. | Harry |
 | 2 | The harness endpoint of D005 is not built. It needs the process protocol (newline JSON with a request ID and a tick number), a single driver, and a ready message. Today `StimulusServer` accepts `step` with an ID only. | Harry |
-| 3 | The PLC names differ between the variants, so one program file does not yet load on both (REQ-INTF-009). HW PR #43 uses `CTCSW_n`, `CTCREV_n`, `SPD_n_b` and `CMD_n_b`. The software variant uses `MAINT` and has no speed bits, and matches the HW code on this branch. | Braden, Harry |
+| 3 | The PLC names differ between the variants, so one program file does not yet load on both (REQ-INTF-009). HW has moved to `CTCSW_s`, `CTCREV_s`, `SPD_n_b` and `CMD_n_b`, with no `FAIL_n` or `MAINT`. The software variant uses the earlier HW names (`FAIL_n`, `SWREV_s`, `MAINT`; restored 2026-10-22), has no speed bits, and so no longer matches HW's current files. One language has to be agreed. | Braden, Harry |
 | 4 | Hand-set switch (rubric 6.8). The software variant lets the programmer set a switch in maintenance mode (UC-08); the hardware variant assumes only the CTC Office does. Agree one behaviour. | Braden, Harry |
 | 5 | Vital code. In the software variant every program has generated vital PLC code attached after it, and only that code writes the outputs. This answers HW open item 1 for the software side. The vital rules and `OUT_` names should be agreed for both variants. | Harry, Braden |
 | 6 | The Protocols differ: HW has `load_territory` and SW loads a whole line through the window (`load_track`). REQ-INTF-009 asks for equivalent external interfaces. | Harry, Braden |
 | 7 | `FAIL_n` is always 0, because the Track Model reports failures as occupancy. It is kept so that programs match HW. Check that REQ-FUNC-059 is satisfied by protecting failures as occupancy. | Harry |
 | 8 | REQ-FUNC-057 ("know when the system is in maintenance mode"). The CTC Office sends no flag; maintenance is inferred from a CTC switch command being in effect. The wording is left open. | Harry, CTC owner |
-| 9 | Keeping a speed under the posted limit, and zero speed for zero authority, belong to the CTC Office. The track controller only passes the suggestion, halves it, or sends 0. The CTC owner to confirm. | CTC owner |
+| 9 | The posted-limit clamp is now vital PLC code (2026-10-28), so the track controller clamps a suggestion that is over the limit. Zero speed for zero authority still belongs to the CTC Office. The CTC owner to confirm. | CTC owner |
 | 10 | REQ-INTF-011 asks for 720 x 450, but the window's minimum size is 1100 x 720. | Harry |
 | 11 | Stale text in the code. `plc.py` cites REQ-FUNC-066 (the Boolean-only requirement is REQ-FUNC-051). The `interface.py` docstrings still say a not-ready wayside drives fail-safe outputs; it transmits nothing. | Harry |
 | 12 | Two proposals in `truth/_inbox/Track-Ctrl-SW/` are superseded: `20261008-1740-vital-restrictions.md` and `20261014-0950-track-controller-vital-restrictions.md`. They should be denied at promotion. | Harry (human promotion) |

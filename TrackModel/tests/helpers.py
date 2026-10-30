@@ -18,9 +18,9 @@ MODULE_DIR = Path(__file__).resolve().parents[1]
 LAYOUT_PATHS = tuple(str(p) for p in sorted(MODULE_DIR.glob("*_line.json")))
 
 
-def make_model(ticket_probability: float = 0.0, seed: int = 0) -> TrackModel:
+def make_model(tickets_per_minute: float = 0.0, seed: int = 0) -> TrackModel:
     """Return a Track Model over every course line."""
-    return TrackModel(TrackConfig(LAYOUT_PATHS, ticket_probability, seed))
+    return TrackModel(TrackConfig(LAYOUT_PATHS, tickets_per_minute, seed))
 
 
 def report(
@@ -60,10 +60,14 @@ def past_end(model: TrackModel, block_id: str) -> float:
 def make_inputs(
     trains: Mapping[str, TrainReport] | None = None,
     controller: TrackControllerCommands | None = None,
-    ambient_temp_c: float = 10.0,
+    ambient_temp_c: float | None = 10.0,
     sim_time_s: float | None = None,
 ) -> TrackModelInputs:
-    """Return a full input set; empty commands keep the last values."""
+    """Return a full input set.
+
+    Empty commands keep every device's last command, and command no
+    speed or authority: those last one tick.
+    """
     return TrackModelInputs(
         controller=controller or TrackControllerCommands(),
         trains=dict(trains or {}),

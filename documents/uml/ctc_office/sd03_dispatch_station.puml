@@ -11,22 +11,31 @@ participant "display" as Disp
 participant "StubCtcOffice" as Model
 end box
 
-D -> UI : pick Line
-UI -> Host : trainOptions(line), stationOptions(line)
-Host --> UI : trains on the line + "New train (T1)";\nthe line's station blocks
-D -> UI : pick Train, Destination station,\nArrival (HH:MM, optional)
-D -> UI : Dispatch train
+D -> UI : lineSelect.committed(line)
+UI -> Host : trainOptions(line)
+Host --> UI : trains on the line + "New train (T1)"
+UI -> Host : stationOptions(line)
+Host --> UI : the line's station blocks
+D -> UI : trainSelect.committed(train_id)
+D -> UI : destinationSelect.committed(block_id)
+D -> UI : arrivalField.committed("HH:MM")
+note right of D : Arrival is optional.
+D -> UI : "Dispatch train".clicked()
 UI -> Host : dispatchTrain(train_id, line, block_id, "HH:MM")
 opt arrival given
   Host -> Disp : parse_time_of_day("HH:MM")
   alt not a time of day
     Disp --> Host : TimeOfDayError
-    Host --> UI : message
+    Host --> UI : the error's text
     UI -> D : the reason; nothing changes
   end
 end
 Host -> Model : dispatch(train_id, line, block_id, arrival_s)
-Model -> Model : train ID trimmed, printable, at most 32 characters;\nline and block on the layout; arrival within a day
+Model -> Model : _require_train_id(train_id)
+note right of Model
+  Train ID trimmed, printable, at most 32 characters;
+  line and block on the layout; arrival within a day.
+end note
 alt a wayside on the line not ready
   Model --> Host : UnsafeActionError "The Red line's Track Controller\nis not ready (W2: no PLC program) ..."
 else destination closed or closing
@@ -34,11 +43,15 @@ else destination closed or closing
 else the train is on the other line
   Model --> Host : UnsafeActionError "T1 is on the Green line ..."
 else accepted
-  Model -> Model : orders[train_id] = DispatchOrder(train, line,\nblock, arrival) — replaces any earlier order
+  note over Model
+    orders[train_id] = DispatchOrder(train, line,
+    block, arrival); replaces any earlier order.
+  end note
   Model --> Host : ok
 end
-Host -> Host : revision += 1
+Host -> UI : stateChanged()
 Host --> UI : "" or the refusal's text
+UI -> UI : report(error, done)
 UI -> D : "T1 dispatched to GLENBURY." or the reason
 note over Model
   A new train waits in the yard until it is released (SD-20).

@@ -1,7 +1,9 @@
 # Train Model physics
 
-What `train_model/model.py` computes, exactly, on every call to
-`step(dt, inputs)`. Numbers are for the default `TrainConfig` (Bombardier
+The retained numerical algorithm in `train_model/model.py` and the accepted
+October 20, 2026 design from [SDD v0.2](../../documents/Railway_Sim_SDD_Train_Model.md).
+Implementation descriptions below reflect the current working tree, including
+concurrent backend changes inspected during this documentation review. Numbers are for the default `TrainConfig` (Bombardier
 FLEXITY 2, Blackpool, 5-module consist). Everything is SI internally; the
 only boundary units that are not SI base units are grade (degrees) and
 temperature (°C).
@@ -28,13 +30,13 @@ primitive keeps everything consistent.
 | `capacity` | 222 (74 seated + 148 standing) | Datasheet |
 | `passenger_mass_kg` | 77.1107 kg (170 lb) | Customer Q&A |
 | `n_crew` | 5 | Design §5.2 |
-| `p_max_w` | 480,000 W (4 × 120 kW) | Provisional |
+| `p_max_w` | 480,000 W (4 × 120 kW) | Confirmed by Kevin Schillinger, 2026-10-20 |
 | `v_max_mps` | 19.444 m/s (70 km/h) | Datasheet; **not enforced** |
 | `ref_load_fraction` | 2/3 | Datasheet test condition |
 | `accel_ref_mps2` | 0.5 m/s² | Datasheet, at 2/3 load |
 | `decel_service_mps2` | 1.2 m/s² | Datasheet, at 2/3 load |
 | `decel_emergency_mps2` | 2.73 m/s² | Datasheet, at 2/3 load |
-| `c_rr` | 0.002 | Assumed |
+| `c_rr` | 0.002 | Existing configured coefficient; retained scope |
 | `g_mps2` | 9.81 m/s² | |
 | `seed` | 0 | Disembark random generator |
 
@@ -67,7 +69,7 @@ is uphill in that direction. θ = radians(`grade_deg`).
 | Traction F_t | see below | forward only |
 | Grade F_g | m·g·sin θ | down the slope (opposes forward motion uphill) |
 | Rolling resistance F_r | c_rr·m·g·cos θ | against motion; static at rest |
-| Brake F_b | 0, `f_service_n` or `f_emergency_n` (section 4) | against motion; static at rest |
+| Brake F_b | Sum of the configured forces of engaged brakes (accepted design; section 4) | against motion; static at rest |
 
 **Traction.** Effective power P = min(`power_cmd_w`, `p_max_w`), and P = 0
 under an engine failure. Then
@@ -89,28 +91,30 @@ acts. Cutting power when braking is the Train Controller's decision
 
 ## 4. Brakes
 
-Which brakes are engaged comes from one function, `_brakes_engaged`, used for
-both the force and the reported Brake State:
+The accepted states are independent:
 
-- **Emergency** is engaged if the Train Controller commands it **or** the
-  passenger emergency brake is pulled.
-- **Service** is engaged if commanded, **and** the emergency brake is not
-  engaged, **and** there is no brake failure.
+- **Emergency** engages for the controller command or the passenger latch.
+- **Service** engages for its command unless service brake failure is active.
+- Both may be active. Their configured forces sum:
+  `F_b = service_active * f_service_n + emergency_active * f_emergency_n`.
 
-So the emergency brake supersedes the service brake (forces never add), and a
-brake failure blocks the service brake only. The brake force is
-`f_emergency_n` if emergency is engaged, else `f_service_n` if service is
-engaged, else 0.
+Force summation is the realization selected in response to Kevin’s review and
+recorded in SDD v0.2. In the inspected working tree, `_brakes_engaged` reports
+independent states and `_brake_n` sums the engaged configured forces. These
+concurrent backend edits were not made by this documentation task.
 
-The passenger pull latches. It stays engaged until cleared; only the test-only
-`clear_passenger_brake_for_test` clears it today (see
-[integration.md](integration.md#passenger-brake-release)).
+The passenger pull latches until the controller's emergency brake goes from
+true to false (Kevin Schillinger 2026-10-28). A pull made after the
+controller's last true is kept. The window has no release action. A separate test-only clear hook remains for
+the developer utility.
 
 ## 5. Integration
 
 Commands and track inputs are **held constant for the whole tick** of length
-dt. The tick is integrated in one or more internal substeps; the harness
-still sees exactly one step of dt.
+dt. The external dt stays fixed throughout the run; speed and pause change only
+tick frequency. Each tick is integrated in internal segments/substeps whose
+durations sum to dt. Stops and traction-regime transitions need internal
+boundaries for accurate event handling; stability limits split segments further.
 
 Within a substep the net force on a moving train is
 
@@ -120,7 +124,7 @@ and the substep is solved according to the regime:
 
 1. **No traction** (P = 0): all forces are constant, so the update is
    exact: v' = v + a·h, x' = x + h·(v + v')/2.
-2. **Force-limited** (0 ≤ v < v_b): traction is the constant F_max, so the
+2. **Force-limited forward motion** (0 ≤ v < v_b): traction is the constant F_max, so the
    update is exact as above. If the train would pass v_b inside the substep,
    the substep ends exactly at v_b and the rest of the tick continues
    power-limited.
@@ -129,7 +133,7 @@ and the substep is solved according to the regime:
    m·(v' − v) = h·(P / v_m − R) with R = F_g + F_b + F_r. This is a quadratic
    in v', solved in closed form. Its key property: the traction work in the
    substep, (P / v_m)·(h·v_m), is exactly P·h, so traction never delivers
-   more energy than was commanded. If the train slows through v_b inside the
+   more energy than was commanded or creates artificial energy gain. If the train slows through v_b inside the
    substep, the substep ends at v_b and continues force-limited.
 
 Substep length is capped at the traction relaxation time m·s²/P, with
@@ -146,7 +150,8 @@ m·w/|R| when R < 0, which keeps the quadratic's roots real; it ends at v_b
 when the rollback slows through it. The balance P/w = R is unstable: a
 slower rollback is stopped, a faster one keeps accelerating.
 
-The scheme is second-order: halving dt cuts the error about fourfold. At
+For numerical verification, halving the external dt cuts second-order error
+about fourfold; production uses the same fixed dt throughout a run. At
 dt = 0.1 s a 60 s full-power launch matches the closed-form solution to about
 4e-9 in speed and 2e-7 in position (relative). Constant-force phases are exact.
 
@@ -180,14 +185,16 @@ or the static rule of section 6 at v = 0.
 `step(dt, inputs)` does, in order:
 
 1. Validate dt and inputs (section 14). On rejection, nothing changes.
-2. Doors and passengers, from the speed at the **start** of the tick
+2. Clear the passenger latch if the controller's emergency brake was true on
+   the last tick with the pull latched and is false now. Then update
+   doors and passengers, from the speed at the **start** of the tick
    (sections 8 and 9).
 3. Block change: if polarity differs from the previous tick, offset resets
    to 0 (section 10).
 4. Integrate motion over dt (sections 5 and 6).
 5. If the train is now moving, the stop ends, so the next stop draws its
    own disembark (section 9). The doors are left as commanded: the
-   interlock that closed them here is commented out (section 8).
+   Train Controller owns the interlock (section 8).
 6. Update cabin temperature (section 11).
 7. Store the inputs, add dt to elapsed time (compensated summation, so the
    sum stays within an ulp of exact over any run), and build the outputs
@@ -197,16 +204,10 @@ or the static rule of section 6 at v = 0.
 
 Each door follows its command: door_open = command_open, whatever the speed.
 
-The door interlock is commented out of `model.py`, not deleted. Whether the
-Train Model enforces it is with the course instructor, and Kevin believes it
-does not (2026-10-06). While it is out, nothing in the Train Model keeps a door
-shut while moving. The commented-out rule was:
-
-- door_open = command_open AND (speed at the start of the tick = 0); an open
-  command while moving was refused and, if held, took effect at the stop;
-- an open door closed as soon as the train moved (step 5 of section 7).
-
-Door State reports the doors, which now always match Door Command.
+The Train Controller ensures doors remain closed when required. The Train
+Model follows commands and reports matching Door State; it enforces no speed
+interlock. Historical disabled interlock code is not an unresolved ownership
+question. Rest remains a separate Train Model boarding condition.
 
 ## 9. Passengers
 
@@ -220,8 +221,9 @@ the tick:
    reopening one, draws nobody more; the next stop begins once the train
    has moved. The generator is `random.Random(config.seed)`, one per train, so
    runs are reproducible.
-2. **Board.** Only if the train is **at rest** **and** a door is open, at a
-   station or not (Kevin, 2026-10-07):
+2. **Board.** The Track Model sends boarding events only at stations. The
+   Train Model checks **rest**, an open door, count bounds and capacity; it
+   applies no station-presence gate (Kevin’s October 20 review):
    aboard += max(0, min(passengers_boarded, capacity − aboard)).
    A count received at any other time boards nobody and is not kept.
 
@@ -256,7 +258,7 @@ next step. Failure status is not sent to the Train Controller.
 | Failure | Effect |
 |---|---|
 | Engine | Traction is 0 (P treated as 0). |
-| Signal pickup | Commanded speed and authority are both reported as 0. Track Info (block, grade, speed limit) is unaffected. |
+| Signal pickup | Commanded speed and authority are both reported as null, invalid data rather than a valid 0 (2026-10-28). Track Info (block, grade, speed limit) is unaffected. |
 | Brake | The service brake is blocked. The emergency brake, commanded or pulled, still works. |
 
 ## 13. Outputs
@@ -287,8 +289,10 @@ Before any state changes, `step` rejects:
   or an integer too large for a float counts as not one
   (`InvalidInputError`);
 - a block ID, station name, announcement or beacon station name that is not
-  text, a beacon platform side other than `L`, `R` or `LR`, or a beacon station
-  name over 128 characters (`InvalidInputError`);
+  text, a beacon platform side other than `L`, `R` or `LR`, or a beacon
+  payload exceeding 128 characters in its complete canonical ASCII JSON
+  encoding (`InvalidInputError`). The inspected `utils/beacon_codec.py`
+  includes syntax and escapes; see [encoding](module-interface.md#beacon-payload-encoding);
 - negative power (`InvalidInputError`);
 - a grade not strictly between −90° and 90°, a negative speed limit or a
   negative commanded speed: values with no physical meaning
@@ -304,7 +308,8 @@ the model.
 
 ## 15. Reference figures
 
-Default configuration, flat track unless stated.
+Default configuration, flat track unless stated. Each brake column describes
+that brake alone; the accepted simultaneous-brake design sums both forces.
 
 | | Crew only (41,286 kg) | Full (58,404 kg) |
 |---|---|---|
@@ -323,8 +328,11 @@ Default configuration, flat track unless stated.
 - Speed governing: `v_max_mps` is not enforced; speed regulation belongs to
   the Train Controller (D009). With no aerodynamic drag, sustained full power
   on flat track would approach P / F_r (hundreds of m/s).
-- Aerodynamic drag, curve resistance, wheel slip, jerk limits and brake
-  build-up time.
+- Rolling resistance with the existing coefficient is the only passive
+  resistance term in scope. Grade remains gravitational force and braking
+  commanded force. Aerodynamic drag, curve resistance, wheel slip, jerk
+  limits and brake build-up are outside this model, not prerequisites.
+  No real-world calibration study is claimed.
 - Load-weighed brakes: brake force does not scale with load.
 - Traction cut on braking (Train Controller's decision).
 - Electrical power, losses and regeneration (see
@@ -332,27 +340,10 @@ Default configuration, flat track unless stated.
 
 ## 17. Relation to the truth branch
 
-Statements on `truth` that describe this code differently, to be
-reconciled by their owner:
-
-- `decisions/D006-fixed-time-step.md` and `modules/train-model.md` say
-  integration is trapezoidal and that the Train Model does not sub-step. The
-  code holds dt fixed, as D006 requires, but integrates each tick in internal
-  substeps (exact for constant forces, midpoint for power-limited traction).
-  No inbox proposal changes this yet; the pending `train-model` proposal
-  still says trapezoidal.
-
-As of 2026-10-07 the following are inbox proposals on this branch awaiting
-promotion, and the promoted entries still say otherwise:
-
-- Brake failure blocks the service brake only (section 4); promoted
-  `signals/brake-state.md`, `signals/failure-status.md`,
-  `arbitration/passenger-emergency-brake.md` and `modules/train-model.md`
-  say it disables both brakes, including a passenger pull.
-- The 51,433 kg reference mass sizes traction as well as the brakes.
-- Failure status is not sent to the Train Controller (section 12); promoted
-  `signals/failure-status.md` says it is.
-- The door interlock is commented out (section 8); promoted
-  `signals/door-command.md` says the Train Model enforces it.
-- A beacon's platform side may be `LR` (section 14); promoted
-  `signals/beacon.md` says L or R.
+The fetched truth branch remains authoritative until human promotion. New
+full-entry proposals in `truth/_inbox/claude/quirky-fermi-sickg4/` capture Kevin’s
+October 20 review: corrected D006, independent brakes and force summation,
+boarding ownership, complete beacon encoding, pickup zeros, front offset,
+confirmed power and scope, and integrated display/clock rules. These proposals
+are not promoted facts. Implementation gaps belong in
+[open issues](open-issues.md), not in the truth store.

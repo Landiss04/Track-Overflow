@@ -4,11 +4,14 @@ Authority is the number of blocks ahead of a train's current block that
 it may still enter (decision D013, proposed on ``ctc-interfacing``). The
 CTC recomputes it every step: the count runs along the train's route
 toward its destination and ends at the earliest of the destination, the
-block before the first occupied, closed, closing or failed block, and
-the block before a switch not reported set for the route
+block before the first closed or closing block, and the
+block before a switch not reported set for the route
 (``authority-stops-before-obstruction``, proposed on ``ctc-interfacing``).
 No block is within two trains' authorities (``exclusive-authority``):
-another train's blocks stop the count too.
+another train's blocks stop the count too. And it never ends next to
+another train's block or authority, along the route or off it: one empty
+block always stays between trains (``keep_gap``; Braden Bosilovich and
+Harry Tye 2026-10-26, Landis 2026-10-28).
 
 The route is the shortest path a train can run through the layout
 files in ``TrackModel/``. Connections come from the files alone:
@@ -39,7 +42,7 @@ from __future__ import annotations
 
 import heapq
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Collection, Mapping
 
 from ctc.interface import SwitchPosition
@@ -341,13 +344,17 @@ def authority(graph: TrackGraph, start: str, destination: str,
 
     ``obstructions`` maps a block ID to why no train may enter it
     ("occupied", "closed" or "closing"); the train's own block
-    may be listed and is ignored. ``switches`` maps a switch ID to its
-    reported position; a switch not listed counts as not set.
+    may be listed and is ignored. ``switches`` maps a
+    switch ID to its reported position; a switch not listed counts as
+    not set.
     ``reserved`` maps a block ID to the other train whose authority
     holds it. With ``keep``, the count also stops at the first block
     not in it: the part of an earlier grant the train still has.
     ``route``, if given, is the path to count along (from ``start`` to
     ``destination``); otherwise the shortest one is taken.
+
+    The count then keeps the gap (``keep_gap``): it never ends next to
+    another train's block or authority.
     """
     path = route if route is not None else graph.route(start, destination)
     if path is None:
@@ -357,17 +364,61 @@ def authority(graph: TrackGraph, start: str, destination: str,
     for count, after in enumerate(path[1:]):
         leg = graph.leg(here, after)
         if leg is not None and switches.get(leg.switch_id) != leg.position:
-            return AuthorityLimit(count, here, "switch", leg.switch_id,
-                                  path)
+            return keep_gap(graph, AuthorityLimit(
+                count, here, "switch", leg.switch_id, path),
+                obstructions, reserved)
         reason = obstructions.get(after)
         if reason is not None:
-            return AuthorityLimit(count, here, reason, after, path)
+            return keep_gap(graph, AuthorityLimit(
+                count, here, reason, after, path), obstructions, reserved)
         holder = reserved.get(after)
         if holder is not None:
-            return AuthorityLimit(count, here, "reserved", after, path,
-                                  holder)
+            return keep_gap(graph, AuthorityLimit(
+                count, here, "reserved", after, path, holder),
+                obstructions, reserved)
         if keep is not None and after not in keep:
-            return AuthorityLimit(count, here, "granted", after, path)
+            return keep_gap(graph, AuthorityLimit(
+                count, here, "granted", after, path), obstructions, reserved)
         here = after
-    return AuthorityLimit(len(path) - 1, destination, "destination",
-                          route=path)
+    return keep_gap(graph, AuthorityLimit(
+        len(path) - 1, destination, "destination", route=path),
+        obstructions, reserved)
+
+
+def keep_gap(graph: TrackGraph, limit: AuthorityLimit,
+             obstructions: Mapping[str, str],
+             reserved: Mapping[str, str]) -> AuthorityLimit:
+    """Pull an authority back until it keeps one empty block clear of
+    every other train.
+
+    A wayside holds any train whose neighbouring block is occupied: it
+    cannot tell a leader from a follower, so two trains next to each
+    other both hold, and neither moves again. So no authority may end
+    next to a block another train occupies (or a failed block, which
+    reads occupied) or another train's authority holds, along the
+    route or off it, as on a switch's other leg (Landis 2026-10-28;
+    Braden Bosilovich and Harry Tye 2026-10-26). A switch's blocks are
+    next to each other whatever position it reports, so an authority
+    that stops at a switch keeps the gap too (Landis and Harry Tye
+    2026-10-28). Each block given up is named, as "occupied" or
+    "reserved", by the block it was next to.
+    """
+    route, blocks = limit.route, limit.blocks
+    while blocks > 0:
+        end = route[blocks]
+        beside = next((n for n in graph.neighbors(end)
+                       if n not in (route[blocks - 1], route[0])
+                       and (obstructions.get(n) == "occupied"
+                            or n in reserved)), None)
+        if beside is None:
+            break
+        blocks -= 1
+        if obstructions.get(beside) == "occupied":
+            limit = replace(limit, reason="occupied", at=beside,
+                            held_by="")
+        else:
+            limit = replace(limit, reason="reserved", at=beside,
+                            held_by=reserved[beside])
+    if blocks == limit.blocks:
+        return limit
+    return replace(limit, blocks=blocks, end_block_id=route[blocks])

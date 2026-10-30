@@ -1,16 +1,18 @@
 """One wayside controller: I/O image, scan cycle, report.
 
-The wayside houses its PLC program and decides nothing on its own. Each
-scan builds the Boolean input image from the CTC Office's and the Track
-Model's inputs for this wayside's blocks, runs the program on both
-channels, and drives its outputs onto the track as they are. Every
-protection (separation, closures, switch locking and correspondence,
-crossings, the speed limit) is the program's.
+The wayside houses its PLC program. Each scan builds the Boolean input
+image from the CTC Office's and the Track Model's inputs for this
+wayside's blocks and runs the program on both channels. It then runs the
+vital block (``track_ctrl_hw.vital``), generated from the territory, on
+both channels over the same inputs and the program's outputs, and drives
+the vital block's ``OUT_`` outputs. The vital block can only make an
+output more restrictive; every other decision is the program's.
 
 Outputs hold their fail-safe values (every signal red, every crossing
 active, every track circuit sending speed 0 and authority 0, every
 switch where it is) only while no program runs: none is loaded, a new
-one has not scanned yet, or channels A and B have disagreed.
+one has not scanned yet, or channels A and B have disagreed on either
+the program or the vital block.
 
 PLC names, for a block numbered ``n``:
 
@@ -39,14 +41,13 @@ Name            Kind   Meaning
 ==============  =====  ====================================================
 
 Speed is a number, so it crosses the I/O card as five bits, bit 0 being
-1 m/s and bit 4 16 m/s: 0 to 31 m/s. Keeping it under the block's
-limit is the program's job. Authority stays outside the program: the
-wayside sends the CTC Office's count when ``AUTH_n`` is 1.
+1 m/s and bit 4 16 m/s: 0 to 31 m/s. The program decides the speed; the
+vital block caps it at the block's limit. Authority stays outside the
+program: the wayside sends the CTC Office's count when ``AUTH_n`` is 1.
 """
 
 from __future__ import annotations
 
-import math
 import time
 from dataclasses import dataclass
 from typing import Mapping
@@ -56,6 +57,7 @@ from track_ctrl_hw.interface import (
     SIGNAL_ASPECTS,
     BlockKey,
     BlockReport,
+    BlockRef,
     CtcInputs,
     CtcReport,
     ProgramInfo,
@@ -68,9 +70,16 @@ from track_ctrl_hw.interface import (
     Territory,
     TrackCircuitCommand,
     TrackModelInputs,
+    VitalInfo,
     WaysideSnapshot,
 )
 from track_ctrl_hw.plc import Program, compile_program
+from track_ctrl_hw.vital import (  # noqa: F401 (speed_limit_whole_mps)
+    OUT,
+    overrides,
+    speed_limit_whole_mps,
+    vital_source,
+)
 
 #: PLC suffix for each signal aspect, in ``SIGNAL_ASPECTS`` order.
 ASPECT_SUFFIXES: tuple[str, ...] = ("R", "Y", "G", "SG")
@@ -79,9 +88,11 @@ SPEED_BITS = 5
 #: The fastest speed the I/O card carries, in m/s.
 MAX_SPEED_MPS = (1 << SPEED_BITS) - 1
 
-# A speed limit within this of a whole m/s counts as that whole number,
-# so 36 km/h is 10 m/s rather than 9.999... after division.
-_LIMIT_TOLERANCE = 1e-9
+
+def _neighbor_numbers(territory: Territory) -> frozenset[str]:
+    """The adjacent block IDs whose state is shared read-only."""
+    return frozenset(number for block in territory.blocks
+                     for number in block.next_blocks if number != "yard")
 
 
 def input_names(territory: Territory) -> frozenset[str]:
@@ -91,6 +102,8 @@ def input_names(territory: Territory) -> frozenset[str]:
         number = block.key.block_id
         names.update((f"OCC_{number}", f"CLOSED_{number}"))
         names.update(_speed_names("SPD", number))
+    for number in _neighbor_numbers(territory):
+        names.update((f"OCC_{number}", f"CLOSED_{number}"))
     for switch in territory.switches:
         number = switch.switch_id
         names.update(
@@ -123,11 +136,6 @@ def _signal_names(switch: Switch) -> tuple[str, ...]:
 def _speed_names(prefix: str, number: str) -> tuple[str, ...]:
     # Least significant bit first.
     return tuple(f"{prefix}_{number}_{bit}" for bit in range(SPEED_BITS))
-
-
-def speed_limit_whole_mps(limit_mps: float) -> int:
-    """The highest whole m/s that does not exceed a speed limit."""
-    return int(math.floor(limit_mps + _LIMIT_TOLERANCE))
 
 
 def decode_aspect(values: Mapping[str, bool], switch: Switch) -> SignalAspect:
@@ -186,6 +194,12 @@ class Wayside:
     def __init__(self, territory: Territory) -> None:
         self._territory = territory
         self._keys = frozenset(territory.keys)
+        self._vital = compile_program(vital_source(territory))
+        if self._vital.diagnostics:
+            raise RuntimeError(
+                f"Vital block for wayside {territory.wayside_id} does not "
+                f"compile: {self._vital.diagnostics[0]}"
+            )
         self._program: Program | None = None
         self._program_info: ProgramInfo | None = None
         self._clear_runtime()
@@ -302,7 +316,7 @@ class Wayside:
             values, holding = None, stall
         else:
             values, holding = self._run_program(
-                occupied, closed, suggestions, requests, track_model
+                occupied, closed, suggestions, requests, track_model, ctc
             )
         duration = time.perf_counter() - started
 
@@ -385,6 +399,7 @@ class Wayside:
         suggestions: Mapping[BlockKey, Suggestion],
         requests: Mapping[BlockKey, SwitchPosition],
         track_model: TrackModelInputs,
+        ctc: CtcInputs,
     ) -> tuple[dict[str, bool] | None, str]:
         # The program's outputs and "", or None and why no program runs.
         if self._scan_info.channel_fault:
@@ -400,6 +415,11 @@ class Wayside:
             speed = 0 if suggestion is None else suggestion.speed_mps
             for bit, name in enumerate(_speed_names("SPD", number)):
                 image[name] = bool(speed >> bit & 1)
+        occupied_refs = {key.ref for key in track_model.occupied_blocks}
+        for number in _neighbor_numbers(self._territory):
+            ref = BlockRef(self._territory.line, number)
+            image[f"OCC_{number}"] = ref in occupied_refs
+            image[f"CLOSED_{number}"] = ref in ctc.closed_blocks
         for switch in self._territory.switches:
             number = switch.switch_id
             image[f"SWREV_{number}"] = (
@@ -410,31 +430,43 @@ class Wayside:
         channel_a = self._program.scan_a(image)
         channel_b = self._program.scan_b(image)
         if channel_a != channel_b:
-            differing = sorted(
-                name
-                for name in channel_a
-                if channel_a[name] != channel_b[name]
-            )
-            fault = (
-                "Channels A and B disagree on "
-                + ", ".join(differing[:3])
-                + ("..." if len(differing) > 3 else "")
-                + ". Outputs are held until a program is loaded."
-            )
-            self._scan_info = ScanInfo(
-                scans=self._scan_info.scans,
-                last_scan_s=self._scan_info.last_scan_s,
-                interval_s=self._scan_info.interval_s,
-                last_duration_s=self._scan_info.last_duration_s,
-                overruns=self._scan_info.overruns,
-                channels_agree=False,
-                channel_fault=fault,
-            )
-            return None, fault
+            return None, self._channel_fault("", channel_a, channel_b)
         # Outputs the program does not declare read as 0.
-        values = {name: False for name in output_names(self._territory)}
-        values.update(channel_a)
+        program = {name: False for name in output_names(self._territory)}
+        program.update(channel_a)
+        vital_image = {**image, **program}
+        vital_a = self._vital.scan_a(vital_image)
+        vital_b = self._vital.scan_b(vital_image)
+        if vital_a != vital_b:
+            return None, self._channel_fault("vital ", vital_a, vital_b)
+        values = {name: vital_a[OUT + name] for name in program}
+        self._overrides = overrides(program, values)
         return values, ""
+
+    def _channel_fault(
+        self, which: str, channel_a: Mapping[str, bool],
+        channel_b: Mapping[str, bool],
+    ) -> str:
+        # Latch a disagreement; only a new program clears it.
+        differing = sorted(
+            name for name in channel_a if channel_a[name] != channel_b[name]
+        )
+        fault = (
+            f"Channels A and B disagree on {which}"
+            + ", ".join(differing[:3])
+            + ("..." if len(differing) > 3 else "")
+            + ". Outputs are held until a program is loaded."
+        )
+        self._scan_info = ScanInfo(
+            scans=self._scan_info.scans,
+            last_scan_s=self._scan_info.last_scan_s,
+            interval_s=self._scan_info.interval_s,
+            last_duration_s=self._scan_info.last_duration_s,
+            overruns=self._scan_info.overruns,
+            channels_agree=False,
+            channel_fault=fault,
+        )
+        return fault
 
     def _drive(self, values: Mapping[str, bool]) -> None:
         # The program's outputs, onto the track as they are.
@@ -484,6 +516,7 @@ class Wayside:
         self._signal_reports: dict[BlockKey, SignalAspect] = {}
         self._crossing_reports: dict[BlockKey, bool] = {}
         self._report: CtcReport | None = None
+        self._overrides: tuple[str, ...] = ()
         self._hold_restrictive("No scan has run yet.")
 
     def _hold_restrictive(self, reason: str) -> None:
@@ -500,6 +533,7 @@ class Wayside:
         self._circuits: dict[BlockKey, TrackCircuitCommand] = {
             key: TrackCircuitCommand(0, 0) for key in self._suggestions
         }
+        self._overrides = ()
         self._holding = reason
 
     def snapshot(self) -> WaysideSnapshot:
@@ -528,4 +562,10 @@ class Wayside:
             switch_requests=dict(self._switch_requests),
             holding=self._holding,
             report=self._report,
+            vital=VitalInfo(
+                checksum=self._vital.checksum,
+                boolean_count=self._vital.boolean_count,
+                statement_count=len(self._vital.statements),
+            ),
+            overrides=self._overrides,
         )

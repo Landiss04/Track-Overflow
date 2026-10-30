@@ -114,10 +114,10 @@ class UserInputTests(unittest.TestCase):
         self.ctc_maintenance(True)
         self.user("set_switch", switch="12", reverse=True)
         self.assertTrue(
-            self.state.system.controller(CONTROLLER).outputs.switches["12"])
+            self.state.system.controller(CONTROLLER).switch_commands["12"])
         self.user("release_switch", switch="12")
         self.assertFalse(
-            self.state.system.controller(CONTROLLER).outputs.switches["12"])
+            self.state.system.controller(CONTROLLER).switch_commands["12"])
 
     def test_maintenance_ending_takes_the_hand_set_switch_back(self) -> None:
         self.ctc_maintenance(True)
@@ -438,7 +438,7 @@ class TrackConfigTests(unittest.TestCase):
             self.state.load_track_config(str(self._purple(folder)))
         self.state.system.load_starter_programs()
         controller = self.state.system.controller("PTC-01")
-        self.assertEqual(controller.config.switches, ())
+        self.assertEqual(controller.config.switches, {})
         self.assertEqual(controller.diagnose(
             compile_program(default_program_source(controller))), ())
         self.state.step(0.1, TrackControllerInputs(time_s=1.0))

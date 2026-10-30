@@ -237,6 +237,47 @@ class Stepping(unittest.TestCase):
         self.assertEqual(module.snapshot().ticks, 0)
 
 
+class StarterSeparation(unittest.TestCase):
+    """The starter program holds a train beside another, nothing more.
+
+    The CTC Office suggests for the block a train is in and preloads
+    the next block on its route (truth ``signals/suggested-speed``). The
+    next block has no train in it yet, so it passes its suggestion and
+    the train finds its values there as it enters.
+    """
+
+    @staticmethod
+    def circuits(
+        occupied: set[str], suggested: dict[str, tuple[int, int]]
+    ) -> dict[str, tuple[int, int]]:
+        out = _tick(
+            _green(),
+            ctc=CtcInputs(suggestions={
+                BlockKey("Green", block): Suggestion(*values)
+                for block, values in suggested.items()
+            }),
+            track_model=TrackModelInputs(occupied_blocks=frozenset(
+                BlockKey("Green", block) for block in occupied
+            )),
+        )
+        return {
+            key.block_id: (circuit.speed_mps, circuit.authority_blocks)
+            for key, circuit in out.track_model.track_circuits.items()
+        }
+
+    def test_a_preloaded_next_block_passes_its_suggestion(self) -> None:
+        self.assertEqual(
+            self.circuits({"64"}, {"64": (12, 2), "65": (12, 1)}),
+            {"64": (12, 2), "65": (12, 1)},
+        )
+
+    def test_a_train_beside_another_is_held(self) -> None:
+        self.assertEqual(
+            self.circuits({"64", "65"}, {"64": (12, 2), "65": (12, 1)}),
+            {"64": (0, 0), "65": (0, 0)},
+        )
+
+
 class Startup(unittest.TestCase):
     """A vital controller stalls until a line and every program are loaded."""
 
@@ -449,7 +490,7 @@ class Programs(unittest.TestCase):
     def test_good_program_is_committed(self) -> None:
         module = _green()
         wayside = module.wayside_ids[0]
-        source = module._waysides[wayside].controller.history[0].source
+        source = module._waysides[wayside].history[0].source
         info = module.load_program(wayside, source, "again.plc")
         self.assertEqual(info.file_name, "again.plc")
         self.assertEqual(info.iteration, 2)

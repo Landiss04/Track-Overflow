@@ -3,21 +3,28 @@ sequenceDiagram
     participant H as Central Harness
     participant M as SwTrackController
     participant W as TrackController (wayside)
+    participant S as TrackControllerState
     participant UI as Track Controller UI (QML)
     participant CTC as CTC Office
     participant TM as Track Model
     H->>M: step(dt, inputs)
     alt no track loaded
-        M-->>H: empty outputs, no reports
+        M->>M: _outputs internal: no waysides, nothing listed
+        M-->>H: return empty outputs, no reports
     else a wayside on the line has no program
+        M->>M: step internal: _waiting_lines() lists the line
         loop each wayside of that line
-            M->>W: idle(): line not ready
-            W->>W: run nothing, drive nothing
+            M->>W: idle(line is not ready)
+            W->>W: idle internal: track_circuits, switch_commands, aspects := empty, crossing_commands := every crossing armed, overrides := not_running
         end
-        M-->>H: no commands for the line, reports with ready false
-        H->>CTC: reports: no PLC program
-        CTC->>CTC: hold the line: no dispatch, no suggestions
-        Note right of TM: Receives no switch, signal, crossing or track circuit command for the line.
-        M-->>UI: NOT READY, with the reason on hover
+        M->>M: _report internal: ready false, reason no PLC program
+        M-->>H: return no commands for the line, reports with ready false
+        H->>CTC: STEP: reports, no PLC program
+        CTC->>CTC: step internal: hold the line: no dispatch, no suggestions
+        Note right of TM: Receives no switch, signal or track circuit command for the line. Its crossings are commanded armed (the default).
+        UI->>S: ready, notReadyReason
+        S->>M: not_ready_reasons()
+        M-->>S: return the waysides with no PLC program
+        S-->>UI: return NOT READY, with the reason
     end
-    Note over H,W: A wayside running nothing cannot transmit: its outputs are absent, not safe defaults. The other line is not held.
+    Note over H,W: A wayside running nothing cannot drive switches, signals or circuits: those are absent, not safe defaults. Its crossings stay armed. The other line is not held.

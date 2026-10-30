@@ -1,0 +1,35 @@
+{
+  "time_unit": "s",
+  "lines": [
+    {
+      "line": "Green",
+      "trains": [
+        {
+          "train_id": "1",
+          "stops": [
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "line": "Red",
+      "trains": [
+        {
+          "train_id": "1",
+          "stops": [
+            {
+              "block_id": "16",
+              "station": "HERRON AVE",
+              "arrival_s": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

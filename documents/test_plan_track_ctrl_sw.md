@@ -77,8 +77,8 @@ It runs every wayside of the Green Line (D021). Everything it exchanges crosses
 - Speeds are whole m/s and authorities are block counts (D013).
 - The automated tests need no display: Qt runs with `QT_QPA_PLATFORM=offscreen`.
 - The Track Model reports failures as occupancy, so `FAIL_n` is always 0.
-- The CTC Office owns the posted-limit clamp and zero speed for zero authority. The module
-  is not tested for them.
+- The CTC Office owns zero speed for zero authority. The module is not tested for it. The
+  posted-limit clamp is the module's (vital code) and is tested.
 
 ### 1.3. Definitions, Acronyms, & Abbreviations
 | Term | Definition |
@@ -187,7 +187,7 @@ Inputs, Expected Output, Pass/Fail, Failure Description, Tester, Date Tested.
   - `test_stimulus.py` and `test_link.py`;
   - the shared rig, `rig.py`.
 - **Test data:**
-  - the track layouts `TrackModel/green_line.json` and `red_line.json`;
+  - the track layouts `Track_layout/green_line.json` and `red_line.json`;
   - the small layouts and malformed files built inside `test_layout.py` and `test_stimulus.py`;
   - the starter and HW example PLC programs.
 - **Test tools:**
@@ -249,9 +249,10 @@ For a manual run, start the module window and then the test UI:
 
 **Build for all items.**
 
-- Branch `Track-Ctrl-SW`, commit `f6900f5`.
+- Branch `Track-Ctrl-SW`, commit `2d3dd86` plus the 2026-10-22 restoration of HW's PLC input names (uncommitted).
 - Python 3.12.10 and PySide6 6.8.3.
-- Last full run: 2026-10-21. 191 tests, `OK`. `mypy` clean.
+- Last full run: 2026-10-22. 218 tests: 207 pass, 11 fail (below). `mypy` reports one error (`state.loadStarterPrograms`).
+- **Known failures, recorded as such:** 3 in `test_hw_language.py` (SW-P-05, SW-P-07: HW's PLC language has since moved to `SPD_n_b`, `CMD_n_b`, `CTCSW_s`, with no `FAIL_n` or `MAINT`); 8 from the merge that left `TrackControllerState` loading Green and Red at start and without `loadStarterPrograms` (SW-U-01, SW-U-02, SW-T-12, SW-X-06 and three in `test_module_process.py`).
 
 ### 7.1. SwTrackController (module boundary)
 
@@ -296,9 +297,9 @@ For a manual run, start the module window and then the test UI:
 ### 7.2. TrackController (wayside)
 
 - **Item Description:** `track_ctrl/controller.py`.
-  - One wayside: its `ControllerInputs` and the OS functions (`build_scan_inputs` to
-    decode, `encode_outputs` to encode).
-  - Its programs: `check_program`, `run_program` for the sandbox, `commit` and `scan`.
+  - One wayside: its input card and output state (attributes of the class) and the OS
+    functions (`build_scan_inputs` to decode, `encode_outputs` to encode).
+  - Its programs: `check_program`, `trial` for the sandbox, `commit` and `scan`.
   - Its iteration history (last five) and hand-set switches.
 - **Version/Build:** as above.
 - **Test Approach:** Rig tests (`tests/rig.py`) that change one world input on GTC-01, tick
@@ -314,9 +315,12 @@ For a manual run, start the module window and then the test UI:
 | SW-W-05 | Signals and crossings come back as read-back | One tick | The world's read-back equals the commands; the next report carries it | REQ-FUNC-055 | test_world :: test_signals_and_crossings_come_back_as_readback |
 | SW-W-06 | Closing a block zeroes only that block | Block 7 closed, then reopened; suggestions `(12, 4)` | Block 7 `(0, 0)` while closed, block 9 still `(12, 4)`; block 7 back to `(12, 4)` when reopened | REQ-FUNC-058.1 | test_world :: test_closing_a_block_zeroes_that_blocks_circuit_only |
 | SW-W-07 | Suggestions are per block | Different suggestions on two blocks | Each circuit carries its own | REQ-FUNC-049 | test_world :: test_suggestions_are_per_block; test_one_part_of_a_suggestion_can_change_alone |
-| SW-W-08 | A suggestion passes unchanged | `Suggestion(15, 0)` on block 3 (over the limit, zero authority) | Circuit `(15, 0)`: the wayside applies no numeric rule; that is the CTC Office's | REQ-FUNC-049 | test_world :: test_the_wayside_passes_a_suggestion_unchanged |
+| SW-W-08 | A suggestion under the limit passes unchanged | `Suggestion(11, 0)` on block 3 (posted at 12 m/s; zero authority) | Circuit `(11, 0)`: zero speed for zero authority is the CTC Office's | REQ-FUNC-049 | test_world :: test_the_wayside_passes_a_suggestion_unchanged |
 | SW-W-09 | A program that withholds a block sends it nothing | A bare program that never grants `AUTH_n` | Block 5's circuit `(0, 0)` | REQ-FUNC-058 | test_world :: test_a_program_that_withholds_a_block_sends_it_nothing |
-| SW-W-10 **S** | A wayside with no program transmits nothing | Default Green module with no programs; `Suggestion(9, 2)` on block 3 | `track_circuits`, `switch_commands`, `signal_commands` and `crossing_commands` all empty | REQ-FUNC-058 | test_world :: test_a_wayside_with_no_program_transmits_nothing |
+| SW-W-10 **S** | A wayside with no program transmits nothing but armed crossings | Default Green module with no programs; `Suggestion(9, 2)` on block 3 | `track_circuits`, `switch_commands` and `signal_commands` empty; every crossing command active | REQ-FUNC-058, REQ-FUNC-056 | test_world :: test_a_wayside_with_no_program_transmits_nothing; test_crossings_default_to_armed_until_a_program_runs |
+| SW-W-17 **S** | A suggestion over the posted limit is clamped | `Suggestion(15, 2)` on block 3 (posted at 12 m/s) | Circuit `(12, 2)`; override `speed_clamped`. A suggestion under the limit, `(11, 0)`, passes unchanged | REQ-FUNC-058.1 | test_world :: test_a_suggestion_over_the_limit_is_clamped_to_it; test_a_suggestion_under_the_limit_passes_unchanged |
+| SW-W-18 **S** | The clamp equals `min(speed, limit)` for every block and speed | Every block of GTC-01, every speed from 0 to past what the speed bits hold | The block's circuit speed is `min(speed, posted limit)` each time | REQ-FUNC-058.1 | test_world :: test_the_clamp_is_exact_for_every_limit_and_speed |
+| SW-W-19 **S** | A program cannot declare the speed bits | A program declaring `VAR_IN SUGSPD_3_0` | Refused: `SUGSPD_3_0` is not an input of the wayside | REQ-FUNC-058 | test_world :: test_a_program_cannot_declare_the_speed_bits |
 | SW-W-11 | Every program has the vital code attached | Commit any program | The scan runs the vital code after the program; the outputs are the `OUT_` bits | REQ-FUNC-058 | test_world :: test_every_program_gets_the_vital_code_attached |
 | SW-W-12 | A warning blocks commit like an error | A program that reads an undeclared name | `commit` refused; `blocks_commit` true | REQ-FUNC-058 | test_stimulus :: test_a_warning_blocks_commit_like_an_error; test_the_controller_itself_refuses_a_program_with_warnings |
 | SW-W-13 | An unassigned output blocks commit | A program that declares `SW_12` but never assigns it | One diagnostic naming the output; commit refused | REQ-FUNC-052 | test_stimulus :: test_an_unassigned_output_blocks_commit; test_many_unassigned_outputs_are_one_message |
@@ -376,10 +380,10 @@ For a manual run, start the module window and then the test UI:
 ### 7.5. Track layout (layout)
 
 - **Item Description:** `track_ctrl/layout.py`: `load_layout_file`, `parse_layout`,
-  `build_line`, `WAYSIDE_COUNTS`, and the classes `LineLayout`, `ControllerConfig`,
-  `Block`, `Switch`, `WaysideSignal` and `Crossing`. Also `track_ctrl/display.py` for the
+  `LineLayout.divide`, `WAYSIDE_COUNTS`, and the classes `LineLayout`, `ControllerConfig`
+  and `Block`. Also `track_ctrl/display.py` for the
   unit conversions.
-- **Version/Build:** as above, with `TrackModel/green_line.json` and `red_line.json`.
+- **Version/Build:** as above, with `Track_layout/green_line.json` and `red_line.json`.
 - **Test Approach:** Parse the real course files and compare the counts with the files.
   Check the partition invariants. Feed malformed layouts, one fault each, and expect
   `LayoutError` with a reason.
@@ -390,9 +394,9 @@ For a manual run, start the module window and then the test UI:
 | SW-L-02 | Switch strings read normal first, then reverse | Green switch entries | `normal_end` and `reverse_end` as in the file | REQ-INTF-012 | test_layout :: test_switch_strings_are_read_normal_first_then_reverse |
 | SW-L-03 | Every block belongs to exactly one wayside | Green divided into 6 | The territories are disjoint, contiguous, nearly equal and cover every block | REQ-FUNC-058 | test_layout :: test_every_block_belongs_to_exactly_one_controller; test_territories_are_contiguous_and_nearly_equal |
 | SW-L-04 | A switch belongs to the wayside that owns its block | Green | Each switch is in exactly one `ControllerConfig`, with its block | REQ-FUNC-052 | test_layout :: test_a_switch_belongs_to_the_wayside_that_owns_its_block |
-| SW-L-05 | A signal at every switch and nowhere else | Green | One `WaysideSignal` per switch block | REQ-FUNC-053 | test_layout :: test_a_signal_stands_at_every_switch_and_nowhere_else |
-| SW-L-06 | A crossing is armed by its block and neighbours | Green crossing 19 | `approach_block_ids` contains 18, 19 and 20 | REQ-FUNC-056 | test_layout :: test_a_crossing_is_armed_by_its_own_block_and_its_neighbours |
-| SW-L-07 | The wayside count is what the line allows | `build_line(Green, n)` with n = 0, 1, 151, -3, `True`, 2.5 | `LayoutError` for each; the default system builds Green into 6 (`WAYSIDE_COUNTS`) | REQ-INTF-012 | test_layout :: test_the_wayside_count_is_limited_to_what_the_line_allows |
+| SW-L-05 | A signal at every switch and nowhere else | Green | `ControllerConfig.signals` is exactly its switch ids | REQ-FUNC-053 | test_layout :: test_a_signal_stands_at_every_switch_and_nowhere_else |
+| SW-L-06 | A crossing is armed by its block and neighbours | Green crossing 19 | `crossing_approach("19")` is 18, 19 and 20 | REQ-FUNC-056 | test_layout :: test_a_crossing_is_armed_by_its_own_block_and_its_neighbours |
+| SW-L-07 | The wayside count is what the line allows | `divide(n)` on Green with n = 0, 1, 151, -3, `True`, 2.5 | `LayoutError` for each; the default system builds Green into 6 (`WAYSIDE_COUNTS`) | REQ-INTF-012 | test_layout :: test_the_wayside_count_is_limited_to_what_the_line_allows |
 | SW-L-08 | PLC names use block numbers | GTC-01's first switch, signal and crossing | `SW_12`, `SIG_12_R`, `XING_19` | REQ-INTF-009 | test_layout :: test_plc_names_use_block_numbers |
 | SW-L-09 | Malformed layouts are refused with a reason | Wrong shape; a bad block field; a duplicate block; a bad switch string; unreadable files | `LayoutError` naming the fault | REQ-NFR-003 | test_layout :: test_shape_errors; test_block_errors; test_a_duplicate_block_is_refused; test_switch_string_errors; test_unreadable_files |
 | SW-L-10 | A wayside database is not a track layout | A single-wayside JSON file | Refused with that reason | REQ-NFR-003 | test_layout :: test_a_wayside_database_is_not_a_track_layout |

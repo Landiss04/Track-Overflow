@@ -41,6 +41,28 @@ Offscreen smoke test (no display needed; clean = no output):
 QT_QPA_PLATFORM=offscreen .venv/Scripts/python main.py
 ```
 
+### Under the central harness
+
+`python track_overflow.py`, from the repository root, starts the harness and this
+module with the others (`common/harness/README.md`). The harness runs
+`track_overflow.py --module track-controller-sw`, which is
+`track_ctrl/module_process.py`:
+
+- It holds the Green Line only, six waysides, `GTC-01` to `GTC-06` (R77; the HW
+  variant runs the Red).
+- It starts not ready. A person loads a PLC program on every wayside in the window:
+  RUN then COMMIT on each, or **Load starters**. `--load-starters` on the harness
+  command line commits the starter programs at launch instead, for tests and
+  demonstrations. Until every wayside is ready, nothing is released, and the harness
+  logs `WAYSIDES_NOT_READY` with the waysides and the reason.
+- It steps once per `STEP`, on its own JSON forms (`track_ctrl/wire.py`). Bad input
+  refuses the tick and changes nothing.
+- The test link is not opened: the harness is the one driver.
+- The header shows the harness's time. It shows the clock paused once no step has
+  come for 1 s. The 10x badge stays hidden, since the harness does not send the speed.
+- A scripted CTC Office in the harness sends the suggestions until the CTC Office is
+  wired in (Phase 4).
+
 ## Test
 
 ```bash
@@ -51,8 +73,9 @@ QT_QPA_PLATFORM=offscreen .venv/Scripts/python -m unittest discover -s tests -v
 The suites in `tests/`: the module boundary (`test_boundary`), the stand-in
 world driving a controller through the real PLC and safety layer
 (`test_world`), the programmer's inputs, the commit gate and the clock display
-(`test_stimulus`), and the link between the two processes over a real named
-pipe (one test UI at a time, refusals, malformed input) (`test_link`).
+(`test_stimulus`), the link between the two processes over a real named
+pipe (one test UI at a time, refusals, malformed input) (`test_link`), and the
+process the harness starts (`test_module_process`).
 
 ## Type-check
 
@@ -262,7 +285,9 @@ scan, and HW's own sample programs must compile cleanly here.
 
 A program can only name what its own controller has, and the names are HW's.
 The inputs are `OCC_n`, `CLOSED_n` and `FAIL_n` for each block it owns, `SWREV_s`
-(the switch is reported reverse) for each switch, and `MAINT`. The outputs are
+(the Track Model's read-back of the switch, reverse) for each switch, and
+`MAINT`. A suggestion's numbers never enter a user program; only the vital code
+sees the speed. The outputs are
 `AUTH_n` for each block, `SW_s` for each switch (1 is reverse),
 `SIG_s_R` / `_Y` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
 each crossing. Block numbers are the track layout's own, and a switch, its signal
@@ -292,7 +317,7 @@ changes. Speeds are whole m/s and authorities are block counts, the system's
 backend units (D013, `truth/conventions/units.md`). Nothing inside the module is
 in mph.
 
-Numbers never enter the PLC program. It answers with one bit per block,
+Numbers never enter the user's PLC program. It answers with one bit per block,
 `AUTH_n`: pass block *n*'s suggestion down its track circuit (1), or send speed 0
 and authority 0 (0). The controller sends a track circuit only for blocks the CTC
 suggested something for.
@@ -329,12 +354,16 @@ wrong program produce a stopped railway rather than a collision:
 | `ctc_switch_command` | In maintenance, a switch follows the CTC's command |
 | `manual_switch` | In maintenance, a hand-set switch is held (the CTC wins) |
 
-The OS passes a block's suggestion, or half its speed, or 0, as the bits say.
-Keeping a speed under the posted limit, and zero speed for zero authority, are
-the CTC Office's (truth `suggested-speed-under-block-limit`,
-`suggested-speed-stops-within-authority`); the wayside no longer has any numeric
-rule. A wayside running no program, or on a line that is not ready, runs nothing
-and **transmits nothing**.
+The OS passes a block's speed, or half of it, or 0, as the bits say. The speed is
+the CTC Office's suggestion **clamped to the block's posted limit by the vital
+code**: the vital code reads the suggested speed as bits no user program can
+declare (`SUGSPD_n_b`, whole m/s, least significant first) and writes
+`OUT_SPD_n_b`, comparing against the limit in Boolean code, and RUN lists it as the
+override `speed_clamped`. Zero speed for zero authority is still the CTC Office's
+(truth `suggested-speed-stops-within-authority`). A wayside running no program, or
+on a line that is not ready, runs nothing and transmits nothing, except that its
+**crossings are armed** (lights on, gates down): that is their default state until
+a program is running and says otherwise.
 
 Overrides are worked out by comparing the program's outputs with the vital
 code's, and shown in the UI with the rule and why, so the programmer can see
@@ -372,8 +401,10 @@ come, never how long each is. The module shows the time of the last tick and
 stamps its terminal and commits with it; before the first tick it shows
 `--:--:--`.
 
-- **Integrated**, the central harness owns the clock and calls
-  `TrackControllerState.step(dt, inputs)` (or `SwTrackController.step`).
+- **Integrated**, the central harness owns the clock, and
+  `track_ctrl/module_process.py` steps the controller once per `STEP` with the
+  harness's time. The harness does not send the speed or the pause, so the
+  header shows **Paused** once no step has come for 1 s, and never **10×**.
 - **Standalone**, the test UI owns a `SystemClock` and a `ClockDriver`, ticks
   them in real time at 1x or 10x, and steps the controller over the link.
 
@@ -469,6 +500,43 @@ recorded here.
    different blocks and devices, so `default_program_source()` writes a working
    program against that controller's own signal names rather than shipping one
    fixed sample that would not compile elsewhere.
+
+   **Switches** are set for the train coming to them, from the track chart
+   (each block's `next_blocks`, which every controller carries for its whole
+   line) and what the wayside sees. A train comes to a switch's points from its
+   fixed side (facing) and takes the one leg it may run on to, or comes off a
+   leg (trailing) and needs that leg. The CTC Office counts authority only up to
+   a switch not set for the route, trailing moves included, so the switch is set
+   first:
+
+   - facing: the train is on the fixed-side block and the points block is clear
+     (`NOT OCC_p AND OCC_f`);
+   - trailing, off a one-way leg: the train is on the leg (`OCC_l`). Where the
+     leg is the block the switch is listed on, a train in it locks the switch,
+     so the block before it occupied counts too, where that block is the
+     wayside's own;
+   - a way in through another wayside's block cannot be seen, so the switch
+     stands for it while no train is seen: Green 28 stands reverse for a train
+     coming off 150, and goes normal for a train on 27 about to enter 28.
+
+   The program cannot see which way a train is heading (that needs a suggestion
+   bit, which HW's language does not have), so a train on a leg is taken to be
+   coming for the points.
+
+   A switch is held where it stands (`SWREV_s`) while its points block is occupied,
+   whichever block the switch is listed on (Green 12's points are 13, Green 76's
+   are 77), and while trains come for both positions. In maintenance it is
+   normal unless held, as before; the CTC Office's command or a hand-set position
+   drives it then. The yard is not routed (D022): a train is retired stopped at
+   the yard entry block, so switches 58 and 62 stay normal. With these, a Green
+   train runs from the yard round the whole line back to 57
+   (`common/harness/tests/test_harness_train_loop.py`, `ReturnToYardTest`, run
+   with `TRACK_OVERFLOW_ROUND_TRIP=1`; today the Train Controller's engine
+   detector stops the train at 93 first, see `INTEGRATION_DISCREPANCIES.md` E7).
+   Where the layout gives no direction, or the points are another wayside's, the
+   switch is held where it stands. On the Red Line, which runs both ways, the
+   starter cannot tell a train's direction from occupancy, so its switches stay
+   normal.
 7. **The world and the clock live in the test UI.** The module is stepped from
    outside (D006), so the stand-in trains, the CTC's suggestions and the clock
    moved out of it into `track_ctrl_test/`. Integrating means the harness calls
@@ -506,11 +574,13 @@ recorded here.
     they differ the switch is mid-throw and its block's authority is zeroed, even
     if the program ignores it. There is no `FAULT_<switch>`: the controller is
     told of no failures.
-15. **No numeric rule lives in the wayside.** Clamping a speed to the posted
-    limit, and zero speed for zero authority, were Python rules in the old
-    supervisor. Only PLC code may decide, and numbers never enter the PLC (D016),
-    so both are the CTC Office's now (truth `suggested-speed-under-block-limit`,
-    `suggested-speed-stops-within-authority`). The stand-in CTC in the test UI
+15. **The posted-limit clamp is vital PLC code.** Zero speed for zero authority
+    is the CTC Office's (truth `suggested-speed-stops-within-authority`). The clamp
+    to the posted limit was once a Python rule in the old supervisor, then the CTC
+    Office's; since 2026-10-28 it is generated Boolean code in the vital program
+    (a comparison against the limit for each block, on speed bits only the vital
+    code can read), so only PLC code decides and a user program still never sees or
+    sets a speed. The stand-in CTC in the test UI
     suggests under each block's limit. The per-controller speed-limit override is
     gone.
 16. **A physical input is sent on the next step, not the next tick.** Editing
@@ -539,8 +609,18 @@ recorded here.
 - Only the light theme of the style guide is implemented.
 - The controller has no hardware variation yet; this is the software one.
 - Committed programs live in memory, so history does not survive a restart.
-- Integration with the CTC Office, HW Track Controller and Track Model is not
-  done; see `INTEGRATION_DISCREPANCIES.md` for every known mismatch.
+- Under the harness the module runs with the Track Model and a scripted CTC Office
+  (Phase 3). The CTC Office joins in Phase 4 and the HW Track Controller in Phase 5;
+  see `INTEGRATION_DISCREPANCIES.md` for every known mismatch.
+- Under the starter program, two trains in adjacent blocks hold each other for good.
+  The starter cannot tell direction; the CTC Office's authority is
+  to keep trains apart.
+- Under the starter program, a train about to enter Green 76 while another stands
+  on 77 bound for 101 enters 76 with switch 76 reverse, and the switch then locks
+  under it (the vital lock is on the block a switch is listed on, 76, not on its
+  points, 77): it waits for good. The train coming to 76 is on 75, another
+  wayside's block. The CTC Office's two-way zone (77 to 100) should keep
+  scheduled runs from meeting there; see `INTEGRATION_DISCREPANCIES.md` E7.
 18. **Lists reach QML as `{"rows": [...]}`.** A list property read from QML is a
     live reference: every `.length` or element access inside `filter` calls the
     Python getter again, once per element. A view that filtered a 30-row list in

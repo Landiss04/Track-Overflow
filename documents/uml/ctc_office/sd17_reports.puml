@@ -13,21 +13,33 @@ participant "_Layout" as L
 end box
 
 TC --> H : tick k−1 outputs: one CtcReport per wayside\n(wayside ID, line, ready, reason; per block:\noccupied, switch position, crossing active, ...)
-H -> H : track_controller_to_ctc():\noccupancy per block; switches (normal / reverse);\ncrossings (active / inactive from the flag);\nwaysides (ID, line, ready, reason)
+H -> H : track_controller_to_ctc(outputs)
+note right of H
+  Occupancy per block; switches (normal / reverse);
+  crossings (active / inactive from the flag);
+  waysides (ID, line, ready, reason).
+end note
 H -> Proc : STEP (tick k, inputs.track_controller)
-Proc -> Wire : inputs_from_wire()
+Proc -> Wire : inputs_from_wire(inputs)
 Wire --> Proc : TrackControllerInputs
-Proc -> Model : step(...) (via CtcHost)
+Proc -> Model : step(dt, inputs, sim_time_s) (via CtcHost.step_at)
 Model -> L : validate_inputs(inputs)
-L -> L : every line, block, switch and crossing on the layout;\nvalues in range; no block, switch or crossing\nreported twice with different values
+note right of L
+  Every line, block, switch and crossing on the layout;
+  values in range; no block, switch or crossing
+  reported twice with different values.
+end note
 alt invalid
   L --> Model : InvalidInputError
   Model --> Proc : the tick is refused (SD-16)
 else valid
-  Model -> Model : these become the step's inputs
-  Model -> Model : occupancy → tracking (SD-18)
-  Model -> Model : switch positions → a switch not reported\nset for a route cuts authority short (SD-21)
-  Model -> Model : waysides → ready lines (SD-24)
-  Model -> Model : crossings → shown on the map (SD-11)
+  Model -> Model : _inputs = inputs
+  Model -> Model : _occupied(inputs) → _tracker.update(...) (SD-18)
+  note right of Model
+    Switch positions: a switch not reported set
+    for a route cuts authority short (SD-21).
+    Crossings: shown on the map (SD-11).
+  end note
+  Model -> Model : _ready_lines() → ready_lines(waysides) (SD-24)
 end
 @enduml

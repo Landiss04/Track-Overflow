@@ -1,0 +1,295 @@
+"""Edges between the Track Model and the trains (D005).
+
+Pure functions on each module's JSON form, as in ``train_edges``. The
+Track Model names a block its own way, ``"GREEN K-63"``: the line in
+capitals, then the section and the number. Every other module names a
+block by its line and number, ``("Green", "63")``
+(``conventions/identifiers``), and the harness maps the Track Model's
+``GREEN`` (R50). ``BlockNames`` translates between the two, learning
+the Track Model's names from the blocks its outputs list, so nothing
+here repeats the layout files.
+
+Train Model -> Track Model, ``train_model_to_track_model``, one
+train's report::
+
+    track.block_id             -> block_id, in the Track Model's name
+    track.offset_m             -> offset_m
+    track.actual_speed_mps     -> actual_speed_mps
+    track.block_changed        -> block_changed
+    track.passenger_capacity   -> passenger_capacity
+    controller.door_left_open,
+    controller.door_right_open -> doors_open: either door open
+                                  (signals/door-state)
+
+Track Model -> Train Model, ``track_model_to_train_model``: one
+train's feed becomes its ``track`` input, field for field, with the
+block named by its number; the Train Model knows the train's line. A
+beacon passes unchanged, checked or not: the Train Model checks its
+payload (``utils.beacon_codec``) and rejects a train whose beacon is
+malformed, so only that train misses the tick (R60).
+
+The edges between the Track Model and the Track Controller are in
+``wayside_edges``; they use ``BlockNames`` too.
+
+A train the CTC Office releases enters at its line's yard exit block
+(D022). Until its Train Model first reports it, ``placement_report``
+stands in for that report, so the Track Model puts the train on the
+block and starts its feed.
+
+Track Model -> Train Controller: the light ahead of a train, every tick
+(the Track Model's ``signal_seen``; TM-2), unchanged: both spell the
+fourth aspect ``SUPER_GREEN``. With no light ahead it is not sent, and
+the Train Controller keeps the last one.
+
+Track Model -> CTC Office, ``track_model_to_ctc``, the CTC Office's
+``track_model`` input::
+
+    ctc.tickets_sold_now  -> ticket_sales: by station name, as written
+                             in the layout files (R50); stations that
+                             sold none are left out
+
+The Track Model reports each tick's sales once, as events; the CTC
+Office takes them as sales since its last step (R52). ``TicketSales``
+holds the sales the CTC Office has not yet stepped on, so each sale
+reaches it exactly once: a tick the CTC Office refuses, or misses, is
+sent again with the next tick's sales added. Only Green and Red
+stations reach it: the Track Model loads no Blue Line (R67).
+"""
+
+from __future__ import annotations
+
+__all__ = [
+    "TRACK_MODEL_LINES",
+    "YARD_EXIT_BLOCKS",
+    "BlockNames",
+    "TicketSales",
+    "placement_report",
+    "track_model_to_ctc",
+    "track_model_to_train_model",
+    "train_model_to_track_model",
+]
+
+import re
+from collections.abc import Iterable, Mapping
+from typing import Any
+
+#: The Track Model's spelling of each line in the system (D023: the
+#: Blue Line is out of scope).
+TRACK_MODEL_LINES: Mapping[str, str] = {"GREEN": "Green", "RED": "Red"}
+
+#: Where a released train enters each line (D022).
+YARD_EXIT_BLOCKS: Mapping[str, str] = {"Green": "63", "Red": "9"}
+
+# The Track Model's block name: line, section, number.
+_NAME = re.compile(r"^(?P<line>[A-Z]+) (?P<section>[A-Z]+)-(?P<number>\d+)$")
+
+
+class BlockNames:
+    """The Track Model's block names, against line and number."""
+
+    def __init__(self) -> None:
+        """Start knowing no block."""
+        self._names: frozenset[str] = frozenset()
+        self._by_block: dict[tuple[str, str], str] = {}
+        self._by_name: dict[str, tuple[str, str]] = {}
+
+    def __bool__(self) -> bool:
+        """Whether any block is known yet."""
+        return bool(self._by_name)
+
+    def learn(self, names: Iterable[str]) -> None:
+        """Take the Track Model's block names, as its outputs list them.
+
+        A name not of the Track Model's form, or on a line outside the
+        system, is left out. The same names again change nothing.
+        """
+        names = frozenset(names)
+        if names == self._names:
+            return
+        self._names = names
+        self._by_block = {}
+        self._by_name = {}
+        for name in names:
+            match = _NAME.match(name)
+            if match is None or match["line"] not in TRACK_MODEL_LINES:
+                continue
+            block = (TRACK_MODEL_LINES[match["line"]], match["number"])
+            self._by_block[block] = name
+            self._by_name[name] = block
+
+    def track_model_name(self, line: str, number: str) -> str:
+        """Return the Track Model's name for a block.
+
+        Raises:
+            KeyError: If the Track Model has no such block.
+        """
+        return self._by_block[(line, number)]
+
+    def section(self, line: str, number: str) -> str:
+        """Return the section carried in the Track Model's block name."""
+        match = _NAME.fullmatch(self.track_model_name(line, number))
+        assert match is not None
+        return match["section"]
+
+    def block(self, name: str) -> tuple[str, str]:
+        """Return the line and number of a Track Model block name.
+
+        Raises:
+            KeyError: If the Track Model has no such block.
+        """
+        return self._by_name[name]
+
+
+def placement_report(name: str) -> dict[str, Any]:
+    """Return a new train's report: at rest at the start of a block.
+
+    It stands in for the train's Train Model, which has not reported
+    it yet, so it has no room for passengers.
+
+    Args:
+        name: The block, in the Track Model's name.
+    """
+    return {
+        "block_id": name,
+        "offset_m": 0.0,
+        "actual_speed_mps": 0.0,
+        "block_changed": False,
+        "passenger_capacity": 0,
+        "doors_open": False,
+    }
+
+
+def train_model_to_track_model(
+    outputs: Mapping[str, Any], line: str, names: BlockNames
+) -> dict[str, Any]:
+    """Map a train's Train Model outputs to its Track Model report.
+
+    Args:
+        outputs: The train's outputs, ``controller`` and ``track``.
+        line: The train's line.
+        names: The Track Model's block names.
+
+    Raises:
+        KeyError: If an output is missing, or the block is unknown.
+    """
+    track = outputs["track"]
+    controller = outputs["controller"]
+    return {
+        "block_id": names.track_model_name(line, track["block_id"]),
+        "offset_m": track["offset_m"],
+        "actual_speed_mps": track["actual_speed_mps"],
+        "block_changed": track["block_changed"],
+        "passenger_capacity": track["passenger_capacity"],
+        "doors_open": (
+            controller["door_left_open"] or controller["door_right_open"]
+        ),
+    }
+
+
+def track_model_to_train_model(
+    feed: Mapping[str, Any], names: BlockNames
+) -> dict[str, Any]:
+    """Map a train's Track Model feed to its Train Model ``track``.
+
+    Raises:
+        KeyError: If a field is missing, or the block is unknown.
+    """
+    info = feed["track_info"]
+    signal = feed["track_signal"]
+    beacon = feed["beacon"]
+    _, number = names.block(info["block_id"])
+    return {
+        "track_info": {
+            "block_id": number,
+            "grade_deg": info["grade_deg"],
+            "elevation_m": info["elevation_m"],
+            "speed_limit_mps": info["speed_limit_mps"],
+            "polarity": info["polarity"],
+            "station_name": info["station_name"],
+        },
+        "track_signal": {
+            "commanded_speed_mps": signal["commanded_speed_mps"],
+            "authority_blocks": signal["authority_blocks"],
+        },
+        "beacon": None if beacon is None else {
+            "station_name": beacon["station_name"],
+            "platform_side": beacon["platform_side"],
+            "underground": beacon["underground"],
+        },
+        "passengers_boarded": feed["passengers_boarded"],
+    }
+
+
+def track_model_to_ctc(outputs: Mapping[str, Any]) -> dict[str, Any]:
+    """Map the Track Model's outputs to the CTC Office's ``track_model``.
+
+    Args:
+        outputs: The Track Model's outputs, with ``ctc``.
+
+    Raises:
+        KeyError: If an output is missing.
+        ValueError: If a count is not a whole number of tickets.
+    """
+    sold = outputs["ctc"]["tickets_sold_now"]
+    sales = {}
+    for station, tickets in sold.items():
+        if isinstance(tickets, bool) or not isinstance(tickets, int) \
+                or tickets < 0:
+            raise ValueError(
+                f"tickets sold at {station} must be a whole number, "
+                f"got {tickets!r}"
+            )
+        if tickets:
+            sales[station] = tickets
+    return {"ticket_sales": sales}
+
+
+class TicketSales:
+    """Ticket sales on their way to the CTC Office, each exactly once.
+
+    ``add`` takes the sales of each tick the Track Model completes.
+    ``send`` gives the CTC Office every sale it has not stepped on, and
+    ``delivered`` says whether it stepped on them (R52).
+    """
+
+    def __init__(self) -> None:
+        """Start with nothing sold."""
+        self._pending: dict[str, int] = {}
+        self._sent: dict[str, int] = {}
+
+    @property
+    def pending(self) -> dict[str, int]:
+        """Sales the CTC Office has not stepped on yet, by station."""
+        return dict(self._pending)
+
+    def add(self, outputs: Mapping[str, Any]) -> None:
+        """Add one tick's sales from the Track Model's outputs.
+
+        Raises:
+            KeyError: If an output is missing.
+            ValueError: If a count is not a whole number of tickets.
+        """
+        for station, tickets in track_model_to_ctc(outputs)[
+                "ticket_sales"].items():
+            self._pending[station] = self._pending.get(station, 0) + tickets
+
+    def send(self) -> dict[str, int]:
+        """Return the sales to send the CTC Office on this tick."""
+        self._sent = dict(self._pending)
+        return dict(self._sent)
+
+    def delivered(self, stepped: bool) -> None:
+        """Close the tick: drop what was sent if the CTC stepped on it.
+
+        Args:
+            stepped: Whether the CTC Office replied with outputs to
+                the tick the sales were sent on.
+        """
+        if stepped:
+            for station, tickets in self._sent.items():
+                left = self._pending.get(station, 0) - tickets
+                if left > 0:
+                    self._pending[station] = left
+                else:
+                    self._pending.pop(station, None)
+        self._sent = {}

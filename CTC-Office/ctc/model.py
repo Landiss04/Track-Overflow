@@ -6,9 +6,37 @@ occupancy, so the stub follows its own trains from it and infers which
 occupied blocks are failures (``ctc.tracking``). Each dispatched train it
 is following gets a suggested speed a little under its current block's
 speed limit, and an authority counted in blocks toward its destination
-that stops short of any occupied, closed, closing or failed block and of
-any switch not reported set for its route (``ctc.routing``), recomputed
-every step.
+that stops short of any closed or closing block and of
+any switch not reported set for its route, and never ends next to
+another train's block or authority, so one empty block stays between
+trains (``ctc.routing``), recomputed
+every step. While that authority is at least 1 the train gets a second
+suggestion, for the next block on its route, with one block less
+authority and a speed worked out for that block (R49).
+
+The stub releases ordered trains from the yard and retires them there
+(D022, R46), and reports each in a one-time event in its outputs:
+
+- **Release** (``new_trains``): on each line, one train at a time, the
+  waiting train most behind schedule first, only while the line's
+  waysides are all ready, its yard exit block (Green 63, Red 9) is
+  clear and no train is authorized into it, and the schedule is not
+  holding the run. A released train holds its exit block until it is
+  found there (``ctc.tracking``).
+- **Retirement** (``retired_trains``): a train sent back to the yard
+  (a run of the schedule after its last stop, or a manual train by the
+  dispatcher's "return to yard", R66), once it has stopped at its
+  line's yard entry block (Green 57, Red 9) with authority 0 at its
+  destination. The CTC sees only occupancy, so "stopped" means the
+  train holds that block alone and the fastest it could still be going,
+  braking at ``SERVICE_DECEL_MPS2`` since it was told 0 there, is 0.
+  Its order is dropped with it.
+
+Under the central harness each step brings the simulation time
+(D017), and the stub's time is that time: a tick it refused or never
+got does not put its schedule behind. On its own it counts the time of
+the steps it took.
+
 The blocks closed in maintenance mode (closing ones included) and
 switch commands pass through. Nothing is sent to a line's Track
 Controller, and no train is dispatched on the line, until it reports
@@ -35,6 +63,8 @@ from ctc.interface import (
     CtcOutputs,
     CtcSnapshot,
     DispatchOrder,
+    NewTrain,
+    RetiredTrain,
     ScheduledRun,
     SwitchCommand,
     SwitchPosition,
@@ -51,18 +81,29 @@ from ctc.routing import (
     authority,
     build_graphs,
     first_reversal,
+    keep_gap,
     reversing_route,
 )
 from ctc.track_layout import Line, load_layout, station_lines
 from ctc.scheduler import (
+    IN_YARD,
     SIMULATION_START_S,
+    TO_YARD,
     AutoDispatcher,
     Cancel,
     World,
     plan_run,
     train_id_for,
 )
-from ctc.tracking import YARD_EXITS, Plan, TrainTracker, Waiting
+from ctc.tracking import (
+    YARD_ENTRIES,
+    YARD_EXIT_FROM,
+    YARD_EXITS,
+    Plan,
+    Tracked,
+    TrainTracker,
+    Waiting,
+)
 
 if TYPE_CHECKING:
     from ctc.schedule import Schedule
@@ -375,8 +416,10 @@ class StubCtcOffice:
 
     It does enforce the safety rules: no authority into a closed,
     closing or failed block or onto another line than the train's;
-    authority stops short of every such block, of occupied blocks and
-    of switches not set for the route; no switch thrown under a train.
+    authority stops short of every such block and of switches not set
+    for the route, and never ends next to another train's block or
+    authority (one empty block between trains); no switch thrown under
+    a train.
     Block closures are maintenance-mode only and wait for an occupied
     block to clear. Failed blocks are inferred from occupancy
     (``ctc.tracking``) and shown to the UIs only as occupied. Nothing is
@@ -427,26 +470,57 @@ class StubCtcOffice:
         self._tracker = TrainTracker(SERVICE_DECEL_MPS2)
         # What each tracked train should do next, from the last step.
         self._plans: dict[str, Plan] = {}
+        # Trains released from the yard and not yet found on the track,
+        # by train ID, with their line, in the order released: at most
+        # one per line. Each holds its line's yard exit block.
+        self._released: dict[str, str] = {}
+        # Trains the CTC has created (released) and not retired: a
+        # train already in service that went back into the yard
+        # without being retired leaves it again with no second event.
+        self._in_service: set[str] = set()
+        # Manual trains the dispatcher sent back to the yard ("return to
+        # yard", R66) whose order to the yard entry block still stands.
+        self._returning: set[str] = set()
+        # This step's one-time events (D022); empty after a step with
+        # none.
+        self._new_trains: tuple[NewTrain, ...] = ()
+        self._retired_trains: tuple[RetiredTrain, ...] = ()
 
     # -- Stepping -----------------------------------------------------
 
-    def step(self, dt: float, inputs: CtcInputs) -> CtcOutputs:
-        """Advance one tick; see ``CtcOffice.step``."""
+    def step(self, dt: float, inputs: CtcInputs,
+             sim_time_s: float | None = None) -> CtcOutputs:
+        """Advance one tick; see ``CtcOffice.step``.
+
+        With ``sim_time_s`` (the harness's time at the end of the step,
+        D017) the module's time becomes that time; without it, the
+        module's time moves on by ``dt``.
+        """
         if not _is_finite_number(dt) or dt <= 0:
             raise InvalidTimeStepError(
                 f"dt must be finite and positive, got {_short(dt)}")
-        if not math.isfinite(self._elapsed_s + dt):
-            raise InvalidTimeStepError(
-                f"dt {dt:g} s would take the elapsed time past what can "
-                "be counted")
+        if sim_time_s is None:
+            elapsed_s = self._elapsed_s + dt
+            if not math.isfinite(elapsed_s):
+                raise InvalidTimeStepError(
+                    f"dt {dt:g} s would take the elapsed time past what "
+                    "can be counted")
+        else:
+            elapsed_s = self._elapsed_at(sim_time_s)
         inputs = _normalize(inputs)
         self._layout.validate_inputs(inputs)
 
-        self._elapsed_s += dt
+        self._elapsed_s = elapsed_s
+        self._new_trains, self._retired_trains = (), ()
         # Follow the trains (and infer failures) from the new occupancy,
-        # against the last step's plans.
-        self._tracker.update(frozenset(self._occupied(inputs)),
-                             self._elapsed_s, self._plans, self._waiting())
+        # against the last step's plans. Only a train the CTC released
+        # can be found leaving the yard.
+        self._tracker.update(
+            frozenset(self._occupied(inputs)), self._elapsed_s,
+            self._plans,
+            [Waiting(t, line) for t, line in self._released.items()])
+        self._released = {t: line for t, line in self._released.items()
+                          if t not in self._tracker.trains}
         self._inputs = inputs
         self._staged = None
         for station, tickets in inputs.track_model.ticket_sales.items():
@@ -459,13 +533,32 @@ class StubCtcOffice:
             if (block.line, block.block_id) not in occupied:
                 self._pending.discard(block)
                 self._closed.add(block)
+        # Trains sent back to the yard that have stopped at its entry
+        # block are retired, and their orders dropped.
+        self._retire()
         # Commit this step's grants; later steps keep them. Nothing is
         # granted on a line whose Track Controller is not ready.
         ready = self._ready_lines()
         self._granted = {a.train_id: a.route[1:a.blocks + 1]
                          for a in self._authorities() if a.line in ready}
         self._plans = self._make_plans()
+        # Then, with this step's grants, a waiting train may be let out.
+        self._release()
         return self._outputs()
+
+    def _elapsed_at(self, sim_time_s: float) -> float:
+        """The elapsed time at the harness's ``sim_time_s``: unwrapped
+        seconds since the first midnight (D017), finite and after the
+        module's own time, which never goes back."""
+        if not _is_finite_number(sim_time_s):
+            raise InvalidTimeStepError(
+                "sim_time_s must be a finite number of seconds, got "
+                f"{_short(sim_time_s)}")
+        if sim_time_s <= self._now_s():
+            raise InvalidTimeStepError(
+                f"sim_time_s {sim_time_s:g} s is not after the module's "
+                f"time, {self._now_s():g} s")
+        return float(sim_time_s) - SIMULATION_START_S
 
     def validate_inputs(self, inputs: CtcInputs) -> None:
         """Raise ``InvalidInputError`` if any input is malformed."""
@@ -553,13 +646,41 @@ class StubCtcOffice:
                 f"to a {line} block.")
         self._orders[train_id] = DispatchOrder(
             train_id, line, destination_block_id, arrival_s)
+        # A new order withdraws a "return to yard".
+        self._returning.discard(train_id)
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        """Drop a train's dispatch order, if it has one. A train the CTC
-        had lost track of is forgotten with it."""
+    def return_to_yard(self, train_id: str) -> None:
+        """Send a manual train back to the yard (R66, D022).
+
+        The train is ordered to its line's yard entry block (Green 57,
+        Red 9), with no arrival time, in place of any order it had. Once
+        it has stopped there with authority 0 it is retired as a run of
+        the schedule is (``retired_trains``). A later order withdraws
+        it.
+
+        Refused (``InvalidInputError``) for a train the CTC is not
+        following on the track (one waiting in the yard has nothing to
+        return from), and for a run of the
+        loaded schedule, which the schedule sends back itself. Refused
+        (safety) as ``dispatch`` refuses: the yard entry block closed or
+        closing, or the line's Track Controller not ready.
+        """
         train_id = _trim(train_id)
-        self._orders.pop(train_id, None)
-        self._tracker.lost.discard(train_id)
+        train = self._tracker.trains.get(train_id)
+        if train is None:
+            raise InvalidInputError(
+                f"{train_id} is not on the track; only a train on the "
+                "track can be sent back to the yard.")
+        if self._auto is not None and train_id in self._auto.progress:
+            raise InvalidInputError(
+                f"{train_id} is a run of the loaded schedule; the "
+                "schedule sends it back to the yard itself.")
+        entries = sorted(YARD_ENTRIES.get(train.line, ()))
+        if not entries:
+            raise InvalidInputError(
+                f"The {train.line} line has no yard entry block.")
+        self.dispatch(train_id, train.line, entries[0])
+        self._returning.add(train_id)
 
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
@@ -707,16 +828,19 @@ class StubCtcOffice:
                 for train_id, t in self._tracker.trains.items()}
 
     def _waiting(self) -> list[Waiting]:
-        """Ordered trains waiting in the yard (not followed, not lost),
-        most behind schedule first: the order they leave it in."""
+        """Ordered trains waiting in the yard (not followed, not lost,
+        not yet released), most behind schedule first: the order they
+        are released in."""
         waiting = []
         for train_id, order in self._orders.items():
             if (train_id in self._tracker.trains
-                    or train_id in self._tracker.lost):
+                    or train_id in self._tracker.lost
+                    or train_id in self._released):
                 continue
             exit_block = YARD_EXITS.get(order.line)
             route = (self._graphs[order.line].route(
-                exit_block, order.destination_block_id)
+                exit_block, order.destination_block_id,
+                came_from=YARD_EXIT_FROM.get(order.line))
                 if exit_block is not None else None)
             waiting.append((self._priority(order, order.line,
                                            route or ()), order))
@@ -736,21 +860,115 @@ class StubCtcOffice:
             plans[limit.train_id] = Plan(
                 limit.route[1] if limit.blocks >= 1 else None,
                 self._layout.lengths_m[(limit.line, train.head)],
-                self._suggested_speed_mps(limit.line, train.head, limit))
+                self._suggested_speed_mps(
+                    limit.line, train.head,
+                    limit.route[1:limit.blocks + 1]))
         return plans
+
+    # -- The yard -----------------------------------------------------
+
+    def _scheduler_holds(self, train_id: str) -> bool:
+        """Whether the schedule is holding a run in the yard: outside
+        automatic mode, while automatic dispatch is paused, or while the
+        run is not waiting to leave (``ctc.scheduler``). A train that is
+        not a run of the loaded schedule is never held by it."""
+        if self._auto is None or train_id not in self._auto.progress:
+            return False
+        return (not self._automatic or self._dispatch_paused
+                or self._auto.progress[train_id].status != IN_YARD)
+
+    def _sent_to_yard(self, train_id: str) -> bool:
+        """Whether a train has been sent back to the yard: a run of the
+        loaded schedule on its way back after its last stop, or a manual
+        train the dispatcher returned to the yard (``return_to_yard``)."""
+        if train_id in self._returning:
+            return True
+        return (self._auto is not None
+                and train_id in self._auto.progress
+                and self._auto.progress[train_id].status == TO_YARD)
+
+    def _release(self) -> None:
+        """Release waiting trains from the yard (D022, R46): on each
+        line, at most one released train not yet found on the track,
+        and the most behind schedule first among those the scheduler is
+        not holding. Only while the line's waysides are all ready, its
+        yard exit block is clear (not occupied, not closed or closing,
+        no train on it) and no train is authorized into it. A train is
+        reported in ``new_trains`` the step it is released, unless it
+        was already in service."""
+        ready = self._ready_lines()
+        applied = self._inputs if self._inputs is not None else CtcInputs()
+        blocked = (self._occupied(applied)
+                   | {(t.line, b) for t in self._tracker.trains.values()
+                      for b in t.blocks}
+                   | {(b.line, b.block_id)
+                      for b in self._closed | self._pending}
+                   | {(a.line, b) for a in self._authorities()
+                      for b in a.route[1:a.blocks + 1]})
+        busy = set(self._released.values())
+        released = []
+        for waiting in self._waiting():
+            line = waiting.line
+            exit_block = YARD_EXITS.get(line)
+            if (exit_block is None or line in busy or line not in ready
+                    or (line, exit_block) in blocked
+                    or self._scheduler_holds(waiting.train_id)):
+                continue
+            busy.add(line)
+            self._released[waiting.train_id] = line
+            if waiting.train_id not in self._in_service:
+                self._in_service.add(waiting.train_id)
+                released.append(NewTrain(waiting.train_id, line))
+        self._new_trains = tuple(released)
+
+    def _at_a_stand(self, train: Tracked, order: DispatchOrder) -> bool:
+        """Whether a followed train has stopped at its destination, as
+        far as occupancy can tell: its head and tail are both in that
+        block, and the fastest it could still be going, braking at
+        ``SERVICE_DECEL_MPS2`` since it was told 0 there, is 0
+        (``ctc.tracking``). The CTC never sees a speed, so this is the
+        latest it could still be moving, not the moment it stopped."""
+        return (train.blocks == (order.destination_block_id,)
+                and train.speed_mps <= 0)
+
+    def _retire(self) -> None:
+        """Retire each train sent back to the yard that has stopped at
+        its line's yard entry block (Green 57, Red 9) with authority 0
+        at its destination (D022, R46), reporting it in
+        ``retired_trains`` and dropping its order. Nothing more is sent
+        for it; the harness removes it, the block clears, and the
+        schedule marks its run done."""
+        retired = []
+        for limit in self._authorities():
+            train = self._tracker.trains.get(limit.train_id)
+            order = self._orders.get(limit.train_id)
+            if (train is None or order is None
+                    or order.destination_block_id
+                    not in YARD_ENTRIES.get(train.line, ())
+                    or limit.blocks != 0 or limit.reason != "destination"
+                    or not self._at_a_stand(train, order)
+                    or not self._sent_to_yard(limit.train_id)):
+                continue
+            del self._orders[limit.train_id]
+            self._in_service.discard(limit.train_id)
+            self._returning.discard(limit.train_id)
+            retired.append(RetiredTrain(limit.train_id))
+        self._retired_trains = tuple(retired)
 
     def _cancel_orders_into(self, block: BlockRef, reason: str) -> None:
         for train_id, order in sorted(self._orders.items()):
             if (order.line, order.destination_block_id) == (
                     block.line, block.block_id):
                 del self._orders[train_id]
+                self._returning.discard(train_id)
                 self._cancelled.append(CancelledOrder(
                     train_id, block.line, block.block_id, reason))
         del self._cancelled[:-_CANCELLED_KEPT]
 
     def _now_s(self) -> float:
-        """Simulated time of day: the module is stepped from the
-        simulation start (D017)."""
+        """Simulated time, unwrapped seconds since the first midnight:
+        the simulation starts at 05:00:00 (D017). Under the harness it
+        is the last step's ``sim_time_s``."""
         return SIMULATION_START_S + self._elapsed_s
 
     def _run_schedule(self) -> None:
@@ -772,7 +990,10 @@ class StubCtcOffice:
         while pending:
             action = pending.pop(0)
             if isinstance(action, Cancel):
-                self.cancel_dispatch(action.train_id)
+                # The run is back in the yard: its order is done.
+                self._orders.pop(action.train_id, None)
+                self._returning.discard(action.train_id)
+                self._tracker.lost.discard(action.train_id)
                 continue
             try:
                 self.dispatch(action.train_id, action.line, action.block_id,
@@ -805,18 +1026,23 @@ class StubCtcOffice:
         return tuple(runs)
 
     def _suggested_speed_mps(self, line: str, block_id: str,
-                             limit: TrainAuthority) -> int:
-        """The lower of: a little under the block's speed limit (the
+                             ahead: Collection[str]) -> int:
+        """The speed suggested for a train in ``block_id``, with the
+        blocks ``ahead`` of it within its authority.
+
+        The lower of: a little under the block's speed limit (the
         limit in whole m/s, rounded down, less
         ``SUGGESTED_SPEED_MARGIN_MPS``), and the speed the train can
-        stop from within its authority at ``SERVICE_DECEL_MPS2`` (0 with
-        no authority). The distance left in its own block is not
-        counted: which way it heads through it is not known."""
+        stop from within the blocks ``ahead`` at ``SERVICE_DECEL_MPS2``
+        (0 with none). The distance left in the block itself is not
+        counted: which way it heads through it is not known. For the
+        next block on a train's route, ``ahead`` is one block shorter
+        than for the block it is in (``suggested-speed``)."""
         limit_kmh = self._layout.speed_limits_kmh[(line, block_id)]
         under_limit = max(0, int(limit_kmh / _KMH_PER_MPS)
                           - SUGGESTED_SPEED_MARGIN_MPS)
-        stopping_m = sum(self._layout.lengths_m[(line, ahead)]
-                         for ahead in limit.route[1:limit.blocks + 1])
+        stopping_m = sum(self._layout.lengths_m[(line, block)]
+                         for block in ahead)
         can_stop = int(math.sqrt(2 * SERVICE_DECEL_MPS2 * stopping_m))
         return min(under_limit, can_stop)
 
@@ -879,7 +1105,8 @@ class StubCtcOffice:
                frozenset(self._closed), frozenset(self._pending),
                tuple(sorted(self._granted.items())),
                tuple(sorted(self._tracker.trains.items())),
-               frozenset(self._tracker.failures))
+               frozenset(self._tracker.failures),
+               tuple(sorted(self._released.items())))
         cached = self._authority_cache
         if (cached is not None and cached[0][0] is key[0]
                 and cached[0][1:] == key[1:]):
@@ -987,8 +1214,13 @@ class StubCtcOffice:
             line: {} for line in self._lines}
         for report in applied.track_controller.switches:
             switches[report.line][report.switch_id] = report.position
-        # (line, block) -> the train whose authority holds it.
-        holders: dict[tuple[str, str], str] = {}
+        # (line, block) -> the train whose authority holds it. A train
+        # released from the yard and not yet found holds its line's
+        # yard exit block, where it will appear.
+        holders: dict[tuple[str, str], str] = {
+            (line, YARD_EXITS[line]): train_id
+            for train_id, line in self._released.items()
+            if line in YARD_EXITS}
 
         def reserved_for(train_id: str, line: str) -> dict[str, str]:
             return {block: holder for (ln, block), holder in holders.items()
@@ -1001,6 +1233,21 @@ class StubCtcOffice:
                 self._graphs[line], block_id, order.destination_block_id,
                 obstructions[line], switches[line],
                 reserved_for(train_id, line), keep, route)
+            hold = (self._auto.hold_at(train_id)
+                    if self._auto is not None else None)
+            if hold is not None and hold in counted.route:
+                # The schedule holds it round a loop until the zone
+                # ahead is clear the other way (``ctc.scheduler``). Its
+                # route ends there, so it lays no claim to the switches
+                # beyond, which the trains it waits for need.
+                end = counted.route.index(hold)
+                counted = replace(counted, route=counted.route[:end + 1])
+                if counted.blocks >= end:
+                    counted = keep_gap(
+                        self._graphs[line],
+                        replace(counted, blocks=end, end_block_id=hold,
+                                reason="held", at=hold, held_by=""),
+                        obstructions[line], reserved_for(train_id, line))
             for ahead in counted.route[1:counted.blocks + 1]:
                 holders[(line, ahead)] = train_id
             return TrainAuthority(
@@ -1025,18 +1272,35 @@ class StubCtcOffice:
         ready = self._ready_lines()
         # The yard is a black box: a train gets speed and authority once
         # it has left the yard, from the block its head is in.
-        positions = {train_id: (t.line, t.head)
-                     for train_id, t in self._tracker.trains.items()}
-        suggestions = tuple(
-            TrainSuggestion(limit.train_id, *positions[limit.train_id],
-                            self._suggested_speed_mps(
-                                *positions[limit.train_id], limit),
-                            limit.blocks)
-            for limit in self._authorities() if limit.line in ready
-        )
+        suggestions = []
+        for limit in self._authorities():
+            if limit.line not in ready:
+                continue
+            head = self._tracker.trains[limit.train_id].head
+            within = limit.route[1:limit.blocks + 1]
+            # While it may go on, the next block on its route too, with
+            # one block less authority and a speed worked out for that
+            # block: it carries the train's values from the moment the
+            # train enters it, before the CTC sees it there
+            # (``suggested-speed``, ``suggested-authority``; R49). It is
+            # the first block within the train's own exclusive
+            # authority, so no other train's suggestion names it. It
+            # goes before the train's own block: the CTC window and its
+            # test UI still key suggestions by train ID alone, and the
+            # last one per train is the one they show.
+            if limit.blocks >= 1:
+                suggestions.append(TrainSuggestion(
+                    limit.train_id, limit.line, within[0],
+                    self._suggested_speed_mps(limit.line, within[0],
+                                              within[1:]),
+                    limit.blocks - 1))
+            suggestions.append(TrainSuggestion(
+                limit.train_id, limit.line, head,
+                self._suggested_speed_mps(limit.line, head, within),
+                limit.blocks))
         return CtcOutputs(
             track_controller=TrackControllerOutputs(
-                suggestions=suggestions,
+                suggestions=tuple(suggestions),
                 closed_blocks=tuple(b for b in self._closed_blocks()
                                     if b.line in ready),
                 switch_commands=tuple(c for c in self._switch_commands()
@@ -1044,6 +1308,10 @@ class StubCtcOffice:
             ),
             clock_speedup=self._clock_speedup,
             clock_paused=self._clock_paused,
+            # The last step's events; between steps, the snapshot shows
+            # them again, but only ``step`` hands them on.
+            new_trains=self._new_trains,
+            retired_trains=self._retired_trains,
         )
 
     def _closed_blocks(self) -> tuple[BlockRef, ...]:

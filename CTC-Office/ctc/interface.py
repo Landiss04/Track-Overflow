@@ -18,7 +18,11 @@ The CTC exchanges data with two modules:
   its own trains from it (``ctc.tracking``).
 - Track Model: sends ticket sales per station in.
 
-It also sends the clock speedup command to the central harness.
+It also sends the central harness the clock commands (speedup and
+pause) and two one-time train events (D022): ``new_trains``, each train
+it released from the yard on that step, and ``retired_trains``, each
+train it retired. The CTC Office creates every train and its IDs are
+the train IDs (``conventions/identifiers.md``).
 
 Units are backend units per ``truth/conventions/units.md``: speeds in
 m/s, distances in m. Every ID is a string
@@ -122,23 +126,32 @@ class CtcInputs:
 
 @dataclass(frozen=True, slots=True)
 class TrainSuggestion:
-    """Suggested speed and authority for one train, and the block it is
-    in. The Track Controller sees only which blocks are occupied, so the
-    block says which track circuit to send this speed and authority
-    down (``suggested-speed``, ``suggested-authority``, proposed on
-    ``ctc-deployment``)."""
+    """Suggested speed and authority for one train in one block. The
+    Track Controller sees only which blocks are occupied, so the block
+    says which track circuit to send this speed and authority down
+    (``suggested-speed``, ``suggested-authority``).
+
+    Up to two per train: one for the block the train is in and, while
+    its authority there is at least 1, one for the next block on its
+    route, with authority one less. The second closes the gap between
+    the train entering that block and the CTC seeing it there, during
+    which the block would otherwise carry nothing. The next block is
+    always within the train's own exclusive authority, so no two
+    trains' suggestions name the same block."""
 
     train_id: str
     line: str
-    # The block the train's head is in, as the CTC has followed it from
-    # occupancy (``ctc.tracking``): while it crosses into the next block,
-    # the one it is entering. Authority is counted from this block.
+    # The block these values are for: the block the train's head is in,
+    # as the CTC has followed it from occupancy (``ctc.tracking``; while
+    # it crosses into the next block, the one it is entering), or the
+    # next block on its route. Authority is counted from this block.
     block_id: str
     # Whole m/s: a target for safe spacing, not the train's own speed;
-    # never above the speed limit of the block the train is in.
+    # never above this block's speed limit, and low enough to stop
+    # within the authority counted from this block.
     suggested_speed_mps: int
-    # Blocks ahead of the train's current block it may still enter; 0
-    # means stop before leaving the current block.
+    # Blocks ahead of this block the train may still enter; 0 means
+    # stop before leaving it.
     authority_blocks: int
 
 
@@ -180,6 +193,29 @@ class TrackControllerOutputs:
 
 
 @dataclass(frozen=True, slots=True)
+class NewTrain:
+    """A train the CTC Office released from the yard on this step: it
+    creates the train then (D022). The harness places it at its line's
+    yard exit block (Green 63, Red 9) and adds it to the Train Model and
+    the line's Train Controller."""
+
+    # The CTC Office's ID for the train, used unchanged by every module
+    # (``conventions/identifiers.md``).
+    train_id: str
+    line: str
+
+
+@dataclass(frozen=True, slots=True)
+class RetiredTrain:
+    """A train the CTC Office retired on this step: back at its line's
+    yard entry block (Green 57, Red 9), stopped, with authority 0 at
+    its destination (D022). The harness removes it, which clears the
+    block."""
+
+    train_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class CtcOutputs:
     track_controller: TrackControllerOutputs = TrackControllerOutputs()
     # Clock speedup command, for the central harness to relay to every
@@ -191,6 +227,13 @@ class CtcOutputs:
     # harness). The simulation starts paused. While the clock is paused
     # no step happens, so the harness reads it from ``snapshot()`` too.
     clock_paused: bool = True
+    # One-time events, for the central harness's roster (D022): the
+    # trains released from the yard on this step, and the trains
+    # retired on it. Each appears in the outputs of exactly one step,
+    # so the harness applies it exactly once. ``snapshot()`` repeats the
+    # last step's events for display; apply them from ``step`` only.
+    new_trains: tuple[NewTrain, ...] = ()
+    retired_trains: tuple[RetiredTrain, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,7 +299,8 @@ class TrainAuthority:
     end_block_id: str
     # "destination", "occupied" (a failed block too: the CTC never
     # shows one), "closed", "closing", "reserved" (within another
-    # train's authority), "switch" or "no route".
+    # train's authority), "switch", "held" (the schedule holds it there,
+    # round a loop, until the zone ahead is clear) or "no route".
     reason: str
     # The block or switch the reason names; "" for "destination" and
     # "no route".
@@ -291,6 +335,8 @@ class CtcSnapshot:
 
     outputs: CtcOutputs
     inputs: CtcInputs | None = None
+    # Simulated seconds since the simulation started (05:00:00, D017):
+    # under the harness, the last step's time less the start.
     elapsed_s: float = 0.0
     # Tickets sold at each named station since the simulation started,
     # by station name.
@@ -337,11 +383,18 @@ class CtcSnapshot:
 class CtcOffice(Protocol):
     """The CTC Office module, stepped by the harness."""
 
-    def step(self, dt: float, inputs: CtcInputs) -> CtcOutputs:
+    def step(self, dt: float, inputs: CtcInputs,
+             sim_time_s: float | None = None) -> CtcOutputs:
         """Advance one tick.
 
         dt is fixed by the harness and must be finite and positive.
-        Invalid inputs are rejected before any state is changed.
+        ``sim_time_s`` is the harness's simulation time at the end of
+        the tick (D017: unwrapped seconds, 05:00:00 is 18 000): given,
+        it is the module's time from then on, so a tick the module
+        refused or never got does not put it behind; it must be finite
+        and after the module's time. Left out (the standalone window and
+        tests), the module's time moves on by dt. Invalid inputs are
+        rejected before any state is changed.
         """
         ...
 
@@ -373,8 +426,12 @@ class CtcOffice(Protocol):
         """
         ...
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        """Drop a train's dispatch order, if it has one."""
+    def return_to_yard(self, train_id: str) -> None:
+        """Send a manual train on the track back to the yard (R66,
+        D022): an order to its line's yard entry block (Green 57, Red
+        9), where it is retired once it has stopped. Refused for a train
+        not on the track and for a run of the loaded schedule, and
+        (safety) as ``dispatch`` refuses."""
         ...
 
     def set_block_closed(self, line: str, block_id: str,

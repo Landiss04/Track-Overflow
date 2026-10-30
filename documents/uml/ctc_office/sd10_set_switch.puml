@@ -10,23 +10,28 @@ participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
-D -> UI : Line, Switch
-UI -> Host : switchOptions(line), switchDetail(line, switch)
+D -> UI : lineSelect.committed(line)
+UI -> Host : switchOptions(line)
+Host --> UI : the line's switches
+D -> UI : switchSelect.committed(switch_id)
+UI -> Host : switchDetail(line, switch_id)
 Host -> Model : snapshot()
 Host --> UI : Normal (12-13) / Reverse (1-13);\nReported by track controller; Commanded by CTC
-D -> UI : Normal or Reverse
-D -> UI : Send to track controller
-UI -> Host : setSwitch(line, switch_id, 0 or 1)
+D -> UI : positionToggle.activated(index)
+note right of D : 0 = Normal, 1 = Reverse
+D -> UI : "Send to track controller".clicked()
+UI -> Host : setSwitch(line, switch_id, index)
 Host -> Model : set_switch(line, switch_id, "normal" or "reverse")
 alt not in maintenance mode
   Model --> Host : MaintenanceModeRequiredError
 else the switch's block is occupied
   Model --> Host : UnsafeActionError "Green block 12 is occupied;\nits switch cannot be moved under a train."
 else accepted
-  Model -> Model : switches[(line, switch)] = position
+  Model -> Model : _switches[(line, switch_id)] = position
   Model --> Host : ok
 end
 Host --> UI : "" or the reason
+UI -> UI : report(error, done)
 UI -> D : "Sent: Green switch 12 → reverse." or the reason
 note over Model
   The command goes out every step while maintenance
@@ -35,8 +40,10 @@ note over Model
 end note
 
 == Release ==
-D -> UI : Release
+D -> UI : "Release".clicked()
 UI -> Host : releaseSwitch(line, switch_id)
 Host -> Model : release_switch(line, switch_id)
+Model -> Model : _switches.pop((line, switch_id), None)
+UI -> UI : report(error, done)
 UI -> D : "Released Green switch 12 to the track controller."
 @enduml

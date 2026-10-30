@@ -526,23 +526,24 @@ in the Track Model window for these cases.
 - Step 4: all 150 GREEN blocks come back. Then on RED, only Red blocks
   and Red devices show, e.g. switch rows `F-16`, `H-27` and so on.
 
-### TC-27 Heaters warm their section; ambient stays put
+### TC-27 Heaters switch themselves at freezing; ambient stays put
 - [ ] Pass
 
-1. With Line GREEN, set `ambient` to 32 °F. In the block panel, pick
-   `GREEN B-5`. Set `heat B` to true.
+1. With Line GREEN, set `ambient` to 32 °F (0 °C). In the block panel,
+   pick `GREEN B-5`.
 2. Set Rate to **10×**, Clock to **Run** for 60 s (10 simulated
    minutes), then **Hold**.
-3. Set `heat B` to false, and run another 60 s at 10×.
+3. Set `ambient` to 33 °F, and run another 60 s at 10×.
 
 **Expected**
 
-- After step 2: `trk temp` (section B) reads about **8.6 °C**, up from
-  0 °C. In the Track Model window's **Switches, lights & heaters** view,
-  section B shows Heater ON and about 47.6 °F, and every other section
-  stays at 32.0 °F. **Conditions → Ambient temperature** still reads
-  32 °F.
-- During step 3: section B cools back toward 32 °F.
+- After step 2: every section's heater is on, with no command (D026).
+  `trk temp` (section B) reads about **8.6 °C**, up from 0 °C. In the
+  Track Model window's **Switches, lights & heaters** view, every section
+  shows Heater ON and about 47.6 °F. **Conditions → Ambient temperature**
+  still reads 32 °F.
+- During step 3: every heater is off, and the track cools back toward
+  33 °F.
 - Selecting any block in section B shows its Heater and Track temp in
   the Selected panel.
 
