@@ -1,12 +1,9 @@
 // Small operator tables, style guide 6.6. The host supplies scrolling.
 // ponytail: Repeater suits small tables; use TableView for virtualized datasets.
-<<<<<<< HEAD
 // Rows are kept by index: a new rows array updates each row's cells in
 // place, and rows are made or dropped only when the count changes. A
 // Repeater over the array itself rebuilt every row on any change, which
 // took up to a second for the Track Model's 150 blocks.
-=======
->>>>>>> origin/Train_Ctrl_integration
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -18,18 +15,14 @@ ColumnLayout {
     property var columns: []
     property var rows: []
     property int currentIndex: -1
-<<<<<<< HEAD
     // Optional: the Flickable (e.g. ScrollView.contentItem) this table is a
     // direct child of. When set, the header row stays pinned at the top of
     // the view while the rows scroll beneath it.
     property Flickable stickyFlickable: null
-=======
->>>>>>> origin/Train_Ctrl_integration
     signal rowActivated(int index, var row)
     spacing: 0
     opacity: enabled ? 1.0 : 0.42
 
-<<<<<<< HEAD
     Item {
         id: headerSlot
         Layout.fillWidth: true
@@ -84,37 +77,6 @@ ColumnLayout {
             implicitHeight: cells.implicitHeight
             padding: 0
             horizontalPadding: 0 // Basic binds it to padding + 2, offsetting cells from the header
-=======
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 0
-        Repeater {
-            model: root.columns
-            delegate: FieldLabel {
-                required property var modelData
-                Layout.fillWidth: true
-                Layout.preferredWidth: modelData.width || 100
-                padding: theme.space_3
-                text: modelData.label.toUpperCase()
-                horizontalAlignment: modelData.numeric ? Text.AlignRight : Text.AlignLeft
-            }
-        }
-    }
-    Rectangle {
-        Layout.fillWidth: true
-        implicitHeight: 1
-        color: theme.border_strong
-    }
-    Repeater {
-        model: root.rows
-        delegate: Button {
-            id: rowControl
-            required property int index
-            required property var modelData
-            Layout.fillWidth: true
-            implicitHeight: cells.implicitHeight
-            padding: 0
->>>>>>> origin/Train_Ctrl_integration
             hoverEnabled: true
             focusPolicy: Qt.StrongFocus
             Accessible.name: JSON.stringify(modelData)

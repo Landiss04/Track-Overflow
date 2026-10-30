@@ -7,7 +7,6 @@ ColumnLayout {
     id: root
 
     property string label: ""
-<<<<<<< HEAD
     // Clear where the surrounding row already names the field; the label
     // is still used as the accessible name.
     property bool labelVisible: true
@@ -52,26 +51,13 @@ ColumnLayout {
         return value >= -2147483648 && value <= 2147483647;
     }
 
-=======
-    property string kind: "string" // int | float | string
-    property alias text: editor.text
-    readonly property bool valid: kind === "string" || editor.acceptableInput
-    property string errorMessage: kind === "int"
-        ? qsTr("Enter a whole number.") : qsTr("Enter a number.")
-    signal committed(var value)
-
->>>>>>> origin/Train_Ctrl_integration
     spacing: theme.space_1
     opacity: enabled ? 1.0 : 0.42
 
     FieldLabel {
         Layout.fillWidth: true
         text: root.label.toUpperCase()
-<<<<<<< HEAD
         visible: root.labelVisible && root.label !== ""
-=======
-        visible: root.label !== ""
->>>>>>> origin/Train_Ctrl_integration
     }
 
     TextField {
@@ -86,21 +72,13 @@ ColumnLayout {
         font.pixelSize: theme.size_small
         selectByMouse: true
         Accessible.name: root.label
-<<<<<<< HEAD
         validator: root.kind === "int" || root.kind === "float"
             ? doubleValidator : null
 
-=======
-        validator: root.kind === "int" ? intValidator
-            : root.kind === "float" ? doubleValidator : null
-
-        IntValidator { id: intValidator; locale: "C" }
->>>>>>> origin/Train_Ctrl_integration
         DoubleValidator {
             id: doubleValidator
             locale: "C"
             notation: DoubleValidator.StandardNotation
-<<<<<<< HEAD
             bottom: root.minimum
         }
 
@@ -131,18 +109,12 @@ ColumnLayout {
                 if (text === before)
                     rejectedInput = refused;
             });
-=======
->>>>>>> origin/Train_Ctrl_integration
         }
 
         background: Rectangle {
             radius: theme.radius_md
             color: theme.bg_sunken
-<<<<<<< HEAD
             border.color: root.showError ? theme.danger
-=======
-            border.color: !root.valid ? theme.danger
->>>>>>> origin/Train_Ctrl_integration
                 : editor.activeFocus ? theme.accent : theme.border_strong
             Rectangle {
                 anchors.fill: parent
@@ -155,7 +127,6 @@ ColumnLayout {
             }
         }
 
-<<<<<<< HEAD
         property bool userEdited: false
         // dirty is the user-command half of editingFinished: it only goes
         // true from onTextEdited and clears after a commit, so passing
@@ -178,26 +149,11 @@ ColumnLayout {
             if (!root.valid || !dirty) return;
             if (root.kind === "string") {
                 dirty = false;
-=======
-        // editingFinished fires on Return and again on focus loss; only
-        // commit text that has not already been committed.
-        property var lastCommittedText: undefined
-        onTextChanged: if (text !== lastCommittedText) lastCommittedText = undefined
-
-        onEditingFinished: {
-            if (!root.valid || text === lastCommittedText) return;
-            if (root.kind === "string") {
-                lastCommittedText = text;
->>>>>>> origin/Train_Ctrl_integration
                 root.committed(text);
             } else {
                 const value = Number.fromLocaleString(Qt.locale("C"), text);
                 if (Number.isFinite(value)) {
-<<<<<<< HEAD
                     dirty = false;
-=======
-                    lastCommittedText = text;
->>>>>>> origin/Train_Ctrl_integration
                     root.committed(value);
                 }
             }
@@ -206,14 +162,9 @@ ColumnLayout {
 
     HelperText {
         Layout.fillWidth: true
-<<<<<<< HEAD
         visible: root.showError
         text: editor.rejectedInput === "" ? root.errorMessage
             : qsTr("%1 ignored. %2").arg(editor.rejectedInput).arg(root.errorMessage)
-=======
-        visible: !root.valid
-        text: root.errorMessage
->>>>>>> origin/Train_Ctrl_integration
         color: theme.danger
     }
 }

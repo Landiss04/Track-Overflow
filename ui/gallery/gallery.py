@@ -7,12 +7,8 @@ Run from the repository root with the Train Model virtual environment:
     python ui/gallery/gallery.py --check --shots DIR
 
 The self-test renders the whole gallery, clicks every control, types into
-<<<<<<< HEAD
 every text field, confirms and cancels the safety prompt, and checks that
 the int field keeps a typed decimal point ("2.5" stays "2.5"); it exits
-=======
-every text field, confirms and cancels the safety prompt, and exits
->>>>>>> origin/Train_Ctrl_integration
 non-zero if any QML warning appears or a disabled control fires.
 """
 
@@ -145,14 +141,9 @@ def run_check(window, log: WarningLog, shots: Path | None) -> int:
         shots: Folder for screenshots, or None to skip them.
 
     Returns:
-<<<<<<< HEAD
         0 when there are no warnings, no disabled control fired, the int
         field kept a typed decimal point, and both long labels elide; 1
         otherwise.
-=======
-        0 when there are no warnings, no disabled control fired, and
-        both long labels elide; 1 otherwise.
->>>>>>> origin/Train_Ctrl_integration
     """
     # Grow the window so the whole gallery is on screen at once.
     QTest.qWait(200)
@@ -183,13 +174,9 @@ def run_check(window, log: WarningLog, shots: Path | None) -> int:
         if item.isVisible():  # An earlier click may have hidden it.
             _click(window, item, wait_ms=5)
 
-<<<<<<< HEAD
     # Later clicks in the sweep moved focus off the safety prompt it opened,
     # which cancels it: arm again, confirm, re-arm, cancel.
     _click(window, _find_button(window, "APPLY EMERGENCY BRAKE"))
-=======
-    # The sweep armed the confirmed safety button: confirm, re-arm, cancel.
->>>>>>> origin/Train_Ctrl_integration
     _click(window, _find_button(window, "CONFIRM"))
     _click(window, _find_button(window, "RELEASE EMERGENCY BRAKE"))
     _click(window, _find_button(window, "Cancel"))
@@ -201,7 +188,6 @@ def run_check(window, log: WarningLog, shots: Path | None) -> int:
             QTest.keyClick(window, Qt.Key_Down)
             QTest.qWait(20)
 
-<<<<<<< HEAD
     # Regression: with an IntValidator a typed decimal point was silently
     # dropped ("2.5" showed as "25"), so the old setProperty-based typing
     # never caught it. Keystrokes through the real path must keep it.
@@ -221,8 +207,6 @@ def run_check(window, log: WarningLog, shots: Path | None) -> int:
         QTest.keyClick(window, ch)
     QTest.keyClick(window, Qt.Key_Return)
 
-=======
->>>>>>> origin/Train_Ctrl_integration
     # Type valid and invalid text into every visible text field.
     editors = [
         i for i in _walk(window.contentItem())
@@ -247,16 +231,11 @@ def run_check(window, log: WarningLog, shots: Path | None) -> int:
         print("   event:", line)
     print("disabled controls that fired:", fired)
     print("long labels elide:", elided)
-<<<<<<< HEAD
     print("decimal point kept:", decimal_kept)
     print("warnings:", log.warning_count)
     passed = (
         log.warning_count == 0 and fired == 0 and decimal_kept and elided
     )
-=======
-    print("warnings:", log.warning_count)
-    passed = log.warning_count == 0 and fired == 0 and elided
->>>>>>> origin/Train_Ctrl_integration
     print("RESULT:", "PASS" if passed else "FAIL")
     return 0 if passed else 1
 

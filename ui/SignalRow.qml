@@ -50,12 +50,8 @@ RowLayout {
             visible: !root.editable
             text: root.displayValue
             width: parent.width
-<<<<<<< HEAD
             horizontalAlignment: root.kind === "int" || root.kind === "uint"
                 || root.kind === "float"
-=======
-            horizontalAlignment: root.kind === "int" || root.kind === "float"
->>>>>>> origin/Train_Ctrl_integration
                 ? Text.AlignRight : Text.AlignLeft
         }
 
@@ -105,7 +101,6 @@ RowLayout {
 
         ValueField {
             label: root.name
-<<<<<<< HEAD
             labelVisible: false
             kind: root.kind
             modelValue: root.value === undefined ? null : root.value
@@ -121,11 +116,6 @@ RowLayout {
             label: root.name
             labelVisible: false
             modelValue: root.value === undefined ? null : root.value
-=======
-            kind: root.kind
-            text: root.value === undefined || root.value === null
-                ? "" : String(root.value)
->>>>>>> origin/Train_Ctrl_integration
             onCommitted: function (newValue) { root.edited(newValue); }
         }
     }

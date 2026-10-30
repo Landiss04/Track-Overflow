@@ -19,10 +19,7 @@ ColumnLayout {
         Text {
             Layout.fillWidth: true
             text: root.label
-<<<<<<< HEAD
             textFormat: Text.PlainText
-=======
->>>>>>> origin/Train_Ctrl_integration
             color: theme.text_secondary
             font.family: theme.ui_family
             font.pixelSize: theme.size_small

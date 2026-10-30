@@ -1,12 +1,9 @@
 // Labeled native select, style guide 6.2. Emits the value, not display text.
-<<<<<<< HEAD
 //
 // Options are never cut short: the list widens to its longest option
 // (never narrower than the field, and kept inside the window), and a
 // picked value too long for the field shows in full in a tooltip on
 // hover.
-=======
->>>>>>> origin/Train_Ctrl_integration
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Controls.impl
@@ -16,12 +13,9 @@ ColumnLayout {
     id: root
 
     property string label: ""
-<<<<<<< HEAD
     // Clear where the surrounding row already names the field; the label
     // is still used as the accessible name.
     property bool labelVisible: true
-=======
->>>>>>> origin/Train_Ctrl_integration
     property alias model: control.model
     property alias textRole: control.textRole
     property alias valueRole: control.valueRole
@@ -35,12 +29,9 @@ ColumnLayout {
     FieldLabel {
         Layout.fillWidth: true
         text: root.label.toUpperCase()
-<<<<<<< HEAD
         // Unlabeled in tables, where a header row names the column, and
         // wherever labelVisible is false.
         visible: root.labelVisible && root.label !== ""
-=======
->>>>>>> origin/Train_Ctrl_integration
     }
 
     ComboBox {
@@ -64,20 +55,15 @@ ColumnLayout {
         // disabled, on top of this field's own 42 %. Draw both from tokens so
         // disabled is dimmed exactly once, like every other control.
         contentItem: Text {
-<<<<<<< HEAD
             id: shown
             text: control.displayText
             textFormat: Text.PlainText
-=======
-            text: control.displayText
->>>>>>> origin/Train_Ctrl_integration
             color: theme.text_primary
             font: control.font
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
         }
 
-<<<<<<< HEAD
         // Measures options, so the list can fit the longest.
         FontMetrics {
             id: optionMetrics
@@ -115,8 +101,6 @@ ColumnLayout {
             }
         }
 
-=======
->>>>>>> origin/Train_Ctrl_integration
         indicator: ColorImage {
             x: control.width - width - theme.space_3
             y: (control.height - height) / 2
@@ -159,10 +143,7 @@ ColumnLayout {
             contentItem: Text {
                 text: control.textRole
                     ? option.model[control.textRole] : option.model.modelData
-<<<<<<< HEAD
                 textFormat: Text.PlainText
-=======
->>>>>>> origin/Train_Ctrl_integration
                 color: option.selected ? theme.on_accent : theme.text_primary
                 font: control.font
                 verticalAlignment: Text.AlignVCenter
@@ -177,7 +158,6 @@ ColumnLayout {
 
         popup: Popup {
             y: control.height + theme.space_1
-<<<<<<< HEAD
             // Wide enough for the longest option (its padding, the
             // popup's, and room for the scroll indicator), never narrower
             // than the field; the side margins keep it inside the window.
@@ -185,9 +165,6 @@ ColumnLayout {
                 + 2 * theme.space_3 + 2 * padding + theme.space_2)
             leftMargin: theme.space_2
             rightMargin: theme.space_2
-=======
-            width: control.width
->>>>>>> origin/Train_Ctrl_integration
             height: Math.min(contentItem.implicitHeight + 2 * padding,
                 control.Window.height - topMargin - bottomMargin)
             topMargin: theme.space_2

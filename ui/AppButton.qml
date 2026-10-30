@@ -68,10 +68,7 @@ Button {
     contentItem: Text {
         id: label
         text: control.text
-<<<<<<< HEAD
         textFormat: Text.PlainText
-=======
->>>>>>> origin/Train_Ctrl_integration
         color: control.labelColor
         font.family: theme.ui_family
         font.pixelSize: control.labelSize

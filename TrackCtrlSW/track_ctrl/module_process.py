@@ -195,6 +195,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     # the harness's to handle.
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+    from ui.aspect_lock import install_window_scaling
+
     app = QGuiApplication(sys.argv[:1])
     app.setApplicationName("Track Controller")
     keep_windows_open(app)
@@ -219,6 +221,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not roots or not isinstance(roots[0], QWindow):
         print(f"Failed to load {_ENTRY_QML}", file=sys.stderr)
         return EXIT_NO_WINDOW
+    # Holds the window at 16:10 while it is dragged; keep it alive.
+    window_scaling = install_window_scaling(  # noqa: F841
+        roots[0]
+    )
 
     process.start()
     exit_code = app.exec()

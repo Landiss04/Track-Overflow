@@ -43,10 +43,7 @@ Rectangle {
 
         Text {
             text: root.label.toUpperCase()
-<<<<<<< HEAD
             textFormat: Text.PlainText
-=======
->>>>>>> origin/Train_Ctrl_integration
             color: root.tone
             font.family: theme.ui_family
             font.pixelSize: theme.size_label

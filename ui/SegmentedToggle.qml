@@ -10,7 +10,6 @@ Rectangle {
     property int currentIndex: 0
     signal activated(int index)
 
-<<<<<<< HEAD
     // Segments split the track evenly, sized to fit the widest current label.
     readonly property real widestSegment: {
         let widest = 0;
@@ -21,10 +20,6 @@ Rectangle {
         }
         return widest;
     }
-=======
-    // Segments split the track evenly, sized to fit the widest label.
-    property real widestSegment: 0
->>>>>>> origin/Train_Ctrl_integration
     readonly property real segmentWidth: options.length > 0
         ? row.width / options.length : 0
 
@@ -43,10 +38,7 @@ Rectangle {
         spacing: 0
 
         Repeater {
-<<<<<<< HEAD
             id: segments
-=======
->>>>>>> origin/Train_Ctrl_integration
             model: root.options
 
             delegate: AppButton {
@@ -64,13 +56,6 @@ Rectangle {
                 variant: selected ? "primary" : "ghost"
                 Accessible.name: modelData
                 onClicked: root.activated(index)
-<<<<<<< HEAD
-=======
-                onImplicitWidthChanged: root.widestSegment = Math.max(
-                    root.widestSegment, implicitWidth)
-                Component.onCompleted: root.widestSegment = Math.max(
-                    root.widestSegment, implicitWidth)
->>>>>>> origin/Train_Ctrl_integration
 
                 // Pill-shaped fill so the selected side matches the track.
                 background: Rectangle {
