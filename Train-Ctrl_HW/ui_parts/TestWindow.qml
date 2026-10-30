@@ -32,12 +32,37 @@ ScaledWindow {
             mode: window.s.has_train ? window.s.mode_label : ""
             clock: window.s.clock
             underground: window.s.beacon_underground
+            paused: window.s.paused
             faulted: window.s.emergency_brake
+            dwellLeft: window.s.dwell_left
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
                 window.s.fault_pickup ? qsTr("Signal pickup fault") : "",
-                window.s.fault_brake ? qsTr("Brake fault") : ""
+                window.s.fault_brake ? qsTr("Brake fault") : "",
+                window.s.vital_breach ? qsTr("Vitality breach") : ""
             ].filter(function (label) { return label !== ""; })
+
+            // Set the bench clock, to test the 18:00 and 06:00 lights.
+            // Greyed under a harness, whose clock is the time.
+            clockTools: [
+                TimeWheels {
+                    id: timeWheels
+                    objectName: "benchTimeWheels"
+                    enabled: window.s.bench_clock
+                    Component.onCompleted: hours = 18
+                },
+                AppButton {
+                    objectName: "benchTimeButton"
+                    size: "small"
+                    variant: "secondary"
+                    text: qsTr("Set time")
+                    enabled: window.s.bench_clock
+                    tooltip: window.s.bench_clock
+                        ? qsTr("Set the bench clock to the time on the wheels")
+                        : qsTr("The harness's clock sets the time")
+                    onClicked: controller.set_bench_time(timeWheels.timeText())
+                }
+            ]
         }
 
         TestView {
