@@ -2,8 +2,8 @@
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Grouped by who has to act; numbers are kept, so references
-from `REQUIREMENTS.md` and the code stay valid. Last reviewed 2026-10-24,
-against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
+from `REQUIREMENTS.md` and the code stay valid. Last reviewed 2026-10-30,
+against `claude/quirky-fermi-sickg4` `51eca3b` and truth `84c7d44`
 (`REQUIREMENTS.md` M0–M21; M5 is merged into M3).
 
 ## Waiting on other owners or branches
@@ -22,8 +22,9 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     - the e-brake force (about 140 kN) is far above full traction (about
       25.7 kN), so a repaired engine can never show rising speed.
 
-    Signal pickup is unaffected (a non-zero Track Signal can return at any
-    time). Decided in part (R29, M2, M3): once the train stands, the
+    Signal pickup is unaffected (a non-null Track Signal can return at any
+    time), but its resolution is not detected either, so under the harness
+    a pickup failure latches for the run (Kevin's F37, `BUGS.md`). Decided in part (R29, M2, M3): once the train stands, the
     driver may release the e-brake in Manual with the failure still
     latched, and the failure does not engage it again. That lets a
     repaired service brake read applied, since the driver may command it
@@ -39,17 +40,6 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
       for an engine failure. Risk: rollback on a grade.
     - (c) Ask Kevin to report the service brake's state independently of
       the e-brake.
-
-35. **This module has diverged on `claude/quirky-fermi-sickg4`.** That
-    branch runs this module as both Train Controller variants (M13):
-    `train_ctrl/module_process.py` for the harness, and `common/hw_link`
-    for the Pi. But its copy of `Train-Ctrl_HW` is older than this
-    branch's: the toy plant is still inside `control.py`; its harness
-    edge still sends one `brake_state` [emergency, service] input, not
-    M18's two; its engine-failure rule is the steady-fall check (#28); and
-    it has none of M21, the M6 / M7 boarding or the Cab controls panel.
-    The two need reconciling before integration; that touches another
-    branch, so it waits for the owners.
 
 ## Controller: to decide or build
 
@@ -68,14 +58,17 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     on this branch.** This branch still has the old rule (power that
     should pull 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s),
     which flags a healthy full train 2.4–2.9 s onto a +2 % or +5 % grade.
-    Kevin accepted a replacement on 2026-10-21 (R91), built on
-    `claude/quirky-fermi-sickg4` and proposed there for truth
-    (`truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-engine-failure-steady-fall-accepted.md`):
+    Kevin accepted a replacement on 2026-10-21 (R91), built in `460579b`
+    on `claude/quirky-fermi-sickg4` and proposed there for truth
+    (`truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-engine-failure-steady-fall-accepted.md`).
+    That branch's copy of this module has since been replaced with this
+    one (`74159e9`), so the rule is now in no branch's tip, only in
+    `460579b`'s `control.py` and `tests/test_engine_detection.py`:
     never within 0.05 m/s of the target; otherwise latch only when, over a
     6 s window, power is above 0 on every tick, no brake is commanded or
     reported on any tick, and the half-second speed means fall by more
     than 0.05 m/s, each within 10 % of that fall of a straight line. Port
-    it here (#35); `REQUIREMENTS.md` §4 states it. Its own limits: a stationary dead engine is not
+    it here from `460579b`; `REQUIREMENTS.md` §4 states it. Its own limits: a stationary dead engine is not
     flagged, and a heavy train that cannot hold speed on Green 7's 5 %
     grade can be.
 
@@ -180,6 +173,16 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     Reusing the Train Model's physics (#26 (b)) would close the physics
     and report gaps; the track side needs a track to run on.
 
+45. **The bench should spawn the console for the line** (planned, the
+    weekend of 2026-11-07; Jonathan, 2026-10-30). So the bench emulates
+    the integrated system: it opens on its own, and **Spawn** on the Red
+    Line opens (or reuses) the HW Train Controller console, on the Green
+    Line the SW one, each with its own backend and titled as under the
+    harness (M13, `run(variant=…)`). To design: one bench editing trains
+    held by two backends. Also then: setting the bench's time is slow
+    with the scroll wheels (M15); make it quicker to set, for example by
+    typing it (#31, #32, #36).
+
 ## Outside the style guide and shared UI
 
 37. **Service-brake amber and the 72 px hero readouts** (`brake_service` and
@@ -276,6 +279,11 @@ One line each; the details are in `CHANGELOG.md`.
   the fleet takes `echo_ticks` (ECHO_TICKS, 2, under the harness; 1 on
   the bench), and the brake-failure rule (M4) and the passenger-pull
   test (M2) use the report due for each command.
+- **35.** The module diverged on `claude/quirky-fermi-sickg4`: Kevin
+  pulled this branch's `e0e142d` there (`74159e9`), and `f05053b` brought
+  his changes back, so the two matched at `51eca3b`. That branch's harness
+  sends M18's two brake states. `module_process.py` runs only there, where
+  `utils/module_link` is.
 - **44.** Integrated, a brake failure never resolved: the controller
   now concludes it resolved when a service brake commanded with the
   e-brake off reads applied in its report (§4), and the bench clears
