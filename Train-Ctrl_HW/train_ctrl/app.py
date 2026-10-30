@@ -25,6 +25,7 @@ from ui.aspect_lock import install_window_scaling
 from .fleet import TrainControllerFleet
 from .backend import ConsoleBackend
 from .console_theme import build_console_theme, check_shared_library
+from .constants import VARIANT_LINES
 
 # train_ctrl/app.py -> Train-Ctrl_HW/ui_parts
 _UI_DIR = Path(__file__).resolve().parents[1] / "ui_parts"
@@ -34,11 +35,14 @@ _TEST_QML = _UI_DIR / "TestWindow.qml"
 
 def run(console: bool, bench: bool, check: bool = False,
         shots: Path | None = None,
-        fleet: TrainControllerFleet | None = None) -> int:
+        fleet: TrainControllerFleet | None = None,
+        variant: str = "HW") -> int:
     """Open the requested windows and run until they close.
 
     ``fleet`` is a central harness's TrainControllerFleet; without
-    one the console owns its own. With ``check`` it runs offscreen
+    one the console owns its own. ``variant`` is "SW" or "HW": the
+    console is titled for it and, under a harness, lists only its
+    line's trains (SW Green, HW Red). With ``check`` it runs offscreen
     instead, drives a session through both windows, and returns
     non-zero on any problem.
     """
@@ -62,7 +66,9 @@ def run(console: bool, bench: bool, check: bool = False,
 
     # Keep a Python reference so it is not garbage collected while
     # QML holds only a C++ pointer to it.
-    backend = ConsoleBackend(fleet=fleet)
+    backend = ConsoleBackend(
+        fleet=fleet, variant=variant,
+        line=VARIANT_LINES[variant] if fleet is not None else "")
 
     if not check_shared_library():
         return 1

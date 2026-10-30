@@ -757,6 +757,33 @@ def run_check(
         picker.setProperty("query", "")
         backend.select_train(first)
 
+    # Standalone the console is the HW one, every line (M13).
+    expect(window.title() == "HW Train Controller",
+           f"the standalone console is titled {window.title()!r}")
+    # Under a harness each variant's console is named for it and its
+    # line, and lists and picks only that line's trains (M13). The
+    # harness names a line "Green", the bench "GREEN LINE".
+    for variant, mine, other, title in (
+            ("SW", "G1", "R1", "SW Train Controller — Green Line"),
+            ("HW", "R1", "G1", "HW Train Controller — Red Line")):
+        fleet = mod.TrainControllerFleet()
+        fleet.add("G1", "Green")
+        fleet.add("R1", "Red")
+        harnessed = type(backend)(fleet=fleet, variant=variant,
+                                  line=mod.VARIANT_LINES[variant])
+        listed = [t["id"] for t in harnessed.trains]
+        expect(listed == [mine],
+               f"the {variant} console lists {listed}, not [{mine}]")
+        expect(harnessed.selected == mine,
+               f"the {variant} console started on {harnessed.selected}")
+        harnessed.select_train(other)
+        expect(harnessed.selected == mine,
+               f"the {variant} console picked {other}, off its line")
+        expect(harnessed.snapshot["window_title"] == title,
+               f"the {variant} console is titled "
+               f"{harnessed.snapshot['window_title']!r}, not {title!r}")
+        harnessed.deleteLater()
+
     # The roster only signals when a train is added or removed, so the
     # pickers' lists are not rebuilt on every UI tick.
     roster_signals = []

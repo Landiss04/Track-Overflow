@@ -126,5 +126,8 @@ BEACON_SIDES = ("L", "R", "LR")
 #: Lines a train can be spawned on, and the id prefix each one uses.
 LINES = {"GREEN LINE": "T", "RED LINE": "R"}
 
+#: The line each variant drives (truth D021, REQUIREMENTS.md M13).
+VARIANT_LINES = {"SW": "GREEN LINE", "HW": "RED LINE"}
+
 #: Real time per simulated second, as the bench offers it.
 SIM_RATES = (1, 10)

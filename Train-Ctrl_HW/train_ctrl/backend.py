@@ -40,6 +40,15 @@ def normalize_block_letter(text: str) -> str:
     return letters[0].upper() if letters else "A"
 
 
+def same_line(a: str, b: str) -> bool:
+    """Whether two names are the same line.
+
+    The bench names a line "GREEN LINE", the harness "Green", so only
+    the first word is compared, in any case.
+    """
+    return a.upper().split()[:1] == b.upper().split()[:1]
+
+
 class ConsoleBackend(QObject):
     """What QML sees: one snapshot out, one slot per operator action.
 
@@ -63,8 +72,14 @@ class ConsoleBackend(QObject):
     ENGINEER_INDEX = ROLES.index("engineer")
 
     def __init__(self, parent: QObject | None = None, *,
-                 fleet: TrainControllerFleet | None = None) -> None:
+                 fleet: TrainControllerFleet | None = None,
+                 variant: str = "HW", line: str = "") -> None:
         super().__init__(parent)
+        # Which Train Controller this window is, and, under a harness,
+        # the one line whose trains it lists and lets the operator
+        # pick (REQUIREMENTS.md M13). Standalone, every line.
+        self.variant = variant
+        self.line = line
         # Standalone, the console owns its fleet and steps every train
         # with the toy plant. Given the central harness's fleet, the
         # harness adds, removes and steps the trains; the console only
@@ -72,7 +87,8 @@ class ConsoleBackend(QObject):
         self._owns_fleet = fleet is None
         self.fleet = fleet if fleet is not None else TrainControllerFleet()
         self._roster: tuple[str, ...] = tuple(self.fleet.ids())
-        self.selected = self._roster[0] if self._roster else ""
+        shown = [i for i in self._roster if self._on_line(i)]
+        self.selected = shown[0] if shown else ""
         self.notes: dict[str, str] = {}
         self.sim_rate = 1
         self.paused = False
@@ -169,7 +185,8 @@ class ConsoleBackend(QObject):
             return
         self._roster = ids
         if self.selected not in self.fleet:
-            self.selected = ids[0] if ids else ""
+            shown = [i for i in ids if self._on_line(i)]
+            self.selected = shown[0] if shown else ""
         self.roster_changed.emit()
 
     def _step_all(self) -> None:
@@ -252,14 +269,27 @@ class ConsoleBackend(QObject):
         return [{"id": core.state.train_id,
                  "line": core.state.line,
                  "label": f"{core.state.train_id} · {core.state.line}"}
-                for core in self.fleet]
+                for core in self.fleet
+                if self._on_line(core.state.train_id)]
+
+    def _on_line(self, train_id: str) -> bool:
+        # Whether this window may show the train: any, standalone.
+        return not self.line or same_line(
+            self.fleet.get(train_id).state.line, self.line)
 
     @Property("QVariantMap", notify=snapshot_changed)
     def snapshot(self) -> dict[str, Any]:
         """Every value the views read, rebuilt once per UI tick."""
         s = self.core.state
         sim = self.sim
+        module_name = f"{self.variant} Train Controller"
+        line_name = self.line.title()
         return {
+            # The variant and its line, named together (M13).
+            "module_name": module_name,
+            "line_name": line_name,
+            "window_title": (f"{module_name} — {line_name}" if line_name
+                             else module_name),
             "train_id": s.train_id,
             "has_train": self.has_train,
             "train_index": (
@@ -486,7 +516,7 @@ class ConsoleBackend(QObject):
         A train whose gains are not set yet signs the driver out: its
         console stays hidden until the engineer commissions it.
         """
-        if train_id in self.fleet:
+        if train_id in self.fleet and self._on_line(train_id):
             self.selected = train_id
             if self.operator == "driver" and not self.core.armed:
                 self.operator = ""

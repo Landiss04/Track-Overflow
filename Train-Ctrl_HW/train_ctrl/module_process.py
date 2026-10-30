@@ -218,4 +218,4 @@ def main(argv: Sequence[str] | None = None) -> int:
     # folder on the import path, which the caller has set.
     from .app import run
 
-    return run(console=True, bench=False, fleet=fleet)
+    return run(console=True, bench=False, fleet=fleet, variant="SW")
