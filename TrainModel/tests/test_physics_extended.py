@@ -725,19 +725,91 @@ def test_brake_deceleration_while_moving(kind: str, n: int) -> None:
     assert vel(model) == pytest.approx(v0 - decel * DT_S, rel=1e-12)
 
 
-def test_emergency_supersedes_service_not_additive() -> None:
-    """Check service plus emergency brakes no harder than emergency."""
+def test_simultaneous_brakes_add_their_forces() -> None:
+    """Check service contributes its force alongside emergency."""
     both = fresh()
     only = fresh()
     launch(both, 10.0)
     launch(only, 10.0)
     out = both.step(DT_S, inp(0.0, service=True, emergency=True))
     only.step(DT_S, inp(0.0, emergency=True))
-    assert acc(both) == acc(only)
-    assert vel(both) == vel(only)
+    extra_decel = CFG.f_service_n / mass_of(0)
+    assert acc(both) == pytest.approx(acc(only) - extra_decel)
+    assert vel(both) == pytest.approx(vel(only) - extra_decel * DT_S)
     brake_state = (out.controller.emergency_brake_active,
                    out.controller.service_brake_active)
-    assert brake_state == (True, False)
+    assert brake_state == (True, True)
+
+
+@pytest.mark.parametrize("n", [0, REF_LOAD, FULL])
+@pytest.mark.parametrize("passenger", [False, True])
+@pytest.mark.parametrize("failed", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+def test_combined_brake_force_and_stop(
+    n: int, passenger: bool, failed: bool, rollback: bool,
+) -> None:
+    """Independent brakes oppose either motion and hold after stopping."""
+    model = fresh(n)
+    if rollback:
+        for _ in range(100):
+            model.step(DT_S, inp(grade_deg=10.0))
+        assert vel(model) < -1.0
+    else:
+        launch(model, 10.0)
+    v0 = vel(model)
+    model.set_failures(FailureState(brake=failed))
+    if passenger:
+        model.pull_passenger_emergency_brake()
+    commands = inp(service=True, emergency=not passenger)
+    output = model.step(DT_S, commands).controller
+    force = CFG.f_emergency_n + (0 if failed else CFG.f_service_n)
+    decel = (force + roll_n(mass_of(n))) / mass_of(n)
+    direction = -1.0 if rollback else 1.0
+    assert acc(model) == pytest.approx(-direction * decel)
+    assert vel(model) == pytest.approx(v0 - direction * decel * DT_S)
+    assert output.emergency_brake_active
+    assert output.service_brake_active is not failed
+    for _ in range(1000):
+        model.step(DT_S, commands)
+        assert direction * vel(model) >= 0.0
+        if vel(model) == 0.0:
+            break
+    assert vel(model) == 0.0
+    held_offset = model.snapshot().outputs.track.offset_m
+    for _ in range(20):
+        model.step(DT_S, inp(service=True, emergency=not passenger,
+                            grade_deg=10.0))
+    assert vel(model) == 0.0
+    assert model.snapshot().outputs.track.offset_m == held_offset
+
+
+def test_pull_holds_until_the_controller_brake_goes_off() -> None:
+    """Check a pull stays latched until the controller's emergency brake
+    goes from true to false (Kevin Schillinger 2026-10-28)."""
+    model = fresh()
+    model.pull_passenger_emergency_brake()
+    # The controller sending false before it has taken the pull up
+    # does not release it.
+    for _ in range(3):
+        out = model.step(DT_S, inp(service=True)).controller
+        assert out.emergency_brake_active
+    out = model.step(DT_S, inp(service=True, emergency=True)).controller
+    assert out.emergency_brake_active
+    assert model.snapshot().passenger_ebrake_pulled
+    out = model.step(DT_S, inp(service=True)).controller
+    assert not model.snapshot().passenger_ebrake_pulled
+    assert not out.emergency_brake_active and out.service_brake_active
+
+
+def test_a_pull_during_the_release_is_kept() -> None:
+    """Check a pull made after the controller's last true survives the
+    controller's brake going off."""
+    model = fresh()
+    model.step(DT_S, inp(emergency=True))
+    model.pull_passenger_emergency_brake()
+    out = model.step(DT_S, inp()).controller
+    assert out.emergency_brake_active
+    assert model.snapshot().passenger_ebrake_pulled
 
 
 def test_passenger_brake_latches_and_holds() -> None:
@@ -1729,15 +1801,23 @@ def test_the_limits_themselves_are_accepted(
 
 
 def test_signal_pickup_failure_blanks_only_the_track_signal() -> None:
-    """Check pickup failure blanks the signal but not the track info."""
+    """Check pickup failure sends null for the track signal, invalid
+    data rather than a valid 0, and leaves the track info."""
     model = fresh()
     model.set_failures(FailureState(signal_pickup=True))
     out = model.step(DT_S, inp(cmd_speed_mps=13.5, authority=12,
                                speed_limit_mps=12.0, block_id="C3"))
-    assert out.controller.commanded_speed_mps == 0.0
-    assert out.controller.authority_blocks == 0
-    assert out.controller.speed_limit_mps == 12.0
+    assert out.controller.commanded_speed_mps is None
+    assert out.controller.authority_blocks is None
     assert out.track.block_id == "C3"
+
+
+def test_no_speed_limit_goes_to_the_controller() -> None:
+    """Check the speed limit stays in the Train Model: the Train
+    Controller takes commanded speed as its limit (its owner,
+    2026-10-28)."""
+    out = fresh().step(DT_S, inp(speed_limit_mps=12.0))
+    assert not hasattr(out.controller, "speed_limit_mps")
 
 
 @pytest.mark.parametrize("engine", [False, True])
@@ -1763,12 +1843,41 @@ def test_light_state_reported(interior: bool, exterior: bool) -> None:
     assert out.controller.exterior_lights_on is exterior
 
 
-def test_beacon_passes_through_only_on_its_tick() -> None:
-    """Check a beacon is reported on its tick and None after."""
+def test_beacon_is_reported_on_its_station_block() -> None:
+    """Check a beacon heard on the block before a station is reported
+    every tick the train is on the station's block, and not before or
+    after (Kevin Schillinger 2026-10-28)."""
     model = fresh()
     beacon = Beacon("Dormont", "R", underground=True)
-    assert model.step(DT_S, inp(beacon=beacon)).controller.beacon == beacon
+    assert model.step(DT_S, inp(beacon=beacon)).controller.beacon is None
     assert model.step(DT_S, inp()).controller.beacon is None
+    for _ in range(3):
+        out = model.step(DT_S, inp(station="Dormont", polarity=False))
+        assert out.controller.beacon == beacon
+    assert model.step(DT_S, inp()).controller.beacon is None
+    out = model.step(DT_S, inp(station="Glenbury", polarity=False))
+    assert out.controller.beacon is None
+
+
+def test_a_beacon_heard_leaving_a_station_is_not_reported() -> None:
+    """Check the beacon on the block after a station, heard going away
+    from it, is not reported on the block after that."""
+    model = fresh()
+    beacon = Beacon("Dormont", "L", underground=False)
+    model.step(DT_S, inp(station="Dormont"))
+    assert model.step(DT_S, inp(beacon=beacon, polarity=False)
+                      ).controller.beacon is None
+    assert model.step(DT_S, inp()).controller.beacon is None
+
+
+@pytest.mark.parametrize("side", ["L", "R", "LR"])
+def test_every_platform_side_passes_through(side: str) -> None:
+    """Check L, R and LR (platforms on both sides) are accepted as sent."""
+    beacon = Beacon("Dormont", side, underground=False)  # type: ignore[arg-type]
+    model = fresh()
+    model.step(DT_S, inp(beacon=beacon))
+    out = model.step(DT_S, inp(station="Dormont", polarity=False))
+    assert out.controller.beacon == beacon
 
 
 def test_failure_shown_now_and_acts_on_the_next_step() -> None:
@@ -1896,12 +2005,12 @@ def test_a_text_input_must_be_text(field: str) -> None:
     Beacon(5, "L", False),  # type: ignore[arg-type]
 ])
 def test_a_beacon_is_checked(beacon: Beacon) -> None:
-    """Check the platform side is L or R and the name fits 128 chars."""
+    """Check the platform side, text type and complete payload bound."""
     with pytest.raises(InvalidInputError, match="beacon"):
         TrainModel.validate_inputs(DT_S, inp(beacon=beacon))
 
 
 def test_a_full_length_beacon_passes() -> None:
-    """Check a 128-character station name is still accepted."""
-    TrainModel.validate_inputs(DT_S, inp(beacon=Beacon("S" * 128, "R",
+    """Check an exactly 128-character encoded payload is accepted."""
+    TrainModel.validate_inputs(DT_S, inp(beacon=Beacon("S" * 115, "R",
                                                        True)))

@@ -293,8 +293,9 @@ the stale `common/interfaces.py` catalog (D008).
 > **DIAGRAM PLACEHOLDER TM-3:** Insert the existing class diagram. Keep the
 > protocol and concrete `TrainModel` distinguishable by package name. Mark frozen
 > dataclasses, Qt objects, multiplicities, and test-only classes. Check whether
-> the existing drawing includes the newer fleet/process adapter and
-> `passenger_brake_release` field before insertion.
+> the existing drawing includes the newer fleet/process adapter before
+> insertion, and that it shows no `passenger_brake_release` field (withdrawn
+> 2026-10-28).
 
 #### Vehicle configuration and mass
 
@@ -395,7 +396,6 @@ module. The normal passenger-release command is a controller input.
 | `door_left_open`, `door_right_open` | bool each | Requested door states. |
 | `temp_setpoint_c` | finite float, °C | Cabin temperature target. |
 | `announcement` | str | Passenger announcement text. |
-| `passenger_brake_release` | bool, default false | One-shot release of the passenger latch; does not cancel the controller emergency command. |
 
 #### Track Model to Train Model: `TrackInputs`
 
@@ -404,7 +404,7 @@ module. The normal passenger-release command is a controller input.
 | `track_info.block_id` | str | Current block identifier. |
 | `track_info.grade_deg` | finite float, degrees, strictly between -90 and 90 | Positive uphill; source layout grade percent is converted upstream. |
 | `track_info.elevation_m` | finite float, m | Terrain metadata. |
-| `track_info.speed_limit_mps` | finite float, m/s, >= 0 | Block limit passed through in model outputs. |
+| `track_info.speed_limit_mps` | finite float, m/s, >= 0 | Block limit, shown in the Train Model window; not sent to the Train Controller (2026-10-28). |
 | `track_info.polarity` | bool | Flip on block entry; a change resets offset and raises the block-change event. |
 | `track_info.station_name` | str or `None` | Station in the current block; implementation uses `None` off-station. |
 | `track_signal.commanded_speed_mps` | finite float, m/s, >= 0 | Track-circuit commanded speed passed to the controller. |
@@ -421,9 +421,8 @@ module. The normal passenger-release command is a controller input.
 | `door_left_open`, `door_right_open` | bool each | Actual simulated door states. |
 | `interior_lights_on`, `exterior_lights_on` | bool each | Actual simulated light states. |
 | `cabin_temp_c` | float, °C | Simulated cabin temperature. |
-| `commanded_speed_mps`, `authority_blocks` | float m/s; int blocks | Track-signal pass-through; both become zero under signal pickup failure, as confirmed in R10. |
-| `speed_limit_mps` | float, m/s | Block speed limit, unaffected by pickup failure. The current controller edge drops this field because that consumer has no separate speed-limit input. |
-| `beacon` | `Beacon` or `None` | Current tick's beacon; the consumer retains station information if needed. |
+| `commanded_speed_mps`, `authority_blocks` | float m/s or null; int blocks or null | Track-signal pass-through; both become null under signal pickup failure, invalid data rather than a valid 0 (Kevin Schillinger 2026-10-28; zero before, R10). |
+| `beacon` | `Beacon` or `None` | The beacon of the block the train is on: the one heard on the block before a station, every tick the train is on that station's block, and `None` elsewhere (Kevin Schillinger 2026-10-28). |
 
 Failure flags are available to the Train Model window through its snapshot.
 They are not sent to the Train Controller. The controller must observe physical
@@ -457,8 +456,9 @@ before state mutation; names are never silently truncated.
 Existing typed `Beacon` objects and named fields in harness JSON envelopes remain
 the readable module boundary. Canonical array encoding defines the bounded beacon
 payload, not a replacement for the entire harness protocol. Producers and the
-Train Model must enforce the same rule. `None` remains the output between beacon
-ticks; the Train Controller retains the last beacon if its control logic needs it.
+Train Model must enforce the same rule. The Train Model holds the last beacon heard
+and outputs it while the train is on that beacon's station block, `None` elsewhere
+(Kevin Schillinger 2026-10-28).
 This encoding is specified here for follow-up implementation and documentation.
 
 #### Validation and units
@@ -616,12 +616,12 @@ presents the announcement without advancing physics independently.
 **Trigger:** A track input accompanies a tick.
 
 **Main success scenario:** Use grade in the force balance; detect a block transition
-from polarity; pass commanded speed, authority, speed limit, and the current beacon
-to controller outputs; publish block, offset, and transition flag to the Track Model.
+from polarity; pass commanded speed and authority to controller outputs, and the
+beacon heard on the block before a station while the train is on that station; publish block, offset, and transition flag to the Track Model.
 
 **Alternate flows:** The first polarity sample establishes a baseline. Under pickup
 failure, commanded speed and authority become zero; terrain and beacon pass-through
-remain available. A tick without a beacon reports `None`.
+remain available. Off a station's block the beacon output is `None`.
 
 **Postcondition:** The controller receives the modeled pickup information, and the
 Track Model receives current position feedback.
@@ -648,20 +648,24 @@ with that count. Station scheduling and the 45 s dwell remain control/test dutie
 #### UC-TM-06: Pull and release the passenger emergency brake
 
 **Primary actor:** Passenger. **Supporting actor:** Train Controller.
-**Requirement:** REQ-FUNC-047; promoted `passenger-brake-release` signal.
+**Requirement:** REQ-FUNC-047; release rule asserted by Kevin Schillinger
+2026-10-28.
 
 **Preconditions:** The selected train exists. **Trigger:** The passenger activates
 the emergency-brake button in the Train Model window.
 
 **Main success scenario:** Latch the passenger pull; report emergency brake active
 immediately; apply its physical braking force on subsequent steps. The Train
-Controller later sends a one-shot `passenger_brake_release` to clear the pull.
+Controller takes the pull up as its own emergency brake; when the driver
+releases it, the controller's `emergency_brake` goes from true to false and the
+pull clears.
 
-**Alternate flows:** A brake failure does not disable the emergency brake. A held
-controller emergency command keeps emergency braking active after passenger
-release. The module window provides no passenger-release action.
+**Alternate flows:** A brake failure does not disable the emergency brake. A pull
+made after the controller's last true is kept through that release. The module
+window provides no passenger-release action.
 
-**Postcondition:** The pull remains latched until the release command is accepted.
+**Postcondition:** The pull remains latched until the Train Controller's
+emergency brake goes from true to false.
 
 #### UC-TM-07: Inject or clear a failure
 
@@ -677,7 +681,7 @@ next step. Multiple independent flags may be active together.
 | Failure | Simulated effect |
 |---------|------------------|
 | Engine | Zero traction despite a nonzero power command. |
-| Signal pickup | Zero commanded speed and authority in controller feedback. |
+| Signal pickup | Null commanded speed and authority in controller feedback. |
 | Brake | Block service braking; emergency braking remains available. |
 
 **Alternate flows:** Clearing a failure restores the relevant command path.
@@ -828,7 +832,7 @@ SDD-only session. No item below is a request to implement product changes now.
 | Simultaneous brakes | Both brakes can apply simultaneously; service failure disables service only. The selected physical realization adds the two engaged brake forces. | Backend: remove service suppression, align force and state reporting, and update focused tests. |
 | Station restriction on boarding | Track Model sends boarding events only at stations. Train Model enforces rest, doors, counts, and capacity without a station gate. | Documentation: clarify responsibility in the boarding signal and module descriptions. |
 | Beacon encoding and between-beacon behavior | Canonical compact ASCII-escaped JSON array `[station_name, platform_side, underground]`, maximum 128 characters for the complete payload. Keep `None` between beacon ticks. | Backend: enforce complete payload length consistently. Documentation: record encoding and retention responsibility. |
-| Pickup failure output | Keep commanded speed zero and authority zero. | Documentation: record the settled choice; preserve existing implementation. |
+| Pickup failure output | Keep commanded speed zero and authority zero. Superseded 2026-10-28: both null. | Documentation: record the settled choice; preserve existing implementation. |
 | Door interlock | Train Controller ensures doors remain closed when required. Train Model follows door commands. | Documentation: remove unresolved ownership language; preserve existing Train Model behavior. |
 | Vehicle parameters | 480 kW is confirmed. Rolling resistance is the only passive resistance term in scope; grade and brake forces still apply. | Documentation: remove provisional-power and extra-resistance calibration requests. |
 | Position reference | Use the front of the train for offset. | Documentation: align interface comments, position signal, physics, and integration text. |

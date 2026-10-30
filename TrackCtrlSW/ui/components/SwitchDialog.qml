@@ -18,8 +18,10 @@ Dialog {
     readonly property var currentSwitch: switches.length > 0
         ? switches[Math.min(currentIndex, switches.length - 1)] : null
 
-    signal applied(string switchId, bool reverse)
-    signal released(string switchId)
+    // Not "applied": Dialog has an applied() signal of its own, which a
+    // signal of the same name would override (Qt warns of it).
+    signal switchApplied(string switchId, bool reverse)
+    signal switchReleased(string switchId)
 
     modal: true
     anchors.centerIn: parent
@@ -157,7 +159,7 @@ Dialog {
                     enabled: root.currentSwitch !== null
                         && root.currentSwitch.manual
                     onClicked: {
-                        root.released(root.currentSwitch.id);
+                        root.switchReleased(root.currentSwitch.id);
                         root.close();
                     }
                 }
@@ -175,7 +177,7 @@ Dialog {
                     variant: "primary"
                     enabled: root.currentSwitch !== null
                     onClicked: {
-                        root.applied(root.currentSwitch.id, root.reverse);
+                        root.switchApplied(root.currentSwitch.id, root.reverse);
                         root.close();
                     }
                 }

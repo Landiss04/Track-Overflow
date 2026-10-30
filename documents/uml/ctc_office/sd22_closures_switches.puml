@@ -9,13 +9,21 @@ end box
 participant "Central Harness" as H
 participant "Track Controller\n(the line's)" as TC
 
-Model -> Model : closed_blocks = closed + closing blocks,\nthe full set, sorted
-Model -> Model : switch_commands = every commanded switch\n(none outside maintenance mode)
-Model -> Model : keep only the lines that are ready (SD-24)
+Model -> Model : _outputs()
+Model -> Model : _closed_blocks()
+note right of Model : closed + closing blocks,\nthe full set, sorted
+Model -> Model : _switch_commands()
+note right of Model : every commanded switch\n(none outside maintenance mode)
+Model -> Model : _ready_lines()
+note right of Model : keep only the lines that are ready (SD-24)
 Model --> H : outputs.track_controller:\nclosed_blocks, switch_commands
-H -> H : ctc_to_track_controller(line):\nthe line's blocks and switches
+H -> H : ctc_to_track_controller(line)
+note right of H : the line's blocks and switches
 H -> TC : (tick k+1) closed blocks; switch commands\n(normal / reverse, by switch block)
-TC -> TC : a listed block may not be overridden;\nthe PLC program moves a commanded switch
+note right of TC
+  A listed block may not be overridden;
+  the PLC program moves a commanded switch.
+end note
 TC --> H : (later tick) the switch reports its new position
 H --> Model : switches input (SD-17): Set switch position\nshows "Reported by track controller"
 @enduml

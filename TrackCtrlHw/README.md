@@ -222,17 +222,48 @@ SW_12 := OCC_1 AND NOT OCC_12 AND NOT OCC_13
 `AUTH_n` decides whether block *n*'s track circuit passes the CTC Office's
 authority (1) or sends 0 (0). Speed is a number, so it crosses into the program
 as five bits, `SPD_n_0` (1 m/s) to `SPD_n_4` (16 m/s), and back out as
-`CMD_n_0..4`; keeping it under the block's limit is the program's job. Each
+`CMD_n_0..4`; the program decides it and the vital block caps it at the block's
+limit. Each
 statement is compiled twice by different algorithms (recursive
 descent and a tree walk; shunting-yard and a stack machine), and both channels
 run every scan. A disagreement is a latched channel fault until a new program is
 loaded.
 
-## Nothing above the program
+## The vital block
 
-The wayside houses its PLC program and decides nothing itself. There is no
-vital layer: every protection is the program's to write, and the wayside drives
-the program's outputs onto the track as they are. The sample programs show how:
+After the user's program, every scan runs a read-only vital block
+(`track_ctrl_hw/vital.py`). It is PLC code generated from the wayside's
+database when the database loads, runs on the same engine and both channels,
+reads the inputs and the program's outputs under their own names, and writes
+the outputs the wayside drives, prefixed `OUT_`. A disagreement between its
+channels is a channel fault like the program's. Every rule only restricts, so a
+wrong program stops trains rather than letting them collide:
+
+- Authority: none in a closed block, while any block a train in it could move
+  into (`next_blocks`) is occupied, or while a switch whose points or listed
+  block it is is moving. At points only the leg the switch reports set counts;
+  a train on a leg is held by a train on the points either way. Two-way blocks
+  therefore hold a train for a neighbour on either side, one-way blocks only
+  for the block ahead.
+- Speed: `CMD_n` is capped at the block's limit, rounded down to whole m/s, and
+  is 0 without authority.
+- Switches: the CTC Office's command (`CTCSW_n`, `CTCREV_n`) wins over the
+  program; a train on the points or the listed block locks the switch where it
+  reports.
+- Signals: red unless exactly one aspect is lit and the points are clear,
+  open and not moving.
+- Crossings: active while a train is on the crossing's block or beside it.
+
+There is no hand-set switch control and no speed halving on yellow: speed is
+the program's, under the vital cap. The PLC details window shows the vital
+block's checksum, its source and what it overrode on the last scan. The
+software variant appends its own vital code (`TrackCtrlSW/track_ctrl/vital.py`)
+with different names and rules; the two need not match.
+
+## The sample programs
+
+The Green samples keep their own protections as well, so they still stand
+alone:
 
 - Separation: a train keeps its authority only while the blocks beside it, on
   the route the switches have set, are clear.
@@ -242,13 +273,12 @@ the program's outputs onto the track as they are. The sample programs show how:
 - Switch correspondence: `SW_n XOR SWREV_n` turns the signal red and zeroes
   `AUTH` on every block of the route over the switch.
 - Crossings: active while a train is on the crossing's block or one beside it.
-- Speed limits: `OVER_n` compares the five `SPD_n` bits with the block's limit,
-  written into the program as constants; above it, the limit's own bits go out
-  as `CMD_n`. Every `CMD_n` bit is ANDed with `AUTH_n`, so held authority sends
-  no speed. Six statements a block, so programs run to a few hundred lines.
+- Speed limits: `OVER_n` compares the five `SPD_n` bits with the block's limit;
+  above it, the limit's own bits go out as `CMD_n`.
 
-Signal outputs decode in a fixed order: red if `SIG_n_R` is 1 or none is,
-otherwise the first of `_Y`, `_G`, `_SG` that is 1.
+The Red programs (`red_wayside_*_integration_test.plc`, Braden's since
+2026-10-26) route, signal and separate, and pass the CTC Office's speed
+through with authority; the vital block caps it.
 
 Outputs hold their fail-safe values (every signal red, every crossing active,
 speed 0 and authority 0, switches where they are) only while no program runs:
@@ -256,14 +286,30 @@ none is loaded, a new one has not scanned yet, or the channels have disagreed.
 
 The CTC Office sends no maintenance flag. Its switch commands reach the program
 as `CTCSW_n` (a command is in effect) and `CTCREV_n` (it is reverse); the
-sample programs obey them.
+vital block enforces them.
 
 ## Known gaps
 
 - Authority is not truncated at an occupied block: that needs each train's
-  direction, which a wayside that knows no trains does not have. The sample
-  programs hold a train whose neighbour is occupied instead.
+  direction, which a wayside that knows no trains does not have. A train is held
+  while a block it could move into is occupied; the CTC Office keeps one empty
+  block between trains so that this never stops a follower and its leader
+  together (decided 2026-10-26; the CTC change is Landis's).
+- An occupancy input the wayside expects but is not sent reads as clear, because
+  the harness sends only the occupied blocks (INPUT-1; fix requested of the
+  harness).
 - With no memory between scans, a program can lock a switch only where it
   reports, not where it was last commanded.
 - The test UI shows values in backend units (m/s, blocks); the Track Controller
   window shows imperial.
+
+## Phase 5 integration test data
+
+See [INTEGRATION.md](INTEGRATION.md) for the Red test copies, host/Pi split,
+read-only cross-wayside occupancy inputs and the unresolved Red-9 yard text.
+`red_wayside_*_integration_test.json` are Kevin's exact cuts of the Red line;
+the matching PLCs are Braden's since 2026-10-26 (file names kept so the harness
+and its tests are untouched). The three Green samples
+now include `next_blocks` as exact cuts of the course layout (R78).
+Pi owner instructions are in [pi-owner-setup.md](../documents/pi-owner-setup.md),
+marked untested on hardware.

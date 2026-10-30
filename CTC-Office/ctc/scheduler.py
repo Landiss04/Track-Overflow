@@ -21,19 +21,40 @@ mode, carries the plans out:
 - **Stopping.** The CTC stops a train at each of its stops: it sends
   the train to the stop (its authority ends there), holds it for
   ``DWELL_S`` once it is there, then sends it to the next stop.
-- **The yard.** A run leaves the yard when the dispatcher's order is
-  given and the yard exit becomes occupied (``ctc.tracking``). After
-  its last stop it is sent to the line's yard entry block; once its
-  blocks clear there it is back in the yard and the run is done.
+- **The yard.** A run waits in the yard ("in yard") once its order is
+  given. The model releases it when the yard exit block is free
+  (D022); it has left once that block becomes occupied
+  (``ctc.tracking``). Outside automatic mode, or while dispatch is
+  paused, the schedule holds it in the yard. After its last stop it is
+  sent to the line's yard entry block; the model retires it once it has
+  stopped there, and once its block clears it is back in the yard and
+  the run is done.
 - **No head-on meets.** The runs must not be scheduled to meet head-on
   (asserted by Landis 2026-10-15; one that happens anyway is for the
   wayside controllers to handle). Where the runs' paths cross the same
-  track in both directions (Green 77 to 100 and 1 to 28, out and back;
-  most of Red), that stretch, together with any loop a train runs out
-  and back through it, is a two-way zone, and it holds one scheduled
-  train at a time. A train is sent into a zone only when no other is
-  in it or has been sent into it; until then it waits at its last stop,
-  or in the yard ("held"). It has the zone until it has left it.
+  track in both directions (Green 77 to 85 and 13 to 28; Red 16 to
+  52), that stretch is a two-way zone, reserved by direction, not by
+  train (decided by Landis 2026-10-25):
+
+  - Several trains may be in a zone at once if they all go through it
+    the same way. A train is sent into a zone only when no other is in
+    it, or has been sent into it, going the other way; until then it
+    waits at its last stop, or in the yard ("held"). It has the zone
+    until it has left it, and a zone that ends at the yard entry block
+    until it is back in the yard.
+  - A loop a train runs out and back through (Red 53 to 66) is not part
+    of the zone: it is one way. A train that has turned is given its
+    order on, but its authority stops a block short of the loop's end
+    ("held" while it goes there and waits), clear of the switch out of
+    the loop, which the trains it waits for need. It comes back into
+    the zone from there once they are through. Then they come back
+    together.
+  - Once a train waits round a loop to come back into a zone,
+    no train is sent into it the other way for the first time, even
+    when due: the trains following it go round the loop, and the next
+    runs wait in the yard.
+
+  Following trains are kept apart by the authority rules, not here.
 
 The dispatcher can pause automatic dispatch, and nothing advances
 outside automatic mode: runs not yet due wait, and a train at a stop
@@ -49,7 +70,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Callable, Collection, Mapping, Sequence
 
-from ctc.tracking import YARD_ENTRIES, YARD_EXITS
+from ctc.tracking import YARD_ENTRIES, YARD_EXIT_FROM, YARD_EXITS
 
 if TYPE_CHECKING:
     # Types only: ctc.schedule imports ctc.model, which imports this.
@@ -65,7 +86,7 @@ SIMULATION_START_S = 5 * 3600
 
 #: What a run is doing, as the snapshot reports it.
 QUEUED = "queued"          # not due yet, or dispatch is held
-HELD = "held"              # due to move on; a two-way zone ahead is busy
+HELD = "held"              # a zone ahead is in use the other way
 IN_YARD = "in yard"        # dispatched; waiting to leave the yard
 EN_ROUTE = "en route"      # heading for its next stop
 DWELLING = "dwelling"      # stopped at a stop
@@ -125,7 +146,7 @@ def plan_run(run: ScheduledTrain, graph: TrackGraph,
     it never turns back at a stop.
     """
     here = YARD_EXITS.get(run.line, "")
-    came_from: str | None = None
+    came_from = YARD_EXIT_FROM.get(run.line)
     left: list[tuple[str, str | None]] = []
     for stop in run.stops:
         if (stop.block_id in station_blocks
@@ -174,10 +195,8 @@ def two_way_zones(paths: Sequence[Sequence[str]]) -> dict[str, str]:
     """The two-way zones of one line's run paths, as each zone's blocks
     mapped to the zone's name (its lowest block).
 
-    A zone starts as the track the paths cross in both directions. Where
-    a path leaves a zone and comes back into it (a loop it runs out and
-    back through), the blocks in between join the zone, so each pass of
-    a path through a zone is one unbroken stretch of it.
+    A zone is the track the paths cross in both directions. A loop a
+    path runs out and back through is not part of it: it is one way.
     """
     used = {edge for path in paths for edge in zip(path, path[1:])}
     parent: dict[str, str] = {}
@@ -192,21 +211,6 @@ def two_way_zones(paths: Sequence[Sequence[str]]) -> dict[str, str]:
     for a, b in used:
         if (b, a) in used:
             parent[find(a)] = find(b)
-    changed = True
-    while changed:
-        changed = False
-        for path in paths:
-            last_seen: dict[str, int] = {}
-            for index, block in enumerate(path):
-                if block not in parent:
-                    continue
-                zone = find(block)
-                if zone in last_seen and last_seen[zone] < index - 1:
-                    for between in path[last_seen[zone] + 1:index]:
-                        if between not in parent or find(between) != zone:
-                            parent[find(between)] = zone
-                            changed = True
-                last_seen[find(block)] = index
     members: dict[str, list[str]] = {}
     for block in parent:
         members.setdefault(find(block), []).append(block)
@@ -237,6 +241,19 @@ def zone_spans(path: Sequence[str],
     return tuple(spans)
 
 
+def opposed(path_a: Sequence[str], span_a: tuple[str, int, int],
+            path_b: Sequence[str], span_b: tuple[str, int, int]) -> bool:
+    """Whether two passes through the same zone go opposite ways: one
+    runs some stretch of track the other runs the other way."""
+    if span_a[0] != span_b[0]:
+        return False
+    _, first, last = span_a
+    edges = set(zip(path_a[first:last + 1], path_a[first + 1:last + 1]))
+    _, first, last = span_b
+    return any((b, a) in edges for a, b in
+               zip(path_b[first:last + 1], path_b[first + 1:last + 1]))
+
+
 @dataclass(frozen=True, slots=True)
 class Progress:
     """How far one run has got."""
@@ -250,6 +267,9 @@ class Progress:
     # How far along its path its head has been seen: an index into the
     # plan's path, -1 before it has left the yard.
     at: int = -1
+    # Where along its path a held run has been sent to wait, round a
+    # loop; -1 when it waits where it is.
+    wait: int = -1
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,11 +343,25 @@ class AutoDispatcher:
             actions.extend(act)
         return actions
 
+    def hold_at(self, train_id: str) -> str | None:
+        """The block a run's authority stops at while it waits round a
+        loop to come back into a zone, or None."""
+        progress = self.progress.get(train_id)
+        if progress is None or progress.status != HELD or progress.wait < 0:
+            return None
+        plan = next(p for p in self.plans if p.train_id == train_id)
+        return plan.path[progress.wait]
+
     def skip_stop(self, train_id: str) -> Action | None:
         """The order for a run's current stop was refused (its block is
         closed or closing): go on to the next stop instead."""
         plan = next(p for p in self.plans if p.train_id == train_id)
         progress = self.progress[train_id]
+        if progress.status == HELD:
+            # The leg it waits round a loop for was refused: it waits
+            # where it is.
+            self.progress[train_id] = replace(progress, wait=-1)
+            return None
         new, act = self._release(plan, progress, progress.leg + 1)
         if progress.status == IN_YARD and new.status == EN_ROUTE:
             new = replace(new, status=IN_YARD)    # it has not left yet
@@ -366,41 +400,115 @@ class AutoDispatcher:
         if progress.status == DWELLING:
             return plan.stop_indexes[progress.leg]
         if progress.status == HELD:
-            return progress.at
+            return max(progress.at, progress.wait)
         return -1
 
     # -- Two-way zones --------------------------------------------------
 
-    def _holds(self, plan: RunPlan, zone: str) -> bool:
-        """Whether a run is in a zone, or has been sent into it."""
+    def _held_spans(self, plan: RunPlan,
+                    zone: str) -> list[tuple[str, int, int]]:
+        """The passes through a zone a run is on, or has been sent on."""
         progress = self.progress[plan.train_id]
         if progress.status in (QUEUED, DONE):
-            return False
+            return []
         sent = self._released_to(plan, progress)
-        return any(name == zone and first <= sent and progress.at <= last
-                   for name, first, last in self._spans[plan.train_id])
+        return [span for span in self._spans[plan.train_id]
+                if span[0] == zone and span[1] <= sent
+                and progress.at <= span[2]]
 
-    def _clear(self, plan: RunPlan, progress: Progress,
-               target: int) -> bool:
-        """Whether every zone a run would enter on its way to ``target``
-        is free of every other scheduled train."""
-        for zone, first, _ in self._spans[plan.train_id]:
+    def _returns(self, plan: RunPlan, span: tuple[str, int, int]) -> bool:
+        """Whether a pass comes back into a zone the run went through
+        earlier on its way."""
+        return any(name == span[0] and last < span[1]
+                   for name, _, last in self._spans[plan.train_id])
+
+    def _blocking(self, plan: RunPlan, progress: Progress,
+                  target: int) -> tuple[str, int, int] | None:
+        """The first zone pass a run would make on its way to
+        ``target`` that it may not make yet, or None."""
+        for span in self._spans[plan.train_id]:
+            zone, first, _ = span
             if not progress.at < first <= target:
                 continue
+            returning = self._returns(plan, span)
             for other in self.plans:
-                if (other.train_id != plan.train_id
-                        and other.line == plan.line
-                        and self._holds(other, zone)):
-                    return False
-        return True
+                if other.train_id == plan.train_id or \
+                        other.line != plan.line:
+                    continue
+                if any(opposed(plan.path, span, other.path, held)
+                       for held in self._held_spans(other, zone)):
+                    return span
+                # A train waiting to come back has the zone next: no
+                # other is sent into it the other way for the first time.
+                waiting = self._waiting_span(other)
+                if (not returning and waiting is not None
+                        and waiting[0] == zone
+                        and opposed(plan.path, span, other.path, waiting)):
+                    return span
+        return None
+
+    def _waiting_span(self, plan: RunPlan) -> tuple[str, int, int] | None:
+        """The zone pass a held run waits to make to come back, if it
+        is at the end of a loop waiting to come back."""
+        progress = self.progress[plan.train_id]
+        if progress.status != HELD or progress.at < progress.wait \
+                or progress.wait < 0:
+            return None
+        target = self._leg_target(plan, progress.leg)
+        if target is None:
+            return None
+        for span in self._spans[plan.train_id]:
+            if progress.at < span[1] <= target:
+                return span if self._returns(plan, span) else None
+        return None
+
+    def _loop_end(self, plan: RunPlan, progress: Progress,
+                  target: int) -> int | None:
+        """Where a run that has turned waits before it comes back into a
+        zone on its way to ``target``: round the loop it is going round,
+        a block short of its end, so the block at the switch out of the
+        loop stays clear for the trains it waits for to come in by. None
+        if it is not coming back into one, or is already there."""
+        for span in self._spans[plan.train_id]:
+            if not progress.at < span[1] <= target:
+                continue
+            if not self._returns(plan, span):
+                return None
+            zone = self.zones[plan.line]
+            loop_start = max(last for name, _, last in self._spans[
+                plan.train_id] if name == span[0] and last < span[1]) + 1
+            wait = span[1] - 1
+            if wait - 1 >= loop_start and plan.path[wait - 1] not in zone:
+                wait -= 1
+            if wait > progress.at and plan.path[wait] not in zone:
+                return wait
+            return None
+        return None
 
     def _release(self, plan: RunPlan, progress: Progress,
                  leg: int) -> tuple[Progress, Action | None]:
-        """Send a run on its next leg, or hold it where it is while a
-        zone that leg enters is busy."""
+        """Send a run on its next leg, or hold it while a zone that leg
+        enters is in use the other way. A run that has turned is sent
+        round the loop to its last block first, and comes back into the
+        zone from there."""
         target = self._leg_target(plan, leg)
-        if target is not None and not self._clear(plan, progress, target):
-            return replace(progress, status=HELD, leg=leg), None
+        if target is None:
+            new, act = _next_leg(plan, leg)
+            return replace(new, at=progress.at), act
+        held = replace(progress, status=HELD, leg=leg)
+        wait = self._loop_end(plan, progress, target)
+        if wait is not None:
+            # Its order is the whole leg, so it is routed the way the
+            # plan goes round the loop; its authority stops at the wait
+            # (``hold_at``).
+            if self._blocking(plan, progress, wait) is not None:
+                return held, None
+            if progress.wait == wait:
+                return held, None
+            _, order = _next_leg(plan, leg)
+            return replace(held, wait=wait), order
+        if self._blocking(plan, progress, target) is not None:
+            return held, None
         new, act = _next_leg(plan, leg)
         return replace(new, at=progress.at), act
 

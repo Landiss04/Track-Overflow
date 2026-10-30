@@ -10,21 +10,26 @@ participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
-D -> UI : pick Line and Train
-D -> UI : Block on the selected line\n("or dispatch directly to a block")
+D -> UI : lineSelect.committed(line)
+D -> UI : trainSelect.committed(train_id)
 UI -> Host : blockOptions(line)
 Host --> UI : every block of the line
-D -> UI : Set authority
+D -> UI : blockSelect.committed(block_id)
+note right of D : "or dispatch directly to a block"
+D -> UI : "Set authority".clicked()
 UI -> Host : setAuthority(train_id, line, block_id)
 Host -> Model : dispatch(train_id, line, block_id, None)
 alt refused (line not ready, block closed or closing,\ntrain on the other line, bad train ID)
   Model --> Host : UnsafeActionError / InvalidInputError
   Host --> UI : the refusal's text
 else accepted
-  Model -> Model : orders[train_id] = DispatchOrder(train, line, block)
+  note over Model
+    orders[train_id] = DispatchOrder(train, line, block)
+  end note
   Model --> Host : ok
   Host --> UI : ""
 end
+UI -> UI : report(error, done)
 UI -> D : "T1 given authority toward Green block 30." or the reason
 note over Model
   Every step the order becomes a count of blocks

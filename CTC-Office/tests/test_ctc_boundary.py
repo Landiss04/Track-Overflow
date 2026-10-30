@@ -20,6 +20,7 @@ from ctc.interface import (  # noqa: E402
     CtcInputs,
     CtcSnapshot,
     DispatchOrder,
+    NewTrain,
     SwitchCommand,
     SwitchReport,
     TrackModelInputs,
@@ -43,7 +44,7 @@ from ctc_ui.test_harness import (  # noqa: E402
     MPS_TO_MPH,
     CtcTestHarness,
 )
-from tests.occupancy import ready_office, reports  # noqa: E402
+from tests.occupancy import own_block, ready_office, reports  # noqa: E402
 
 
 def _green(tickets: int) -> TrackModelInputs:
@@ -76,12 +77,20 @@ class StubModuleTest(unittest.TestCase):
     def test_dispatch_becomes_suggestion_and_authority(self) -> None:
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "65", arrival_s=8 * 3600)
-        # Not on the track yet (the yard is a black box): no suggestion.
-        out = ctc.step(DT_S, CtcInputs())
+        # The CTC releases T1 from the yard (D022). Not on the track
+        # yet (the yard is a black box): no suggestion.
+        out = ctc.step(DT_S, reports())
         self.assertEqual(out.track_controller.suggestions, ())
+        self.assertEqual(out.new_trains, (NewTrain("T1", "Green"),))
         # Green 63, the yard exit, becomes occupied: T1 has left the yard.
         out = ctc.step(DT_S, reports(occupied=[("Green", "63")]))
-        (suggestion,) = out.track_controller.suggestions
+        self.assertEqual(out.new_trains, ())
+        suggestion = own_block(out.track_controller.suggestions)
+        # And one for the next block on its route, authority one less.
+        self.assertEqual(
+            [(s.block_id, s.authority_blocks)
+             for s in out.track_controller.suggestions
+             if s is not suggestion], [("64", 1)])
         # Two blocks ahead of 63 to the destination: 64 and 65. The
         # suggestion says where T1 is, for the Track Controller, which
         # sees only occupancy.
@@ -442,11 +451,6 @@ class HarnessSendTest(unittest.TestCase):
         snap = link.snapshot()
         self.assertEqual([o.train_id for o in snap.orders], ["T1"])
         self.assertTrue(snap.maintenance_mode)
-
-        # The order is cancelled in the window: its outputs go.
-        link.cancel_dispatch("T1")
-        harness.send()
-        self.assertNotIn("authority[T1]", _outputs(harness))
 
     def test_unknown_block_is_reported_and_not_stepped(self) -> None:
         # The table only offers real blocks; the module still checks.

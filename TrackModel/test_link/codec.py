@@ -79,7 +79,7 @@ def decode_inputs(data: Json) -> TrackModelInputs:
     return TrackModelInputs(
         controller=TrackControllerCommands(
             commanded_speed_mps={
-                k: int(v) for k, v in cmd["commanded_speed_mps"].items()
+                k: float(v) for k, v in cmd["commanded_speed_mps"].items()
             },
             commanded_authority={
                 k: int(v) for k, v in cmd["commanded_authority"].items()
@@ -104,7 +104,10 @@ def decode_inputs(data: Json) -> TrackModelInputs:
             )
             for train_id, r in data["trains"].items()
         },
-        ambient_temp_c=float(data["ambient_temp_c"]),
+        ambient_temp_c=(
+            None if data.get("ambient_temp_c") is None
+            else float(data["ambient_temp_c"])
+        ),
         sim_time_s=(
             None if data.get("sim_time_s") is None
             else float(data["sim_time_s"])
@@ -214,7 +217,7 @@ def _decode_feed(data: Json) -> TrainFeed:
             station_name=info["station_name"],
         ),
         track_signal=TrackSignal(
-            commanded_speed_mps=int(signal["commanded_speed_mps"]),
+            commanded_speed_mps=float(signal["commanded_speed_mps"]),
             authority_blocks=int(signal["authority_blocks"]),
         ),
         beacon=None if beacon is None else Beacon(

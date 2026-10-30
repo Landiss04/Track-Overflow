@@ -146,15 +146,6 @@ class BinaryOp:
 Expression = Literal | Reference | Not | BinaryOp
 
 
-@dataclass(frozen=True)
-class Assignment:
-    """One ``NAME := expression`` statement."""
-
-    target: str
-    expression: Expression
-    line: int
-
-
 class _Scope:
     """Values visible to one scan, plus the warnings it raised."""
 
@@ -181,18 +172,6 @@ class _Scope:
         self.values[name] = value
 
 
-@dataclass
-class ScanResult:
-    """What one pass of a program produced."""
-
-    values: dict[str, bool] = field(default_factory=dict)
-    warnings: list[Diagnostic] = field(default_factory=list)
-
-    def outputs(self, names: tuple[str, ...]) -> dict[str, bool]:
-        """Return just the declared outputs, defaulting missing to 0."""
-        return {name: self.values.get(name, False) for name in names}
-
-
 @dataclass(frozen=True)
 class Program:
     """A compiled, executable PLC program."""
@@ -200,19 +179,27 @@ class Program:
     source: str
     inputs: tuple[str, ...]
     outputs: tuple[str, ...]
-    assignments: tuple[Assignment, ...]
+    #: ``(target, expression, line)`` for each assignment, in source
+    #: order.
+    assignments: tuple[tuple[str, Expression, int], ...]
     diagnostics: tuple[Diagnostic, ...] = ()
     #: Line each name was declared on, so a check made against a
     #: controller's I/O can point at the declaration.
     declared_at: Mapping[str, int] = field(default_factory=dict)
+    #: Set when the program is committed to a wayside: which commit it
+    #: was (counting from 1), the file it came from, and when. A program
+    #: that has not been committed has number 0.
+    number: int = 0
+    file_name: str = ""
+    committed_at: str = ""
 
     @property
     def boolean_count(self) -> int:
         """Total distinct booleans the program touches."""
         names: set[str] = set(self.inputs) | set(self.outputs)
-        for assignment in self.assignments:
-            names.add(assignment.target)
-            names |= assignment.expression.names()
+        for target, expression, _ in self.assignments:
+            names.add(target)
+            names |= expression.names()
         return len(names)
 
     @property
@@ -220,19 +207,21 @@ class Program:
         """Source lines, as shown in the editor gutter."""
         return len(self.source.splitlines())
 
-    def scan(self, inputs: Mapping[str, bool]) -> ScanResult:
-        """Run one scan cycle over ``inputs`` and return every value.
+    def scan(
+        self, inputs: Mapping[str, bool]
+    ) -> tuple[dict[str, bool], list[Diagnostic]]:
+        """Run one scan cycle over ``inputs``.
+
+        Returns every value, and the warnings the scan raised.
 
         The program is pure: nothing in ``self`` is mutated, so the
         same compiled program can be scanned against live inputs and
         against a sandbox copy without the two interfering.
         """
         scope = _Scope(inputs)
-        for assignment in self.assignments:
-            scope.write(
-                assignment.target, assignment.expression.evaluate(scope)
-            )
-        return ScanResult(values=scope.values, warnings=scope.undefined_reads)
+        for target, expression, _ in self.assignments:
+            scope.write(target, expression.evaluate(scope))
+        return scope.values, scope.undefined_reads
 
 
 # --- parsing ---------------------------------------------------------
@@ -408,7 +397,7 @@ def compile_program(source: str) -> Program:
     """
     inputs: list[str] = []
     outputs: list[str] = []
-    assignments: list[Assignment] = []
+    assignments: list[tuple[str, Expression, int]] = []
     diagnostics: list[Diagnostic] = []
     assigned: set[str] = set()
     read_unknown: set[str] = set()
@@ -482,7 +471,7 @@ def compile_program(source: str) -> Program:
                         "a VAR_IN; it reads as 0",
                     )
                 )
-            assignments.append(Assignment(target_name, expression, number))
+            assignments.append((target_name, expression, number))
             assigned.add(target_name)
 
         except PlcSyntaxError as error:

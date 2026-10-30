@@ -145,6 +145,7 @@ Panel {
             inlineUnit: true
             valueSize: theme.size_h3
             rule: false
+            wrapValue: true
             name: "announcement"
             kind: "string"
             value: root.s.announcement

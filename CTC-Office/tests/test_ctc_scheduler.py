@@ -5,6 +5,8 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 
 from __future__ import annotations
 
+import math
+from dataclasses import replace
 import sys
 import unittest
 from pathlib import Path
@@ -13,7 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import ScheduledRun, SwitchReport  # noqa: E402
-from ctc.model import StubCtcOffice  # noqa: E402
+from ctc.model import (  # noqa: E402
+    InvalidInputError,
+    InvalidTimeStepError,
+    StubCtcOffice,
+)
 from ctc.routing import build_graphs  # noqa: E402
 from ctc.schedule import (  # noqa: E402
     Schedule,
@@ -24,8 +30,11 @@ from ctc.scheduler import (  # noqa: E402
     DONE,
     DWELL_S,
     EN_ROUTE,
+    HELD,
+    QUEUED,
     SIMULATION_START_S,
     Progress,
+    opposed,
     train_id_for,
     two_way_zones,
 )
@@ -44,7 +53,10 @@ _GRAPHS = build_graphs(_LAYOUT)
 #: station with no name.
 GREEN_ORDER = ["65", "73", "77", "88", "96", "105", "123", "132", "141",
                "22", "16", "9", "2", "31", "39", "48", "57"]
-RED_ORDER = ["7", "16", "21", "25", "35", "45", "48", "60"]
+#: Red run 1's, from the yard (9), which a train leaves toward 10 as the
+#: Track Model runs it: up to 52, round the loop to South Hills Junction
+#: (60), back down to 16, and through Shadyside (7) to the yard at 9.
+RED_ORDER = ["16", "21", "25", "35", "45", "48", "60", "7"]
 
 
 def _loaded(automatic: bool = True,
@@ -140,43 +152,60 @@ class PlanTest(unittest.TestCase):
 
 class ZoneTest(unittest.TestCase):
     """Runs are never sent to meet head-on: where their paths cross the
-    same track both ways, one scheduled train at a time."""
+    same track both ways, trains go through it one way at a time."""
 
     def test_the_zones(self) -> None:
         zones = _loaded()._auto.zones
         green: dict[str, set[str]] = {}
         for block, zone in zones["Green"].items():
             green.setdefault(zone, set()).add(block)
-        # Up N and back down, through the loop O to Q; down D to F, round
-        # A to C, and back up.
-        self.assertEqual(sorted(green.values(), key=len), [
-            {str(n) for n in range(77, 101)},
-            {str(n) for n in range(1, 29)}])
-        # Red: out from 16, round the loop at 52, and back to 16.
+        # Up N to 85 and back down; up from 13 to 28 and back down. The
+        # loops beyond them (86 to 100, 1 to 12) are one way.
+        self.assertEqual(sorted(green.values(), key=min), [
+            {str(n) for n in range(13, 29)},
+            {str(n) for n in range(77, 86)}])
+        # Red: out from 16 to 52 and back; the loop 53 to 66 is one way.
         self.assertEqual(set(zones["Red"]),
-                         {str(n) for n in range(16, 67)})
+                         {str(n) for n in range(16, 53)})
         # The yards are outside them.
         self.assertNotIn("63", zones["Green"])
         self.assertNotIn("9", zones["Red"])
 
     def test_out_and_back_track_is_a_zone(self) -> None:
         # One path out along 1-2-3 and back: all of it. A path that only
-        # passes one way is not.
+        # passes one way is not, nor a loop it runs round (4 and 5).
         self.assertEqual(set(two_way_zones([("1", "2", "3", "2", "1")])),
                          {"1", "2", "3"})
         self.assertEqual(two_way_zones([("1", "2", "3")]), {})
+        self.assertEqual(
+            set(two_way_zones([("1", "2", "3", "4", "5", "3", "2", "1")])),
+            {"1", "2", "3"})
 
-    def test_held_until_the_zone_is_clear(self) -> None:
-        # G1 is in N (77 to 100) on its way to Poplar (88). G2, done at
-        # Dormont (73), would go into N for Mt Lebanon (77): it waits.
-        ctc = _loaded()
-        step_at(ctc)
+    def test_opposed(self) -> None:
+        path = ("1", "2", "3", "4", "5", "3", "2", "1")
+        out, back = ("1", 0, 2), ("1", 5, 7)
+        self.assertTrue(opposed(path, out, path, back))
+        self.assertFalse(opposed(path, out, path, out))
+        self.assertFalse(opposed(path, out, path, ("2", 5, 7)))
+
+    def _g1_in_n(self, ctc: StubCtcOffice, index: int, leg: int) -> None:
+        ctc._auto.progress["G1"] = Progress(EN_ROUTE, leg, at=index)
+
+    def _g2_done_at_dormont(self, ctc: StubCtcOffice) -> None:
+        # G2, done at Dormont (73), would go into N for Mt Lebanon (77).
         plans = {p.train_id: p for p in ctc._auto.plans}
-        ctc._auto.progress["G1"] = Progress(
-            EN_ROUTE, 3, at=plans["G1"].path.index("80"))
         ctc._auto.progress["G2"] = Progress(
             "dwelling", 1, at=plans["G2"].stop_indexes[1])
         ctc.dispatch("G2", "Green", "73")
+
+    def test_held_until_the_zone_is_clear(self) -> None:
+        # G1 is coming back down N (at 80) on its way to 105: G2 waits.
+        ctc = _loaded()
+        step_at(ctc)
+        path = next(p for p in ctc._auto.plans if p.train_id == "G1").path
+        back = path.index("80", path.index("100"))
+        self._g1_in_n(ctc, back, GREEN_ORDER.index("105"))
+        self._g2_done_at_dormont(ctc)
         step_at(ctc, at("G1", "80"), at("G2", "73"), dt=DWELL_S)
         run = _run(ctc, "G2")
         self.assertEqual((run.status, run.stop_block_id), ("held", "77"))
@@ -186,6 +215,79 @@ class ZoneTest(unittest.TestCase):
         step_at(ctc, at("G2", "73"))
         self.assertEqual((_run(ctc, "G2").status, _order(ctc, "G2")),
                          ("en route", "77"))
+
+    def test_trains_going_the_same_way_share_it(self) -> None:
+        # G1 is going up N (at 80) to Poplar (88): G2 follows it in.
+        ctc = _loaded()
+        step_at(ctc)
+        path = next(p for p in ctc._auto.plans if p.train_id == "G1").path
+        self._g1_in_n(ctc, path.index("80"), GREEN_ORDER.index("88"))
+        self._g2_done_at_dormont(ctc)
+        step_at(ctc, at("G1", "80"), at("G2", "73"), dt=DWELL_S)
+        self.assertEqual((_run(ctc, "G2").status, _order(ctc, "G2")),
+                         ("en route", "77"))
+
+    def _r1_turned(self) -> StubCtcOffice:
+        """R1 done at South Hills Junction (60), round the loop, with R2
+        following it out (at 30) and R3 due in the yard."""
+        ctc = _loaded()
+        step_at(ctc)
+        plans = {p.train_id: p for p in ctc._auto.plans}
+        leg = RED_ORDER.index("60")
+        ctc._auto.progress["R1"] = Progress(
+            "dwelling", leg, at=plans["R1"].stop_indexes[leg])
+        ctc.dispatch("R1", "Red", "60")
+        ctc._auto.progress["R2"] = Progress(
+            EN_ROUTE, RED_ORDER.index("35"),
+            at=plans["R2"].path.index("30"))
+        ctc.dispatch("R2", "Red", "35")
+        ctc._auto.progress["R3"] = Progress(QUEUED)
+        return ctc
+
+    def test_a_train_that_has_turned_waits_round_the_loop(self) -> None:
+        # R1 would come back down past R2: it is given its order on to
+        # Shadyside (7), but its authority stops at 54, round the loop a
+        # block short of 53 (by switch 52), where it waits.
+        ctc = self._r1_turned()
+        step_at(ctc, at("R1", "60", "Red"), at("R2", "30", "Red"),
+                dt=DWELL_S)
+        self.assertEqual((_run(ctc, "R1").status, _order(ctc, "R1")),
+                         ("held", "7"))
+        self.assertEqual(ctc._auto.hold_at("R1"), "54")
+        # Placed at 60, it came round the loop from 61.
+        ctc._tracker.trains["R1"] = replace(ctc._tracker.trains["R1"],
+                                            came_from="61")
+        step_at(ctc, at("R1", "60", "Red"), at("R2", "30", "Red"))
+        (limit,) = [a for a in ctc.snapshot().authorities
+                    if a.train_id == "R1"]
+        self.assertEqual((limit.end_block_id, limit.reason),
+                         ("54", "held"))
+        self.assertEqual(limit.route[-2:], ("55", "54"))
+        self.assertEqual(_order(ctc, "R2"), "35")
+        # R2 is round the loop too: R1 comes back, and R2 after it.
+        plans = {p.train_id: p for p in ctc._auto.plans}
+        ctc._auto.progress["R2"] = Progress(
+            HELD, len(RED_ORDER) - 1, at=plans["R2"].path.index("55"),
+            wait=plans["R2"].path.index("54"))
+        step_at(ctc, at("R1", "54", "Red"), at("R2", "55", "Red"))
+        self.assertEqual((_run(ctc, "R1").status, _order(ctc, "R1")),
+                         ("en route", "7"))
+        self.assertIsNone(ctc._auto.hold_at("R1"))
+
+    def test_no_train_goes_out_while_one_waits_to_come_back(self) -> None:
+        # R3 is due, but R1 waits at 54 to come back: R3 stays in the
+        # yard. (On its way round to 54, R1 would not stop R3 going.)
+        ctc = self._r1_turned()
+        plans = {p.train_id: p for p in ctc._auto.plans}
+        wait = plans["R1"].path.index("54")
+        ctc._auto.progress["R1"] = Progress(
+            HELD, len(RED_ORDER) - 1, at=wait, wait=wait)
+        ctc.dispatch("R1", "Red", "7")
+        step_at(ctc, at("R1", "54", "Red"), at("R2", "30", "Red"),
+                dt=plans["R3"].departure_s - SIMULATION_START_S)
+        self.assertEqual(ctc._auto.hold_at("R1"), "54")
+        self.assertEqual(_run(ctc, "R3").status, "held")
+        self.assertIsNone(_order(ctc, "R3"))
 
 
 class DispatchTest(unittest.TestCase):
@@ -205,7 +307,7 @@ class DispatchTest(unittest.TestCase):
         ctc.set_dispatch_paused(False)
         step_at(ctc)
         self.assertEqual((_order(ctc, "G1"), _order(ctc, "R1")),
-                         ("65", "7"))
+                         ("65", "16"))
 
     def test_a_run_leaves_when_due(self) -> None:
         ctc = _loaded()
@@ -259,14 +361,14 @@ class DispatchTest(unittest.TestCase):
         self.assertEqual(_order(ctc, "G1"), "73")
 
     def test_back_to_the_yard_and_done(self) -> None:
-        # R1 heading for its last stop, South Hills Junction (60).
+        # R1 heading for its last stop, Shadyside (7).
         ctc = _loaded()
         step_at(ctc)
         ctc._auto.progress["R1"] = Progress(EN_ROUTE, len(RED_ORDER) - 1)
-        ctc.dispatch("R1", "Red", "60")
-        step_at(ctc, at("R1", "60", "Red"))
+        ctc.dispatch("R1", "Red", "7")
+        step_at(ctc, at("R1", "7", "Red"))
         self.assertEqual(_run(ctc, "R1").status, "dwelling")
-        step_at(ctc, at("R1", "60", "Red"), dt=DWELL_S)
+        step_at(ctc, at("R1", "7", "Red"), dt=DWELL_S)
         self.assertEqual((_run(ctc, "R1").status, _order(ctc, "R1")),
                          ("to yard", "9"))
         # Back at 9, then its block clears: it has gone into the yard.
@@ -279,13 +381,63 @@ class DispatchTest(unittest.TestCase):
         self.assertEqual(ctc.snapshot().lost_trains, ())
 
 
+class HarnessTimeTest(unittest.TestCase):
+    """Under the harness each step brings the simulation time (D017:
+    unwrapped seconds, at the end of the step), and the CTC Office's
+    time is that time. A tick it refused or never got does not put its
+    schedule behind the harness's."""
+
+    def test_its_time_is_the_harness_time(self) -> None:
+        ctc = _loaded()
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 0.1)
+        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 0.1)
+        # Three ticks it never saw: its time is the harness's still.
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 0.5)
+        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 0.5)
+        # Past midnight, unwrapped.
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 86_400)
+        self.assertAlmostEqual(ctc.snapshot().elapsed_s, 86_400)
+
+    def test_a_refused_tick_does_not_put_the_schedule_behind(self) -> None:
+        # G2 is due out of the yard at 05:03:00.
+        ctc = _loaded()
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 179.9)
+        self.assertEqual(_run(ctc, "G2").status, "queued")
+        with self.assertRaises(InvalidInputError):
+            ctc.step(0.1, reports(occupied=[("Green", "999")]),
+                     sim_time_s=SIMULATION_START_S + 180.0)
+        self.assertEqual(_run(ctc, "G2").status, "queued")
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 180.1)
+        self.assertEqual(_run(ctc, "G2").status, "in yard")
+
+    def test_a_bad_time_is_refused_and_changes_nothing(self) -> None:
+        ctc = _loaded()
+        ctc.step(0.1, reports(), sim_time_s=SIMULATION_START_S + 10)
+        before = ctc.snapshot()
+        for bad in (math.nan, math.inf, -math.inf, True, "18010.1",
+                    SIMULATION_START_S + 10, SIMULATION_START_S + 5):
+            with self.subTest(bad=bad):
+                with self.assertRaises(InvalidTimeStepError):
+                    ctc.step(0.1, reports(),
+                             sim_time_s=bad)  # type: ignore[arg-type]
+        self.assertEqual(ctc.snapshot(), before)
+
+    def test_on_its_own_it_counts_its_steps(self) -> None:
+        # The standalone window and the tests: no harness time.
+        ctc = _loaded()
+        ctc.step(1.0, reports())
+        ctc.step(2.0, reports())
+        self.assertEqual(ctc.snapshot().elapsed_s, 3.0)
+
+
 class _Railway:
-    """A stand-in for the rest of the system, for a whole run: the yard
-    lets dispatched trains out, trains run at their suggested speed
-    within their authority (holding both blocks for one step as they
-    cross a boundary), the waysides throw switches for the trains' routes
-    where no train is on them or authorized over them, and a train at its
-    yard entry block with nowhere else to go drives into the yard."""
+    """A stand-in for the rest of the system, for a whole run, as the
+    harness will be: each train the CTC releases (``new_trains``) is
+    put at its line's yard exit block, trains run at their suggested
+    speed within their authority (holding both blocks for one step as
+    they cross a boundary), the waysides throw switches for the trains'
+    routes where no train is on them or authorized over them, and each
+    train the CTC retires (``retired_trains``) is taken off the track."""
 
     def __init__(self, ctc: StubCtcOffice, line: str) -> None:
         self.ctc = ctc
@@ -297,22 +449,15 @@ class _Railway:
         self.trains: dict[str, list[str]] = {}
         self.progress: dict[str, float] = {}
         self.reported: set[str] = set()
+        # Every train released and retired, in order.
+        self.released: list[str] = []
+        self.retired: list[str] = []
 
     def occupied(self) -> set[str]:
         return {b for held in self.trains.values() for b in held}
 
     def step(self, dt: float) -> str | None:
         snap = self.ctc.snapshot()
-        runs = [r for r in snap.scheduled_runs if r.line == self.line]
-        exit_block = YARD_EXITS[self.line]
-        # The yard lets a train out onto a clear exit block that no
-        # train is authorized into (on Red it is the yard entry too).
-        authorized = {b for a in snap.authorities
-                      for b in a.route[1:a.blocks + 1]}
-        if (any(r.status == "in yard" for r in runs)
-                and exit_block not in (self.occupied() | self.reported
-                                       | authorized)):
-            self.trains["?"], self.progress["?"] = [exit_block], 0.0
         self._throw_switches(snap)
         self.reported = self.occupied()
         out = self.ctc.step(dt, reports(
@@ -322,13 +467,21 @@ class _Railway:
         snap = self.ctc.snapshot()
         followed = {t.train_id: list(t.blocks) for t in snap.trains
                     if t.line == self.line}
-        if "?" in self.trains:
-            (name,) = [t for t, held in followed.items()
-                       if t not in self.trains]
-            self.trains[name] = self.trains.pop("?")
-            self.progress[name] = self.progress.pop("?")
         if followed != self.trains:
             return f"the CTC has {followed}, trains are {self.trains}"
+        for gone in out.retired_trains:
+            # The harness takes a retired train off the track.
+            self.retired.append(gone.train_id)
+            del self.trains[gone.train_id]
+        exit_block = YARD_EXITS[self.line]
+        for new in out.new_trains:
+            # The harness puts a released train at the yard exit block,
+            # which the CTC made sure was clear and held for it.
+            if exit_block in self.occupied():
+                return f"{new.train_id} released onto occupied {exit_block}"
+            self.released.append(new.train_id)
+            self.trains[new.train_id] = [exit_block]
+            self.progress[new.train_id] = 0.0
         self._move(dt, out, snap)
         everything = [b for held in self.trains.values() for b in held]
         if len(set(everything)) != len(everything):
@@ -357,21 +510,17 @@ class _Railway:
                 self.switches[switch_id] = position
 
     def _move(self, dt: float, out, snap) -> None:
+        # The speed for the block each train is in.
         speeds = {s.train_id: s.suggested_speed_mps
-                  for s in out.track_controller.suggestions}
+                  for s in out.track_controller.suggestions
+                  if s.block_id == self.trains.get(s.train_id, [""])[-1]}
         limits = {a.train_id: a for a in snap.authorities}
-        runs = {r.train_id: r for r in snap.scheduled_runs}
         for train_id in sorted(self.trains):
             held = self.trains[train_id]
             if len(held) > 1:
                 held.pop(0)
                 continue
             limit = limits.get(train_id)
-            run = runs.get(train_id)
-            if (run is not None and run.status == "to yard" and limit
-                    and limit.blocks == 0 and limit.reason == "destination"):
-                del self.trains[train_id]           # into the yard
-                continue
             length = self.lengths[held[-1]]
             self.progress[train_id] = min(
                 length, self.progress[train_id]
@@ -384,16 +533,18 @@ class _Railway:
 
 class EndToEndTest(unittest.TestCase):
     """Whole runs, start to finish, with nothing between the CTC and the
-    trains but occupancy and switch states. Enough runs that they queue
-    for the two-way zones (four Green runs met head-on in N before the
-    zones), and never more than one train in a zone."""
+    trains but occupancy and switch states. Enough runs that they share
+    the two-way zones (four Green runs met head-on in N before the
+    zones), and never two trains in a zone going opposite ways."""
 
     def _run_line(self, line: str, run_ids: tuple[str, ...]) -> None:
         runs = tuple(t for t in SCHEDULE.trains
                      if t.line == line and t.train_id in run_ids)
         ctc = _loaded(schedule=Schedule("some runs", runs))
         railway = _Railway(ctc, line)
-        zones = ctc._auto.zones[line]
+        auto = ctc._auto
+        plans = {p.train_id: p for p in auto.plans}
+        most = 0
         # Where each run dwelt, and for how long.
         dwells: dict[str, list[tuple[str, float]]] = {
             train_id_for(line, run_id): [] for run_id in run_ids}
@@ -402,13 +553,20 @@ class EndToEndTest(unittest.TestCase):
         for _ in range(int(3 * 3600 / dt)):
             problem = railway.step(dt)
             self.assertIsNone(problem)
-            in_zone: dict[str, set[str]] = {}
-            for train_id, blocks in railway.trains.items():
-                for block in blocks:
-                    if block in zones:
-                        in_zone.setdefault(zones[block], set()).add(train_id)
-            self.assertTrue(all(len(trains) == 1
-                                for trains in in_zone.values()), in_zone)
+            most = max(most, len(railway.trains))
+            passes = []
+            for train_id in railway.trains:
+                at_ = auto.progress[train_id].at
+                passes.extend(
+                    (train_id, span)
+                    for span in auto._spans[train_id]
+                    if span[1] <= at_ <= span[2])
+            for i, (a, span_a) in enumerate(passes):
+                for b, span_b in passes[i + 1:]:
+                    self.assertFalse(
+                        a != b and opposed(plans[a].path, span_a,
+                                           plans[b].path, span_b),
+                        (a, span_a, b, span_b, railway.trains))
             snap = ctc.snapshot()
             for run in snap.scheduled_runs:
                 if run.status == "dwelling" and run.train_id not in started:
@@ -425,6 +583,11 @@ class EndToEndTest(unittest.TestCase):
         statuses = {r.train_id: r.status for r in snap.scheduled_runs}
         self.assertEqual(set(statuses.values()), {"done"}, statuses)
         self.assertEqual(railway.trains, {})
+        # Each run released once and retired once (D022).
+        self.assertEqual(sorted(railway.released), sorted(dwells))
+        self.assertEqual(sorted(railway.retired), sorted(dwells))
+        # More than one train out at once.
+        self.assertGreater(most, 1)
         expected = GREEN_ORDER if line == "Green" else RED_ORDER
         for train_id, stops in dwells.items():
             with self.subTest(train=train_id):
