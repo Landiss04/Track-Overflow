@@ -382,8 +382,17 @@ class InputCheckTest(unittest.TestCase):
                           for o in ctc.snapshot().orders], [("T1", "73")])
         ctc.place_train(" T2", "Green", "62")
         self.assertEqual(ctc.snapshot().trains[0].train_id, "T2")
-        ctc.cancel_dispatch(" T1")
-        self.assertEqual(ctc.snapshot().orders, ())
+
+    def test_the_dispatcher_cannot_cancel_an_order(self) -> None:
+        # Not asked for by the customer: an order can be replaced
+        # (reroute) but never withdrawn by the dispatcher.
+        ctc = ready_office()
+        self.assertFalse(hasattr(ctc, "cancel_dispatch"))
+        ctc.dispatch("T1", "Green", "65")
+        with self.assertRaises(InvalidInputError):
+            apply_action(ctc, "cancel_dispatch", {"train_id": "T1"})
+        self.assertEqual([o.train_id for o in ctc.snapshot().orders],
+                         ["T1"])
 
     def test_dt_must_be_a_real_number(self) -> None:
         for dt in (True, "0.1"):

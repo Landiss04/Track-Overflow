@@ -751,10 +751,6 @@ class CtcHost(QObject):
         return self._act(self._module.dispatch, train_id, line, block_id,
                          None)
 
-    @Slot(str, result=str)
-    def cancelDispatch(self, train_id: str) -> str:  # noqa: N802
-        return self._act(self._module.cancel_dispatch, train_id)
-
     @Slot(str, str, result=str)
     def closeBlock(self, line: str, block_id: str) -> str:  # noqa: N802
         """Close a block; says so instead if it already is (or is
