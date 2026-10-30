@@ -168,6 +168,23 @@ Kevin.
 | CTC-3 decision | "The CTC treats a switch's blocks as neighbours whatever position it reports, so the follower waits on 75 while the head is on 77": "both harry and landis agree to this option" (Kevin) | `ctc/routing.py` `authority()` keeps the gap when a count stops at a switch. `test_green_follower.py` follows the case through to the follower running on; the vital lock is unchanged. Proposal `20261028-2104-authority-gap-at-switches.md` |
 | Crossings while a SW wayside is not ready | "module currently does not arm crossings by default but will in the future" (Harry Tye) | Done by Harry in `e5e51d4`, cherry-picked here: a wayside with no program or not ready commands every crossing active. The harness crossing test passes and is no longer an expected failure |
 
+## Track Controller HW answers, 2026-10-30
+
+Braden Bosilovich's answers, relayed by Kevin.
+
+| Question | Answer | Done |
+| --- | --- | --- |
+| Red switch 9's light, now at block 9 (TM-2) | No Track Controller HW or Pi change is needed. HW names every signal by its switch (`SIG_9_*`), never by block. Red-1's signal 9 logic still fits a lamp facing a train coming from 10 onto the switch: `BLOCKED_9` covers 9 and the normal leg 8, and caution and green look ahead to 7 and 6. The light ahead starts at the block ahead of the train, so the red the vital block forces while 9 is occupied is never shown to the train standing on 9. PLC programs are not in the Pi bundle. | No change. Braden ran `TrackCtrlHw` at `629f0af`: 104 passed, 54,596 subtests |
+| Pi bundles: who regenerates them, and when (request 7) | Each bundle is the hw_link runtime, `utils/harness_protocol.py` and both HW cores (`common/hw_link/manifest.py` `sources()`). Both boards carry both cores and one shared hash, so a change to either core means rebuilding both boards. SW-1 and TM-2 don't change the bundle; the HW vital block and the Train Controller HW `SUPER_GREEN` and pickup changes do. Bundles are built at install time (PI-1), from exactly the commit the host runs. Braden builds and installs the Track Controller board; the Train Controller HW owner builds theirs. | Nothing to regenerate now: no bundle is committed and no Pi is set up. Proposal `20261030-1434-pi-bundle-built-at-install.md` |
+| `development` merge hazard (request 1) | PR #51 (`70289dc`) brought this branch's history into `development` but reset its content, so a plain merge drops files. Braden's branch `integrate/quirky-into-development` (`cb163af`) merges `development` (`c3bae11`) and this branch (`cabcb3a`) against base `f590f41`. All 96 conflicts resolve to this branch. Everything else is `development`'s own documents. Land it as a **merge commit**; a squash or rebase brings the problem back. | Checked 2026-10-30: parents `c3bae11` and `cabcb3a`. Outside `documents/`, `.vscode/` and `TrackCtrlHw/docs/` the tree is identical to `cabcb3a`. A plain merge of `development` today keeps 8 of the 21 `common/hw_link` files; this one keeps 21, and merging this branch into it afterwards changes nothing. Not landed: awaiting Kevin |
+
+**Tests on Braden's Windows machine:** 12 to 13 harness and hw_link tests fail with
+and without his changes, for environment reasons:
+- Qt writes "Cannot find font directory" to stderr, and the tests expect stderr to
+  be empty.
+- Some tests save to `/tmp/...`.
+- The bundle "shell parses" tests need bash.
+
 ## CTC-1: Red concurrency
 
 **Owner:** Landis, CTC Office.
