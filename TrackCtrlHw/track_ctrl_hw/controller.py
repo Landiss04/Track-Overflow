@@ -223,6 +223,8 @@ def _validate(inputs: Any) -> None:
     model = inputs.track_model
     _keys(ctc.closed_blocks, "closed_blocks", BlockRef)
     _keys(model.occupied_blocks, "occupied_blocks")
+    if model.reported_blocks is not None:
+        _keys(model.reported_blocks, "reported_blocks")
     _choices(ctc.switch_commands, SWITCH_POSITIONS, "switch_commands",
              BlockRef)
     _choices(model.switch_positions, SWITCH_POSITIONS, "switch_positions")

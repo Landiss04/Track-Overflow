@@ -168,6 +168,11 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
             "signal_aspects": _entries(
                 model.signal_aspects, lambda a: {"aspect": a}
             ),
+            **({} if model.reported_blocks is None else {
+                "reported_blocks": [
+                    key_to_wire(k) for k in model.reported_blocks
+                ],
+            }),
         },
     }
 
@@ -197,6 +202,11 @@ def inputs_from_wire(data: Any) -> TrackControllerInputs:
         track_model=TrackModelInputs(
             occupied_blocks=_key_set(
                 model.get("occupied_blocks"), "occupied_blocks"
+            ),
+            reported_blocks=(
+                None if "reported_blocks" not in model else _key_set(
+                    model["reported_blocks"], "reported_blocks"
+                )
             ),
             switch_positions=_from_entries(
                 model.get("switch_positions"), "switch_positions",

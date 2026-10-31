@@ -77,6 +77,11 @@ def test_hw_input_contract():
     assert decoded.track_model.crossings_active == {
         api.BlockKey("Red", "D", "11"): True
     }
+    # Every Red block the Track Model reported, so HW can tell a missing
+    # one (INPUT-1); Green's is another wayside's.
+    assert decoded.track_model.reported_blocks == {
+        api.BlockKey("Red", "C", "9")
+    }
 
 
 def test_hw_output_contract_and_combined_ctc_report():

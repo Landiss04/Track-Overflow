@@ -171,6 +171,10 @@ class TrackModelInputs:
     # Blocks a train, or a failure, makes read as occupied. The module
     # cannot tell which.
     occupied_blocks: frozenset[BlockKey] = frozenset()
+    # Every block the Track Model reported this tick, occupied or not,
+    # or None when the sender does not say. An expected block missing
+    # from it reads as occupied (INPUT-1, Braden Bosilovich 2026-10-26).
+    reported_blocks: frozenset[BlockKey] | None = None
     # Actual positions of the switch machines, by the switch's block.
     switch_positions: Mapping[BlockKey, SwitchPosition] = field(
         default_factory=dict

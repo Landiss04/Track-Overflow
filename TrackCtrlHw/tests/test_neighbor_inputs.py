@@ -54,3 +54,30 @@ def test_neighbor_scope_cannot_be_extended_by_program(declaration):
     controller, _ = red_two()
     with pytest.raises(PlcError):
         controller.load_program("Red-2", declaration + "\n", "neighbor.plc")
+
+
+def test_a_block_the_track_model_did_not_report_reads_occupied():
+    """INPUT-1: an expected block missing from the report is occupied."""
+    controller, territory = red_two()
+    controller.load_program("Red-2", """
+VAR_IN OCC_76 OCC_25
+VAR_OUT AUTH_25
+AUTH_25 := NOT (OCC_76 OR OCC_25)
+""", "neighbor.plc")
+    own = [key for key in territory.keys if key.block_id != "25"]
+    everything = frozenset([*territory.keys, BlockKey("Red", "X", "76")])
+    for reported, authority, own_occupied in (
+            (None, 3, False),
+            (everything, 3, False),
+            (everything - {BlockKey("Red", "X", "76")}, 0, False),
+            (frozenset(own) | {BlockKey("Red", "X", "76")}, 0, True)):
+        base = inputs(controller, suggestions={"25": (10, 3)})
+        case = replace(base, track_model=replace(
+            base.track_model, reported_blocks=reported))
+        out = controller.step(0.1, case)
+        circuits = {k.block_id: v for k, v in
+                    out.track_model.track_circuits.items()}
+        assert circuits["25"].authority_blocks == authority
+        blocks = {k.block_id: v for report in out.ctc_reports
+                  for k, v in report.blocks.items()}
+        assert blocks["25"].occupied is own_occupied

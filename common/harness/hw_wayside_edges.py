@@ -49,7 +49,15 @@ def track_model_to_track_controller(
     fields = {"switch_positions": "position", "crossings_active": "active",
               "signal_aspects": "aspect"}
     result: dict[str, Any] = {
-        "occupied_blocks": [key(block) for block in mapped["occupied_blocks"]]
+        "occupied_blocks": [key(block) for block in mapped["occupied_blocks"]],
+        # Every block reported, so HW reads a missing one as occupied
+        # (INPUT-1).
+        "reported_blocks": [
+            key({"line": line, "block_id": number})
+            for number, _ in sw._on_line(
+                outputs["controller"]["block_occupancy"], line, names
+            )
+        ],
     }
     for field, value_name in fields.items():
         result[field] = [

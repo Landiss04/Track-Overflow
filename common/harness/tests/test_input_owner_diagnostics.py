@@ -78,7 +78,14 @@ def test_member_omission_equals_false_but_whole_field_is_required(
     present = mapped({"RED I-25": True, "RED X-76": True})
     omitted = mapped({"RED X-76": True})
     explicit_false = mapped({"RED I-25": False, "RED X-76": True})
-    assert omitted == explicit_false
+    assert omitted["occupied_blocks"] == explicit_false["occupied_blocks"]
+    if edge is hw_edges:
+        # HW is told what was reported, so it reads the omitted block as
+        # occupied (INPUT-1); SW still reads it as clear.
+        assert [b["block_id"] for b in omitted["reported_blocks"]] == ["76"]
+        assert len(explicit_false["reported_blocks"]) == 2
+    else:
+        assert omitted == explicit_false
     assert [entry["block_id"] for entry in present["occupied_blocks"]] == [
         "25",
         "76",
@@ -158,18 +165,21 @@ AUTH_25 := NOT (OCC_25 OR CLOSED_25 OR OCC_76 OR CLOSED_76)
         "input-owner-probe.plc",
     )
     authority = []
+    # Every case reports both blocks, unset ones clear, except the last:
+    # a report without 76 holds 25, as an occupied 76 does (INPUT-1).
     cases = [
-        ({}, []),
-        ({"RED I-25": True}, []),
-        ({"RED X-76": True}, []),
-        ({}, ["25"]),
-        ({}, ["76"]),
-        ({"RED X-76": True}, []),
-        ({"RED X-76": True}, []),
-        ({}, []),
-        ({"RED X-76": False}, []),
+        ({}, [], False),
+        ({"RED I-25": True}, [], False),
+        ({"RED X-76": True}, [], False),
+        ({}, ["25"], False),
+        ({}, ["76"], False),
+        ({"RED X-76": True}, [], False),
+        ({"RED X-76": True}, [], False),
+        ({}, [], False),
+        ({"RED X-76": False}, [], False),
+        ({"RED I-25": False}, [], True),
     ]
-    for index, (occupied, closed) in enumerate(cases):
+    for index, (occupied, closed, sparse) in enumerate(cases):
         ctc = {
             "track_controller": {
                 "suggestions": [
@@ -191,7 +201,10 @@ AUTH_25 := NOT (OCC_25 OR CLOSED_25 OR OCC_76 OR CLOSED_76)
                 "time_s": 18000.0 + index * 0.1,
                 "ctc": hw_edges.ctc_to_track_controller(ctc, "Red"),
                 "track_model": hw_edges.track_model_to_track_controller(
-                    producer(occupied), "Red", names, devices
+                    producer(occupied if sparse else {
+                        "RED I-25": False, "RED X-76": False, **occupied
+                    }),
+                    "Red", names, devices,
                 ),
             }
         )
@@ -203,7 +216,7 @@ AUTH_25 := NOT (OCC_25 OR CLOSED_25 OR OCC_76 OR CLOSED_76)
         }
         assert "76" not in circuits
         authority.append(circuits["25"].authority_blocks)
-    assert authority == [3, 0, 0, 0, 0, 0, 0, 3, 3]
+    assert authority == [3, 0, 0, 0, 0, 0, 0, 3, 3, 0]
 
 
 def test_sw_own_members_replace_prior_snapshot_remote_namespace_unavailable(

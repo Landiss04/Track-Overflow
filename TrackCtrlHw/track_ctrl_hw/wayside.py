@@ -20,7 +20,8 @@ PLC names, for a block numbered ``n``:
 Name            Kind   Meaning
 ==============  =====  ====================================================
 ``OCC_n``       in     Occupied: a train, or a failure the Track Model
-                       reports as occupancy
+                       reports as occupancy, or a block it did not
+                       report at all
 ``CLOSED_n``    in     Closed by the dispatcher
 ``SWREV_n``     in     The switch listed on block n reports reverse
 ``CTCSW_n``     in     The CTC Office commands the switch on block n (it
@@ -294,8 +295,11 @@ class Wayside:
         """
         territory = self._territory
         keys = territory.keys
+        reported = track_model.reported_blocks
         occupied = frozenset(
-            key for key in keys if key in track_model.occupied_blocks
+            key for key in keys
+            if key in track_model.occupied_blocks
+            or (reported is not None and key not in reported)
         )
         closed = frozenset(
             key for key in keys if key.ref in ctc.closed_blocks
@@ -416,9 +420,15 @@ class Wayside:
             for bit, name in enumerate(_speed_names("SPD", number)):
                 image[name] = bool(speed >> bit & 1)
         occupied_refs = {key.ref for key in track_model.occupied_blocks}
+        reported = track_model.reported_blocks
+        reported_refs = (
+            None if reported is None else {key.ref for key in reported}
+        )
         for number in _neighbor_numbers(self._territory):
             ref = BlockRef(self._territory.line, number)
-            image[f"OCC_{number}"] = ref in occupied_refs
+            image[f"OCC_{number}"] = ref in occupied_refs or (
+                reported_refs is not None and ref not in reported_refs
+            )
             image[f"CLOSED_{number}"] = ref in ctc.closed_blocks
         for switch in self._territory.switches:
             number = switch.switch_id

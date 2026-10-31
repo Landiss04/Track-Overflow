@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 import unittest
 
 from track_ctrl_hw import display, views
@@ -32,6 +33,13 @@ class Wire(unittest.TestCase):
         )
         wire = json.loads(json.dumps(inputs_to_wire(sent)))
         self.assertEqual(inputs_from_wire(wire), sent)
+        # No reported set is sent as none, and a set round-trips.
+        self.assertNotIn("reported_blocks", wire["track_model"])
+        full = replace(sent, track_model=replace(
+            sent.track_model,
+            reported_blocks=frozenset(keys(controller).values())))
+        self.assertEqual(inputs_from_wire(
+            json.loads(json.dumps(inputs_to_wire(full)))), full)
         # The CTC Office's part is in its own shapes.
         self.assertEqual(wire["ctc"]["closed_blocks"],
                          [{"line": "Green", "block_id": "30"}])

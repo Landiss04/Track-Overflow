@@ -4,6 +4,27 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-10-31 — An unreported block reads occupied (INPUT-1, integration)
+
+Branch `feature/input1-reported-blocks`. Braden's INPUT-1 rule (2026-10-26): a
+block the wayside expects, its own or a declared neighbour, that the inputs do
+not report counts as occupied, and is reported to the CTC Office as occupied.
+
+- `TrackModelInputs.reported_blocks`: every block the Track Model reported this
+  tick, or `None` when the sender doesn't say. `None` keeps the old reading, so
+  the test UI, the CTC-only stubs and a Track Model that has not replied yet
+  are unchanged.
+- `wire.py` sends `reported_blocks` only when it is set; `wayside.py` reads an
+  expected block missing from it as `OCC_n` true; `controller.py` checks its
+  keys.
+- The harness's HW edge now sends every block on the line from the Track
+  Model's occupancy map (`common/harness/hw_wayside_edges.py`).
+
+Tests: `tests/test_neighbor_inputs.py` (own and neighbour block missing),
+`tests/test_wire_and_views.py` (round trip). For Braden to review.
+
+---
+
 ## 2026-10-28 — Red switch test reads the SW layout's new form (integration)
 
 `tests/test_red_integration.py` only. Harry's `e5e51d4` folds the SW reader's
