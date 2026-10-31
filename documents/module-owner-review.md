@@ -62,9 +62,9 @@ retains portable interpreter selection for other checkouts.
 | [PI-1: Physical Pi prerequisites](#pi-1-physical-pi-prerequisites) | Both HW module owners; Kevin for performance choice |
 | [TC-1: Green train over its limit after dispatch](#tc-1-green-train-over-its-limit-after-dispatch) | Train Controller SW owner |
 
-The cited records identify Landis, Harry and Braden. They do not establish a named
-Track Model owner or Train Controller HW owner for these requests; Kevin must route
-those reviews to the responsible people.
+Owners: Landis (CTC Office), Harry Tye (Track Controller SW), Braden Bosilovich
+(Track Controller HW), Deni (Track Model), Ivan (Train Controller HW) and Jon
+(Train Controller SW), as Kevin named them on 2026-10-31.
 
 ## Kevin’s answers and proposal review
 
@@ -201,6 +201,20 @@ still applies it (`V_REQ_s` reads `CTCSW_s` first). So in maintenance mode, a CT
 switch command moves a HW wayside's switch whatever its program does. It moves a SW
 wayside's switch only if the program obeys it, as the starter does. Is that
 difference intended? If not, which way should both variants go?
+
+## Answers, 2026-10-31
+
+Kevin's answers, 2026-10-31.
+
+| Question | Answer | Done on this branch |
+| --- | --- | --- |
+| Service brake reported apart from the emergency brake (Train Controller #23, option c) | "make this update in the train model" (Kevin) | Already so on this branch since `4859971`: the service brake reads engaged when commanded and not failed, whatever the emergency brake does. The harness passes both states (`common/harness/train_edges.py`) and the HW Train Controller reads both (M18). `TrainModel/tests/test_physics.py` `test_brake_state_reports_engaged_brakes` covers both engaged. No code change |
+| Bench simulator (Train Controller #26) | "this is irrelevant to integration, the bench/test uis are only for testing" (Kevin) | Closed in `Train-Ctrl_HW/OPEN_ISSUES.md`; no team decision needed |
+| Module owners | "Track model - Deni Train ctrl hw Ivan SW Jon" (Kevin) | Track Model: Deni. Train Controller HW: Ivan. Train Controller SW: Jon. Proposals `20261031-1618-*-owner.md` set the three module shards' owners |
+| `development` merge (Braden's request 1) | "merge commit to preserve history" (Kevin) | Not landed. `development` has moved since Braden's `cb163af`: PR #50 (`d0d7953`, Train-Ctrl_HW) and PR #49 (`f69c65a`, CTC Cancel order removed). PR #52 now conflicts in 16 files (5 CTC-Office, 11 Train-Ctrl_HW). Awaiting Kevin on how to resolve |
+| Unreported blocks (INPUT-1) | "build in a feature branch" (Kevin) | Built on `feature/input1-reported-blocks` (`e377692`, cut from this branch because `development` has no harness yet): the HW edge sends every block the Track Model reported, and the HW wayside reads an expected block missing from it as occupied. SW is unchanged, for Harry to decide. Not merged; Braden to review |
+| Test gains in the Pi-link recovery rule | "include" (Kevin) | Proposal `20261031-1326-pi-link-recovery.md` amended: a replaced Pi also gets the test gains back |
+| Real company logos in the Train Model header (F27) | "intended" (Kevin) | No change |
 
 ## CTC-1: Red concurrency
 
