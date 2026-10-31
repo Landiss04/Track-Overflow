@@ -3,6 +3,11 @@
 No clock runs here. A durable request journal reconstructs the core and reply
 cache after a process/Pi restart. It records accepted and rejected transactions
 before replying; replay is internal reconstruction, never a new harness tick.
+
+Every ``CHECKPOINT_TICKS`` steps the agent pickles its core and reply cache and
+starts a new journal on top of that checkpoint, so a restart replays at most
+that many steps and the journal never grows past them. The checkpoint is only
+ever read back from the agent's own disk; nothing pickled crosses the link.
 """
 
 from __future__ import annotations
@@ -10,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pickle
 import random
 import sys
 import time
@@ -26,6 +32,9 @@ from .manifest import AGENT_VERSION, expected_hash
 # to halve measured snapshot packing/unpacking and window refresh overhead.
 # STEP replies and ACTION acknowledgement views are still immediate.
 VIEW_INTERVAL_S = 0.2
+
+# Steps between checkpoints: one minute at 10x, ten at 1x.
+CHECKPOINT_TICKS = 600
 
 AGENT_HASH = expected_hash()
 
@@ -54,6 +63,10 @@ class PiLinkServer:
         ] = {}
         self.buffer = LineBuffer()
         self.last_view = 0.0
+        # The reply just executed and its encoded line, sent as is.
+        self._fresh: tuple[dict[str, Any], bytes] | None = None
+        self._checkpoint_seq = 0
+        self._steps_since_checkpoint = 0
         self._restore()
 
     def _restore(self) -> None:
@@ -70,14 +83,24 @@ class PiLinkServer:
             if index == 0:
                 if entry["module"] != self.module:
                     raise ValueError("journal module mismatch")
+                # Kept even when stale, so the next HELLO deletes it.
+                self._checkpoint_seq = entry.get("checkpoint") or 0
+                if entry.get("agent_hash") != AGENT_HASH:
+                    # Written by other agent code: start fresh, as a wiped
+                    # Pi does, rather than unpickle or replay into this one.
+                    self.log("JOURNAL_STALE agent hash differs; starting fresh")
+                    return
+                if self._checkpoint_seq:
+                    path = self._checkpoint_path(self._checkpoint_seq)
+                    with path.open("rb") as stream:
+                        self.core, self.cache = pickle.load(stream)
                 self.session = entry["session"]
             else:
                 request = entry["request"]
                 self._execute(request)
-                self.cache[self._key(request)] = (
-                    p.encode(request),
-                    entry["reply"],
-                )
+                self._remember(request, p.encode(request), entry["reply"])
+                if request["op"] == "STEP":
+                    self._steps_since_checkpoint += 1
             complete.extend(line)
         if len(complete) != self.journal.stat().st_size:
             self.journal.write_bytes(complete)
@@ -87,38 +110,70 @@ class PiLinkServer:
     def _key(request: dict[str, Any]) -> tuple[str, int, int]:
         return request["op"], request["id"], request["tick"]
 
+    def _checkpoint_path(self, seq: int) -> Path:
+        assert self.journal is not None
+        return self.journal.with_name(f"{self.journal.name}.ckpt{seq}")
+
     def _start(self, session: str) -> None:
         self.session = session
         self.core = make_core(self.module)
         self.cache.clear()
         if self.journal is not None:
             self.journal.parent.mkdir(parents=True, exist_ok=True)
-            with self.journal.open("wb") as stream:
-                stream.write(
-                    (
-                        json.dumps({"module": self.module, "session": session})
-                        + "\n"
-                    ).encode()
-                )
-                stream.flush()
-                os.fsync(stream.fileno())
+            self._new_journal(0)
 
-    def _record(self, request: dict[str, Any], reply: dict[str, Any]) -> None:
-        if self.journal is not None:
-            with self.journal.open("ab") as stream:
-                stream.write(
-                    (
-                        json.dumps(
-                            {"request": request, "reply": reply},
-                            allow_nan=False,
-                        )
-                        + "\n"
-                    ).encode()
-                )
-                stream.flush()
-                os.fsync(stream.fileno())
+    def _new_journal(self, seq: int) -> None:
+        # Swap in a journal holding only its header, then drop the
+        # checkpoint the old one stood on. A crash in between leaves the
+        # old journal and its checkpoint, still consistent.
+        assert self.journal is not None
+        header = {
+            "module": self.module,
+            "session": self.session,
+            "agent_hash": AGENT_HASH,
+            "checkpoint": seq or None,
+        }
+        _write_durably(self.journal, (json.dumps(header) + "\n").encode())
+        if self._checkpoint_seq and self._checkpoint_seq != seq:
+            self._checkpoint_path(self._checkpoint_seq).unlink(missing_ok=True)
+        self._checkpoint_seq = seq
+        self._steps_since_checkpoint = 0
 
-    def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _checkpoint(self) -> None:
+        seq = self._checkpoint_seq + 1
+        _write_durably(
+            self._checkpoint_path(seq),
+            pickle.dumps(
+                (self.core, self.cache), protocol=pickle.HIGHEST_PROTOCOL
+            ),
+        )
+        self._new_journal(seq)
+        self.log(f"CHECKPOINT {seq}")
+
+    def _record(self, request: bytes, reply: bytes) -> None:
+        if self.journal is None:
+            return
+        # Both are already compact JSON lines; splice, do not re-encode.
+        line = b'{"request":' + request[:-1] + b',"reply":' + reply[:-1]
+        with self.journal.open("ab") as stream:
+            stream.write(line + b"}\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+
+    def _remember(
+        self, request: dict[str, Any], request_bytes: bytes, reply: Any
+    ) -> None:
+        # Every ACTION stays, since a reconnect replays the loads; of the
+        # steps only the latest can be resent, so only it stays.
+        key = self._key(request)
+        if key[0] == "STEP":
+            for old in [k for k in self.cache if k[0] == "STEP"]:
+                del self.cache[old]
+        self.cache[key] = (request_bytes, reply)
+
+    def _execute(
+        self, request: dict[str, Any]
+    ) -> tuple[dict[str, Any], bytes]:
         started = time.perf_counter()
         try:
             if request["op"] == "STEP":
@@ -152,8 +207,7 @@ class PiLinkServer:
                 diagnostics=list(getattr(error, "diagnostics", ())),
             )
         # Fail before journalling if a core returned something un-sendable.
-        p.encode(reply)
-        return reply
+        return reply, p.encode(reply)
 
     def handle(self, request: dict[str, Any]) -> list[dict[str, Any]]:
         """Handle a checked request once, preserving IDs on replay."""
@@ -213,9 +267,10 @@ class PiLinkServer:
         if op not in ("STEP", p.ACTION):
             return []
         key = self._key(request)
+        request_bytes = p.encode(request)
         previous = self.cache.get(key)
         if previous is not None:
-            if previous[0] != p.encode(request):
+            if previous[0] != request_bytes:
                 return [
                     p.message(
                         "REJECTED",
@@ -228,9 +283,17 @@ class PiLinkServer:
                 ]
             self.log(f"CACHE_HIT {key}")
             return [previous[1]]
-        reply = self._execute(request)
-        self._record(request, reply)
-        self.cache[key] = (p.encode(request), reply)
+        reply, reply_bytes = self._execute(request)
+        self._record(request_bytes, reply_bytes)
+        self._remember(request, request_bytes, reply)
+        self._fresh = (reply, reply_bytes)
+        if op == "STEP":
+            self._steps_since_checkpoint += 1
+            if (
+                self.journal is not None
+                and self._steps_since_checkpoint >= CHECKPOINT_TICKS
+            ):
+                self._checkpoint()
         replies = [reply]
         now = time.monotonic()
         if now - self.last_view >= VIEW_INTERVAL_S:
@@ -242,15 +305,23 @@ class PiLinkServer:
 
     def feed(self, data: bytes) -> list[bytes]:
         """Parse chunks; log and skip modem probes and malformed lines."""
-        outgoing: list[bytes] = []
+        return [line for _, line in self._feed(data)]
+
+    def _feed(self, data: bytes) -> list[tuple[dict[str, Any], bytes]]:
+        # Each reply with its line; a fresh reply's line is the one
+        # encoded when it was checked.
+        outgoing: list[tuple[dict[str, Any], bytes]] = []
         for line in self.buffer.feed(data):
             try:
                 if isinstance(line, ProtocolError):
                     raise line
-                request = p.decode(line)
-                outgoing.extend(
-                    p.encode(reply) for reply in self.handle(request)
-                )
+                self._fresh = None
+                for reply in self.handle(p.decode(line)):
+                    fresh = self._fresh
+                    if fresh is not None and reply is fresh[0]:
+                        outgoing.append(fresh)
+                    else:
+                        outgoing.append((reply, p.encode(reply)))
             except ProtocolError as error:
                 self.log(f"SKIPPED_LINE {error}")
         return outgoing
@@ -309,8 +380,7 @@ def main(argv: list[str] | None = None) -> int:
                     if not options.device:
                         return 0
                     break
-                for reply in server.feed(data):
-                    decoded = p.decode(reply)
+                for decoded, reply in server._feed(data):
                     if decoded["op"] == "OUTPUTS":
                         count += 1
                         fault = (
@@ -346,6 +416,24 @@ def main(argv: list[str] | None = None) -> int:
         server._hello_seen = False
         log("DEVICE_RECONNECT_WAIT")
         time.sleep(0.3)
+
+
+def _write_durably(path: Path, data: bytes) -> None:
+    # Write beside, fsync, then rename over: a power loss leaves the old
+    # file or the new one, never half of either.
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("wb") as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    if hasattr(os, "O_DIRECTORY"):
+        # The rename is durable only once its directory is.
+        folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(folder)
+        finally:
+            os.close(folder)
 
 
 if __name__ == "__main__":

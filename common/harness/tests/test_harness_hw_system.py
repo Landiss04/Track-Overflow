@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -154,7 +155,9 @@ def test_pi_loss_holds_then_recovers_pending_step(tmp_path, capfd, fault):
     ):
         assert event in trail
     agent_log = (tmp_path / "track-pi.agent.log").read_text()
-    assert "CACHE_HIT ('STEP'," in agent_log
+    # The resent tick 20 was answered from the cache, not run again. The
+    # journal may since have moved onto a checkpoint and no longer hold it.
+    assert re.search(r"CACHE_HIT \('STEP', \d+, 20\)", agent_log)
     records = [
         json.loads(line)
         for line in (tmp_path / "track-pi.agent.jsonl")
@@ -166,7 +169,7 @@ def test_pi_loss_holds_then_recovers_pending_step(tmp_path, capfd, fault):
         for record in records
         if record.get("request", {}).get("op") == "STEP"
     ]
-    assert step_ticks.count(20) == 1
+    assert step_ticks.count(20) <= 1
     assert len(step_ticks) == len(set(step_ticks))
     assert not [
         entry

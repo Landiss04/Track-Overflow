@@ -453,3 +453,24 @@ def test_missing_or_ambiguous_pi_names_identity_and_repeats(
         assert not transport.port.isOpen()
     finally:
         transport.close()
+
+
+def test_history_keeps_only_configuration(tmp_path):
+    from common.hw_link.relay import REPLAYED_ACTIONS
+
+    relay, replies, events, views, errors = make_relay(tmp_path)
+    try:
+        relay.call_action("test_engineer_gains", {"kp": 1, "ki": 2})
+        for tick in range(1, 4):
+            relay.submit_step(request(tick))
+        until(lambda: len(replies) == 3)
+        relay.call_action(
+            "set_state", {"train_id": "R1", "field": "kp", "value": 5}
+        )
+        assert [frame["action"] for frame in relay._history] == [
+            "test_engineer_gains"
+        ]
+        assert {f["action"] for f in relay._history} <= REPLAYED_ACTIONS
+        assert not hasattr(relay, "metrics")
+    finally:
+        relay.close()
