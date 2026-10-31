@@ -962,7 +962,10 @@ def run_check(
                f"the driver could not release the emergency brake in "
                f"Automatic during a {name}")
         scan("06-failure-automatic-release")
+        # Engaged again; it ends any try of the engine (§4), whose
+        # target the next tick clears.
         backend.toggle_emergency_brake()
+        _settle(app, 200)
         backend.set_manual(True)
         expect(state.manual,
                f"the mode would not switch to Manual during a {name}")
@@ -998,11 +1001,20 @@ def run_check(
         # off. A brake failure the controller then resolves itself,
         # once the service brake answers again, and a signal pickup
         # failure once the Track Signal arrives non-null
-        # (REQUIREMENTS.md §4); an engine failure it cannot see
-        # resolved, so the bench clears it directly (M3,
-        # OPEN_ISSUES.md #23).
+        # (REQUIREMENTS.md §4); an engine failure once the driver
+        # tries the train and the speed rises under power (M3,
+        # OPEN_ISSUES.md #23). The bench never clears one in the
+        # controller directly.
         backend.apply_bench_inputs({row: False})
-        if key == "signal_pickup":
+        if key == "engine":
+            expect(state.failures[key],
+                   "clearing the engine failure on the bench cleared it "
+                   "in the controller directly")
+            backend.set_target_mph(30)
+            expect(_until(app, lambda: not backend.core.failed, 10),
+                   "the engine failure did not resolve when the driver "
+                   "tried the train")
+        elif key == "signal_pickup":
             expect(state.failures[key],
                    "clearing the signal pickup failure on the bench "
                    "cleared it in the controller directly")
@@ -1020,15 +1032,13 @@ def run_check(
                    "brake answered")
             backend.toggle_service_brake()
             drive_off("after the brake failure resolved")
-        else:
-            expect(not backend.core.failed,
-                   f"clearing the {name} on the bench did not resolve it")
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
-    # An engine failure at a steady cruise shows only once traction is
-    # needed: the toy plant has no resistance, so holding speed takes
-    # no power and a dead engine changes nothing until the train is
-    # asked to speed up (OPEN_ISSUES.md).
+    # An engine failure at a steady cruise: holding speed on the toy
+    # plant takes no power, but a dead engine leaves rolling
+    # resistance, so the speed falls steadily under the power the speed
+    # law then asks for, and the steady fall finds it once a full
+    # window has fallen (REQUIREMENTS.md §4, BUGS.md B3).
     cruise = mod.ControllerCore()
     cruise.armed = True
     cruise.state.manual = True
@@ -1039,14 +1049,14 @@ def run_check(
     cruise.set_target_mps(20 / mod.MPS_TO_MPH)
     drive(cruise, plant, 60)
     plant.injected["engine"] = True
-    drive(cruise, plant, 10)
+    drive(cruise, plant, mod.ENGINE_DETECT_S - 1)
     expect(not cruise.failed,
-           "an engine failure was claimed at a cruise needing no power")
-    cruise.set_target_mps(30 / mod.MPS_TO_MPH)
+           "an engine failure was claimed before a full window had "
+           "fallen")
     drive(cruise, plant, 5)
     expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
-           "an engine failure at cruise was not found once speed was "
-           "asked for")
+           "an engine failure at cruise was not found by its steady "
+           "fall")
 
     # A brake failure is concluded on the tick after the service brake
     # is commanded, when its state still reads off; a working brake is

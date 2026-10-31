@@ -156,9 +156,10 @@ class TrainControllerProcess(QObject):
 
 def _play_engineer(core: ControllerCore, kp: float, ki: float) -> None:
     # Tests only: what ConsoleBackend.commission_gains does once an
-    # engineer signs in and sets the gains.
-    core.state.kp = max(0.0, kp)
-    core.state.ki = max(0.0, ki)
+    # engineer signs in and sets the gains. main() has refused
+    # negative gains, as the console does, so they are set as given.
+    core.state.kp = kp
+    core.state.ki = ki
     core.integral = 0.0
     core.armed = True
 
@@ -194,6 +195,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="tests only: set these gains on each train as it joins",
     )
     options = parser.parse_args(argv)
+    if options.engineer_gains is not None and min(options.engineer_gains) < 0:
+        parser.error("--engineer-gains: Kp and Ki cannot be negative")
     # Only the harness ends a module (D005); Ctrl+C in the console is
     # the harness's to handle.
     signal.signal(signal.SIGINT, signal.SIG_IGN)

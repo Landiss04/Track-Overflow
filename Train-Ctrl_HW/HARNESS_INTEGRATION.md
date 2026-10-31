@@ -243,10 +243,10 @@ The controller infers failures from what the harness sends back, so three inputs
 | Failure inferred | Trigger | What the harness must send |
 | --- | --- | --- |
 | Brake | The command `echo_ticks` ago asked for the service brake with the e-brake off, and this tick's `service_brake_state`, its report, is false (M4). The service brake stays commanded under a brake failure | The service brake's real applied state, on the tick its report is due |
-| Engine | Power that should pull 0.1 m/s² or more, and `actual_speed` up by less than 0.05 m/s for 2 s. **Known false positive on grades:** against `development`'s Train Model it flags a healthy full train 2.4–2.9 s onto a +2 % or +5 % grade, latching the emergency brake. Kevin accepted a steady-fall rule to replace it (R91, `REQUIREMENTS.md` §4), built in `460579b`, not yet here (`OPEN_ISSUES.md` #28) | The real `actual_speed` every tick |
+| Engine | A steady fall (R91, `REQUIREMENTS.md` §4): over 6 s, power commanded and no brake commanded or reported on every tick, and `actual_speed` falling by more than 0.05 m/s along a straight line, with the train not within 0.05 m/s of its target. Against the Train Model it flags a dead engine 5.2–5.9 s after it fails, and no healthy train with up to about 125 passengers on Green's grades (`BUGS.md` B3) | The real `actual_speed` every tick |
 | Signal pickup | `commanded_speed` or `authority_blocks` arrives null: the Train Model could not read the Track Signal (Kevin Schillinger 2026-10-28). A valid 0 is never taken for one | Null only under a pickup failure |
 
-A brake failure resolves when a service brake, commanded with the e-brake off, reads applied in its report (`REQUIREMENTS.md` §4): once the train stands, the driver releases the e-brake in Manual and asks for the service brake. Engine and signal pickup failures latch for the run under the harness: the controller does not yet detect their resolution (M3), and the harness has no call to clear one (`OPEN_ISSUES.md` #23). The failure latches the e-brake once, on detection; at a stand the driver may release it in Manual with the failure still latched, and `emergency_brake` then stays false.
+The controller detects each resolution itself (M3, `REQUIREMENTS.md` §4); the harness has no call to clear a failure, and needs none. A brake failure resolves when a service brake, commanded with the e-brake off, reads applied in its report: once the train stands, the driver releases the e-brake and asks for the service brake. A signal pickup failure resolves on the first tick `commanded_speed` and `authority_blocks` both arrive non-null. An engine failure resolves when the driver tries the train: with only an engine failure latched, releasing the e-brake lets power through (the commanded speed in Automatic, the driver's setpoint in Manual), and `actual_speed` rising by more than 0.05 m/s under power resolves it; 3 s of power without a rise, or a rollback, ends the try, and the service brake then holds the train. The failure latches the e-brake once, on detection; at a stand the driver may release it in either mode with the failure still latched, and `emergency_brake` then stays false.
 
 `door_state` must be faithful too: an Automatic train leaves a station only once `door_state` reports both doors closed. If it never does, the train waits at the station.
 
@@ -259,7 +259,7 @@ Open issues:
 - [ ] **The bench breaks a harness fleet.** A train spawned from the bench is unknown to the harness, so the next `step_all` raises. The bench now refuses edits to a harness's trains, but not spawning. Open the console only.
 - [x] **No harness commissioning.** Decided: by design (see Commissioning).
 - [ ] **Exception classes differ from `TrainModelFleet`'s.** See the comparison above.
-- [ ] **Engine detection trips on grades.** A healthy train climbing a +2 % or steeper grade under full power is taken for an engine failure and stopped on the emergency brake (`OPEN_ISSUES.md` #28). Until the accepted rule is ported, expect this on the Green line's grades.
+- [x] **Engine detection tripped on grades.** Fixed 2026-10-31: the steady-fall rule (R91) is ported (`OPEN_ISSUES.md` #28, `BUGS.md` B3). It still stops a train with more than about 125 passengers on Green's 5 % grade, which cannot climb it at all on the Train Model.
 
 ## Trying it
 

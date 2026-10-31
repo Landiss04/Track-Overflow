@@ -22,10 +22,10 @@ module documentation is to be updated later (see §6).
 
 | # | Rule | Status | Notes |
 |---|---|---|---|
-| M0 | **The controller knows only what it receives and what it sends.** Either the test bench drives it or the central harness does, never both at once, and the controller cannot tell which. The bench feeds it through the same input path as the harness; the bench's own simulation (the toy plant, Murphy's injected failures, the bench clock) is not part of the controller. | Partial | The bench's simulation is `bench_sim.py`, and the bench steps the fleet through `step_all` (2026-10-21). One reach remains: clearing an injected engine failure on the bench also clears it in the controller, until M3's resolution detection is built for it (#23). A brake failure (2026-10-24) and a signal pickup failure (2026-10-31) the controller resolves itself |
+| M0 | **The controller knows only what it receives and what it sends.** Either the test bench drives it or the central harness does, never both at once, and the controller cannot tell which. The bench feeds it through the same input path as the harness; the bench's own simulation (the toy plant, Murphy's injected failures, the bench clock) is not part of the controller. | Met | The bench's simulation is `bench_sim.py`, and the bench steps the fleet through `step_all` (2026-10-21). Clearing an injected failure on the bench clears it in the simulation only; the controller resolves every failure itself (brake 2026-10-24, signal pickup and engine 2026-10-31) |
 | M1 | **The target is capped by the commanded speed only, in both modes.** Automatic: the target is the commanded speed. Manual: the target is the driver's dial setpoint, capped at the commanded speed: when the commanded speed drops, the setpoint drops with it; when it rises, the setpoint stays where it is and the driver reacts to the change. There is no separate speed limit and no 70 km/h cap, because the controller does not know the true limit; keeping the train under it is the wayside's, through the commanded speed. The speed limit the Train Model passes through is not used (#24). | Met | R30 |
 | M2 | **Emergency brake.** The driver engages it from the cab; a passenger can also engage it through the Train Model. It latches. **Only the driver releases it**, only at a stand (< 0.1 m/s), in either mode, with or without a failure still latched (M3). The driver's release overrides whatever the Train Model reports for the passenger brake. The engineer has no e-brake control. | Met | In the controller (R31): only a turn on of the reported state is a pull, and not one within `echo_ticks` of the controller's own command. No passenger-brake-release signal is sent, by decision: clearing the Train Model's passenger latch is deferred to the Train Model's own detection (#25) |
-| M3 | **Failures are detected, and so is their resolution.** The driver can still switch between Manual and Automatic while a failure is latched, to try the train and see whether it has been resolved. A detected failure latches the emergency brake and keeps the target at 0, in either mode; once the train stands, the driver may release the emergency brake in either mode (M2), and the failure, still latched, does not engage it again; switching to Automatic does not engage it again either. Nothing reports failures to the controller, and nothing tells it one has cleared: it infers both from the signals it gets back (§4), whether the bench or the harness is driving. The failure pills clear when the controller believes the failure is resolved; the driver then releases the emergency brake, if it is still on, and carries on. On the bench, clearing an injected failure removes it from the bench's simulation only; the controller has to see that it is resolved. There is no driver reset. | Partial | Brake (2026-10-24) and signal pickup (2026-10-31, R40) resolution are detected (§4); engine resolution is not, and the bench clears it directly (`clear_failure`, #23). The release is built in Manual (R31) and in Automatic (2026-10-31, R42) |
+| M3 | **Failures are detected, and so is their resolution.** The driver can still switch between Manual and Automatic while a failure is latched, to try the train and see whether it has been resolved. A detected failure latches the emergency brake and keeps the target at 0, in either mode; once the train stands, the driver may release the emergency brake in either mode (M2), and the failure, still latched, does not engage it again; switching to Automatic does not engage it again either. Nothing reports failures to the controller, and nothing tells it one has cleared: it infers both from the signals it gets back (§4), whether the bench or the harness is driving. The failure pills clear when the controller believes the failure is resolved; the driver then releases the emergency brake, if it is still on, and carries on. On the bench, clearing an injected failure removes it from the bench's simulation only; the controller has to see that it is resolved. There is no driver reset. | Met | Resolution is detected for the brake (2026-10-24), signal pickup (2026-10-31, R40) and engine (2026-10-31, R44: the driver's try, §4). The release is built in Manual (R31) and in Automatic (2026-10-31, R42) |
 | M4 | **Brake failure.** The service brake is commanded whenever it is asked for, failure or not, and shows as applied. When the Train Model's report of that command (the next tick on the bench, two ticks later under the harness) still reads the service brake off, the controller concludes a brake failure, latches the emergency brake and shows the failure. | Met | R32; the report due for each command since 2026-10-24 (`echo_ticks`) |
 | M6 | **Doors and station boarding**, in both modes unless marked. Doors open only at a stand (< 0.1 m/s); while the train moves they stay closed, and a door still commanded open is closed. Away from a station, in Manual, the driver may open either side at a stand. **Arrival** is the beacon received (only while the train is on the station's block), authority 0, commanded speed 0 and the train at a stand: the controller opens the platform side the beacon gave. The **dwell** runs 45 s of system time (truth D007) from Door State reporting the doors open; the train is held, and the driver cannot close them; a "Station dwell" pill in the header, with the failures, starts full and empties as it runs. At its end the controller closes the doors. After the dwell, until a new Track Signal (commanded speed and authority both above 0), the driver may open and close the platform side in Manual; in Automatic the console is locked and the doors stay closed. A **new Track Signal** closes any open door and locks the doors; one that arrives during the dwell waits for it to end. Switching to Automatic with the doors open after the dwell leaves them open until the new Track Signal closes them. No traction until Door State reports both doors closed; then Automatic departs, and in Manual the driver sets a speed. The Train Model's door interlock is commented out, so the controller is the only one. The console's door tiles read "Open left" / "Close left" (and right), greyed whenever the driver cannot use them; the Cab controls badge reads "Doors free" or "Doors locked" in Manual, "Locked" in Automatic. | Met | 2026-10-24: the dwell is the controller's, as truth D007 has it (was the Train Model's), and boarding runs in Manual too. |
 | M7 | **Announcements are commands.** The controller sends an announcement command; the Train Model makes the announcement. Sent automatically, in both modes: "The train *id* is arriving soon" when the authority reaches 3 blocks (it normally comes down to 3; a rise to 3 announces too), never while at a station; at a departure (from the yard, or from a station once "departing" has played) it is sent at once if the authority is 3 or fewer. "The train *id* has arrived at *station*" on arrival (M6). "The train *id* is departing from *station*" once, after the dwell, a new Track Signal has arrived and the doors report closed. Each is held for 5 s of system time; a new one replaces one still playing. **In Manual the driver may send any of the three again once its state has been met**: after the automatic "arriving soon" at 3 blocks, say, again at 2 or 1. The automatic announcements are still sent in Manual; the driver's press only repeats one. Each stays available until the next announcement is sent. In Automatic the console's button reads "Sending automatically". | Met | R34: one button repeats the last automatic announcement, the only one available under this rule; greyed while one plays and before any was sent. 2026-10-24: none at a station; at a departure, 3 blocks or fewer at once |
@@ -40,7 +40,7 @@ module documentation is to be updated later (see §6).
 | M16 | **Authority is used as given.** The controller never counts blocks: the count it receives is how far it may go, and it changes only when a new count arrives. Integrated, the Train Model reports a block change to the Track Model, which then sends the next block's count. On the bench, a **Block change** button stands in for that: the next count, one fewer, never below 0. | Met | 2026-10-21 |
 | M17 | **Authority 0 sets the target to 0**, and the service brake is applied while the train moves, as a fail safe. Stopping at the right block or station is still the rest of the system's, which lowers the commanded speed in time. | Met | `enforce_safety`. The speed law also holds the service brake at any target of 0 until the train stands, below the 0.05 m/s band too (`stopping`) |
 | M18 | **Brake State arrives as two separate inputs:** emergency brake state and service brake state, each what is engaged, not what was commanded. | Met | 2026-10-21: `emergency_brake_state` and `service_brake_state` |
-| M19 | **The controller assumes perfect movement.** It models no rolling resistance, grade, mass or brake rate; the speed error is what absorbs every outside force, and the physics is the Train Model's (or, on the bench, the bench's simulation). | Partial | Engine-failure detection still uses mass and `F = P/v` (§4) |
+| M19 | **The controller assumes perfect movement.** It models no rolling resistance, grade, mass or brake rate; the speed error is what absorbs every outside force, and the physics is the Train Model's (or, on the bench, the bench's simulation). | Met | Since the steady-fall rule (2026-10-31, R43), engine-failure detection reads only power, brakes and speed (§4) |
 | M20 | **Signal light ahead comes from the Track Model**, directly, on the tick the train enters a signal block. Display only. | Done | Read as `signal_light_ahead`, spelled as truth spells it (`SUPER_GREEN`; Kevin 2026-10-28); the harness maps it from the Track Model (#27) |
 | M21 | **The power command is vital: three calculations, voted two out of three.** Each tick the power command (§3) is calculated three times, fresh, from the same inputs; nothing is kept per calculation. A result (the power and the integrator it carries to the next tick) that at least two agree on is used, and the command is marked verified. With no two equal it is a **vitality breach**: this tick's command is rejected and 0 W is sent, the emergency brake latches, the command is marked unverified, and a "Vitality breach" pill shows in the header with the failures. The breach clears on the next tick that agrees; the emergency brake stays on, and the driver may release it only after that (M2). The three calculations are identical, so the vote guards against a corrupted calculation or state, not against a design error common to all three. | Met | `vital.py` `compute_power`, `vote_2oo3`; `power_verified` on the commands (§3). The numbers drawer shows the three calculations and the vote. Shown failing only in `check.py`: the bench cannot reach inside the controller (M0) |
 
@@ -62,7 +62,7 @@ module documentation is to be updated later (see §6).
 | FUNC-036 | 4.9 | Stop correctly at each station | Partial | Stops where authority and commanded speed end, then serves the station (M6, M17); where that is depends on the wayside. The 45 s dwell is the controller's (M6) |
 | FUNC-037.1 | 4.10 (1) | Stop when authority is exhausted | Partial | M17: target 0 and the service brake at a count of 0; stopping in time is the wayside's, through the commanded speed |
 | FUNC-037.2 | 4.10 | Stop when a failure is detected | Met | M3: any detected failure latches the emergency brake and sets the target to 0 |
-| FUNC-038 | — | Detect engine, signal pickup and brake failures | Partial | Detection from returned signals (M3); resolution is detected for brake and signal pickup failures (#23); the engine rule is being revised (§4, #28). The SRS wording "reported by the Train Model" is out of date (§6) |
+| FUNC-038 | — | Detect engine, signal pickup and brake failures | Met | Detection from returned signals (M3), and each failure's resolution (§4). The SRS wording "reported by the Train Model" is out of date (§6) |
 | FUNC-047 | 5.8 | Passenger emergency brake | Met | A reported pull latches the controller's e-brake (M2) |
 | FUNC-001 / 002 | 1.2 / 1.4 | Run at 1× and 10× | Met | Fixed 0.1 s step; 10× is 100 ticks a second (M11) |
 | FUNC-003 | 1.3 | Pause | Met (bench) | Holds every train and the clock; the harness clock owns it when integrated |
@@ -89,7 +89,7 @@ and a stability analysis of Kp and Ki.
 |---|---|---|
 | Actual speed | m/s, signed | |
 | Emergency brake state | bool | Engaged, not commanded; also true for a passenger pull (M2, M18) |
-| Service brake state | bool | Engaged; the Train Model reports false while the e-brake is engaged or the brake has failed (M4, M18, #23) |
+| Service brake state | bool | Engaged; false when the brake has failed. Reported independently of the e-brake since `claude/quirky-fermi-sickg4` `57e8847` (was: false while the e-brake is engaged) (M4, M18, #23) |
 | Door State | bool[2] [left, right] | |
 | Light State | bool[2] [interior, exterior] | Cabin and headlights |
 | Cabin temperature | °C | |
@@ -123,12 +123,45 @@ controller sends and receives (M0, M19).
 | Failure | Detected when (decided) | Resolved when (decided) | Code today |
 |---|---|---|---|
 | Brake | The service brake was commanded, and the report of that command (`echo_ticks` later) still reads it off | The service brake state reads applied again when commanded | Detection and resolution as decided, each on the report due for its command (R32; resolution 2026-10-24). The resolution is seen once the driver has released the e-brake and asked for the service brake (#23) |
-| Engine | A steady fall (accepted by Kevin 2026-10-21, R91). Never within 0.05 m/s of the target. Otherwise, over a 6 s window of system time: power above 0 on every tick; no service or emergency brake commanded or reported on any tick (a brake or 0 W starts the window again); and the half-second speed means fall by more than 0.05 m/s from the first to the last, each within 10 % of that fall of the straight line between them. Falling speed, not speed that fails to rise | Commanded power gives rising speed again | Not on this branch: the old rule, "should pull ≥ 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s", which false-positives on grades. The accepted rule is built on `claude/quirky-fermi-sickg4` (#28, #35). Resolution not detected |
+| Engine | A steady fall (accepted by Kevin 2026-10-21, R91). Never within 0.05 m/s of the target. Otherwise, over a 6 s window of system time: power above 0 on every tick; no service or emergency brake commanded or reported on any tick (a brake or 0 W starts the window again); and the half-second speed means fall by more than 0.05 m/s from the first to the last, each within 10 % of that fall of the straight line between them. Falling speed, not speed that fails to rise | Commanded power gives rising speed again, when the driver tries the train. With only an engine failure latched, the driver's release of the emergency brake at a stand opens a **try**: the speed law drives again (the commanded speed in Automatic, the driver's setpoint in Manual), and the speed rising more than 0.05 m/s above where the try began, after power was commanded, resolves the failure. The try ends without it after 3 s of power commanded with no such rise (seconds without power do not count, so a Manual driver may take their time), on a rollback of 0.1 m/s, or when the emergency brake is engaged again; the next release opens a new one. Outside a try, an engine failure with the emergency brake released holds the train on the service brake, so it cannot roll back | As decided: the detection ported from `460579b` (2026-10-31, R43), the try built (2026-10-31, R44; `OPEN_ISSUES.md` #23 option a) |
 | Signal pickup | Commanded speed or authority arrives null (Kevin Schillinger 2026-10-28; before: both falling to 0 together from ≥ 2 blocks, which a valid stop could trip) | Commanded speed and authority both arrive non-null again | Detection and resolution as decided (resolution 2026-10-31, R40). The emergency brake stays on until the driver releases it |
 
 The straight-line check tells a sustained fall from the sag of a healthy
 train running onto a grade, which the PI recovers (about 0.51 m/s, back in
 about 3 s, at Green 7).
+
+Measured 2026-10-31 against the Train Model on `claude/quirky-fermi-sickg4`
+`57e8847`, with the harness's two-tick echo (Kp 400,000, Ki 8,000), the
+train running onto the grade from a steady speed on the flat. Old rule:
+"should pull ≥ 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s".
+
+| Case | Old rule | Steady fall |
+|---|---|---|
+| Healthy, onto +2 %, full load, 15 m/s or 70 km/h | Latched 3.0–3.3 s in | Never |
+| Healthy, onto +4 %, full load, 45 km/h | Latched 2.5 s in | Never |
+| Healthy, onto +5 %, crew only, 15 m/s or 70 km/h | Latched 2.5–2.6 s in | Never |
+| Healthy, onto +5 %, 100–125 passengers, 11 or 15 m/s | Latched 2.4–2.5 s in (measured at 111 and 125) | Never in 90 s |
+| Healthy, onto +5 %, 130 or more passengers | Latched 2.4–2.5 s in | Latched 7.4–10.2 s in |
+| Engine fails, flat, 5 or 15 m/s | Latched 2.0–4.8 s after | Latched 5.2–5.9 s after |
+| Engine fails, +2 % or +5 % | Latched 2.4 s onto the grade, before the failure | Latched 5.4 s after |
+
+A real failure is found 0.4–3.9 s later than by the old rule. Above about
+125 passengers the train cannot climb a 5 % grade at all (§7): it slows
+steadily, and the steady fall stops it on the emergency brake before it
+stalls and rolls back.
+
+The try, measured the same way: the engine fails at 10 m/s, the train
+stops on the emergency brake, and the driver releases it in Automatic.
+
+| Grade | Passengers | Engine repaired | Engine still dead |
+|---|---|---|---|
+| Flat | 0 or 111 | Resolved 0.3–0.4 s after the release | Stays latched; held on the service brake |
+| +2 % | 0 or 111 | Resolved 0.4 s after | Stays latched; rolls back 0.12 m/s, then held |
+| +5 % | 0 | Resolved 0.7 s after | Stays latched; rolls back 0.19 m/s, then held |
+| +5 % | 111 | Stays latched (too slow to rise in 3 s) | Stays latched; rolls back 0.19 m/s, then held |
+
+On a down-grade of 2 % or 5 % the dead engine was never detected: the
+grade held the speed without power, so it never fell.
 
 A vitality breach (M21) is not a Train Model failure: it is the
 controller's own calculations disagreeing, and it clears on the next tick
@@ -137,14 +170,22 @@ they agree.
 Known limits:
 - A brake failure is only seen when the service brake is asked for.
 - A dead engine on a standing train is not seen: its speed does not fall.
+  Nor on a downhill steep enough to hold the speed without power.
 - A heavily loaded train that cannot hold its speed on Green 7's 5 % grade
   falls steadily and can be taken for an engine failure (more than about
   125 passengers; `BUGS.md` B3, and §7).
 - Brake and engine resolution cannot be seen while the emergency brake is
-  on. Once the train stands, the driver may release it in either mode (M2,
-  M3, R31, R42); a repaired service brake can then read applied (M4), but nothing
-  yet concludes that it is resolved, and an engine still cannot be seen
-  (#23).
+  on: both brakes are stronger than full traction, and the controller
+  counts only service brake commands sent with the e-brake off. Resolved by
+  the driver's release at a stand, in either mode (M2, M3, R31, R42): a
+  repaired service brake then reads applied when asked for, and the
+  controller concludes the brake failure resolved (#44, 2026-10-24); an
+  engine is tried as above (R44, 2026-10-31).
+- A repaired engine pulling a heavy train up a 5 % grade gains speed too
+  slowly to rise 0.05 m/s within the 3 s try (111 passengers: about
+  0.006 m/s²), so the failure stays latched; the driver tries again.
+- Trying a dead engine on an up-grade, the train rolls back up to about
+  0.2 m/s (Green's 5 %) before the service brake holds it.
 
 ## 5. Revisions made
 

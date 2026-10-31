@@ -60,9 +60,11 @@ class SimTrain:
     No resistance term in normal running: a train with no power
     applied coasts forever, so the only ways down are the two brakes.
     An injected engine failure zeroes traction; an injected brake
-    failure blocks the service brake only, and only then does rolling
-    resistance act. An injected signal pickup failure sends null for
-    commanded speed and authority, as the Train Model does.
+    failure blocks the service brake only. Under either, and only
+    then, rolling resistance acts, so a dead engine slows the train as
+    it does on the Train Model and its steady fall can be seen. An
+    injected signal pickup failure sends null for commanded speed and
+    authority, as the Train Model does.
     """
 
     def __init__(self) -> None:
@@ -157,7 +159,7 @@ class SimTrain:
         if decel:
             # A brake opposes the motion and never reverses it.
             a = -math.copysign(decel, v) if v else 0.0
-        elif not service_works:
+        elif not service_works or self.injected["engine"]:
             # Resistance opposes the motion, holds the train at rest,
             # and never reverses it.
             a = (a - math.copysign(ROLLING_DECEL_MPS2, v) if v

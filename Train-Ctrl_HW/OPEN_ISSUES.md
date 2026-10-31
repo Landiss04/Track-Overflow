@@ -8,46 +8,6 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
 
 ## Controller: to decide or build
 
-23. **Brake and engine resolution with the emergency brake on.** Blocks
-    M3 for the engine. Signal pickup resolution is built (R40). What is
-    known now, on `claude/quirky-fermi-sickg4` `57e8847`
-    (`TrainModel/docs/physics.md` §1, §4):
-    - The Train Model reports the two brake states **independently**
-      (`_brakes_engaged`): a working service brake reads applied while the
-      e-brake is on too. The old report (service off whenever the e-brake
-      is on) is gone. The bench simulation already reports them this way.
-    - Full traction is 25.7 kN; the service brake is 61.7 kN and the
-      e-brake 140.4 kN. With either brake on, a repaired engine cannot
-      show rising speed.
-    - An unbraked train rolls back on any grade steeper than 0.2 %.
-
-    Today a brake failure resolves once the driver releases the e-brake
-    and asks for the service brake (#44); the controller counts only
-    service commands sent with the e-brake off. An engine failure latches
-    until the bench clears it, so under the harness it latches for the
-    run. Options, none chosen:
-    - **Brake (a):** while a brake failure is latched, command the
-      service brake on top of the e-brake every tick, and resolve on the
-      first report that reads it applied. No driver action, no rollback
-      risk. Changes `detect_failures` to count service commands with the
-      e-brake on.
-    - **Brake (b):** keep today's rule.
-    - **Engine (a):** the driver tries the train. Once the driver has
-      released the e-brake (either mode, M2), let power through despite
-      the latched failure: the driver's setpoint in Manual, the commanded
-      speed in Automatic. Speed rising by more than 0.05 m/s resolves it;
-      no rise within a few seconds cuts power again. Risk: a dead engine
-      on a grade rolls back while it is tried, so the service brake would
-      have to hold whenever the speed goes negative.
-    - **Engine (b):** the controller probes by itself at a stand, briefly
-      dropping its own e-brake and commanding power. Conflicts with M2
-      (only the driver releases the e-brake), and the same rollback risk.
-    - **Engine (c):** the Train Model reports an engine failure and its
-      repair. Failure status is not one of its outputs (`physics.md`
-      §12–13) and truth has the controller infer failures, so this needs
-      a truth change.
-    - **Engine (d):** keep today's: cleared only on the bench.
-
 26. **Which simulator the bench uses.** Deferred to later by decision
     (2026-10-31). The bench's simulation is separate (`bench_sim.py`
     `SimTrain`, R15), still the toy plant. The choice:
@@ -58,45 +18,6 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
       from `development` inside `SimTrain`: one physics, with real rolling
       resistance and grade. D005 says modules do not import each other's
       boundary types, so this needs a team decision.
-
-28. **Engine-failure detection false-positives; the accepted rule is not
-    on this branch.** This branch still has the old rule (power that
-    should pull 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s),
-    which flags a healthy full train 2.4–2.9 s onto a +2 % or +5 % grade.
-    Kevin accepted a replacement on 2026-10-21 (R91), built in `460579b`
-    on `claude/quirky-fermi-sickg4` and proposed there for truth
-    (`truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-engine-failure-steady-fall-accepted.md`).
-    That branch's copy of this module has since been replaced with this
-    one (`74159e9`), so the rule is now in no branch's tip, only in
-    `460579b`'s `control.py` and `tests/test_engine_detection.py`:
-    never within 0.05 m/s of the target; otherwise latch only when, over a
-    6 s window, power is above 0 on every tick, no brake is commanded or
-    reported on any tick, and the half-second speed means fall by more
-    than 0.05 m/s, each within 10 % of that fall of a straight line. Port
-    it here from `460579b`; `REQUIREMENTS.md` §4 states it. Its own limits: a stationary dead engine is not
-    flagged, and a heavy train that cannot hold speed on Green 7's 5 %
-    grade can be.
-
-    Measured 2026-10-21: this controller against `development`'s
-    `TrainModel` (`de7a98f`), grades from `Track_layout/` (Green ±5 %,
-    Red ±2 %), commanded 15 m/s. Worst speed fall over a window with
-    power above 0, no brake, and outside a 0.1 m/s band of the target:
-
-    | Case | 2 s | 3 s | 4 s | 5 s |
-    |---|---|---|---|---|
-    | Healthy, flat | 0 | 0 | 0 | 0 |
-    | Healthy, onto +2 %, full load | 0.19 | 0.23 | 0.26 | 0.27 |
-    | Healthy, onto +5 %, crew only | 0.44 | 0.50 | 0.53 | 0.53 |
-    | Healthy, onto +5 %, full load | 0.55 | 0.67 | 0.74 | 0.81 |
-    | Engine failed, flat (any load, 5 or 15 m/s) | 0.04 | 0.06 | 0.08 | 0.10 |
-    | Engine failed, +2 % | 0.43 | 0.65 | 0.86 | 1.08 |
-    | Engine failed, +5 % | 1.02 | 1.53 | 2.04 | 2.55 |
-
-    (m/s; a 0.05 or 0.2 m/s band changes these by under 0.1.) On the
-    flat a dead engine loses only rolling resistance (0.0196 m/s²), less
-    than a healthy full train loses under full power on +5 %. On the
-    bench nothing falls at all: the bench simulation has no resistance,
-    so a dead engine coasts at constant speed.
 
 ## Bench and console
 
@@ -153,19 +74,21 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
       authority changes only with the Block change button, commanded
       speed and the signal ahead only when edited, and the beacon only
       with the `at_station` row.
-    - **Failures.** Clearing an injected engine failure clears it in the
-      controller directly (M0, M3, #23). Brake and signal pickup failures
-      the controller resolves itself.
+    - **Failures.** None left: clearing an injected failure clears it in
+      the bench's simulation only, and the controller resolves each one
+      itself (M0, M3, #23).
 
 45. **The bench should spawn the console for the line** (planned, the
-    weekend of 2026-11-07; Jonathan, 2026-10-30). So the bench emulates
-    the integrated system: it opens on its own, and **Spawn** on the Red
+    weekend of 2026-11-07; Jonathan, 2026-10-30; plan confirmed
+    2026-10-31). So the bench emulates the integrated system. The bench
+    opens only when asked for: `main.py --test`, or the central harness
+    asking for the test bench. It opens on its own, and **Spawn** on the Red
     Line opens (or reuses) the HW Train Controller console, on the Green
     Line the SW one, each with its own backend and titled as under the
     harness (M13, `run(variant=…)`). To design: one bench editing trains
     held by two backends. Also then: setting the bench's time is slow
-    with the scroll wheels (M15); make it quicker to set, for example by
-    typing it (#31, #32, #36).
+    with the scroll wheels (M15); the time is to be typed instead (#31,
+    #32, #36).
 
 ## Outside the style guide and shared UI
 
@@ -238,8 +161,18 @@ One line each; the details are in `CHANGELOG.md`.
 
 - **11.** Block lengths unknown: authority is used as given (M16, R13).
 - **14.** How a failure clears once integrated: decided, the controller
-  detects resolution (M3); built for the brake (#44) and signal pickup
-  (R40), the engine waits on #23.
+  detects resolution (M3); built for the brake (#44), signal pickup (R40)
+  and the engine (R44).
+- **23.** Brake and engine resolution with the emergency brake on:
+  decided 2026-10-31. Brake: kept as built (#44), resolved once the
+  driver releases the e-brake and asks for the service brake. Engine:
+  the driver tries the train (option a, R44): with only an engine
+  failure latched, the release opens a try, and the speed rising under
+  power resolves it; outside a try the service brake holds the train
+  against a rollback (`REQUIREMENTS.md` §4, measured there).
+- **28.** Engine-failure false positives on grades: the steady-fall rule
+  Kevin accepted (R91) is ported from `460579b` (R43,
+  `tests/test_engine_detection.py`); measured in `REQUIREMENTS.md` §4.
 - **16.** The gains hand-over signed a driver in unasked: fixed, it hands
   over only on the train just commissioned (M9, `bf277b1`).
 - **17.** No block-change dummy: none needed; the bench's Block change

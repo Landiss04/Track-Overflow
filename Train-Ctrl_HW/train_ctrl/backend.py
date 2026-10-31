@@ -792,14 +792,6 @@ class ConsoleBackend(QObject):
         sim.apply(read_inputs(si))
         sim.injected.update(injected)
         sim.at_station = at_station
-        # The controller resolves a brake failure once the service
-        # brake answers again, and a signal pickup failure once the
-        # Track Signal arrives non-null (REQUIREMENTS.md §4). An engine
-        # failure it cannot yet see resolved, so clearing one on the
-        # bench clears it in the controller too (REQUIREMENTS.md M3,
-        # OPEN_ISSUES.md #23).
-        if injected.get("engine") is False:
-            self.core.clear_failure("engine")
 
     @Slot(float, float)
     def commission_gains(self, kp: float, ki: float) -> None:
