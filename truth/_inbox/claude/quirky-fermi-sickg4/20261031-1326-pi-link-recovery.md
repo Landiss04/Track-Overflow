@@ -1,7 +1,7 @@
 **Target:** truth/arbitration/pi-link-recovery.md
 **Action:** create
 **Proposed by:** Integration on claude/quirky-fermi-sickg4
-**Provenance:** Kevin Schillinger's Pi-link performance plan in the session prompt, 2026-10-30, approved for commit 2026-10-31. Item 1: "Every N ticks (proposed: 600 ...) the agent saves its whole core with `pickle`"; "On a mismatch the agent ignores the checkpoint and starts fresh, the same as a wiped Pi." Item 3: "A replaced Pi starts again from those loads. It loses runtime state". Replaces the unpromoted proposal 20261021-1808-pi-link-recovery.md on this branch.
+**Provenance:** Kevin Schillinger's Pi-link performance plan in the session prompt, 2026-10-30, approved for commit 2026-10-31. Item 1: "Every N ticks (proposed: 600 ...) the agent saves its whole core with `pickle`"; "On a mismatch the agent ignores the checkpoint and starts fresh, the same as a wiped Pi." Item 3: "A replaced Pi starts again from those loads. It loses runtime state". Test gains replayed too: "include" (Kevin Schillinger 2026-10-31). Replaces the unpromoted proposal 20261021-1808-pi-link-recovery.md on this branch.
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Status:** current
 **Owner:** Kevin
-**Provenance:** asserted by Kevin Schillinger 2026-10-21 (K7: "approved" to hold/reconnect/HELLO/load replay/pending STEP; K8: "the whole clock should wait this will never happen"); amended by Kevin Schillinger 2026-10-30 (Pi-link performance plan: agent checkpoint every 600 ticks, bundle-hash mismatch starts fresh, a replaced Pi restarts from its loads only)
+**Provenance:** asserted by Kevin Schillinger 2026-10-21 (K7: "approved" to hold/reconnect/HELLO/load replay/pending STEP; K8: "the whole clock should wait this will never happen"); amended by Kevin Schillinger 2026-10-30 (Pi-link performance plan: agent checkpoint every 600 ticks, bundle-hash mismatch starts fresh, a replaced Pi restarts from its loads only; 2026-10-31 "include" for the test gains)
 **Aliases:** USB unplug, Pi reboot, repeated STEP, replay, checkpoint, replaced Pi, wiped Pi
 **Last updated:** 2026-10-31
 
@@ -22,8 +22,9 @@ missing at launch also holds the whole clock. Simulation is selected
 explicitly for tests and development only.
 
 The host reconnects by USB identity, repeats HELLO, replays the recorded
-territory and program loads and re-sends the pending STEP, logging each
-recovery stage. The Pi answers a repeated STEP from its session's cache
+territory and program loads and the test engineer gains
+(`--engineer-gains`), and re-sends the pending STEP, logging each recovery
+stage. The Pi answers a repeated STEP from its session's cache
 keyed by `(id, tick)`; it never advances the same STEP twice. The cache
 keeps every ACTION reply and only the latest STEP reply.
 
@@ -35,9 +36,9 @@ agent's own disk; nothing pickled crosses USB. The journal header records
 the agent bundle hash. On a mismatch the agent ignores the checkpoint and
 starts fresh, the same as a wiped Pi.
 
-A replaced or wiped Pi starts again from the replayed loads only. It
-loses runtime state: locks, channel faults, train integrals and armed
-gains. The existing gain-recovery path asks the engineer for gains when
+A replaced or wiped Pi starts again from the replayed loads and test
+gains only. It loses runtime state: locks, channel faults, train integrals
+and armed gains. The existing gain-recovery path asks the engineer for gains when
 needed.
 
 ## Supersedes
