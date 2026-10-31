@@ -267,8 +267,10 @@ class ControllerCore:
 
         A brake failure resolves when the service brake answers
         again: the command echo_ticks ago asked for it and this tick's
-        report reads it applied (REQUIREMENTS.md §4, M3). The others
-        latch until cleared on the test bench (clear_failure).
+        report reads it applied. A signal pickup failure resolves when
+        commanded speed and authority both arrive non-null again
+        (REQUIREMENTS.md §4, M3). An engine failure latches until
+        cleared on the test bench (clear_failure).
         """
         s = self.state
 
@@ -292,8 +294,7 @@ class ControllerCore:
             if self._engine_stalled_s >= ENGINE_DETECT_S:
                 s.failures["engine"] = True
 
-        if s.signal_lost:
-            s.failures["signal_pickup"] = True
+        s.failures["signal_pickup"] = s.signal_lost
 
     def clear_failure(self, name: str) -> None:
         """Let go of one detected failure, once it has been resolved.
@@ -325,7 +326,7 @@ class ControllerCore:
                            asked for (REQUIREMENTS.md M4)
 
         Once the train stands, the driver may release the emergency
-        brake in Manual to try the train (release_emergency); the
+        brake in either mode to try the train (release_emergency); the
         failure, still latched, does not engage it again
         (REQUIREMENTS.md M2, M3).
         """
@@ -378,19 +379,16 @@ class ControllerCore:
     def release_emergency(self) -> bool:
         """Release the latched brake, at a stand.
 
-        With no failure latched, in either mode; with one still
-        latched, only in Manual, so the driver can try the train
-        (REQUIREMENTS.md M2, M3). Not during a vitality breach: only
-        once the power command agrees again (M21). Asking a released
-        brake to release is not a refusal: it is already where the
-        caller wants it.
+        In either mode, with or without a failure still latched, so
+        the driver can try the train (REQUIREMENTS.md M2, M3). Not
+        during a vitality breach: only once the power command agrees
+        again (M21). Asking a released brake to release is not a
+        refusal: it is already where the caller wants it.
         """
         s = self.state
         if not s.emergency_brake:
             return True
         if abs(s.actual_mps) >= STANDSTILL_MPS or s.vital_breach:
-            return False
-        if self.failed and not s.manual:
             return False
         s.emergency_brake = False
         return True

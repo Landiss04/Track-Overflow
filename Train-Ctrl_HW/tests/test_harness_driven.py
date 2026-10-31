@@ -152,6 +152,19 @@ class SignalPickupTest(unittest.TestCase):
                 self.assertEqual((self.core.commanded_mps,
                                   self.core.authority_blocks), (0.0, 0))
 
+    def test_pickup_failure_resolves_when_the_signal_returns(self) -> None:
+        # Resolved on the first tick both arrive non-null (BUGS.md B1);
+        # the emergency brake stays on until the driver releases it.
+        self.step(speed_mps=8.0)
+        self.step(speed_mps=8.0, commanded_mps=None, authority=None)
+        self.step(speed_mps=0.0, commanded_mps=None)
+        self.assertTrue(self.core.state.failures["signal_pickup"])
+        commands = self.step(speed_mps=0.0, commanded_mps=6.0, authority=3)
+        self.assertFalse(self.core.state.failures["signal_pickup"])
+        self.assertEqual((self.core.commanded_mps,
+                          self.core.authority_blocks), (6.0, 3))
+        self.assertTrue(commands.emergency_brake)
+
 
 class LowerLimitAheadTest(unittest.TestCase):
     """A train entering a slower block too fast brakes at once.

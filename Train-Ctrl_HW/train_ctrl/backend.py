@@ -581,8 +581,8 @@ class ConsoleBackend(QObject):
 
         Engagement is immediate and unconfirmed, the one exception the
         style guide grants (section 7). Release is refused unless the
-        train is stopped, during a vitality breach, and, with a
-        failure latched, unless it is in Manual. The driver only.
+        train is stopped, and during a vitality breach. The driver
+        only.
         """
         if not self.can_ebrake:
             return
@@ -597,12 +597,9 @@ class ConsoleBackend(QObject):
             self.brake_note = ""
         elif not self.core.at_stand:
             self.brake_note = "Cannot release: the train is still moving."
-        elif s.vital_breach:
+        else:
             self.brake_note = (
                 "Cannot release: waiting for a safe power command.")
-        else:
-            names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
-            self.brake_note = f"Release it in Manual: {names} is still active."
         self._publish()
 
     @Slot()
@@ -795,14 +792,14 @@ class ConsoleBackend(QObject):
         sim.apply(read_inputs(si))
         sim.injected.update(injected)
         sim.at_station = at_station
-        # A brake failure the controller resolves itself, once the
-        # service brake answers again (REQUIREMENTS.md §4). Engine and
-        # signal pickup failures it cannot yet see resolved, so clearing
-        # one on the bench clears it in the controller too
-        # (REQUIREMENTS.md M3, OPEN_ISSUES.md #23).
-        for name, on in injected.items():
-            if not on and name != "brake":
-                self.core.clear_failure(name)
+        # The controller resolves a brake failure once the service
+        # brake answers again, and a signal pickup failure once the
+        # Track Signal arrives non-null (REQUIREMENTS.md §4). An engine
+        # failure it cannot yet see resolved, so clearing one on the
+        # bench clears it in the controller too (REQUIREMENTS.md M3,
+        # OPEN_ISSUES.md #23).
+        if injected.get("engine") is False:
+            self.core.clear_failure("engine")
 
     @Slot(float, float)
     def commission_gains(self, kp: float, ki: float) -> None:
@@ -816,13 +813,19 @@ class ConsoleBackend(QObject):
             return
         if self.core.armed or self.operator != "engineer":
             return
+        # Refused, never corrected: the values committed are exactly
+        # the ones the engineer pressed Set gains on.
         if not (math.isfinite(kp) and math.isfinite(ki)):
             self.gains_note = "Kp and Ki must be numbers."
             self._publish()
             return
+        if kp < 0 or ki < 0:
+            self.gains_note = "Kp and Ki cannot be negative."
+            self._publish()
+            return
         s = self.core.state
-        s.kp = max(0.0, kp)
-        s.ki = max(0.0, ki)
+        s.kp = kp
+        s.ki = ki
         self.core.integral = 0.0
         self.core.armed = True
         self.gains_note = (

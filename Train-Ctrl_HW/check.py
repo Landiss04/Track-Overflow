@@ -250,6 +250,12 @@ def run_check(
     # The engineer's pop-up commissions the gains; the bench cannot.
     backend.apply_bench_inputs({"kp": 1000, "ki": 10})
     expect(not backend.core.armed, "the bench commissioned the gains")
+    # A negative gain is refused with the reason, never saved as
+    # another value (BUGS.md B2).
+    backend.commission_gains(-5, 8000)
+    expect(not backend.core.armed and backend.snapshot["gains_note"]
+           == "Kp and Ki cannot be negative.",
+           "a negative gain was not refused with its reason")
     backend.commission_gains(400000, 8000)
     expect(backend.core.armed, "commissioning did not arm the controller")
     _settle(app, mod.GAINS_HANDOVER_MS + 400)
@@ -869,7 +875,7 @@ def run_check(
     # each one from what comes back (REQ-FUNC-038). A detected failure
     # applies and latches the emergency brake and stops the train
     # (REQ-FUNC-037.2), and refuses driving until the bench clears it;
-    # once stopped, the driver may release the brake in Manual only
+    # once stopped, the driver may release the brake in either mode
     # (REQUIREMENTS.md M2, M3). Ten times real time keeps the stops
     # short.
     backend.set_sim_rate(mod.SIM_RATES.index(10))
@@ -939,21 +945,24 @@ def run_check(
             bench.grabWindow().save(str(shots / "07-test.png"))
 
         # Latched while the bench still has it in: no target, no
-        # service brake, still detected at a stand, and no release in
-        # Automatic.
+        # service brake, still detected at a stand.
         _settle(app, 300)
         expect(state.failures[key],
                f"the {name} cleared by itself while still injected")
         # The mode still switches, both ways, so the driver can try the
-        # train in Manual; the failure keeps it stopped either way.
+        # train in either; the failure keeps it stopped either way. The
+        # driver may release the brake at a stand in Automatic too
+        # (REQUIREMENTS.md M2, M3), and engages it again here so the
+        # release in Manual below is tried as well.
         backend.set_manual(False)
         expect(not state.manual,
                f"the mode would not switch to Automatic during a {name}")
         backend.toggle_emergency_brake()
-        expect(state.emergency_brake,
-               f"the emergency brake released in Automatic during a "
-               f"{name}")
+        expect(not state.emergency_brake,
+               f"the driver could not release the emergency brake in "
+               f"Automatic during a {name}")
         scan("06-failure-automatic-release")
+        backend.toggle_emergency_brake()
         backend.set_manual(True)
         expect(state.manual,
                f"the mode would not switch to Manual during a {name}")
@@ -987,11 +996,20 @@ def run_check(
 
         # The bench clears its injected failure; the e-brake is already
         # off. A brake failure the controller then resolves itself,
-        # once the service brake answers again (REQUIREMENTS.md §4);
-        # the others it cannot see resolved, so the bench clears them
-        # directly (M3, OPEN_ISSUES.md #23).
+        # once the service brake answers again, and a signal pickup
+        # failure once the Track Signal arrives non-null
+        # (REQUIREMENTS.md §4); an engine failure it cannot see
+        # resolved, so the bench clears it directly (M3,
+        # OPEN_ISSUES.md #23).
         backend.apply_bench_inputs({row: False})
-        if key == "brake":
+        if key == "signal_pickup":
+            expect(state.failures[key],
+                   "clearing the signal pickup failure on the bench "
+                   "cleared it in the controller directly")
+            expect(_until(app, lambda: not backend.core.failed, 10),
+                   "the signal pickup failure did not resolve once the "
+                   "Track Signal arrived again")
+        elif key == "brake":
             expect(state.failures[key],
                    "clearing the brake failure on the bench cleared it in "
                    "the controller directly")
