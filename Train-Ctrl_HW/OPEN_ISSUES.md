@@ -2,50 +2,55 @@
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Grouped by who has to act; numbers are kept, so references
-from `REQUIREMENTS.md` and the code stay valid. Last reviewed 2026-10-30,
-against `claude/quirky-fermi-sickg4` `51eca3b` and truth `84c7d44`
+from `REQUIREMENTS.md` and the code stay valid. Last reviewed 2026-10-31,
+against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
 (`REQUIREMENTS.md` M0–M21; M5 is merged into M3).
-
-## Waiting on other owners or branches
-
-19. **Module rules are not recorded outside this folder.** Rules M0–M21
-    in `REQUIREMENTS.md` are in neither truth's Train Controller contract
-    (still a placeholder) nor the SRS. Update the documentation later.
-
-23. **Brake and engine resolution cannot be seen while the emergency brake
-    is on.** Blocks M3. On detection the controller latches the
-    e-brake, and the pills are meant to clear before the driver releases
-    it. But on `development` (`TrainModel/docs/physics.md` §3–4):
-    - the Train Model reports the service brake as **not engaged whenever
-      the e-brake is engaged**, so a repaired service brake never reads
-      applied;
-    - the e-brake force (about 140 kN) is far above full traction (about
-      25.7 kN), so a repaired engine can never show rising speed.
-
-    Signal pickup is unaffected (a non-null Track Signal can return at any
-    time), but its resolution is not detected either, so under the harness
-    a pickup failure latches for the run (Kevin's F37, `BUGS.md`). Decided in part (R29, M2, M3): once the train stands, the
-    driver may release the e-brake in Manual with the failure still
-    latched, and the failure does not engage it again. That lets a
-    repaired service brake read applied, since the driver may command it
-    under a brake failure (M4, R32), and the controller then concludes
-    the brake failure resolved (#44). It does not settle the engine: a
-    latched failure keeps the target at 0, so no power is commanded and
-    §4's "commanded power gives rising speed again" cannot happen.
-    Candidate approaches for the rest, none chosen:
-    - (a) Once stopped, hold an engine failure on the service brake
-      instead of the e-brake, and probe with power.
-    - (b) Once stopped, briefly drop the controller's e-brake command and
-      probe: command the service brake for a brake failure, a little power
-      for an engine failure. Risk: rollback on a grade.
-    - (c) Ask Kevin to report the service brake's state independently of
-      the e-brake.
 
 ## Controller: to decide or build
 
-26. **Which simulator the bench uses.** The bench's simulation is
-    separate (`bench_sim.py` `SimTrain`, R15), still the toy plant. Not
-    decided:
+23. **Brake and engine resolution with the emergency brake on.** Blocks
+    M3 for the engine. Signal pickup resolution is built (R40). What is
+    known now, on `claude/quirky-fermi-sickg4` `57e8847`
+    (`TrainModel/docs/physics.md` §1, §4):
+    - The Train Model reports the two brake states **independently**
+      (`_brakes_engaged`): a working service brake reads applied while the
+      e-brake is on too. The old report (service off whenever the e-brake
+      is on) is gone. The bench simulation already reports them this way.
+    - Full traction is 25.7 kN; the service brake is 61.7 kN and the
+      e-brake 140.4 kN. With either brake on, a repaired engine cannot
+      show rising speed.
+    - An unbraked train rolls back on any grade steeper than 0.2 %.
+
+    Today a brake failure resolves once the driver releases the e-brake
+    and asks for the service brake (#44); the controller counts only
+    service commands sent with the e-brake off. An engine failure latches
+    until the bench clears it, so under the harness it latches for the
+    run. Options, none chosen:
+    - **Brake (a):** while a brake failure is latched, command the
+      service brake on top of the e-brake every tick, and resolve on the
+      first report that reads it applied. No driver action, no rollback
+      risk. Changes `detect_failures` to count service commands with the
+      e-brake on.
+    - **Brake (b):** keep today's rule.
+    - **Engine (a):** the driver tries the train. Once the driver has
+      released the e-brake (either mode, M2), let power through despite
+      the latched failure: the driver's setpoint in Manual, the commanded
+      speed in Automatic. Speed rising by more than 0.05 m/s resolves it;
+      no rise within a few seconds cuts power again. Risk: a dead engine
+      on a grade rolls back while it is tried, so the service brake would
+      have to hold whenever the speed goes negative.
+    - **Engine (b):** the controller probes by itself at a stand, briefly
+      dropping its own e-brake and commanding power. Conflicts with M2
+      (only the driver releases the e-brake), and the same rollback risk.
+    - **Engine (c):** the Train Model reports an engine failure and its
+      repair. Failure status is not one of its outputs (`physics.md`
+      §12–13) and truth has the controller infer failures, so this needs
+      a truth change.
+    - **Engine (d):** keep today's: cleared only on the bench.
+
+26. **Which simulator the bench uses.** Deferred to later by decision
+    (2026-10-31). The bench's simulation is separate (`bench_sim.py`
+    `SimTrain`, R15), still the toy plant. The choice:
     - (a) keep the toy plant (Euler, rolling resistance only under a brake
       failure, no grade; its service brake state does not go false under
       the e-brake as the Train Model's does); or
@@ -93,14 +98,6 @@ against `claude/quirky-fermi-sickg4` `51eca3b` and truth `84c7d44`
     bench nothing falls at all: the bench simulation has no resistance,
     so a dead engine coasts at constant speed.
 
-34. **E-brake left off in Automatic with a failure latched** (R31, to
-    test later). The driver releases the emergency brake in Manual at a
-    stand, failure still latched, then switches to Automatic: the brake
-    stays off, and the train is held only by the 0 target (and the
-    service brake if it moves). That follows M3 ("does not engage it
-    again"). To decide after testing: keep it, or have Automatic engage
-    it again while a failure is latched.
-
 ## Bench and console
 
 31. **Setting the bench clock is a jump.** The lights act only if the
@@ -142,36 +139,23 @@ against `claude/quirky-fermi-sickg4` `51eca3b` and truth `84c7d44`
     past the window edge. The console's header has no time wheels and
     fits.
 
-43. **The bench does not stand in for the rest of the system** (reported
-    2026-10-24). Its job is to simulate the controller's inputs, and how
-    they would behave with the whole system, without the other modules
-    connected: it substitutes for every connected module. Where it falls
-    short today:
+43. **Where the bench differs from the harness it stands in for.**
+    Decided 2026-10-31: the bench is a stand-in for the central harness
+    while the bench drives the system, and does nothing while the harness
+    is connected. Where it still differs from the harness:
     - **Timing.** It answers each command on the next tick; the harness
       answers two ticks later. The controller allows for it (`echo_ticks`,
       #42), but a rule tested only on the bench is tested at one tick.
     - **Train Model physics.** The toy plant has no grade, no load and no
       rolling resistance outside an injected brake failure, so a dead
-      engine coasts at constant speed and neither engine rule can trip at
-      a cruise (#26, #28).
-    - **Train Model reports.** Its service brake state does not go false
-      while the e-brake is engaged, as the Train Model's does (#23); its
-      passenger pull lasts one tick and is never latched, where the
-      Train Model's holds until the e-brake command goes off (#25,
-      closed).
+      engine coasts at constant speed. Deferred with #26.
     - **Track Model, Track Controller and CTC Office.** There is no track:
       authority changes only with the Block change button, commanded
       speed and the signal ahead only when edited, and the beacon only
-      with the `at_station` row. Nothing moves the train through blocks,
-      stations and signals as the rest of the system would.
-    - **Failures.** Clearing an injected engine or signal pickup
-      failure clears it in the controller directly (M0, M3), so the bench
-      never exercises how the integrated controller would see those
-      resolved (#23). A brake failure the controller resolves itself
-      (#44).
-
-    Reusing the Train Model's physics (#26 (b)) would close the physics
-    and report gaps; the track side needs a track to run on.
+      with the `at_station` row.
+    - **Failures.** Clearing an injected engine failure clears it in the
+      controller directly (M0, M3, #23). Brake and signal pickup failures
+      the controller resolves itself.
 
 45. **The bench should spawn the console for the line** (planned, the
     weekend of 2026-11-07; Jonathan, 2026-10-30). So the bench emulates
@@ -215,7 +199,8 @@ against `claude/quirky-fermi-sickg4` `51eca3b` and truth `84c7d44`
     passed with 0 in 34 s. Run `--check` on its own; a fix would step the
     controller directly instead of waiting on the timer, as the checks
     added since 2026-10-24 do. `check.py` is a development self-check
-    only: the integration does not run or ship it.
+    only, run by the AI to test the module offline: it is never run with
+    the central harness, and the integration does not ship it.
 
 41. **The root `requirements.txt` on this branch lacks the PySide6 pin**
     that `development` has (`PySide6==6.11.2`).
@@ -233,7 +218,9 @@ Not issues: things to know.
   the backend's `_power_channels` and `_power_vote`;
   `ControllerCore.last_vote`; and the drawer step in `check.py`. M12's
   acceleration exception goes with it; the drawer's acceleration comes
-  from the bench simulation and reads 0 under a harness.
+  from the bench simulation and reads 0 under a harness. The drawer is
+  for debugging outside integration, so what it shows under the central
+  harness is not tracked as a bug (`BUGS.md`).
 - **The vote is shown failing only in `check.py`** (M21), which swaps
   power channels for faulty ones. The bench has no row for it: it would
   have to reach inside the controller (M0).
@@ -251,7 +238,8 @@ One line each; the details are in `CHANGELOG.md`.
 
 - **11.** Block lengths unknown: authority is used as given (M16, R13).
 - **14.** How a failure clears once integrated: decided, the controller
-  detects resolution (M3); building it waits on #23.
+  detects resolution (M3); built for the brake (#44) and signal pickup
+  (R40), the engine waits on #23.
 - **16.** The gains hand-over signed a driver in unasked: fixed, it hands
   over only on the train just commissioned (M9, `bf277b1`).
 - **17.** No block-change dummy: none needed; the bench's Block change
@@ -275,6 +263,9 @@ One line each; the details are in `CHANGELOG.md`.
   Status column is the record.
 - **31 (first bullet).** The bench clock runs from the first
   commissioning (M11, R37).
+- **34.** E-brake left off in Automatic with a failure latched: kept,
+  by decision (2026-10-31). The driver may also release the e-brake at a
+  stand during a failure in Automatic, not only in Manual (M2, M3, R42).
 - **42.** Two ticks between a command and its report under the harness:
   the fleet takes `echo_ticks` (ECHO_TICKS, 2, under the harness; 1 on
   the bench), and the brake-failure rule (M4) and the passenger-pull
@@ -296,3 +287,24 @@ One line each; the details are in `CHANGELOG.md`.
   and this controller takes its `SUPER_GREEN` spelling (Kevin, 2026-10-28),
   so the harness passes the light through unchanged.
 - "Arriving soon" on a rise to 3 blocks: accepted (M7, R29).
+
+## Notes for other modules
+
+Questions and possible errors whose answer lies with another module or
+the team's shared documents.
+
+**Truth and the SRS:**
+
+19. **Module rules are not recorded outside this folder.** Rules M0–M21
+    in `REQUIREMENTS.md` are in neither truth's Train Controller contract
+    (still a placeholder) nor the SRS. Update the documentation later.
+
+**Train Model:**
+
+- A train with more than about 125 passengers cannot climb Green's 5 %
+  grade at all (`REQUIREMENTS.md` §7, `BUGS.md` B3).
+
+**CTC Office:**
+
+- TC-1, a Green train over its limit after dispatch: should the commanded
+  speed drop before a slower block? (`BUGS.md`, Notes for other modules).
