@@ -18,7 +18,7 @@ Not tracked here:
 - **Questions for other modules.** Those go in
   [Notes for other modules](#notes-for-other-modules) at the end.
 
-Last updated 2026-10-31, on `Train_Ctrl_integration` `f11ebe5`. Sources: this
+Last updated 2026-10-31, on `Train_Ctrl_integration` `fdf5844`. Sources: this
 branch's git history and `CHANGELOG.md`, and Kevin Schillinger's harness
 walkthrough on `claude/quirky-fermi-sickg4` `51eca3b`
 (`documents/central-harness-windows-gui-2026-10-28.md`, "F" numbers, and
@@ -27,7 +27,7 @@ walkthrough on `claude/quirky-fermi-sickg4` `51eca3b`
 Severity:
 
 - **Medium**: reachable in normal use, or on a real line.
-- **Low**: cosmetic, a debugging view, or tooling.
+- **Low**: cosmetic, or a debugging view.
 
 Area is the **controller** (`train_ctrl/control.py` and the fleet), the
 **console** (the driver's and engineer's window), or the **bench** (the
