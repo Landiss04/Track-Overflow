@@ -141,15 +141,12 @@ Item {
             text: qsTr("TARGET SPEED")
         }
 
-        Text {
+        DecimalText {
             Layout.alignment: Qt.AlignHCenter
             text: Number(root.target).toFixed(1)
-            color: theme.text_primary
-            font.family: theme.mono_family
             // Sized for the widest reading, "43.5", so the figure fits
             // inside the ring and never changes size as it changes.
-            font.pixelSize: Math.max(24, root.radius * 0.45)
-            font.weight: theme.weight_bold
+            pixelSize: Math.max(24, root.radius * 0.45)
         }
 
         MonoText {

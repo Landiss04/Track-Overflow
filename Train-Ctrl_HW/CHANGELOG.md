@@ -249,6 +249,7 @@ the Cab controls badge.
 | `87cdc89` | 11-01 | A differential test at a stand resolves an engine failure, in place of the driver's try (#23, R46). |
 | `d7836b5` | 11-01 | Brake failure: presses under the emergency brake, the unanswered press dropped, and the emergency brake engaged again on a rollback or runaway (R47). |
 | `8cb89dc` | 11-01 | The emergency brake note reads "Emergency brake engaged.", or "Emergency brake engaged: rollback detected." (or runaway) when the controller engaged it again; "Release it from the same control." removed. |
+| (next) | 11-01 | Readouts with a decimal ("Your speed", "Commanded speed", the dial's target) draw the point at its own width, from the UI face, so "20.0" is spaced like "72" (`components/DecimalText.qml`). |
 
 ---
 
