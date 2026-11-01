@@ -68,8 +68,14 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
       answers two ticks later. The controller allows for it (`echo_ticks`,
       #42), but a rule tested only on the bench is tested at one tick.
     - **Train Model physics.** The toy plant has no grade, no load and no
-      rolling resistance outside an injected brake failure, so a dead
-      engine coasts at constant speed. Deferred with #26.
+      rolling resistance outside an injected brake or engine failure, so
+      a dead engine coasts at constant speed. Nor does a healthy train
+      above its target slow back to it inside the 0.05 m/s band where
+      no brake is applied: measured 2026-11-01, speeding up to 20 mph
+      the bench settles at 20.07 (shows 20.1) and slowing to 8.2 mph at
+      8.27 (shows 8.3); against the Train Model, 20.005 and 8.21, shown
+      as 20.0 and 8.2 (a 0.02 mph overshoot on the way up). Deferred
+      with #26, for the bench refactor.
     - **Track Model, Track Controller and CTC Office.** There is no track:
       authority changes only with the Block change button, commanded
       speed and the signal ahead only when edited, and the beacon only
