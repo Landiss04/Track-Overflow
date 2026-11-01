@@ -18,7 +18,7 @@ Not tracked here:
 - **Questions for other modules.** Those go in
   [Notes for other modules](#notes-for-other-modules) at the end.
 
-Last updated 2026-11-01, on `Train_Ctrl_integration` `8cb89dc`. Sources: this
+Last updated 2026-11-01, on `Train_Ctrl_integration` `b2f9762`. Sources: this
 branch's git history and `CHANGELOG.md`, and Kevin Schillinger's harness
 walkthrough on `claude/quirky-fermi-sickg4` `51eca3b`
 (`documents/central-harness-windows-gui-2026-10-28.md`, "F" numbers, and
@@ -35,19 +35,23 @@ test window and its simulation).
 
 | ID | Area | Severity | Summary |
 |---|---|---|---|
-| [B8](#b8) | Bench | Low | Five header pills push *Set time* off the bench (#36) |
+| [B8](#b8) | Bench | Low | Header pills push *Set time* off the bench (#36) |
 
 ## Bugs
 
 ### B8
 
-**Five header pills push Set time off the bench.** Bench, Low.
+**Header pills push Set time off the bench.** Bench, Low.
 `OPEN_ISSUES.md` #36, 2026-10-24.
 
-- **Reproduce:** on the bench, show the mode, Underground, E-brake, a failure
-  and the Station dwell pill at once. The time wheels push the clock and
-  *Set time* past the window edge.
-- **Fix:** with the time-setting redesign (`OPEN_ISSUES.md` #45).
+- **Reproduce:** on the bench, show many header pills at once. Measured
+  2026-11-01 at 1440 px: the five first reported (mode, Underground,
+  E-brake, a failure, Station dwell) now fit, before and after the typed
+  time; seven (mode, Underground, E-brake, three failures, Vitality
+  breach) push *Set time* 50 px and the clock 140 px past the edge (with
+  the old time wheels: 110 px and 200 px).
+- **Fix:** the typed time (#45, 2026-11-01) narrowed it; left for the bench
+  refactor.
 
 ## Week by week
 
@@ -72,8 +76,8 @@ note for the CTC Office, B5, B6 and B7 were in the numbers drawer, and B9
 was in `check.py`.
 
 **To resolve by 2026-11-06:** B1, B2 and B3 are done (R40, R41, R43), and
-the five found on 2026-11-01 (R46–R49). Left: B8, with `OPEN_ISSUES.md`
-#45.
+the five found on 2026-11-01 (R46–R49). Left: B8, narrowed by the
+typed time (#45) and left for the bench refactor.
 
 ## Resolved
 

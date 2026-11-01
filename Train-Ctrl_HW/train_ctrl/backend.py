@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict
 from typing import Any
 
@@ -27,6 +29,20 @@ def _clock_text(time_s: float) -> str:
     seconds = int(time_s) % 86400
     return (f"{seconds // 3600:02d}:{seconds // 60 % 60:02d}:"
             f"{seconds % 60:02d}")
+
+
+def parse_time_of_day(text: str) -> int | None:
+    """Read HH:MM or HH:MM:SS as seconds since midnight, or None."""
+    parts = str(text).strip().split(":")
+    try:
+        numbers = [int(part) for part in parts]
+    except ValueError:
+        return None
+    if (len(numbers) not in (2, 3) or not 0 <= numbers[0] < 24
+            or not all(0 <= n < 60 for n in numbers[1:])):
+        return None
+    hours, minutes, seconds = (numbers + [0])[:3]
+    return hours * 3600 + minutes * 60 + seconds
 
 
 def normalize_block_letter(text: str) -> str:
@@ -73,7 +89,8 @@ class ConsoleBackend(QObject):
 
     def __init__(self, parent: QObject | None = None, *,
                  fleet: TrainControllerFleet | None = None,
-                 variant: str = "HW", line: str = "") -> None:
+                 variant: str = "HW", line: str = "",
+                 bench_driven: bool = False) -> None:
         super().__init__(parent)
         # Which Train Controller this window is, and, under a harness,
         # the one line whose trains it lists and lets the operator
@@ -115,7 +132,10 @@ class ConsoleBackend(QObject):
         # rather than every binding needing a null check.
         self.idle = ControllerCore()
 
-        if self._owns_fleet:
+        # Opened by the bench (BenchBackend), the console owns its
+        # fleet but the bench steps it, so both lines share one clock.
+        self._bench_driven = bench_driven
+        if self._owns_fleet and not bench_driven:
             # Precise, because at 10x a tick is every 10 ms.
             self._control = QTimer(self)
             self._control.setTimerType(Qt.TimerType.PreciseTimer)
@@ -200,15 +220,34 @@ class ConsoleBackend(QObject):
             self._clock_started = any(core.armed for core in self.fleet)
         if self._clock_started:
             self.time_s += TICK_S
+        self.step_fleet(self.time_s)
+
+    def step_fleet(self, time_s: float) -> None:
+        """Step every train once on its simulation, at ``time_s``."""
+        self.time_s = time_s
         inputs = {train_id: sim.outputs()
                   for train_id, sim in self.sims.items()}
-        all_commands = self.fleet.step_all(TICK_S, inputs, self.time_s)
+        all_commands = self.fleet.step_all(TICK_S, inputs, time_s)
         for train_id, commands in all_commands.items():
             self.sims[train_id].step(commands)
             if self._last_commands.get(train_id) != commands:
                 self._last_commands[train_id] = commands
                 self.commands_changed.emit(
                     {"train_id": train_id, **asdict(commands)})
+
+    @contextmanager
+    def viewing(self, train_id: str) -> Iterator[None]:
+        """Point at another train for the length of a with block.
+
+        For the bench, which edits and reads any train while each
+        console stays on the one its operator picked.
+        """
+        kept = self.selected
+        self.selected = train_id
+        try:
+            yield
+        finally:
+            self.selected = kept
 
     @property
     def has_train(self) -> bool:
@@ -549,7 +588,7 @@ class ConsoleBackend(QObject):
         if not 0 <= index < len(SIM_RATES):
             return
         self.sim_rate = SIM_RATES[index]
-        if self._owns_fleet:
+        if self._owns_fleet and not self._bench_driven:
             self._control.setInterval(self._tick_ms())
         self._publish()
 
@@ -689,19 +728,13 @@ class ConsoleBackend(QObject):
         """
         if not self._owns_fleet:
             return
-        parts = str(text).strip().split(":")
-        try:
-            numbers = [int(part) for part in parts]
-        except ValueError:
-            numbers = []
-        if (len(numbers) not in (2, 3) or not 0 <= numbers[0] < 24
-                or not all(0 <= n < 60 for n in numbers[1:])):
+        seconds = parse_time_of_day(text)
+        if seconds is None:
             self.bench_error = f"time must be HH:MM or HH:MM:SS, not {text!r}"
             self._publish()
             return
-        hours, minutes, seconds = (numbers + [0])[:3]
         day = int(self.time_s // 86400)
-        self.time_s = day * 86400 + hours * 3600 + minutes * 60 + seconds
+        self.time_s = day * 86400 + seconds
         self.bench_error = ""
         self._publish()
 

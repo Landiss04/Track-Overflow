@@ -54,11 +54,11 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
     inside the window, or a state the check never reaches (a very long
     station name, say).
 
-36. **The bench header runs out of room with five pills or more.** With
-    the mode, Underground, E-brake, a failure and the Station dwell pill
-    all showing, the bench's time wheels push its clock and **Set time**
-    past the window edge. The console's header has no time wheels and
-    fits.
+36. **The bench header runs out of room with many pills.** Seven pills
+    (mode, Underground, E-brake, three failures, Vitality breach) push
+    **Set time** and the clock past the window edge; five now fit
+    (`BUGS.md` B8). The console's header has no time controls and fits.
+    Left for the bench refactor.
 
 43. **Where the bench differs from the harness it stands in for.**
     Decided 2026-10-31: the bench is a stand-in for the central harness
@@ -77,18 +77,6 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
     - **Failures.** None left: clearing an injected failure clears it in
       the bench's simulation only, and the controller resolves each one
       itself (M0, M3, #23).
-
-45. **The bench should spawn the console for the line** (planned, the
-    weekend of 2026-11-07; Jonathan, 2026-10-30; plan confirmed
-    2026-10-31). So the bench emulates the integrated system. The bench
-    opens only when asked for: `main.py --test`, or the central harness
-    asking for the test bench. It opens on its own, and **Spawn** on the Red
-    Line opens (or reuses) the HW Train Controller console, on the Green
-    Line the SW one, each with its own backend and titled as under the
-    harness (M13, `run(variant=…)`). To design: one bench editing trains
-    held by two backends. Also then: setting the bench's time is slow
-    with the scroll wheels (M15); the time is to be typed instead (#31,
-    #32, #36).
 
 ## Outside the style guide and shared UI
 
@@ -201,6 +189,13 @@ One line each; the details are in `CHANGELOG.md`.
   Status column is the record.
 - **31 (first bullet).** The bench clock runs from the first
   commissioning (M11, R37).
+- **45.** The bench spawns the console for the line (2026-11-01):
+  `main.py --test` opens the bench alone; a train spawned on the Red Line
+  opens the HW console, on the Green Line the SW one, each on its own
+  backend, both stepped on the bench's one clock; the bench edits any
+  train. The time is typed (HH:MM or HH:MM:SS). `main.py --both` is gone.
+  The central harness asking for the bench is not built: its protocol
+  has no such request (Notes for other modules).
 - **34.** E-brake left off in Automatic with a failure latched: kept,
   by decision (2026-10-31). The driver may also release the e-brake at a
   stand during a failure in Automatic, not only in Manual (M2, M3, R42).
@@ -257,6 +252,14 @@ the team's shared documents.
 
 - A train with more than about 125 passengers cannot climb Green's 5 %
   grade at all (`REQUIREMENTS.md` §7, `BUGS.md` B3).
+
+**Central harness:**
+
+- Opening a module's test bench on request: the harness protocol has
+  `SHOW` (reopen the module's window) but no request for a test bench
+  (`utils/harness_protocol.py` on `claude/quirky-fermi-sickg4`
+  `0a953bb`). Wanted: one, so the bench can be opened from the harness
+  (#45).
 
 **CTC Office:**
 

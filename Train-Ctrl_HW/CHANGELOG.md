@@ -114,8 +114,8 @@ the 2026-10-21 changes.
   every tick; otherwise once, when one of them is sent.
 - Spawning a train no longer switches the bench or the console to it.
 - `at_station` sits under `authority_blocks`; **Set time** beside the
-  bench clock sets it to a time of day, picked on three wheels (hours
-  0–23, minutes and seconds 0–59) dragged or scrolled (2026-10-21). The status line and
+  bench clock sets it to a time of day, typed as HH:MM or HH:MM:SS
+  (2026-11-01; from 2026-10-21, three wheels, dragged or scrolled). The status line and
   the announcement output wrap instead of being cut off.
 - Outputs panel adds the Announcement row; values at 18 px.
 
@@ -151,9 +151,13 @@ stopwatch (it failed 4 of 4 runs on Windows before).
   the window edge) and fails on any; it found seven on `5b99075`. New
   checks for the bench time setter, including noon then 18:00 turning the
   lights on.
-- The mode switches both ways during each failure; the time wheels run
-  24 / 60 / 60, a scroll notch steps one, a drag moves them, and the time
-  they show reaches the controller.
+- The mode switches both ways during each failure; the time typed on the
+  bench reaches the controller (2026-11-01; before, the time wheels' run,
+  scroll and drag).
+- The bench on its own opens the HW console for a Red Line train and the
+  SW one for a Green Line train, titled for their line; its edits reach
+  the train being edited and no other; both lines run on its one clock
+  (2026-11-01).
 
 2026-10-24: the vote's truth table; one faulty power channel outvoted with
 no change to the run; two giving a breach (0 W, the e-brake, unverified),
@@ -251,7 +255,8 @@ the Cab controls badge.
 | `8cb89dc` | 11-01 | The emergency brake note reads "Emergency brake engaged.", or "Emergency brake engaged: rollback detected." (or runaway) when the controller engaged it again; "Release it from the same control." removed. |
 | `b4d9dc4` | 11-01 | Readouts with a decimal ("Your speed", "Commanded speed", the dial's target) draw the point at its own width, from the UI face, so "20.0" is spaced like "72" (`components/DecimalText.qml`). |
 | `3551163` | 11-01 | Held at a stand after the engine test found the engine dead, the test runs again every 10 s, so a repair is found without the driver (R48). |
-| (next) | 11-01 | Start check: from a stand, 2 s of power with no rise runs the engine test, so an engine that fails while the train stands is found (R49). |
+| `b2f9762` | 11-01 | Start check: from a stand, 2 s of power with no rise runs the engine test, so an engine that fails while the train stands is found (R49). |
+| (next) | 11-01 | The bench spawns the console for the line: `main.py --test` opens the bench alone, Red Line trains open the HW console and Green Line trains the SW one, each on its own backend, on one bench clock; the time is typed; `--both` removed (#45, R50). |
 
 ---
 
@@ -296,7 +301,7 @@ Kept here so a reviewer reading old commits is not misled.
 
 ---
 
-## 4. Revisions R2–R49
+## 4. Revisions R2–R50
 
 Moved here from `REQUIREMENTS.md` §5 on 2026-10-24, which refers to
 them by number.
@@ -389,3 +394,4 @@ From `0f2e2d2`, one rule at a time.
 | R47 | M3, M4: the driver's service brake press counts under the emergency brake too (the Train Model reports the service brake on its own, `57e8847`); a press the report does not answer is dropped, and the first answered press resolves a brake failure. With a brake failure latched and the emergency brake released, the train moving 0.1 m/s or more either way engages the emergency brake again, and the console says "rollback detected" or "runaway detected". Against the Train Model the train moves at most 5 cm (0.19 m/s on ±5 %) before it engages; before, −3.5 m/s after 20 s on +2 % and +9.4 m/s on −5 %. On the old code `BrakeFailureTest` fails four ways and so do two `check.py` checks | `control.py` `detect_failures`, `respond_to_failures`, `release_emergency`, `stop_reason`; `backend.py` `_tick`, `toggle_service_brake`; `check.py`; `tests/test_harness_driven.py` |
 | R48 | M3, §4: held at a stand on the service brake after the engine test found the engine dead, the test starts again every 10 s (`ENGINE_RETEST_S`), so a repair is found without the driver engaging and releasing the e-brake. Each retest lets the train roll for about 2 s. On R46's code `test_a_repair_while_held_is_found_by_the_retest` fails | `control.py` `_test_engine`, `_start_engine_test`; `constants.py`; `tests/test_engine_detection.py` |
 | R49 | §4: start check. From a stand (under 0.1 m/s), power with no brake for 2 s (`ENGINE_START_S`) and the speed not up 0.05 m/s runs the differential test; dead latches the engine failure. Once passed, not again until the train moves off forwards or the power stops. An e-brake release starts a test only with an engine failure latched. Against the Train Model: a dead engine at a stand on the flat found 3.9 s after power is asked for (before: never), on +2 % / +5 % found while standing; no healthy start flagged. On R48's code `test_a_dead_engine_at_a_stand_is_found_on_starting` fails | `control.py` `_check_start`, `_test_engine`, `_may_test_engine`, `respond_to_failures`, `release_emergency`; `constants.py`; `tests/test_engine_detection.py` |
+| R50 | M13, M15: the test bench stands in for the central harness (#45). `main.py --test` opens it alone (`run_bench`); it holds an HW backend for the Red Line and an SW backend for the Green, each owning its fleet; spawning a train opens or shows its line's console, titled and filtered as under the harness. The bench (`BenchBackend`) edits any train while each console keeps its own selection, and steps both on one clock. The time is typed (HH:MM or HH:MM:SS); `TimeWheels.qml` and `main.py --both` removed. The self-check still runs one console and the bench on one backend, and checks the new bench headless | `train_ctrl/bench.py`; `app.py` `run_bench`; `backend.py` `step_fleet`, `viewing`, `parse_time_of_day`; `main.py`; `TestWindow.qml`; `check.py` |

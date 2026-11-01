@@ -26,16 +26,16 @@ from PySide6.QtCore import (
     Q_RETURN_ARG,
     QMetaObject,
     QObject,
-    QPoint,
     QPointF,
     Qt,
     QTime,
 )
-from PySide6.QtGui import QGuiApplication, QWheelEvent
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
 import train_ctrl as mod
+from train_ctrl.bench import BenchBackend
 from train_ctrl.bench_sim import SimTrain
 from train_ctrl.vital import PowerResult, compute_power, vote_2oo3
 
@@ -708,50 +708,18 @@ def run_check(
     expect(backend.time_s == before and "HH:MM" in
            backend.snapshot["bench_error"],
            "the bench took a time that is not one, or said nothing")
-    # The bench's time is picked on three wheels, hours 0-23 and
-    # minutes and seconds 0-59, each scrolled a notch at a time or
-    # dragged, then set with the button beside them.
-    wheels = bench.findChild(QQuickItem, "benchTimeWheels")
-    minutes = bench.findChild(QQuickItem, "minutesWheel")
-    expect(wheels is not None and minutes is not None,
-           "the bench's time wheels are missing")
-    if wheels is not None and minutes is not None:
-        counts = [bench.findChild(QQuickItem, name).property("count")
-                  for name in ("hoursWheel", "minutesWheel",
-                               "secondsWheel")]
-        expect(counts == [24, 60, 60],
-               f"the time wheels run {counts}, not 24 / 60 / 60")
-        for name, value in (("hours", 18), ("minutes", 30),
-                            ("seconds", 15)):
-            wheels.setProperty(name, value)
-        centre = minutes.mapToScene(
-            QPointF(minutes.width() / 2, minutes.height() / 2))
-        QGuiApplication.sendEvent(bench, QWheelEvent(
-            centre, centre, QPoint(0, 0), QPoint(0, -120), Qt.NoButton,
-            Qt.NoModifier, Qt.NoScrollPhase, False))
-        _settle(app, 200)
-        expect(minutes.property("currentIndex") == 31,
-               "a scroll notch did not step the minutes by one")
-        point = centre.toPoint()
-        QTest.mousePress(bench, Qt.LeftButton, Qt.NoModifier, point)
-        for rise in range(0, 60, 4):
-            QTest.mouseMove(bench, QPoint(point.x(), point.y() - rise), 10)
-        QTest.mouseRelease(bench, Qt.LeftButton, Qt.NoModifier,
-                           QPoint(point.x(), point.y() - 60), 10)
-        _settle(app, 1500)
-        expect(minutes.property("currentIndex") != 31,
-               "dragging the minutes wheel did not move it")
-        wheels.setProperty("minutes", 30)
-        picked = QMetaObject.invokeMethod(
-            wheels, "timeText", Q_RETURN_ARG("QVariant"))
-        picked = picked.toVariant() if hasattr(picked, "toVariant") \
-            else picked
-        expect(picked == "18:30:15",
-               f"the wheels read {picked!r}, not '18:30:15'")
-        backend.set_bench_time(picked)
+    # The bench's time is typed, HH:MM or HH:MM:SS, and set with Return
+    # or the button beside it (OPEN_ISSUES.md #45).
+    field = bench.findChild(QQuickItem, "benchTimeField")
+    expect(field is not None, "the bench's time field is missing")
+    if field is not None:
+        field.setProperty("text", "18:30:15")
+        field.forceActiveFocus()
+        QTest.keyClick(bench, Qt.Key_Return)
+        _settle(app, 100)
         tick()
         expect(backend.snapshot["clock"] == "18:30:15",
-               "the time on the wheels did not reach the controller")
+               "the time typed on the bench did not reach the controller")
     backend.set_bench_time("05:00")
     tick()
     # The beacon is heard at a station, every tick; away from one,
@@ -1671,6 +1639,44 @@ def run_check(
            "brake let go by itself")
     if drawer is not None:
         drawer.setProperty("expanded", False)
+
+    # The bench on its own (main.py --test) stands in for the harness:
+    # a train spawned on the Red Line opens the HW console, on the Green
+    # Line the SW one, each on its own backend; the bench edits any
+    # train and steps both on one clock (OPEN_ISSUES.md #45).
+    opened: list[str] = []
+    bench_only = BenchBackend(lambda b: opened.append(b.variant))
+    bench_only._control.stop()
+    hw, sw = bench_only.backends["HW"], bench_only.backends["SW"]
+    bench_only.spawn_train(1, "RED LINE", "A")
+    bench_only.spawn_train(2, "GREEN LINE", "A")
+    expect(opened == ["HW", "SW"] and "R-1" in hw.fleet
+           and "T-2" in sw.fleet and "T-2" not in hw.fleet,
+           f"spawning opened {opened}, not the HW console for the Red "
+           "Line and the SW one for the Green")
+    expect(hw.snapshot["window_title"] == "HW Train Controller — Red Line"
+           and sw.snapshot["window_title"]
+           == "SW Train Controller — Green Line",
+           "the consoles the bench opened are not titled for their line")
+    expect(bench_only.editing == "R-1"
+           and [t["id"] for t in bench_only.trains] == ["R-1", "T-2"],
+           "the bench did not list both lines' trains, or left the "
+           "first one spawned")
+    bench_only.select_train("T-2")
+    bench_only.apply_bench_inputs({"commanded_speed": 30})
+    expect(round(sw.sims["T-2"].commanded_mps * mod.MPS_TO_MPH) == 30
+           and hw.sims["R-1"].commanded_mps == 0.0,
+           "a bench edit did not reach the train being edited, or "
+           "reached the other line's")
+    bench_only.set_bench_time("18:00")
+    bench_only._step_all()
+    expect(hw.time_s == sw.time_s == bench_only.time_s
+           and hw.fleet.get("R-1").state.time_s == 18 * 3600,
+           "the two lines are not on the bench's one clock")
+    bench_only.remove_train("T-2")
+    expect(bench_only.editing == "R-1" and "T-2" not in sw.fleet,
+           "removing the edited train did not move the bench on")
+    bench_only._ui.stop()
 
     for text, seen in sorted(cut.items()):
         expect(False, f"text cut off: {text!r} ({', '.join(seen[:3])})")
