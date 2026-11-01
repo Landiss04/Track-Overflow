@@ -249,14 +249,50 @@ Shared.ScaledWindow {
                             }
                         }
                         ScrollView {
+                            id: outputScroll
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             visible: backend.output_text !== "—"
                                 && backend.output_module
                                     === backend.selected_module
                             TextArea {
+                                id: outputEditor
                                 objectName: "outputInspector"
-                                text: backend.output_text
+                                property string displayedModule: ""
+                                // Replacing TextArea.text resets its cursor,
+                                // selection and viewport. Keep those when the
+                                // same module publishes its next snapshot.
+                                function refreshOutput() {
+                                    const sameModule = displayedModule
+                                        === backend.output_module
+                                    const view = outputScroll.contentItem
+                                    const y = sameModule ? view.contentY : 0
+                                    const start = selectionStart
+                                    const end = selectionEnd
+                                    const cursor = cursorPosition
+                                    text = backend.output_text
+                                    displayedModule = backend.output_module
+                                    if (sameModule) {
+                                        const a = Math.min(start, length)
+                                        const b = Math.min(end, length)
+                                        if (cursor === start)
+                                            select(b, a)
+                                        else
+                                            select(a, b)
+                                    } else {
+                                        deselect()
+                                        cursorPosition = 0
+                                    }
+                                    view.contentY = Math.max(0, Math.min(y,
+                                        view.contentHeight - view.height))
+                                }
+                                Component.onCompleted: refreshOutput()
+                                Connections {
+                                    target: backend
+                                    function onOutputChanged() {
+                                        outputEditor.refreshOutput()
+                                    }
+                                }
                                 readOnly: true
                                 selectByMouse: true
                                 textFormat: TextEdit.PlainText
