@@ -962,8 +962,8 @@ def run_check(
                f"the driver could not release the emergency brake in "
                f"Automatic during a {name}")
         scan("06-failure-automatic-release")
-        # Engaged again; it ends any try of the engine (§4), whose
-        # target the next tick clears.
+        # Engaged again; it abandons any test of the engine (§4), whose
+        # power the next tick clears.
         backend.toggle_emergency_brake()
         _settle(app, 200)
         backend.set_manual(True)
@@ -1001,19 +1001,25 @@ def run_check(
         # off. A brake failure the controller then resolves itself,
         # once the service brake answers again, and a signal pickup
         # failure once the Track Signal arrives non-null
-        # (REQUIREMENTS.md §4); an engine failure once the driver
-        # tries the train and the speed rises under power (M3,
-        # OPEN_ISSUES.md #23). The bench never clears one in the
-        # controller directly.
+        # (REQUIREMENTS.md §4); an engine failure once the differential
+        # test at a stand, started by the driver's release of the
+        # emergency brake, shows the engine pulling (M3, OPEN_ISSUES.md
+        # #23). The bench never clears one in the controller directly.
         backend.apply_bench_inputs({row: False})
         if key == "engine":
             expect(state.failures[key],
                    "clearing the engine failure on the bench cleared it "
                    "in the controller directly")
-            backend.set_target_mph(30)
+            # The release above tested the engine while it was still
+            # dead; engaging and releasing again tests it once more.
+            backend.toggle_emergency_brake()
+            backend.toggle_emergency_brake()
+            expect(not state.emergency_brake,
+                   "the driver could not release the emergency brake "
+                   "to test the engine")
             expect(_until(app, lambda: not backend.core.failed, 10),
-                   "the engine failure did not resolve when the driver "
-                   "tried the train")
+                   "the engine failure did not resolve when the test "
+                   "found the engine pulling")
         elif key == "signal_pickup":
             expect(state.failures[key],
                    "clearing the signal pickup failure on the bench "

@@ -5,8 +5,8 @@ The rules (Kevin Schillinger, 2026-10-21): never flag a train that is
 holding its target; flag on speed falling, not on speed failing to
 rise, with power commanded and no brake applied anywhere in the
 window; and use a window a few seconds longer than the old 2 s.
-Resolution: the driver tries the train once the emergency brake is
-released (OPEN_ISSUES.md #23, option a).
+Resolution: a differential test at a stand once the driver releases
+the emergency brake (OPEN_ISSUES.md #23).
 
 The plant here is the Train Model's force balance cut down to what
 detection sees: traction P / v capped at F_max (zero with the engine
@@ -35,7 +35,6 @@ from train_ctrl import ECHO_TICKS, TICK_S  # noqa: E402
 from train_ctrl.constants import (  # noqa: E402
     EBRAKE_DECEL_MPS2,
     ENGINE_DETECT_S,
-    ENGINE_TRY_S,
     GRAVITY_MPS2,
     MASS_KG,
     MAX_FORCE_N,
@@ -287,63 +286,88 @@ class EngineDetectionTest(unittest.TestCase):
         self.assertEqual(rig.core.failed, [])
 
 
-class EngineTryTest(unittest.TestCase):
-    """The driver tries the train to see a failed engine repaired."""
+class EngineTestTest(unittest.TestCase):
+    """A differential test at a stand: power on, then off."""
 
-    def latched_at_a_stand(self, grade: float = 0.0) -> Rig:
-        """An engine failure detected, the train stopped on it."""
-        rig = Rig(Plant(0.0, grade), 10.0)
+    #: Long enough for the test to finish (about 1.7 s).
+    TEST_S = 3.0
+
+    def latched_at_a_stand(self, grade: float = 0.0,
+                           mass_kg: float = MASS_KG) -> Rig:
+        """An engine failure found on the flat, the train stopped on
+        it, then standing on ``grade`` with gravity free to roll it
+        once released."""
+        rig = Rig(Plant(0.0, 0.0, mass_kg), 10.0)
         rig.run(60.0)
         rig.plant.engine_failed = True
         self.assertIsNotNone(rig.run_until_failed(ENGINE_DETECT_S + 0.5))
         rig.run(10.0)
         self.assertEqual(rig.plant.v, 0.0)
         self.assertTrue(rig.core.state.emergency_brake)
+        rig.plant.grade = math.atan(grade / 100.0)
+        rig.plant.rolls_back = True
         return rig
 
-    def test_a_repaired_engine_resolves_when_tried(self) -> None:
-        rig = self.latched_at_a_stand()
-        rig.plant.engine_failed = False
-        rig.run(5.0)
-        self.assertEqual(rig.core.failed, ["engine"],
-                         "resolved before the driver tried the train")
-        self.assertTrue(rig.core.release_emergency())
-        rig.run(ENGINE_TRY_S)
-        self.assertEqual(rig.core.failed, [])
-        rig.run(30.0)
-        self.assertGreater(rig.plant.v, 5.0)
+    def test_a_repaired_engine_clears_on_any_grade_and_load(self) -> None:
+        # Including a full train on 5 %, which cannot climb it: the
+        # engine still pulls.
+        for grade in (0.0, 2.0, 5.0, -5.0):
+            for mass in (EMPTY_KG, LOADED_KG):
+                with self.subTest(grade=grade, mass=mass):
+                    rig = self.latched_at_a_stand(grade, mass)
+                    rig.plant.engine_failed = False
+                    rig.run(5.0)
+                    self.assertEqual(rig.core.failed, ["engine"],
+                                     "cleared before the release")
+                    self.assertTrue(rig.core.release_emergency())
+                    rig.run(self.TEST_S)
+                    self.assertEqual(rig.core.failed, [])
 
-    def test_a_dead_engine_stays_latched_and_is_held(self) -> None:
-        rig = self.latched_at_a_stand()
-        self.assertTrue(rig.core.release_emergency())
-        rig.run(ENGINE_TRY_S + 1.0)
-        s = rig.core.state
-        self.assertEqual(rig.core.failed, ["engine"])
-        self.assertEqual((s.power_w, s.target_mps), (0.0, 0.0))
-        self.assertTrue(s.service_brake)
-        self.assertFalse(s.emergency_brake)
+    def test_a_dead_engine_stays_latched_on_any_grade(self) -> None:
+        # Including a downhill, where the speed rises without power.
+        for grade in (0.0, 2.0, 5.0, -5.0):
+            with self.subTest(grade=grade):
+                rig = self.latched_at_a_stand(grade, LOADED_KG)
+                self.assertTrue(rig.core.release_emergency())
+                rig.run(self.TEST_S + 5.0)
+                s = rig.core.state
+                self.assertEqual(rig.core.failed, ["engine"])
+                self.assertEqual(s.power_w, 0.0)
+                self.assertTrue(s.service_brake)
+                self.assertFalse(s.emergency_brake)
+                self.assertEqual(rig.plant.v, 0.0)
 
-    def test_only_seconds_under_power_count(self) -> None:
-        # In Manual the try waits for the driver to set a speed.
+    def test_it_runs_in_manual_without_a_speed_set(self) -> None:
         rig = self.latched_at_a_stand()
         rig.core.state.manual = True
         rig.plant.engine_failed = False
         self.assertTrue(rig.core.release_emergency())
-        rig.run(20.0)
-        self.assertEqual(rig.core.failed, ["engine"])
-        rig.core.set_target_mps(5.0)
-        rig.run(ENGINE_TRY_S)
+        rig.run(self.TEST_S)
         self.assertEqual(rig.core.failed, [])
 
-    def test_a_dead_engine_rolling_back_is_held(self) -> None:
-        rig = self.latched_at_a_stand(grade=2.0)
-        rig.plant.rolls_back = True
+    def test_the_emergency_brake_abandons_it(self) -> None:
+        rig = self.latched_at_a_stand()
+        rig.plant.engine_failed = False
         self.assertTrue(rig.core.release_emergency())
-        rig.run(20.0)
+        rig.run(0.6)
+        rig.core.engage_emergency()
+        rig.run(self.TEST_S)
         self.assertEqual(rig.core.failed, ["engine"])
-        self.assertTrue(rig.core.state.service_brake)
-        self.assertGreater(rig.plant.v, -0.5)
-        self.assertEqual(rig.plant.v, 0.0)
+        # The next release tries again.
+        rig.run(5.0)
+        self.assertTrue(rig.core.release_emergency())
+        rig.run(self.TEST_S)
+        self.assertEqual(rig.core.failed, [])
+
+    def test_no_power_without_authority(self) -> None:
+        rig = self.latched_at_a_stand()
+        rig.plant.engine_failed = False
+        rig.core.state.authority_blocks = 0
+        self.assertTrue(rig.core.release_emergency())
+        for _ in range(round(self.TEST_S / TICK_S)):
+            rig.tick()
+            self.assertEqual(rig.core.state.power_w, 0.0)
+        self.assertEqual(rig.core.failed, ["engine"])
 
 
 if __name__ == "__main__":

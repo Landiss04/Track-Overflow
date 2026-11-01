@@ -103,11 +103,18 @@ ENGINE_STRAIGHT_FRACTION = 0.1
 # Within this of its target the train is holding the speed it was
 # told to: never an engine failure, whatever the power.
 ENGINE_HOLD_BAND_MPS = SERVICE_BAND_MPS
-# Resolution: the driver tries the train (OPEN_ISSUES.md #23, option
-# a). Speed up by more than this under power resolves the failure;
-# this long under power without it ends the try.
-ENGINE_RISE_MPS = SERVICE_BAND_MPS
-ENGINE_TRY_S = 3.0
+# Resolution: a differential test at a stand (OPEN_ISSUES.md #23).
+# Full power, then none, with no brake on: the acceleration with power
+# less the acceleration without. Grade, load and rolling resistance
+# act the same in both halves and cancel, so what is left is the
+# engine's pull over the mass. The least a working engine can give is
+# full traction (25.7 kN) over the heaviest train (58.4 t, full load):
+# 0.44 m/s^2. A dead engine gives 0. The bar is half the least.
+ENGINE_TEST_POWER_W = MAX_POWER_W
+ENGINE_TEST_MIN_MPS2 = 0.2
+# Speeds read in each half, after the reports of the switch arrive
+# (echo_ticks): 5 speeds, 0.4 s of acceleration.
+ENGINE_TEST_SAMPLES = 5
 
 # ---------------------------------------------------------------- gains
 # Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three

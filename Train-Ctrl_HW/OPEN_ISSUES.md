@@ -162,14 +162,15 @@ One line each; the details are in `CHANGELOG.md`.
 - **11.** Block lengths unknown: authority is used as given (M16, R13).
 - **14.** How a failure clears once integrated: decided, the controller
   detects resolution (M3); built for the brake (#44), signal pickup (R40)
-  and the engine (R44).
+  and the engine (R46).
 - **23.** Brake and engine resolution with the emergency brake on:
   decided 2026-10-31. Brake: kept as built (#44), resolved once the
   driver releases the e-brake and asks for the service brake. Engine:
-  the driver tries the train (option a, R44): with only an engine
-  failure latched, the release opens a try, and the speed rising under
-  power resolves it; outside a try the service brake holds the train
-  against a rollback (`REQUIREMENTS.md` §4, measured there).
+  a differential test at a stand (R46, 2026-11-01, in place of option
+  a's try, R44): with only an engine failure latched, the release starts
+  it, full power then none with no brake, and the difference in
+  acceleration shows whether the engine pulls; outside a test the
+  service brake holds the train (`REQUIREMENTS.md` §4, measured there).
 - **28.** Engine-failure false positives on grades: the steady-fall rule
   Kevin accepted (R91) is ported from `460579b` (R43,
   `tests/test_engine_detection.py`); measured in `REQUIREMENTS.md` §4.
