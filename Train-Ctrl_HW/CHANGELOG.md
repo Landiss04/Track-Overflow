@@ -260,7 +260,8 @@ the Cab controls badge.
 | `284263f` | 11-01 | Closing `main.py --test` printed "Cannot read property 'snapshot' of null" from every window: the backends were freed before the windows reading them. The windows and the engine now go first. |
 | `f6cd8c4` | 11-01 | The bench settling just above its target noted under #43 (no rolling resistance in the toy plant). |
 | `872457f` | 11-01 | A target of 0 holds the train on the service brake at a stand with no power and the integrator cleared; it chattered every tick (R51). The start check tests at once on a rollback. |
-| (next) | 11-01 | The *Stop the train* badge says why the service brake is on: BRAKING while slowing, HOLDING stopped at a target of 0, DRIVER BRAKE for the driver's press (was BRAKING for all three). |
+| `696d4df` | 11-01 | The *Stop the train* badge says why the service brake is on: BRAKING while slowing, HOLDING stopped at a target of 0, DRIVER BRAKE for the driver's press (was BRAKING for all three). |
+| (next) | 11-01 | Trains spawned on the Green Line are named G-# (was T-#); Red Line trains stay R-#. |
 
 ---
 

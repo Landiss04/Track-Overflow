@@ -173,7 +173,7 @@ FAILURE_TEXT = {
 BEACON_SIDES = ("L", "R", "LR")
 
 #: Lines a train can be spawned on, and the id prefix each one uses.
-LINES = {"GREEN LINE": "T", "RED LINE": "R"}
+LINES = {"GREEN LINE": "G", "RED LINE": "R"}
 
 #: The line each variant drives (truth D021, REQUIREMENTS.md M13).
 VARIANT_LINES = {"SW": "GREEN LINE", "HW": "RED LINE"}

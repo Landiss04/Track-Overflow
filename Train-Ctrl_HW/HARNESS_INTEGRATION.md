@@ -74,12 +74,12 @@ fleet = TrainControllerFleet(echo_ticks=ECHO_TICKS)
 time_s = clock.sim_time_s               # utils/system_clock.py, this tick
 
 # A train enters service.
-core = fleet.add("T-114", "GREEN LINE")     # returns its ControllerCore
+core = fleet.add("G-114", "GREEN LINE")     # returns its ControllerCore
 
 # Every tick: exactly one input dict per train in service, with every
 # key in EVERY_TICK.
 commands = fleet.step_all(TICK_S, {
-    "T-114": {
+    "G-114": {
         "commanded_speed": 12.0,        # m/s
         "authority_blocks": 10,
         "actual_speed": 0.0,            # m/s, from the Train Model
@@ -90,10 +90,10 @@ commands = fleet.step_all(TICK_S, {
         "cabin_temperature": 21.0,      # °C, as reported
     },
 }, time_s)
-cmd = commands["T-114"]                 # TrainModelCommands
+cmd = commands["G-114"]                 # TrainModelCommands
 
 # A train leaves service.
-fleet.remove("T-114")
+fleet.remove("G-114")
 ```
 
 Also available: `fleet.get(id)`, `fleet.ids()` in the order trains were added, `id in fleet`, `len(fleet)` for how many controllers exist, and iteration over the cores.
@@ -275,10 +275,10 @@ The terminal prints the controller count at each change, and the console's train
 
 | Time | Event | Controllers |
 | --- | --- | --- |
-| 0 s | `T-1` spawned | 1 |
-| 5 s | `T-2` spawned | 2 |
-| 10 s | `T-3` spawned | 3 |
-| 30 s | `T-1` removed | 2 |
+| 0 s | `G-1` spawned | 1 |
+| 5 s | `G-2` spawned | 2 |
+| 10 s | `G-3` spawned | 3 |
+| 30 s | `G-1` removed | 2 |
 
 Every train gets the same inputs each tick, the full `EVERY_TICK` set at the 0.1 s step: 55 mph commanded, 20 blocks of authority, a 75 °F cabin, a GREEN signal ahead, and doors, lights and the service brake echoed from the last commands. It keeps its own clock, from 05:00:00, and passes it as `time_s`. Trains stay stopped until an engineer commissions each one from the console.
 

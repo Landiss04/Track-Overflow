@@ -203,7 +203,7 @@ def run_check(
 
     backend.spawn_train(114, "GREEN LINE", "GREEN K")
     expect(backend.snapshot["has_train"], "spawning did not produce a train")
-    expect(backend.snapshot["train_id"] == "T-114",
+    expect(backend.snapshot["train_id"] == "G-114",
            "the spawned train did not take the number asked for")
     expect(not backend.core.armed, "controller armed before commissioning")
     expect(backend.snapshot["clock"] == "05:00:00",
@@ -1671,7 +1671,7 @@ def run_check(
     bench_only.spawn_train(1, "RED LINE", "A")
     bench_only.spawn_train(2, "GREEN LINE", "A")
     expect(opened == ["HW", "SW"] and "R-1" in hw.fleet
-           and "T-2" in sw.fleet and "T-2" not in hw.fleet,
+           and "G-2" in sw.fleet and "G-2" not in hw.fleet,
            f"spawning opened {opened}, not the HW console for the Red "
            "Line and the SW one for the Green")
     expect(hw.snapshot["window_title"] == "HW Train Controller — Red Line"
@@ -1679,12 +1679,12 @@ def run_check(
            == "SW Train Controller — Green Line",
            "the consoles the bench opened are not titled for their line")
     expect(bench_only.editing == "R-1"
-           and [t["id"] for t in bench_only.trains] == ["R-1", "T-2"],
+           and [t["id"] for t in bench_only.trains] == ["R-1", "G-2"],
            "the bench did not list both lines' trains, or left the "
            "first one spawned")
-    bench_only.select_train("T-2")
+    bench_only.select_train("G-2")
     bench_only.apply_bench_inputs({"commanded_speed": 30})
-    expect(round(sw.sims["T-2"].commanded_mps * mod.MPS_TO_MPH) == 30
+    expect(round(sw.sims["G-2"].commanded_mps * mod.MPS_TO_MPH) == 30
            and hw.sims["R-1"].commanded_mps == 0.0,
            "a bench edit did not reach the train being edited, or "
            "reached the other line's")
@@ -1693,8 +1693,8 @@ def run_check(
     expect(hw.time_s == sw.time_s == bench_only.time_s
            and hw.fleet.get("R-1").state.time_s == 18 * 3600,
            "the two lines are not on the bench's one clock")
-    bench_only.remove_train("T-2")
-    expect(bench_only.editing == "R-1" and "T-2" not in sw.fleet,
+    bench_only.remove_train("G-2")
+    expect(bench_only.editing == "R-1" and "G-2" not in sw.fleet,
            "removing the edited train did not move the bench on")
     bench_only._ui.stop()
 
