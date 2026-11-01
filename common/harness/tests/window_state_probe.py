@@ -130,6 +130,69 @@ class WindowStateProbe(unittest.TestCase):
         self.window.close()
         self.assertEqual(self.warnings, [])
 
+    def publish_output(self, module: str, values: dict[str, Any]) -> None:
+        """Publish immediately, without waiting for the output throttle."""
+        self.harness.outputs[module] = values
+        self.console.select_module(module)
+        self.console._next_output_s = 0
+        self.console.refresh()
+        settle(0.05)
+
+    def test_output_refresh_keeps_scroll_selection_and_cursor_direction(self) -> None:
+        """A changing snapshot must leave the operator's reading state intact."""
+        module = NAMES[4]
+        self.publish_output(module, {"tick": 0, "rows": list(range(300))})
+        editor = find_item(self.root, "outputInspector")
+        assert editor is not None
+        editor.forceActiveFocus()
+        # A backwards selection checks the active cursor end as well as
+        # the selected range. Scroll after selecting to inspect later rows.
+        editor.select(30, 20)
+        selected = editor.property("selectedText")
+        view = editor.parentItem()
+        while view.property("contentY") is None:
+            view = view.parentItem()
+        view.setProperty("contentY", 300)
+        self.publish_output(module, {"tick": 1, "rows": list(range(300))})
+        self.assertEqual(view.property("contentY"), 300)
+        self.assertEqual(editor.property("selectedText"), selected)
+        self.assertEqual(editor.property("cursorPosition"), 20)
+        self.assertIn('"tick": 1', editor.property("text"))
+
+    def test_shorter_output_clamps_selection_and_viewport(self) -> None:
+        """An output that shrinks stays scrollable and keeps a valid cursor."""
+        module = NAMES[4]
+        self.publish_output(module, {"rows": list(range(300))})
+        editor = find_item(self.root, "outputInspector")
+        assert editor is not None
+        editor.select(100, 200)
+        view = editor.parentItem()
+        while view.property("contentY") is None:
+            view = view.parentItem()
+        view.setProperty("contentY", 300)
+        self.publish_output(module, {"ok": True})
+        self.assertEqual(editor.property("cursorPosition"),
+                         len(editor.property("text")))
+        self.assertEqual(editor.property("selectedText"), "")
+        self.assertEqual(view.property("contentY"), 0)
+
+    def test_switching_modules_clears_reading_state_even_for_identical_text(self) -> None:
+        """State belongs to the displayed module, even if its JSON is identical."""
+        values = {"rows": list(range(300))}
+        self.publish_output(NAMES[4], values)
+        editor = find_item(self.root, "outputInspector")
+        assert editor is not None
+        editor.select(20, 30)
+        view = editor.parentItem()
+        while view.property("contentY") is None:
+            view = view.parentItem()
+        view.setProperty("contentY", 300)
+        self.publish_output(NAMES[0], values)
+        self.assertEqual(editor.property("displayedModule"), NAMES[0])
+        self.assertEqual(editor.property("selectedText"), "")
+        self.assertEqual(editor.property("cursorPosition"), 0)
+        self.assertEqual(view.property("contentY"), 0)
+
     def test_status_update_keeps_focus(self) -> None:
         name = f"show-{NAMES[2]}"
         button = find_item(self.root, name)

@@ -101,6 +101,15 @@ class ValidationTest(unittest.TestCase):
     def test_unknown_op(self) -> None:
         self.assert_refused(b'{"op": "step", "id": 1, "tick": 1}')
 
+    def test_non_string_ops_raise_protocol_error_both_paths(self) -> None:
+        """Malformed operations use the error type handled by socket readers."""
+        for bad in (None, True, 0, 42, ["STEP"], {"op": "STEP"}):
+            message = {"op": bad, "id": 1, "tick": 1}
+            with self.subTest(op=bad):
+                with self.assertRaises(ProtocolError):
+                    encode(message)
+                self.assert_refused(json.dumps(message).encode())
+
     def test_id_and_tick_must_be_non_negative_integers(self) -> None:
         for bad in ('"1"', "-1", "1.5", "true", "null"):
             with self.subTest(value=bad):
