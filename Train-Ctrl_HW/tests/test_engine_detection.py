@@ -35,6 +35,7 @@ from train_ctrl import ECHO_TICKS, TICK_S  # noqa: E402
 from train_ctrl.constants import (  # noqa: E402
     EBRAKE_DECEL_MPS2,
     ENGINE_DETECT_S,
+    ENGINE_RETEST_S,
     GRAVITY_MPS2,
     MASS_KG,
     MAX_FORCE_N,
@@ -336,6 +337,24 @@ class EngineTestTest(unittest.TestCase):
                 self.assertTrue(s.service_brake)
                 self.assertFalse(s.emergency_brake)
                 self.assertEqual(rig.plant.v, 0.0)
+
+    def test_a_repair_while_held_is_found_by_the_retest(self) -> None:
+        # The first test finds the engine dead; it is repaired while
+        # the train is held, and a retest finds it without the driver.
+        rig = self.latched_at_a_stand(2.0, LOADED_KG)
+        self.assertTrue(rig.core.release_emergency())
+        rig.run(self.TEST_S)
+        self.assertEqual(rig.core.failed, ["engine"])
+        rig.plant.engine_failed = False
+        rig.run(ENGINE_RETEST_S + self.TEST_S)
+        self.assertEqual(rig.core.failed, [])
+
+    def test_a_dead_engine_is_retested_and_stays_latched(self) -> None:
+        rig = self.latched_at_a_stand(0.0, LOADED_KG)
+        self.assertTrue(rig.core.release_emergency())
+        rig.run(4 * (ENGINE_RETEST_S + self.TEST_S))
+        self.assertEqual(rig.core.failed, ["engine"])
+        self.assertTrue(rig.core.state.service_brake)
 
     def test_it_runs_in_manual_without_a_speed_set(self) -> None:
         rig = self.latched_at_a_stand()

@@ -23,6 +23,7 @@ from .constants import (
     ENGINE_HOLD_BAND_MPS,
     ENGINE_SMOOTH_S,
     ENGINE_STRAIGHT_FRACTION,
+    ENGINE_RETEST_S,
     ENGINE_TEST_MIN_MPS2,
     ENGINE_TEST_POWER_W,
     ENGINE_TEST_SAMPLES,
@@ -122,6 +123,9 @@ class ControllerCore:
         self._engine_test = ""
         self._engine_test_ticks = 0
         self._engine_test_speeds: dict[str, list[float]] = {}
+        # Seconds held at a stand since the last test, towards the
+        # next one (ENGINE_RETEST_S).
+        self._engine_held_s = 0.0
 
     @property
     def failed(self) -> list[str]:
@@ -346,7 +350,9 @@ class ControllerCore:
 
     def _test_engine(self) -> None:
         # REQUIREMENTS.md §4, OPEN_ISSUES.md #23. The driver's release
-        # of the emergency brake starts the test (release_emergency).
+        # of the emergency brake starts the test (release_emergency),
+        # and while the train is held at a stand on the service brake
+        # it starts again every ENGINE_RETEST_S.
         # With no brake on, it commands full power, then none
         # (respond_to_failures), and reads the acceleration in each
         # half from the reported speed, skipping the echo_ticks before
@@ -358,6 +364,12 @@ class ControllerCore:
         s = self.state
         phase = self._engine_test
         if not phase:
+            held = (not s.emergency_brake and self.at_stand
+                    and self._may_test_engine())
+            self._engine_held_s = self._engine_held_s + self.dt if held \
+                else 0.0
+            if self._engine_held_s >= ENGINE_RETEST_S:
+                self._start_engine_test()
             return
         if not self._may_test_engine():
             self._engine_test = ""
@@ -391,6 +403,11 @@ class ControllerCore:
         if pull >= ENGINE_TEST_MIN_MPS2:
             s.failures["engine"] = False
             self._engine_window.clear()
+
+    def _start_engine_test(self) -> None:
+        self._engine_test, self._engine_test_ticks = "wait", 0
+        self._engine_test_speeds = {}
+        self._engine_held_s = 0.0
 
     def _may_test_engine(self) -> bool:
         # Power is sent only with the engine the one failure, some
@@ -520,8 +537,7 @@ class ControllerCore:
         s.emergency_brake = False
         self.stop_reason = ""
         if self._may_test_engine():
-            self._engine_test, self._engine_test_ticks = "wait", 0
-            self._engine_test_speeds = {}
+            self._start_engine_test()
         return True
 
     def set_target_mps(self, mps: float) -> None:

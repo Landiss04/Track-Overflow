@@ -173,7 +173,8 @@ One line each; the details are in `CHANGELOG.md`.
   a's try, R44): with only an engine failure latched, the release starts
   it, full power then none with no brake, and the difference in
   acceleration shows whether the engine pulls; outside a test the
-  service brake holds the train (`REQUIREMENTS.md` §4, measured there).
+  service brake holds the train, and the test runs again every 10 s
+  while it is held (R48) (`REQUIREMENTS.md` §4, measured there).
 - **28.** Engine-failure false positives on grades: the steady-fall rule
   Kevin accepted (R91) is ported from `460579b` (R43,
   `tests/test_engine_detection.py`); measured in `REQUIREMENTS.md` §4.

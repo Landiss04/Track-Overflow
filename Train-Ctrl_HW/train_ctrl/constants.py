@@ -115,6 +115,10 @@ ENGINE_TEST_MIN_MPS2 = 0.2
 # Speeds read in each half, after the reports of the switch arrive
 # (echo_ticks): 5 speeds, 0.4 s of acceleration.
 ENGINE_TEST_SAMPLES = 5
+# Held at a stand after a test found the engine dead, test again this
+# often, so a repair is seen without the driver doing anything. Each
+# test lets the train roll for about 2 s.
+ENGINE_RETEST_S = 10.0
 
 # ---------------------------------------------------------------- gains
 # Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three
