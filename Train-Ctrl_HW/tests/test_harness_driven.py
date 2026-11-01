@@ -212,6 +212,64 @@ class LowerLimitAheadTest(unittest.TestCase):
         self.assertFalse(self.core.state.emergency_brake)
 
 
+class BrakeFailureTest(unittest.TestCase):
+    """The driver tries the service brake, under the emergency brake
+    too; the emergency brake engages again if the train moves with the
+    service brake failed (REQUIREMENTS.md M3, M4)."""
+
+    def setUp(self) -> None:
+        self.fleet = TrainControllerFleet(echo_ticks=ECHO_TICKS)
+        self.core = self.fleet.add("G1", "Green")
+        arm(self.core)
+        self.s = self.core.state
+        self.s.manual = True
+        # Running, the driver presses; the failed brake never answers.
+        self.step(speed_mps=8.0)
+        self.s.service_request = True
+        for _ in range(ECHO_TICKS + 1):
+            self.step(speed_mps=8.0)
+        # Stopped on the emergency brake.
+        for _ in range(3):
+            self.step(emergency=True)
+
+    def step(self, **values: Any) -> Any:
+        """Step the train on one report; return its commands."""
+        return self.fleet.step_all(
+            TICK_S, {"G1": report(**values)}, _START_S)["G1"]
+
+    def press(self, answered: bool) -> None:
+        """Press the service brake at a stand under the emergency
+        brake, the report answering as given."""
+        self.s.service_request = True
+        for _ in range(ECHO_TICKS + 1):
+            self.step(emergency=True, service=answered)
+
+    def test_an_unanswered_press_latches_it_and_is_dropped(self) -> None:
+        self.assertEqual(self.core.failed, ["brake"])
+        self.assertTrue(self.s.emergency_brake)
+        self.assertFalse(self.s.service_request)
+
+    def test_a_press_under_the_emergency_brake_clears_it(self) -> None:
+        self.press(answered=False)
+        self.assertEqual(self.core.failed, ["brake"])
+        self.assertFalse(self.s.service_request)
+        self.press(answered=True)
+        self.assertEqual(self.core.failed, [])
+        self.assertTrue(self.s.emergency_brake)
+
+    def test_moving_after_the_release_engages_it_again(self) -> None:
+        for speed, reason in ((-0.2, "rollback"), (0.2, "runaway")):
+            with self.subTest(reason=reason):
+                self.assertTrue(self.core.release_emergency())
+                self.step(speed_mps=0.0)
+                self.assertFalse(self.s.emergency_brake)
+                commands = self.step(speed_mps=speed)
+                self.assertTrue(commands.emergency_brake)
+                self.assertEqual(self.core.stop_reason, reason)
+                self.assertEqual(self.core.failed, ["brake"])
+                self.step(emergency=True)
+
+
 class ConsoleFleetTest(unittest.TestCase):
     """The console's own fleet reads reports as answering this step."""
 

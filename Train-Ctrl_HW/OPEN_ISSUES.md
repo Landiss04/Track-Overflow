@@ -164,8 +164,11 @@ One line each; the details are in `CHANGELOG.md`.
   detects resolution (M3); built for the brake (#44), signal pickup (R40)
   and the engine (R46).
 - **23.** Brake and engine resolution with the emergency brake on:
-  decided 2026-10-31. Brake: kept as built (#44), resolved once the
-  driver releases the e-brake and asks for the service brake. Engine:
+  decided 2026-10-31. Brake: the driver presses the service brake, also
+  under the e-brake; an unanswered press is dropped, and the first press
+  the report reads applied resolves it (R47, 2026-11-01). If the train
+  moves 0.1 m/s with a brake failure latched and the e-brake released,
+  the e-brake engages again (R47). Engine:
   a differential test at a stand (R46, 2026-11-01, in place of option
   a's try, R44): with only an engine failure latched, the release starts
   it, full power then none with no brake, and the difference in
@@ -221,6 +224,22 @@ One line each; the details are in `CHANGELOG.md`.
   and this controller takes its `SUPER_GREEN` spelling (Kevin, 2026-10-28),
   so the harness passes the light through unchanged.
 - "Arriving soon" on a rise to 3 blocks: accepted (M7, R29).
+
+## Several failures at once
+
+Simulated 2026-11-01 against the Train Model (`57e8847`), all three and
+each pair, injected at cruise, on +2 % and −5 %. Each failure clears by
+its own rule once repaired, and in every case the train ended with
+nothing latched and drove off. Two of them hide others while latched:
+
+- **Signal pickup hides the engine.** No authority means no power, so an
+  engine failure cannot show a steady fall; it is found only once the
+  pickup failure clears and power is asked for again (then the steady
+  fall's usual 5–6 s, expected; not measured).
+- **The brake shows only when asked for.** It is found when the
+  controller or the driver asks for the service brake, which it now does
+  under the emergency brake too, so it is no longer hidden by an engine
+  failure's stop.
 
 ## Notes for other modules
 

@@ -917,9 +917,11 @@ def run_check(
             expect(_until(app, lambda: state.fb_emergency_brake, 2),
                    "the emergency brake did not report applied during "
                    "a brake failure")
-            expect(state.service_brake and state.service_request,
-                   "the service brake stopped being commanded under a "
-                   "brake failure")
+            # The press the brake did not answer is dropped, so the
+            # driver presses again to try it (REQUIREMENTS.md M4).
+            expect(not state.service_request,
+                   "the driver's unanswered service brake press was not "
+                   "dropped")
             expect(state.actual_mps <= asked,
                    "the train sped up on a brake failure")
         else:
@@ -1087,9 +1089,9 @@ def run_check(
         if failed:
             expect(quick.failed == ["brake"]
                    and quick.state.emergency_brake
-                   and quick.state.service_brake,
+                   and not quick.state.service_request,
                    "a brake failure was not concluded on the next tick, "
-                   "with the service brake still commanded")
+                   "with the unanswered press dropped")
         else:
             drive(quick, plant, 5)
             expect(not quick.failed,

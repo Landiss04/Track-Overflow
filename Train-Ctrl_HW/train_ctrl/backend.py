@@ -606,8 +606,9 @@ class ConsoleBackend(QObject):
     def toggle_service_brake(self) -> None:
         """Apply or release the driver's service brake request.
 
-        Also under a brake failure, so the driver can try the brake
-        (REQUIREMENTS.md M4).
+        Also under a brake failure, and under the emergency brake, so
+        the driver can try the brake; a press the brake does not answer
+        is dropped (REQUIREMENTS.md M4).
         """
         if not self.can_drive:
             return
@@ -842,10 +843,11 @@ class ConsoleBackend(QObject):
     def _tick(self) -> None:
         self._sync_roster()
         if self.core.state.emergency_brake and not self.brake_note:
+            reason = self.core.stop_reason
             self.brake_note = (
-                "Emergency brake engaged. "
-                "Release it from the same control."
-            )
+                f"Emergency brake engaged: {reason} detected. "
+                if reason else "Emergency brake engaged. "
+            ) + "Release it from the same control."
         self._publish()
 
     def _publish(self) -> None:

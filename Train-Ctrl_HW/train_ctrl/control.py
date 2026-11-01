@@ -93,16 +93,20 @@ class ControllerCore:
         # so a failure still latched after the driver's release does
         # not engage it again (REQUIREMENTS.md M2, M3).
         self._braked_for: set[str] = set()
+        # Why the controller engaged the emergency brake again after the
+        # driver's release, for the console: "rollback" or "runaway"
+        # (respond_to_failures); "" otherwise.
+        self.stop_reason = ""
         self._clear_detection()
 
     def _clear_detection(self) -> None:
         # What detect_failures() carries from one tick to the next.
         # The last echo_ticks commands, oldest first: whether each
-        # asked for the service brake with the emergency brake off,
-        # and whether each engaged the emergency brake. This tick's
-        # reports answer the oldest. Only service commands with the
-        # emergency brake off count, as decided (OPEN_ISSUES.md #23):
-        # the brake failure resolves once the driver has released it.
+        # asked for the service brake, and whether each engaged the
+        # emergency brake. This tick's reports answer the oldest. The
+        # Train Model reports the service brake whether or not the
+        # emergency brake is on (claude/quirky-fermi-sickg4 57e8847),
+        # so the driver can try it under the emergency brake.
         empty = [False] * self.echo_ticks
         self._service_asked = deque(empty, maxlen=self.echo_ticks)
         self._emergency_sent = deque(empty, maxlen=self.echo_ticks)
@@ -194,7 +198,7 @@ class ControllerCore:
 
         self.respond_to_failures()
         self.enforce_safety()
-        self._service_asked.append(s.service_brake and not s.emergency_brake)
+        self._service_asked.append(s.service_brake)
         self._emergency_sent.append(s.emergency_brake)
 
     def _vital_power(self) -> None:
@@ -283,17 +287,19 @@ class ControllerCore:
 
         A brake failure resolves when the service brake answers
         again: the command echo_ticks ago asked for it and this tick's
-        report reads it applied. A signal pickup failure resolves when
-        commanded speed and authority both arrive non-null again
-        (REQUIREMENTS.md §4, M3). An engine failure resolves when a
-        differential test at a stand shows the engine pulling
-        (_test_engine).
+        report reads it applied. A press the brake did not answer is
+        dropped, so the driver presses again to try it once more. A
+        signal pickup failure resolves when commanded speed and
+        authority both arrive non-null again (REQUIREMENTS.md §4, M3).
+        An engine failure resolves when a differential test at a stand
+        shows the engine pulling (_test_engine).
         """
         s = self.state
 
         if self._service_asked[0]:
             if not s.fb_service_brake:
                 s.failures["brake"] = True
+                s.service_request = False
             elif s.failures["brake"]:
                 s.failures["brake"] = False
 
@@ -448,6 +454,15 @@ class ControllerCore:
             s.service_brake = True
         if new and not s.emergency_brake:
             self.engage_emergency()
+        elif (s.failures["brake"] and not s.emergency_brake
+                and abs(s.actual_mps) >= STANDSTILL_MPS):
+            # Released with the service brake failed: nothing else can
+            # stop the train if it starts to move, back on an up-grade
+            # or forward on a down-grade, so engage the emergency brake
+            # again (REQUIREMENTS.md M3).
+            self.stop_reason = ("rollback" if s.actual_mps < 0.0
+                                else "runaway")
+            self.engage_emergency()
 
     def enforce_safety(self) -> None:
         """Override the PI law with the safety rules.
@@ -503,6 +518,7 @@ class ControllerCore:
         if abs(s.actual_mps) >= STANDSTILL_MPS or s.vital_breach:
             return False
         s.emergency_brake = False
+        self.stop_reason = ""
         if self._may_test_engine():
             self._engine_test, self._engine_test_ticks = "wait", 0
             self._engine_test_speeds = {}
