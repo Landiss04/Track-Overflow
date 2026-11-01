@@ -419,5 +419,30 @@ class EngineTestTest(unittest.TestCase):
         self.assertEqual(rig.core.failed, ["engine"])
 
 
+class StopHoldTest(unittest.TestCase):
+    """A target of 0 holds the train on the service brake, with no
+    power: the integrator from the run does not creep it against the
+    brake."""
+
+    def test_a_zero_target_holds_without_power(self) -> None:
+        for grade in (0.0, 5.0):
+            with self.subTest(grade=grade):
+                # Empty: a heavier train cannot climb 5 % at all.
+                rig = Rig(Plant(0.0, grade, EMPTY_KG), 10.0)
+                rig.plant.rolls_back = True
+                rig.run(60.0)
+                rig.core.state.commanded_mps = 0.0
+                rig.run(20.0)
+                for _ in range(round(30.0 / TICK_S)):
+                    rig.tick()
+                    self.assertEqual(rig.core.state.power_w, 0.0)
+                    self.assertTrue(rig.core.state.service_brake)
+                self.assertEqual(rig.plant.v, 0.0)
+                # And drives off again when the target returns.
+                rig.core.state.commanded_mps = 10.0
+                rig.run(30.0)
+                self.assertGreater(rig.plant.v, 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

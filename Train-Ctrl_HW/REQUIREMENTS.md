@@ -38,7 +38,7 @@ module documentation is to be updated later (see §6).
 | M14 | **Driver speed changes are in 0.1 mph steps** on the dial, and the dial's target, your speed and the commanded speed read to one decimal place. Keyboard arrow keys are not required. The dial's scale is fixed at the car's 70 km/h (43.5 mph), whatever is commanded, by decision: it is display only, not a cap (M1), and a commanded speed above 43.5 mph cannot be set from the dial (#29); a press in the bottom gap reads 0, and a drag past either end holds that end rather than wrapping. | Met | — |
 | M15 | **The test bench has no cab controls.** It feeds what the Train Model and Track Model send, and Murphy's failures; the cab is driven from the console only. Its `at_station` row (in the Train Model column, under `authority_blocks`) says whether the beacon is heard: every tick while at a station, otherwise once, when a beacon row is sent. A time typed beside its clock, HH:MM or HH:MM:SS, set with Return or **Set time**, sets the bench clock to a time of day for both lines (2026-11-01; before, three scroll wheels). Spawning a train from the bench does not switch the console or the bench to it (the first train spawned is selected, as nothing else is). The bench's input rows are for debugging and will be removed later. | Met | — |
 | M16 | **Authority is used as given.** The controller never counts blocks: the count it receives is how far it may go, and it changes only when a new count arrives. Integrated, the Train Model reports a block change to the Track Model, which then sends the next block's count. On the bench, a **Block change** button stands in for that: the next count, one fewer, never below 0. | Met | 2026-10-21 |
-| M17 | **Authority 0 sets the target to 0**, and the service brake is applied while the train moves, as a fail safe. Stopping at the right block or station is still the rest of the system's, which lowers the commanded speed in time. | Met | `enforce_safety`. The speed law also holds the service brake at any target of 0 until the train stands, below the 0.05 m/s band too (`stopping`) |
+| M17 | **Authority 0 sets the target to 0**, and the service brake is applied while the train moves, as a fail safe. Stopping at the right block or station is still the rest of the system's, which lowers the commanded speed in time. | Met | `enforce_safety`. The speed law also holds the service brake at any target of 0, below the 0.05 m/s band too, and at a stand with no power and the integrator cleared (`stopping`; at a stand since 2026-11-01, R51, except under a brake failure) |
 | M18 | **Brake State arrives as two separate inputs:** emergency brake state and service brake state, each what is engaged, not what was commanded. | Met | 2026-10-21: `emergency_brake_state` and `service_brake_state` |
 | M19 | **The controller assumes perfect movement.** It models no rolling resistance, grade, mass or brake rate; the speed error is what absorbs every outside force, and the physics is the Train Model's (or, on the bench, the bench's simulation). | Met | Since the steady-fall rule (2026-10-31, R43), engine-failure detection reads only power, brakes and speed (§4) |
 | M20 | **Signal light ahead comes from the Track Model**, directly, on the tick the train enters a signal block. Display only. | Done | Read as `signal_light_ahead`, spelled as truth spells it (`SUPER_GREEN`; Kevin 2026-10-28); the harness maps it from the Track Model (#27) |
@@ -183,12 +183,12 @@ Known limits:
 - A dead engine on a downhill steep enough to hold the speed without power
   is not seen, at a stand or moving: its speed does not fall, and it rises
   without power.
-- A dead engine on a standing train is found by the start check (R49).
-  Measured 2026-11-01 against the Train Model, engine failed at a stand
-  then 10 m/s commanded: flat, found 3.9 s after (before: never, 480 kW
-  commanded indefinitely); +2 % or +5 %, found while standing, before it
-  rolls back (before: 1.1–1.3 s after the start, having rolled back up to
-  2.9 m/s); −2 %, not found. No healthy start, 0 to 222 passengers on −2 %
+- A dead engine on a standing train is found by the start check (R49), on
+  a rollback at once (R51). Measured 2026-11-01 against the Train Model,
+  engine failed at a stand held on the service brake, then 10 m/s
+  commanded: flat, found 4.0 s after (before R49: never, 480 kW commanded
+  indefinitely); +2 %, found 2.4 s after, having rolled back 0.39 m/s;
+  +5 %, 2.3 s, 0.99 m/s; −2 %, not found. No healthy start, 0 to 222 passengers on −2 %
   to +5 %, was flagged; 111 passengers on +5 %, which climbs at about
   0.006 m/s², was tested once and passed.
 - While held after a test found the engine dead, each retest (every 10 s)

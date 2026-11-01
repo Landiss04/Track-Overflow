@@ -66,7 +66,7 @@ a bug with no recorded date for a step is not counted for that step.
 | 2026-10-16 | 2 | 2 | 1 | 1 |
 | 2026-10-23 | 10 | 10 | 9 | 2 |
 | 2026-10-30 | 10 | 9 | 5 | 9 |
-| 2026-11-06 (to 11-01) | 6 | 6 | 9 | 1 |
+| 2026-11-06 (to 11-01) | 7 | 7 | 10 | 1 |
 
 Not counted in Reported: the gains hand-over (#16) and the 0/0 pickup rule,
 whose first report is not dated in the record. Both are in the resolved
@@ -76,7 +76,7 @@ note for the CTC Office, B5, B6 and B7 were in the numbers drawer, and B9
 was in `check.py`.
 
 **To resolve by 2026-11-06:** B1, B2 and B3 are done (R40, R41, R43), and
-the six found on 2026-11-01 (R46–R50). Left: B8, narrowed by the
+the seven found on 2026-11-01 (R46–R51). Left: B8, narrowed by the
 typed time (#45) and left for the bench refactor.
 
 ## Resolved
@@ -109,10 +109,11 @@ One line each; details in the commits.
 | Under an engine failure's stop, a brake failure was not detected: only service brake commands with the e-brake off counted | 11-01 | 11-01 | 11-01 `d7836b5` (R47) |
 | After the engine test found the engine dead, a later repair was not found until the driver engaged and released the e-brake | 11-01 | 11-01 | 11-01 `3551163` (R48) |
 | An engine that failed while the train stood was never found on the flat: 480 kW commanded indefinitely | 11-01 | 11-01 | 11-01 `b2f9762` (R49) |
-| Closing the bench (`main.py --test`) printed "Cannot read property 'snapshot' of null" from every window | 11-01 | 11-01 | 11-01 |
+| Closing the bench (`main.py --test`) printed "Cannot read property 'snapshot' of null" from every window | 11-01 | 11-01 | 11-01 `284263f` |
+| At a target of 0 the service brake and power switched every tick at a stand: the integrator from the run crept the train | 11-01 | 11-01 | 11-01 (R51) |
 
 The seven texts count as seven bugs and review items 5–9 as five, so the
-log's 25 rows are 31 resolved bugs.
+log's 26 rows are 32 resolved bugs.
 
 ## Notes for other modules
 

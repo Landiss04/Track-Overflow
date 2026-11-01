@@ -196,10 +196,16 @@ class ControllerCore:
         self._station_stop()
         if self.armed:
             error = s.target_mps - s.actual_mps
-            # A target of zero means stop, so the brake holds to a
-            # stand rather than leaving the train creeping inside the
-            # band with no resistance to bring it down.
-            stopping = s.target_mps <= 0.0 and s.actual_mps > 0.0
+            # A target of zero means stop and stay stopped: the brake
+            # holds the train, at a stand too, and the integrator is
+            # cleared, so nothing it carried from the run creeps the
+            # train against the brake. Not at a stand under a brake
+            # failure: that brake cannot hold it, and the driver's
+            # press is what tries it (REQUIREMENTS.md M4).
+            stopping = s.target_mps <= 0.0 and (
+                s.actual_mps > 0.0 or not s.failures["brake"])
+            if stopping:
+                self.integral = 0.0
             s.service_brake = (
                 error < -SERVICE_BAND_MPS or s.service_request or stopping
             )
@@ -445,7 +451,11 @@ class ControllerCore:
         self._start_s += self.dt
         if v > self._start_ref_mps + ENGINE_RISE_MPS:
             self._start_s = 0.0
-        elif self._start_s >= ENGINE_START_S and self._may_test_engine():
+        elif ((self._start_s >= ENGINE_START_S
+               or v < self._start_ref_mps - ENGINE_RISE_MPS)
+              and self._may_test_engine()):
+            # No rise in ENGINE_START_S, or rolling back under power
+            # already: test now rather than let it roll for the rest.
             self._start_s = 0.0
             self._start_engine_test()
 

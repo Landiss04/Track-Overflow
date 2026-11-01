@@ -120,7 +120,8 @@ ENGINE_TEST_SAMPLES = 5
 # test lets the train roll for about 2 s.
 ENGINE_RETEST_S = 10.0
 # Starting from a stand, power this long with the speed not up by
-# ENGINE_RISE_MPS runs the test too: a dead engine on the flat never
+# ENGINE_RISE_MPS, or the speed down by it (rolling back), runs the test
+# too: a dead engine on the flat never
 # moves, so its speed never falls for the steady-fall rule to see. A
 # working engine gives at least ENGINE_TEST_MIN_MPS2 more than without
 # power, so a slow start on a grade passes the test and carries on.

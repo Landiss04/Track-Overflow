@@ -257,7 +257,9 @@ the Cab controls badge.
 | `3551163` | 11-01 | Held at a stand after the engine test found the engine dead, the test runs again every 10 s, so a repair is found without the driver (R48). |
 | `b2f9762` | 11-01 | Start check: from a stand, 2 s of power with no rise runs the engine test, so an engine that fails while the train stands is found (R49). |
 | `4ceba5f` | 11-01 | The bench spawns the console for the line: `main.py --test` opens the bench alone, Red Line trains open the HW console and Green Line trains the SW one, each on its own backend, on one bench clock; the time is typed; `--both` removed (#45, R50). |
-| (next) | 11-01 | Closing `main.py --test` printed "Cannot read property 'snapshot' of null" from every window: the backends were freed before the windows reading them. The windows and the engine now go first. |
+| `284263f` | 11-01 | Closing `main.py --test` printed "Cannot read property 'snapshot' of null" from every window: the backends were freed before the windows reading them. The windows and the engine now go first. |
+| `f6cd8c4` | 11-01 | The bench settling just above its target noted under #43 (no rolling resistance in the toy plant). |
+| (next) | 11-01 | A target of 0 holds the train on the service brake at a stand with no power and the integrator cleared; it chattered every tick (R51). The start check tests at once on a rollback. |
 
 ---
 
@@ -302,7 +304,7 @@ Kept here so a reviewer reading old commits is not misled.
 
 ---
 
-## 4. Revisions R2–R50
+## 4. Revisions R2–R51
 
 Moved here from `REQUIREMENTS.md` §5 on 2026-10-24, which refers to
 them by number.
@@ -396,3 +398,4 @@ From `0f2e2d2`, one rule at a time.
 | R48 | M3, §4: held at a stand on the service brake after the engine test found the engine dead, the test starts again every 10 s (`ENGINE_RETEST_S`), so a repair is found without the driver engaging and releasing the e-brake. Each retest lets the train roll for about 2 s. On R46's code `test_a_repair_while_held_is_found_by_the_retest` fails | `control.py` `_test_engine`, `_start_engine_test`; `constants.py`; `tests/test_engine_detection.py` |
 | R49 | §4: start check. From a stand (under 0.1 m/s), power with no brake for 2 s (`ENGINE_START_S`) and the speed not up 0.05 m/s runs the differential test; dead latches the engine failure. Once passed, not again until the train moves off forwards or the power stops. An e-brake release starts a test only with an engine failure latched. Against the Train Model: a dead engine at a stand on the flat found 3.9 s after power is asked for (before: never), on +2 % / +5 % found while standing; no healthy start flagged. On R48's code `test_a_dead_engine_at_a_stand_is_found_on_starting` fails | `control.py` `_check_start`, `_test_engine`, `_may_test_engine`, `respond_to_failures`, `release_emergency`; `constants.py`; `tests/test_engine_detection.py` |
 | R50 | M13, M15: the test bench stands in for the central harness (#45). `main.py --test` opens it alone (`run_bench`); it holds an HW backend for the Red Line and an SW backend for the Green, each owning its fleet; spawning a train opens or shows its line's console, titled and filtered as under the harness. The bench (`BenchBackend`) edits any train while each console keeps its own selection, and steps both on one clock. The time is typed (HH:MM or HH:MM:SS); `TimeWheels.qml` and `main.py --both` removed. The self-check still runs one console and the bench on one backend, and checks the new bench headless | `train_ctrl/bench.py`; `app.py` `run_bench`; `backend.py` `step_fleet`, `viewing`, `parse_time_of_day`; `main.py`; `TestWindow.qml`; `check.py` |
+| R51 | M17, §4: at a target of 0 the service brake holds the train at a stand too, with no power and the integrator cleared (was: brake only while moving, so the integrator from the run crept the train and the brake came on and off every tick: 300 switches in 30 s on the bench at 12.5 kW, 150 on the Train Model at 10.5 kW; now 0). Not at a stand under a brake failure. The start check now also tests at once when the train rolls back under power. Against the Train Model the engine test is still 30 of 30 right and the brake rules unchanged. On R50's code `StopHoldTest` fails | `control.py` `step`, `_check_start`; `constants.py`; `tests/test_engine_detection.py` |
