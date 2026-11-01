@@ -392,6 +392,8 @@ class ConsoleBackend(QObject):
             "power_vote": self._power_vote(),
             "service_brake": s.service_brake,
             "service_request": s.service_request,
+            # Stopped and held there: a target of 0 at a stand.
+            "holding": s.target_mps <= 0.0 and self.core.at_stand,
             "emergency_brake": s.emergency_brake,
             "brake_note": self.brake_note,
             # Detected and latched by this controller.

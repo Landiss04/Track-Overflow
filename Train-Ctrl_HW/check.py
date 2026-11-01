@@ -301,6 +301,26 @@ def run_check(
     expect(_until(app, lambda: backend.core.state.actual_mps > held[0], 5),
            "the train did not move on after resuming")
 
+    # The Stop panel's badge says why the service brake is on: slowing
+    # to a lower target, held stopped at a target of 0, or the
+    # driver's press.
+    state = backend.core.state
+    _until(app, lambda: state.actual_mps * mod.MPS_TO_MPH > 20.0, 60)
+    backend.set_target_mph(10)
+    expect(_until(app, lambda: state.fb_service_brake, 10)
+           and _until(app, lambda: on_screen(window, "Braking"), 2),
+           "the badge did not say Braking while slowing")
+    backend.set_target_mph(0)
+    expect(_until(app, lambda: on_screen(window, "Holding"), 60),
+           "the badge did not say Holding when stopped at a target of 0")
+    backend.toggle_service_brake()
+    expect(_until(app, lambda: on_screen(window, "Driver brake"), 2),
+           "the badge did not say Driver brake for the driver's press")
+    backend.toggle_service_brake()
+    backend.set_target_mph(35)
+    expect(_until(app, lambda: state.actual_mps > 2.0, 30),
+           "the train did not drive off again")
+
     # The emergency brake stops the train and latches until it is
     # stopped.
     backend.toggle_emergency_brake()
