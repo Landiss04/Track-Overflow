@@ -216,6 +216,17 @@ Kevin's answers, 2026-10-31.
 | Test gains in the Pi-link recovery rule | "include" (Kevin) | Proposal `20261031-1326-pi-link-recovery.md` amended: a replaced Pi also gets the test gains back |
 | Real company logos in the Train Model header (F27) | "intended" (Kevin) | No change |
 
+## Answers, 2026-11-01
+
+Kevin's answers, 2026-11-01. Scope: "the only focus here should be the harness and how
+the modules communicate. i am not here to fix modules."
+
+| Question | Answer | Done on this branch |
+| --- | --- | --- |
+| PR #52 conflicts | Resolve on a new branch, keeping both sides (Kevin) | `integrate/quirky-into-development-resolved` (`a593f0a`): `cb163af` plus a merge of `development` `59cdd2c`. All 16 conflicts take the integration side, which already holds both changes: development's Train-Ctrl_HW is `e0e142d`, pulled in here at `74159e9`, and Cancel order was already removed here. Adds only Landis's proposal `20261025-2000-no-dispatcher-order-cancel`. CTC 272, harness 392 passed; Train-Ctrl_HW `main.py --check` clean. Not merged into `development` |
+| Must PLC programs be fully working for the first integration? (CTC-2) | "no" (Kevin) | No change |
+| Train Controller #28 (engine rule), #23 (repaired engine), #34 (e-brake while latched) | "this are work in progress" (Kevin): module work, not integration | Dropped from the integration open list |
+
 ## CTC-1: Red concurrency
 
 **Owner:** Landis, CTC Office.
