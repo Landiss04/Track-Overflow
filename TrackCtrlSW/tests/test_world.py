@@ -169,6 +169,15 @@ class WorldAndController(unittest.TestCase):
         self.assertIn("switch_locked_under_train", self.rules())
         self.assertIn("OUT_SW_12", self.controller.vital_source)
 
+    def test_a_train_on_the_points_block_also_locks_the_switch(self) -> None:
+        # Switch 12 is listed on block 12 but its points are on block 13.
+        point = self.controller.config.switches["12"][0]
+        self.assertNotEqual(point, "12")
+        self.world.set_occupancy(self.key(point), True)
+        self.commit(bare_program(self.controller, reverse_switch=True))
+        self.assertFalse(self.controller.switch_commands["12"])
+        self.assertIn("switch_locked_under_train", self.rules())
+
     def test_signals_and_crossings_come_back_as_readback(self) -> None:
         self.world.set_occupancy(self.key("18"), True)
         self.rig.settle()
@@ -290,20 +299,27 @@ class WorldAndController(unittest.TestCase):
         self.assertNotIn("maintenance_hold", self.rules())
 
     def test_a_ctc_switch_command_is_obeyed_only_in_maintenance(self) -> None:
+        # The starter program reads CTCSW_12/CTCREV_12 and obeys them.
         self.world.set_switch_command(self.key("12"), "reverse")
         self.rig.tick()
         self.assertFalse(self.controller.switch_commands["12"])
         self.world.set_maintenance(True)
         self.rig.tick()
         self.assertTrue(self.controller.switch_commands["12"])
-        self.assertIn("ctc_switch_command", self.rules())
+        self.assertNotIn("switch_locked_under_train", self.rules())
 
-    def test_the_ctc_command_beats_a_hand_set_switch(self) -> None:
+    def test_a_program_may_read_the_ctc_command(self) -> None:
+        self.assertIn("CTCSW_12", self.controller.input_names())
+        self.assertIn("CTCREV_12", self.controller.input_names())
+        self.assertNotIn("CTCCMD_12", self.controller.input_names())
+
+    def test_the_vital_code_does_not_replace_the_programs_choice(self) -> None:
+        # A program that ignores the CTC's command keeps its own choice:
+        # the vital code only gates it (here, nothing is under a train).
         self.rig.dispatcher_in_maintenance()
         self.world.set_switch_command(self.key("12"), "reverse")
-        self.controller.manual_switches["12"] = False
-        self.rig.tick()
-        self.assertTrue(self.controller.switch_commands["12"])
+        self.commit(bare_program(self.controller, reverse_switch=False))
+        self.assertFalse(self.controller.switch_commands["12"])
 
     def test_a_hand_set_switch_is_obeyed_when_the_ctc_has_not_commanded(
         self,

@@ -22,6 +22,11 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     - the e-brake force (about 140 kN) is far above full traction (about
       25.7 kN), so a repaired engine can never show rising speed.
 
+    On `claude/quirky-fermi-sickg4` the first bullet no longer holds: the
+    Train Model reports the service brake engaged whenever it is commanded
+    and not failed, also under the emergency brake (`4859971`; Kevin asked
+    for it 2026-10-31, option (c)). The engine part below is still open.
+
     Signal pickup is unaffected (a non-zero Track Signal can return at any
     time). Decided in part (R29, M2, M3): once the train stands, the
     driver may release the e-brake in Manual with the failure still
@@ -52,17 +57,6 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     branch, so it waits for the owners.
 
 ## Controller: to decide or build
-
-26. **Which simulator the bench uses.** The bench's simulation is
-    separate (`bench_sim.py` `SimTrain`, R15), still the toy plant. Not
-    decided:
-    - (a) keep the toy plant (Euler, rolling resistance only under a brake
-      failure, no grade; its service brake state does not go false under
-      the e-brake as the Train Model's does); or
-    - (b) reuse the Train Model's pure-Python `train_model.model.TrainModel`
-      from `development` inside `SimTrain`: one physics, with real rolling
-      resistance and grade. D005 says modules do not import each other's
-      boundary types, so this needs a team decision.
 
 28. **Engine-failure detection false-positives; the accepted rule is not
     on this branch.** This branch still has the old rule (power that
@@ -160,12 +154,10 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
     - **Train Model physics.** The toy plant has no grade, no load and no
       rolling resistance outside an injected brake failure, so a dead
       engine coasts at constant speed and neither engine rule can trip at
-      a cruise (#26, #28).
-    - **Train Model reports.** Its service brake state does not go false
-      while the e-brake is engaged, as the Train Model's does (#23); its
-      passenger pull lasts one tick and is never latched, where the
-      Train Model's holds until the e-brake command goes off (#25,
-      closed).
+      a cruise (#28).
+    - **Train Model reports.** Its passenger pull lasts one tick and is
+      never latched, where the Train Model's holds until the e-brake
+      command goes off (#25, closed).
     - **Track Model, Track Controller and CTC Office.** There is no track:
       authority changes only with the Block change button, commanded
       speed and the signal ahead only when edited, and the beacon only
@@ -177,8 +169,8 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
       resolved (#23). A brake failure the controller resolves itself
       (#44).
 
-    Reusing the Train Model's physics (#26 (b)) would close the physics
-    and report gaps; the track side needs a track to run on.
+    These gaps don't block integration: "the bench/test uis are only for
+    testing" (Kevin, 2026-10-31; #26).
 
 ## Outside the style guide and shared UI
 
@@ -264,8 +256,9 @@ One line each; the details are in `CHANGELOG.md`.
   release signal; the Train Model holds a passenger pull until the
   controller's emergency brake command goes from true to false, which the
   driver's release does (M2).
-- **26 (most of it).** The bench's simulation moved out of the
-  controller (M0, R15); the choice of simulator is still open (#26).
+- **26.** The bench's simulation moved out of the controller (M0, R15).
+  Which simulator it uses is not needed for integration: "the bench/test
+  uis are only for testing" (Kevin, 2026-10-31).
 - **29.** The dial's 70 km/h scale against M1: display only, accepted
   (M14, R29).
 - **30.** Rules not yet in the code: dropped, as `REQUIREMENTS.md` §1's
@@ -283,7 +276,7 @@ One line each; the details are in `CHANGELOG.md`.
 - Emergency echo re-latching the brake: fixed (M2, R16).
 - `old_main.py`: removed in `c98393e`.
 - Rolling resistance: decided, the controller models none (M19); the
-  bench simulation's goes with #26.
+  bench simulation keeps its own (#26, resolved).
 - **27.** Signal light ahead (M20): truth has `signals/signal-aspect-ahead`,
   and this controller takes its `SUPER_GREEN` spelling (Kevin, 2026-10-28),
   so the harness passes the light through unchanged.

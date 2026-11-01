@@ -47,9 +47,10 @@ from track_ctrl.plc import (
 )
 from track_ctrl.vital import VitalOverride
 
-#: Per-switch bits only the attached vital code reads: the CTC's command
-#: and the hand-set position. A program cannot declare them.
-VITAL_SWITCH_INPUTS = ("CTCCMD", "CTCREV", "HAND", "HANDREV")
+#: Per-switch bits only the attached vital code reads: the hand-set
+#: position. A program cannot declare them. The CTC Office's switch
+#: command (``CTCSW_s``, ``CTCREV_s``) is the program's to read and obey.
+VITAL_SWITCH_INPUTS = ("HAND", "HANDREV")
 
 #: How many committed programs stay readable in the history pane.
 HISTORY_DEPTH = 5
@@ -179,6 +180,8 @@ class TrackController:
             names.add(f"FAIL_{block.block_id}")
         for switch_id in self.config.switches:
             names.add(f"SWREV_{switch_id}")
+            names.add(f"CTCSW_{switch_id}")
+            names.add(f"CTCREV_{switch_id}")
         return frozenset(names)
 
     def output_names(self) -> tuple[str, ...]:
@@ -348,7 +351,7 @@ class TrackController:
                 )
         for sid in self.config.switches:
             image[f"SWREV_{sid}"] = self.switch_reverse.get(sid, False)
-            image[f"CTCCMD_{sid}"] = sid in self.ctc_switch_commands
+            image[f"CTCSW_{sid}"] = sid in self.ctc_switch_commands
             image[f"CTCREV_{sid}"] = self.ctc_switch_commands.get(
                 sid, False
             )
@@ -707,7 +710,7 @@ def _switch_rule(
     """
     out = config.switch_output(sid)
     point, normal_end, reverse_end = config.switches[sid]
-    held = [f"{out} := SWREV_{sid}"]
+    held = [f"{out} := {_ctc_first(sid, f'SWREV_{sid}')}"]
     legs = {
         end: position
         for end, position in ((normal_end, False), (reverse_end, True))
@@ -792,10 +795,17 @@ def _switch_rule(
     ]
     move = f"NOT WANT_N_{sid}" if rest_reverse else f"WANT_R_{sid}"
     lines.append(
-        f"{out} := (HOLD_{sid} AND SWREV_{sid}) OR "
-        f"(NOT HOLD_{sid} AND NOT MAINT AND {move})"
+        f"{out} := " + _ctc_first(
+            sid, f"(HOLD_{sid} AND SWREV_{sid}) OR "
+            f"(NOT HOLD_{sid} AND NOT MAINT AND {move})")
     )
     return lines
+
+
+def _ctc_first(sid: str, own: str) -> str:
+    """The CTC Office's command for switch ``sid`` if it gives one, else
+    ``own``. The vital code still locks the switch under a train."""
+    return f"(CTCSW_{sid} AND CTCREV_{sid}) OR (NOT CTCSW_{sid} AND {own})"
 
 
 def _coming_off(config: ControllerConfig, sid: str, leg: str) -> str:
@@ -842,6 +852,9 @@ def default_program_source(controller: TrackController) -> str:
     if config.switches:
         lines.append("VAR_IN   " + " ".join(
             f"SWREV_{s}" for s in config.switches
+        ))
+        lines.append("VAR_IN   " + " ".join(
+            f"CTCSW_{s} CTCREV_{s}" for s in config.switches
         ))
     lines += _declare("VAR_OUT", "AUTH", numbers)
     if config.switches:

@@ -18,9 +18,11 @@ The rules, as PLC code:
 
 - a block the CTC closed gets no authority (``OUT_AUTH_n = 0``);
 - a block whose switch is not where it was commanded gets none;
-- in maintenance mode a switch follows the CTC's command, else the
-  programmer's hand-set position, else the program;
-- a switch on an occupied block stays where it actually is;
+- a switch follows the programmer's hand-set position if there is one,
+  else the program (which reads the CTC Office's command, ``CTCSW_s`` and
+  ``CTCREV_s``, and decides for itself);
+- a switch with a train on its listed or points block stays where it
+  actually is;
 - a signal showing no aspect or several, or on an occupied or closed
   block, is red;
 - a train on a crossing's approach arms it;
@@ -134,8 +136,7 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
             f"{OUT}SPD_{n}_{b}" for b in range(width)))
     for s in config.switches:
         lines.append(
-            f"VAR_IN   SW_{s} SWREV_{s} CTCCMD_{s} CTCREV_{s} "
-            f"HAND_{s} HANDREV_{s}"
+            f"VAR_IN   SW_{s} SWREV_{s} HAND_{s} HANDREV_{s}"
         )
         lines.append(f"VAR_OUT  {OUT}SW_{s}")
     for s in config.signals:
@@ -152,15 +153,17 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
     moving: dict[str, str] = {}
     for s in config.switches:
         b = s
+        lock = _lock_terms(config, s, numbers)
         lines += [
             "",
-            f"// Switch {s}: the CTC's command, else the hand-set position,",
-            "// else the program. Under a train it stays where it is.",
-            f"V_REQ_{s} := (CTCCMD_{s} AND CTCREV_{s}) OR "
-            f"(NOT CTCCMD_{s} AND HAND_{s} AND HANDREV_{s}) OR "
-            f"(NOT CTCCMD_{s} AND NOT HAND_{s} AND SW_{s})",
-            f"{OUT}SW_{s} := (OCC_{b} AND SWREV_{s}) OR "
-            f"(NOT OCC_{b} AND V_REQ_{s})",
+            f"// Switch {s}: the programmer's hand-set position, else the",
+            "// program. Under a train, on its listed block or its",
+            "// points block, it stays where it is.",
+            f"V_LOCK_{s} := {' OR '.join(lock)}",
+            f"V_REQ_{s} := (HAND_{s} AND HANDREV_{s}) OR "
+            f"(NOT HAND_{s} AND SW_{s})",
+            f"{OUT}SW_{s} := (V_LOCK_{s} AND SWREV_{s}) OR "
+            f"(NOT V_LOCK_{s} AND V_REQ_{s})",
             f"V_MOV_{s} := {OUT}SW_{s} XOR SWREV_{s}",
         ]
         moving[b] = f"V_MOV_{s}"
@@ -217,6 +220,18 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
 
 # --- what the vital code changed, for display ------------------------------
 
+def _lock_terms(
+    config: ControllerConfig, switch: str, numbers: Sequence[str]
+) -> list[str]:
+    """Occupancy bits that lock a switch: its listed block, and its
+    points block when it is a different one this wayside can see."""
+    point = config.switches[switch][0]
+    terms = [f"OCC_{switch}"]
+    if point != switch and point in numbers:
+        terms.append(f"OCC_{point}")
+    return terms
+
+
 def _blocks_text(names: Sequence[str]) -> str:
     """Name a few and count the rest, for one-line messages."""
     shown = ", ".join(names[:_NAMED_BLOCKS])
@@ -244,21 +259,17 @@ def report_overrides(
 
     for s in config.switches:
         b = s
-        if on(f"CTCCMD_{s}"):
-            found.append(VitalOverride(
-                "ctc_switch_command", f"SW_{s}",
-                "maintenance mode: the CTC Office's command is obeyed, "
-                "the program's output ignored"))
-        elif on(f"HAND_{s}"):
+        if on(f"HAND_{s}"):
             found.append(VitalOverride(
                 "manual_switch", f"SW_{s}",
                 "held by the programmer in maintenance mode, program "
                 "output ignored"))
-        if on(f"OCC_{b}") and on(f"V_REQ_{s}") != on(f"{OUT}SW_{s}"):
+        if on(f"V_LOCK_{s}") and on(f"V_REQ_{s}") != on(f"{OUT}SW_{s}"):
+            held = _lock_terms(config, s, [x.block_id for x in blocks])
             found.append(VitalOverride(
                 "switch_locked_under_train", f"SW_{s}",
-                f"block {b} is occupied; the switch is locked and will "
-                "not move"))
+                f"block {' or '.join(t[4:] for t in held)} is occupied; "
+                "the switch is locked and will not move"))
 
     for s in config.signals:
         b = s

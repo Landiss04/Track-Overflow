@@ -62,9 +62,9 @@ retains portable interpreter selection for other checkouts.
 | [PI-1: Physical Pi prerequisites](#pi-1-physical-pi-prerequisites) | Both HW module owners; Kevin for performance choice |
 | [TC-1: Green train over its limit after dispatch](#tc-1-green-train-over-its-limit-after-dispatch) | Train Controller SW owner |
 
-The cited records identify Landis, Harry and Braden. They do not establish a named
-Track Model owner or Train Controller HW owner for these requests; Kevin must route
-those reviews to the responsible people.
+Owners: Landis (CTC Office), Harry Tye (Track Controller SW), Braden Bosilovich
+(Track Controller HW), Deni (Track Model), Ivan (Train Controller HW) and Jon
+(Train Controller SW), as Kevin named them on 2026-10-31.
 
 ## Kevin’s answers and proposal review
 
@@ -167,6 +167,65 @@ Kevin.
 | CTC-3 starter check (does the program set REVERSE for the head?) | "the starter code is irrelevant" (Kevin) | Closed with no change: the starter is a sample, so its switch rules are no contract and need no confirmation from Harry |
 | CTC-3 decision | "The CTC treats a switch's blocks as neighbours whatever position it reports, so the follower waits on 75 while the head is on 77": "both harry and landis agree to this option" (Kevin) | `ctc/routing.py` `authority()` keeps the gap when a count stops at a switch. `test_green_follower.py` follows the case through to the follower running on; the vital lock is unchanged. Proposal `20261028-2104-authority-gap-at-switches.md` |
 | Crossings while a SW wayside is not ready | "module currently does not arm crossings by default but will in the future" (Harry Tye) | Done by Harry in `e5e51d4`, cherry-picked here: a wayside with no program or not ready commands every crossing active. The harness crossing test passes and is no longer an expected failure |
+
+## Track Controller HW answers, 2026-10-30
+
+Braden Bosilovich's answers, relayed by Kevin.
+
+| Question | Answer | Done |
+| --- | --- | --- |
+| Red switch 9's light, now at block 9 (TM-2) | No Track Controller HW or Pi change is needed. HW names every signal by its switch (`SIG_9_*`), never by block. Red-1's signal 9 logic still fits a lamp facing a train coming from 10 onto the switch: `BLOCKED_9` covers 9 and the normal leg 8, and caution and green look ahead to 7 and 6. The light ahead starts at the block ahead of the train, so the red the vital block forces while 9 is occupied is never shown to the train standing on 9. PLC programs are not in the Pi bundle. | No change. Braden ran `TrackCtrlHw` at `629f0af`: 104 passed, 54,596 subtests |
+| Pi bundles: who regenerates them, and when (request 7) | Each bundle is the hw_link runtime, `utils/harness_protocol.py` and both HW cores (`common/hw_link/manifest.py` `sources()`). Both boards carry both cores and one shared hash, so a change to either core means rebuilding both boards. SW-1 and TM-2 don't change the bundle; the HW vital block and the Train Controller HW `SUPER_GREEN` and pickup changes do. Bundles are built at install time (PI-1), from exactly the commit the host runs. Braden builds and installs the Track Controller board; the Train Controller HW owner builds theirs. | Nothing to regenerate now: no bundle is committed and no Pi is set up. Proposal `20261030-1434-pi-bundle-built-at-install.md`. Kevin confirmed 2026-10-30: "yes the hw owners will bring up their pis" |
+| `development` merge hazard (request 1) | PR #51 (`70289dc`) brought this branch's history into `development` but reset its content, so a plain merge drops files. Braden's branch `integrate/quirky-into-development` (`cb163af`) merges `development` (`c3bae11`) and this branch (`cabcb3a`) against base `f590f41`. All 96 conflicts resolve to this branch. Everything else is `development`'s own documents. Land it as a **merge commit**; a squash or rebase brings the problem back. | Checked 2026-10-30: parents `c3bae11` and `cabcb3a`. Outside `documents/`, `.vscode/` and `TrackCtrlHw/docs/` the tree is identical to `cabcb3a`. A plain merge of `development` today keeps 8 of the 21 `common/hw_link` files; this one keeps 21, and merging this branch into it afterwards changes nothing. Not landed: awaiting Kevin |
+
+**Tests on Braden's Windows machine:** 12 to 13 harness and hw_link tests fail with
+and without his changes, for environment reasons:
+- Qt writes "Cannot find font directory" to stderr, and the tests expect stderr to
+  be empty.
+- Some tests save to `/tmp/...`.
+- The bundle "shell parses" tests need bash.
+
+## Track Controller SW changes, 2026-10-30
+
+Harry Tye pushed `829c842` to `Track-Ctrl-SW` to be cherry-picked here. Its
+TrackCtrlSW changes are taken (`TrackCtrlSW/CHANGELOG.md`, 2026-10-30):
+- the program obeys the CTC Office's switch command;
+- the switch lock covers the points block;
+- the window scales;
+- a `loadStarterPrograms` slot is added;
+- `STARTER_LOG.md` records the starter fingerprints, and all 11 match here.
+
+**Question for Harry Tye and Braden:** on the SW, the CTC Office's switch command is
+now the program's to obey, and the vital code no longer applies it. The HW vital code
+still applies it (`V_REQ_s` reads `CTCSW_s` first). So in maintenance mode, a CTC
+switch command moves a HW wayside's switch whatever its program does. It moves a SW
+wayside's switch only if the program obeys it, as the starter does. Is that
+difference intended? If not, which way should both variants go?
+
+## Answers, 2026-10-31
+
+Kevin's answers, 2026-10-31.
+
+| Question | Answer | Done on this branch |
+| --- | --- | --- |
+| Service brake reported apart from the emergency brake (Train Controller #23, option c) | "make this update in the train model" (Kevin) | Already so on this branch since `4859971`: the service brake reads engaged when commanded and not failed, whatever the emergency brake does. The harness passes both states (`common/harness/train_edges.py`) and the HW Train Controller reads both (M18). `TrainModel/tests/test_physics.py` `test_brake_state_reports_engaged_brakes` covers both engaged. No code change |
+| Bench simulator (Train Controller #26) | "this is irrelevant to integration, the bench/test uis are only for testing" (Kevin) | Closed in `Train-Ctrl_HW/OPEN_ISSUES.md`; no team decision needed |
+| Module owners | "Track model - Deni Train ctrl hw Ivan SW Jon" (Kevin) | Track Model: Deni. Train Controller HW: Ivan. Train Controller SW: Jon. Proposals `20261031-1618-*-owner.md` set the three module shards' owners |
+| `development` merge (Braden's request 1) | "merge commit to preserve history" (Kevin) | Not landed. `development` has moved since Braden's `cb163af`: PR #50 (`d0d7953`, Train-Ctrl_HW) and PR #49 (`f69c65a`, CTC Cancel order removed). PR #52 now conflicts in 16 files (5 CTC-Office, 11 Train-Ctrl_HW). Awaiting Kevin on how to resolve |
+| Unreported blocks (INPUT-1) | "build in a feature branch" (Kevin) | Built on `feature/input1-reported-blocks` (`e377692`, cut from this branch because `development` has no harness yet): the HW edge sends every block the Track Model reported, and the HW wayside reads an expected block missing from it as occupied. SW is unchanged, for Harry to decide. Not merged; Braden to review |
+| Test gains in the Pi-link recovery rule | "include" (Kevin) | Proposal `20261031-1326-pi-link-recovery.md` amended: a replaced Pi also gets the test gains back |
+| Real company logos in the Train Model header (F27) | "intended" (Kevin) | No change |
+
+## Answers, 2026-11-01
+
+Kevin's answers, 2026-11-01. Scope: "the only focus here should be the harness and how
+the modules communicate. i am not here to fix modules."
+
+| Question | Answer | Done on this branch |
+| --- | --- | --- |
+| PR #52 conflicts | Resolve on a new branch, keeping both sides (Kevin) | `integrate/quirky-into-development-resolved` (`a593f0a`): `cb163af` plus a merge of `development` `59cdd2c`. All 16 conflicts take the integration side, which already holds both changes: development's Train-Ctrl_HW is `e0e142d`, pulled in here at `74159e9`, and Cancel order was already removed here. Adds only Landis's proposal `20261025-2000-no-dispatcher-order-cancel`. CTC 272, harness 392 passed; Train-Ctrl_HW `main.py --check` clean. Not merged into `development` |
+| Must PLC programs be fully working for the first integration? (CTC-2) | "no" (Kevin) | No change |
+| Train Controller #28 (engine rule), #23 (repaired engine), #34 (e-brake while latched) | "this are work in progress" (Kevin): module work, not integration | Dropped from the integration open list |
 
 ## CTC-1: Red concurrency
 

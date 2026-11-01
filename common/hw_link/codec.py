@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import Any
 
 
@@ -31,14 +32,7 @@ def unpack(value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     if "$type" in value:
-        from track_ctrl_hw import interface
-
-        allowed = {
-            name: cls
-            for name, cls in vars(interface).items()
-            if isinstance(cls, type) and dataclasses.is_dataclass(cls)
-        }
-        cls = allowed.get(value["$type"])
+        cls = _allowed().get(value["$type"])
         if cls is None:
             raise ValueError("unknown display type")
         return cls(**{k: unpack(v) for k, v in value["fields"].items()})
@@ -53,3 +47,15 @@ def unpack(value: Any) -> Any:
         }[value["$sequence"]]
         return sequence_type(unpack(v) for v in value["items"])
     return {k: unpack(v) for k, v in value.items()}
+
+
+@functools.cache
+def _allowed() -> dict[str, type]:
+    # The allowlist, built once rather than for every node.
+    from track_ctrl_hw import interface
+
+    return {
+        name: cls
+        for name, cls in vars(interface).items()
+        if isinstance(cls, type) and dataclasses.is_dataclass(cls)
+    }

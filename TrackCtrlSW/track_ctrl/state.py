@@ -885,6 +885,29 @@ class TrackControllerState(QObject):
         self.controllerChanged.emit()
         self.selectionChanged.emit()
 
+    @Slot()
+    def loadStarterPrograms(self) -> None:
+        """Commit a generated starter program to every wayside without one.
+
+        A convenience for the demo and the tests, in place of committing
+        each wayside by hand. A wayside that already runs a program keeps it.
+        """
+        loaded = self._system.load_starter_programs()
+        if loaded:
+            controller = self._controller
+            if controller is not None:
+                controller.scan()
+            self._log(
+                f"[{self._stamp()}] loaded starter programs into "
+                f"{', '.join(loaded)}"
+            )
+        else:
+            self._log(f"[{self._stamp()}] every wayside already has a program")
+        self.bufferChanged.emit()
+        self.terminalChanged.emit()
+        self.controllerChanged.emit()
+        self.selectionChanged.emit()
+
     # --- maintenance mode (the CTC Office's) ------------------------------
 
     @Property(bool, notify=maintenanceChanged)

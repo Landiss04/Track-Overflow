@@ -13,6 +13,13 @@ from . import protocol as p
 from .transport import ByteTransport
 from .manifest import AGENT_VERSION, expected_hash
 
+# Configuration a reconnected or replaced Pi is given again. Runtime state
+# (locks, faults, integrals, gains) is not replayed; a replaced Pi starts
+# from these and the gain policy below.
+REPLAYED_ACTIONS = frozenset(
+    {"load_territory", "load_program", "test_engineer_gains"}
+)
+
 
 class RemoteActionError(ValueError):
     """A refused Pi action, including the original module diagnostic."""
@@ -59,7 +66,6 @@ class HardwareRelay(QObject):
         self._queue: deque[dict[str, Any]] = deque()
         self._last_view: dict[str, Any] = {}
         self._gains: dict[str, list[float]] = {}
-        self.metrics: list[dict[str, Any]] = []
         self.transport.connected.connect(self._connected)
         self.transport.disconnected.connect(self._disconnected)
         self.transport.received.connect(self._received)
@@ -156,19 +162,9 @@ class HardwareRelay(QObject):
                 if not self._recovering:
                     self._saved_inflight = self._inflight
                 self._inflight = None
-                # If the durable agent resumed, load requests are cache hits.
-                # A replaced journal/device needs every accepted transaction.
-                history = (
-                    self._history
-                    if not incoming.get("resumed")
-                    else [
-                        r
-                        for r in self._history
-                        if r.get("action")
-                        in ("load_territory", "load_program")
-                    ]
-                )
-                self._recovery = deque(history)
+                # A resumed agent answers these from its cache; a replaced
+                # one runs them again.
+                self._recovery = deque(self._history)
                 if self.module == "train-controller-hw" and (
                     rebooted or self._lost_running
                 ):
@@ -221,12 +217,9 @@ class HardwareRelay(QObject):
                 f"PI_REPLAYED {current['op']} id={current['id']} "
                 f"tick={current['tick']}"
             )
-            # A recovery policy action is itself part of future reconstruction.
-            if current.get("action") == "recovery_gains":
-                self._history.append(current)
             self._pump_recovery()
             return
-        if op != "REJECTED":
+        if op != "REJECTED" and current.get("action") in REPLAYED_ACTIONS:
             self._history.append(current)
         if current["op"] == "STEP":
             trains = incoming.get("outputs", {}).get("trains")
@@ -236,13 +229,6 @@ class HardwareRelay(QObject):
                     for key, value in self._gains.items()
                     if key in trains
                 }
-            metric = dict(
-                incoming.get("metrics", {}),
-                tick=current["tick"],
-                request_bytes=len(p.encode(current)),
-                reply_bytes=len(p.encode(incoming)),
-            )
-            self.metrics.append(metric)
             self.reply.emit(incoming)
         else:
             self.completed.emit(current["id"], incoming)
