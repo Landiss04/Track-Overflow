@@ -119,6 +119,13 @@ ENGINE_TEST_SAMPLES = 5
 # often, so a repair is seen without the driver doing anything. Each
 # test lets the train roll for about 2 s.
 ENGINE_RETEST_S = 10.0
+# Starting from a stand, power this long with the speed not up by
+# ENGINE_RISE_MPS runs the test too: a dead engine on the flat never
+# moves, so its speed never falls for the steady-fall rule to see. A
+# working engine gives at least ENGINE_TEST_MIN_MPS2 more than without
+# power, so a slow start on a grade passes the test and carries on.
+ENGINE_START_S = 2.0
+ENGINE_RISE_MPS = SERVICE_BAND_MPS
 
 # ---------------------------------------------------------------- gains
 # Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three

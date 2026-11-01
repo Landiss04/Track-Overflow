@@ -24,6 +24,8 @@ from .constants import (
     ENGINE_SMOOTH_S,
     ENGINE_STRAIGHT_FRACTION,
     ENGINE_RETEST_S,
+    ENGINE_RISE_MPS,
+    ENGINE_START_S,
     ENGINE_TEST_MIN_MPS2,
     ENGINE_TEST_POWER_W,
     ENGINE_TEST_SAMPLES,
@@ -126,6 +128,12 @@ class ControllerCore:
         # Seconds held at a stand since the last test, towards the
         # next one (ENGINE_RETEST_S).
         self._engine_held_s = 0.0
+        # The start check (_check_start): seconds of power from a
+        # stand, the speed they began at, and whether a test has
+        # already passed this start.
+        self._start_s = 0.0
+        self._start_ref_mps = 0.0
+        self._start_passed = False
 
     @property
     def failed(self) -> list[str]:
@@ -307,10 +315,11 @@ class ControllerCore:
             elif s.failures["brake"]:
                 s.failures["brake"] = False
 
-        if s.failures["engine"]:
+        if s.failures["engine"] or self._engine_test:
             self._test_engine()
         else:
             self._detect_engine()
+            self._check_start()
 
         s.failures["signal_pickup"] = s.signal_lost
 
@@ -403,6 +412,42 @@ class ControllerCore:
         if pull >= ENGINE_TEST_MIN_MPS2:
             s.failures["engine"] = False
             self._engine_window.clear()
+            self._start_passed = True
+        else:
+            s.failures["engine"] = True
+
+    def _check_start(self) -> None:
+        # REQUIREMENTS.md §4. Power from a stand with no brake, and the
+        # speed not up ENGINE_RISE_MPS after ENGINE_START_S: test the
+        # engine. Once a test has passed, not again until the train
+        # has moved off or the power has stopped, so a slow, heavy
+        # start is tested once.
+        s = self.state
+        v = s.actual_mps
+        pulling = s.power_w > 0.0 and not (
+            s.service_brake or s.emergency_brake
+            or s.fb_service_brake or s.fb_emergency_brake)
+        if not pulling:
+            self._start_s = 0.0
+            self._start_passed = False
+            return
+        if not self._start_s and abs(v) >= STANDSTILL_MPS:
+            # Moving. Only once under way forwards is the next start
+            # from a stand checked again: a slow climb that rolls back
+            # while tested is not tested over and over.
+            if v > 0.0:
+                self._start_passed = False
+            return
+        if self._start_passed:
+            return
+        if not self._start_s:
+            self._start_ref_mps = v
+        self._start_s += self.dt
+        if v > self._start_ref_mps + ENGINE_RISE_MPS:
+            self._start_s = 0.0
+        elif self._start_s >= ENGINE_START_S and self._may_test_engine():
+            self._start_s = 0.0
+            self._start_engine_test()
 
     def _start_engine_test(self) -> None:
         self._engine_test, self._engine_test_ticks = "wait", 0
@@ -410,10 +455,10 @@ class ControllerCore:
         self._engine_held_s = 0.0
 
     def _may_test_engine(self) -> bool:
-        # Power is sent only with the engine the one failure, some
+        # Power is sent only with no failure but the engine's, some
         # authority, the doors closed, and the power command agreed.
         s = self.state
-        return (self.failed == ["engine"] and self.authority_blocks > 0
+        return (set(self.failed) <= {"engine"} and self.authority_blocks > 0
                 and not (s.doors_left or s.doors_right
                          or s.fb_doors_left or s.fb_doors_right)
                 and not s.vital_breach)
@@ -446,7 +491,7 @@ class ControllerCore:
         """
         new = set(self.failed) - self._braked_for
         self._braked_for = set(self.failed)
-        if not self.failed:
+        if not self.failed and not self._engine_test:
             return
         s = self.state
         s.target_mps = 0.0
@@ -536,7 +581,7 @@ class ControllerCore:
             return False
         s.emergency_brake = False
         self.stop_reason = ""
-        if self._may_test_engine():
+        if self.failed == ["engine"] and self._may_test_engine():
             self._start_engine_test()
         return True
 

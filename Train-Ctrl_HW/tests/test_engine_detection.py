@@ -36,6 +36,7 @@ from train_ctrl.constants import (  # noqa: E402
     EBRAKE_DECEL_MPS2,
     ENGINE_DETECT_S,
     ENGINE_RETEST_S,
+    ENGINE_START_S,
     GRAVITY_MPS2,
     MASS_KG,
     MAX_FORCE_N,
@@ -355,6 +356,35 @@ class EngineTestTest(unittest.TestCase):
         rig.run(4 * (ENGINE_RETEST_S + self.TEST_S))
         self.assertEqual(rig.core.failed, ["engine"])
         self.assertTrue(rig.core.state.service_brake)
+
+    def test_a_dead_engine_at_a_stand_is_found_on_starting(self) -> None:
+        # Fails while standing on the flat: its speed never falls, so
+        # only the start check finds it, once power is asked for.
+        rig = Rig(Plant(0.0, 0.0, LOADED_KG), 0.0)
+        rig.run(5.0)
+        rig.plant.engine_failed = True
+        rig.run(5.0)
+        self.assertEqual(rig.core.failed, [])
+        rig.core.state.commanded_mps = 10.0
+        rig.run(ENGINE_START_S + self.TEST_S)
+        self.assertEqual(rig.core.failed, ["engine"])
+        self.assertTrue(rig.core.state.emergency_brake)
+
+    def test_a_slow_healthy_start_is_tested_once(self) -> None:
+        # Heavy on 5 %: barely climbing, so the start check runs the
+        # test, which passes; it is not run again while it crawls.
+        # 111 passengers and the crew, as the Train Model has them.
+        rig = Rig(Plant(0.0, 5.0, 40_900.0 + 116 * 77.1), 0.0)
+        rig.plant.rolls_back = True
+        tests, running = 0, False
+        rig.core.state.commanded_mps = 10.0
+        for _ in range(round(60.0 / TICK_S)):
+            rig.tick()
+            now = bool(rig.core._engine_test)
+            tests += now and not running
+            running = now
+        self.assertEqual(rig.core.failed, [])
+        self.assertLessEqual(tests, 1)
 
     def test_it_runs_in_manual_without_a_speed_set(self) -> None:
         rig = self.latched_at_a_stand()
