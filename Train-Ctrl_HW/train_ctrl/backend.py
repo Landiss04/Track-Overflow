@@ -589,10 +589,7 @@ class ConsoleBackend(QObject):
         s = self.core.state
         if not s.emergency_brake:
             self.core.engage_emergency()
-            self.brake_note = (
-                "Emergency brake engaged. "
-                "Release it from the same control."
-            )
+            self.brake_note = "Emergency brake engaged."
         elif self.core.release_emergency():
             self.brake_note = ""
         elif not self.core.at_stand:
@@ -844,10 +841,8 @@ class ConsoleBackend(QObject):
         self._sync_roster()
         if self.core.state.emergency_brake and not self.brake_note:
             reason = self.core.stop_reason
-            self.brake_note = (
-                f"Emergency brake engaged: {reason} detected. "
-                if reason else "Emergency brake engaged. "
-            ) + "Release it from the same control."
+            self.brake_note = (f"Emergency brake engaged: {reason} detected."
+                               if reason else "Emergency brake engaged.")
         self._publish()
 
     def _publish(self) -> None:
