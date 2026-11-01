@@ -256,7 +256,8 @@ the Cab controls badge.
 | `b4d9dc4` | 11-01 | Readouts with a decimal ("Your speed", "Commanded speed", the dial's target) draw the point at its own width, from the UI face, so "20.0" is spaced like "72" (`components/DecimalText.qml`). |
 | `3551163` | 11-01 | Held at a stand after the engine test found the engine dead, the test runs again every 10 s, so a repair is found without the driver (R48). |
 | `b2f9762` | 11-01 | Start check: from a stand, 2 s of power with no rise runs the engine test, so an engine that fails while the train stands is found (R49). |
-| (next) | 11-01 | The bench spawns the console for the line: `main.py --test` opens the bench alone, Red Line trains open the HW console and Green Line trains the SW one, each on its own backend, on one bench clock; the time is typed; `--both` removed (#45, R50). |
+| `4ceba5f` | 11-01 | The bench spawns the console for the line: `main.py --test` opens the bench alone, Red Line trains open the HW console and Green Line trains the SW one, each on its own backend, on one bench clock; the time is typed; `--both` removed (#45, R50). |
+| (next) | 11-01 | Closing `main.py --test` printed "Cannot read property 'snapshot' of null" from every window: the backends were freed before the windows reading them. The windows and the engine now go first. |
 
 ---
 

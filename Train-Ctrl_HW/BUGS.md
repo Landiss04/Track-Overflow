@@ -66,7 +66,7 @@ a bug with no recorded date for a step is not counted for that step.
 | 2026-10-16 | 2 | 2 | 1 | 1 |
 | 2026-10-23 | 10 | 10 | 9 | 2 |
 | 2026-10-30 | 10 | 9 | 5 | 9 |
-| 2026-11-06 (to 11-01) | 5 | 5 | 8 | 1 |
+| 2026-11-06 (to 11-01) | 6 | 6 | 9 | 1 |
 
 Not counted in Reported: the gains hand-over (#16) and the 0/0 pickup rule,
 whose first report is not dated in the record. Both are in the resolved
@@ -76,7 +76,7 @@ note for the CTC Office, B5, B6 and B7 were in the numbers drawer, and B9
 was in `check.py`.
 
 **To resolve by 2026-11-06:** B1, B2 and B3 are done (R40, R41, R43), and
-the five found on 2026-11-01 (R46–R49). Left: B8, narrowed by the
+the six found on 2026-11-01 (R46–R50). Left: B8, narrowed by the
 typed time (#45) and left for the bench refactor.
 
 ## Resolved
@@ -108,10 +108,11 @@ One line each; details in the commits.
 | Released with a brake failure latched, nothing stopped the train: −3.5 m/s after 20 s on +2 %, +9.4 m/s on −5 % | 11-01 | 11-01 | 11-01 `d7836b5` (R47) |
 | Under an engine failure's stop, a brake failure was not detected: only service brake commands with the e-brake off counted | 11-01 | 11-01 | 11-01 `d7836b5` (R47) |
 | After the engine test found the engine dead, a later repair was not found until the driver engaged and released the e-brake | 11-01 | 11-01 | 11-01 `3551163` (R48) |
-| An engine that failed while the train stood was never found on the flat: 480 kW commanded indefinitely | 11-01 | 11-01 | 11-01 (R49) |
+| An engine that failed while the train stood was never found on the flat: 480 kW commanded indefinitely | 11-01 | 11-01 | 11-01 `b2f9762` (R49) |
+| Closing the bench (`main.py --test`) printed "Cannot read property 'snapshot' of null" from every window | 11-01 | 11-01 | 11-01 |
 
 The seven texts count as seven bugs and review items 5–9 as five, so the
-log's 24 rows are 30 resolved bugs.
+log's 25 rows are 31 resolved bugs.
 
 ## Notes for other modules
 

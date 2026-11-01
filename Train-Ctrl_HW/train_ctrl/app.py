@@ -21,6 +21,7 @@ from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext
 # Imported for its side effect: it registers QQuickWindow, so the
 # windows QML creates expose grabWindow() to the self-check.
 from PySide6.QtQuick import QQuickWindow  # noqa: F401
+import shiboken6
 
 from ui.aspect_lock import install_window_scaling
 
@@ -92,7 +93,12 @@ def run_bench() -> int:
         return 1
     lock = install_window_scaling(windows[0])  # noqa: F841
     exit_code = app.exec()
-    # The consoles go before the engine that made them.
+    # The windows go first, then the engine, while the backends they
+    # read as `controller` still exist: freed the other way round, every
+    # binding reads a null controller on its way out.
+    for _context, window, _lock in consoles.values():
+        shiboken6.delete(window)
+    shiboken6.delete(engine)
     consoles.clear()
     return exit_code
 
