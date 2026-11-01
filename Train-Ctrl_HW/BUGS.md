@@ -18,7 +18,7 @@ Not tracked here:
 - **Questions for other modules.** Those go in
   [Notes for other modules](#notes-for-other-modules) at the end.
 
-Last updated 2026-10-31, on `Train_Ctrl_integration` `fdf5844`. Sources: this
+Last updated 2026-11-01, on `Train_Ctrl_integration` `8cb89dc`. Sources: this
 branch's git history and `CHANGELOG.md`, and Kevin Schillinger's harness
 walkthrough on `claude/quirky-fermi-sickg4` `51eca3b`
 (`documents/central-harness-windows-gui-2026-10-28.md`, "F" numbers, and
@@ -62,7 +62,7 @@ a bug with no recorded date for a step is not counted for that step.
 | 2026-10-16 | 2 | 2 | 1 | 1 |
 | 2026-10-23 | 10 | 10 | 9 | 2 |
 | 2026-10-30 | 10 | 9 | 5 | 9 |
-| 2026-11-06 (to 10-31) | 0 | 0 | 3 | 1 |
+| 2026-11-06 (to 11-01) | 3 | 3 | 6 | 1 |
 
 Not counted in Reported: the gains hand-over (#16) and the 0/0 pickup rule,
 whose first report is not dated in the record. Both are in the resolved
@@ -71,8 +71,9 @@ On 2026-10-31 five bugs left the count without being resolved: B4 became a
 note for the CTC Office, B5, B6 and B7 were in the numbers drawer, and B9
 was in `check.py`.
 
-**To resolve by 2026-11-06:** B1, B2 and B3 are done (R40, R41, R43). Left:
-B8, with `OPEN_ISSUES.md` #45.
+**To resolve by 2026-11-06:** B1, B2 and B3 are done (R40, R41, R43), and
+the three found on 2026-11-01 (R46, R47). Left: B8, with `OPEN_ISSUES.md`
+#45.
 
 ## Resolved
 
@@ -99,9 +100,12 @@ One line each; details in the commits.
 | A signal pickup failure never cleared under the harness (B1, F37) | 10-28 | 10-30 | 10-31 (R40) |
 | A negative gain was saved as 0 without a word, for good (B2, F23) | 10-28 | 10-31 | 10-31 (R41) |
 | A healthy train climbing a grade was taken for an engine failure (B3, #28) | 10-21 | 10-21 | 10-31 (R43; measured in `REQUIREMENTS.md` §4) |
+| The driver's try could resolve a dead engine on a down-grade, where the speed rises without power, and could not resolve a repaired one under a heavy load on +5 % | 11-01 | 11-01 | 11-01 `87cdc89` (R46) |
+| Released with a brake failure latched, nothing stopped the train: −3.5 m/s after 20 s on +2 %, +9.4 m/s on −5 % | 11-01 | 11-01 | 11-01 `d7836b5` (R47) |
+| Under an engine failure's stop, a brake failure was not detected: only service brake commands with the e-brake off counted | 11-01 | 11-01 | 11-01 `d7836b5` (R47) |
 
 The seven texts count as seven bugs and review items 5–9 as five, so the
-log's 19 rows are 25 resolved bugs.
+log's 22 rows are 28 resolved bugs.
 
 ## Notes for other modules
 
