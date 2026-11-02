@@ -4,6 +4,19 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-02 — Switch commands outlast maintenance mode
+
+From Landis (INPUT-1, relayed by Kevin 2026-11-02, and confirmed directly):
+a switch set in maintenance mode holds through Automatic and Manual until
+the dispatcher, back in maintenance mode, releases it.
+
+- `ctc/model.py` `set_maintenance_mode()`: leaving maintenance mode no
+  longer clears the switch commands. `release_switch()` now requires
+  maintenance mode, as `set_switch()` does.
+- Panel texts, the README and `tests/test_ctc_boundary.py` follow.
+  Truth: proposal `20261102-0829-maintenance-switches-persist.md` on
+  `claude/quirky-fermi-sickg4`.
+
 ## 2026-10-30 — Windows GUI walkthrough fixes (CTC)
 
 From Landis's review of the CTC findings in

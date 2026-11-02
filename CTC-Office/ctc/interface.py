@@ -453,12 +453,14 @@ class CtcOffice(Protocol):
         ...
 
     def release_switch(self, line: str, switch_id: str) -> None:
-        """Drop the command for one switch, if there is one."""
+        """Drop the command for one switch, if there is one.
+        Maintenance mode only."""
         ...
 
     def set_maintenance_mode(self, active: bool) -> None:
-        """Enter or leave maintenance mode; leaving it drops every
-        switch command."""
+        """Enter or leave maintenance mode. Closed blocks and switch
+        commands outlast it; only the dispatcher removes them, in
+        maintenance mode."""
         ...
 
     def set_clock_speedup(self, active: bool) -> None:

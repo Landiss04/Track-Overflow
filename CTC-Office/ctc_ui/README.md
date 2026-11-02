@@ -128,8 +128,10 @@ yet) through `ctc_ui/ctc_host.py`:
   `snapshot()` as well as from `step()`.
 - The **Operating mode** toggle switches the right-hand column between the
   Automatic, Manual, and Maintenance views. Maintenance lets the
-  dispatcher close blocks and set switches; leaving it releases every
-  switch command. The mode itself is not sent to the Track Controller:
+  dispatcher close blocks and set switches. Both outlast it: the
+  dispatcher moves freely between Maintenance, Automatic and Manual, and
+  a closure or switch command stays until reopened or released, back in
+  Maintenance (`maintenance-closure-lock`). The mode itself is not sent to the Track Controller:
   it gets `closed_blocks`, every block closed in
   maintenance mode, and may not override a listed block until the
   dispatcher reopens it.
