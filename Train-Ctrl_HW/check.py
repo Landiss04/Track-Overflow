@@ -16,6 +16,7 @@ second copy of the application module.
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -25,16 +26,16 @@ from PySide6.QtCore import (
     Q_RETURN_ARG,
     QMetaObject,
     QObject,
-    QPoint,
     QPointF,
     Qt,
     QTime,
 )
-from PySide6.QtGui import QGuiApplication, QWheelEvent
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
 import train_ctrl as mod
+from train_ctrl.bench import BenchBackend
 from train_ctrl.bench_sim import SimTrain
 from train_ctrl.vital import PowerResult, compute_power, vote_2oo3
 
@@ -202,7 +203,7 @@ def run_check(
 
     backend.spawn_train(114, "GREEN LINE", "GREEN K")
     expect(backend.snapshot["has_train"], "spawning did not produce a train")
-    expect(backend.snapshot["train_id"] == "T-114",
+    expect(backend.snapshot["train_id"] == "G-114",
            "the spawned train did not take the number asked for")
     expect(not backend.core.armed, "controller armed before commissioning")
     expect(backend.snapshot["clock"] == "05:00:00",
@@ -249,6 +250,12 @@ def run_check(
     # The engineer's pop-up commissions the gains; the bench cannot.
     backend.apply_bench_inputs({"kp": 1000, "ki": 10})
     expect(not backend.core.armed, "the bench commissioned the gains")
+    # A negative gain is refused with the reason, never saved as
+    # another value (BUGS.md B2).
+    backend.commission_gains(-5, 8000)
+    expect(not backend.core.armed and backend.snapshot["gains_note"]
+           == "Kp and Ki cannot be negative.",
+           "a negative gain was not refused with its reason")
     backend.commission_gains(400000, 8000)
     expect(backend.core.armed, "commissioning did not arm the controller")
     _settle(app, mod.GAINS_HANDOVER_MS + 400)
@@ -293,6 +300,26 @@ def run_check(
     backend.set_paused(False)
     expect(_until(app, lambda: backend.core.state.actual_mps > held[0], 5),
            "the train did not move on after resuming")
+
+    # The Stop panel's badge says why the service brake is on: slowing
+    # to a lower target, held stopped at a target of 0, or the
+    # driver's press.
+    state = backend.core.state
+    _until(app, lambda: state.actual_mps * mod.MPS_TO_MPH > 20.0, 60)
+    backend.set_target_mph(10)
+    expect(_until(app, lambda: state.fb_service_brake, 10)
+           and _until(app, lambda: on_screen(window, "Braking"), 2),
+           "the badge did not say Braking while slowing")
+    backend.set_target_mph(0)
+    expect(_until(app, lambda: on_screen(window, "Holding"), 60),
+           "the badge did not say Holding when stopped at a target of 0")
+    backend.toggle_service_brake()
+    expect(_until(app, lambda: on_screen(window, "Driver brake"), 2),
+           "the badge did not say Driver brake for the driver's press")
+    backend.toggle_service_brake()
+    backend.set_target_mph(35)
+    expect(_until(app, lambda: state.actual_mps > 2.0, 30),
+           "the train did not drive off again")
 
     # The emergency brake stops the train and latches until it is
     # stopped.
@@ -454,6 +481,29 @@ def run_check(
         expect(dial.property("limit") == top,
                "the dial's scale moved with the commanded speed")
         send({"commanded_speed": 43})
+        _settle(app, 100)
+        tile = window.findChild(QObject, "commandedReadout")
+        shown = tile.property("value") if tile else None
+        expect(shown == "43.0",
+               f"the commanded speed read {shown!r}, not '43.0'")
+
+        # A press sets the target in tenths of a mph (M14). A pixel is
+        # about 0.1 mph on the ring, so near 22.4 rather than on it.
+        wanted = 22.4
+        angle = math.radians(135 + wanted / top * 270)
+        ring = dial.property("radius") - dial.property("ringWidth") / 2
+        at = dial.mapToScene(QPointF(
+            dial.width() / 2 + ring * math.cos(angle),
+            dial.height() / 2 + ring * math.sin(angle)))
+        QTest.mouseClick(window, Qt.MouseButton.LeftButton,
+                         Qt.KeyboardModifier.NoModifier, at.toPoint())
+        _settle(app, 50)
+        got = backend.snapshot["target_mph"]
+        expect(abs(got * 10 - round(got * 10)) < 1e-6
+               and got != round(got) and abs(got - wanted) <= 0.15,
+               f"a press at {wanted} mph on the dial set {got:.2f} mph, "
+               "not a tenth near it")
+        backend.set_target_mph(30)
 
     # The numbers drawer goes in the final iteration, and this with it.
     drawer = window.findChild(QObject, "numbersDrawer")
@@ -678,50 +728,18 @@ def run_check(
     expect(backend.time_s == before and "HH:MM" in
            backend.snapshot["bench_error"],
            "the bench took a time that is not one, or said nothing")
-    # The bench's time is picked on three wheels, hours 0-23 and
-    # minutes and seconds 0-59, each scrolled a notch at a time or
-    # dragged, then set with the button beside them.
-    wheels = bench.findChild(QQuickItem, "benchTimeWheels")
-    minutes = bench.findChild(QQuickItem, "minutesWheel")
-    expect(wheels is not None and minutes is not None,
-           "the bench's time wheels are missing")
-    if wheels is not None and minutes is not None:
-        counts = [bench.findChild(QQuickItem, name).property("count")
-                  for name in ("hoursWheel", "minutesWheel",
-                               "secondsWheel")]
-        expect(counts == [24, 60, 60],
-               f"the time wheels run {counts}, not 24 / 60 / 60")
-        for name, value in (("hours", 18), ("minutes", 30),
-                            ("seconds", 15)):
-            wheels.setProperty(name, value)
-        centre = minutes.mapToScene(
-            QPointF(minutes.width() / 2, minutes.height() / 2))
-        QGuiApplication.sendEvent(bench, QWheelEvent(
-            centre, centre, QPoint(0, 0), QPoint(0, -120), Qt.NoButton,
-            Qt.NoModifier, Qt.NoScrollPhase, False))
-        _settle(app, 200)
-        expect(minutes.property("currentIndex") == 31,
-               "a scroll notch did not step the minutes by one")
-        point = centre.toPoint()
-        QTest.mousePress(bench, Qt.LeftButton, Qt.NoModifier, point)
-        for rise in range(0, 60, 4):
-            QTest.mouseMove(bench, QPoint(point.x(), point.y() - rise), 10)
-        QTest.mouseRelease(bench, Qt.LeftButton, Qt.NoModifier,
-                           QPoint(point.x(), point.y() - 60), 10)
-        _settle(app, 1500)
-        expect(minutes.property("currentIndex") != 31,
-               "dragging the minutes wheel did not move it")
-        wheels.setProperty("minutes", 30)
-        picked = QMetaObject.invokeMethod(
-            wheels, "timeText", Q_RETURN_ARG("QVariant"))
-        picked = picked.toVariant() if hasattr(picked, "toVariant") \
-            else picked
-        expect(picked == "18:30:15",
-               f"the wheels read {picked!r}, not '18:30:15'")
-        backend.set_bench_time(picked)
+    # The bench's time is typed, HH:MM or HH:MM:SS, and set with Return
+    # or the button beside it (OPEN_ISSUES.md #45).
+    field = bench.findChild(QQuickItem, "benchTimeField")
+    expect(field is not None, "the bench's time field is missing")
+    if field is not None:
+        field.setProperty("text", "18:30:15")
+        field.forceActiveFocus()
+        QTest.keyClick(bench, Qt.Key_Return)
+        _settle(app, 100)
         tick()
         expect(backend.snapshot["clock"] == "18:30:15",
-               "the time on the wheels did not reach the controller")
+               "the time typed on the bench did not reach the controller")
     backend.set_bench_time("05:00")
     tick()
     # The beacon is heard at a station, every tick; away from one,
@@ -756,6 +774,33 @@ def run_check(
                "picking a search result did not select that train")
         picker.setProperty("query", "")
         backend.select_train(first)
+
+    # Standalone the console is the HW one, every line (M13).
+    expect(window.title() == "HW Train Controller",
+           f"the standalone console is titled {window.title()!r}")
+    # Under a harness each variant's console is named for it and its
+    # line, and lists and picks only that line's trains (M13). The
+    # harness names a line "Green", the bench "GREEN LINE".
+    for variant, mine, other, title in (
+            ("SW", "G1", "R1", "SW Train Controller — Green Line"),
+            ("HW", "R1", "G1", "HW Train Controller — Red Line")):
+        fleet = mod.TrainControllerFleet()
+        fleet.add("G1", "Green")
+        fleet.add("R1", "Red")
+        harnessed = type(backend)(fleet=fleet, variant=variant,
+                                  line=mod.VARIANT_LINES[variant])
+        listed = [t["id"] for t in harnessed.trains]
+        expect(listed == [mine],
+               f"the {variant} console lists {listed}, not [{mine}]")
+        expect(harnessed.selected == mine,
+               f"the {variant} console started on {harnessed.selected}")
+        harnessed.select_train(other)
+        expect(harnessed.selected == mine,
+               f"the {variant} console picked {other}, off its line")
+        expect(harnessed.snapshot["window_title"] == title,
+               f"the {variant} console is titled "
+               f"{harnessed.snapshot['window_title']!r}, not {title!r}")
+        harnessed.deleteLater()
 
     # The roster only signals when a train is added or removed, so the
     # pickers' lists are not rebuilt on every UI tick.
@@ -818,7 +863,7 @@ def run_check(
     # each one from what comes back (REQ-FUNC-038). A detected failure
     # applies and latches the emergency brake and stops the train
     # (REQ-FUNC-037.2), and refuses driving until the bench clears it;
-    # once stopped, the driver may release the brake in Manual only
+    # once stopped, the driver may release the brake in either mode
     # (REQUIREMENTS.md M2, M3). Ten times real time keeps the stops
     # short.
     backend.set_sim_rate(mod.SIM_RATES.index(10))
@@ -860,9 +905,11 @@ def run_check(
             expect(_until(app, lambda: state.fb_emergency_brake, 2),
                    "the emergency brake did not report applied during "
                    "a brake failure")
-            expect(state.service_brake and state.service_request,
-                   "the service brake stopped being commanded under a "
-                   "brake failure")
+            # The press the brake did not answer is dropped, so the
+            # driver presses again to try it (REQUIREMENTS.md M4).
+            expect(not state.service_request,
+                   "the driver's unanswered service brake press was not "
+                   "dropped")
             expect(state.actual_mps <= asked,
                    "the train sped up on a brake failure")
         else:
@@ -888,21 +935,27 @@ def run_check(
             bench.grabWindow().save(str(shots / "07-test.png"))
 
         # Latched while the bench still has it in: no target, no
-        # service brake, still detected at a stand, and no release in
-        # Automatic.
+        # service brake, still detected at a stand.
         _settle(app, 300)
         expect(state.failures[key],
                f"the {name} cleared by itself while still injected")
         # The mode still switches, both ways, so the driver can try the
-        # train in Manual; the failure keeps it stopped either way.
+        # train in either; the failure keeps it stopped either way. The
+        # driver may release the brake at a stand in Automatic too
+        # (REQUIREMENTS.md M2, M3), and engages it again here so the
+        # release in Manual below is tried as well.
         backend.set_manual(False)
         expect(not state.manual,
                f"the mode would not switch to Automatic during a {name}")
         backend.toggle_emergency_brake()
-        expect(state.emergency_brake,
-               f"the emergency brake released in Automatic during a "
-               f"{name}")
+        expect(not state.emergency_brake,
+               f"the driver could not release the emergency brake in "
+               f"Automatic during a {name}")
         scan("06-failure-automatic-release")
+        # Engaged again; it abandons any test of the engine (§4), whose
+        # power the next tick clears.
+        backend.toggle_emergency_brake()
+        _settle(app, 200)
         backend.set_manual(True)
         expect(state.manual,
                f"the mode would not switch to Manual during a {name}")
@@ -936,11 +989,35 @@ def run_check(
 
         # The bench clears its injected failure; the e-brake is already
         # off. A brake failure the controller then resolves itself,
-        # once the service brake answers again (REQUIREMENTS.md §4);
-        # the others it cannot see resolved, so the bench clears them
-        # directly (M3, OPEN_ISSUES.md #23).
+        # once the service brake answers again, and a signal pickup
+        # failure once the Track Signal arrives non-null
+        # (REQUIREMENTS.md §4); an engine failure once the differential
+        # test at a stand, started by the driver's release of the
+        # emergency brake, shows the engine pulling (M3, OPEN_ISSUES.md
+        # #23). The bench never clears one in the controller directly.
         backend.apply_bench_inputs({row: False})
-        if key == "brake":
+        if key == "engine":
+            expect(state.failures[key],
+                   "clearing the engine failure on the bench cleared it "
+                   "in the controller directly")
+            # The release above tested the engine while it was still
+            # dead; engaging and releasing again tests it once more.
+            backend.toggle_emergency_brake()
+            backend.toggle_emergency_brake()
+            expect(not state.emergency_brake,
+                   "the driver could not release the emergency brake "
+                   "to test the engine")
+            expect(_until(app, lambda: not backend.core.failed, 10),
+                   "the engine failure did not resolve when the test "
+                   "found the engine pulling")
+        elif key == "signal_pickup":
+            expect(state.failures[key],
+                   "clearing the signal pickup failure on the bench "
+                   "cleared it in the controller directly")
+            expect(_until(app, lambda: not backend.core.failed, 10),
+                   "the signal pickup failure did not resolve once the "
+                   "Track Signal arrived again")
+        elif key == "brake":
             expect(state.failures[key],
                    "clearing the brake failure on the bench cleared it in "
                    "the controller directly")
@@ -951,15 +1028,13 @@ def run_check(
                    "brake answered")
             backend.toggle_service_brake()
             drive_off("after the brake failure resolved")
-        else:
-            expect(not backend.core.failed,
-                   f"clearing the {name} on the bench did not resolve it")
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
-    # An engine failure at a steady cruise shows only once traction is
-    # needed: the toy plant has no resistance, so holding speed takes
-    # no power and a dead engine changes nothing until the train is
-    # asked to speed up (OPEN_ISSUES.md).
+    # An engine failure at a steady cruise: holding speed on the toy
+    # plant takes no power, but a dead engine leaves rolling
+    # resistance, so the speed falls steadily under the power the speed
+    # law then asks for, and the steady fall finds it once a full
+    # window has fallen (REQUIREMENTS.md §4, BUGS.md B3).
     cruise = mod.ControllerCore()
     cruise.armed = True
     cruise.state.manual = True
@@ -970,14 +1045,14 @@ def run_check(
     cruise.set_target_mps(20 / mod.MPS_TO_MPH)
     drive(cruise, plant, 60)
     plant.injected["engine"] = True
-    drive(cruise, plant, 10)
+    drive(cruise, plant, mod.ENGINE_DETECT_S - 1)
     expect(not cruise.failed,
-           "an engine failure was claimed at a cruise needing no power")
-    cruise.set_target_mps(30 / mod.MPS_TO_MPH)
+           "an engine failure was claimed before a full window had "
+           "fallen")
     drive(cruise, plant, 5)
     expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
-           "an engine failure at cruise was not found once speed was "
-           "asked for")
+           "an engine failure at cruise was not found by its steady "
+           "fall")
 
     # A brake failure is concluded on the tick after the service brake
     # is commanded, when its state still reads off; a working brake is
@@ -1002,9 +1077,9 @@ def run_check(
         if failed:
             expect(quick.failed == ["brake"]
                    and quick.state.emergency_brake
-                   and quick.state.service_brake,
+                   and not quick.state.service_request,
                    "a brake failure was not concluded on the next tick, "
-                   "with the service brake still commanded")
+                   "with the unanswered press dropped")
         else:
             drive(quick, plant, 5)
             expect(not quick.failed,
@@ -1516,8 +1591,7 @@ def run_check(
 
     # The station dwell pill on both headers (REQUIREMENTS.md M6):
     # full when the dwell starts, half after half of it, gone after.
-    # The last block first: both falling to 0 from 2 or more blocks
-    # at once would read as a lost pickup.
+    # The last block, then a stop.
     sim = backend.sim
     sim.authority_blocks = 1
     tick()
@@ -1585,6 +1659,44 @@ def run_check(
            "brake let go by itself")
     if drawer is not None:
         drawer.setProperty("expanded", False)
+
+    # The bench on its own (main.py --test) stands in for the harness:
+    # a train spawned on the Red Line opens the HW console, on the Green
+    # Line the SW one, each on its own backend; the bench edits any
+    # train and steps both on one clock (OPEN_ISSUES.md #45).
+    opened: list[str] = []
+    bench_only = BenchBackend(lambda b: opened.append(b.variant))
+    bench_only._control.stop()
+    hw, sw = bench_only.backends["HW"], bench_only.backends["SW"]
+    bench_only.spawn_train(1, "RED LINE", "A")
+    bench_only.spawn_train(2, "GREEN LINE", "A")
+    expect(opened == ["HW", "SW"] and "R-1" in hw.fleet
+           and "G-2" in sw.fleet and "G-2" not in hw.fleet,
+           f"spawning opened {opened}, not the HW console for the Red "
+           "Line and the SW one for the Green")
+    expect(hw.snapshot["window_title"] == "HW Train Controller — Red Line"
+           and sw.snapshot["window_title"]
+           == "SW Train Controller — Green Line",
+           "the consoles the bench opened are not titled for their line")
+    expect(bench_only.editing == "R-1"
+           and [t["id"] for t in bench_only.trains] == ["R-1", "G-2"],
+           "the bench did not list both lines' trains, or left the "
+           "first one spawned")
+    bench_only.select_train("G-2")
+    bench_only.apply_bench_inputs({"commanded_speed": 30})
+    expect(round(sw.sims["G-2"].commanded_mps * mod.MPS_TO_MPH) == 30
+           and hw.sims["R-1"].commanded_mps == 0.0,
+           "a bench edit did not reach the train being edited, or "
+           "reached the other line's")
+    bench_only.set_bench_time("18:00")
+    bench_only._step_all()
+    expect(hw.time_s == sw.time_s == bench_only.time_s
+           and hw.fleet.get("R-1").state.time_s == 18 * 3600,
+           "the two lines are not on the bench's one clock")
+    bench_only.remove_train("G-2")
+    expect(bench_only.editing == "R-1" and "G-2" not in sw.fleet,
+           "removing the edited train did not move the bench on")
+    bench_only._ui.stop()
 
     for text, seen in sorted(cut.items()):
         expect(False, f"text cut off: {text!r} ({', '.join(seen[:3])})")
