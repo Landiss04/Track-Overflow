@@ -155,8 +155,18 @@ class StubModuleTest(unittest.TestCase):
         ctc.release_switch("Red", "9")
         self.assertEqual(len(ctc.snapshot().outputs.track_controller
                              .switch_commands), 1)
-        # Leaving maintenance mode hands every switch back.
+        # Switch commands outlast maintenance mode, through Automatic
+        # and Manual, and are released only back in maintenance.
         ctc.set_maintenance_mode(False)
+        ctc.set_automatic_mode(True)
+        ctc.set_automatic_mode(False)
+        self.assertEqual(
+            ctc.snapshot().outputs.track_controller.switch_commands,
+            (SwitchCommand("Green", "12", "reverse"),))
+        with self.assertRaises(MaintenanceModeRequiredError):
+            ctc.release_switch("Green", "12")
+        ctc.set_maintenance_mode(True)
+        ctc.release_switch("Green", "12")
         self.assertEqual(
             ctc.snapshot().outputs.track_controller.switch_commands, ())
 

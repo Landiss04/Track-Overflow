@@ -420,8 +420,9 @@ class StubCtcOffice:
     for the route, and never ends next to another train's block or
     authority (one empty block between trains); no switch thrown under
     a train.
-    Block closures are maintenance-mode only and wait for an occupied
-    block to clear. Failed blocks are inferred from occupancy
+    Block closures and switch commands are set and removed in
+    maintenance mode only, and both outlast it
+    (``maintenance-closure-lock``). Failed blocks are inferred from occupancy
     (``ctc.tracking``) and shown to the UIs only as occupied. Nothing is
     sent to a line's Track Controller until it reports the line ready,
     and no train is dispatched on it: closures and switch commands are
@@ -755,19 +756,22 @@ class StubCtcOffice:
         self._switches[(line, switch_id)] = position
 
     def release_switch(self, line: str, switch_id: str) -> None:
-        """Drop the command for one switch, if there is one."""
+        """Drop the command for one switch, if there is one, handing it
+        back to the Track Controller. Maintenance mode only."""
+        if not self._maintenance:
+            raise MaintenanceModeRequiredError(
+                "Switches can be released only in maintenance mode.")
         self._switches.pop((line, switch_id), None)
 
     def set_maintenance_mode(self, active: bool) -> None:
-        """Enter or leave maintenance mode. Leaving drops every switch
-        command, handing the switches back to the Track Controller;
-        closed blocks stay closed."""
+        """Enter or leave maintenance mode. Closed blocks and switch
+        commands stay as they are either way: only the dispatcher,
+        back in maintenance mode, reopens or releases them
+        (``maintenance-closure-lock``)."""
         if not isinstance(active, bool):
             raise InvalidInputError(
                 f"maintenance mode must be true or false, got {active!r}")
         self._maintenance = active
-        if not self._maintenance:
-            self._switches.clear()
 
     def set_clock_speedup(self, active: bool) -> None:
         if not isinstance(active, bool):
