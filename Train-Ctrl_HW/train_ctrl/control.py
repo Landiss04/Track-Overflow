@@ -18,18 +18,23 @@ from .constants import (
     ANNOUNCE_LOCKOUT_MS,
     BENCH_ECHO_TICKS,
     DWELL_S,
-    ENGINE_DETECT_ACCEL_MPS2,
     ENGINE_DETECT_S,
+    ENGINE_FALL_MPS,
+    ENGINE_HOLD_BAND_MPS,
+    ENGINE_SMOOTH_S,
+    ENGINE_STRAIGHT_FRACTION,
+    ENGINE_RETEST_S,
     ENGINE_RISE_MPS,
+    ENGINE_START_S,
+    ENGINE_TEST_MIN_MPS2,
+    ENGINE_TEST_POWER_W,
+    ENGINE_TEST_SAMPLES,
     FAILURES,
-    MASS_KG,
-    MAX_FORCE_N,
     NIGHT_END_S,
     NIGHT_START_S,
     SERVICE_BAND_MPS,
     STANDSTILL_MPS,
     TICK_S,
-    V_FLOOR_MPS,
 )
 from .state import State, TrainModelCommands
 from .vital import PowerInputs, VitalVote, compute_power, vote_2oo3
@@ -91,21 +96,44 @@ class ControllerCore:
         # so a failure still latched after the driver's release does
         # not engage it again (REQUIREMENTS.md M2, M3).
         self._braked_for: set[str] = set()
+        # Why the controller engaged the emergency brake again after the
+        # driver's release, for the console: "rollback" or "runaway"
+        # (respond_to_failures); "" otherwise.
+        self.stop_reason = ""
         self._clear_detection()
 
     def _clear_detection(self) -> None:
         # What detect_failures() carries from one tick to the next.
         # The last echo_ticks commands, oldest first: whether each
-        # asked for the service brake with the emergency brake off,
-        # and whether each engaged the emergency brake. This tick's
-        # reports answer the oldest (the Train Model reports the
-        # service brake off while the emergency brake is engaged,
-        # OPEN_ISSUES.md #23).
+        # asked for the service brake, and whether each engaged the
+        # emergency brake. This tick's reports answer the oldest. The
+        # Train Model reports the service brake whether or not the
+        # emergency brake is on (claude/quirky-fermi-sickg4 57e8847),
+        # so the driver can try it under the emergency brake.
         empty = [False] * self.echo_ticks
         self._service_asked = deque(empty, maxlen=self.echo_ticks)
         self._emergency_sent = deque(empty, maxlen=self.echo_ticks)
-        self._engine_stalled_s = 0.0
-        self._engine_ref_mps = 0.0
+        # The actual speed on each of the last ENGINE_DETECT_S of
+        # ticks, oldest first, kept only while every one of them had
+        # power commanded and no brake commanded or reported.
+        self._engine_window: deque[float] = deque(
+            maxlen=round(ENGINE_DETECT_S / self.dt))
+        # The differential test of a latched engine failure
+        # (_test_engine): its phase ("" when none runs, else "wait",
+        # "on" or "off"), the ticks spent in it, and the speeds read
+        # in each half.
+        self._engine_test = ""
+        self._engine_test_ticks = 0
+        self._engine_test_speeds: dict[str, list[float]] = {}
+        # Seconds held at a stand since the last test, towards the
+        # next one (ENGINE_RETEST_S).
+        self._engine_held_s = 0.0
+        # The start check (_check_start): seconds of power from a
+        # stand, the speed they began at, and whether a test has
+        # already passed this start.
+        self._start_s = 0.0
+        self._start_ref_mps = 0.0
+        self._start_passed = False
 
     @property
     def failed(self) -> list[str]:
@@ -168,10 +196,16 @@ class ControllerCore:
         self._station_stop()
         if self.armed:
             error = s.target_mps - s.actual_mps
-            # A target of zero means stop, so the brake holds to a
-            # stand rather than leaving the train creeping inside the
-            # band with no resistance to bring it down.
-            stopping = s.target_mps <= 0.0 and s.actual_mps > 0.0
+            # A target of zero means stop and stay stopped: the brake
+            # holds the train, at a stand too, and the integrator is
+            # cleared, so nothing it carried from the run creeps the
+            # train against the brake. Not at a stand under a brake
+            # failure: that brake cannot hold it, and the driver's
+            # press is what tries it (REQUIREMENTS.md M4).
+            stopping = s.target_mps <= 0.0 and (
+                s.actual_mps > 0.0 or not s.failures["brake"])
+            if stopping:
+                self.integral = 0.0
             s.service_brake = (
                 error < -SERVICE_BAND_MPS or s.service_request or stopping
             )
@@ -182,7 +216,7 @@ class ControllerCore:
 
         self.respond_to_failures()
         self.enforce_safety()
-        self._service_asked.append(s.service_brake and not s.emergency_brake)
+        self._service_asked.append(s.service_brake)
         self._emergency_sent.append(s.emergency_brake)
 
     def _vital_power(self) -> None:
@@ -256,10 +290,14 @@ class ControllerCore:
                            and this tick's service brake state, its
                            report, still reads off (REQUIREMENTS.md
                            M4)
-            engine         the power commanded should have pulled at
-                           least ENGINE_DETECT_ACCEL_MPS2, no brake is
-                           on, and the actual speed has not risen for
-                           ENGINE_DETECT_S
+            engine         a steady fall: over the last
+                           ENGINE_DETECT_S, power was commanded and no
+                           brake commanded or reported on every tick,
+                           and the speed fell by more than
+                           ENGINE_FALL_MPS (ENGINE_SMOOTH_S means, each
+                           within ENGINE_STRAIGHT_FRACTION of the fall
+                           of a straight line), with the train not
+                           within ENGINE_HOLD_BAND_MPS of its target
             signal pickup  commanded speed or authority arrived null:
                            the Train Model could not read the Track
                            Signal (Kevin Schillinger 2026-10-28). A
@@ -267,45 +305,173 @@ class ControllerCore:
 
         A brake failure resolves when the service brake answers
         again: the command echo_ticks ago asked for it and this tick's
-        report reads it applied (REQUIREMENTS.md §4, M3). The others
-        latch until cleared on the test bench (clear_failure).
+        report reads it applied. A press the brake did not answer is
+        dropped, so the driver presses again to try it once more. A
+        signal pickup failure resolves when commanded speed and
+        authority both arrive non-null again (REQUIREMENTS.md §4, M3).
+        An engine failure resolves when a differential test at a stand
+        shows the engine pulling (_test_engine).
         """
         s = self.state
 
         if self._service_asked[0]:
             if not s.fb_service_brake:
                 s.failures["brake"] = True
+                s.service_request = False
             elif s.failures["brake"]:
                 s.failures["brake"] = False
 
-        v = s.actual_mps
-        force = min(MAX_FORCE_N, s.power_w / max(abs(v), V_FLOOR_MPS))
-        pulling = (force / MASS_KG >= ENGINE_DETECT_ACCEL_MPS2
-                   and not s.service_brake and not s.emergency_brake)
-        if not pulling or v > self._engine_ref_mps + ENGINE_RISE_MPS:
-            # Not asked to pull, or the speed is answering: start
-            # watching again from here.
-            self._engine_stalled_s = 0.0
-            self._engine_ref_mps = v
+        if s.failures["engine"] or self._engine_test:
+            self._test_engine()
         else:
-            self._engine_stalled_s += self.dt
-            if self._engine_stalled_s >= ENGINE_DETECT_S:
-                s.failures["engine"] = True
+            self._detect_engine()
+            self._check_start()
 
-        if s.signal_lost:
-            s.failures["signal_pickup"] = True
+        s.failures["signal_pickup"] = s.signal_lost
 
-    def clear_failure(self, name: str) -> None:
-        """Let go of one detected failure, once it has been resolved.
+    def _detect_engine(self) -> None:
+        # Rules by Kevin Schillinger, 2026-10-21; see detect_failures.
+        # Counted in ticks of simulated time, never wall clock.
+        s = self.state
+        v = s.actual_mps
+        braked = (s.service_brake or s.emergency_brake
+                  or s.fb_service_brake or s.fb_emergency_brake)
+        window = self._engine_window
+        if s.power_w <= 0.0 or braked:
+            # No power asked for, or a brake explains any fall: watch
+            # again from the next clean tick.
+            window.clear()
+            return
+        window.append(v)
+        if len(window) < window.maxlen:
+            return
+        if abs(v - s.target_mps) <= ENGINE_HOLD_BAND_MPS:
+            return                  # holding its target, as told
+        # Half-second means, oldest first: down by more than the
+        # control band in all, and steadily, every mean close to the
+        # straight line from the first to the last.
+        k = round(ENGINE_SMOOTH_S / self.dt)
+        speeds = list(window)
+        means = [sum(speeds[i:i + k]) / k
+                 for i in range(0, len(speeds) - k + 1, k)]
+        fall = means[0] - means[-1]
+        if fall <= ENGINE_FALL_MPS:
+            return
+        last = len(means) - 1
+        if all(abs(m - (means[0] - fall * i / last))
+               <= ENGINE_STRAIGHT_FRACTION * fall
+               for i, m in enumerate(means)):
+            s.failures["engine"] = True
 
-        The test bench decides that, by clearing the failure it
-        injected. The emergency brake stays on until the driver
-        releases it (release_emergency).
-        """
-        self.state.failures[name] = False
-        if name == "engine":
-            self._engine_stalled_s = 0.0
-            self._engine_ref_mps = self.state.actual_mps
+    def _test_engine(self) -> None:
+        # REQUIREMENTS.md §4, OPEN_ISSUES.md #23. The driver's release
+        # of the emergency brake starts the test (release_emergency),
+        # and while the train is held at a stand on the service brake
+        # it starts again every ENGINE_RETEST_S.
+        # With no brake on, it commands full power, then none
+        # (respond_to_failures), and reads the acceleration in each
+        # half from the reported speed, skipping the echo_ticks before
+        # the switch shows. Grade, load and rolling resistance act the
+        # same in both halves, so the difference is the engine's pull.
+        # Once under way, a brake reported on, or a reason the power
+        # cannot be sent, abandons it without a verdict; the next
+        # release tries again.
+        s = self.state
+        phase = self._engine_test
+        if not phase:
+            held = (not s.emergency_brake and self.at_stand
+                    and self._may_test_engine())
+            self._engine_held_s = self._engine_held_s + self.dt if held \
+                else 0.0
+            if self._engine_held_s >= ENGINE_RETEST_S:
+                self._start_engine_test()
+            return
+        if not self._may_test_engine():
+            self._engine_test = ""
+            return
+        braked = s.fb_service_brake or s.fb_emergency_brake
+        if phase == "wait":
+            # Until both brakes have read off for echo_ticks, so every
+            # report from here answers a command sent with none.
+            self._engine_test_ticks = 0 if braked else (
+                self._engine_test_ticks + 1)
+            if self._engine_test_ticks > self.echo_ticks:
+                self._engine_test, self._engine_test_ticks = "on", 0
+            return
+        if braked:
+            self._engine_test = ""
+            return
+        self._engine_test_ticks += 1
+        if self._engine_test_ticks <= self.echo_ticks:
+            return
+        speeds = self._engine_test_speeds.setdefault(phase, [])
+        speeds.append(s.actual_mps)
+        if len(speeds) < ENGINE_TEST_SAMPLES:
+            return
+        if phase == "on":
+            self._engine_test, self._engine_test_ticks = "off", 0
+            return
+        on, off = (self._engine_test_speeds[h] for h in ("on", "off"))
+        span_s = (ENGINE_TEST_SAMPLES - 1) * self.dt
+        pull = ((on[-1] - on[0]) - (off[-1] - off[0])) / span_s
+        self._engine_test = ""
+        if pull >= ENGINE_TEST_MIN_MPS2:
+            s.failures["engine"] = False
+            self._engine_window.clear()
+            self._start_passed = True
+        else:
+            s.failures["engine"] = True
+
+    def _check_start(self) -> None:
+        # REQUIREMENTS.md §4. Power from a stand with no brake, and the
+        # speed not up ENGINE_RISE_MPS after ENGINE_START_S: test the
+        # engine. Once a test has passed, not again until the train
+        # has moved off or the power has stopped, so a slow, heavy
+        # start is tested once.
+        s = self.state
+        v = s.actual_mps
+        pulling = s.power_w > 0.0 and not (
+            s.service_brake or s.emergency_brake
+            or s.fb_service_brake or s.fb_emergency_brake)
+        if not pulling:
+            self._start_s = 0.0
+            self._start_passed = False
+            return
+        if not self._start_s and abs(v) >= STANDSTILL_MPS:
+            # Moving. Only once under way forwards is the next start
+            # from a stand checked again: a slow climb that rolls back
+            # while tested is not tested over and over.
+            if v > 0.0:
+                self._start_passed = False
+            return
+        if self._start_passed:
+            return
+        if not self._start_s:
+            self._start_ref_mps = v
+        self._start_s += self.dt
+        if v > self._start_ref_mps + ENGINE_RISE_MPS:
+            self._start_s = 0.0
+        elif ((self._start_s >= ENGINE_START_S
+               or v < self._start_ref_mps - ENGINE_RISE_MPS)
+              and self._may_test_engine()):
+            # No rise in ENGINE_START_S, or rolling back under power
+            # already: test now rather than let it roll for the rest.
+            self._start_s = 0.0
+            self._start_engine_test()
+
+    def _start_engine_test(self) -> None:
+        self._engine_test, self._engine_test_ticks = "wait", 0
+        self._engine_test_speeds = {}
+        self._engine_held_s = 0.0
+
+    def _may_test_engine(self) -> bool:
+        # Power is sent only with no failure but the engine's, some
+        # authority, the doors closed, and the power command agreed.
+        s = self.state
+        return (set(self.failed) <= {"engine"} and self.authority_blocks > 0
+                and not (s.doors_left or s.doors_right
+                         or s.fb_doors_left or s.fb_doors_right)
+                and not s.vital_breach)
 
     def respond_to_failures(self) -> None:
         """Stop the train while any detected failure is latched.
@@ -325,19 +491,49 @@ class ControllerCore:
                            asked for (REQUIREMENTS.md M4)
 
         Once the train stands, the driver may release the emergency
-        brake in Manual to try the train (release_emergency); the
+        brake in either mode to try the train (release_emergency); the
         failure, still latched, does not engage it again
-        (REQUIREMENTS.md M2, M3).
+        (REQUIREMENTS.md M2, M3). With only an engine failure latched,
+        the release starts a differential test (_test_engine), which
+        commands its own power and no brake; outside a test, an engine
+        failure with the emergency brake released holds the train on
+        the service brake.
         """
         new = set(self.failed) - self._braked_for
         self._braked_for = set(self.failed)
-        if not self.failed:
+        if not self.failed and not self._engine_test:
             return
         s = self.state
         s.target_mps = 0.0
         s.power_w = 0.0
         self.integral = 0.0
+        if self._engine_test in ("on", "off"):
+            # The test's own commands: full power, then none, and no
+            # brake. A fixed command, not the speed law's, so it is
+            # not voted (M21).
+            s.service_brake = False
+            if self._engine_test == "on":
+                s.power_w = ENGINE_TEST_POWER_W
+            return
+        if self._engine_test == "wait":
+            s.service_brake = False
+            return
+        if "engine" in self.failed and not s.emergency_brake:
+            # Released, with no test running (it ended, or another
+            # failure is latched too): nothing pulls, so the service
+            # brake holds the train rather than let it roll back on a
+            # grade (OPEN_ISSUES.md #23).
+            s.service_brake = True
         if new and not s.emergency_brake:
+            self.engage_emergency()
+        elif (s.failures["brake"] and not s.emergency_brake
+                and abs(s.actual_mps) >= STANDSTILL_MPS):
+            # Released with the service brake failed: nothing else can
+            # stop the train if it starts to move, back on an up-grade
+            # or forward on a down-grade, so engage the emergency brake
+            # again (REQUIREMENTS.md M3).
+            self.stop_reason = ("rollback" if s.actual_mps < 0.0
+                                else "runaway")
             self.engage_emergency()
 
     def enforce_safety(self) -> None:
@@ -370,29 +566,33 @@ class ControllerCore:
 
         Guide section 7 calls the emergency brake immediate, so the
         safety path runs on the press rather than up to one control
-        period later.
+        period later. It abandons any test of the engine; the next
+        release starts a new one (_test_engine).
         """
         self.state.emergency_brake = True
+        self._engine_test = ""
         self.enforce_safety()
 
     def release_emergency(self) -> bool:
         """Release the latched brake, at a stand.
 
-        With no failure latched, in either mode; with one still
-        latched, only in Manual, so the driver can try the train
-        (REQUIREMENTS.md M2, M3). Not during a vitality breach: only
-        once the power command agrees again (M21). Asking a released
-        brake to release is not a refusal: it is already where the
-        caller wants it.
+        In either mode, with or without a failure still latched, so
+        the driver can try the train (REQUIREMENTS.md M2, M3; with
+        only an engine failure latched it starts a test,
+        _test_engine). Not during a vitality breach: only once the
+        power command agrees again (M21). Asking a released brake to
+        release is not a refusal: it is already where the caller wants
+        it.
         """
         s = self.state
         if not s.emergency_brake:
             return True
         if abs(s.actual_mps) >= STANDSTILL_MPS or s.vital_breach:
             return False
-        if self.failed and not s.manual:
-            return False
         s.emergency_brake = False
+        self.stop_reason = ""
+        if self.failed == ["engine"] and self._may_test_engine():
+            self._start_engine_test()
         return True
 
     def set_target_mps(self, mps: float) -> None:

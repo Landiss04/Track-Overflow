@@ -59,8 +59,8 @@ EBRAKE_DECEL_MPS2 = 2.73
 # its target (35 -> 30 mph ends at 30.08 at the 0.1 s step).
 SERVICE_BAND_MPS = 0.05
 # Rolling resistance, from truth modules/train-model.md. The bench
-# simulation applies it only under a brake failure; the controller
-# never models it (REQUIREMENTS.md M19).
+# simulation applies it only under a brake or an engine failure; the
+# controller never models it (REQUIREMENTS.md M19).
 ROLLING_RESISTANCE_COEFF = 0.002
 GRAVITY_MPS2 = 9.81
 ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
@@ -82,10 +82,59 @@ SETTLE_MPS = 0.12
 # ---------------------------------------------------- failure detection
 # The Train Model no longer reports its failures, so the controller
 # infers them. Rules and thresholds are this controller's own design;
-# see ControllerCore.detect_failures() and OPEN_ISSUES.md.
-ENGINE_DETECT_ACCEL_MPS2 = 0.1
-ENGINE_DETECT_S = 2.0
-ENGINE_RISE_MPS = 0.05
+# see ControllerCore.detect_failures() and REQUIREMENTS.md §4.
+#
+# Engine: a steady fall (Kevin Schillinger, 2026-10-21, R91). A failed
+# engine zeroes traction, so the slowest a real failure can show is
+# rolling resistance alone on the flat: C_rr x g = 0.0196 m/s^2. Any
+# up-grade makes it faster, and it never lets up.
+#
+# The window: a few seconds longer than the old 2 s, so one tick's
+# jitter cannot carry it, and long enough that rolling resistance
+# alone loses about twice ENGINE_FALL_MPS across it. 60 steps.
+ENGINE_DETECT_S = 6.0
+# The window is read as half-second means (5 steps each), so a
+# tick-to-tick wobble in the reported speed cancels out instead of
+# reading as a fall.
+ENGINE_SMOOTH_S = 0.5
+# The fall that counts, first mean to last: more than the control
+# band, the most the PI lets the speed wander while holding a target,
+# so a train doing what it was told never reaches it.
+ENGINE_FALL_MPS = SERVICE_BAND_MPS
+# And the fall has to be steady: every mean within this fraction of
+# the fall of the straight line from the first mean to the last. A
+# dead engine leaves a constant resistance and so a straight fall.
+# Running onto a grade the speed sags too, with power on and no brake,
+# but the PI catches it within a few seconds, so the sag curves out
+# and never reads as straight across a 6 s window (BUGS.md B3).
+ENGINE_STRAIGHT_FRACTION = 0.1
+# Within this of its target the train is holding the speed it was
+# told to: never an engine failure, whatever the power.
+ENGINE_HOLD_BAND_MPS = SERVICE_BAND_MPS
+# Resolution: a differential test at a stand (OPEN_ISSUES.md #23).
+# Full power, then none, with no brake on: the acceleration with power
+# less the acceleration without. Grade, load and rolling resistance
+# act the same in both halves and cancel, so what is left is the
+# engine's pull over the mass. The least a working engine can give is
+# full traction (25.7 kN) over the heaviest train (58.4 t, full load):
+# 0.44 m/s^2. A dead engine gives 0. The bar is half the least.
+ENGINE_TEST_POWER_W = MAX_POWER_W
+ENGINE_TEST_MIN_MPS2 = 0.2
+# Speeds read in each half, after the reports of the switch arrive
+# (echo_ticks): 5 speeds, 0.4 s of acceleration.
+ENGINE_TEST_SAMPLES = 5
+# Held at a stand after a test found the engine dead, test again this
+# often, so a repair is seen without the driver doing anything. Each
+# test lets the train roll for about 2 s.
+ENGINE_RETEST_S = 10.0
+# Starting from a stand, power this long with the speed not up by
+# ENGINE_RISE_MPS, or the speed down by it (rolling back), runs the test
+# too: a dead engine on the flat never
+# moves, so its speed never falls for the steady-fall rule to see. A
+# working engine gives at least ENGINE_TEST_MIN_MPS2 more than without
+# power, so a slow start on a grade passes the test and carries on.
+ENGINE_START_S = 2.0
+ENGINE_RISE_MPS = SERVICE_BAND_MPS
 
 # ---------------------------------------------------------------- gains
 # Pull full traction from a stand, reach 70 km/h in about three
@@ -132,7 +181,10 @@ FAILURE_TEXT = {
 BEACON_SIDES = ("L", "R", "LR")
 
 #: Lines a train can be spawned on, and the id prefix each one uses.
-LINES = {"GREEN LINE": "T", "RED LINE": "R"}
+LINES = {"GREEN LINE": "G", "RED LINE": "R"}
+
+#: The line each variant drives (truth D021, REQUIREMENTS.md M13).
+VARIANT_LINES = {"SW": "GREEN LINE", "HW": "RED LINE"}
 
 #: Real time per simulated second, as the bench offers it.
 SIM_RATES = (1, 10)
