@@ -283,6 +283,12 @@ class TimeOfDayTest(unittest.TestCase):
         self.assertEqual(format_time_of_day(30600), "08:30")
         self.assertEqual(format_time_of_day(30605), "08:30:05")
 
+    def test_wraps_at_midnight(self) -> None:
+        # Never past 23:59: the unwrapped clock (D017) starts a new day.
+        self.assertEqual(format_time_of_day(86399), "23:59:59")
+        self.assertEqual(format_time_of_day(86400), "00:00")
+        self.assertEqual(format_time_of_day(86400 + 30600), "08:30")
+
     def test_rejects_non_times(self) -> None:
         for text in ("8.30", "24:00", "12:60", "noon", ""):
             with self.subTest(text=text), self.assertRaises(TimeOfDayError):

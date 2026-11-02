@@ -29,27 +29,28 @@ ScrollView {
             variant: "warning"
             heading: qsTr("Maintenance mode")
             body: qsTr("You close and reopen blocks and set switch "
-                + "positions by hand, only in this mode. A block with a "
-                + "train in it closes once the train has left. Switch "
-                + "commands are released when you leave Maintenance; "
-                + "closures stay.")
+                + "positions by hand, only in this mode. A block closes "
+                + "at once, even with a train in it. Switch commands are "
+                + "released when you leave Maintenance; closures stay.")
         }
 
         RowLayout {
             Layout.fillWidth: true
             spacing: theme.space_3
 
+            // Wide enough for the armed confirmation, "YES, CLOSE
+            // BLOCK" beside Cancel, to show in full.
             CloseBlockPanel {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredWidth: 1
+                Layout.preferredWidth: 396
                 host: root.host
             }
 
             SwitchPanel {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredWidth: 1
+                Layout.preferredWidth: 352
                 host: root.host
             }
         }
