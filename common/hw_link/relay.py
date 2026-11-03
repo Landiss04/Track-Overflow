@@ -42,6 +42,9 @@ class HardwareRelay(QObject):
     completed = Signal(int, object)
     closing = Signal()
 
+    # The Pi discards bytes that arrive while its agent has no tty open.
+    HELLO_RETRY_MS = 1000
+
     def __init__(
         self,
         module: str,
@@ -70,6 +73,11 @@ class HardwareRelay(QObject):
         self._queue: deque[dict[str, Any]] = deque()
         self._last_view: dict[str, Any] = {}
         self._gains: dict[str, list[float]] = {}
+        self._hello: bytes | None = None
+        self._hello_answered = False
+        self._hello_timer = QTimer(self)
+        self._hello_timer.setInterval(self.HELLO_RETRY_MS)
+        self._hello_timer.timeout.connect(self._send_hello)
         self.transport.connected.connect(self._connected)
         self.transport.disconnected.connect(self._disconnected)
         self.transport.received.connect(self._received)
@@ -98,25 +106,31 @@ class HardwareRelay(QObject):
         self._online = True
         self.buffer = LineBuffer()
         self.diagnosticEvent.emit("PI_CONNECTED " + self.module)
+        self._hello_answered = False
         # A host that closed mid-write leaves a partial line on the Pi; end it.
-        self.transport.write(
-            b"\n"
-            + p.encode(
-                p.message(
-                    p.HELLO,
-                    self._next_id(),
-                    protocol=p.VERSION,
-                    module=self.module,
-                    session=self.session,
-                    agent_version="host-1",
-                    agent_hash="host",
-                )
+        self._hello = b"\n" + p.encode(
+            p.message(
+                p.HELLO,
+                self._next_id(),
+                protocol=p.VERSION,
+                module=self.module,
+                session=self.session,
+                agent_version="host-1",
+                agent_hash="host",
             )
         )
+        self._send_hello()
+        self._hello_timer.start()
+
+    def _send_hello(self) -> None:
+        if self._hello is not None and self._online and not self._closed:
+            self.transport.write(self._hello)
 
     def _disconnected(self) -> None:
         if self._closed:
             return
+        self._hello = None
+        self._hello_timer.stop()
         self._online = self._ready = False
         if not self._recovering:
             self._lost_running = self._clock_running
@@ -155,6 +169,11 @@ class HardwareRelay(QObject):
                     "identity, version or bundle hash mismatch"
                 )
                 return
+            if self._hello_answered:
+                return  # A retried HELLO answered again; this link is up.
+            self._hello_answered = True
+            self._hello = None
+            self._hello_timer.stop()
             rebooted = self._boot is not None and self._boot != incoming.get(
                 "boot"
             )
@@ -337,6 +356,7 @@ class HardwareRelay(QObject):
 
     def close(self) -> None:
         self._closed = True
+        self._hello_timer.stop()
         self.closing.emit()
         self._queue.clear()
         self._inflight = None
