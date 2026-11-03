@@ -284,7 +284,7 @@ Every train gets the same inputs each tick, the full `EVERY_TICK` set at the 0.1
 
 What the stand-in simplifies:
 
-- Its physics is power into acceleration, capped at 0.5 m/s², and the two brake rates. There is no grade or resistance.
+- Its physics is power into acceleration, its force capped at the traction cap (`MAX_FORCE_N`, 35.5 kN), and the two brake rates. There is no grade or resistance.
 - It reports the emergency brake state as false always: it never makes a passenger pull, and does not echo the command.
 - It answers every command on the next tick, not two ticks later as the real harness does.
 - It reports the lights on before the first command, though a train spawns with them off (M8); doors, lights and the service brake echo the last commands after that.

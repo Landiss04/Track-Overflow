@@ -1,5 +1,7 @@
 """Rates, plant figures, detection thresholds and domain vocabulary."""
 
+import math
+
 from .units import KMH_PER_MPS
 
 # ---------------------------------------------------------------- rates
@@ -20,8 +22,7 @@ GAINS_HANDOVER_MS = 1500
 
 # Truth modules/train-model.md: 4 x 120 kW, the data sheet's 120 kW
 # per motor rather than for the whole car (provisional, pending the
-# instructor). The car's 0.5 m/s^2 force cap now binds up to about
-# 67 km/h, nearly the whole 70 km/h range, as the sheet quotes it.
+# instructor). The force cap binds up to about 49 km/h.
 MAX_POWER_W = 480_000.0
 
 # ---------------------------------------------------------------- cabin
@@ -47,8 +48,6 @@ CABIN_DRIFT_MAX_C = 0.011
 # at 4 pass./m^2, and the acceleration figure is quoted at 2/3 load,
 # so the plant runs at that mass.
 MASS_KG = 51_433.0
-MAX_ACCEL_MPS2 = 0.5            # and the car will not exceed it
-MAX_FORCE_N = MASS_KG * MAX_ACCEL_MPS2
 # The car's data-sheet top speed: the speed dial's fixed full scale,
 # display only, not a cap (REQUIREMENTS.md M1, M14).
 MAX_SPEED_MPS = 70 / KMH_PER_MPS
@@ -65,6 +64,15 @@ SERVICE_BAND_MPS = 0.05
 ROLLING_RESISTANCE_COEFF = 0.002
 GRAVITY_MPS2 = 9.81
 ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
+# Traction cap, as the Train Model sizes it (Kevin 2026-11-02): the
+# force that holds a full train, 222 passengers and 5 crew at 170 lb,
+# on the data sheet's 60 per mille maximum gradient, about 35.5 kN.
+# The 0.5 m/s^2 above is a 0-70 km/h average, not the cap.
+FULL_MASS_KG = 40_900.0 + (222 + 5) * 77.1107
+MAX_GRADIENT = 0.06
+_THETA = math.atan(MAX_GRADIENT)
+MAX_FORCE_N = FULL_MASS_KG * GRAVITY_MPS2 * (
+    math.sin(_THETA) + ROLLING_RESISTANCE_COEFF * math.cos(_THETA))
 # Below this the emergency brake may be released (D011).
 STANDSTILL_MPS = 0.1
 # Below this, with no power applied, the bench simulation settles to
@@ -103,33 +111,32 @@ ENGINE_STRAIGHT_FRACTION = 0.1
 # Within this of its target the train is holding the speed it was
 # told to: never an engine failure, whatever the power.
 ENGINE_HOLD_BAND_MPS = SERVICE_BAND_MPS
-# Resolution: a differential test at a stand (OPEN_ISSUES.md #23).
-# Full power, then none, with no brake on: the acceleration with power
-# less the acceleration without. Grade, load and rolling resistance
-# act the same in both halves and cancel, so what is left is the
-# engine's pull over the mass. The least a working engine can give is
-# full traction (25.7 kN) over the heaviest train (58.4 t, full load):
-# 0.44 m/s^2. A dead engine gives 0. The bar is half the least.
+# Resolution, and every departure from a stand: the engine test
+# (OPEN_ISSUES.md #23). The brake comes off as full power goes on; one
+# tick of full power, one of none, then the brake again (on a
+# departure, the speed law) while the reports come back. The speed's
+# change under power less its change without is the engine's pull
+# over the mass; grade, load and rolling resistance cancel. The least
+# a working engine can give is full traction (MAX_FORCE_N, 35.5 kN)
+# over the heaviest train (58.4 t, full load): 0.61 m/s^2. A dead
+# engine gives 0. The bar is a third of the least.
 ENGINE_TEST_POWER_W = MAX_POWER_W
 ENGINE_TEST_MIN_MPS2 = 0.2
-# Speeds read in each half, after the reports of the switch arrive
-# (echo_ticks): 5 speeds, 0.4 s of acceleration.
-ENGINE_TEST_SAMPLES = 5
+# Under way, run the same test this often, on a tick the speed law
+# asks for power with no brake and the train under its target: the
+# steady fall cannot see a dead engine on a down-grade, where
+# gravity holds the speed.
+ENGINE_PULSE_S = 5.0
+# Once this fast, the train is under way: coming back to a stand under
+# power (a stall on a climb) is a new start, tested again. A test's own
+# creep at a stand never reaches it.
+ENGINE_UNDER_WAY_MPS = 1.0
 # Held at a stand after a test found the engine dead, test again this
-# often, so a repair is seen without the driver doing anything. Each
-# test lets the train roll for about 2 s.
+# often, so a repair is seen without the driver doing anything.
 ENGINE_RETEST_S = 10.0
-# Starting from a stand, power this long with the speed not up by
-# ENGINE_RISE_MPS, or the speed down by it (rolling back), runs the test
-# too: a dead engine on the flat never
-# moves, so its speed never falls for the steady-fall rule to see. A
-# working engine gives at least ENGINE_TEST_MIN_MPS2 more than without
-# power, so a slow start on a grade passes the test and carries on.
-ENGINE_START_S = 2.0
-ENGINE_RISE_MPS = SERVICE_BAND_MPS
 
 # ---------------------------------------------------------------- gains
-# Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three
+# Pull full traction from a stand, reach 70 km/h in about three
 # quarters of a minute, then hold within a tenth of a mph of target.
 DEFAULT_KP = 400_000.0          # W per m/s of error
 DEFAULT_KI = 8_000.0            # W per (m/s x s) of accumulated error

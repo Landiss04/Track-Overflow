@@ -1032,9 +1032,10 @@ def run_check(
 
     # An engine failure at a steady cruise: holding speed on the toy
     # plant takes no power, but a dead engine leaves rolling
-    # resistance, so the speed falls steadily under the power the speed
-    # law then asks for, and the steady fall finds it once a full
-    # window has fallen (REQUIREMENTS.md §4, BUGS.md B3).
+    # resistance, so the speed falls under the power the speed law then
+    # asks for. The engine test under way (ENGINE_PULSE_S) or the
+    # steady fall finds it within a full window (REQUIREMENTS.md §4,
+    # BUGS.md B3).
     cruise = mod.ControllerCore()
     cruise.armed = True
     cruise.state.manual = True
@@ -1045,14 +1046,9 @@ def run_check(
     cruise.set_target_mps(20 / mod.MPS_TO_MPH)
     drive(cruise, plant, 60)
     plant.injected["engine"] = True
-    drive(cruise, plant, mod.ENGINE_DETECT_S - 1)
-    expect(not cruise.failed,
-           "an engine failure was claimed before a full window had "
-           "fallen")
-    drive(cruise, plant, 5)
+    drive(cruise, plant, mod.ENGINE_DETECT_S + 4)
     expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
-           "an engine failure at cruise was not found by its steady "
-           "fall")
+           "an engine failure at cruise was not found")
 
     # A brake failure is concluded on the tick after the service brake
     # is commanded, when its state still reads off; a working brake is
