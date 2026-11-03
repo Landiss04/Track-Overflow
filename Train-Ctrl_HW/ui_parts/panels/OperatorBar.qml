@@ -102,20 +102,10 @@ Rectangle {
             objectName: "trainPicker"
             Layout.preferredWidth: 280
             Layout.alignment: Qt.AlignTop
-<<<<<<< HEAD
-<<<<<<< HEAD
-            enabled: root.s.signed_in && root.s.train_count > 0
-=======
-=======
->>>>>>> integrate/quirky-into-development-resolved
             // Usable signed out too: picking a train whose gains are
             // not set signs the driver out, and they must be able to
             // pick their way back.
             enabled: root.s.train_count > 0
-<<<<<<< HEAD
->>>>>>> origin/Train_Ctrl_integration
-=======
->>>>>>> integrate/quirky-into-development-resolved
             label: qsTr("Current selected train")
             trains: controller.trains
             currentId: root.s.has_train ? root.s.train_id : ""

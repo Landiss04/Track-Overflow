@@ -50,14 +50,9 @@ Date Modified: {{date_modified}}
 
 | Name           | Date       | Reason For Changes                                                                                          | Version     |
 | -------------- | ---------- | ----------------------------------------------------------------------------------------------------------- | ----------- |
-<<<<<<< HEAD
-| Jonathan Tsang | 2026-10-21 | Train Controller sections filled for the merge                                                              | {{version}} |
-| Jonathan Tsang | 2026-10-22 | Scope combined; design choices, class cards, IO dictionary, use cases, authority, timing and vitality added | {{version}} |
-=======
 | Jonathan Tsang | 2026-10-21 | Train Controller sections filled for the merge                                                              |     1.0     |
 | Jonathan Tsang | 2026-10-22 | Scope combined; design choices, class cards, IO dictionary, use cases, authority, timing and vitality added |     1.1     |
 | Ivan Zheng     | 2026-10-22 | Fixed inconsistencies between diagrams and presentation                                                     |     1.2     |
->>>>>>> integrate/quirky-into-development-resolved
 
 ---
 
@@ -344,11 +339,7 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
 
   | Responsibility                                            | Collaborator                                     |
   | --------------------------------------------------------- | ------------------------------------------------ |
-<<<<<<< HEAD
-  | Add a train's controller when it enters service           | Central harness, ControllerCore                  |
-=======
   | Add a train's controller when it enters service           | Central harness                                  |
->>>>>>> integrate/quirky-into-development-resolved
   | Remove it when it leaves                                  | Central harness                                  |
   | Return one train's controller                             | ConsoleBackend                                   |
   | Read every train's inputs, then step every train, or none | Central harness, `read_inputs`, ControllerCore |
@@ -422,14 +413,8 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   | fleet            | The fleet shown: its own, or the harness's  |
   | selected         | The selected train                          |
   | operator         | Driver, engineer or nobody                  |
-<<<<<<< HEAD
-  | sim_rate, paused | 1× or 10×, and Pause, for a fleet it owns |
-  | sims             | The bench's `SimTrain` per train          |
-  | time_s           | The clock shown                             |
-=======
   | idle             | An unstepped controller, so the views have a shape to read while no train is in service |
   | notes            | A message per train, shown on the console   |
->>>>>>> integrate/quirky-into-development-resolved
 
   | Responsibility                                                                          | Collaborator                   |
   | --------------------------------------------------------------------------------------- | ------------------------------ |
@@ -485,12 +470,8 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   | Train Model      | Train Controller | Beacon                        | Station name, platform side, underground       |
   | Track Model      | Train Controller | Signal aspect ahead           | Red, Yellow, Green, Super Green                |
   | Train Controller | Train Model      | Power command                 | Power, W                                       |
-<<<<<<< HEAD
-  | Train Controller | Train Model      | Brake command                 | Emergency, service                             |
-=======
   | Train Controller | Train Model      | Service brake command         | On, off                                        |
   | Train Controller | Train Model      | Emergency brake command       | On, off                                        |
->>>>>>> integrate/quirky-into-development-resolved
   | Train Controller | Train Model      | Door command                  | Left, right                                    |
   | Train Controller | Train Model      | Light command                 | Interior, exterior                             |
   | Train Controller | Train Model      | Temperature setpoint          | °C                                            |
@@ -536,23 +517,13 @@ Physical, Structure, Dependency, Information, Algorithm, State Dynamics, Concurr
   | Field                      | Unit / shape                  | Truth signal                                           | Harness maps to (`ControllerCommands`) |
   | -------------------------- | ----------------------------- | ------------------------------------------------------ | ---------------------------------------- |
   | `power_w`                | W, 0–480,000                 | `power-command`                                      | `power_cmd_w`                          |
-<<<<<<< HEAD
-  | `brake_command`          | `[emergency, service]` bool | `emergency-brake-command`, `service-brake-command` | `emergency_brake`, `service_brake`   |
-=======
   | `service_brake`          | bool                     | `service-brake-command`   | `service_brake`                        |
   | `emergency_brake`        | bool                     | `emergency-brake-command` | `emergency_brake`                      |
->>>>>>> integrate/quirky-into-development-resolved
   | `door_command`           | `(left, right)`             | `door-command`                                       | `door_left_open`, `door_right_open`  |
   | `light_command`          | `(interior, exterior)`      | `light-command`                                      | `interior_lights`, `exterior_lights` |
   | `temperature_setpoint_c` | °C                           | `temperature-setpoint`                               | `temp_setpoint_c`                      |
   | `announcement`           | str, empty when none          | `announcement`                                       | `announcement`                         |
 
-<<<<<<< HEAD
-  Code today sends two bools (`service_brake`, `emergency_brake`); to
-  change to `brake_command`.
-
-=======
->>>>>>> integrate/quirky-into-development-resolved
   **Errors** (all derive from `TrainControllerError`; a failed
   `step_all` changes no train):
 
@@ -932,11 +903,7 @@ tick, when the harness steps the fleet and maps its commands (D005).
 | Use case | Apply service brake |
 | Actors | Driver |
 | Description | • In Manual, the driver toggles a service brake request.<br>• Also allowed under a brake failure, so the driver can try the brake (M4).<br>• While it is applied, traction is cut to 0 and the integrator holds.<br>• The Train Model reports back whether the brake is actually applied (Brake State). |
-<<<<<<< HEAD
-| Data | Input: service brake press<br>Output: brake command [emergency, service] with service on; power 0 W |
-=======
 | Data | Input: service brake press<br>Output: service brake command on; power 0 W |
->>>>>>> integrate/quirky-into-development-resolved
 | Stimulus | The driver presses the service brake. |
 | Response | The train slows at the service rate (1.2 m/s² on the data sheet) until the driver releases it. |
 
@@ -978,11 +945,7 @@ Announce station:
 | Use case | Engage the emergency brake |
 | Actors | Driver; Passenger (through the Train Model) |
 | Description | • The driver engages it in any mode; it acts at once and latches.<br>• A passenger pull arrives as Brake State from the Train Model and latches it too.<br>• While it is applied, traction is cut to 0.<br>• Only the driver can release it (use case 6, M2). |
-<<<<<<< HEAD
-| Data | Input: emergency brake button; Brake State [emergency]<br>Output: brake command [emergency, service] with emergency on; power 0 W |
-=======
 | Data | Input: emergency brake button; Brake State [emergency]<br>Output: emergency brake command on; power 0 W |
->>>>>>> integrate/quirky-into-development-resolved
 | Stimulus | The driver presses the emergency brake, or a passenger pulls it. |
 | Response | The train stops on the emergency brake (2.73 m/s² on the data sheet); the console shows it engaged. |
 
@@ -996,11 +959,7 @@ Announce station:
 | Use case | Release the emergency brake |
 | Actors | Driver |
 | Description | • Only the driver releases it (M2); passengers and the engineer cannot.<br>• Only below 0.1 m/s: with no failure latched, in either mode; with one latched, only in Manual, so the driver can try the train (M2, M3).<br>• A Train Model report of off never releases it.<br>• A refused release says why: still moving, or which failure is active. |
-<<<<<<< HEAD
-| Data | Input: emergency brake button<br>Output: brake command with emergency off; brake message |
-=======
 | Data | Input: emergency brake button<br>Output: emergency brake command off; brake message |
->>>>>>> integrate/quirky-into-development-resolved
 | Stimulus | The driver presses the emergency brake while it is engaged. |
 | Response | The brake releases, or the console says why it cannot. |
 
@@ -1020,64 +979,6 @@ Announce station:
 
 ![Sequence diagram: Set Kp and Ki](sdd-figures/train-controller/07-seq-08-set-gains.png)
 
-<<<<<<< HEAD
-#### Use case 8 — Regulate to commanded speed (Automatic)
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Regulate to commanded speed (Automatic) |
-| Actors | Train Model |
-| Description | • The target is the commanded speed, the only cap (M1).<br>• Power = Kp × error + Ki × ∫error, limited to 0–480 kW, with the integrator held at the limits.<br>• The service brake applies when the train is more than 0.05 m/s over target, or the target is 0 while it moves.<br>• At a new station beacon: announce, stop, open the platform side, hold until the Track Signal resumes, close the doors, then depart (M6, M7). |
-| Data | Input: commanded speed, actual speed, beacon, door state<br>Output: power, service brake, door and announcement commands |
-| Stimulus | Each tick while the train is in Automatic. |
-| Response | The train holds the commanded speed; a 35 → 30 mph change settles at 30.08 mph. |
-
-No user starts it: it runs in every tick (005-interaction, "One 0.1 s
-tick").
-
-#### Use case 9 — Stop when authority runs out
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Stop when authority runs out |
-| Actors | Train Model |
-| Description | • When authority reaches 0 the target becomes 0, traction is cut and the integrator resets.<br>• The service brake holds until the train stands, in either mode; it is not an emergency.<br>• The driver's speed changes are refused while authority is 0.<br>• Known limit: braking starts only at 0, so with 100 m blocks the train overruns above 34.6 mph (OPEN_ISSUES #11). |
-| Data | Input: authority (blocks) in the Track Signal<br>Output: service brake command; power 0 W |
-| Stimulus | Authority in the Track Signal reaches 0. |
-| Response | The train comes to a stand on the service brake. |
-
-No user starts it: it runs in every tick (005-interaction).
-
-#### Use case 10 — Detect failures and stop
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Detect failures and stop |
-| Actors | Train Model |
-| Description | • Brake: the service brake was commanded last tick (emergency brake off) and is still reported off this tick (M4). Engine: power that should pull, but no rise in speed for 2 s; under review, as it trips on grades (#28). Signal pickup: commanded speed and authority drop to 0 together from 2 or more blocks.<br>• On detection the target and power go to 0, and the emergency brake engages and latches, once (M3, M4).<br>• Mode switching stays allowed; at a stand the driver may release the emergency brake in Manual to try the train (M2, M3).<br>• Resolution is not detected yet: the failure stays latched until it is cleared on the test bench (#23). |
-| Data | Input: Brake State, actual speed, Track Signal<br>Output: brake command with emergency on; the failure named on the console |
-| Stimulus | The signals returned disagree with what was commanded. |
-| Response | The train stops on the emergency brake and the console names the failure. |
-
-No user starts it: it runs in every tick (005-interaction).
-
-#### Use case 11 — Send signal aspect ahead
-
-| | |
-|---|---|
-| System | HW Train Controller |
-| Use case | Send signal aspect ahead |
-| Actors | Track Model |
-| Description | • Each tick the Track Model sends the next signal light ahead: RED, YELLOW, GREEN or SUPER GREEN.<br>• The console shows the light and what it means: Stop, Slow down, Continue to cruise, All clear ahead.<br>• It stands in for the light the driver sees through the front window.<br>• The controller does not act on it; the driver drives accordingly. |
-| Data | Input: signal aspect ahead<br>Output: the light and its meaning on the console |
-| Stimulus | The Track Model sends the signal aspect ahead. |
-| Response | The console shows the light; the driver drives to it. |
-
-=======
->>>>>>> integrate/quirky-into-development-resolved
 ---
 
 *— End of document —*

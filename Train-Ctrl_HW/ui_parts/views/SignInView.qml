@@ -6,27 +6,12 @@ import "../../../ui"
 Item {
     id: root
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-    EmptyState {
-        anchors.centerIn: parent
-        heading: qsTr("Select an operator to unlock the console")
-        body: qsTr("The driver drives the train. The engineer sets the "
-=======
     readonly property var s: controller.snapshot
     // A train nobody has commissioned has no driver's console yet.
     readonly property bool needsGains: s.has_train && !s.gains_locked
 
     EmptyState {
         anchors.centerIn: parent
-=======
-    readonly property var s: controller.snapshot
-    // A train nobody has commissioned has no driver's console yet.
-    readonly property bool needsGains: s.has_train && !s.gains_locked
-
-    EmptyState {
-        anchors.centerIn: parent
->>>>>>> integrate/quirky-into-development-resolved
         heading: root.needsGains
             ? qsTr("%1 is waiting for its gains").arg(root.s.train_id)
             : qsTr("Select an operator to unlock the console")
@@ -34,10 +19,6 @@ Item {
             ? qsTr("Sign in as Engineer to set Kp and Ki. The driver's "
                    + "console opens once they are set.")
             : qsTr("The driver drives the train. The engineer sets the "
-<<<<<<< HEAD
->>>>>>> origin/Train_Ctrl_integration
-=======
->>>>>>> integrate/quirky-into-development-resolved
                    + "control gains once, before the run starts.")
     }
 }
