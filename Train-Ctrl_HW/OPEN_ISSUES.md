@@ -20,7 +20,7 @@ against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
       the e-brake is engaged**, so a repaired service brake never reads
       applied;
     - the e-brake force (about 140 kN) is far above full traction (about
-      25.7 kN), so a repaired engine can never show rising speed.
+      35.5 kN), so a repaired engine can never show rising speed.
 
     On `claude/quirky-fermi-sickg4` the first bullet no longer holds: the
     Train Model reports the service brake engaged whenever it is commanded

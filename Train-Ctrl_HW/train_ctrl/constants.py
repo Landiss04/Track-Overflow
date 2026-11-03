@@ -1,5 +1,7 @@
 """Rates, plant figures, detection thresholds and domain vocabulary."""
 
+import math
+
 from .units import KMH_PER_MPS
 
 # ---------------------------------------------------------------- rates
@@ -20,8 +22,7 @@ GAINS_HANDOVER_MS = 1500
 
 # Truth modules/train-model.md: 4 x 120 kW, the data sheet's 120 kW
 # per motor rather than for the whole car (provisional, pending the
-# instructor). The car's 0.5 m/s^2 force cap now binds up to about
-# 67 km/h, nearly the whole 70 km/h range, as the sheet quotes it.
+# instructor). The force cap binds up to about 49 km/h.
 MAX_POWER_W = 480_000.0
 
 # ---------------------------------------------------------------- cabin
@@ -47,8 +48,6 @@ CABIN_DRIFT_MAX_C = 0.011
 # at 4 pass./m^2, and the acceleration figure is quoted at 2/3 load,
 # so the plant runs at that mass.
 MASS_KG = 51_433.0
-MAX_ACCEL_MPS2 = 0.5            # and the car will not exceed it
-MAX_FORCE_N = MASS_KG * MAX_ACCEL_MPS2
 # The car's data-sheet top speed: the speed dial's fixed full scale,
 # display only, not a cap (REQUIREMENTS.md M1, M14).
 MAX_SPEED_MPS = 70 / KMH_PER_MPS
@@ -65,6 +64,15 @@ SERVICE_BAND_MPS = 0.05
 ROLLING_RESISTANCE_COEFF = 0.002
 GRAVITY_MPS2 = 9.81
 ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
+# Traction cap, as the Train Model sizes it (Kevin 2026-11-02): the
+# force that holds a full train, 222 passengers and 5 crew at 170 lb,
+# on the data sheet's 60 per mille maximum gradient, about 35.5 kN.
+# The 0.5 m/s^2 above is a 0-70 km/h average, not the cap.
+FULL_MASS_KG = 40_900.0 + (222 + 5) * 77.1107
+MAX_GRADIENT = 0.06
+_THETA = math.atan(MAX_GRADIENT)
+MAX_FORCE_N = FULL_MASS_KG * GRAVITY_MPS2 * (
+    math.sin(_THETA) + ROLLING_RESISTANCE_COEFF * math.cos(_THETA))
 # Below this the emergency brake may be released (D011).
 STANDSTILL_MPS = 0.1
 # Below this, with no power applied, the bench simulation settles to
@@ -80,7 +88,7 @@ ENGINE_DETECT_S = 2.0
 ENGINE_RISE_MPS = 0.05
 
 # ---------------------------------------------------------------- gains
-# Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three
+# Pull full traction from a stand, reach 70 km/h in about three
 # quarters of a minute, then hold within a tenth of a mph of target.
 DEFAULT_KP = 400_000.0          # W per m/s of error
 DEFAULT_KI = 8_000.0            # W per (m/s x s) of accumulated error

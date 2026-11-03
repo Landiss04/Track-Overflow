@@ -116,7 +116,8 @@ def test_design_constants() -> None:
     config = TrainConfig()
     # 2/3 of the datasheet load: 40.9 t empty, 56.7 t loaded.
     assert config.m_ref_kg == pytest.approx(51_433, abs=1.0)
-    assert config.f_max_n == pytest.approx(25_717, abs=1.0)
+    # Holds a full train on the datasheet's 60 per mille maximum gradient.
+    assert config.f_max_n == pytest.approx(35_459, abs=1.0)
     # The instructor's values: 51,433 kg x 1.2 and x 2.73.
     assert config.f_service_n == pytest.approx(61_720, abs=1.0)
     assert config.f_emergency_n == pytest.approx(140_413, abs=1.0)
@@ -152,24 +153,54 @@ def test_emergency_stop_distance(
 
 
 def test_full_train_grade_threshold() -> None:
-    """Check the full train creeps at 4.2 percent grade but not 4.4.
+    """Check the full train creeps at 5.9 percent grade but not 6.1.
 
-    The limit, F_max = m g (sin + c_rr cos), is about 4.29 percent.
+    F_max = m_full g (sin + c_rr cos) at the 6 percent rated gradient.
     """
     config = TrainConfig()
     model = TrainModel(config)
     board(model, config.capacity)
     for _ in range(200):
         model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, grade_deg=pct_to_deg(4.2)))
+            power_w=config.p_max_w, grade_deg=pct_to_deg(5.9)))
     assert model.snapshot().velocity_mps > 0.0
 
     model = TrainModel(config)
     board(model, config.capacity)
     for _ in range(1000):
         model.step(DT_S, make_inputs(
-            power_w=config.p_max_w, grade_deg=pct_to_deg(4.4)))
+            power_w=config.p_max_w, grade_deg=pct_to_deg(6.1)))
         assert model.snapshot().velocity_mps == 0.0
+
+
+def test_full_train_climbs_5_percent() -> None:
+    """Check a full train under full power holds and climbs a 5 percent grade."""
+    config = TrainConfig()
+    model = TrainModel(config)
+    board(model, config.capacity)
+    speeds = []
+    for _ in range(600):
+        model.step(DT_S, make_inputs(
+            power_w=config.p_max_w, grade_deg=pct_to_deg(5.0)))
+        speeds.append(model.snapshot().velocity_mps)
+    assert min(speeds) >= 0.0
+    assert speeds == sorted(speeds)
+    assert speeds[-1] > 1.0
+
+
+def test_full_train_stalls_on_6_5_percent() -> None:
+    """Check a full train under full power never gains ground on 6.5 percent.
+
+    Past the rating, gravity beats traction plus rolling resistance, so it
+    rolls back slowly instead of climbing.
+    """
+    config = TrainConfig()
+    model = TrainModel(config)
+    board(model, config.capacity)
+    for _ in range(1000):
+        model.step(DT_S, make_inputs(
+            power_w=config.p_max_w, grade_deg=pct_to_deg(6.5)))
+        assert model.snapshot().velocity_mps <= 0.0
 
 
 def test_service_brake_holds_full_train_on_6_percent() -> None:
