@@ -164,6 +164,16 @@ def test_bundle_hash_covers_core_and_protocol_bytes():
         assert content_hash(changed) != content_hash(original)
 
 
+def test_bundle_paths_are_posix_on_every_host(tmp_path):
+    # The Pi recomputes the hash from POSIX paths; a Windows host must match.
+    from common.hw_link.manifest import sources
+
+    assert not [name for name in sources() if "\\" in name]
+    build("track-controller-hw", tmp_path / "bundle.tar.gz")
+    with tarfile.open(tmp_path / "bundle.tar.gz") as archive:
+        assert not [name for name in archive.getnames() if "\\" in name]
+
+
 def test_relay_refuses_wrong_bundle_and_version():
     from common.hw_link.relay import HardwareRelay
     from common.hw_link.transport import ByteTransport
