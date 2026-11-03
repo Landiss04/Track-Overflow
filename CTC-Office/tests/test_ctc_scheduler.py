@@ -23,6 +23,7 @@ from ctc.model import (  # noqa: E402
 from ctc.routing import build_graphs  # noqa: E402
 from ctc.schedule import (  # noqa: E402
     Schedule,
+    ScheduledTrain,
     load_schedule,
     parse_schedule,
 )
@@ -58,9 +59,38 @@ GREEN_ORDER = ["65", "73", "77", "88", "96", "105", "123", "132", "141",
 #: (60), back down to 16, and through Shadyside (7) to the yard at 9.
 RED_ORDER = ["16", "21", "25", "35", "45", "48", "60", "7"]
 
+#: The file lists each run's stations in an order a run follows as given
+#: (``FILE_*``): Green 1 goes to Pioneer (2) first, Red 1 to Shadyside
+#: (7).
+FILE_GREEN = ["2", "9", "16", "22", "31", "39", "48", "57", "65", "73",
+              "77", "88", "96", "105", "123", "132", "141"]
+FILE_RED = ["7", "16", "21", "25", "35", "45", "48", "60"]
+
+
+def _track_ordered(schedule: Schedule) -> Schedule:
+    """The schedule with each run's stops listed in track order from the
+    yard (``GREEN_ORDER``, ``RED_ORDER``), its first entry kept first so
+    that it leaves when it did: one lap a run, for the tests of how runs
+    share the track."""
+    order = {"Green": GREEN_ORDER, "Red": RED_ORDER}
+    trains = []
+    for train in schedule.trains:
+        first, *rest = train.stops
+        listed = order[train.line]
+        rest.sort(key=lambda stop: (listed.index(stop.block_id)
+                                    if stop.block_id in listed
+                                    else len(listed)))
+        trains.append(ScheduledTrain(train.line, train.train_id,
+                                     (first, *rest)))
+    return Schedule(schedule.source, tuple(trains))
+
+
+#: The schedule in track order: what most tests here run.
+TRACK_SCHEDULE = _track_ordered(SCHEDULE)
+
 
 def _loaded(automatic: bool = True,
-            schedule: Schedule = SCHEDULE) -> StubCtcOffice:
+            schedule: Schedule = TRACK_SCHEDULE) -> StubCtcOffice:
     ctc = ready_office()
     ctc.load_schedule(schedule)
     ctc.set_automatic_mode(automatic)
@@ -81,6 +111,28 @@ def _order(ctc: StubCtcOffice, train_id: str) -> str | None:
 
 class PlanTest(unittest.TestCase):
     """Each run is planned when the schedule loads."""
+
+    def test_stations_in_file_order(self) -> None:
+        # The file's order, whatever it costs: Green 1 goes to Pioneer
+        # (2) first, through Glenbury (65) and every station before it
+        # without stopping, and round again for Edgebrook (9).
+        ctc = _loaded(schedule=SCHEDULE)
+        plans = {p.train_id: p for p in ctc._auto.plans}
+        self.assertEqual([s.block_id for s in plans["G1"].stops],
+                         FILE_GREEN)
+        self.assertEqual([s.block_id for s in plans["R1"].stops],
+                         FILE_RED)
+        to_pioneer = plans["G1"].path[:plans["G1"].stop_indexes[0] + 1]
+        self.assertIn("65", to_pioneer)
+        self.assertEqual((plans["G1"].yard_block_id,
+                          plans["R1"].yard_block_id), ("57", "9"))
+
+    def test_first_order_is_the_first_station(self) -> None:
+        # G1's first order is Pioneer: no stop before it.
+        ctc = _loaded(schedule=SCHEDULE)
+        step_at(ctc)
+        self.assertEqual(_order(ctc, "G1"), "2")
+        self.assertEqual(_order(ctc, "R1"), "7")
 
     def test_stations_in_track_order(self) -> None:
         ctc = _loaded()
@@ -199,7 +251,8 @@ class ZoneTest(unittest.TestCase):
         ctc.dispatch("G2", "Green", "73")
 
     def test_held_until_the_zone_is_clear(self) -> None:
-        # G1 is coming back down N (at 80) on its way to 105: G2 waits.
+        # G1 is coming back down N (at 80) on its way to 105: G2 waits,
+        # sent on to 75, a block short of N on the one-way track.
         ctc = _loaded()
         step_at(ctc)
         path = next(p for p in ctc._auto.plans if p.train_id == "G1").path
@@ -209,7 +262,8 @@ class ZoneTest(unittest.TestCase):
         step_at(ctc, at("G1", "80"), at("G2", "73"), dt=DWELL_S)
         run = _run(ctc, "G2")
         self.assertEqual((run.status, run.stop_block_id), ("held", "77"))
-        self.assertEqual(_order(ctc, "G2"), "73")
+        self.assertEqual(_order(ctc, "G2"), "77")
+        self.assertEqual(ctc._auto.hold_at("G2"), "75")
         # G1's run is over: N is clear, and G2 goes on.
         ctc._auto.progress["G1"] = Progress(DONE, 18)
         step_at(ctc, at("G2", "73"))
@@ -247,12 +301,13 @@ class ZoneTest(unittest.TestCase):
     def test_a_train_that_has_turned_waits_round_the_loop(self) -> None:
         # R1 would come back down past R2: it is given its order on to
         # Shadyside (7), but its authority stops at 54, round the loop a
-        # block short of 53 (by switch 52), where it waits.
+        # block short of 53 (by switch 52), where it waits. It is held
+        # only once it waits there.
         ctc = self._r1_turned()
         step_at(ctc, at("R1", "60", "Red"), at("R2", "30", "Red"),
                 dt=DWELL_S)
         self.assertEqual((_run(ctc, "R1").status, _order(ctc, "R1")),
-                         ("held", "7"))
+                         ("en route", "7"))
         self.assertEqual(ctc._auto.hold_at("R1"), "54")
         # Placed at 60, it came round the loop from 61.
         ctc._tracker.trains["R1"] = replace(ctc._tracker.trains["R1"],
@@ -635,10 +690,11 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(sorted(railway.retired), sorted(dwells))
         # More than one train out at once.
         self.assertGreater(most, 1)
-        expected = GREEN_ORDER if line == "Green" else RED_ORDER
+        expected = FILE_GREEN if line == "Green" else FILE_RED
         for train_id, stops in dwells.items():
             with self.subTest(train=train_id):
-                # Its scheduled stations in track order, and no others.
+                # Its scheduled stations in the file's order, and no
+                # others.
                 self.assertEqual([block for block, _ in stops], expected)
                 self.assertTrue(all(seconds >= DWELL_S
                                     for _, seconds in stops), stops)

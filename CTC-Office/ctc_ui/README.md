@@ -227,9 +227,10 @@ yet) through `ctc_ui/ctc_host.py`:
   So runs keep the file's headway however late it is loaded. The Auto
   dispatch panel shows it ("T = 0 at 05:12:30"). It stops only at the stations the file lists for it, and runs
   through every other station on its way. It visits them in the order
-  the track reaches them from the yard (the file lists them by block
-  number, which a train cannot always run), stops 45 s at each (D007),
-  then returns to the yard. The CTC does the stopping: it sends the train to
+  the file lists them, whatever that costs: Green 1 runs from the yard
+  through Glenbury and on round to Pioneer (2), its first station, and
+  round again for Edgebrook (9), which the one-way track reaches before
+  Pioneer. It stops 45 s at each (D007), then returns to the yard. The CTC does the stopping: it sends the train to
   its next station, holds it there for the dwell, then sends it on. A
   station that is closed is skipped. **Departures** shows
   every run's due time and where it has got to; **Pause dispatch**
@@ -242,11 +243,16 @@ yet) through `ctc_ui/ctc_host.py`:
   track in both directions (Green 77 to 85 and 13 to 28; Red 16 to 52),
   that stretch is a two-way zone, reserved by direction: any number of
   scheduled trains may go through it the same way, never two opposite
-  ways. A train due to enter a zone in use the other way waits at its
-  last stop, or in the yard, as **Held**. A train that has turned round
-  a loop (Red 53 to 66) is held a block short of the loop's end
-  ("Held at … by the schedule") until the trains following it are
-  through, and no new train goes out while it waits there. A
+  ways. A train due to enter a zone in use the other way is **Held**:
+  in the yard if it is the first zone on its way out, so the line does
+  not fill up with trains queuing for it; otherwise on the one-way track
+  a block short of the zone, or at its last stop. A train claims a zone
+  only when it is the next one ahead of it. A train that has turned
+  round a loop (Green 86 to 100 and 1 to 12, Red 53 to 66) waits a
+  block short of the loop's end ("Held at … by the schedule") until the
+  trains following it are through, and no new train goes out while it
+  waits there. No more trains go into a zone toward a loop than the loop
+  holds, a block apart. A
   head-on meet that happens anyway (a manual train, say)
   is for the wayside controllers to handle.
 - Trains per hour and the per-line trains and dwell columns stay empty:

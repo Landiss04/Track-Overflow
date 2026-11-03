@@ -188,8 +188,15 @@ class TrackControllerOutputs:
     # listed block (``maintenance-closure-lock``, proposed on
     # ``ctc-interfacing``).
     closed_blocks: tuple[BlockRef, ...] = ()
-    # Only while in maintenance mode; cleared when it ends.
+    # The dispatcher's switch positions, set in maintenance mode; they
+    # outlast it until released (``maintenance-closure-lock``).
     switch_commands: tuple[SwitchCommand, ...] = ()
+    # The position each switch should take for the train the CTC routes
+    # over it: within its authority, or where its authority stops short
+    # of the switch (``switch-route-request``, proposed). A request, not
+    # a command: the Track Controller sets the switch when it is safe,
+    # and a ``switch_commands`` entry for the same switch wins.
+    route_requests: tuple[SwitchCommand, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,6 +4,29 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-03 — Runs stop at their stations in the file's order
+
+From Landis: a run stops at the stations its schedule lists, in that
+order, whatever is efficient. Green 1's first stop is Pioneer, with no
+stop before it.
+
+- `ctc/scheduler.py` `plan_run()`: stations in the file's order, not
+  track order from the yard. A station the track reaches only after a
+  lap (Green Edgebrook after Pioneer) costs that lap.
+- Two-way zones, so the longer runs do not jam: a run leaves the yard
+  only when the first zone on its way is free for it; elsewhere it waits
+  on one-way track a block short of a zone in use the other way; it
+  claims only the next zone ahead; no more trains go toward a loop than
+  it holds (Green 1 to 12 jammed with all ten runs in it); a pass counts
+  as coming back only right after the same zone. A train is shown held
+  only while it waits.
+- `route_requests` (each switch's position for the train routed over it)
+  and `PASSING_SIDINGS` (off) are in, for the Track Controller to use.
+- In the scheduler's own simulated railway all 10 runs finish on both
+  lines (Green by 08:35, Red by 10:26 from a 05:00 start). Tests: plan
+  tests read the file order; zone tests run a track-ordered copy of the
+  schedule (`TRACK_SCHEDULE`).
+
 ## 2026-11-03 — A schedule starts when the clock runs with it
 
 From Landis: loaded five minutes in, a schedule dispatched every run due

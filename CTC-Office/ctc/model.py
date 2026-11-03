@@ -86,6 +86,7 @@ from ctc.routing import (
 )
 from ctc.track_layout import Line, load_layout, station_lines
 from ctc.scheduler import (
+    HELD,
     IN_YARD,
     SIMULATION_START_S,
     TO_YARD,
@@ -936,8 +937,12 @@ class StubCtcOffice:
         not a run of the loaded schedule is never held by it."""
         if self._auto is None or train_id not in self._auto.progress:
             return False
+        progress = self._auto.progress[train_id]
+        # Held with a place to wait further on: it leaves the yard.
+        leaving = (progress.status == IN_YARD
+                   or (progress.status == HELD and progress.wait >= 0))
         return (not self._automatic or self._dispatch_paused
-                or self._auto.progress[train_id].status != IN_YARD)
+                or not leaving)
 
     def _sent_to_yard(self, train_id: str) -> bool:
         """Whether a train has been sent back to the yard: a run of the
@@ -1259,6 +1264,14 @@ class StubCtcOffice:
                                    stuck[line],
                                    self._tracker.trains[train_id].came_from)
                 if line == order.line else (None, ""))
+            # A run keeps to its plan's way (over a passing siding) while
+            # nothing that would hold it up for good is on it.
+            planned = (self._auto.planned_route(train_id, block_id)
+                       if self._auto is not None else None)
+            if (planned is not None and route is not None
+                    and planned[-1] == order.destination_block_id
+                    and not set(planned[1:]) & (unusable | stuck[line])):
+                route, reverse_at = planned, ""
             if route is None:
                 found[train_id] = TrainAuthority(
                     train_id, line, 0, block_id, "no route",
@@ -1363,6 +1376,7 @@ class StubCtcOffice:
                                     if b.line in ready),
                 switch_commands=tuple(c for c in self._switch_commands()
                                       if c.line in ready),
+                route_requests=self._route_requests(ready),
             ),
             clock_speedup=self._clock_speedup,
             clock_paused=self._clock_paused,
@@ -1374,6 +1388,29 @@ class StubCtcOffice:
 
     def _closed_blocks(self) -> tuple[BlockRef, ...]:
         return tuple(sorted(self._closed, key=_block_order))
+
+    def _route_requests(self, ready: Collection[str]
+                        ) -> tuple[SwitchCommand, ...]:
+        """The position each switch should take for the train routed
+        over it: every switch within a train's authority, and the one
+        its authority stops short of. The most urgent train's request
+        stands where two trains want the same switch (authorities are
+        counted most urgent first)."""
+        wanted: dict[tuple[str, str], SwitchCommand] = {}
+        for limit in self._authorities():
+            if limit.line not in ready:
+                continue
+            graph = self._graphs[limit.line]
+            ahead = limit.route[:limit.blocks + 2]
+            for here, after in zip(ahead, ahead[1:]):
+                leg = graph.leg(here, after)
+                if leg is not None:
+                    wanted.setdefault(
+                        (limit.line, leg.switch_id),
+                        SwitchCommand(limit.line, leg.switch_id,
+                                      leg.position))
+        return tuple(wanted[key] for key in sorted(
+            wanted, key=lambda k: _id_order(*k)))
 
     def _switch_commands(self) -> tuple[SwitchCommand, ...]:
         return tuple(

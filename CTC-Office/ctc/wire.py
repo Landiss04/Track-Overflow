@@ -115,6 +115,9 @@ def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
             switch_commands=tuple(
                 SwitchCommand(**c)
                 for c in track.get("switch_commands", ())),
+            route_requests=tuple(
+                SwitchCommand(**c)
+                for c in track.get("route_requests", ())),
         ),
         clock_speedup=bool(data.get("clock_speedup", False)),
         clock_paused=bool(data.get("clock_paused", True)),
