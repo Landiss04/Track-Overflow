@@ -4,6 +4,48 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-02 — Switch commands outlast maintenance mode
+
+From Landis (INPUT-1, relayed by Kevin 2026-11-02, and confirmed directly):
+a switch set in maintenance mode holds through Automatic and Manual until
+the dispatcher, back in maintenance mode, releases it.
+
+- `ctc/model.py` `set_maintenance_mode()`: leaving maintenance mode no
+  longer clears the switch commands. `release_switch()` now requires
+  maintenance mode, as `set_switch()` does.
+- Panel texts, the README and `tests/test_ctc_boundary.py` follow.
+  Truth: proposal `20261102-0829-maintenance-switches-persist.md` on
+  `claude/quirky-fermi-sickg4`.
+
+## 2026-10-30 — Windows GUI walkthrough fixes (CTC)
+
+From Landis's review of the CTC findings in
+`documents/central-harness-windows-gui-2026-10-28.md`.
+
+- F32: a block closes at once, even with a train in it. The pending
+  "closing" state is gone from `ctc/model.py`, `CtcSnapshot`
+  (`pending_closures`), the wire format, the host and the panels; it was
+  already locked and refused authority exactly like a closed block. Truth
+  proposals `20261030-1447-*` on `claude/ctc-harness-findings` supersede
+  `block-closure` and `no-authority-into-unusable-block`.
+- F20: `preview_dispatch()` (model and `CtcOffice`) and
+  `CtcHost.dispatchPreview()`: the Dispatch panel shows the suggested
+  speed and authority as soon as line, train and destination are picked,
+  counted from the yard exit block for a train still in the yard.
+- F21: the Dispatch panel's error clears as soon as any field changes.
+  Every CTC time display already wraps at midnight; a test now says so.
+- Maintenance block picker: `BlockField.qml` takes a typed block number
+  as well as a pick from the list (Close block, and Set authority).
+- Switch labels: every switch reads "normal; reverse"; Red 9, Green 58
+  and Green 62, listed by their yard leg alone, get their main-line leg
+  (`_switch_legs()` in `ctc_host.py`).
+- F22: the always-empty Trains /hr tile is dropped, so the two ticket
+  tiles show up to six digits in full; trains per hour stays in the table.
+- F31: the minimized Train occupancy pill sits in the track view's bottom
+  row instead of over the legend.
+- F32b: the Close block panel is wider, so "YES, CLOSE BLOCK" shows in
+  full.
+
 ## 2026-10-28 — The gap is kept at a switch set against the route
 
 From Landis and Harry Tye's agreement on CTC-3, relayed by Kevin: a

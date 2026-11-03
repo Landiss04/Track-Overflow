@@ -55,7 +55,7 @@ def _maintenance() -> StubCtcOffice:
 
 
 class AuthoritySafetyTest(unittest.TestCase):
-    """No authority into a closed, closing or failed block, or onto
+    """No authority into a closed or failed block, or onto
     another line than the train's own. A failed block is one the CTC
     infers from occupancy, and the UIs never show it as one: an order
     into it is taken and kept, and the train waits short of it."""
@@ -308,40 +308,36 @@ class ClosureTest(unittest.TestCase):
         self.assertEqual(out.track_controller.closed_blocks,
                          (BlockRef("Red", "2"),))
 
-    def test_occupied_block_closes_once_the_train_leaves(self) -> None:
+    def test_occupied_block_closes_at_once(self) -> None:
         ctc = _maintenance()
         step_at(ctc, at("T1", "65"))
         ctc.dispatch("T2", "Green", "65")
         ctc.set_block_closed("Green", "65", True)
         snap = ctc.snapshot()
-        # Pending: not closed yet, orders into it cancelled at once, and
-        # already listed for the Track Controller, which may not
-        # override it from now on.
+        # Closed with the train still in it: orders into it cancelled,
+        # and listed for the Track Controller, which may not override
+        # it from now on (block-closure).
         self.assertEqual(snap.outputs.track_controller.closed_blocks,
                          (BlockRef("Green", "65"),))
-        self.assertEqual(snap.pending_closures, (BlockRef("Green", "65"),))
-        self.assertEqual(snap.cancelled_orders[0].reason, "block closing")
-        with self.assertRaisesRegex(UnsafeActionError, "closing"):
+        self.assertEqual(snap.cancelled_orders[0].reason, "block closed")
+        with self.assertRaisesRegex(UnsafeActionError, "closed"):
             ctc.dispatch("T3", "Green", "65")
-        # Leaving maintenance keeps the pending closure.
+        # It stays closed after the train has left, and after leaving
+        # maintenance.
         ctc.set_maintenance_mode(False)
-        step_at(ctc, at("T1", "65"))
-        self.assertEqual(ctc.snapshot().pending_closures,
-                         (BlockRef("Green", "65"),))
         step_at(ctc, at("T1", "66"))
-        snap = ctc.snapshot()
-        self.assertEqual(snap.pending_closures, ())
-        self.assertEqual(snap.outputs.track_controller.closed_blocks,
-                         (BlockRef("Green", "65"),))
+        self.assertEqual(
+            ctc.snapshot().outputs.track_controller.closed_blocks,
+            (BlockRef("Green", "65"),))
 
-    def test_reopen_cancels_a_pending_closure(self) -> None:
+    def test_reopen_an_occupied_closed_block(self) -> None:
         ctc = _maintenance()
         step_at(ctc, at("T1", "65"))
         ctc.set_block_closed("Green", "65", True)
         ctc.set_block_closed("Green", "65", False)
         ctc.step(DT_S, CtcInputs())
         snap = ctc.snapshot()
-        self.assertEqual(snap.pending_closures, ())
+        self.assertEqual(snap.closed_blocks, ())
         self.assertEqual(snap.outputs.track_controller.closed_blocks, ())
 
 

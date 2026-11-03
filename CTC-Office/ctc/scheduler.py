@@ -354,7 +354,7 @@ class AutoDispatcher:
 
     def skip_stop(self, train_id: str) -> Action | None:
         """The order for a run's current stop was refused (its block is
-        closed or closing): go on to the next stop instead."""
+        closed): go on to the next stop instead."""
         plan = next(p for p in self.plans if p.train_id == train_id)
         progress = self.progress[train_id]
         if progress.status == HELD:

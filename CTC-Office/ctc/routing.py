@@ -4,7 +4,7 @@ Authority is the number of blocks ahead of a train's current block that
 it may still enter (decision D013, proposed on ``ctc-interfacing``). The
 CTC recomputes it every step: the count runs along the train's route
 toward its destination and ends at the earliest of the destination, the
-block before the first closed or closing block, and the
+block before the first closed block, and the
 block before a switch not reported set for the route
 (``authority-stops-before-obstruction``, proposed on ``ctc-interfacing``).
 No block is within two trains' authorities (``exclusive-authority``):
@@ -74,7 +74,7 @@ class AuthorityLimit:
     # The last block it may enter: its own block when ``blocks`` is 0.
     end_block_id: str
     # Why the count ends there: "destination", "occupied", "closed",
-    # "closing", "reserved", "switch" or "no route". With
+    # "reserved", "switch" or "no route". With
     # ``keep``, also "granted": the end of the part of an earlier grant
     # the train still has. The CTC uses that one internally only; it
     # never reaches a TrainAuthority.
@@ -343,7 +343,7 @@ def authority(graph: TrackGraph, start: str, destination: str,
     """Count a train's authority along its route.
 
     ``obstructions`` maps a block ID to why no train may enter it
-    ("occupied", "closed" or "closing"); the train's own block
+    ("occupied" or "closed"); the train's own block
     may be listed and is ignored. ``switches`` maps a
     switch ID to its reported position; a switch not listed counts as
     not set.
