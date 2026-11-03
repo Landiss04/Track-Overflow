@@ -8,7 +8,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, QProcess, QSocketNotifier, QTimer, Signal
+from PySide6.QtCore import (
+    QObject,
+    QProcess,
+    QSocketNotifier,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtSerialPort import QSerialPort, QSerialPortInfo
 
 IDENTITIES = {
@@ -84,14 +91,19 @@ class ByteTransport(QObject):
 class SerialTransport(ByteTransport):
     """Production USB transport; wait for the assigned Pi identity."""
 
+    # Windows QSerialPort reads nothing more until readyRead returns, so a
+    # receiver that waits for a reply (call_action) must not run inside it.
+    _arrived = Signal(bytes)
+
     def __init__(self, module: str, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.module = module
         self.port = QSerialPort(self)
         self.port.setBaudRate(115200)
-        self.port.readyRead.connect(
-            lambda: self.received.emit(self.port.readAll().data())
+        self._arrived.connect(
+            self.received, Qt.ConnectionType.QueuedConnection
         )
+        self.port.readyRead.connect(self._read_ready)
         self.port.errorOccurred.connect(self._error)
         self.retry = QTimer(self)
         self.retry.setInterval(300)
@@ -103,6 +115,9 @@ class SerialTransport(ByteTransport):
     def start(self) -> None:
         self.retry.start()
         self._find()
+
+    def _read_ready(self) -> None:
+        self._arrived.emit(self.port.readAll().data())
 
     def _find(self) -> None:
         if self._open:

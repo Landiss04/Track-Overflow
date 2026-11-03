@@ -7,7 +7,11 @@ import sys
 import pytest
 from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 from common.hw_link.relay import HardwareRelay
-from common.hw_link.transport import ProcessTransport, matches_identity
+from common.hw_link.transport import (
+    ProcessTransport,
+    SerialTransport,
+    matches_identity,
+)
 from utils.harness_protocol import step_message
 
 APP = QCoreApplication.instance() or QCoreApplication([])
@@ -173,6 +177,26 @@ def test_serial_identity_never_uses_com_number():
 
     assert matches_identity(Info(), "track-controller-hw")
     assert not matches_identity(Info(), "train-controller-hw")
+
+
+def test_serial_ready_read_returns_before_receivers_run():
+    # Windows QSerialPort delivers nothing more while its readyRead slot is
+    # on the stack, so a receiver that waits for a reply there never gets it.
+    class Bytes:
+        def data(self):
+            return b"HELLO\n"
+
+    class Port:
+        def readAll(self):
+            return Bytes()
+
+    transport = SerialTransport("track-controller-hw")
+    transport.port = Port()
+    received = []
+    transport.received.connect(received.append)
+    transport._read_ready()
+    assert received == []
+    until(lambda: received == [b"HELLO\n"])
 
 
 def test_same_boot_unplug_resends_running_gains_only(tmp_path):
