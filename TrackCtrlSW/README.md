@@ -141,13 +141,14 @@ procedure is the programmer's, from the Track Controller UI:
    program opens an empty editor, and NEW gives an empty one too: nothing is
    written or committed for you.
 
-Until both are done the line is **not ready**: no wayside on it runs a program,
-and a wayside running nothing transmits nothing. One unprogrammed wayside stalls
-its whole line. The header shows **NOT READY**, with what is missing on hover. Loading a new line, or `reset()`, makes a ready module not
+A wayside is **ready** when its track layout is present and a program is committed
+on it (`ready = layout present AND committed program`). It runs and transmits as soon
+as it is, whatever the other waysides are doing; a wayside with no program runs
+nothing and transmits nothing. The header shows **NOT READY**, with what is missing on hover. Loading a new line, or `reset()`, makes a ready module not
 ready again.
 
 Readiness is reported **per wayside, and so per line**: each wayside's
-`CtcReport` carries its line, a `ready` flag (it has a program) and a `reason`
+`CtcReport` carries its line, a `ready` flag (its layout is present and a program is committed) and a `reason`
 (`no PLC program`), so the CTC Office, and anyone debugging, can see exactly
 which waysides are not ready. There is no module-level flag on the wire.
 `TrackControllerOutputs.ready` is derived: true only when at least one wayside
@@ -362,8 +363,8 @@ code**: the vital code reads the suggested speed as bits no user program can
 declare (`SUGSPD_n_b`, whole m/s, least significant first) and writes
 `OUT_SPD_n_b`, comparing against the limit in Boolean code, and RUN lists it as the
 override `speed_clamped`. Zero speed for zero authority is still the CTC Office's
-(truth `suggested-speed-stops-within-authority`). A wayside running no program, or
-on a line that is not ready, runs nothing and transmits nothing, except that its
+(truth `suggested-speed-stops-within-authority`). A wayside running no program
+runs nothing and transmits nothing, except that its
 **crossings are armed** (lights on, gates down): that is their default state until
 a program is running and says otherwise.
 

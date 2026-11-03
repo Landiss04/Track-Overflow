@@ -1,0 +1,1439 @@
+{
+  "source": "utils/schedule_v4.json (timetable per train), compressed for a Track Controller stress test",
+  "time_unit": "s",
+  "time_origin": "schedule start; Train 1 is at its first stop at 0",
+  "headway_s": 45,
+  "purpose": "Stress test, not a service plan: 14 Green trains 45 s apart (v4 is 180 s), so many trains are on the line at once and close behind each other through every switch and both crossings; the last four end early at different stations. Red runs 4 trains 90 s apart.",
+  "lines": [
+    {
+      "line": "Green",
+      "trains": [
+        {
+          "train_id": "1",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 0
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 60
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 240
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 480
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 720
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 960
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1140
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1260
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1440
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1620
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 1860
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2040
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2460
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2640
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 2880
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3060
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3240
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3420
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5400
+            }
+          ]
+        },
+        {
+          "train_id": "2",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 45
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 105
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 285
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 525
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 765
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1005
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1185
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1305
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1485
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1665
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 1905
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2085
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2505
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2685
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 2925
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3105
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3285
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3465
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5445
+            }
+          ]
+        },
+        {
+          "train_id": "3",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 90
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 150
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 330
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 570
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 810
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1050
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1230
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1350
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1530
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1710
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 1950
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2130
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2550
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2730
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 2970
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3150
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3330
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3510
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5490
+            }
+          ]
+        },
+        {
+          "train_id": "4",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 135
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 195
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 375
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 615
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 855
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1095
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1275
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1395
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1575
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1755
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 1995
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2175
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2595
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2775
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 3015
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3195
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3375
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3555
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5535
+            }
+          ]
+        },
+        {
+          "train_id": "5",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 180
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 240
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 420
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 660
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 900
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1140
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1320
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1440
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1620
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1800
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2040
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2220
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2640
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2820
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 3060
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3240
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3420
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3600
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5580
+            }
+          ]
+        },
+        {
+          "train_id": "6",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 225
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 285
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 465
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 705
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 945
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1185
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1365
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1485
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1665
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1845
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2085
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2265
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2685
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2865
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 3105
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3285
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3465
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3645
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5625
+            }
+          ]
+        },
+        {
+          "train_id": "7",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 270
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 330
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 510
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 750
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 990
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1230
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1410
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1530
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1710
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1890
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2130
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2310
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2730
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2910
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 3150
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3330
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3510
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3690
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5670
+            }
+          ]
+        },
+        {
+          "train_id": "8",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 315
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 375
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 555
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 795
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 1035
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1275
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1455
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1575
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1755
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1935
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2175
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2355
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2775
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 2955
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 3195
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3375
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3555
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3735
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5715
+            }
+          ]
+        },
+        {
+          "train_id": "9",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 360
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 420
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 600
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 840
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 1080
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1320
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1500
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1620
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1800
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 1980
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2220
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2400
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2820
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 3000
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 3240
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3420
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3600
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3780
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5760
+            }
+          ]
+        },
+        {
+          "train_id": "10",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 405
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 465
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 645
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 885
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 1125
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1365
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1545
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1665
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1845
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 2025
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2265
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2445
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 2865
+            },
+            {
+              "block_id": "96",
+              "station": "CASTLE SHANNON",
+              "arrival_s": 3045
+            },
+            {
+              "block_id": "105",
+              "station": "DORMONT",
+              "arrival_s": 3285
+            },
+            {
+              "block_id": "113",
+              "station": null,
+              "arrival_s": 3465
+            },
+            {
+              "block_id": "123",
+              "station": "OVERBROOK",
+              "arrival_s": 3645
+            },
+            {
+              "block_id": "132",
+              "station": "INGLEWOOD",
+              "arrival_s": 3825
+            },
+            {
+              "block_id": "141",
+              "station": "CENTRAL",
+              "arrival_s": 5805
+            }
+          ]
+        },
+        {
+          "train_id": "11",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 450
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 510
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 690
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 930
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 1170
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1410
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1590
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1710
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1890
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 2070
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2310
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2490
+            }
+          ]
+        },
+        {
+          "train_id": "12",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 495
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 555
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 735
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 975
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 1215
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1455
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1635
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1755
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1935
+            }
+          ]
+        },
+        {
+          "train_id": "13",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 540
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 600
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 780
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 1020
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 1260
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1500
+            },
+            {
+              "block_id": "39",
+              "station": "CENTRAL",
+              "arrival_s": 1680
+            },
+            {
+              "block_id": "48",
+              "station": "INGLEWOOD",
+              "arrival_s": 1800
+            },
+            {
+              "block_id": "57",
+              "station": "OVERBROOK",
+              "arrival_s": 1980
+            },
+            {
+              "block_id": "65",
+              "station": "GLENBURY",
+              "arrival_s": 2160
+            },
+            {
+              "block_id": "73",
+              "station": "DORMONT",
+              "arrival_s": 2400
+            },
+            {
+              "block_id": "77",
+              "station": "MT LEBANON",
+              "arrival_s": 2580
+            },
+            {
+              "block_id": "88",
+              "station": "POPLAR",
+              "arrival_s": 3000
+            }
+          ]
+        },
+        {
+          "train_id": "14",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 585
+            },
+            {
+              "block_id": "2",
+              "station": "PIONEER",
+              "arrival_s": 645
+            },
+            {
+              "block_id": "9",
+              "station": "EDGEBROOK",
+              "arrival_s": 825
+            },
+            {
+              "block_id": "16",
+              "station": null,
+              "arrival_s": 1065
+            },
+            {
+              "block_id": "22",
+              "station": "WHITED",
+              "arrival_s": 1305
+            },
+            {
+              "block_id": "31",
+              "station": "SOUTH BANK",
+              "arrival_s": 1545
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "line": "Red",
+      "trains": [
+        {
+          "train_id": "1",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 0
+            },
+            {
+              "block_id": "7",
+              "station": "SHADYSIDE",
+              "arrival_s": 180
+            },
+            {
+              "block_id": "16",
+              "station": "HERRON AVE",
+              "arrival_s": 480
+            },
+            {
+              "block_id": "21",
+              "station": "SWISSVILLE",
+              "arrival_s": 720
+            },
+            {
+              "block_id": "25",
+              "station": "PENN STATION",
+              "arrival_s": 960
+            },
+            {
+              "block_id": "35",
+              "station": "STEEL PLAZA",
+              "arrival_s": 1140
+            },
+            {
+              "block_id": "45",
+              "station": "FIRST AVE",
+              "arrival_s": 1260
+            },
+            {
+              "block_id": "48",
+              "station": "STATION SQUARE",
+              "arrival_s": 1440
+            },
+            {
+              "block_id": "60",
+              "station": "SOUTH HILLS JUNCTION",
+              "arrival_s": 1620
+            }
+          ]
+        },
+        {
+          "train_id": "2",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 90
+            },
+            {
+              "block_id": "7",
+              "station": "SHADYSIDE",
+              "arrival_s": 270
+            },
+            {
+              "block_id": "16",
+              "station": "HERRON AVE",
+              "arrival_s": 570
+            },
+            {
+              "block_id": "21",
+              "station": "SWISSVILLE",
+              "arrival_s": 810
+            },
+            {
+              "block_id": "25",
+              "station": "PENN STATION",
+              "arrival_s": 1050
+            },
+            {
+              "block_id": "35",
+              "station": "STEEL PLAZA",
+              "arrival_s": 1230
+            },
+            {
+              "block_id": "45",
+              "station": "FIRST AVE",
+              "arrival_s": 1350
+            },
+            {
+              "block_id": "48",
+              "station": "STATION SQUARE",
+              "arrival_s": 1530
+            },
+            {
+              "block_id": "60",
+              "station": "SOUTH HILLS JUNCTION",
+              "arrival_s": 1710
+            }
+          ]
+        },
+        {
+          "train_id": "3",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 180
+            },
+            {
+              "block_id": "7",
+              "station": "SHADYSIDE",
+              "arrival_s": 360
+            },
+            {
+              "block_id": "16",
+              "station": "HERRON AVE",
+              "arrival_s": 660
+            },
+            {
+              "block_id": "21",
+              "station": "SWISSVILLE",
+              "arrival_s": 900
+            },
+            {
+              "block_id": "25",
+              "station": "PENN STATION",
+              "arrival_s": 1140
+            },
+            {
+              "block_id": "35",
+              "station": "STEEL PLAZA",
+              "arrival_s": 1320
+            },
+            {
+              "block_id": "45",
+              "station": "FIRST AVE",
+              "arrival_s": 1440
+            },
+            {
+              "block_id": "48",
+              "station": "STATION SQUARE",
+              "arrival_s": 1620
+            },
+            {
+              "block_id": "60",
+              "station": "SOUTH HILLS JUNCTION",
+              "arrival_s": 1800
+            }
+          ]
+        },
+        {
+          "train_id": "4",
+          "stops": [
+            {
+              "block_id": "1",
+              "station": null,
+              "arrival_s": 270
+            },
+            {
+              "block_id": "7",
+              "station": "SHADYSIDE",
+              "arrival_s": 450
+            },
+            {
+              "block_id": "16",
+              "station": "HERRON AVE",
+              "arrival_s": 750
+            },
+            {
+              "block_id": "21",
+              "station": "SWISSVILLE",
+              "arrival_s": 990
+            },
+            {
+              "block_id": "25",
+              "station": "PENN STATION",
+              "arrival_s": 1230
+            },
+            {
+              "block_id": "35",
+              "station": "STEEL PLAZA",
+              "arrival_s": 1410
+            },
+            {
+              "block_id": "45",
+              "station": "FIRST AVE",
+              "arrival_s": 1530
+            },
+            {
+              "block_id": "48",
+              "station": "STATION SQUARE",
+              "arrival_s": 1710
+            },
+            {
+              "block_id": "60",
+              "station": "SOUTH HILLS JUNCTION",
+              "arrival_s": 1890
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

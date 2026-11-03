@@ -110,7 +110,7 @@ class WorldAndController(unittest.TestCase):
         self.rig.tick()
         self.assertTrue(self.controller.crossing_commands["19"])
 
-    def test_a_train_holds_the_train_beside_it(self) -> None:
+    def test_a_train_waits_for_the_train_ahead_of_it(self) -> None:
         # An empty block beside a train passes its suggestion: it is the
         # block the CTC Office preloads for the train about to enter it.
         self.world.set_occupancy(self.key("6"), True)
@@ -118,10 +118,11 @@ class WorldAndController(unittest.TestCase):
         self.assertEqual(self.circuit("5"), (12, 4))
         self.assertEqual(self.circuit("6"), (12, 4))
         self.assertEqual(self.circuit("7"), (12, 4))
-        # A train in the block beside it holds both.
+        # Block 6 leads to block 5. A train in 5 holds the one in 6 behind
+        # it; the leader, whose next block 4 is clear, keeps its values.
         self.world.set_occupancy(self.key("5"), True)
         self.rig.tick()
-        self.assertEqual(self.circuit("5"), (0, 0))
+        self.assertEqual(self.circuit("5"), (12, 4))
         self.assertEqual(self.circuit("6"), (0, 0))
         self.assertEqual(self.circuit("7"), (12, 4))
         # The vital layer does not count blocks: a block farther away
@@ -139,11 +140,11 @@ class WorldAndController(unittest.TestCase):
     def test_a_failed_block_is_only_an_occupied_one(self) -> None:
         # There is no failure input: the Track Model reports a broken
         # rail as presence, and the controller reacts as to a train,
-        # holding a train beside it.
+        # holding the train behind it.
         self.world.set_occupancy(self.key("6"), True)
         self.world.set_occupancy(self.key("5"), True)
         self.rig.tick()
-        self.assertEqual(self.circuit("5"), (0, 0))
+        self.assertEqual(self.circuit("6"), (0, 0))
 
     def test_a_switch_that_will_not_follow_stops_its_block(self) -> None:
         # The program throws switch 12 and the machine does not follow,

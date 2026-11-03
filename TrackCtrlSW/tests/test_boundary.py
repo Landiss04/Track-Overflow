@@ -271,10 +271,25 @@ class StarterSeparation(unittest.TestCase):
             {"64": (12, 2), "65": (12, 1)},
         )
 
-    def test_a_train_beside_another_is_held(self) -> None:
+    def test_a_train_behind_another_is_held_and_the_leader_is_not(
+        self,
+    ) -> None:
+        # Block 64 leads to 65 on the Green Line. Only the train behind
+        # is held: holding the leader too would stall both for good.
         self.assertEqual(
             self.circuits({"64", "65"}, {"64": (12, 2), "65": (12, 1)}),
-            {"64": (0, 0), "65": (0, 0)},
+            {"64": (0, 0), "65": (12, 1)},
+        )
+
+    def test_a_convoy_is_held_only_behind_its_leader(self) -> None:
+        # Three trains in 62, 63 and 64: the two behind wait, the front
+        # one moves, so the convoy can clear instead of deadlocking.
+        self.assertEqual(
+            self.circuits(
+                {"62", "63", "64"},
+                {"62": (12, 1), "63": (0, 0), "64": (12, 2)},
+            ),
+            {"62": (0, 0), "63": (0, 0), "64": (12, 2)},
         )
 
 
@@ -321,7 +336,9 @@ class Startup(unittest.TestCase):
             len(module.not_ready_reasons()), len(module.wayside_ids))
         self.hold_is_total(_tick(module, ctc=self.suggest_all()))
 
-    def test_one_missing_program_stalls_every_wayside(self) -> None:
+    def test_a_wayside_with_a_program_runs_without_waiting_for_the_rest(
+        self,
+    ) -> None:
         module = self.bare()
         ids = module.wayside_ids
         # Everything but the last wayside is programmed.
@@ -331,18 +348,17 @@ class Startup(unittest.TestCase):
                 wayside_id, default_program_source(controller), "a.plc")
         self.assertEqual(
             module.not_ready_reasons(), (f"{ids[-1]} has no PLC program",))
-        out = self._stalled_with_programs(module)
-        self.assertFalse(out.ready)
-        # The programmed waysides are held too: nothing runs.
-        self.assertFalse(any(
-            circuit.speed_mps for circuit in out.track_model.track_circuits.values()))
-
-    def _stalled_with_programs(
-        self, module: SwTrackController
-    ) -> interface.TrackControllerOutputs:
         out = _tick(module, ctc=self.suggest_all())
-        self.hold_is_total(out)
-        return out
+        self.assertFalse(out.ready)
+        unprogrammed = {
+            module.controller(ids[-1]).key(block_id)
+            for block_id in module.controller(ids[-1]).config.block_ids
+        }
+        circuits = out.track_model.track_circuits
+        # The programmed waysides transmit; the one without a program
+        # transmits nothing.
+        self.assertTrue(circuits)
+        self.assertFalse(unprogrammed & set(circuits))
 
     def test_the_last_program_starts_the_module(self) -> None:
         module = self.bare()
@@ -409,8 +425,6 @@ class Startup(unittest.TestCase):
             self.assertEqual(
                 report.reason,
                 "" if report.ready else "no PLC program")
-        # A wayside that is ready is still held while another is not.
-        self.hold_is_total(out)
 
     def test_the_whole_is_ready_only_when_every_wayside_is(self) -> None:
         module = self.bare()

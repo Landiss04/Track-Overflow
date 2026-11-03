@@ -4,6 +4,31 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+
+## 2026-11-03 — The starter's separation rule is direction-aware
+
+`AUTH_n := NOT (OCC_n AND <next blocks of n>)`, from the layout's `next_blocks`.
+Before, a train was held when either neighbour was occupied, so trains in
+adjacent blocks (Green 62, 63, 64, found in the stress test) held each other
+and none could move. Now only the train behind is held. In a bidirectional
+section (Green 13..28, 77..85) the direction is unknown to the program and each
+block still holds for the other. The CTC-command wrapper in the starter's switch
+rule is also now parenthesised. `tests/test_boundary.py` and `tests/test_world.py`
+updated; a convoy test was added.
+
+---
+## 2026-11-03 — A wayside is ready when its layout is present and a program is committed
+
+`ready` is now per wayside: track layout present AND committed program. A
+ready wayside runs and transmits whatever the others are doing; before, one
+unprogrammed wayside held every wayside on its line. A wayside with no program
+still transmits nothing but its armed crossings. The module-level `ready` (the
+header, `not_ready_reasons`) is still every wayside's, and the CTC Office still
+sees each wayside's own report. `test_one_missing_program_stalls_every_wayside`
+became `test_a_wayside_with_a_program_runs_without_waiting_for_the_rest`.
+
+---
+
 ## 2026-10-30 — Harry's `829c842` taken: CTC switch command, points lock, window
 
 Cherry-picked from `Track-Ctrl-SW` (`829c842`), TrackCtrlSW files only.

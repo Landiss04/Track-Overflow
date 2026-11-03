@@ -17,7 +17,7 @@ silently.
 | Follower case | Commands normal. | Held while the points are occupied; a train coming for each position holds it where it stands. |
 | Inputs it reads | `OCC`, `CLOSED`, `MAINT` | the same, plus, when the wayside has a switch, `SWREV_s` (the read-back) and `CTCSW_s`, `CTCREV_s` (the CTC Office's command, obeyed first) |
 | Signals, crossings | `AHEAD` = blocks `point+1`, `point+2`; crossing = its block and `number ± 1` | **Not the same code any more:** since 2026-10-30 these and the separation rule use the layout's physical neighbours (`config.neighbours`, `config.within`), not block numbers. Block 101 joins block 77. |
-| Separation | `AUTH_n := NOT neighbour` for neighbours `n ± 1`, so an empty block beside a train is held | `AUTH_n := NOT (OCC_n AND neighbour)`: only a block with a train in it is held. An empty block passes the CTC Office's preloaded suggestion. Neighbours come from the layout. |
+| Separation | `AUTH_n := NOT neighbour` for neighbours `n ± 1`, so an empty block beside a train is held | `AUTH_n := NOT (OCC_n AND next block)`: only a block with a train in it is held, and only for the block ahead of it (from the layout's `next_blocks`). An empty block passes the CTC Office's preloaded suggestion. |
 
 The original starter's separation and neighbour rules were already replaced on this branch before
 today; the switch rule is the one most at risk in a merge.
@@ -30,17 +30,17 @@ changes included). Regenerate and update this table whenever the starter is chan
 
 | Wayside | Fingerprint | Lines | Switches |
 |---|---|---|---|
-| GTC-01 | 5df41fe67971 | 60 | 12 |
-| GTC-02 | d5f67e9af784 | 56 | 28 |
-| GTC-03 | 19df36ed3a76 | 73 | 58, 62 |
-| GTC-04 | a5df0b60c2ca | 73 | 76, 85 |
-| GTC-05 | 4facfa4cbfe0 | 40 | none |
-| GTC-06 | 578c45905306 | 36 | none |
-| RTC-01 | f12a22eb164f | 69 | 9, 15 |
-| RTC-02 | 392b6b05a776 | 47 | 27 |
-| RTC-03 | c64bf40ba58f | 83 | 32, 38, 43 |
-| RTC-04 | 3543c23b9713 | 51 | 52 |
-| RTC-05 | f88f0e81ba95 | 26 | none |
+| GTC-01 | e50493208a4e | 60 | 12 |
+| GTC-02 | 445778f3e50e | 56 | 28 |
+| GTC-03 | e3e271fc4e1e | 73 | 58, 62 |
+| GTC-04 | 4e8ff0f3ba41 | 73 | 76, 85 |
+| GTC-05 | f2ac5c30c278 | 40 | none |
+| GTC-06 | 6cb878630a54 | 36 | none |
+| RTC-01 | 17212ca33105 | 69 | 9, 15 |
+| RTC-02 | be308e41fa7a | 47 | 27 |
+| RTC-03 | 5297cb851d87 | 83 | 32, 38, 43 |
+| RTC-04 | a23a83dc6272 | 51 | 52 |
+| RTC-05 | 6af88a2d8c5b | 26 | none |
 
 Regenerate them from `TrackCtrlSW` with a script that builds the default module without programs
 (`tests/rig.py`, `default_module(programs=False)`) and hashes `default_program_source(controller)`
@@ -64,6 +64,16 @@ for each controller.
 
 ## History
 
+- 2026-11-03: separation is direction-aware. `AUTH_n := NOT (OCC_n AND <next blocks of n>)`, with the
+  next blocks from the layout's `next_blocks`, so a train is held only for the block ahead of it.
+  Before, it was held for either neighbour, and a convoy of adjacent trains (Green 62, 63, 64) held
+  each other for good. Where the layout joins two blocks both ways (Green 13..28 and 77..85) the
+  program cannot tell the direction, so each block still holds for the other there. All 11
+  fingerprints regenerated.
+- 2026-11-03: the CTC-command wrapper in the switch rule now parenthesises the starter's own
+  expression: `(CTCSW AND CTCREV) OR (NOT CTCSW AND (own))`. Without the brackets the second half of
+  `own` applied even while the CTC was commanding. Fingerprints of the 8 waysides with switches
+  regenerated.
 - 2026-10-30: the starter reads the CTC Office's switch command (`CTCSW_s`, `CTCREV_s`) and obeys it
   first, whatever else it would do; the vital code no longer applies the command itself. Every
   wayside with a switch has new fingerprints (GTC-05, GTC-06 and RTC-05 have no switch and are
