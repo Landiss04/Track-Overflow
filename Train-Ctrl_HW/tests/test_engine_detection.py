@@ -25,6 +25,7 @@ import math
 import random
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parents[1]
@@ -36,7 +37,6 @@ from train_ctrl.constants import (  # noqa: E402
     EBRAKE_DECEL_MPS2,
     ENGINE_DETECT_S,
     ENGINE_RETEST_S,
-    ENGINE_START_S,
     GRAVITY_MPS2,
     MASS_KG,
     MAX_FORCE_N,
@@ -44,6 +44,7 @@ from train_ctrl.constants import (  # noqa: E402
     SERVICE_BAND_MPS,
     SERVICE_DECEL_MPS2,
 )
+from train_ctrl import control  # noqa: E402
 from train_ctrl.control import ControllerCore  # noqa: E402
 
 KP, KI = 400_000.0, 8_000.0
@@ -144,6 +145,12 @@ class Rig:
         return None
 
 
+# The engine test under way reads the speed's change over single ticks,
+# so it needs the Train Model's exact speed reports. Tests that write
+# the reported speed themselves exercise the steady fall alone.
+steady_fall_only = mock.patch.object(control, "ENGINE_PULSE_S", math.inf)
+
+
 class EngineDetectionTest(unittest.TestCase):
 
     def test_window_is_longer_than_the_old_two_seconds(self) -> None:
@@ -220,6 +227,7 @@ class EngineDetectionTest(unittest.TestCase):
         latched = rig.run_until_failed(ENGINE_DETECT_S + 0.5)
         self.assertIsNotNone(latched, "the engine failure was not found")
 
+    @steady_fall_only
     def test_falling_speed_with_a_brake_in_the_window_does_not_latch(
             self) -> None:
         # Power is commanded throughout (the train is under target),
@@ -258,6 +266,7 @@ class EngineDetectionTest(unittest.TestCase):
         rig.run(60.0)
         self.assertEqual(rig.core.failed, [])
 
+    @steady_fall_only
     def test_tick_noise_around_the_target_does_not_latch(self) -> None:
         # Reported speed jitters tick to tick around a target the
         # controller holds: alternating, and random, inside and a
@@ -278,6 +287,7 @@ class EngineDetectionTest(unittest.TestCase):
                     rig.tick(target + noise(n))
                 self.assertEqual(rig.core.failed, [])
 
+    @steady_fall_only
     def test_steady_out_of_band_speed_does_not_latch(self) -> None:
         # Below target and not falling (say, power-limited on a
         # climb): not rising is not a failure.
@@ -288,10 +298,106 @@ class EngineDetectionTest(unittest.TestCase):
         self.assertEqual(rig.core.failed, [])
 
 
-class EngineTestTest(unittest.TestCase):
-    """A differential test at a stand: power on, then off."""
+    def test_a_failure_on_a_down_grade_is_found_under_way(self) -> None:
+        # Gravity holds the speed, so it never falls; the engine test
+        # under way finds it within a few pulses.
+        for grade in (-0.5, -2.0, -5.0):
+            for target in (5.0, 15.0):
+                with self.subTest(grade=grade, target=target):
+                    rig = Rig(Plant(0.0, grade), target)
+                    rig.plant.rolls_back = True
+                    rig.run(120.0)
+                    self.assertEqual(rig.core.failed, [])
+                    rig.plant.engine_failed = True
+                    latched = rig.run_until_failed(4 * control.ENGINE_PULSE_S)
+                    self.assertIsNotNone(latched)
+                    self.assertTrue(rig.core.state.emergency_brake)
 
-    #: Long enough for the test to finish (about 1.7 s).
+    def test_never_pushes_over_the_target_under_way(self) -> None:
+        # The pulse runs only from under the target by the control
+        # band, so its tick of full power adds nothing to how far the
+        # speed law itself overshoots on a down-grade.
+        def overshoot(grade: float) -> float:
+            rig = Rig(Plant(0.0, grade), 15.0)
+            rig.plant.rolls_back = True
+            rig.run(60.0)
+            over = 0.0
+            for _ in range(round(120.0 / TICK_S)):
+                rig.tick()
+                over = max(over, rig.plant.v - 15.0)
+            self.assertEqual(rig.core.failed, [])
+            return over
+
+        for grade in (0.0, -0.5, -2.0, -5.0, 2.0):
+            with self.subTest(grade=grade):
+                with steady_fall_only:
+                    without = overshoot(grade)
+                self.assertLess(overshoot(grade), without + 0.01)
+
+
+    def test_a_pulse_then_a_climb_does_not_latch(self) -> None:
+        # The test's tick of full power lifts the speed a little, and
+        # the speed law takes it back. Onto a climb just after, that
+        # and the sag read as one straight fall unless the steady fall
+        # waits for the step to be taken back first.
+        for shift in range(0, 60, 3):
+            with self.subTest(shift=shift):
+                rig = Rig(Plant(0.0, 0.0, LOADED_KG), 19.0)
+                rig.plant.rolls_back = True
+                rig.run(90.0 + shift * TICK_S)
+                rig.plant.grade = math.atan(0.5 / 100.0)
+                rig.run(30.0)
+                self.assertEqual(rig.core.failed, [])
+
+    def test_a_grade_change_inside_a_pulse_does_not_latch(self) -> None:
+        # A working engine at 19 m/s pulls about 0.43 m/s^2, less than
+        # the 0.47 m/s^2 a step from flat onto -5 % adds: a step between
+        # the pulse's two ticks reads as a dead engine, so a dead verdict
+        # under way is tested once more before it latches.
+        for offset in range(1, 4):
+            with self.subTest(offset=offset):
+                rig = Rig(Plant(0.0, 0.0, LOADED_KG), 19.0)
+                rig.plant.rolls_back = True
+                rig.run(60.0)
+                # Downhill now, so pulses run; flat again until one does.
+                rig.plant.grade = math.atan(-1.0 / 100.0)
+                for _ in range(round(30.0 / TICK_S)):
+                    rig.tick()
+                    if rig.core._engine_test == "on":
+                        break
+                self.assertEqual(rig.core._engine_test, "on")
+                for _ in range(offset):
+                    rig.tick()
+                rig.plant.grade = math.atan(-5.0 / 100.0)
+                rig.run(10.0)
+                self.assertEqual(rig.core.failed, [])
+
+    def test_a_stall_right_after_a_start_latches_the_engine(self) -> None:
+        # The engine dies just after the departure test passes, before
+        # 1 m/s and before a steady-fall window: the train stalls on
+        # the climb and rolls back under power. A working engine climbs
+        # every grade on the lines, so that rollback names the engine.
+        for mass in (EMPTY_KG, LOADED_KG):
+            with self.subTest(mass=mass):
+                rig = Rig(Plant(0.0, 5.0, mass), 10.0)
+                rig.plant.rolls_back = True
+                rig.run(1.0)
+                self.assertEqual(rig.core.failed, [])
+                rig.plant.engine_failed = True
+                back = 0.0
+                for _ in range(round(10.0 / TICK_S)):
+                    rig.tick()
+                    back += min(0.0, rig.plant.v) * TICK_S
+                self.assertEqual(rig.core.failed, ["engine"])
+                self.assertTrue(rig.core.state.emergency_brake)
+                self.assertEqual(rig.plant.v, 0.0)
+                self.assertLess(-back, 0.05)
+
+
+class EngineTestTest(unittest.TestCase):
+    """The engine test at a stand: one tick of power, one of none."""
+
+    #: Long enough for the test to finish (0.4 s under the harness).
     TEST_S = 3.0
 
     def latched_at_a_stand(self, grade: float = 0.0,
@@ -366,13 +472,62 @@ class EngineTestTest(unittest.TestCase):
         rig.run(5.0)
         self.assertEqual(rig.core.failed, [])
         rig.core.state.commanded_mps = 10.0
-        rig.run(ENGINE_START_S + self.TEST_S)
+        rig.run(self.TEST_S)
         self.assertEqual(rig.core.failed, ["engine"])
         self.assertTrue(rig.core.state.emergency_brake)
 
+    def roll(self, rig: Rig, seconds: float) -> tuple[float, int]:
+        """Run; return the distance rolled and the ticks commanded
+        with neither power nor a brake."""
+        metres, free = 0.0, 0
+        for _ in range(round(seconds / TICK_S)):
+            rig.tick()
+            s = rig.core.state
+            free += not (s.power_w > 0.0 or s.service_brake
+                         or s.emergency_brake)
+            metres += abs(rig.plant.v) * TICK_S
+        return metres, free
+
+    def test_a_dead_engine_on_a_down_grade_is_found_on_starting(
+            self) -> None:
+        # Gravity rolls it forward as a working engine would, so only
+        # the test can tell; it rolls under 3 cm before the brake.
+        for grade in (-0.5, -1.0, -5.0):
+            with self.subTest(grade=grade):
+                rig = Rig(Plant(0.0, grade, LOADED_KG), 0.0)
+                rig.plant.rolls_back = True
+                rig.run(5.0)
+                self.assertEqual(rig.plant.v, 0.0)
+                rig.plant.engine_failed = True
+                rig.core.state.commanded_mps = 10.0
+                metres, free = self.roll(rig, self.TEST_S)
+                self.assertEqual(rig.core.failed, ["engine"])
+                self.assertTrue(rig.core.state.emergency_brake)
+                self.assertEqual(rig.plant.v, 0.0)
+                self.assertLess(metres, 0.03)
+                self.assertEqual(free, 1)
+
+    def test_one_tick_free_and_a_dead_engine_barely_moves(self) -> None:
+        # Each test leaves the train with neither power nor a brake for
+        # exactly one tick; a dead engine moves under 2 cm on any
+        # grade, a working one is cleared.
+        for grade in (-5.0, -0.5, 0.0, 0.5, 5.0):
+            for dead in (True, False):
+                with self.subTest(grade=grade, dead=dead):
+                    rig = self.latched_at_a_stand(grade, LOADED_KG)
+                    rig.plant.engine_failed = dead
+                    self.assertTrue(rig.core.release_emergency())
+                    metres, free = self.roll(rig, self.TEST_S)
+                    self.assertEqual(free, 1)
+                    if dead:
+                        self.assertEqual(rig.core.failed, ["engine"])
+                        self.assertLess(metres, 0.02)
+                    else:
+                        self.assertEqual(rig.core.failed, [])
+
     def test_a_slow_healthy_start_is_tested_once(self) -> None:
-        # Heavy on 5 %: barely climbing, so the start check runs the
-        # test, which passes; it is not run again while it crawls.
+        # Heavy on 5 %: barely climbing. The departure is tested once,
+        # and passes; the tests under way while it crawls pass too.
         # 111 passengers and the crew, as the Train Model has them.
         rig = Rig(Plant(0.0, 5.0, 40_900.0 + 116 * 77.1), 0.0)
         rig.plant.rolls_back = True
@@ -381,7 +536,7 @@ class EngineTestTest(unittest.TestCase):
         for _ in range(round(60.0 / TICK_S)):
             rig.tick()
             now = bool(rig.core._engine_test)
-            tests += now and not running
+            tests += now and not running and rig.core.at_stand
             running = now
         self.assertEqual(rig.core.failed, [])
         self.assertLessEqual(tests, 1)
@@ -398,7 +553,7 @@ class EngineTestTest(unittest.TestCase):
         rig = self.latched_at_a_stand()
         rig.plant.engine_failed = False
         self.assertTrue(rig.core.release_emergency())
-        rig.run(0.6)
+        rig.run(0.1)
         rig.core.engage_emergency()
         rig.run(self.TEST_S)
         self.assertEqual(rig.core.failed, ["engine"])
