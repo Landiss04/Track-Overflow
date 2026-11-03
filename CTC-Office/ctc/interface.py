@@ -343,6 +343,10 @@ class CtcSnapshot:
     tickets_sold: Mapping[str, int] = field(default_factory=dict)
     # Every run of the loaded schedule, by departure time.
     scheduled_runs: tuple[ScheduledRun, ...] = ()
+    # The loaded schedule's time zero, in simulated seconds since
+    # midnight, once it has started (the clock ran with it loaded);
+    # None before then, or with no schedule.
+    schedule_start_s: float | None = None
     # Dispatcher orders, by train ID.
     orders: tuple[DispatchOrder, ...] = ()
     # The dispatcher's closed blocks and switch
@@ -472,8 +476,10 @@ class CtcOffice(Protocol):
         ...
 
     def load_schedule(self, schedule: Schedule) -> None:
-        """Replace the schedule. In automatic mode its runs dispatch
-        themselves when due (``ctc.scheduler``)."""
+        """Replace the schedule. Its time zero is the moment it starts:
+        now if the clock is running, else when the clock next runs. In
+        automatic mode its runs dispatch themselves when due
+        (``ctc.scheduler``)."""
         ...
 
     def set_automatic_mode(self, active: bool) -> None:

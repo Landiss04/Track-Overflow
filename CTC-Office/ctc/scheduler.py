@@ -14,10 +14,15 @@ mode, carries the plans out:
   them in (the file lists them by block number, which a train cannot
   always run). It then returns to the yard. (Asserted by Landis
   2026-10-14, as a first approach that may change.)
-- **Due times.** Time zero is the simulation start, 05:00:00 (D017). A
-  run is due to leave the yard at 05:00 plus its departure offset in the
-  file. Each stop is due when the run would reach it running every
-  block at its speed limit, stopping ``DWELL_S`` at each stop before.
+- **Due times.** Time zero is the moment the schedule starts: the
+  simulation time when the clock runs with the schedule loaded, at Run,
+  or at once if it is loaded while the clock is running, whatever the
+  time is then (asserted by Landis 2026-11-03; it replaces the
+  simulation start, 05:00:00). A run is due to leave the yard at time
+  zero plus its departure offset in the file, so the runs keep the
+  file's headway however late the schedule is loaded. Each stop is due
+  when the run would reach it running every block at its speed limit,
+  stopping ``DWELL_S`` at each stop before.
 - **Stopping.** The CTC stops a train at each of its stops: it sends
   the train to the stop (its authority ends there), holds it for
   ``DWELL_S`` once it is there, then sends it to the next stop.
@@ -136,14 +141,16 @@ class RunPlan:
 
 def plan_run(run: ScheduledTrain, graph: TrackGraph,
              run_time_s: Callable[[tuple[str, ...]], float],
-             station_blocks: Collection[str]) -> RunPlan:
+             station_blocks: Collection[str],
+             start_s: float = SIMULATION_START_S) -> RunPlan:
     """Order a run's scheduled stations by track from the yard exit,
     time them, and route the return to the yard.
 
     ``run_time_s`` is how long a route takes after its first block, and
     ``station_blocks`` the blocks of the run's line the track layout
-    marks as stations. Each leg carries on the way the train is going:
-    it never turns back at a stop.
+    marks as stations. ``start_s`` is the schedule's time zero, in
+    simulated seconds since midnight. Each leg carries on the way the
+    train is going: it never turns back at a stop.
     """
     here = YARD_EXITS.get(run.line, "")
     came_from = YARD_EXIT_FROM.get(run.line)
@@ -152,7 +159,7 @@ def plan_run(run: ScheduledTrain, graph: TrackGraph,
         if (stop.block_id in station_blocks
                 and stop.block_id not in (b for b, _ in left)):
             left.append((stop.block_id, stop.station))
-    due = SIMULATION_START_S + run.departure_s
+    due = start_s + run.departure_s
     stops: list[PlannedStop] = []
     path: list[str] = [here] if here else []
     stop_indexes: list[int] = []
@@ -186,7 +193,7 @@ def plan_run(run: ScheduledTrain, graph: TrackGraph,
             break
     return RunPlan(
         run.line, run.train_id, train_id_for(run.line, run.train_id),
-        SIMULATION_START_S + run.departure_s, tuple(stops), yard_block,
+        start_s + run.departure_s, tuple(stops), yard_block,
         tuple(station or block_id for block_id, station in left),
         tuple(path), tuple(stop_indexes), yard_index)
 

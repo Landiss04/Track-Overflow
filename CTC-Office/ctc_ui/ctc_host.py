@@ -912,6 +912,17 @@ class CtcHost(QObject):
     def scheduleError(self) -> str:  # noqa: N802
         return self._schedule_error
 
+    @Property(str, notify=scheduleChanged)
+    def scheduleStart(self) -> str:  # noqa: N802
+        """When the loaded schedule's time zero is: set the moment the
+        clock runs with it loaded, whatever the time then."""
+        snap = self._module.snapshot()
+        if not snap.scheduled_runs:
+            return ""
+        if snap.schedule_start_s is None:
+            return "T = 0 when you press Run"
+        return f"T = 0 at {format_time_of_day(snap.schedule_start_s)}"
+
     @Property(list, notify=scheduleChanged)
     def departures(self) -> list[dict[str, Any]]:
         """Every run of the schedule as a row for the Departures table:

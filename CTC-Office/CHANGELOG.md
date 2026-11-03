@@ -4,6 +4,19 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-03 — A schedule starts when the clock runs with it
+
+From Landis: loaded five minutes in, a schedule dispatched every run due
+in those five minutes at once, piling them up on the yard exit.
+
+- `ctc/model.py`: a schedule's time zero is the moment the clock runs
+  with it loaded: at Run (`set_clock_paused(False)`, or the first step),
+  or at once if loaded while the clock runs. The runs are planned again
+  from it (`plan_run(start_s=...)`). `CtcSnapshot.schedule_start_s`
+  reports it; the Auto dispatch panel shows "T = 0 at …".
+- Tests: `ScheduleStartTest`; `RetireTest` now starts the clock before it
+  sets a run's progress by hand.
+
 ## 2026-11-02 — Switch commands outlast maintenance mode
 
 From Landis (INPUT-1, relayed by Kevin 2026-11-02, and confirmed directly):

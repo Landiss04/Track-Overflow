@@ -381,6 +381,53 @@ class DispatchTest(unittest.TestCase):
         self.assertEqual(ctc.snapshot().lost_trains, ())
 
 
+class ScheduleStartTest(unittest.TestCase):
+    """A schedule's time zero is the moment the clock runs with it
+    loaded, whatever the simulation time is then."""
+
+    def _late(self, running: bool) -> StubCtcOffice:
+        # Five minutes into the simulation, with no schedule yet.
+        ctc = ready_office()
+        if running:
+            ctc.set_clock_paused(False)
+        step_at(ctc, dt=300.0)
+        ctc.set_automatic_mode(True)
+        ctc.load_schedule(SCHEDULE)
+        return ctc
+
+    def test_loaded_while_paused_starts_at_run(self) -> None:
+        ctc = self._late(running=False)
+        self.assertIsNone(ctc.snapshot().schedule_start_s)
+        ctc.set_clock_paused(False)
+        start = SIMULATION_START_S + 300.0
+        self.assertEqual(ctc.snapshot().schedule_start_s, start)
+        # Each run keeps its offset from the new time zero.
+        self.assertEqual(_run(ctc, "G2").departure_s, start + 180)
+
+    def test_loaded_while_running_starts_at_once(self) -> None:
+        ctc = self._late(running=True)
+        start = SIMULATION_START_S + 300.0
+        self.assertEqual(ctc.snapshot().schedule_start_s, start)
+        self.assertEqual(_run(ctc, "G1").departure_s, start)
+
+    def test_late_load_keeps_the_headway(self) -> None:
+        # Loaded at 05:05, the runs due at 0 s and 180 s do not both
+        # go at once: only the first is dispatched.
+        ctc = self._late(running=True)
+        step_at(ctc)
+        self.assertEqual(_run(ctc, "G1").status, "in yard")
+        self.assertEqual(_run(ctc, "G2").status, QUEUED)
+        step_at(ctc, dt=180.0)
+        self.assertNotEqual(_run(ctc, "G2").status, QUEUED)
+
+    def test_a_new_schedule_starts_again(self) -> None:
+        ctc = self._late(running=True)
+        step_at(ctc, dt=120.0)
+        ctc.load_schedule(SCHEDULE)
+        self.assertEqual(ctc.snapshot().schedule_start_s,
+                         SIMULATION_START_S + 420.0)
+
+
 class HarnessTimeTest(unittest.TestCase):
     """Under the harness each step brings the simulation time (D017:
     unwrapped seconds, at the end of the step), and the CTC Office's

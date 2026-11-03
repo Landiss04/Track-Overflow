@@ -134,6 +134,8 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         tickets_sold=dict(data.get("tickets_sold", {})),
         scheduled_runs=tuple(ScheduledRun(**r)
                              for r in data.get("scheduled_runs", ())),
+        schedule_start_s=(None if data.get("schedule_start_s") is None
+                          else float(data["schedule_start_s"])),
         orders=tuple(DispatchOrder(**o) for o in data.get("orders", ())),
         closed_blocks=tuple(BlockRef(**b) for b in
                             data.get("closed_blocks", ())),

@@ -221,8 +221,11 @@ yet) through `ctc_ui/ctc_host.py`:
 - **Automatic dispatch** (`ctc/scheduler.py`) carries the schedule out
   while the window is in Automatic mode. Each run is a train named for
   its line and run number (Green run 1 is `G1`). It is due out of the
-  yard at 05:00, when the simulation starts, plus its departure in the
-  file. It stops only at the stations the file lists for it, and runs
+  yard at the schedule's T = 0 plus its departure in the file. T = 0 is
+  the moment the clock runs with the schedule loaded: **Run**, or at
+  once if it is loaded while the clock runs, whatever the time is then.
+  So runs keep the file's headway however late it is loaded. The Auto
+  dispatch panel shows it ("T = 0 at 05:12:30"). It stops only at the stations the file lists for it, and runs
   through every other station on its way. It visits them in the order
   the track reaches them from the yard (the file lists them by block
   number, which a train cannot always run), stops 45 s at each (D007),
