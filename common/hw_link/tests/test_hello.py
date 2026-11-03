@@ -57,6 +57,38 @@ class IdleTransport(ByteTransport):
         pass
 
 
+def test_hello_survives_a_partial_line_left_by_a_closed_host():
+    # A host that closes the port mid-write leaves an unterminated line on
+    # the Pi; the next host's HELLO must not be glued onto it.
+    from common.hw_link.agent import PiLinkServer
+
+    class Recording(IdleTransport):
+        def __init__(self):
+            super().__init__()
+            self.sent = []
+
+        def write(self, data):
+            self.sent.append(data)
+
+    transport = Recording()
+    relay = HardwareRelay("track-controller-hw", transport)
+    server = PiLinkServer("track-controller-hw")
+    try:
+        server.feed(b'{"op":"ACTION","id":7,"args":{"territory":{"blo')
+        transport.connected.emit()
+        replies = [
+            p.decode(line)
+            for data in transport.sent
+            for line in server.feed(data)
+        ]
+        assert any(
+            reply["op"] == p.HELLO and reply["session"] == relay.session
+            for reply in replies
+        )
+    finally:
+        relay.close()
+
+
 @pytest.mark.parametrize(
     "field,value", [*MISMATCHES[1:], ("boot", None), ("boot", "")]
 )

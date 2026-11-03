@@ -98,8 +98,10 @@ class HardwareRelay(QObject):
         self._online = True
         self.buffer = LineBuffer()
         self.diagnosticEvent.emit("PI_CONNECTED " + self.module)
+        # A host that closed mid-write leaves a partial line on the Pi; end it.
         self.transport.write(
-            p.encode(
+            b"\n"
+            + p.encode(
                 p.message(
                     p.HELLO,
                     self._next_id(),
