@@ -31,14 +31,8 @@ from track_ctrl.interface import (
 )
 from track_ctrl.layout import (
     NEUTRAL_LINE_COLOR,
-<<<<<<< HEAD
-    LayoutError,
-    LineLayout,
-    build_default_system,
-=======
     LineLayout,
     LayoutError,
->>>>>>> integrate/quirky-into-development-resolved
     default_layout_dir,
     load_layout_file,
 )
@@ -88,13 +82,9 @@ class TrackControllerState(QObject):
         The module has no clock and no world of its own. Whatever drives
         it, the central harness or the test UI, calls :meth:`step` once
         per tick of the shared clock (D017), with the tick's inputs.
-<<<<<<< HEAD
-        Until the first tick every wayside idles at its starter program.
-=======
         It starts with no track and no program: the programmer loads a
         track, then writes or loads a program for every wayside. Until
         then it is not ready and the editor is empty.
->>>>>>> integrate/quirky-into-development-resolved
 
         Args:
             parent: Optional Qt parent.
@@ -890,29 +880,6 @@ class TrackControllerState(QObject):
         )
         self._verified_source = None
 
-        self.bufferChanged.emit()
-        self.terminalChanged.emit()
-        self.controllerChanged.emit()
-        self.selectionChanged.emit()
-
-    @Slot()
-    def loadStarterPrograms(self) -> None:
-        """Commit a generated starter program to every wayside without one.
-
-        A convenience for the demo and the tests, in place of committing
-        each wayside by hand. A wayside that already runs a program keeps it.
-        """
-        loaded = self._system.load_starter_programs()
-        if loaded:
-            controller = self._controller
-            if controller is not None:
-                controller.scan()
-            self._log(
-                f"[{self._stamp()}] loaded starter programs into "
-                f"{', '.join(loaded)}"
-            )
-        else:
-            self._log(f"[{self._stamp()}] every wayside already has a program")
         self.bufferChanged.emit()
         self.terminalChanged.emit()
         self.controllerChanged.emit()

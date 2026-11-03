@@ -277,15 +277,6 @@ SIG_12_R := OCC_12 OR CLOSED_12
 AUTH_20  := NOT (OCC_19 OR OCC_21)
 ```
 
-<<<<<<< HEAD
-A program can only name what its own controller has. The inputs are `OCC_n`,
-`CLOSED_n` and `FAIL_n` for each block it owns, `MAINT`, and `SWREV_s` for each
-switch: HW's names, so one program runs on both variants. `FAIL_n` is always 0
-here (this wayside is told of no failures; a failed block reads occupied), and
-`SWREV_s` is the Track Model's read-back of switch `s`. A suggestion's numbers
-never enter a user program; only the vital code sees the speed. The outputs are `AUTH_n` for each block, `SW_s` for each switch,
-`SIG_s_R` / `_O` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
-=======
 The language is the HW Track Controller's, so one program file runs on either
 variant (REQ-INTF-009). The two are written separately and share a language,
 not code, and `tests/test_hw_language.py` holds them to it: the same text is
@@ -295,11 +286,12 @@ scan, and HW's own sample programs must compile cleanly here.
 A program can only name what its own controller has, and the names are HW's.
 The inputs are `OCC_n`, `CLOSED_n` and `FAIL_n` for each block it owns, `SWREV_s`
 (the Track Model's read-back of the switch, reverse) for each switch, and
+`CTCSW_s` and `CTCREV_s` (the CTC Office's command for the switch, which the
+program obeys or not as it decides; the vital code only gates the result), and
 `MAINT`. A suggestion's numbers never enter a user program; only the vital code
 sees the speed. The outputs are
 `AUTH_n` for each block, `SW_s` for each switch (1 is reverse),
 `SIG_s_R` / `_Y` / `_G` / `_SG` for the signal at each switch, and `XING_c` for
->>>>>>> integrate/quirky-into-development-resolved
 each crossing. Block numbers are the track layout's own, and a switch, its signal
 and a crossing are named by the block they are listed on. A starter program for
 every wayside is generated from its territory, including waysides that own no

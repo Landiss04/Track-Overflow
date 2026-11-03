@@ -4,8 +4,6 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
-<<<<<<< HEAD
-=======
 ## 2026-10-30 — Harry's `829c842` taken: CTC switch command, points lock, window
 
 Cherry-picked from `Track-Ctrl-SW` (`829c842`), TrackCtrlSW files only.
@@ -36,7 +34,6 @@ were left out.
 
 ---
 
->>>>>>> integrate/quirky-into-development-resolved
 ## 2026-10-28 — vital code clamps the speed; crossings default to armed
 
 `track_ctrl/vital.py`, `track_ctrl/controller.py` and the tests.
@@ -59,8 +56,6 @@ were left out.
 
 ---
 
-<<<<<<< HEAD
-=======
 ## 2026-10-27 — Harry's development version taken (review SW-1)
 
 The integration branch now carries Harry Tye's `development` TrackCtrlSW
@@ -94,7 +89,6 @@ in `TrackModel/`, as on `development`: `default_layout_dir()` points there, not 
 
 ---
 
->>>>>>> integrate/quirky-into-development-resolved
 ## 2026-10-23 — data-only classes folded into the classes that own them
 
 `track_ctrl/controller.py`, `vital.py`, `plc.py`, `layout.py`, `module.py`,
