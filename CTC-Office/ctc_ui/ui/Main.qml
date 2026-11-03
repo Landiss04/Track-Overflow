@@ -149,6 +149,7 @@ ScaledWindow {
                     host: ctc
                     selectedTrainId: window.selectedTrainId
                     scheduleFile: ctc.scheduleFile
+                    scheduleStart: ctc.scheduleStart
                     scheduleError: ctc.scheduleError
                     departures: ctc.departures
                     dispatchRunning: ctc.dispatchRunning

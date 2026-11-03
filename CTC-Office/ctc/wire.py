@@ -115,6 +115,9 @@ def outputs_from_wire(data: Mapping[str, Any]) -> CtcOutputs:
             switch_commands=tuple(
                 SwitchCommand(**c)
                 for c in track.get("switch_commands", ())),
+            route_requests=tuple(
+                SwitchCommand(**c)
+                for c in track.get("route_requests", ())),
         ),
         clock_speedup=bool(data.get("clock_speedup", False)),
         clock_paused=bool(data.get("clock_paused", True)),
@@ -134,6 +137,8 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         tickets_sold=dict(data.get("tickets_sold", {})),
         scheduled_runs=tuple(ScheduledRun(**r)
                              for r in data.get("scheduled_runs", ())),
+        schedule_start_s=(None if data.get("schedule_start_s") is None
+                          else float(data["schedule_start_s"])),
         orders=tuple(DispatchOrder(**o) for o in data.get("orders", ())),
         closed_blocks=tuple(BlockRef(**b) for b in
                             data.get("closed_blocks", ())),

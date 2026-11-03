@@ -197,6 +197,8 @@ class RetireTest(unittest.TestCase):
         ctc = ready_office()
         ctc.load_schedule(Schedule("G1 only", runs))
         ctc.set_automatic_mode(True)
+        # The clock runs: the schedule starts, and is timed from now.
+        ctc.set_clock_paused(False)
         stops = len(ctc._auto.plans[0].stops)
         ctc._auto.progress["G1"] = Progress(TO_YARD, stops)
         ctc.dispatch("G1", "Green", "57")

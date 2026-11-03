@@ -58,6 +58,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         The exit code.
     """
     args = list(sys.argv[1:] if argv is None else argv)
+    from utils.process_speed import keep_full_speed
+
+    # The harness, every module and a frozen build's Pi agents start here.
+    keep_full_speed()
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--module")
     parser.add_argument("--pi-agent", action="store_true")

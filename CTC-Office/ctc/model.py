@@ -86,6 +86,7 @@ from ctc.routing import (
 )
 from ctc.track_layout import Line, load_layout, station_lines
 from ctc.scheduler import (
+    HELD,
     IN_YARD,
     SIMULATION_START_S,
     TO_YARD,
@@ -461,6 +462,9 @@ class StubCtcOffice:
         self._tickets: dict[str, int] = {
             station: 0 for station in self._layout.station_lines}
         self._schedule: Schedule | None = None
+        # The loaded schedule's time zero, once it has started: the
+        # clock ran with it loaded (``ctc.scheduler``). None until then.
+        self._schedule_start_s: float | None = None
         # The loaded schedule's plans and progress (ctc.scheduler).
         self._auto: AutoDispatcher | None = None
         self._automatic = False
@@ -508,6 +512,9 @@ class StubCtcOffice:
             elapsed_s = self._elapsed_at(sim_time_s)
         inputs = _normalize(inputs)
         self._layout.validate_inputs(inputs)
+        # Time passing means the clock runs: a loaded schedule starts now
+        # if it has not yet (it starts at Run, set_clock_paused).
+        self._start_schedule()
 
         self._elapsed_s = elapsed_s
         self._new_trains, self._retired_trains = (), ()
@@ -572,6 +579,7 @@ class StubCtcOffice:
             tickets_sold=dict(self._tickets),
             scheduled_runs=self._scheduled_runs(),
             orders=tuple(self._orders[t] for t in sorted(self._orders)),
+            schedule_start_s=self._schedule_start_s,
             closed_blocks=self._closed_blocks(),
             switch_commands=self._switch_commands(),
             cancelled_orders=tuple(self._cancelled),
@@ -786,13 +794,17 @@ class StubCtcOffice:
             raise InvalidInputError(
                 f"clock paused must be true or false, got {paused!r}")
         self._clock_paused = paused
+        if not paused:
+            self._start_schedule()
 
     def load_schedule(self, schedule: Schedule) -> None:
         """Replace the schedule. Every stop must be a block of the
         track layout. Each run is planned at once (``ctc.scheduler``):
         its scheduled stations, and no others, in track order from the
-        yard, each with the time it is due there. In automatic mode the
-        runs then dispatch themselves. Orders already given stay."""
+        yard, each with the time it is due there. The schedule's time
+        zero is now if the clock is running, else the moment it next runs
+        (Run), when the runs are timed again from then. In automatic mode
+        the runs then dispatch themselves. Orders already given stay."""
         runs = set()
         for train in schedule.trains:
             what = f"schedule {train.line} train {train.train_id}"
@@ -812,13 +824,31 @@ class StubCtcOffice:
                 raise InvalidInputError(
                     f"schedule: two runs would both be train {train_id}")
             _require_train_id(train_id, "schedule train ID")
+        self._schedule = schedule
+        self._schedule_start_s = None
+        self._plan_schedule(self._now_s())
+        if not self._clock_paused:
+            self._start_schedule()
+
+    def _plan_schedule(self, start_s: float) -> None:
+        """Plan every run of the loaded schedule from time zero
+        ``start_s``."""
+        schedule = self._schedule
+        assert schedule is not None
         self._auto = AutoDispatcher([
             plan_run(train, self._graphs[train.line],
                      lambda route, line=train.line: self._run_time_s(
                          line, route),
-                     self._station_blocks[train.line])
+                     self._station_blocks[train.line], start_s)
             for train in schedule.trains])
-        self._schedule = schedule
+
+    def _start_schedule(self) -> None:
+        """Start a loaded schedule that has not started: its time zero
+        is now, and its runs are timed from it."""
+        if self._schedule is None or self._schedule_start_s is not None:
+            return
+        self._schedule_start_s = self._now_s()
+        self._plan_schedule(self._schedule_start_s)
 
     def set_automatic_mode(self, active: bool) -> None:
         """Enter or leave automatic mode; see ``CtcOffice``."""
@@ -907,8 +937,12 @@ class StubCtcOffice:
         not a run of the loaded schedule is never held by it."""
         if self._auto is None or train_id not in self._auto.progress:
             return False
+        progress = self._auto.progress[train_id]
+        # Held with a place to wait further on: it leaves the yard.
+        leaving = (progress.status == IN_YARD
+                   or (progress.status == HELD and progress.wait >= 0))
         return (not self._automatic or self._dispatch_paused
-                or self._auto.progress[train_id].status != IN_YARD)
+                or not leaving)
 
     def _sent_to_yard(self, train_id: str) -> bool:
         """Whether a train has been sent back to the yard: a run of the
@@ -1230,6 +1264,14 @@ class StubCtcOffice:
                                    stuck[line],
                                    self._tracker.trains[train_id].came_from)
                 if line == order.line else (None, ""))
+            # A run keeps to its plan's way (over a passing siding) while
+            # nothing that would hold it up for good is on it.
+            planned = (self._auto.planned_route(train_id, block_id)
+                       if self._auto is not None else None)
+            if (planned is not None and route is not None
+                    and planned[-1] == order.destination_block_id
+                    and not set(planned[1:]) & (unusable | stuck[line])):
+                route, reverse_at = planned, ""
             if route is None:
                 found[train_id] = TrainAuthority(
                     train_id, line, 0, block_id, "no route",
@@ -1334,6 +1376,7 @@ class StubCtcOffice:
                                     if b.line in ready),
                 switch_commands=tuple(c for c in self._switch_commands()
                                       if c.line in ready),
+                route_requests=self._route_requests(ready),
             ),
             clock_speedup=self._clock_speedup,
             clock_paused=self._clock_paused,
@@ -1345,6 +1388,29 @@ class StubCtcOffice:
 
     def _closed_blocks(self) -> tuple[BlockRef, ...]:
         return tuple(sorted(self._closed, key=_block_order))
+
+    def _route_requests(self, ready: Collection[str]
+                        ) -> tuple[SwitchCommand, ...]:
+        """The position each switch should take for the train routed
+        over it: every switch within a train's authority, and the one
+        its authority stops short of. The most urgent train's request
+        stands where two trains want the same switch (authorities are
+        counted most urgent first)."""
+        wanted: dict[tuple[str, str], SwitchCommand] = {}
+        for limit in self._authorities():
+            if limit.line not in ready:
+                continue
+            graph = self._graphs[limit.line]
+            ahead = limit.route[:limit.blocks + 2]
+            for here, after in zip(ahead, ahead[1:]):
+                leg = graph.leg(here, after)
+                if leg is not None:
+                    wanted.setdefault(
+                        (limit.line, leg.switch_id),
+                        SwitchCommand(limit.line, leg.switch_id,
+                                      leg.position))
+        return tuple(wanted[key] for key in sorted(
+            wanted, key=lambda k: _id_order(*k)))
 
     def _switch_commands(self) -> tuple[SwitchCommand, ...]:
         return tuple(

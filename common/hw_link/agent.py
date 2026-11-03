@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from utils.harness_protocol import LineBuffer, ProtocolError
+from utils.process_speed import keep_full_speed
 from . import protocol as p
 from .cores import make_core
 from .manifest import AGENT_VERSION, expected_hash
@@ -49,10 +50,14 @@ class PiLinkServer:
         log: Callable[[str], None] | None = None,
         *,
         echo_test: bool = False,
+        durable: bool = True,
     ) -> None:
         self.module = module
         self.echo_test = echo_test
         self.journal = journal
+        # fsync each record, so it survives a power loss and not only a
+        # restart of this process.
+        self.durable = durable
         self.log = log or (lambda text: None)
         self.boot = uuid.uuid4().hex
         self.session: str | None = None
@@ -158,7 +163,8 @@ class PiLinkServer:
         with self.journal.open("ab") as stream:
             stream.write(line + b"}\n")
             stream.flush()
-            os.fsync(stream.fileno())
+            if self.durable:
+                os.fsync(stream.fileno())
 
     def _remember(
         self, request: dict[str, Any], request_bytes: bytes, reply: Any
@@ -352,8 +358,16 @@ def main(argv: list[str] | None = None) -> int:
             with options.log.open("a") as stream:
                 stream.write(text + "\n")
 
+    keep_full_speed()
+    # A Pi's journal must survive its power being cut. A stdio agent runs
+    # on the host, where a per-tick fsync costs about 1 ms on Windows and
+    # the OS keeps written records through an agent restart.
     server = PiLinkServer(
-        options.module, options.journal, log, echo_test=options.echo_test
+        options.module,
+        options.journal,
+        log,
+        echo_test=options.echo_test,
+        durable=options.device is not None,
     )
     count = 0
     fault_marker = options.journal.with_suffix(".fault-used")
