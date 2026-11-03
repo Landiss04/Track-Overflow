@@ -4,6 +4,30 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-10-27 — Owner answers TM-1 and TM-3
+
+From the Track Model owner's answers to `documents/module-owner-review.md`
+(2026-10-26), relayed by Kevin.
+
+- TM-1: ticket sales are time-based. `TrackConfig.ticket_probability` (a chance
+  per tick) is replaced by `tickets_per_minute` (default 12 per station); each
+  tick's chance is `min(1, tickets_per_minute * dt / 60)`, 0.02 at the 0.1 s
+  tick as before. Tests pass rates (600 and 300 a minute for the old 1.0 and
+  0.5), and a new test checks the rate at 0.1 s and 0.5 s ticks.
+- TM-3: the Track Model switches the heaters itself (D026): every section's
+  heater is on at or below 0 °C ambient (`HEATER_ON_AT_C`) and off above it,
+  with no hysteresis; a tick with no ambient keeps them as they were. Heater
+  commands are still accepted on the boundary but not applied. Heater tests
+  and manual test TC-27 are rewritten for the rule.
+- TM-2 (B1 fixed): signals sit at switches, one per switch at its point,
+  named by the switch's ID (`layout._signal_blocks`), as Braden relayed from the
+  professor. Every tick each train is sent the light ahead (`_signal_seen`): the
+  first switch along its way, with the switches as set, that it comes onto from
+  the point's fixed side, where the light faces. Tests are moved to the
+  switch-named lights and rewritten for the every-tick light; the harness
+  (`common/harness/track_devices.py`) now stands each light at its point.
+  Neither Track Controller changes: both already name signals by switch.
+
 ## 2026-10-22 — Red yard and integration inputs
 
 Correction commit: `5d51051` (course data restoration and reader agreement).

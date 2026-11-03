@@ -30,10 +30,17 @@ Rectangle {
     //: Fault labels shown after the emergency badge, hidden when empty.
     property var alerts: []
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     //: Controls placed just before the clock (the bench's time setter).
     property alias clockTools: clockTools.data
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    //: Share of the station dwell still to run, 1 to 0; hidden at 0.
+    property real dwellLeft: 0
+    //: Controls placed just before the clock (the bench's time setter).
+    property alias clockTools: clockTools.data
+>>>>>>> integrate/quirky-into-development-resolved
     property var navigationEntries: []
     property int currentNavigationIndex: -1
     signal navigationActivated(int index)
@@ -97,6 +104,11 @@ Rectangle {
             visible: root.faulted
         }
 
+        DwellPill {
+            visible: root.dwellLeft > 0
+            share: root.dwellLeft
+        }
+
         Repeater {
             model: root.alerts
 
@@ -145,13 +157,19 @@ Rectangle {
         }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         RowLayout {
             id: clockTools
             spacing: theme.space_2
         }
 
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         MonoText {
             text: root.clock
             color: theme.text_muted

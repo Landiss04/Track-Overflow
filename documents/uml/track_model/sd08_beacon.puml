@@ -1,0 +1,28 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam sequenceMessageAlign left
+skinparam ParticipantPadding 20
+autonumber
+participant "Central harness" as H
+participant ":TrackModel" as TM
+participant ":Layout" as L
+participant "Train Model" as TRM
+H -> TM : step(dt, inputs)
+loop each train on the track
+  TM -> TM : _feed(train, report)
+  TM -> L : beacons.get(train's block)
+  alt block next to a station
+    L --> TM : Beacon (station, platform side, underground)
+  else
+    L --> TM : none
+  end
+end
+TM --> H : TrainFeed.beacon
+H -> TRM : track_model_to_train_model()  // beacon passed on
+@enduml

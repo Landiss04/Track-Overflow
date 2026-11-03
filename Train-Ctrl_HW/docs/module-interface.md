@@ -81,7 +81,7 @@ Train Model UI action happens (failure, passenger pull).
 |---|---|
 | `set_failures(FailureState)` / `TrainModelState.setFailure(name, active)` | Murphy fault injection from the Train Model window. Shown at once in `snapshot().failures`, never output; physical effect from the next step. |
 | `pull_passenger_emergency_brake()` / `TrainModelState.applyEmergencyBrake()` | A passenger pull. Latches; reported at once; force from the next step. |
-| `TrainModelState.releaseEmergencyBrake()` | Does nothing. The Train Model window offers no release (D011); the Train Controller releases a pull with `controller.passenger_brake_release`. |
+| `TrainModelState.releaseEmergencyBrake()` | Does nothing. The Train Model window offers no release (D011); a pull clears when the Train Controller's `emergency_brake` goes from true to false. |
 | `clear_passenger_brake_for_test()` | **Test only.** Clears the latch. |
 | `TrainModelState.reset()` | **Test only.** Replaces the train with a fresh one. |
 
@@ -110,7 +110,6 @@ TrainModelInputs
 | `door_right_open` | bool | | Door Command, right. Obeyed at any speed, as the left. |
 | `temp_setpoint_c` | float | °C | Cabin temperature setpoint. |
 | `announcement` | str | | Passed in; not used by the physics. |
-| `passenger_brake_release` | bool | | One-shot: true on the tick the Train Controller releases a passenger pull. The model clears the pull before it steps; the controller's own emergency brake follows `emergency_brake`. Optional, false by default. |
 
 ### `TrackInfo` (Track Model, every tick)
 
@@ -119,7 +118,7 @@ TrainModelInputs
 | `block_id` | str | | Block the train is in. |
 | `grade_deg` | float | deg | Grade, positive uphill in the direction of travel. Strictly between −90 and 90. Layout files give percent; the loader converts. |
 | `elevation_m` | float | m | Elevation. Validated, not used by the physics. |
-| `speed_limit_mps` | float | m/s | Nonnegative. Passed through to the Train Controller. |
+| `speed_limit_mps` | float | m/s | Nonnegative. Shown in the Train Model window; not sent to the Train Controller, which takes commanded speed as its limit (2026-10-28). |
 | `polarity` | bool | | Track-circuit polarity. A change from the previous tick is a block change. |
 | `station_name` | str \| None | | Station in this block for display, or `None`. Default `None`; not a Train Model boarding gate. |
 
@@ -130,7 +129,7 @@ TrainModelInputs
 | `commanded_speed_mps` | float | m/s | Nonnegative. Passed through to the Train Controller. |
 | `authority_blocks` | int | blocks | Blocks the train may travel before it must stop. Nonnegative. Passed through. |
 
-Both are reported as 0 while signal pickup has failed.
+Both are reported as null (`None`) while signal pickup has failed: invalid data, not a valid 0 (Kevin Schillinger 2026-10-28).
 
 ### `Beacon` (Track Model, only on the tick the train passes one)
 
@@ -140,8 +139,9 @@ Both are reported as 0 while signal pickup has failed.
 | `platform_side` | `"L"`, `"R"` or `"LR"` | Platform side; `"LR"` when the station has platforms on both sides. |
 | `underground` | bool | Whether the station is underground. |
 
-Send `None` on every other tick. The Train Controller retains earlier beacon
-information when its control logic needs it.
+Send `None` on every other tick. The Train Model keeps the last beacon heard and
+reports it to the Train Controller while the train is on that beacon's station (the
+block whose `station_name` matches), not on the block where it was heard.
 
 #### Beacon payload encoding
 
@@ -193,10 +193,9 @@ TrainModelOutputs
 | `door_left_open`, `door_right_open` | bool | | Door State follows Door Command. Train Controller owns the interlock. |
 | `interior_lights_on`, `exterior_lights_on` | bool | | Light State: follows the command. |
 | `cabin_temp_c` | float | °C | Cabin temperature. |
-| `commanded_speed_mps` | float | m/s | Passed through; 0 under signal pickup failure. |
-| `authority_blocks` | int | blocks | Passed through; 0 under signal pickup failure or before the first step. |
-| `speed_limit_mps` | float | m/s | Passed through from `TrackInfo`. |
-| `beacon` | Beacon \| None | | This tick's beacon, else `None`. |
+| `commanded_speed_mps` | float or null | m/s | Passed through; null under signal pickup failure. |
+| `authority_blocks` | int or null | blocks | Passed through; null under signal pickup failure, 0 before the first step. |
+| `beacon` | Beacon \| None | | The beacon of the block the train is on: the one heard on the block before a station, every tick the train is on that station's block; `None` elsewhere (2026-10-28). |
 
 ### `TrackOutputs`
 
@@ -243,10 +242,9 @@ for the rest of the system (section 3 of [integration.md](integration.md)).
 | `door-command` | in | `controller.door_left_open`, `door_right_open` |
 | `temperature-setpoint` | in | `controller.temp_setpoint_c` |
 | `announcement` | in | `controller.announcement` |
-| `passenger-brake-release` | in | `controller.passenger_brake_release` |
 | `track-info` | in | `track.track_info` |
 | `track-signal` | in, passed out | `track.track_signal` → `commanded_speed_mps`, `authority_blocks` |
-| `beacon` | in, passed out | `track.beacon` → `controller.beacon` |
+| `beacon` | in, held, out on the station block | `track.beacon` → `controller.beacon` |
 | `passengers-boarded` | in | `track.passengers_boarded` |
 | `actual-speed` | out | `controller.actual_speed_mps`, `track.actual_speed_mps` |
 | `brake-state` | out | `emergency_brake_active`, `service_brake_active` |

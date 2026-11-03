@@ -40,11 +40,17 @@ Item {
     // Narrow columns drop the type, which the name already implies.
     property bool showKind: true
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     // Read-only only: a long value wraps within its column and the row
     // grows, rather than running past the panel.
     property bool wrapValue: false
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    // Read-only only: a long value wraps within its column and the row
+    // grows, rather than running past the panel.
+    property bool wrapValue: false
+>>>>>>> integrate/quirky-into-development-resolved
     // Doors and lights read as switches, not as propositions.
     property string trueLabel: qsTr("True")
     property string falseLabel: qsTr("False")
@@ -64,11 +70,16 @@ Item {
     signal edited(var newValue)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     implicitHeight: root.rowHeight
 =======
     implicitHeight: Math.max(root.rowHeight,
                              valueSlot.Layout.preferredHeight + theme.space_2)
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    implicitHeight: Math.max(root.rowHeight,
+                             valueSlot.Layout.preferredHeight + theme.space_2)
+>>>>>>> integrate/quirky-into-development-resolved
     implicitWidth: row.implicitWidth
 
     RowLayout {
@@ -95,13 +106,21 @@ Item {
 
         Item {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+            id: valueSlot
+>>>>>>> integrate/quirky-into-development-resolved
             Layout.preferredWidth: root.valueWidth
-            Layout.preferredHeight: theme.control_h_md
+            Layout.preferredHeight: root.wrapValue && !root.editable
+                ? Math.max(theme.control_h_md, valueText.implicitHeight)
+                : theme.control_h_md
             Layout.alignment: Qt.AlignVCenter
 
             MonoText {
+                id: valueText
                 anchors.fill: parent
                 visible: !root.editable
+<<<<<<< HEAD
 =======
             id: valueSlot
             Layout.preferredWidth: root.valueWidth
@@ -117,6 +136,10 @@ Item {
                 wrapMode: root.wrapValue ? Text.WrapAtWordBoundaryOrAnywhere
                                          : Text.NoWrap
 >>>>>>> origin/Train_Ctrl_integration
+=======
+                wrapMode: root.wrapValue ? Text.WrapAtWordBoundaryOrAnywhere
+                                         : Text.NoWrap
+>>>>>>> integrate/quirky-into-development-resolved
                 text: root.inlineUnit && root.unit !== ""
                     ? root.shown + "  " + root.unit : root.shown
                 font.pixelSize: root.valueSize

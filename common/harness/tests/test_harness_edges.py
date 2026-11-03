@@ -49,7 +49,6 @@ from common.harness.track_edges import (  # noqa: E402
 )
 from common.harness.train_edges import (  # noqa: E402
     INERT_COMMANDS,
-    aspect_to_train_controller,
     train_controller_to_train_model,
     train_model_to_train_controller,
 )
@@ -82,7 +81,7 @@ def commands(**changes: Any) -> dict[str, Any]:
         "light_command": [True, False],
         "temperature_setpoint_c": 22.2,
         "announcement": "GLENBURY",
-        "passenger_brake_release": False,
+        "power_verified": True,
         **changes,
     }
 
@@ -100,7 +99,6 @@ def report(**changes: Any) -> dict[str, Any]:
         "cabin_temp_c": 21.5,
         "commanded_speed_mps": 12.5,
         "authority_blocks": 3,
-        "speed_limit_mps": 19.4,
         "beacon": None,
         **changes,
     }
@@ -110,9 +108,7 @@ class TrainEdgesTest(unittest.TestCase):
     """Each field lands where the other module reads it."""
 
     def test_commands_to_the_train_model(self) -> None:
-        mapped = train_controller_to_train_model(
-            commands(passenger_brake_release=True)
-        )
+        mapped = train_controller_to_train_model(commands())
         self.assertEqual(mapped, {
             "power_cmd_w": 1200.0,
             "service_brake": False,
@@ -123,7 +119,6 @@ class TrainEdgesTest(unittest.TestCase):
             "door_right_open": True,
             "temp_setpoint_c": 22.2,
             "announcement": "GLENBURY",
-            "passenger_brake_release": True,
         })
 
     def test_report_to_the_train_controller(self) -> None:
@@ -131,11 +126,21 @@ class TrainEdgesTest(unittest.TestCase):
             "actual_speed": 4.5,
             "commanded_speed": 12.5,
             "authority_blocks": 3,
-            "brake_state": [True, False],
+            "emergency_brake_state": True,
+            "service_brake_state": False,
             "door_state": [False, True],
             "light_state": [True, False],
             "cabin_temperature": 21.5,
         })
+
+    def test_a_null_track_signal_reaches_the_controller(self) -> None:
+        # Pickup failure: the Train Model sends null, and the Train
+        # Controller reads it as one.
+        mapped = train_model_to_train_controller(report(
+            commanded_speed_mps=None, authority_blocks=None))
+        self.assertEqual(
+            (mapped["commanded_speed"], mapped["authority_blocks"]),
+            (None, None))
 
     def test_a_beacon_is_passed_on_while_reported(self) -> None:
         mapped = train_model_to_train_controller(report(beacon={
@@ -154,14 +159,6 @@ class TrainEdgesTest(unittest.TestCase):
         del broken["power_w"]
         with self.assertRaises(KeyError):
             train_controller_to_train_model(broken)
-
-    def test_lights_ahead_in_the_controllers_spelling(self) -> None:
-        self.assertEqual(
-            aspect_to_train_controller("SUPER_GREEN"), "SUPER GREEN"
-        )
-        self.assertEqual(aspect_to_train_controller("RED"), "RED")
-        with self.assertRaises(KeyError):
-            aspect_to_train_controller("SUPER GREEN")
 
     def test_inert_commands_hold_the_train(self) -> None:
         self.assertEqual(INERT_COMMANDS["power_cmd_w"], 0.0)
@@ -367,9 +364,11 @@ class TrackEdgesTest(unittest.TestCase):
 
 
 #: The Green Line's switches: ID, point and light (``track_devices``).
+# (ID, point, light): signals sit at switches, so a light stands at
+# its switch's point (TM-2).
 GREEN_SWITCHES = (
-    ("12", "13", "14"), ("28", "28", "27"), ("58", "57", "56"),
-    ("62", "63", "64"), ("76", "77", "78"), ("85", "85", "84"),
+    ("12", "13", "13"), ("28", "28", "28"), ("58", "57", "57"),
+    ("62", "63", "63"), ("76", "77", "77"), ("85", "85", "85"),
 )
 
 
@@ -449,10 +448,10 @@ class TrackDevicesTest(unittest.TestCase):
         )
 
     def test_lookups_by_each_name(self) -> None:
-        place = SwitchPlace("Green", "62", "63", "64")
+        place = SwitchPlace("Green", "62", "63", "63")
         self.assertEqual(self.devices.by_switch("Green", "62"), place)
         self.assertEqual(self.devices.by_point("Green", "63"), place)
-        self.assertEqual(self.devices.by_light("Green", "64"), place)
+        self.assertEqual(self.devices.by_light("Green", "63"), place)
         with self.assertRaises(KeyError):
             self.devices.by_switch("Red", "62")
 
@@ -473,13 +472,9 @@ class TrackDevicesTest(unittest.TestCase):
                 {place.light for place in places},
                 {names.block(block)[1] for block in layout.signal_block_ids},
             )
-            # Each light stands beside its own switch's point.
+            # Each light stands at its own switch's point.
             for place in places:
-                self.assertIn(
-                    names.track_model_name(line, place.point),
-                    layout.neighbours[
-                        names.track_model_name(line, place.light)],
-                )
+                self.assertEqual(place.light, place.point)
 
     def test_the_track_controller_reads_the_same_ids_and_points(
         self,
@@ -573,7 +568,7 @@ class WaysideEdgesTest(unittest.TestCase):
             # Switch Green 62 has its point on 63 and its light on 64.
             "switch_states": {"GREEN K-63": "REVERSE"},
             "crossing_states": {"GREEN K-65": True},
-            "signal_states": {"GREEN K-64": "SUPER_GREEN"},
+            "signal_states": {"GREEN K-63": "SUPER_GREEN"},
         }}, "Green", self.names, self.devices)
         self.assertEqual(mapped, {
             "occupied_blocks": [_green("63")],
@@ -597,7 +592,7 @@ class WaysideEdgesTest(unittest.TestCase):
             "commanded_authority": {"GREEN K-63": 2, "GREEN K-64": 1},
             "switch_commands": {"GREEN K-63": "NORMAL"},
             "crossing_commands": {},
-            "signal_commands": {"GREEN K-64": "YELLOW"},
+            "signal_commands": {"GREEN K-63": "YELLOW"},
         })
         # Commanded speed is a float on the track signal (R24).
         speed = mapped["commanded_speed_mps"]["GREEN K-63"]
@@ -728,7 +723,7 @@ class EdgeContractTest(unittest.TestCase):
                 "block_occupancy": {"GREEN K-63": True},
                 "switch_states": {"GREEN K-63": "NORMAL"},
                 "crossing_states": {"GREEN K-65": False},
-                "signal_states": {"GREEN K-64": "RED"},
+                "signal_states": {"GREEN K-63": "RED"},
             }}, "Green", self.names, self.devices),
         })))
         self.assertEqual(len(inputs.ctc.suggestions), 1)
@@ -778,7 +773,7 @@ class EdgeContractTest(unittest.TestCase):
         finally:
             sys.path.remove(str(_REPO / "CTC-Office"))
         model = TrackModel(TrackConfig(layout_paths(),
-                                       ticket_probability=1.0))
+                                       tickets_per_minute=600.0))
         outputs = encode_outputs(model.step(DT_S, decode_inputs(
             {"controller": {}, "trains": {}}, SIM_TIME_S
         )))
@@ -857,7 +852,7 @@ class SystemEdgesTest(unittest.TestCase):
         self.assertEqual(controller["commanded_authority"],
                          {"GREEN K-63": 2})
         self.assertEqual(controller["signal_commands"],
-                         {"GREEN K-64": "GREEN"})
+                         {"GREEN K-63": "GREEN"})
         self.assertNotIn("heater_commands", controller)
 
     def test_track_controller_takes_the_track_models_read_back(
@@ -994,7 +989,7 @@ class SystemEdgesTest(unittest.TestCase):
         self.assertEqual(set(trains), {"G1"})
         self.assertEqual(trains["G1"]["line"], "Green")
         self.assertEqual(
-            trains["G1"]["inputs"]["signal_light_ahead"], "SUPER GREEN"
+            trains["G1"]["inputs"]["signal_light_ahead"], "SUPER_GREEN"
         )
         self.assertEqual(trains["G1"]["inputs"]["actual_speed"], 4.5)
 

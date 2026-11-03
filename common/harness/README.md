@@ -1,5 +1,6 @@
 # Central harness
 
+To start, operate, stop or troubleshoot a run, see [the harness runbook](RUNBOOK.md).
 For the current manual/scheduled two-line review commands, recovery steps and
 Linux build recipe, see [the review runbook](../../documents/review-runbook.md).
 `utils/build_linux.sh` includes all seven modules, HW data and the Pi manifest;
@@ -184,11 +185,10 @@ exactly once.
   field, with the block named by its number. A beacon passes unchanged: the Train Model
   checks its payload (`utils/beacon_codec.py`) and rejects a train whose beacon is
   malformed, so only that train misses the tick.
-- **Track Model → Train Controller.** The light a train saw as it entered a block with a
-  signal (`signal_seen`), sent on that tick only, with `SUPER_GREEN` spelled the Train
-  Controller's way. The Train Controller keeps the last light it was given. Truth's
-  `signal-aspect-ahead` asks for the next light ahead on every tick; the Track Model
-  reports it only on entry so far.
+- **Track Model → Train Controller.** The light ahead of each train (`signal_seen`), on
+  every tick (TM-2), passed unchanged: both modules spell the fourth aspect `SUPER_GREEN`.
+  With no light ahead nothing is sent, and the Train Controller keeps the last light it
+  was given.
 - **Train Controller ↔ Train Model.** As in Phase 1 (`train_edges.py`). Until a train's
   first commands arrive, the Train Model gets `INERT_COMMANDS`: no power, the service
   brake on, doors shut.
@@ -282,8 +282,8 @@ The harness maps module-owned types directly (D005/D008); `common/interfaces.py`
 is stale. Phase 2 wires the Track Model process through the direct edges in
 `track_edges.py`. Track Model owns station eligibility for boarding; Train Model checks
 rest, doors, valid count and capacity without a station gate. Position offset
-references the train’s front. Controller one-shot `passenger_brake_release` clears
-only the passenger latch; a held controller emergency command remains active.
+references the train’s front. A passenger pull stays latched until the Train
+Controller's emergency brake goes from true to false (2026-10-28).
 
 Existing tests are local developer verification utilities.
 
@@ -366,7 +366,7 @@ Phases 1 to 4 add three layers of tests:
   the orchestrator's targeted check of 2026-10-21 (the earlier environment took about
   140 s). Kevin Schillinger accepted the extra steady-fall detector criterion as
   built on 2026-10-21 (design R91); its known limits remain recorded in
-  `documents/integration-handover-phase-4.md` section 6. This is not a whole-suite rerun or a new timing-budget measurement.
+  `documents/integration-handover.md#phase-4` section 6. This is not a whole-suite rerun or a new timing-budget measurement.
 - `test_harness_system.py`: the real CTC Office, Track Controller SW, Track Model, Train
   Model and Train Controller processes and two stubs, with the starter programs loaded.
   It runs the Iteration 3 scenario: G1 dispatched from the yard to GLENBURY, placed at
@@ -715,7 +715,7 @@ of the source checkout.
 
 ## Phase 5 as built: Red and Pi relays
 
-See [the Phase 5 handover](../../documents/integration-handover-phase-5.md)
+See [the Phase 5 handover](../../documents/integration-handover.md#phase-5-handover)
 and design §5.6 for the final acceptance evidence. All seven modules are
 real by default; the two HW hosts wait for their USB Pis with no fallback.
 CLOCK_STATE is implemented in `9325523` for authoritative loss-time metadata.
@@ -805,3 +805,45 @@ does not change the core's occupancy handling.
 The profile-driven `c9498e4` change sends periodic Pi VIEW snapshots every
 200 ms instead of 100 ms, within K6's approved 100–200 ms range. STEP and
 ACTION ordering, durable journal synchronization and replay are unchanged.
+
+### Independent simulated Pis for testing
+
+Edit [config/pi-testing.json](../../config/pi-testing.json) to enable each
+simulated Pi independently, then launch from the repository root:
+
+```sh
+python track_overflow.py --pi-config config/pi-testing.json --load-starters
+```
+
+The supplied file enables both process simulators:
+
+```json
+{
+  "track-controller-hw": true,
+  "train-controller-hw": true
+}
+```
+
+Set either value to `false` to use that module's physical USB Pi. An omitted
+key also selects physical hardware. The configuration does not disable the
+module: the harness waits for its assigned physical Pi to become ready. Changing
+the selection requires restarting the run. No file is loaded automatically;
+launching without simulation options continues to select both physical Pis.
+
+For quick overrides, select each module directly:
+
+```sh
+# Simulate only the Track Controller Pi.
+python track_overflow.py --track-controller-pi process \
+  --train-controller-pi physical --load-starters
+# Simulate only the Train Controller Pi.
+python track_overflow.py --track-controller-pi physical \
+  --train-controller-pi process --load-starters
+```
+
+Individual options accept `physical`, `process`, or Linux-only `pty`.
+Selection precedence is physical defaults, then the config file, then the
+existing global `--test-pi process|pty` shortcut for both modules, then each
+individual option. A per-module `physical` override can therefore turn one
+simulator off even with `--test-pi process`. Malformed, unreadable or unknown-key
+configuration is rejected before modules start; values must be JSON Booleans.

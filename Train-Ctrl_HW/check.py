@@ -2,7 +2,7 @@
 
 Two of them, catching different kinds of breakage:
 
-    check_snapshot_contract   every start-up, in milliseconds: do the
+    check_snapshot_contract   with --check, in milliseconds: do the
                               views and this backend still agree on
                               what the snapshot contains?
     run_check                 python main.py --check: drive a whole
@@ -26,11 +26,20 @@ from PySide6.QtCore import (
     QMetaObject,
     QObject,
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+    QPoint,
+    QPointF,
+    Qt,
+>>>>>>> integrate/quirky-into-development-resolved
     QTime,
 )
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QWheelEvent
+from PySide6.QtQuick import QQuickItem
+from PySide6.QtTest import QTest
 
 import train_ctrl as mod
+<<<<<<< HEAD
 =======
     QPoint,
     QPointF,
@@ -44,6 +53,10 @@ from PySide6.QtTest import QTest
 import train_ctrl as mod
 from train_ctrl.bench_sim import SimTrain
 >>>>>>> origin/Train_Ctrl_integration
+=======
+from train_ctrl.bench_sim import SimTrain
+from train_ctrl.vital import PowerResult, compute_power, vote_2oo3
+>>>>>>> integrate/quirky-into-development-resolved
 
 
 # ========================================================== contract
@@ -120,7 +133,10 @@ def run_check(
             problems.append(what)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     # Every visible text the views had to cut short, by text, with where
     # it was seen. Qt marks an elided Text as truncated.
     cut: dict[str, list[str]] = {}
@@ -168,6 +184,29 @@ def run_check(
         values.update(changes)
         return values
 
+<<<<<<< HEAD
+=======
+    def on_screen(win: Any, text: str) -> bool:
+        # Whether a visible item in the window shows this text, as its
+        # text or, for a StatusBadge, which draws it in capitals, as its
+        # label.
+        def walk(item: Any) -> bool:
+            if not item.isVisible():
+                return False
+            if text in (item.property("text"), item.property("label")):
+                return True
+            return any(walk(child) for child in item.childItems())
+        return walk(win.contentItem())
+
+    def off_by(watts: float) -> Any:
+        # A power channel that calculates the same and then adds this
+        # much: a fault for the vote to catch (REQUIREMENTS.md M21).
+        def channel(inputs: Any) -> PowerResult:
+            result = compute_power(inputs)
+            return PowerResult(result.power_w + watts, result.integral)
+        return channel
+
+>>>>>>> integrate/quirky-into-development-resolved
     def drive(core: Any, sim: SimTrain, seconds: float) -> None:
         # A controller and its simulated train, tick by tick, the way
         # step_all and the bench pair them.
@@ -176,7 +215,10 @@ def run_check(
             core.step()
             sim.step(core.commands())
 
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     if shots:
         shots.mkdir(parents=True, exist_ok=True)
 
@@ -198,6 +240,7 @@ def run_check(
     expect(backend.snapshot["clock"] == "05:00:00",
            "the clock does not start at D017's 05:00:00")
 <<<<<<< HEAD
+<<<<<<< HEAD
     # The toy plant spends a block of authority every 100 m, and the
     # drives below cover kilometres, so give them room; the countdown
     # has its own check further on. Commanded speed is the driver's
@@ -213,6 +256,15 @@ def run_check(
                                 "commanded_speed": 43})
     scan("01-signed-out")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    # Authority holds until a block change or a new count arrives
+    # (REQUIREMENTS.md M16), so the drives below only need it above 0.
+    # Commanded speed is the driver's ceiling (REQUIREMENTS.md M1), so
+    # give that room too.
+    backend.apply_bench_inputs({"authority_blocks": 200,
+                                "commanded_speed": 43})
+    scan("01-signed-out")
+>>>>>>> integrate/quirky-into-development-resolved
     if shots:
         window.grabWindow().save(str(shots / "01-signed-out.png"))
 
@@ -243,9 +295,13 @@ def run_check(
     expect(not backend.core.state.emergency_brake,
            "the engineer engaged the emergency brake")
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     scan("02-gains")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    scan("02-gains")
+>>>>>>> integrate/quirky-into-development-resolved
     if shots:
         window.grabWindow().save(str(shots / "02-gains.png"))
     # The engineer's pop-up commissions the gains; the bench cannot.
@@ -277,6 +333,7 @@ def run_check(
     moving = _until(app, lambda: backend.core.state.actual_mps > 2.0, 30)
     expect(moving, "train never got moving")
 <<<<<<< HEAD
+<<<<<<< HEAD
     expect(backend.core.state.accel_mps2 > 0.3,
            "the train is not pulling anything like its rated "
            "acceleration")
@@ -286,6 +343,12 @@ def run_check(
            "acceleration")
     scan("03-driving")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    expect(backend.sim.accel_mps2 > 0.3,
+           "the train is not pulling anything like its rated "
+           "acceleration")
+    scan("03-driving")
+>>>>>>> integrate/quirky-into-development-resolved
     if shots:
         window.grabWindow().save(str(shots / "03-driving.png"))
 
@@ -312,9 +375,13 @@ def run_check(
            "too")
     _settle(app, 200)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     scan("04-ebrake")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    scan("04-ebrake")
+>>>>>>> integrate/quirky-into-development-resolved
     if shots:
         window.grabWindow().save(str(shots / "04-ebrake.png"))
     backend.toggle_emergency_brake()
@@ -340,6 +407,7 @@ def run_check(
     # controller's own; a report of false never releases it, only
     # the driver does (D011).
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_inputs({"brake_state": [True, False]})
     expect(backend.core.state.emergency_brake,
            "a reported pull did not latch the emergency brake")
@@ -354,13 +422,26 @@ def run_check(
            "a reported pull did not latch the emergency brake")
     send({"emergency_brake_state": False})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    # Two ticks first, so the brake state the controller receives has
+    # caught up with the driver's release: a pull is a turn on.
+    tick()
+    tick()
+    send({"emergency_brake_state": True})
+    expect(backend.core.state.emergency_brake,
+           "a reported pull did not latch the emergency brake")
+    send({"emergency_brake_state": False})
+>>>>>>> integrate/quirky-into-development-resolved
     expect(backend.core.state.emergency_brake,
            "a report of false released the emergency brake")
     backend.toggle_emergency_brake()
     expect(not backend.core.state.emergency_brake,
            "the driver could not release it at a stand")
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     # The driver's release overrides a state still reported engaged
     # (REQUIREMENTS.md M2): only a turn on is a pull.
     held = mod.ControllerCore()
@@ -375,7 +456,10 @@ def run_check(
     expect(held.state.emergency_brake,
            "a new pull after the release did not latch the brake")
     scan("04-stopped")
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     if shots:
         window.grabWindow().save(str(shots / "04-stopped.png"))
 
@@ -385,11 +469,16 @@ def run_check(
     # of a minute to reach line speed.
     backend.set_manual(False)
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_inputs({"commanded_speed": 12.0})
 =======
     scan("automatic")
     backend.sim.commanded_mps = 12.0
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    scan("automatic")
+    backend.sim.commanded_mps = 12.0
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_sim_rate(mod.SIM_RATES.index(10))
     # 10x ticks ten times as often; the step stays truth's 0.1 s
     # (REQUIREMENTS.md M11).
@@ -412,12 +501,23 @@ def run_check(
     settled = _until(app, lambda: (
         abs(backend.core.state.actual_mps - 12.0) < 0.1
 <<<<<<< HEAD
+<<<<<<< HEAD
         and abs(backend.core.state.accel_mps2) < 0.02), 90)
 =======
         and abs(backend.sim.accel_mps2) < 0.02), 90)
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        and abs(backend.sim.accel_mps2) < 0.02), 90)
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_sim_rate(mod.SIM_RATES.index(1))
     expect(settled, "the train never settled on its commanded speed")
+    # The three power calculations agreed on every tick at 1x and 10x
+    # (REQUIREMENTS.md M21): a breach would have latched the e-brake.
+    expect(backend.core.last_vote is not None
+           and backend.core.last_vote.agreeing == 3
+           and backend.core.commands().power_verified
+           and not backend.core.state.emergency_brake,
+           "the power calculations did not agree in normal running")
     expect(not backend.core.state.service_brake,
            "the service brake is fighting the speed law at target")
     # Automatic locks the console but never the driver's e-brake.
@@ -427,6 +527,7 @@ def run_check(
 
     # Slowing to a lower target ends on it, not a mile an hour above
     # it: the brake lets go within the narrow band.
+<<<<<<< HEAD
 <<<<<<< HEAD
     backend.apply_bench_inputs({"commanded_speed": 43})
     backend.set_sim_rate(mod.SIM_RATES.index(10))
@@ -439,6 +540,13 @@ def run_check(
     expect(_until(app, lambda: backend.snapshot["actual_mph"] > 34.8, 60),
            "the train never reached 35 mph to slow down from")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    send({"commanded_speed": 43})
+    backend.set_sim_rate(mod.SIM_RATES.index(10))
+    backend.set_target_mph(35)
+    expect(_until(app, lambda: backend.snapshot["actual_mph"] > 34.8, 60),
+           "the train never reached 35 mph to slow down from")
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_target_mph(30)
     slowed = _until(app, lambda: (
         abs(backend.snapshot["actual_mph"] - 30.0) < 0.25
@@ -479,6 +587,7 @@ def run_check(
         expect(abs(top - 70 / 3.6 * mod.MPS_TO_MPH) < 0.01,
                "the dial's full scale is not the car's 70 km/h")
 <<<<<<< HEAD
+<<<<<<< HEAD
         backend.apply_bench_inputs({"commanded_speed": 20})
         _settle(app, 100)
         expect(dial.property("limit") == top,
@@ -491,16 +600,30 @@ def run_check(
                "the dial's scale moved with the commanded speed")
         send({"commanded_speed": 43})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        send({"commanded_speed": 20})
+        _settle(app, 100)
+        expect(dial.property("limit") == top,
+               "the dial's scale moved with the commanded speed")
+        send({"commanded_speed": 43})
+>>>>>>> integrate/quirky-into-development-resolved
 
+    # The numbers drawer goes in the final iteration, and this with it.
     drawer = window.findChild(QObject, "numbersDrawer")
     expect(drawer is not None, "numbers drawer missing")
     if drawer is not None:
         drawer.setProperty("expanded", True)
         _settle(app, 300)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         scan("05-numbers")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        expect(on_screen(window, "3 of 3 agree"),
+               "the numbers drawer does not show the power vote")
+        scan("05-numbers")
+>>>>>>> integrate/quirky-into-development-resolved
         if shots:
             window.grabWindow().save(str(shots / "05-numbers.png"))
         drawer.setProperty("expanded", False)
@@ -508,16 +631,25 @@ def run_check(
     # The Train Model interface is SI, in the shapes truth gives.
     _settle(app, 300)
 <<<<<<< HEAD
+<<<<<<< HEAD
     actual = backend.core.state.actual_mps
     backend.apply_inputs({"commanded_speed": 10.0, "actual_speed": -0.5})
     expect(backend.core.state.commanded_mps == 10.0,
+=======
+    si = mod.TrainControllerFleet()
+    si.add("T-9")
+    si.step_all(0.1, {"T-9": full_inputs(commanded_speed=10.0,
+                                         actual_speed=-0.5)},
+                mod.CLOCK_START_S)
+    expect(si.get("T-9").state.commanded_mps == 10.0,
+>>>>>>> integrate/quirky-into-development-resolved
            "the Train Model interface did not take m/s")
-    expect(backend.core.state.actual_mps == -0.5,
+    expect(si.get("T-9").state.actual_mps == -0.5,
            "a negative actual speed (rollback) was not kept signed")
-    backend.apply_inputs({"actual_speed": actual})
 
     # The bench types what the console reads, and converts once on
     # the display side: in mph and Fahrenheit, out m/s and Celsius.
+<<<<<<< HEAD
     backend.apply_bench_inputs({"commanded_speed": 42.5})
 =======
     si = mod.TrainControllerFleet()
@@ -534,15 +666,22 @@ def run_check(
     # the display side: in mph and Fahrenheit, out m/s and Celsius.
     send({"commanded_speed": 42.5})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    send({"commanded_speed": 42.5})
+>>>>>>> integrate/quirky-into-development-resolved
     expect(abs(backend.core.state.commanded_mps - 42.5 / mod.MPS_TO_MPH)
            < 1e-6, "the bench's mph did not convert to m/s")
     expect(abs(backend.snapshot["commanded_mph"] - 42.5) < 1e-3,
            "commanded speed did not come back as it was typed")
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_bench_inputs({"cabin_temperature": 68})
 =======
     send({"cabin_temperature": 68})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    send({"cabin_temperature": 68})
+>>>>>>> integrate/quirky-into-development-resolved
     expect(abs(backend.core.state.cabin_temp_c - 20.0) < 0.01,
            "the bench's Fahrenheit did not convert to Celsius")
     expect(abs(backend.snapshot["cabin_temp_f"] - 68.0) < 0.01,
@@ -550,10 +689,14 @@ def run_check(
 
     # A staged set applies in one call.
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_bench_inputs({
 =======
     send({
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    send({
+>>>>>>> integrate/quirky-into-development-resolved
         "commanded_speed": 31,
         "beacon_station": "DORMONT",
         "beacon_side": "R",
@@ -571,6 +714,7 @@ def run_check(
     expect(backend.core.state.actual_mps > 0.0,
            "this check needs a train that is moving")
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_bench_inputs({"door_state_left": True,
                                 "light_state_interior": False,
                                 "brake_state_emergency": False})
@@ -579,6 +723,11 @@ def run_check(
           "light_state_interior": False,
           "emergency_brake_state": False})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    send({"door_state_left": True,
+          "light_state_interior": False,
+          "emergency_brake_state": False})
+>>>>>>> integrate/quirky-into-development-resolved
     expect(not backend.core.state.emergency_brake,
            "sending inputs to a moving train engaged the emergency brake")
     _settle(app, 400)
@@ -592,6 +741,7 @@ def run_check(
     expect(not backend.snapshot["fb_interior_lights"],
            "the plant wrote over a light state the bench published")
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     # Only the platform side opens (truth beacon.md). The beacon above
     # put the platform on the right, so the left doors stay shut, and
@@ -612,34 +762,80 @@ def run_check(
     # shut (truth door-command.md).
     send({"door_state_left": False})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    # The door interlock: a door commanded open while moving stays
+    # shut (truth door-command.md).
+    send({"door_state_left": False})
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_door("left", True)
     _settle(app, 300)
     expect(not backend.snapshot["fb_doors_left"],
            "a door opened while the train was moving")
+    # The Cab controls badge says whether the driver may work the
+    # doors (REQUIREMENTS.md M6): locked while moving.
+    expect(on_screen(window, "Cab controls")
+           and on_screen(window, "Doors locked"),
+           "the Cab controls panel does not say the doors are locked "
+           "while moving")
     # Pressed again at a stand, the same command still opens it: the
     # tile re-sends a command the plant has already answered once.
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
     # The platform is on the right, but away from a station either
     # side opens (REQUIREMENTS.md M6).
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    # The platform is on the right, but away from a station either
+    # side opens (REQUIREMENTS.md M6).
+>>>>>>> integrate/quirky-into-development-resolved
     backend.toggle_emergency_brake()
     _until(app, lambda: backend.core.state.actual_mps == 0.0, 30)
+    _settle(app, 300)
+    expect(on_screen(window, "Doors free"),
+           "the Cab controls badge does not say the doors are free at a "
+           "stand")
     backend.set_door("left", True)
     _settle(app, 300)
     expect(backend.snapshot["fb_doors_left"],
            "re-pressing 'Open left' at a stand did not open the door")
 <<<<<<< HEAD
+<<<<<<< HEAD
     # Moved off the platform side, an open door still closes.
     backend.apply_bench_inputs({"beacon_side": "R"})
+=======
+    # An open door always closes.
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_door("left", False)
     expect(not backend.snapshot["doors_left"],
-           "an open door off the platform side could not be closed")
+           "the open left door could not be closed")
     backend.toggle_emergency_brake()
 
+    # The hand-over signs a driver in only if the engineer is still
+    # signed in on the train just commissioned: signing out, or picking
+    # a train with no gains, inside it signs nobody in (REQUIREMENTS.md
+    # M9).
+    for leave in ("signed out", "picked a train with no gains"):
+        console = type(backend)()
+        console.spawn_train(1, "GREEN LINE", "GREEN K")
+        console.spawn_train(2, "GREEN LINE", "GREEN K")
+        console.select_operator(console.ENGINEER_INDEX)
+        console.commission_gains(400000, 8000)
+        if leave == "signed out":
+            console.select_operator(-1)
+        else:
+            console.select_train(console.fleet.ids()[1])
+        _settle(app, mod.GAINS_HANDOVER_MS + 400)
+        expect(console.operator != "driver",
+               f"a driver was signed in after the engineer {leave} "
+               f"during the hand-over")
+        console.deleteLater()
+
     # Another train, running its own plant, with its own gains.
+    # Spawning it leaves the console on the train it shows.
     first = backend.selected
     backend.spawn_train(301, "RED LINE", "f")
+<<<<<<< HEAD
     second = backend.selected
     expect(second == "R-301", "spawning did not add the train asked for")
 =======
@@ -653,11 +849,16 @@ def run_check(
     # Spawning it leaves the console on the train it shows.
     first = backend.selected
     backend.spawn_train(301, "RED LINE", "f")
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     second = "R-301"
     expect(second in backend.fleet, "spawning did not add the train asked for")
     expect(backend.selected == first,
            "spawning switched the console to the new train")
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     expect(backend.fleet.get(second).state.authority_target == "F",
            "a block typed in lower case did not come back capitalised")
     expect(backend.snapshot["train_count"] == 2, "roster did not grow")
@@ -665,12 +866,18 @@ def run_check(
     expect(backend.snapshot["train_count"] == 2,
            "spawning the same id twice added a second copy")
 <<<<<<< HEAD
+<<<<<<< HEAD
     expect(not backend.core.armed, "a new train came up commissioned")
     expect(backend.fleet.get(first).armed, "spawning disarmed the first train")
 =======
     expect(not backend.fleet.get(second).armed,
            "a new train came up commissioned")
     expect(backend.fleet.get(first).armed, "spawning disarmed the first train")
+=======
+    expect(not backend.fleet.get(second).armed,
+           "a new train came up commissioned")
+    expect(backend.fleet.get(first).armed, "spawning disarmed the first train")
+>>>>>>> integrate/quirky-into-development-resolved
     # Nobody drives a train before its gains are set: picking it signs
     # the driver out, the Driver role is refused, and the console stays
     # behind the sign-in view until the engineer commissions it.
@@ -698,7 +905,10 @@ def run_check(
     _settle(app, mod.GAINS_HANDOVER_MS + 400)
     expect(backend.snapshot["operator"] == "driver",
            "the driver did not get the train once its gains were set")
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     # A new train is stopped, so this engages and releases cleanly,
     # and the train beside it is not touched either way.
     backend.toggle_emergency_brake()
@@ -714,7 +924,10 @@ def run_check(
            "could not go back to the first train")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     # A light state the bench published never locks the driver out: a
     # pressed tile is answered even when the command is unchanged.
     backend.set_manual(True)
@@ -819,7 +1032,10 @@ def run_check(
            "the beacon was not heard every tick at a station")
     send({"at_station": False})
 
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     # The console's train picker narrows the roster as the operator
     # types, and a pick selects that train.
     picker = window.findChild(QObject, "trainPicker")
@@ -846,13 +1062,19 @@ def run_check(
     # A set with one bad value changes nothing, and commissioning,
     # which cannot be undone, waits for the rest to apply.
 <<<<<<< HEAD
+<<<<<<< HEAD
     commanded = backend.core.state.commanded_mps
+=======
+    commanded = si.get("T-9").state.commanded_mps
+>>>>>>> integrate/quirky-into-development-resolved
     try:
-        backend.apply_inputs({"commanded_speed": commanded + 5.0,
-                              "authority_blocks": "abc"})
+        si.step_all(0.1, {"T-9": full_inputs(commanded_speed=commanded + 5,
+                                             authority_blocks="abc")},
+                    mod.CLOCK_START_S)
         expect(False, "a bad authority value was accepted")
     except mod.InvalidInputError:
         pass
+<<<<<<< HEAD
     expect(backend.core.state.commanded_mps == commanded,
 =======
     commanded = si.get("T-9").state.commanded_mps
@@ -865,6 +1087,9 @@ def run_check(
         pass
     expect(si.get("T-9").state.commanded_mps == commanded,
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    expect(si.get("T-9").state.commanded_mps == commanded,
+>>>>>>> integrate/quirky-into-development-resolved
            "a set with a bad value was half applied")
     backend.select_train(second)
     doors = backend.core.state.fb_doors_left
@@ -898,11 +1123,15 @@ def run_check(
         QMetaObject.invokeMethod(inputs, "release")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_bench_inputs({"authority_blocks": 3,
                                 "signal_light_ahead": "RED"})
 =======
     send({"authority_blocks": 3, "signal_light_ahead": "RED"})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    send({"authority_blocks": 3, "signal_light_ahead": "RED"})
+>>>>>>> integrate/quirky-into-development-resolved
     expect(backend.core.state.authority_blocks == 3,
            "authority not taken as a block count")
     expect(backend.snapshot["next_signal"] == "RED", "aspect not set")
@@ -912,14 +1141,20 @@ def run_check(
     # each one from what comes back (REQ-FUNC-038). A detected failure
     # applies and latches the emergency brake and stops the train
 <<<<<<< HEAD
+<<<<<<< HEAD
     # (REQ-FUNC-037.2), and refuses driving and brake release until
     # the bench clears it. Ten times real time keeps the stops short.
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     # (REQ-FUNC-037.2), and refuses driving until the bench clears it;
     # once stopped, the driver may release the brake in Manual only
     # (REQUIREMENTS.md M2, M3). Ten times real time keeps the stops
     # short.
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_sim_rate(mod.SIM_RATES.index(10))
     state = backend.core.state
 
@@ -930,11 +1165,15 @@ def run_check(
 
     # A Failure Status sent the old way is not an input any more.
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_inputs({"failure_status": [True, True, True]})
     expect(not backend.core.failed,
 =======
     expect(mod.read_inputs({"failure_status": [True, True, True]}) == {},
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    expect(mod.read_inputs({"failure_status": [True, True, True]}) == {},
+>>>>>>> integrate/quirky-into-development-resolved
            "a failure status from the Train Model was still taken")
 
     for row, key in (("failure_engine", "engine"),
@@ -942,11 +1181,15 @@ def run_check(
                      ("failure_brake", "brake")):
         name = mod.FAILURE_TEXT[key]
 <<<<<<< HEAD
+<<<<<<< HEAD
         backend.apply_bench_inputs({"authority_blocks": 20,
                                     "commanded_speed": 30})
 =======
         send({"authority_blocks": 20, "commanded_speed": 30})
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        send({"authority_blocks": 20, "commanded_speed": 30})
+>>>>>>> integrate/quirky-into-development-resolved
         drive_off(f"before the {name} test")
         backend.apply_bench_inputs({row: True})
         expect(not state.failures[key],
@@ -967,6 +1210,7 @@ def run_check(
             expect(not state.fb_service_brake,
                    "a failed service brake reported itself applied")
 <<<<<<< HEAD
+<<<<<<< HEAD
             expect(state.fb_emergency_brake,
                    "the emergency brake did not report applied during "
                    "a brake failure")
@@ -980,6 +1224,14 @@ def run_check(
                    "the service brake stopped being commanded under a "
                    "brake failure")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+            expect(_until(app, lambda: state.fb_emergency_brake, 2),
+                   "the emergency brake did not report applied during "
+                   "a brake failure")
+            expect(state.service_brake and state.service_request,
+                   "the service brake stopped being commanded under a "
+                   "brake failure")
+>>>>>>> integrate/quirky-into-development-resolved
             expect(state.actual_mps <= asked,
                    "the train sped up on a brake failure")
         else:
@@ -1000,21 +1252,37 @@ def run_check(
         expect(_until(app, lambda: state.actual_mps == 0.0, 20),
                f"a detected {name} did not stop the train")
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         scan("06-failure")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        scan("06-failure")
+>>>>>>> integrate/quirky-into-development-resolved
         if key == "brake" and shots:
             window.grabWindow().save(str(shots / "06-failure.png"))
             bench.grabWindow().save(str(shots / "07-test.png"))
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         # Latched while the bench still has it in: no release, no
         # target, no service brake, and still detected at a stand.
+=======
+        # Latched while the bench still has it in: no target, no
+        # service brake, still detected at a stand, and no release in
+        # Automatic.
+>>>>>>> integrate/quirky-into-development-resolved
         _settle(app, 300)
         expect(state.failures[key],
                f"the {name} cleared by itself while still injected")
+        # The mode still switches, both ways, so the driver can try the
+        # train in Manual; the failure keeps it stopped either way.
+        backend.set_manual(False)
+        expect(not state.manual,
+               f"the mode would not switch to Automatic during a {name}")
         backend.toggle_emergency_brake()
         expect(state.emergency_brake,
+<<<<<<< HEAD
                f"the emergency brake released during a {name}")
 =======
         # Latched while the bench still has it in: no target, no
@@ -1030,28 +1298,41 @@ def run_check(
                f"the mode would not switch to Automatic during a {name}")
         backend.toggle_emergency_brake()
         expect(state.emergency_brake,
+=======
+>>>>>>> integrate/quirky-into-development-resolved
                f"the emergency brake released in Automatic during a "
                f"{name}")
         scan("06-failure-automatic-release")
         backend.set_manual(True)
         expect(state.manual,
                f"the mode would not switch to Manual during a {name}")
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         backend.set_target_mph(30)
         expect(state.target_mps == 0.0,
                f"the driver set a target during a {name}")
         if key == "brake":
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+            # Still live under a brake failure, so the driver can try
+            # it (REQUIREMENTS.md M4).
+            asked = state.service_request
+>>>>>>> integrate/quirky-into-development-resolved
             backend.toggle_service_brake()
-            expect(not state.service_request,
-                   "the service brake could be asked for while failed")
-
-        # The bench resolves it; the driver then releases the brake.
-        backend.apply_bench_inputs({row: False})
-        expect(not backend.core.failed,
-               f"clearing the {name} on the bench did not resolve it")
+            expect(state.service_request != asked,
+                   "the service brake could not be asked for under a "
+                   "brake failure")
+            if state.service_request:
+                backend.toggle_service_brake()
+        # In Manual, at a stand, the driver may release it with the
+        # failure still latched, and the failure does not engage it
+        # again.
         backend.toggle_emergency_brake()
         expect(not state.emergency_brake,
+<<<<<<< HEAD
                f"the brake would not release once the {name} cleared")
 =======
             # Still live under a brake failure, so the driver can try
@@ -1068,6 +1349,8 @@ def run_check(
         # again.
         backend.toggle_emergency_brake()
         expect(not state.emergency_brake,
+=======
+>>>>>>> integrate/quirky-into-development-resolved
                f"the driver could not release the emergency brake in "
                f"Manual during a {name}")
         _settle(app, 300)
@@ -1078,23 +1361,37 @@ def run_check(
                and state.actual_mps == 0.0,
                f"the train moved after the release during a {name}")
 
+<<<<<<< HEAD
         # The bench resolves it; the brake is already off.
         backend.apply_bench_inputs({row: False})
         expect(not backend.core.failed,
                f"clearing the {name} on the bench did not resolve it")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        # The bench clears its injected failure; the e-brake is already
+        # off. A brake failure the controller then resolves itself,
+        # once the service brake answers again (REQUIREMENTS.md §4);
+        # the others it cannot see resolved, so the bench clears them
+        # directly (M3, OPEN_ISSUES.md #23).
+        backend.apply_bench_inputs({row: False})
+>>>>>>> integrate/quirky-into-development-resolved
         if key == "brake":
-            # The service brake answers again.
-            drive_off("after the brake failure cleared")
+            expect(state.failures[key],
+                   "clearing the brake failure on the bench cleared it in "
+                   "the controller directly")
             backend.toggle_service_brake()
-            expect(_until(app, lambda: state.fb_service_brake, 10),
-                   "the service brake did not work after the failure "
-                   "cleared")
+            expect(_until(app, lambda: not backend.core.failed, 10)
+                   and state.fb_service_brake,
+                   "the brake failure did not resolve once the service "
+                   "brake answered")
+            backend.toggle_service_brake()
+            drive_off("after the brake failure resolved")
+        else:
             expect(not backend.core.failed,
-                   "a working service brake was taken for a failure")
-            backend.toggle_service_brake()
+                   f"clearing the {name} on the bench did not resolve it")
     backend.set_sim_rate(mod.SIM_RATES.index(1))
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     # Engine detection flags a steady fall in speed with power on and
     # no brake, never a train holding its target (Kevin Schillinger,
@@ -1102,32 +1399,167 @@ def run_check(
     # engine dies, rolling resistance (applied by the toy plant under
     # an engine failure, as the Train Model always applies it) slows
     # the train, and the failure is found within the window.
+=======
+    # An engine failure at a steady cruise shows only once traction is
+    # needed: the toy plant has no resistance, so holding speed takes
+    # no power and a dead engine changes nothing until the train is
+    # asked to speed up (OPEN_ISSUES.md).
+>>>>>>> integrate/quirky-into-development-resolved
     cruise = mod.ControllerCore()
     cruise.armed = True
     cruise.state.manual = True
-    cruise.state.authority_blocks = 999
-    cruise.state.commanded_mps = 43 / mod.MPS_TO_MPH
+    plant = SimTrain()
+    plant.authority_blocks = 999
+    plant.commanded_mps = 43 / mod.MPS_TO_MPH
+    drive(cruise, plant, cruise.dt)
     cruise.set_target_mps(20 / mod.MPS_TO_MPH)
-    for _ in range(round(60 / cruise.dt)):
-        cruise.step()
+    drive(cruise, plant, 60)
+    plant.injected["engine"] = True
+    drive(cruise, plant, 10)
     expect(not cruise.failed,
-           "an engine failure was claimed while holding a cruise")
-    cruise.state.injected["engine"] = True
-    for _ in range(round((mod.ENGINE_DETECT_S + 1.0) / cruise.dt)):
-        cruise.step()
-        if cruise.failed:
-            break
+           "an engine failure was claimed at a cruise needing no power")
+    cruise.set_target_mps(30 / mod.MPS_TO_MPH)
+    drive(cruise, plant, 5)
     expect(cruise.failed == ["engine"] and cruise.state.emergency_brake,
-           "an engine failure at cruise was not found within the "
-           "detection window once the speed fell")
+           "an engine failure at cruise was not found once speed was "
+           "asked for")
 
-    # Doors are the controller's (REQUIREMENTS.md M6): never opened
-    # while moving; in Automatic, opened on the platform side at a new
-    # station once stopped, held open for the 45 s dwell however soon
-    # the Track Signal resumes (truth D007), then closed, and the train
-    # leaves only once Door State reports them closed.
+    # A brake failure is concluded on the tick after the service brake
+    # is commanded, when its state still reads off; a working brake is
+    # never taken for one (REQUIREMENTS.md M4).
+    for failed in (False, True):
+        quick = mod.ControllerCore()
+        quick.armed = True
+        quick.state.manual = True
+        plant = SimTrain()
+        plant.authority_blocks = 999
+        plant.commanded_mps = 20 / mod.MPS_TO_MPH
+        drive(quick, plant, quick.dt)
+        quick.set_target_mps(20 / mod.MPS_TO_MPH)
+        drive(quick, plant, 20)
+        plant.injected["brake"] = failed
+        quick.state.service_request = True
+        drive(quick, plant, quick.dt)
+        expect(not quick.failed,
+               "a brake failure was concluded before the Train Model "
+               "could answer")
+        drive(quick, plant, quick.dt)
+        if failed:
+            expect(quick.failed == ["brake"]
+                   and quick.state.emergency_brake
+                   and quick.state.service_brake,
+                   "a brake failure was not concluded on the next tick, "
+                   "with the service brake still commanded")
+        else:
+            drive(quick, plant, 5)
+            expect(not quick.failed,
+                   "a working service brake was taken for a failure")
+
+    # Doors and station boarding (REQUIREMENTS.md M6), in both modes.
+    # The bench plant stands in for the Train Model: its doors follow
+    # the commands, and its beacon is received only at a station.
+    def stopped(core: Any) -> bool:
+        return abs(core.state.actual_mps) < mod.STANDSTILL_MPS
+
+    def at_dormont(manual: bool) -> tuple[Any, SimTrain]:
+        # Out of the yard with 5 blocks, which says nothing, running
+        # at 10 m/s onto the last block, then arriving at a station
+        # whose platform is on the right.
+        core = mod.ControllerCore()
+        core.armed = True
+        core.state.manual = manual
+        core.state.train_id = "T-9"
+        plant = SimTrain()
+        plant.commanded_mps = plant.actual_mps = 10.0
+        plant.authority_blocks = 5
+        plant.beacon_side = "R"
+        core.state.target_mps = 10.0
+        drive(core, plant, 1.0)
+        plant.authority_blocks = 1
+        drive(core, plant, 0.5)
+        plant.beacon_station = "DORMONT"
+        plant.at_station = True
+        plant.commanded_mps, plant.authority_blocks = 0.0, 0
+        return core, plant
+
+    def through_dwell(core: Any, plant: SimTrain) -> None:
+        # Until the platform side has opened and closed again.
+        for opened in (True, False):
+            for _ in range(1000):
+                if plant.door_right == opened:
+                    break
+                drive(core, plant, 0.1)
+    for manual in (False, True):
+        mode = "Manual" if manual else "Automatic"
+        door, plant = at_dormont(manual)
+        expect(not door.driver_door("right", True),
+               f"{mode}: a door could be opened while moving")
+        door.command_door("left", True)
+        drive(door, plant, 0.1)
+        expect(not door.state.doors_left,
+               f"{mode}: a door commanded open while moving stayed open")
+        ticks = 0
+        while not plant.door_right and ticks < 400:
+            drive(door, plant, 0.1)
+            ticks += 1
+        expect(stopped(door) and plant.door_right and not plant.door_left,
+               f"{mode}: arriving did not open only the platform side")
+        expect(not door.driver_door("right", False)
+               and not door.driver_door("left", True),
+               f"{mode}: the driver worked the doors during the dwell")
+        # A Track Signal during the dwell waits for it to end.
+        held = 0
+        while plant.door_right and held < 600:
+            if held == 200:
+                plant.commanded_mps, plant.authority_blocks = 10.0, 3
+            drive(door, plant, 0.1)
+            held += 1
+            if plant.door_right:
+                expect(door.commands().power_w == 0.0,
+                       f"{mode}: power during the dwell")
+        expect(abs(held * door.dt - mod.DWELL_S) <= door.dt + 1e-9,
+               f"{mode}: the doors closed after {held * door.dt:.1f} s, "
+               f"not the {mod.DWELL_S:.0f} s dwell")
+    # After the dwell, before a new Track Signal: the platform side
+    # only (the driver's in Manual); a new Track Signal closes it and
+    # locks the doors, and there is no traction until Door State
+    # reports them closed.
+    door, plant = at_dormont(True)
+    through_dwell(door, plant)
+    expect(not plant.door_right and not door.may_open("left")
+           and door.driver_door("right", True),
+           "after the dwell the driver could not open only the platform "
+           "side")
+    drive(door, plant, 0.2)
+    expect(plant.door_right, "the platform side did not reopen")
+    plant.commanded_mps, plant.authority_blocks = 10.0, 3
+    door.apply_staged(mod.read_inputs(plant.outputs()))
+    door.step()
+    expect(not door.commands().door_command[1]
+           and not door.driver_door("right", True),
+           "a new Track Signal did not close the doors and lock them")
+    door.set_target_mps(8.0)
+    expect(door.commands().power_w == 0.0,
+           "power before Door State reported the doors closed")
+    drive(door, plant, 0.2)
+    door.set_target_mps(8.0)
+    drive(door, plant, 0.1)
+    expect(door.commands().power_w > 0.0,
+           "no power once the doors reported closed and the driver set "
+           "a speed")
+    # Automatic leaves by itself once the doors report closed.
+    door, plant = at_dormont(False)
+    through_dwell(door, plant)
+    plant.commanded_mps, plant.authority_blocks = 10.0, 3
+    drive(door, plant, 0.3)
+    expect(door.commands().power_w > 0.0,
+           "Automatic did not leave once the doors reported closed")
+    # No boarding without the beacon: a train that heard a station's
+    # beacon while running through it, then stops where its authority
+    # ends off a station, keeps its doors shut.
     door = mod.ControllerCore()
     door.armed = True
+<<<<<<< HEAD
     door.apply_staged(mod.read_inputs({"commanded_speed": 10.0,
                                        "authority_blocks": 999,
                                        "actual_speed": 10.0}))
@@ -1241,6 +1673,149 @@ def run_check(
         door.step()
     expect(stopped() and not door.state.doors_right,
            "the doors opened at a stop with no new station")
+=======
+    plant = SimTrain()
+    plant.commanded_mps = plant.actual_mps = 10.0
+    plant.authority_blocks = 5
+    plant.beacon_station, plant.beacon_side = "DORMONT", "R"
+    plant.at_station = True
+    drive(door, plant, 2.0)
+    plant.at_station = False
+    plant.authority_blocks = 1
+    drive(door, plant, 1.0)
+    plant.commanded_mps, plant.authority_blocks = 0.0, 0
+    drive(door, plant, 30.0)
+    expect(stopped(door) and not plant.door_right and not plant.door_left,
+           "the doors opened at a stop off a station")
+
+    # The vital power command (REQUIREMENTS.md M21): the result at least
+    # two of the three channels agree on passes; with no two equal,
+    # nothing does. Agreeing means equal, power and integrator both.
+    good, bad, worse = (PowerResult(1000.0, 2.0), PowerResult(5000.0, 2.0),
+                        PowerResult(1000.0, 3.0))
+    for results, agreed, agreeing in (
+            ((good, good, good), good, 3),
+            ((bad, good, good), good, 2),
+            ((good, bad, good), good, 2),
+            ((good, good, bad), good, 2),
+            ((good, bad, worse), None, 0),
+            ((PowerResult(float("nan"), 2.0),) * 3, None, 0)):
+        vote = vote_2oo3(results)
+        expect(vote.agreed == agreed and vote.agreeing == agreeing,
+               f"the vote on {results} passed {vote.agreed} with "
+               f"{vote.agreeing} agreeing, not {agreed} with {agreeing}")
+
+    # Wired into the controller, tick by tick (REQUIREMENTS.md M21).
+    # One channel off by 50 kW is outvoted and the train runs as it
+    # would have; two that disagree with each other and the third are
+    # a vitality breach.
+    def vital_train() -> tuple[Any, SimTrain]:
+        core = mod.ControllerCore()
+        core.armed = True
+        plant = SimTrain()
+        plant.commanded_mps, plant.authority_blocks = 12.0, 999
+        return core, plant
+    healthy, plant = vital_train()
+    drive(healthy, plant, 20.0)
+    outvoted, plant = vital_train()
+    outvoted.channels = (compute_power, off_by(50_000.0), compute_power)
+    drive(outvoted, plant, 20.0)
+    expect(outvoted.state.actual_mps == healthy.state.actual_mps
+           and outvoted.last_vote.agreeing == 2
+           and outvoted.commands().power_verified
+           and not outvoted.state.emergency_brake,
+           "one faulty power channel changed how the train ran")
+    breach, plant = vital_train()
+    drive(breach, plant, 10.0)
+    breach.channels = (compute_power, off_by(50_000.0), off_by(-50_000.0))
+    drive(breach, plant, 0.1)
+    cmd = breach.commands()
+    expect(breach.state.vital_breach and cmd.power_w == 0.0
+           and cmd.emergency_brake and not cmd.power_verified,
+           "no two power calculations agreed, and the command was not "
+           "rejected for 0 W on the emergency brake")
+    drive(breach, plant, 30.0)
+    expect(breach.at_stand and not breach.release_emergency(),
+           "the emergency brake released during a vitality breach")
+    breach.channels = (compute_power,) * 3
+    drive(breach, plant, 0.1)
+    cmd = breach.commands()
+    expect(not breach.state.vital_breach and cmd.power_verified
+           and cmd.emergency_brake and cmd.power_w == 0.0,
+           "an agreeing tick did not clear the breach, or released the "
+           "emergency brake by itself")
+    expect(breach.release_emergency(),
+           "the driver could not release the emergency brake once the "
+           "power command agreed again")
+    drive(breach, plant, 0.1)
+    expect(breach.commands().power_w > 0.0,
+           "no power after the release")
+
+    # Under the harness a command's report comes back two ticks later
+    # (truth D017, OPEN_ISSUES.md #42). With echo_ticks set to match, a
+    # working service brake is not a failure, a failed one still is,
+    # and the controller's own emergency brake coming back is not a
+    # passenger pull; a real pull still latches.
+    def late(core: Any, plant: SimTrain, ticks: int) -> None:
+        # The plant acts on each command a tick late, as the harness
+        # delivers it.
+        pending = None
+        for _ in range(ticks):
+            core.apply_staged(mod.read_inputs(plant.outputs()))
+            core.step()
+            if pending is not None:
+                plant.step(pending)
+            pending = core.commands()
+    for failed in (False, True):
+        echo = mod.ControllerCore(echo_ticks=mod.ECHO_TICKS)
+        echo.armed = True
+        echo.state.manual = True
+        plant = SimTrain()
+        plant.commanded_mps = plant.actual_mps = 10.0
+        plant.authority_blocks = 50
+        echo.state.target_mps = 10.0
+        late(echo, plant, 20)
+        plant.injected["brake"] = failed
+        echo.state.service_request = True
+        late(echo, plant, 10)
+        state = "failed" if failed else "working"
+        expect(echo.state.failures["brake"] == failed,
+               f"with reports two ticks late, a {state} service brake "
+               f"was {'not ' if failed else ''}taken for a failure")
+    echo = mod.ControllerCore(echo_ticks=mod.ECHO_TICKS)
+    echo.armed = True
+    plant = SimTrain()
+    plant.authority_blocks = 50
+    late(echo, plant, 3)
+    echo.engage_emergency()
+    late(echo, plant, 1)
+    echo.release_emergency()
+    late(echo, plant, 5)
+    expect(not echo.state.emergency_brake,
+           "the controller's own emergency brake, reported two ticks late, "
+           "was taken for a passenger pull")
+    plant.apply(mod.read_inputs({"emergency_brake_state": True}))
+    late(echo, plant, 3)
+    expect(echo.state.emergency_brake,
+           "with reports two ticks late, a passenger pull did not latch")
+    expect(mod.TrainControllerFleet(echo_ticks=mod.ECHO_TICKS).add("T-1")
+           .echo_ticks == mod.ECHO_TICKS
+           and mod.TrainControllerFleet().add("T-1").echo_ticks
+           == mod.BENCH_ECHO_TICKS,
+           "the fleet did not pass its echo ticks to its trains")
+
+    # The controller only commands (REQUIREMENTS.md M0): stepping it
+    # sends power and moves nothing it receives.
+    core = mod.ControllerCore()
+    core.armed = True
+    core.apply_staged(mod.read_inputs({"commanded_speed": 10.0,
+                                       "authority_blocks": 5,
+                                       "actual_speed": 0.0}))
+    core.step()
+    expect(core.commands().power_w > 0.0
+           and core.state.actual_mps == 0.0,
+           "stepping the controller moved the train itself")
+>>>>>>> integrate/quirky-into-development-resolved
 
 =======
     plant.beacon_station = "DORMONT"
@@ -1307,15 +1882,23 @@ def run_check(
     fleet = mod.TrainControllerFleet()
     fleet.add("T-1").armed = True
 <<<<<<< HEAD
+<<<<<<< HEAD
     full = {"actual_speed": 5.0, "commanded_speed": 10.0,
             "authority_blocks": 5, "brake_state": [False, False],
             "door_state": [False, False], "light_state": [True, True],
             "cabin_temperature": 21.0}
     fleet.step_all(0.1, {"T-1": full})
+=======
+    full = full_inputs()
+    start = mod.CLOCK_START_S
+    fleet.step_all(0.1, {"T-1": full}, start)
+>>>>>>> integrate/quirky-into-development-resolved
     before = fleet.get("T-1").state.actual_mps
-    short = {k: v for k, v in full.items() if k != "brake_state"}
+    # Brake State is two signals (REQUIREMENTS.md M18), each required.
+    short = {k: v for k, v in full.items() if k != "service_brake_state"}
     short["actual_speed"] = 9.0
     try:
+<<<<<<< HEAD
         fleet.step_all(0.1, {"T-1": short})
         expect(False, "a tick without Brake State was accepted")
 =======
@@ -1331,6 +1914,11 @@ def run_check(
         expect(False, "a tick without the service brake state was "
                "accepted")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        fleet.step_all(0.1, {"T-1": short}, start)
+        expect(False, "a tick without the service brake state was "
+               "accepted")
+>>>>>>> integrate/quirky-into-development-resolved
     except mod.InvalidInputError:
         pass
     expect(fleet.get("T-1").state.actual_mps == before,
@@ -1338,34 +1926,52 @@ def run_check(
     # The step is truth's fixed 0.1 s; any other dt is refused whole.
     try:
 <<<<<<< HEAD
+<<<<<<< HEAD
         fleet.step_all(0.05, {"T-1": dict(full, actual_speed=9.0)})
 =======
         fleet.step_all(0.05, {"T-1": dict(full, actual_speed=9.0)}, start)
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        fleet.step_all(0.05, {"T-1": dict(full, actual_speed=9.0)}, start)
+>>>>>>> integrate/quirky-into-development-resolved
         expect(False, "a step other than 0.1 s was accepted")
     except mod.InvalidInputError:
         pass
     expect(fleet.get("T-1").state.actual_mps == before,
            "a refused dt still changed the train")
 <<<<<<< HEAD
+<<<<<<< HEAD
     fleet.step_all(0.1, {"T-1": full})
+=======
+    fleet.step_all(0.1, {"T-1": full}, start)
+    # The time is the harness's, received each tick (REQUIREMENTS.md
+    # M11); a time that cannot be one refuses the tick.
+    fleet.step_all(0.1, {"T-1": full}, 18 * 3600.0)
+    expect(fleet.get("T-1").state.time_s == 18 * 3600.0,
+           "the controller did not take the harness's time")
+    for bad in (-1.0, float("nan"), "18:00", True):
+        try:
+            fleet.step_all(0.1, {"T-1": full}, bad)
+            expect(False, f"a time of {bad!r} was accepted")
+        except mod.InvalidInputError:
+            pass
+    expect(fleet.get("T-1").state.time_s == 18 * 3600.0,
+           "a refused time still reached the controller")
+>>>>>>> integrate/quirky-into-development-resolved
 
-    # Announcements are commands (REQUIREMENTS.md M7): in Automatic a
-    # new station beacon sends one on the approach, for the lockout,
-    # and in Manual only the driver's press does.
-    talk = mod.ControllerCore()
-    talk.apply_staged(mod.read_inputs({"beacon_station": "GLENBURY"}))
-    expect(talk.commands().announcement == "GLENBURY",
-           "Automatic sent no announcement on the approach")
-    for _ in range(round(mod.ANNOUNCE_LOCKOUT_MS / 1000 / talk.dt) + 1):
-        talk.step(plant=False)
-    expect(talk.commands().announcement == "",
-           "the automatic announcement never cleared")
-    talk.state.manual = True
-    talk.apply_staged(mod.read_inputs({"beacon_station": "DORMONT"}))
-    expect(talk.commands().announcement == "",
-           "Manual announced without the driver's press")
+    # Announcements are commands (REQUIREMENTS.md M7), in both modes,
+    # each held for the lockout, then cleared: arriving soon when the
+    # authority reaches 3, never at a station; arrived on arriving;
+    # departing once the doors report closed for a new Track Signal,
+    # after the dwell. At a departure, 3 blocks or fewer is announced
+    # at once, after "departing" from a station. In Manual the driver
+    # may repeat the last one, not while one plays.
+    soon = mod.ANNOUNCE_ARRIVING.format(train_id="T-9")
+    arrived = mod.ANNOUNCE_ARRIVED.format(train_id="T-9", station="DORMONT")
+    leaving = mod.ANNOUNCE_DEPARTING.format(train_id="T-9",
+                                            station="DORMONT")
 
+<<<<<<< HEAD
     # Until the Track Model sends the count, the toy plant spends one
     # block of authority per BLOCK_LENGTH_M travelled, part-blocks
     # carried over.
@@ -1444,6 +2050,58 @@ def run_check(
         expect(talk.repeat_announcement() == manual
                and talk.commands().announcement == (said if manual else ""),
                f"{mode} got the repeat of the last announcement wrong")
+=======
+    def heard(core: Any, plant: SimTrain, seconds: float) -> list[str]:
+        # Every announcement sent while driving, in order.
+        said: list[str] = []
+        for _ in range(round(seconds / core.dt)):
+            drive(core, plant, 0.1)
+            text = core.commands().announcement
+            if text and (not said or said[-1] != text):
+                said.append(text)
+            elif not text and said and said[-1] != "":
+                said.append("")
+        return [text for text in said if text]
+    for manual in (False, True):
+        mode = "Manual" if manual else "Automatic"
+        talk, plant = at_dormont(manual)
+        expect(not talk.repeat_announcement(),
+               f"{mode} repeated an announcement before any was sent")
+        said = heard(talk, plant, 20.0)
+        expect(said == [arrived],
+               f"{mode} said {said} arriving, not the arrival")
+        # A new Track Signal of 3 blocks during the dwell: nothing
+        # until the dwell ends, then departing, then arriving soon.
+        plant.commanded_mps, plant.authority_blocks = 10.0, 3
+        said = heard(talk, plant, mod.DWELL_S + 12.0)
+        expect(said == [leaving, soon],
+               f"{mode} said {said} leaving, not departing then arriving "
+               f"soon")
+        expect(talk.repeat_announcement() == manual
+               and talk.commands().announcement == (soon if manual else ""),
+               f"{mode} got the repeat of the last announcement wrong")
+        # Away from a station, arriving soon when the authority comes
+        # down to 3.
+        plant.authority_blocks = 4
+        heard(talk, plant, 6.0)
+        plant.authority_blocks = 3
+        expect(heard(talk, plant, 1.0) == [soon],
+               f"{mode} did not announce arriving soon at 3 blocks")
+    # Leaving the yard: 3 blocks or fewer is announced at once, also
+    # when the count arrived before the gains were set; more, only
+    # once it comes down to 3.
+    for blocks, expected in ((3, [soon]), (2, [soon]), (5, [])):
+        yard = mod.ControllerCore()
+        yard.state.train_id = "T-9"
+        plant = SimTrain()
+        plant.commanded_mps, plant.authority_blocks = 10.0, blocks
+        said = heard(yard, plant, 2.0)
+        yard.armed = True
+        said += heard(yard, plant, 2.0)
+        expect(said == expected,
+               f"leaving the yard with {blocks} blocks said {said}, not "
+               f"{expected}")
+>>>>>>> integrate/quirky-into-development-resolved
 
     # Automatic lights (REQUIREMENTS.md M8), in either mode: on with an
     # underground beacon and at 18:00; off with a later beacon saying
@@ -1523,7 +2181,10 @@ def run_check(
     expect(backend.snapshot["track_authority_blocks"] == 0,
            "a bench block change took authority below 0")
     tick()
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     expect(not backend.core.state.emergency_brake,
            "running out of authority pulled the emergency brake")
     expect(backend.core.state.target_mps == 0.0,
@@ -1538,6 +2199,7 @@ def run_check(
     expect(backend.core.state.target_mps == 0.0,
            "the driver could set a target with no authority left")
 <<<<<<< HEAD
+<<<<<<< HEAD
     # Commanded speed is the speed limit, never above the car's 70 km/h
     # (REQUIREMENTS.md M1): it caps the driver's target when set, and in
     # Automatic it is the target.
@@ -1545,25 +2207,37 @@ def run_check(
     backend.apply_bench_inputs({"authority_blocks": 6,
                                 "commanded_speed": 40})
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     # The commanded speed is the only cap, in both modes, with no
     # 70 km/h cap (REQUIREMENTS.md M1): in Manual it caps the driver's
     # setpoint, also when it drops later; in Automatic it is the target.
     send({"authority_blocks": 6, "commanded_speed": 40})
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_manual(True)
     backend.set_target_mph(55)
     expect(abs(backend.snapshot["target_mph"] - 40) < 0.5,
            "the driver's target was not capped at the commanded speed")
 <<<<<<< HEAD
+<<<<<<< HEAD
     backend.apply_bench_inputs({"commanded_speed": 60})
+=======
+    send({"commanded_speed": 60})
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_target_mph(55)
-    expect(abs(backend.snapshot["target_mph"] - car_max_mph) < 0.01,
-           "the driver's target went above the car's 70 km/h")
+    expect(abs(backend.snapshot["target_mph"] - 55) < 0.5,
+           "the driver's target was capped below the commanded speed")
+    send({"commanded_speed": 30})
+    expect(abs(backend.snapshot["target_mph"] - 30) < 0.5,
+           "the driver's target stayed above a lowered commanded speed")
     backend.set_manual(False)
-    backend.apply_bench_inputs({"commanded_speed": 30})
-    backend.core.step(plant=False)
+    send({"commanded_speed": 30})
     expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 30) < 0.5,
            "Automatic did not take the commanded speed as its target")
+<<<<<<< HEAD
     backend.apply_bench_inputs({"commanded_speed": 60})
     backend.core.step(plant=False)
     expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH
@@ -1585,6 +2259,11 @@ def run_check(
     expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 60) < 0.5,
            "Automatic did not target a commanded speed above 70 km/h")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    send({"commanded_speed": 60})
+    expect(abs(backend.core.state.target_mps * mod.MPS_TO_MPH - 60) < 0.5,
+           "Automatic did not target a commanded speed above 70 km/h")
+>>>>>>> integrate/quirky-into-development-resolved
     backend.set_manual(True)
     _settle(app, 300)
 
@@ -1601,10 +2280,31 @@ def run_check(
            "removing a missing train changed the roster")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     # Announcements lock out for their duration, and carry the
     # beacon's station while they play.
+=======
+    # In Manual the press repeats the last announcement, held for the
+    # lockout on system time (REQUIREMENTS.md M7, M11).
+    # The longest announcement the controller sends, on screen.
+    longest = mod.ANNOUNCE_DEPARTING.format(train_id=backend.selected,
+                                            station="DORMONT")
+    backend.core._announce(longest)
+    backend._publish()
+    _settle(app, 300)
+    expect(backend.snapshot["announcement"] == longest,
+           "the long announcement was not on screen to check")
+    scan("long announcement")
+    if shots:
+        bench.grabWindow().save(str(shots / "09-announcement.png"))
+    expect(_until(app, lambda: not backend.snapshot["announcing"], 10),
+           "announcement never cleared")
+    scan("nothing announcing")
+>>>>>>> integrate/quirky-into-development-resolved
     backend.announce()
+    scan("announcing")
     expect(backend.snapshot["announcing"], "announcement did not start")
+<<<<<<< HEAD
     expect(backend.snapshot["announcement"] == "DORMONT",
            "the announcement did not carry the beacon's station")
     _settle(app, mod.ANNOUNCE_LOCKOUT_MS + 400)
@@ -1629,14 +2329,92 @@ def run_check(
     backend.announce()
     scan("announcing")
     expect(backend.snapshot["announcing"], "announcement did not start")
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     expect(backend.snapshot["announcement"] == longest,
            "the press did not repeat the last announcement")
     expect(_until(app, lambda: not backend.snapshot["announcing"], 10),
            "announcement never cleared")
 
+<<<<<<< HEAD
     for text, seen in sorted(cut.items()):
         expect(False, f"text cut off: {text!r} ({', '.join(seen[:3])})")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    # The station dwell pill on both headers (REQUIREMENTS.md M6):
+    # full when the dwell starts, half after half of it, gone after.
+    # The last block, then a stop.
+    sim = backend.sim
+    sim.authority_blocks = 1
+    tick()
+    sim.commanded_mps, sim.authority_blocks = 0.0, 0
+    for _ in range(600):
+        if backend.core.at_stand:
+            break
+        tick()
+    sim.beacon_station, sim.beacon_side, sim.at_station = "DORMONT", "R", True
+    for _ in range(20):
+        if backend.core.dwell_left > 0:
+            break
+        tick()
+    backend._publish()
+    _settle(app, 300)
+    expect(backend.snapshot["dwell_left"] > 0.99
+           and on_screen(window, "Station dwell")
+           and on_screen(bench, "Station dwell"),
+           "the station dwell pill is not full on both headers as the "
+           "dwell starts")
+    scan("station dwell")
+    if shots:
+        window.grabWindow().save(str(shots / "11-station-dwell.png"))
+        bench.grabWindow().save(str(shots / "11-station-dwell-bench.png"))
+    for _ in range(round(mod.DWELL_S / 2 / mod.TICK_S)):
+        tick()
+    expect(abs(backend.core.dwell_left - 0.5) < 0.01,
+           f"the dwell pill read {backend.core.dwell_left:.2f} halfway "
+           f"through the dwell")
+    for _ in range(round(mod.DWELL_S / 2 / mod.TICK_S) + 2):
+        tick()
+    backend._publish()
+    _settle(app, 300)
+    expect(not on_screen(window, "Station dwell"),
+           "the station dwell pill stayed after the dwell")
+    sim.at_station = False
+
+    # A vitality breach on the console: the header pill on both
+    # windows, the drawer's vote, and the e-brake held until the
+    # driver releases it (REQUIREMENTS.md M21).
+    vital = backend.core
+    vital.channels = (compute_power, off_by(50_000.0), off_by(-50_000.0))
+    tick()
+    backend._publish()
+    if drawer is not None:
+        drawer.setProperty("expanded", True)
+    _settle(app, 300)
+    expect(backend.snapshot["vital_breach"]
+           and on_screen(window, "Vitality breach")
+           and on_screen(bench, "Vitality breach"),
+           "the Vitality breach pill is not in both headers")
+    expect(on_screen(window, "Breach: 0 W sent"),
+           "the numbers drawer does not show the breach")
+    scan("vitality breach")
+    if shots:
+        window.grabWindow().save(str(shots / "10-vitality-breach.png"))
+        bench.grabWindow().save(str(shots / "10-vitality-breach-bench.png"))
+    vital.channels = (compute_power,) * 3
+    tick()
+    backend._publish()
+    _settle(app, 300)
+    expect(not on_screen(window, "Vitality breach")
+           and backend.core.state.emergency_brake,
+           "the pill stayed after an agreeing tick, or the emergency "
+           "brake let go by itself")
+    if drawer is not None:
+        drawer.setProperty("expanded", False)
+
+    for text, seen in sorted(cut.items()):
+        expect(False, f"text cut off: {text!r} ({', '.join(seen[:3])})")
+>>>>>>> integrate/quirky-into-development-resolved
 
     for message in warnings:
         print(f"QML warning: {message}", file=sys.stderr)

@@ -1,6 +1,9 @@
 // Every number behind the four readouts, one press away. Closed by
 // default: the driving view shows what is needed to drive, and this is
 // what is needed to debug.
+//
+// To be removed in the final iteration, with everything that serves
+// only this drawer (each marked so): OPEN_ISSUES.md, Notes.
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
@@ -89,9 +92,21 @@ ColumnLayout {
             }
             KeyValueRow {
                 Layout.fillWidth: true
-                rule: false
                 label: qsTr("Acceleration")
                 value: Number(root.s.accel_mps2).toFixed(2) + " m/s^2"
+            }
+            // The vital power command's three calculations and the
+            // vote on them (REQUIREMENTS.md M21).
+            KeyValueRow {
+                Layout.fillWidth: true
+                label: qsTr("Power channels")
+                value: root.s.power_channels
+            }
+            KeyValueRow {
+                Layout.fillWidth: true
+                rule: false
+                label: qsTr("Power vote")
+                value: root.s.power_vote
             }
             }
         }

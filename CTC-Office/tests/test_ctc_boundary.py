@@ -155,8 +155,18 @@ class StubModuleTest(unittest.TestCase):
         ctc.release_switch("Red", "9")
         self.assertEqual(len(ctc.snapshot().outputs.track_controller
                              .switch_commands), 1)
-        # Leaving maintenance mode hands every switch back.
+        # Switch commands outlast maintenance mode, through Automatic
+        # and Manual, and are released only back in maintenance.
         ctc.set_maintenance_mode(False)
+        ctc.set_automatic_mode(True)
+        ctc.set_automatic_mode(False)
+        self.assertEqual(
+            ctc.snapshot().outputs.track_controller.switch_commands,
+            (SwitchCommand("Green", "12", "reverse"),))
+        with self.assertRaises(MaintenanceModeRequiredError):
+            ctc.release_switch("Green", "12")
+        ctc.set_maintenance_mode(True)
+        ctc.release_switch("Green", "12")
         self.assertEqual(
             ctc.snapshot().outputs.track_controller.switch_commands, ())
 
@@ -282,6 +292,12 @@ class TimeOfDayTest(unittest.TestCase):
         self.assertEqual(parse_time_of_day("23:59:59"), 86399.0)
         self.assertEqual(format_time_of_day(30600), "08:30")
         self.assertEqual(format_time_of_day(30605), "08:30:05")
+
+    def test_wraps_at_midnight(self) -> None:
+        # Never past 23:59: the unwrapped clock (D017) starts a new day.
+        self.assertEqual(format_time_of_day(86399), "23:59:59")
+        self.assertEqual(format_time_of_day(86400), "00:00")
+        self.assertEqual(format_time_of_day(86400 + 30600), "08:30")
 
     def test_rejects_non_times(self) -> None:
         for text in ("8.30", "24:00", "12:60", "noon", ""):
@@ -451,11 +467,6 @@ class HarnessSendTest(unittest.TestCase):
         snap = link.snapshot()
         self.assertEqual([o.train_id for o in snap.orders], ["T1"])
         self.assertTrue(snap.maintenance_mode)
-
-        # The order is cancelled in the window: its outputs go.
-        link.cancel_dispatch("T1")
-        harness.send()
-        self.assertNotIn("authority[T1]", _outputs(harness))
 
     def test_unknown_block_is_reported_and_not_stepped(self) -> None:
         # The table only offers real blocks; the module still checks.

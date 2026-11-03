@@ -10,6 +10,7 @@ temperature in degrees Celsius, grade in degrees, and authority as a count
 of blocks.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -44,9 +45,10 @@ class TrainConfig:
 
     # Rated performance, all at 2/3 load (datasheet)
     ref_load_fraction: float = 2.0 / 3.0
-    accel_ref_mps2: float = 0.5
+    accel_ref_mps2: float = 0.5             # medium, 0 to 70 km/h average; not the cap
     decel_service_mps2: float = 1.2
     decel_emergency_mps2: float = 2.73
+    max_gradient: float = 0.06              # 60 per mille, datasheet
 
     # Environment
     c_rr: float = 0.002                     # rolling resistance, assumed
@@ -63,7 +65,12 @@ class TrainConfig:
 
     @property
     def f_max_n(self) -> float:
-        return self.m_ref_kg * self.accel_ref_mps2
+        """Traction cap: holds a full train on max_gradient, about 35.5 kN."""
+        m_full_kg = (self.m_empty_kg
+                     + (self.capacity + self.n_crew) * self.passenger_mass_kg)
+        theta = math.atan(self.max_gradient)
+        return (m_full_kg * self.g_mps2
+                * (math.sin(theta) + self.c_rr * math.cos(theta)))
 
     @property
     def f_service_n(self) -> float:
@@ -119,9 +126,6 @@ class ControllerCommands:
     door_right_open: bool
     temp_setpoint_c: float
     announcement: str
-    # One-shot: true on the tick the Train Controller releases a
-    # passenger pull (signals/passenger-brake-release).
-    passenger_brake_release: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,12 +190,15 @@ class ControllerOutputs:
     interior_lights_on: bool
     exterior_lights_on: bool
     cabin_temp_c: float
-    # Commanded speed and authority both become zero under pickup failure.
-    commanded_speed_mps: float
-    authority_blocks: int           # passed through; 0 = must stop
-    # Passed through from TrackInfo; terrain unaffected by pickup failure.
-    speed_limit_mps: float
-    beacon: Beacon | None           # None between ticks; controller retains data
+    # Passed through; both None (null) under signal pickup failure,
+    # invalid data rather than a valid 0.
+    commanded_speed_mps: float | None
+    authority_blocks: int | None    # 0 = must stop
+    # No speed limit: the Train Controller takes commanded speed as its
+    # limit (its owner, 2026-10-28).
+    # The station beacon of the block the train is on, every tick it is
+    # there (heard on the block before); None elsewhere.
+    beacon: Beacon | None
 
 
 @dataclass(frozen=True, slots=True)

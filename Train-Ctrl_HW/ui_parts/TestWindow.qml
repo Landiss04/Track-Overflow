@@ -34,13 +34,18 @@ ScaledWindow {
             underground: window.s.beacon_underground
             paused: window.s.paused
             faulted: window.s.emergency_brake
+            dwellLeft: window.s.dwell_left
             alerts: [
                 window.s.fault_engine ? qsTr("Engine fault") : "",
                 window.s.fault_pickup ? qsTr("Signal pickup fault") : "",
-                window.s.fault_brake ? qsTr("Brake fault") : ""
+                window.s.fault_brake ? qsTr("Brake fault") : "",
+                window.s.vital_breach ? qsTr("Vitality breach") : ""
             ].filter(function (label) { return label !== ""; })
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 
             // Set the bench clock, to test the 18:00 and 06:00 lights.
             // Greyed under a harness, whose clock is the time.
@@ -63,7 +68,10 @@ ScaledWindow {
                     onClicked: controller.set_bench_time(timeWheels.timeText())
                 }
             ]
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         }
 
         TestView {

@@ -146,9 +146,13 @@ Panel {
             valueSize: theme.size_h3
             rule: false
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
             wrapValue: true
 >>>>>>> origin/Train_Ctrl_integration
+=======
+            wrapValue: true
+>>>>>>> integrate/quirky-into-development-resolved
             name: "announcement"
             kind: "string"
             value: root.s.announcement

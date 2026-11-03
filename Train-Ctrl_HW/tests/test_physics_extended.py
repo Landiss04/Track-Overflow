@@ -285,8 +285,11 @@ def test_derived_forces_follow_primitives(cfg: TrainConfig) -> None:
     m_ref = cfg.m_empty_kg + cfg.ref_load_fraction * (
         cfg.m_loaded_kg - cfg.m_empty_kg)
     assert cfg.m_ref_kg == pytest.approx(m_ref, rel=1e-12)
+    m_full = cfg.m_empty_kg + (cfg.capacity + cfg.n_crew) * cfg.passenger_mass_kg
+    th = math.atan(cfg.max_gradient)
     assert cfg.f_max_n == pytest.approx(
-        m_ref * cfg.accel_ref_mps2, rel=1e-12)
+        m_full * cfg.g_mps2 * (math.sin(th) + cfg.c_rr * math.cos(th)),
+        rel=1e-12)
     assert cfg.f_service_n == pytest.approx(
         m_ref * cfg.decel_service_mps2, rel=1e-12)
     assert cfg.f_emergency_n == pytest.approx(
@@ -315,19 +318,19 @@ def test_config_is_immutable() -> None:
         CFG.p_max_w = 1.0  # type: ignore[misc]
 
 
-def test_traction_gives_rated_rate_at_reference_mass() -> None:
-    """Check F_max gives the datasheet 0.5 m/s^2 on the 2/3-load mass."""
-    assert CFG.f_max_n / CFG.m_ref_kg == pytest.approx(0.5, rel=1e-12)
+def test_traction_exceeds_medium_rate_at_reference_mass() -> None:
+    """Check F_max beats the datasheet 0.5 m/s^2 medium rate at 2/3 load."""
+    assert CFG.f_max_n / CFG.m_ref_kg > CFG.accel_ref_mps2
 
 
 @pytest.mark.parametrize(("force", "expected_n"), [
-    ("f_max_n", 25_717.0),
+    ("f_max_n", 35_459.0),
     ("f_service_n", 61_720.0),
     ("f_emergency_n", 140_413.0),
 ])
 def test_forces_match_instructor_values(
         force: str, expected_n: float) -> None:
-    """Check each force is the instructor's 51,433 kg figure, to 1 N."""
+    """Check each force against its documented value, to 1 N."""
     assert getattr(CFG, force) == pytest.approx(expected_n, abs=1.0)
 
 
@@ -338,9 +341,9 @@ def test_reference_mass_is_two_thirds_of_datasheet_load() -> None:
 
 
 def test_base_speed_where_power_limit_takes_over() -> None:
-    """Check P_max / F_max lies just below the maximum speed."""
+    """Check P_max / F_max is about 13.5 m/s, below the maximum speed."""
     base = CFG.p_max_w / CFG.f_max_n
-    assert 18.0 < base < CFG.v_max_mps
+    assert 13.0 < base < CFG.v_max_mps
 
 
 # --------------------------------------------------------------------------- #
@@ -555,11 +558,11 @@ def test_traction_slows_a_rollback_then_drives_forward() -> None:
 def test_traction_slows_a_rollback_it_cannot_stop() -> None:
     """Check the motors still help on a grade too steep for them."""
     model = fresh()
-    roll_back(model, 8.0, 1.0)
+    roll_back(model, 10.0, 1.0)
     m = mass_of(0)
-    f_grade, f_roll = grade_and_roll_n(m, 8.0)
+    f_grade, f_roll = grade_and_roll_n(m, 10.0)
     assert f_grade - f_roll > CFG.f_max_n
-    model.step(DT_S, inp(CFG.p_max_w, grade_deg=pct(8.0)))
+    model.step(DT_S, inp(CFG.p_max_w, grade_deg=pct(10.0)))
     assert acc(model) == pytest.approx(
         (CFG.f_max_n - f_grade + f_roll) / m, rel=1e-12)
     assert (f_roll - f_grade) / m < acc(model) < 0.0
@@ -783,23 +786,33 @@ def test_combined_brake_force_and_stop(
     assert model.snapshot().outputs.track.offset_m == held_offset
 
 
-def test_controller_and_passenger_brakes_release_independently() -> None:
+def test_pull_holds_until_the_controller_brake_goes_off() -> None:
+    """Check a pull stays latched until the controller's emergency brake
+    goes from true to false (Kevin Schillinger 2026-10-28)."""
     model = fresh()
     model.pull_passenger_emergency_brake()
+    # The controller sending false before it has taken the pull up
+    # does not release it.
+    for _ in range(3):
+        out = model.step(DT_S, inp(service=True)).controller
+        assert out.emergency_brake_active
     out = model.step(DT_S, inp(service=True, emergency=True)).controller
-    assert out.emergency_brake_active and out.service_brake_active
-    # Releasing the controller command leaves the passenger latch engaged.
+    assert out.emergency_brake_active
+    assert model.snapshot().passenger_ebrake_pulled
     out = model.step(DT_S, inp(service=True)).controller
-    assert out.emergency_brake_active and out.service_brake_active
-    release = inp(service=True, emergency=True)
-    release = dataclasses.replace(release, controller=dataclasses.replace(
-        release.controller, passenger_brake_release=True,
-    ))
-    out = model.step(DT_S, release).controller
     assert not model.snapshot().passenger_ebrake_pulled
-    assert out.emergency_brake_active and out.service_brake_active
-    out = model.step(DT_S, inp(service=True)).controller
     assert not out.emergency_brake_active and out.service_brake_active
+
+
+def test_a_pull_during_the_release_is_kept() -> None:
+    """Check a pull made after the controller's last true survives the
+    controller's brake going off."""
+    model = fresh()
+    model.step(DT_S, inp(emergency=True))
+    model.pull_passenger_emergency_brake()
+    out = model.step(DT_S, inp()).controller
+    assert out.emergency_brake_active
+    assert model.snapshot().passenger_ebrake_pulled
 
 
 def test_passenger_brake_latches_and_holds() -> None:
@@ -1791,15 +1804,23 @@ def test_the_limits_themselves_are_accepted(
 
 
 def test_signal_pickup_failure_blanks_only_the_track_signal() -> None:
-    """Check pickup failure blanks the signal but not the track info."""
+    """Check pickup failure sends null for the track signal, invalid
+    data rather than a valid 0, and leaves the track info."""
     model = fresh()
     model.set_failures(FailureState(signal_pickup=True))
     out = model.step(DT_S, inp(cmd_speed_mps=13.5, authority=12,
                                speed_limit_mps=12.0, block_id="C3"))
-    assert out.controller.commanded_speed_mps == 0.0
-    assert out.controller.authority_blocks == 0
-    assert out.controller.speed_limit_mps == 12.0
+    assert out.controller.commanded_speed_mps is None
+    assert out.controller.authority_blocks is None
     assert out.track.block_id == "C3"
+
+
+def test_no_speed_limit_goes_to_the_controller() -> None:
+    """Check the speed limit stays in the Train Model: the Train
+    Controller takes commanded speed as its limit (its owner,
+    2026-10-28)."""
+    out = fresh().step(DT_S, inp(speed_limit_mps=12.0))
+    assert not hasattr(out.controller, "speed_limit_mps")
 
 
 @pytest.mark.parametrize("engine", [False, True])
@@ -1825,11 +1846,30 @@ def test_light_state_reported(interior: bool, exterior: bool) -> None:
     assert out.controller.exterior_lights_on is exterior
 
 
-def test_beacon_passes_through_only_on_its_tick() -> None:
-    """Check a beacon is reported on its tick and None after."""
+def test_beacon_is_reported_on_its_station_block() -> None:
+    """Check a beacon heard on the block before a station is reported
+    every tick the train is on the station's block, and not before or
+    after (Kevin Schillinger 2026-10-28)."""
     model = fresh()
     beacon = Beacon("Dormont", "R", underground=True)
-    assert model.step(DT_S, inp(beacon=beacon)).controller.beacon == beacon
+    assert model.step(DT_S, inp(beacon=beacon)).controller.beacon is None
+    assert model.step(DT_S, inp()).controller.beacon is None
+    for _ in range(3):
+        out = model.step(DT_S, inp(station="Dormont", polarity=False))
+        assert out.controller.beacon == beacon
+    assert model.step(DT_S, inp()).controller.beacon is None
+    out = model.step(DT_S, inp(station="Glenbury", polarity=False))
+    assert out.controller.beacon is None
+
+
+def test_a_beacon_heard_leaving_a_station_is_not_reported() -> None:
+    """Check the beacon on the block after a station, heard going away
+    from it, is not reported on the block after that."""
+    model = fresh()
+    beacon = Beacon("Dormont", "L", underground=False)
+    model.step(DT_S, inp(station="Dormont"))
+    assert model.step(DT_S, inp(beacon=beacon, polarity=False)
+                      ).controller.beacon is None
     assert model.step(DT_S, inp()).controller.beacon is None
 
 
@@ -1837,7 +1877,9 @@ def test_beacon_passes_through_only_on_its_tick() -> None:
 def test_every_platform_side_passes_through(side: str) -> None:
     """Check L, R and LR (platforms on both sides) are accepted as sent."""
     beacon = Beacon("Dormont", side, underground=False)  # type: ignore[arg-type]
-    out = fresh().step(DT_S, inp(beacon=beacon))
+    model = fresh()
+    model.step(DT_S, inp(beacon=beacon))
+    out = model.step(DT_S, inp(station="Dormont", polarity=False))
     assert out.controller.beacon == beacon
 
 

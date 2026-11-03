@@ -17,12 +17,18 @@ Panel {
         // reports it (Brake State), not what was asked of them.
         StatusBadge {
 <<<<<<< HEAD
+<<<<<<< HEAD
             label: root.s.fault_brake ? qsTr("Brake failure")
 =======
             // "Brake fault", as the header pill says it: "Brake
             // failure" left no room for the panel's title.
             label: root.s.fault_brake ? qsTr("Brake fault")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+            // "Brake fault", as the header pill says it: "Brake
+            // failure" left no room for the panel's title.
+            label: root.s.fault_brake ? qsTr("Brake fault")
+>>>>>>> integrate/quirky-into-development-resolved
                 : root.s.fb_emergency_brake ? qsTr("Emergency")
                 : root.s.fb_service_brake ? qsTr("Braking")
                 : qsTr("Running")
@@ -62,15 +68,21 @@ Panel {
         Layout.preferredHeight: 100
         tone: "service"
 <<<<<<< HEAD
+<<<<<<< HEAD
         // A brake failure is the service brake failing; the emergency
         // brake above stands in for it.
         enabled: root.s.can_drive && !root.s.fault_brake
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         // Live under a brake failure too, so the driver can try the
         // brake (REQUIREMENTS.md M4); the emergency brake above stops
         // the train.
         enabled: root.s.can_drive
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         applied: root.s.service_request
         text: root.s.service_request ? qsTr("Release service brake")
                                      : qsTr("Service brake")

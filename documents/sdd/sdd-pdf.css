@@ -1,0 +1,161 @@
+/* Print styles for Markdown PDF exports of the combined SDD. */
+
+/* ---- Cover page ------------------------------------------------------ */
+
+.cover-page {
+    break-after: page;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    min-height: 23.4cm;
+    border-left: 0.45cm solid #1f3a5f;
+    padding: 1.2cm 0 0 1.2cm;
+}
+
+.cover-page h1,
+.cover-page h2 {
+    border-bottom: none;
+    padding: 0;
+    break-before: auto;
+    page-break-before: auto;
+}
+
+.cover-kicker {
+    margin: 2.5cm 0 0.5cm 0;
+    font-size: 11pt;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5b6775;
+}
+
+.cover-page h1 {
+    margin: 0;
+    font-size: 34pt;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #1f3a5f;
+}
+
+.cover-page h2 {
+    margin: 0.3cm 0 0 0;
+    font-size: 20pt;
+    font-weight: 400;
+    color: #222b36;
+}
+
+.cover-rule {
+    width: 3cm;
+    height: 0.12cm;
+    margin: 0.9cm 0 0.7cm 0;
+    background: #1f3a5f;
+}
+
+.cover-meta {
+    margin: 0;
+    font-size: 12pt;
+    line-height: 1.7;
+    color: #222b36;
+}
+
+.cover-page table {
+    width: 13cm;
+    margin: 1.4cm 0 0 0;
+    border-collapse: collapse;
+    font-size: 10.5pt;
+}
+
+.cover-page th,
+.cover-page td {
+    border: none;
+    border-bottom: 1px solid #d9e2ec;
+    padding: 0.14cm 0.3cm 0.14cm 0;
+    text-align: left;
+    background: none;
+}
+
+.cover-page th {
+    color: #5b6775;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 9pt;
+    letter-spacing: 0.08em;
+}
+
+.cover-page tr:nth-child(2n) td {
+    background: none;
+}
+
+.cover-org {
+    margin: auto 0 0 0;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #5b6775;
+}
+
+/* ---- Body ------------------------------------------------------------ */
+
+/* Long paths and identifiers must wrap: anything wider than the page makes
+   Chrome shrink the whole document to fit. */
+td,
+th,
+code,
+a {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* Keep tables and their rows from being split across pages. */
+table {
+    break-inside: auto;
+    width: 100%;
+}
+
+tr,
+td,
+th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+/* Repeat table headers when a long table does span pages. */
+thead {
+    display: table-header-group;
+}
+
+/* Never strand a heading at the bottom of a page. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    break-after: avoid;
+    page-break-after: avoid;
+}
+
+/* Each module chapter starts on a new page. */
+h2,
+h3[id^="5"] {
+    break-before: page;
+    page-break-before: always;
+}
+
+pre,
+blockquote,
+img {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+    max-height: 21cm;
+    margin: 0.3cm auto 0 auto;
+}

@@ -1,0 +1,24 @@
+@startuml sd14_track_circuits
+!include ../style.iuml
+autonumber
+
+participant "Central\nHarness" as H
+participant "Wayside" as W
+participant "Program\n(user + vital block)" as PLC
+
+H -> W : step → scan(...): image with SPD_n_0..4,\nOCC_n, CLOSED_n
+W -> PLC : scan_a(image); scan_b(image)
+PLC --> W : values: AUTH_n, CMD_n_0..4
+loop for key, suggestion in self._suggestions.items()
+  W -> W : speed = sum(1 << bit for bit in range(SPEED_BITS)\nif values[f"CMD_{n}_{bit}"])
+  W -> W : authority = suggestion.authority_blocks\nif values[f"AUTH_{n}"] else 0
+  W -> W : circuits[key] = TrackCircuitCommand(speed, authority)
+end
+W -> W : self._circuits = circuits
+W --> H : WaysideScan.track_circuits\n→ OUTPUTS track_model.track_circuits (tick k)
+H -> H : track_controller_to_track_model(outputs,\nnames, devices): speed_mps,\nauthority_blocks per block
+note over W, PLC
+  The program caps speed at the block's limit and ANDs every
+  CMD bit with AUTH_n, so withheld authority sends no speed.
+end note
+@enduml

@@ -128,8 +128,8 @@ def test_dead_end_stays_put(layout: Layout) -> None:
 
 def test_signals_stand_before_each_switch(layout: Layout) -> None:
     """Check signal placement on the fixed side of every switch point."""
-    assert "BLUE A-4" in layout.signal_block_ids
-    assert "GREEN D-14" in layout.signal_block_ids
+    assert "BLUE A-5" in layout.signal_block_ids
+    assert "GREEN D-13" in layout.signal_block_ids
     assert len(layout.signal_block_ids) == len(layout.switches)
 
 
@@ -159,4 +159,5 @@ def test_red_yard_interpretation_uses_exit_direction(layout: Layout) -> None:
     assert None in layout.blocks[point].next_block_ids
     assert all(None not in b.next_block_ids for b in layout.blocks.values()
                if b.line == "RED" and b.block_id != point)
-    assert fixed in layout.signal_block_ids
+    # Its light stands at the switch, by its point (TM-2).
+    assert point in layout.signal_block_ids

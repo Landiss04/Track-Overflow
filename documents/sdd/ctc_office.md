@@ -21,6 +21,7 @@ only what is specific to the CTC Office.
 | Name | Date | Reason for changes | Version |
 |---|---|---|---|
 | Landis | 2026-10-22 | First CTC Office contribution, following the Track Controller (HW) contribution's layout. | 0.1 |
+| Landis | 2026-10-25 | Sequence diagrams name the signals and method calls; Cancel order removed from Selected train (UC-02, UC-05, UC-06, SD-05, SD-13). | 0.2 |
 
 ## References
 
@@ -93,8 +94,6 @@ section 9.
 
 ## 3. Use cases
 
-![Use case diagram](../uml/ctc_office/uc_ctc_office.png)
-
 Actors:
 
 - **Dispatcher** — the person at the CTC Office window. Every interactive control of the
@@ -104,6 +103,27 @@ Actors:
   and keeps the roster of trains the CTC Office creates and retires.
 - **Track Controller** and **Track Model** — the neighbouring modules, reached only through
   the harness.
+
+### Use case diagrams
+
+One diagram per actor. A use case in grey belongs to another actor and is shown only for
+its include or extend link.
+
+**Dispatcher** (UC-01 to UC-15):
+
+![Use cases of the Dispatcher](../uml/ctc_office/uc_dispatcher.png)
+
+**Central Harness** (UC-01, UC-16 and the use cases it includes, UC-24):
+
+![Use cases of the Central Harness](../uml/ctc_office/uc_harness.png)
+
+**Track Controller** (UC-17, UC-18, UC-21, UC-22, UC-24):
+
+![Use cases of the Track Controller](../uml/ctc_office/uc_track_controller.png)
+
+**Track Model** (UC-23):
+
+![Use cases of the Track Model](../uml/ctc_office/uc_track_model.png)
 
 ### User stories
 
@@ -139,7 +159,7 @@ stories cover every use case.
 | **Description** | Chooses Automatic, Manual or Maintenance mode. |
 | **Data** | One mode at a time. |
 | **Stimulus** | OPERATING MODE toggle in the header. |
-| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train, and reroute, cancel or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
+| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train, and reroute or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
 | **Requirements** | Rubric 2.2; REQ-FUNC-006, 007, 008 |
 | **Sequence** | SD-02 |
 
@@ -169,16 +189,16 @@ stories cover every use case.
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-04 |
 
-### UC-05 Reroute or cancel a train's order
+### UC-05 Reroute a train
 
 | | |
 |---|---|
 | **Actors** | Dispatcher |
-| **Description** | Changes where the selected train is going, or withdraws its order. |
-| **Data** | Train; new destination. |
-| **Stimulus** | **Reroute** or **Cancel order** in Selected train (Manual mode). |
-| **Response** | A reroute replaces the order; the route is worked out again from where the train is, carrying on the way it is going. A cancel drops the order, so the train's authority is 0 from the next step and it stops. |
-| **Alternatives** | A reroute is refused as UC-03 refuses. |
+| **Description** | Changes where the selected train is going. The dispatcher cannot withdraw a train's order. |
+| **Data** | Train; new destination; arrival time (optional). |
+| **Stimulus** | A new destination, then **Reroute** in Selected train (Manual mode). |
+| **Response** | The new order replaces the old one; the route is worked out again from where the train is, carrying on the way it is going. |
+| **Alternatives** | Refused as UC-03 refuses. |
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-05 |
 
@@ -190,8 +210,8 @@ stories cover every use case.
 | **Description** | Sends a manual train on the track back to the yard, where it is retired (D022). |
 | **Data** | Train. |
 | **Stimulus** | **Return to yard** in Selected train (Manual mode). |
-| **Response** | An order to the line's yard entry block (Green 57, Red 9). Once the train has stopped there with authority 0 it is retired (UC-20). A later order or a cancel withdraws it. |
-| **Alternatives** | Refused for a train not on the track (cancel its order instead), for a run of the loaded schedule (the schedule returns it), and as UC-03 refuses. |
+| **Response** | An order to the line's yard entry block (Green 57, Red 9). Once the train has stopped there with authority 0 it is retired (UC-20). A later order withdraws it. |
+| **Alternatives** | Refused for a train not on the track, for a run of the loaded schedule (the schedule returns it), and as UC-03 refuses. |
 | **Requirements** | D022 |
 | **Sequence** | SD-06 |
 
@@ -336,7 +356,7 @@ stories cover every use case.
 
 | | |
 |---|---|
-| **Actors** | Central Harness (included in UC-16) |
+| **Actors** | Central Harness (included in UC-16); Track Controller (its occupancy) |
 | **Description** | Works out where each of its trains is, and which occupied blocks are failures, from occupancy alone. |
 | **Data** | Occupancy now and at the last step; each train's route, authority and suggested speeds; the trains it has released. |
 | **Stimulus** | Every step. |
@@ -413,7 +433,7 @@ stories cover every use case.
 
 | | |
 |---|---|
-| **Actors** | Central Harness (extends UC-16) |
+| **Actors** | Central Harness (extends UC-16); Track Controller (a wayside not ready) |
 | **Description** | Keeps a line still while any wayside on it is not ready (no PLC program loaded). The waysides are vital, so nothing is sent to a line until every wayside on it runs its program. |
 | **Data** | Each wayside's ready and reason. A line is ready once a wayside on it has reported and every wayside on it is ready. |
 | **Stimulus** | Any step on which a line is not ready. |
@@ -461,7 +481,7 @@ Design choices:
 |---|---|
 | Route | Shortest route a train can run, on a graph built from each block's `next_blocks` and each switch's two legs. It never turns a train back: each route carries on from the block the train came from. It goes round closed, closing and failed blocks and trains that are not moving, preferring a way round both, then round unusable blocks only, then the shortest route, on which the train waits. No detour more than twice the shortest is taken. When only reversing would get round, the train waits and the dispatcher is alerted. |
 | Switches | Outside maintenance mode the CTC Office never commands a switch. Authority stops at the block before a switch not reported set for the route, and grows once the wayside sets it. |
-| Authority | Blocks ahead of the train's head block along its route, to the destination, ending before the first block that is occupied, closed, closing, failed or within another train's authority, or before a switch not set. |
+| Authority | Blocks ahead of the train's head block along its route, to the destination, ending before the first block that is closed, closing or within another train's authority, two blocks before the first that is occupied or failed (one empty block between trains), or before a switch not set. |
 | Contested blocks | A block no train holds yet goes to the train most behind schedule: the least slack between its requested arrival and the time it needs at each block's limit. A train with no arrival comes after; ties go to the lower ID. |
 | Suggested speed | The block's limit in m/s, rounded down, less 1 m/s; never more than √(2 × 1.2 m/s² × d), d being the length within authority; 0 at authority 0. The next block's value is worked out for that block, with one block less. |
 | Tracking | UC-18. |
@@ -574,7 +594,7 @@ whole step, refers to the diagrams of the use cases it includes.
 | SD-02 | UC-02 Change operating mode |
 | SD-03 | UC-03 Dispatch a train to a station |
 | SD-04 | UC-04 Dispatch a train to a block |
-| SD-05 | UC-05 Reroute or cancel a train's order |
+| SD-05 | UC-05 Reroute a train |
 | SD-06 | UC-06 Return a train to the yard |
 | SD-07 | UC-07 Load a schedule |
 | SD-08 | UC-08 Monitor and pause automatic dispatch |
@@ -611,7 +631,7 @@ whole step, refers to the diagrams of the use cases it includes.
 
 ![SD-04](../uml/ctc_office/sd04_dispatch_block.png)
 
-### SD-05 Reroute or cancel a train's order
+### SD-05 Reroute a train
 
 ![SD-05](../uml/ctc_office/sd05_reroute_cancel.png)
 
@@ -729,7 +749,7 @@ whole step, refers to the diagrams of the use cases it includes.
 |---|---|---|
 | 1.3 System architecture and design: route, authority, wayside distribution, timing, vitality | 15 | Section 4.1 for the CTC Office's part; [system_concepts.md](system_concepts.md) for the system. |
 | 1.4 Software architecture | 14 | Section 4 and its figure. |
-| 1.5 Use case diagram (actors shown) | 14 | Section 3: diagram, actors, a user story per actor, and a description of each use case, UC-01 to UC-24. |
+| 1.5 Use case diagram (actors shown) | 14 | Section 3: one use case diagram per actor, a user story per actor, and a description of each use case, UC-01 to UC-24. |
 | 1.6 Class diagram | 14 | Section 6: four diagrams. |
 | 1.7 Sequence diagram | 14 | Section 7: one per use case, SD-01 to SD-24. |
 | 1.8 Deployment diagram | 14 | Section 8. |

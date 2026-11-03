@@ -31,9 +31,14 @@ from track_ctrl.interface import (
 )
 from track_ctrl.layout import (
     NEUTRAL_LINE_COLOR,
+<<<<<<< HEAD
     LayoutError,
     LineLayout,
     build_default_system,
+=======
+    LineLayout,
+    LayoutError,
+>>>>>>> integrate/quirky-into-development-resolved
     default_layout_dir,
     load_layout_file,
 )
@@ -83,18 +88,24 @@ class TrackControllerState(QObject):
         The module has no clock and no world of its own. Whatever drives
         it, the central harness or the test UI, calls :meth:`step` once
         per tick of the shared clock (D017), with the tick's inputs.
+<<<<<<< HEAD
         Until the first tick every wayside idles at its starter program.
+=======
+        It starts with no track and no program: the programmer loads a
+        track, then writes or loads a program for every wayside. Until
+        then it is not ready and the editor is empty.
+>>>>>>> integrate/quirky-into-development-resolved
 
         Args:
             parent: Optional Qt parent.
-            lines: The lines to start with, each divided among its
-                waysides; the default Green and Red when None. Under the
-                central harness this variant runs the Green Line only
-                (R77, ``track_ctrl.module_process``).
+            lines: Lines to load at once, in place of the programmer's
+                Load track; none when None. The central harness runs
+                this variant on the Green Line (R77,
+                ``track_ctrl.module_process``).
         """
         super().__init__(parent)
         self._system = SwTrackController()
-        for line in build_default_system() if lines is None else lines:
+        for line in lines or ():
             self._system.load_track(line)
 
         #: Only for the header badges: whether the sender's clock is held
@@ -107,6 +118,10 @@ class TrackControllerState(QObject):
         #: Empty until a track is loaded.
         self._line_name = ""
         self._controller_id = ""
+        if self._system.lines:
+            first = self._system.lines[0]
+            self._line_name = first.name
+            self._controller_id = first.controllers[0].controller_id
 
         self._buffer: str = ""
         self._buffer_file = ""
@@ -221,6 +236,25 @@ class TrackControllerState(QObject):
             return ""
         more = len(reasons) - 1
         return reasons[0] + (f" (and {more} more)" if more else "")
+
+    def loadStarterPrograms(self) -> None:  # noqa: N802
+        """Commit the generated starter program to every wayside
+        without one, as a programmer loading each would. For the
+        harness and its tests, which have no programmer; the UI never
+        calls it (``track_ctrl.module_process`` ``--load-starters``)."""
+        loaded = self._system.load_starter_programs()
+        if not loaded:
+            return
+        self._log(
+            f"[{self._stamp()}] starter programs loaded on "
+            f"{len(loaded)} wayside(s)"
+        )
+        if self._controller_id in loaded:
+            self._load_buffer_from_controller()
+            self.bufferChanged.emit()
+        self.terminalChanged.emit()
+        self.selectionChanged.emit()
+        self.controllerChanged.emit()
 
     def set_clock_status(self, paused: bool, speed: int) -> None:
         """Note the sender's clock state, for the header badges."""

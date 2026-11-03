@@ -86,7 +86,6 @@ from common.harness.track_edges import (
 )
 from common.harness.train_edges import (
     INERT_COMMANDS,
-    aspect_to_train_controller,
     train_controller_to_train_model,
     train_model_to_train_controller,
 )
@@ -395,12 +394,13 @@ class SystemEdges:
                 or train_id in self._off_track
             ):
                 continue
+            # The Train Model reports a station's beacon on the
+            # station's own block, every tick the train is there, as the
+            # Train Controller needs it (M6).
             inputs = train_model_to_train_controller(report["controller"])
             aspect = seen.get(train_id)
             if aspect is not None:
-                inputs["signal_light_ahead"] = aspect_to_train_controller(
-                    aspect
-                )
+                inputs["signal_light_ahead"] = aspect
             trains[train_id] = {"line": entry.line, "inputs": inputs}
         return {"trains": trains}
 

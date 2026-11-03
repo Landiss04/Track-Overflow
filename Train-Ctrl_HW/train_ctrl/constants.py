@@ -1,5 +1,7 @@
 """Rates, plant figures, detection thresholds and domain vocabulary."""
 
+import math
+
 from .units import KMH_PER_MPS
 
 # ---------------------------------------------------------------- rates
@@ -8,10 +10,21 @@ from .units import KMH_PER_MPS
 TICK_S = 0.1
 CONTROL_HZ = 10                 # ticks per second at real time
 <<<<<<< HEAD
+<<<<<<< HEAD
 CLOCK_START = (5, 0, 0)         # D017's clock starts at 05:00:00
+=======
+# D017's clock starts at 05:00:00, counted in seconds since midnight
+# as utils/system_clock.py does.
+CLOCK_START_S = 5 * 3600.0
+>>>>>>> integrate/quirky-into-development-resolved
 UI_HZ = 10
 ANNOUNCE_LOCKOUT_MS = 5000
+# Automatic lights (REQUIREMENTS.md M8): on at 18:00, off at 06:00,
+# in seconds since midnight.
+NIGHT_START_S = 18 * 3600.0
+NIGHT_END_S = 6 * 3600.0
 GAINS_HANDOVER_MS = 1500
+<<<<<<< HEAD
 # Station dwell, truth D007: the CTC Office schedules it, and the
 # controller enforces it, holding a station stop at least this long
 # with the doors open, whatever the Track Signal says meanwhile.
@@ -28,11 +41,12 @@ NIGHT_START_S = 18 * 3600.0
 NIGHT_END_S = 6 * 3600.0
 GAINS_HANDOVER_MS = 1500
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 
 # Truth modules/train-model.md: 4 x 120 kW, the data sheet's 120 kW
 # per motor rather than for the whole car (provisional, pending the
-# instructor). The car's 0.5 m/s^2 force cap now binds up to about
-# 67 km/h, nearly the whole 70 km/h range, as the sheet quotes it.
+# instructor). The force cap binds up to about 49 km/h.
 MAX_POWER_W = 480_000.0
 
 # ---------------------------------------------------------------- cabin
@@ -47,6 +61,7 @@ CABIN_DRIFT_FRACTION = 0.01
 CABIN_DRIFT_MAX_C = 0.011
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # --------------------------------------- plant model (toy, replaced by
 # the Train Model)
 =======
@@ -54,6 +69,11 @@ CABIN_DRIFT_MAX_C = 0.011
 # the engine-failure rule in control.py, which still uses the mass and
 # force cap (OPEN_ISSUES.md #28)
 >>>>>>> origin/Train_Ctrl_integration
+=======
+# ------------------------------- bench simulation (bench_sim.py), and
+# the engine-failure rule in control.py, which still uses the mass and
+# force cap (OPEN_ISSUES.md #28)
+>>>>>>> integrate/quirky-into-development-resolved
 #     F = P / v        a = F / M        v = v + a dt
 # F = P / v is undefined at a stand, so the division uses a floor
 # speed; below it the train pulls its full tractive effort.
@@ -63,6 +83,7 @@ CABIN_DRIFT_MAX_C = 0.011
 # at 4 pass./m^2, and the acceleration figure is quoted at 2/3 load,
 # so the plant runs at that mass.
 MASS_KG = 51_433.0
+<<<<<<< HEAD
 MAX_ACCEL_MPS2 = 0.5            # and the car will not exceed it
 MAX_FORCE_N = MASS_KG * MAX_ACCEL_MPS2
 <<<<<<< HEAD
@@ -72,6 +93,10 @@ MAX_FORCE_N = MASS_KG * MAX_ACCEL_MPS2
 # The car's data-sheet top speed: the speed dial's fixed full scale,
 # display only, not a cap (REQUIREMENTS.md M1, M14).
 >>>>>>> origin/Train_Ctrl_integration
+=======
+# The car's data-sheet top speed: the speed dial's fixed full scale,
+# display only, not a cap (REQUIREMENTS.md M1, M14).
+>>>>>>> integrate/quirky-into-development-resolved
 MAX_SPEED_MPS = 70 / KMH_PER_MPS
 V_FLOOR_MPS = 1.0               # below which F = P / v is capped
 SERVICE_DECEL_MPS2 = 1.2
@@ -81,6 +106,7 @@ EBRAKE_DECEL_MPS2 = 2.73
 # its target (35 -> 30 mph ends at 30.08 at the 0.1 s step).
 SERVICE_BAND_MPS = 0.05
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Rolling resistance, from truth modules/train-model.md. Applied only
 # under an engine or a brake failure for now; see ControllerCore._plant().
 =======
@@ -88,11 +114,26 @@ SERVICE_BAND_MPS = 0.05
 # simulation applies it only under a brake failure; the controller
 # never models it (REQUIREMENTS.md M19).
 >>>>>>> origin/Train_Ctrl_integration
+=======
+# Rolling resistance, from truth modules/train-model.md. The bench
+# simulation applies it only under a brake failure; the controller
+# never models it (REQUIREMENTS.md M19).
+>>>>>>> integrate/quirky-into-development-resolved
 ROLLING_RESISTANCE_COEFF = 0.002
 GRAVITY_MPS2 = 9.81
 ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
+# Traction cap, as the Train Model sizes it (Kevin 2026-11-02): the
+# force that holds a full train, 222 passengers and 5 crew at 170 lb,
+# on the data sheet's 60 per mille maximum gradient, about 35.5 kN.
+# The 0.5 m/s^2 above is a 0-70 km/h average, not the cap.
+FULL_MASS_KG = 40_900.0 + (222 + 5) * 77.1107
+MAX_GRADIENT = 0.06
+_THETA = math.atan(MAX_GRADIENT)
+MAX_FORCE_N = FULL_MASS_KG * GRAVITY_MPS2 * (
+    math.sin(_THETA) + ROLLING_RESISTANCE_COEFF * math.cos(_THETA))
 # Below this the emergency brake may be released (D011).
 STANDSTILL_MPS = 0.1
+<<<<<<< HEAD
 <<<<<<< HEAD
 # Ticks between a command and the Train Model's report of it under the
 # central harness: each module reads the others' outputs from the tick
@@ -107,12 +148,17 @@ ECHO_TICKS = 2
 # Below this, with no power applied, the bench simulation settles to
 # an exact stand instead of creeping.
 >>>>>>> origin/Train_Ctrl_integration
+=======
+# Below this, with no power applied, the bench simulation settles to
+# an exact stand instead of creeping.
+>>>>>>> integrate/quirky-into-development-resolved
 SETTLE_MPS = 0.12
 
 # ---------------------------------------------------- failure detection
 # The Train Model no longer reports its failures, so the controller
 # infers them. Rules and thresholds are this controller's own design;
 # see ControllerCore.detect_failures() and OPEN_ISSUES.md.
+<<<<<<< HEAD
 <<<<<<< HEAD
 BRAKE_DETECT_S = 0.5
 # Engine failure (Kevin Schillinger, 2026-10-21): flag falling speed
@@ -157,30 +203,52 @@ ENGINE_DETECT_S = 2.0
 ENGINE_RISE_MPS = 0.05
 PICKUP_DETECT_MIN_BLOCKS = 2
 >>>>>>> origin/Train_Ctrl_integration
+=======
+ENGINE_DETECT_ACCEL_MPS2 = 0.1
+ENGINE_DETECT_S = 2.0
+ENGINE_RISE_MPS = 0.05
+>>>>>>> integrate/quirky-into-development-resolved
 
 # ---------------------------------------------------------------- gains
-# Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three
+# Pull full traction from a stand, reach 70 km/h in about three
 # quarters of a minute, then hold within a tenth of a mph of target.
 DEFAULT_KP = 400_000.0          # W per m/s of error
 DEFAULT_KI = 8_000.0            # W per (m/s x s) of accumulated error
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 # -------------------------------------------------------- announcements
 # Sent to the Train Model in both modes (REQUIREMENTS.md M7).
 ANNOUNCE_ARRIVING_BLOCKS = 3
 ANNOUNCE_ARRIVING = "The train {train_id} is arriving soon"
 ANNOUNCE_ARRIVED = "The train {train_id} has arrived at {station}"
 ANNOUNCE_DEPARTING = "The train {train_id} is departing from {station}"
+<<<<<<< HEAD
 
 >>>>>>> origin/Train_Ctrl_integration
+=======
+# Ticks between a command and the Train Model's report of it. On the
+# bench the simulation answers on the next tick. Under the central
+# harness each module reads the others' outputs from the tick before
+# (truth D017): a command sent on one tick is acted on the next, and
+# its report arrives the tick after that.
+BENCH_ECHO_TICKS = 1
+ECHO_TICKS = 2
+# Station dwell, fixed (truth D007): the controller holds it
+# (REQUIREMENTS.md M6).
+DWELL_S = 45.0
+
+>>>>>>> integrate/quirky-into-development-resolved
 # ----------------------------------------------------------- vocabulary
-ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
+ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER_GREEN"]
 ASPECT_TEXT = {
     "RED": "Stop.",
     "YELLOW": "Slow down.",
     "GREEN": "Continue to cruise.",
-    "SUPER GREEN": "All clear ahead.",
+    "SUPER_GREEN": "All clear ahead.",
 }
 
 #: The Train Model's three failures (truth modules/train-model.md),

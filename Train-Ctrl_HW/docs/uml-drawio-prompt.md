@@ -23,9 +23,9 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
   ASCII JSON `[station_name, platform_side, underground]`, at most 128 characters
   including syntax and escapes, rejected without truncation. See the exact
   [serialization](module-interface.md#beacon-payload-encoding). The working tree
-  now has a complete-payload codec; station-name length alone is insufficient. Between beacons output
-  `None`; Train Controller retains prior information when needed.
-- Signal pickup failure outputs zero commanded speed and authority; terrain is
+  now has a complete-payload codec; station-name length alone is insufficient. The Train
+  Model holds the last beacon heard and outputs it on that station's block, `None` elsewhere.
+- Signal pickup failure outputs null commanded speed and authority; terrain is
   unaffected. Train Controller owns the door interlock; model follows commands.
 - 480 kW is confirmed. Rolling resistance uses configured coefficient 0.002 and is
   the only passive resistance term; grade and commanded brake forces remain.
@@ -33,9 +33,9 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
 - Offset references the train’s front. Add no new rollback/block-crossing behavior.
 - Identity/line come from the fleet roster. Keep next station/platform; omit arrival
   from intended window labels. Current QML already omits arrival.
-- Show controller `passenger_brake_release: bool = False`, a one-shot clearing only
-  the passenger latch. An independently held controller emergency command remains
-  active; the window has no release action. This command already exists.
+- Do not show `passenger_brake_release`: it was withdrawn on 2026-10-28. A pull
+  clears when the controller's `emergency_brake` goes from true to false; the
+  window has no release action.
 - Integrated deployment has separate module processes, direct harness mappings
   between module-owned types, and one harness-owned clock (D005/D008/D017).
   `common/interfaces.py` is stale, never an intermediate catalog.
@@ -168,12 +168,12 @@ You need this background to label things correctly. It isn't something to draw.
   window: engine, signal pickup and brake.
   - Engine failure zeroes traction.
   - Brake failure blocks the service brake only.
-  - Signal-pickup failure zeroes the commanded speed and authority passed through to
-    the Train Controller.
+  - Signal-pickup failure makes the commanded speed and authority passed through to
+    the Train Controller null (`float | None`, `int | None`).
   - Failures are **not** reported to the Train Controller.
 - **Passenger emergency brake.** A passenger can pull it from the window. It latches.
-  The Train Controller sends one-shot `passenger_brake_release` to clear the
-  latch; a held controller emergency command remains active. The window has no release.
+  It clears when the Train Controller's `emergency_brake` goes from true to
+  false. The window has no release.
 - **Units and terms.** Backend values are SI, with grade in degrees and temperature in
   °C. Field names carry their units (`power_cmd_w`, `grade_deg`). The track signal
   carries **commanded speed**, never "suggested speed".
@@ -201,7 +201,7 @@ Subject: "Train Model". Use only product actors and use cases:
 | Receive terrain, circuit and beacon | Track Model. REQ-FUNC-042/046; commanded speed and integer block authority, not CTC suggested speed. |
 | Board and disembark passengers | Passenger/Track Model. REQ-FUNC-041.2; station eligibility owned by Track Model, rest/doors/count/capacity by Train Model. |
 | Pull and release passenger emergency brake | Passenger applies; Train Controller releases via one-shot command. REQ-FUNC-047. No window release control. |
-| Inject / clear failure | Murphy. REQ-FUNC-048.1/048.2/048.3. Engine zeroes traction; service failure blocks only service; pickup zeroes circuit outputs. |
+| Inject / clear failure | Murphy. REQ-FUNC-048.1/048.2/048.3. Engine zeroes traction; service failure blocks only service; pickup makes circuit outputs null. |
 
 Keep module actors outside the Train Model subject. Use include/extend relations
 only when they clarify shared behavior; label any failure extension point on the
@@ -256,7 +256,6 @@ otherwise.
   - `+door_right_open: bool`
   - `+temp_setpoint_c: float`
   - `+announcement: str`
-    - `+passenger_brake_release: bool = False`
 - **TrackInputs**:
   - `+passengers_boarded: int`
 - **ControllerOutputs**:
@@ -270,7 +269,6 @@ otherwise.
   - `+cabin_temp_c: float`
   - `+commanded_speed_mps: float`
   - `+authority_blocks: int`
-  - `+speed_limit_mps: float`
 - **TrackOutputs**:
   - `+block_id: str`
   - `+offset_m: float`

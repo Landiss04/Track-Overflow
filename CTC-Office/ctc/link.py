@@ -66,9 +66,6 @@ class CtcLink(Protocol):
                  arrival_s: float | None = None) -> None:
         ...
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        ...
-
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
         ...
@@ -131,9 +128,6 @@ class LocalLink:
                  arrival_s: float | None = None) -> None:
         self._module.dispatch(train_id, line, destination_block_id,
                               arrival_s)
-
-    def cancel_dispatch(self, train_id: str) -> None:
-        self._module.cancel_dispatch(train_id)
 
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:

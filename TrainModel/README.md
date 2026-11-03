@@ -107,8 +107,8 @@ right column scrolls on its own. The output table lists only the
 outputs the Train Model window does not show: position block and offset, and
 passenger capacity. The rest (emergency brake, door and light state, cabin
 temperature, actual speed, speed limit, and the commanded speed, authority
-and beacon passthroughs) are still outputs of the module and show on the
-Train Model window.
+passthroughs, and the beacon, reported on the station's own block) are still
+outputs of the module and show on the Train Model window.
 
 Once the system is integrated, the central harness calls the same
 `TrainModelState.step` the link calls; the test UI and the link are removed
@@ -170,8 +170,9 @@ are outside this model.
 Both brakes may engage simultaneously and their configured forces sum. Emergency
 follows the controller command or passenger latch; service follows its command
 unless service failure is active. The inspected working tree implements
-independent engagement and summed forces. Pickup failure already outputs zero
-commanded speed and authority while leaving terrain unaffected. Position offset
+independent engagement and summed forces. Pickup failure outputs null
+commanded speed and authority, invalid data rather than a valid 0
+(2026-10-28), while leaving terrain unaffected. Position offset
 references the front of the train; this decision adds no block-crossing behavior.
 
 ## Reference mass and operating mass
@@ -182,11 +183,15 @@ The model uses two masses with different jobs.
 which the datasheet rates the vehicle's performance: two-thirds load. The
 datasheet gives 40,900 kg empty and 56,700 kg fully loaded (4 pass./m²), so
 the ⅔-load mass is 40,900 + ⅔ × (56,700 − 40,900) = 51,433 kg. It is used only
-to turn the rated rates into force limits, and never changes during a run:
+to turn the rated brake rates into force limits, and never changes during a run.
+The traction limit is sized instead to the datasheet's 60‰ maximum gradient: the
+force that holds a full train (222 passengers + 5 crew, 58,404 kg) on 6%. The
+datasheet's 0.5 m/s² is the medium acceleration (0 to 70 km/h average) at ⅔ load,
+not the starting pull, so it no longer sizes the cap:
 
-| Force | Rated rate × reference mass |
+| Force | Derivation |
 |---|---|
-| Max traction (`f_max_n`) | 0.5 m/s² × 51,433 = 25,717 N |
+| Max traction (`f_max_n`) | 58,404 × 9.81 × (sin θ + 0.002 cos θ), θ = atan 0.06 = 35,459 N |
 | Service brake (`f_service_n`) | 1.2 m/s² × 51,433 = 61,720 N |
 | Emergency brake (`f_emergency_n`) | 2.73 m/s² × 51,433 = 140,413 N |
 
@@ -386,9 +391,11 @@ door does not redraw until the train has moved.
 The test harness emergency-brake input can explicitly override the passenger
 latch. An injected brake failure blocks the service brake only; the emergency
 brake and a passenger pull still work. The overview offers
-no release action. Normal release is the Train Controller’s one-shot
-`passenger_brake_release`; it clears only the passenger latch, preserving an
-independently held controller emergency command. That path already exists. Its button always reads *Apply emergency brake* and is
+no release action. A pull stays latched until the Train Controller's
+`emergency_brake` goes from true to false: the controller takes the pull up
+as its own emergency brake, and the driver's release clears both (Kevin
+Schillinger 2026-10-28). A pull made after the controller's last true is
+kept. Its button always reads *Apply emergency brake* and is
 disabled while the emergency brake is engaged from any source (a Train
 Controller command from the test UI, or a pull) and while a pull is latched.
 

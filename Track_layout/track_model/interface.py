@@ -133,8 +133,10 @@ class TrackConfig:
     """Construction-time configuration."""
 
     layout_paths: tuple[str, ...]
-    # Chance, per station per tick, that one new ticket is sold.
-    ticket_probability: float = 0.02
+    # Tickets sold per simulated minute at each station, on average
+    # (TM-1, Track Model owner 2026-10-26). Sales are time-based: the
+    # chance of a sale each tick is derived from the tick length.
+    tickets_per_minute: float = 12.0
     seed: int = 0
 
 

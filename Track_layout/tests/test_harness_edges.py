@@ -53,7 +53,7 @@ def test_round_trip_through_every_edge() -> None:
         authority_blocks={"BLUE A-4": 4},
         switch_positions={"BLUE A-5": SwitchPosition.REVERSE},
         crossing_gates_closed={"BLUE A-3": True},
-        signal_aspects={"BLUE A-4": SignalAspect.SUPER_GREEN},
+        signal_aspects={"BLUE A-5": SignalAspect.SUPER_GREEN},
         heaters_on={"BLUE B": True},
     )
     model.step(DT_S, build_track_model_inputs(commands, at("BLUE A-3", 1.0),
@@ -68,7 +68,7 @@ def test_round_trip_through_every_edge() -> None:
     assert readback.block_occupancy["BLUE A-4"]
     assert readback.switch_positions["BLUE A-5"] is SwitchPosition.REVERSE
     assert readback.crossing_gates_closed["BLUE A-3"] is True
-    assert readback.signal_aspects["BLUE A-4"] is SignalAspect.SUPER_GREEN
+    assert readback.signal_aspects["BLUE A-5"] is SignalAspect.SUPER_GREEN
     assert readback.failures["BLUE A-2"] is FailureMode.POWER_FAILURE
     assert readback.heaters_on["BLUE B"] is True
     # BLUE A-2 has lost power, so section A's heaters are off.
@@ -87,7 +87,7 @@ def test_round_trip_through_every_edge() -> None:
 
 def test_ticket_sales_reach_the_ctc_office_as_station_pairs() -> None:
     """Check the CTC edge carries (count, station) pairs and no total."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     for _ in range(2):
         out = model.step(DT_S, build_track_model_inputs(
             WaysideCommands(), {}, ambient_temp_c=0.0))
@@ -100,7 +100,7 @@ def test_ticket_sales_reach_the_ctc_office_as_station_pairs() -> None:
 
 def test_station_name_and_doors_cross_the_edges() -> None:
     """Check the station reaches the train and doors reach boarding."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     stopped = {"T1": TrainTrackReport(
         TrainPosition("GREEN A-2", 1.0), 0.0, False, 222, True)}
     out = model.step(DT_S, build_track_model_inputs(

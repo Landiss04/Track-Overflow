@@ -76,7 +76,9 @@ class TrainCore:
             "engage_emergency",
             "release_emergency",
             "command_door",
+            "driver_door",
             "command_lights",
+            "repeat_announcement",
             "clear_failure",
         }
     )
@@ -111,6 +113,7 @@ class TrainCore:
         commands = candidate.step_all(
             request["dt"],
             {key: entry["inputs"] for key, entry in trains.items()},
+            request["sim_time_s"],
         )
         self.fleet = candidate
         return {

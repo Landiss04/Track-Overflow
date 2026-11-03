@@ -38,6 +38,13 @@ FAULTS = {
     "TIME_SLIPPED",
 }
 
+# The mixed single-train trip reaches both 45-s dwells in about 111
+# simulated seconds. At 1x, allow startup and host scheduling headroom
+# without turning a stalled review into a ten-minute wait.
+REVIEW_WALL_TIMEOUT_S = 240
+DWELL_S = 45.0
+PLATFORM_DOORS = {"G": (False, True), "R": (True, True)}
+
 
 def review_schedule(count):
     """Actual CTC schedule format, 180 simulated seconds between releases."""
@@ -70,7 +77,7 @@ def review_schedule(count):
 
 def run_review(tmp_path, count=1, scheduled=False):
     """Observe every train's station dwell, separation, and clean shutdown."""
-    ctc = ["--run-on-ready", "--speedup-at-tick", "0"]
+    ctc = ["--run-on-ready"]
     if scheduled:
         schedule = tmp_path / "schedule.json"
         schedule.write_text(json.dumps(review_schedule(count)))
@@ -109,10 +116,26 @@ def run_review(tmp_path, count=1, scheduled=False):
 
         def observe(tick, _duration):
             # Collect failures instead of raising through a Qt callback.
+            if harness.clock.speed != 1:
+                problems.append((tick, "review speed", harness.clock.speed))
             reports = harness.outputs.get(TRAIN_MODEL, {}).get("trains", {})
+            for train_id in opened:
+                if dwell[train_id] < DWELL_S and train_id not in reports:
+                    problems.append((tick, train_id, "missing during dwell"))
             occupied = set()
             for train_id, report in reports.items():
                 block, feed = report["track"]["block_id"], report["controller"]
+                controller = (
+                    TRAIN_CONTROLLER_SW if train_id.startswith("G")
+                    else TRAIN_CONTROLLER_HW
+                )
+                commands = harness.outputs.get(controller, {}).get(
+                    "trains", {}
+                ).get(train_id)
+                # Process replies expose commands, not internal failure
+                # latches. Pickup and other failures latch this brake.
+                if commands and commands["emergency_brake"]:
+                    problems.append((tick, train_id, "emergency command"))
                 key = (train_id[0], block)
                 if key in occupied:
                     problems.append((tick, "shared block", key))
@@ -129,36 +152,63 @@ def run_review(tmp_path, count=1, scheduled=False):
                         (tick, train_id, "authority discontinuity", before)
                     )
                 previous_authority[train_id] = authority
-                doors = feed["door_left_open"] or feed["door_right_open"]
+                door_sides = (feed["door_left_open"], feed["door_right_open"])
+                doors = any(door_sides)
+                if doors and (
+                    block != expected[train_id]
+                    or abs(feed["actual_speed_mps"]) >= 0.1
+                    or door_sides != PLATFORM_DOORS[train_id[0]]
+                ):
+                    problems.append(
+                        (tick, train_id, "unsafe doors", block, feed)
+                    )
                 if (
                     block == expected[train_id]
                     and abs(feed["actual_speed_mps"]) < 0.1
                     and doors
                 ):
                     opened.setdefault(train_id, tick)
-                    dwell[train_id] = (tick - opened[train_id] + 1) * 0.1
-                elif train_id in opened and dwell.get(train_id, 0) < 45.0:
-                    problems.append((tick, train_id, "interrupted dwell"))
+                    # Measure the interval between observations: opening at
+                    # t and remaining open through t+45 proves a full dwell.
+                    dwell[train_id] = (
+                        tick - opened[train_id]
+                    ) * harness.clock.tick_s
+                elif train_id in opened and dwell.get(train_id, 0) < DWELL_S:
+                    elapsed = (tick - opened[train_id]) * harness.clock.tick_s
+                    # A closed observation exactly 45 s after opening
+                    # completes the last open interval. Requiring another
+                    # open observation here would demand a 45.1-s dwell.
+                    if (
+                        not doors
+                        and block == expected[train_id]
+                        and abs(feed["actual_speed_mps"]) < 0.1
+                        and elapsed >= DWELL_S
+                    ):
+                        dwell[train_id] = elapsed
+                    else:
+                        problems.append((tick, train_id, "interrupted dwell"))
 
         harness.tickCompleted.connect(observe)
         harness.start()
         try:
             assert wait_until(
                 lambda: (
-                    all(dwell.get(train, 0) >= 45.0 for train in expected)
+                    all(dwell.get(train, 0) >= DWELL_S for train in expected)
                     or bool(harness.down_modules)
                     or bool(problems)
+                    or any(event[1] in FAULTS for event in events)
                 ),
-                timeout_s=180,
+                timeout_s=REVIEW_WALL_TIMEOUT_S,
             ), (paths, dwell, events[-20:])
         finally:
             exits = harness.stop()
     assert not problems, problems[:10]
-    assert all(dwell.get(train, 0) >= 45.0 for train in expected), (
+    assert all(dwell.get(train, 0) >= DWELL_S for train in expected), (
         paths,
         dwell,
     )
     assert not [event for event in events if event[1] in FAULTS]
+    assert not [event for event in events if event[1] == "SPEED_CHANGED"]
     assert exits == dict.fromkeys(MODULE_NAMES, 0)
     assert {event[2] for event in events if event[1] == "WAYSIDES_READY"} == {
         "Green",

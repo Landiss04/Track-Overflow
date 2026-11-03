@@ -40,6 +40,15 @@ from typing import Mapping, Sequence
 #: lists ``Yard-63``; Red's yard joins block 9).
 YARD_EXITS: dict[str, str] = {"Green": "63", "Red": "9"}
 
+#: Which way a train leaves the yard, as the block it is taken to have
+#: entered its yard exit block from. The yard joins its exit block
+#: through a switch leg, and a train out of the yard trails through the
+#: points out of the fixed side, as the Track Model runs it: Green 63
+#: (legs 62 and the yard) on to 64, Red 9 (legs 8 and the yard) on to
+#: 10, never back to 8 (the Track Model's layout is the master, Landis
+#: 2026-10-25).
+YARD_EXIT_FROM: dict[str, str] = {"Green": "62", "Red": "8"}
+
 #: Blocks a train can run from into the yard, per line (Green's 57 lists
 #: ``yard`` among its next blocks; Red's yard joins block 9).
 YARD_ENTRIES: dict[str, frozenset[str]] = {
@@ -66,8 +75,8 @@ class Tracked:
     # The fastest it could be going now, in m/s.
     speed_mps: float = 0.0
     # The block its head entered its head block from: which way it is
-    # going. None until it has moved a block (placed, or just out of
-    # the yard).
+    # going. None until a placed train has moved a block; for a train
+    # just out of the yard, ``YARD_EXIT_FROM``.
     came_from: str | None = None
 
     @property
@@ -170,7 +179,8 @@ class TrainTracker:
                         and candidate.train_id not in self.trains
                         and candidate.train_id not in self.lost):
                     self.trains[candidate.train_id] = Tracked(
-                        line, (exit_block,))
+                        line, (exit_block,),
+                        came_from=YARD_EXIT_FROM.get(line))
                     claimed.add((line, exit_block))
                     break
 

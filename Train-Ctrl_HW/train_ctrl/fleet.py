@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 import math
 >>>>>>> origin/Train_Ctrl_integration
+=======
+import math
+>>>>>>> integrate/quirky-into-development-resolved
 from collections.abc import Iterator, Mapping
 
-from .constants import TICK_S
+from .constants import BENCH_ECHO_TICKS, TICK_S
 from .control import ControllerCore
 from .errors import (DuplicateTrainError, InvalidInputError,
                      TrainControllerError, UnknownTrainError)
 from .inputs import EVERY_TICK, read_inputs
 from .state import TrainModelCommands
+
 
 class TrainControllerFleet:
     """One controller per running train, held by train ID.
@@ -27,12 +32,17 @@ class TrainControllerFleet:
     """
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def __init__(self, echo_ticks: int = 0) -> None:
+=======
+    def __init__(self, echo_ticks: int = BENCH_ECHO_TICKS) -> None:
+>>>>>>> integrate/quirky-into-development-resolved
         """Start with no trains.
 
-        ``echo_ticks`` is passed to every train's ControllerCore: 0
-        for the console's own fleet, ECHO_TICKS when the central
-        harness steps the fleet.
+        ``echo_ticks`` is passed to every train's ControllerCore: the
+        ticks between a command and its report, BENCH_ECHO_TICKS for
+        the bench and ECHO_TICKS when the central harness steps the
+        fleet (OPEN_ISSUES.md #42).
         """
         # Insertion order is the roster order.
         self._cores: dict[str, ControllerCore] = {}
@@ -84,6 +94,7 @@ class TrainControllerFleet:
 
     def step_all(
 <<<<<<< HEAD
+<<<<<<< HEAD
         self, dt: float, inputs_by_id: Mapping[str, dict],
     ) -> dict[str, TrainModelCommands]:
         """Step every train's controller one tick, or none of them.
@@ -99,36 +110,57 @@ class TrainControllerFleet:
     ) -> dict[str, TrainModelCommands]:
         """Step every train's controller one tick, or none of them.
 
+=======
+        self, dt: float, inputs_by_id: Mapping[str, dict], time_s: float,
+    ) -> dict[str, TrainModelCommands]:
+        """Step every train's controller one tick, or none of them.
+
+>>>>>>> integrate/quirky-into-development-resolved
         ``inputs_by_id`` holds each train's signals in SI (the keys
         read_inputs() takes), exactly one entry per train. Every
         train's set is read before any train steps, so a set one train
         would refuse leaves the whole fleet unchanged. The physics is
         the Train Model's, or the bench simulation's. Returns each
         train's commands to its Train Model.
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 
         ``dt`` must be TICK_S: the step is fixed at 0.1 s (truth D006 /
         D017) and faster simulation means more ticks, never longer
         ones. It is still passed, as TrainModelFleet takes it.
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 
         ``time_s`` is the system time this tick, in seconds since
         midnight of the first simulated day, as utils/system_clock.py
         gives it: the harness clock, or the bench's own
         (REQUIREMENTS.md M11).
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         """
         if dt != TICK_S:
             raise InvalidInputError(
                 f"dt must be the fixed {TICK_S} s step, not {dt!r}")
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         if (isinstance(time_s, bool) or not isinstance(time_s, (int, float))
                 or not math.isfinite(time_s) or time_s < 0):
             raise InvalidInputError(
                 f"time_s must be a time of at least 0 s, not {time_s!r}")
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         unknown = sorted(set(inputs_by_id) - set(self._cores))
         if unknown:
             raise UnknownTrainError(f"inputs for unknown trains: {unknown}")
@@ -145,6 +177,7 @@ class TrainControllerFleet:
         commands = {}
         for train_id, core in self._cores.items():
 <<<<<<< HEAD
+<<<<<<< HEAD
             core.apply_staged(staged[train_id])
             core.step(plant=False)
 =======
@@ -152,5 +185,10 @@ class TrainControllerFleet:
             core.apply_staged(staged[train_id])
             core.step()
 >>>>>>> origin/Train_Ctrl_integration
+=======
+            core.state.time_s = float(time_s)
+            core.apply_staged(staged[train_id])
+            core.step()
+>>>>>>> integrate/quirky-into-development-resolved
             commands[train_id] = core.commands()
         return commands

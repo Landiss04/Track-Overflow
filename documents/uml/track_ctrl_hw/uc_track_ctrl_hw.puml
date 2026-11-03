@@ -1,6 +1,5 @@
 @startuml uc_track_ctrl_hw
 !include ../style.iuml
-title Track Controller (HW) — Use Cases
 left to right direction
 
 actor "Programmer" as prog

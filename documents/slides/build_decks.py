@@ -1,4 +1,7 @@
-"""Build the design review decks: the shared template and the Track Ctrl HW deck.
+"""Build the design review template deck and its Deck class.
+
+The combined design review deck is build_combined_deck.py, which uses
+the Deck class from here.
 
 Run from the repository root:  python documents/slides/build_decks.py
 Needs python-pptx and Pillow. Diagrams are read from documents/uml/.
@@ -35,6 +38,8 @@ SLIDE_H = Inches(7.5)
 MARGIN = Inches(0.45)
 TITLE_H = Inches(0.95)
 FOOTER_H = Inches(0.35)
+# Sequence diagrams too detailed to read on one slide.
+SPLIT = {"sd01_load_database": 2, "sd02_load_program": 2}
 
 
 class Deck:
@@ -71,7 +76,7 @@ class Deck:
             run.font.name = font
         return box
 
-    def _chrome(self, title: str, section: str = ""):
+    def _chrome(self, title: str, section: str = "", footer: bool = True):
         self.number += 1
         slide = self.prs.slides.add_slide(self.blank)
         bar = slide.shapes.add_shape(
@@ -79,16 +84,21 @@ class Deck:
         bar.fill.solid()
         bar.fill.fore_color.rgb = NAVY
         bar.line.fill.background()
-        self._text(slide, MARGIN, Inches(0.12), SLIDE_W - 2 * MARGIN,
-                   Inches(0.75), title, size=28, color=WHITE, bold=True,
+        # Leave room for the section label, and shrink a long title to fit.
+        title_w = SLIDE_W - 2 * MARGIN - (Inches(4.0) if section else 0)
+        size = max(18, min(28, int(title_w / Inches(1) / (0.0075 * max(
+            1, len(title))))))
+        self._text(slide, MARGIN, Inches(0.12), title_w,
+                   Inches(0.75), title, size=size, color=WHITE, bold=True,
                    anchor=MSO_ANCHOR.MIDDLE)
         if section:
             self._text(slide, SLIDE_W - Inches(4.2), Inches(0.12),
                        Inches(3.8), Inches(0.75), section, size=12,
                        color=LIGHT, align=PP_ALIGN.RIGHT,
                        anchor=MSO_ANCHOR.MIDDLE)
-        self._text(slide, MARGIN, SLIDE_H - FOOTER_H, Inches(9),
-                   FOOTER_H, self.footer, size=10, color=MUTED)
+        if footer:
+            self._text(slide, MARGIN, SLIDE_H - FOOTER_H, Inches(9),
+                       FOOTER_H, self.footer, size=10, color=MUTED)
         self._text(slide, SLIDE_W - Inches(1.5), SLIDE_H - FOOTER_H,
                    Inches(1.05), FOOTER_H, str(self.number), size=10,
                    color=MUTED, align=PP_ALIGN.RIGHT)
@@ -159,16 +169,39 @@ class Deck:
         return slide
 
     def diagram(self, title: str, image: Path, section: str = "",
-                caption: str = ""):
-        """One diagram, fitted; a tall one is split across slides."""
+                caption: str = "", crop: tuple | None = None,
+                full: bool = False, blank: tuple = (), notes: str = "",
+                parts: int | None = None):
+        """One diagram, fitted; a tall one is split across slides.
+
+        ``crop`` keeps a region given as (left, top, right, bottom)
+        fractions; ``blank`` whites out regions given the same way, to
+        hide fragments of neighbouring boxes. ``full`` fills the slide
+        below the title bar, with no footer or caption. ``parts`` forces
+        the number of slides instead of choosing it from the shape.
+        """
+        if crop is not None:
+            with Image.open(image) as picture:
+                w, h = picture.size
+                picture = picture.convert("RGB")
+                for region in blank:
+                    picture.paste((255, 255, 255), (
+                        int(region[0] * w), int(region[1] * h),
+                        int(region[2] * w), int(region[3] * h)))
+                box = (int(crop[0] * w), int(crop[1] * h),
+                       int(crop[2] * w), int(crop[3] * h))
+                path = self._scratch / (
+                    f"{image.stem}_{'_'.join(map(str, box))}.png")
+                picture.crop(box).save(path)
+            image = path
         with Image.open(image) as picture:
             w_px, h_px = picture.size
-        parts = max(1, round(h_px / w_px / 0.9))
+        parts = parts or max(1, round(h_px / w_px / 0.9))
         if parts == 1:
-            return self._picture(title, image, section, caption)
+            return self._picture(title, image, section, caption, full, notes)
         for index, piece in enumerate(self._slices(image, parts), start=1):
             self._picture(f"{title} ({index} of {parts})", piece, section,
-                          caption if index == parts else "")
+                          caption if index == parts else "", full, notes)
 
     def _slices(self, image: Path, parts: int) -> list[Path]:
         # Cut where a row holds the least ink, so no message is split.
@@ -195,9 +228,17 @@ class Deck:
         return pieces
 
     def _picture(self, title: str, image: Path, section: str,
-                 caption: str):
-        slide = self._chrome(title, section)
-        left, top, width, height = self._body_box()
+                 caption: str, full: bool = False, notes: str = ""):
+        slide = self._chrome(title, section, footer=not full)
+        if notes:
+            slide.notes_slide.notes_text_frame.text = notes
+        left, width = MARGIN, SLIDE_W - 2 * MARGIN
+        if full:
+            top, caption = TITLE_H, ""
+            height = SLIDE_H - top - Inches(0.12)
+        else:
+            top = TITLE_H + Inches(0.12)
+            height = SLIDE_H - top - FOOTER_H - Inches(0.1)
         if caption:
             height -= Inches(0.45)
         with Image.open(image) as picture:
@@ -292,16 +333,17 @@ def build_template() -> None:
         "One idea per slide; a diagram slide holds one diagram, centred, "
         "with an optional one-line caption",
         "Section dividers in this order: Overview, Use cases, "
-        "Architecture, Class diagrams, Sequence diagrams, Deployment, "
-        "System concepts, Open items",
+        "Use case descriptions, Architecture, Class diagrams, Sequence "
+        "diagrams; system architecture, deployment and concepts are drawn "
+        "once, for the system",
         "Diagrams: PlantUML with documents/uml/style.iuml, rendered to "
         "PNG at 150 dpi",
         ("Designed-but-not-built elements are orange and marked "
          "\u00abplanned\u00bb", 1),
         "Requirement IDs as in the SRS (REQ-FUNC-049); rubric items as "
         "6.0 to 6.9",
-        "No use case descriptions on slides (the professor asked us to "
-        "leave them out)",
+        "Use case descriptions on their own slides, in one block after the "
+        "use case diagram, so a presenter can skip past them",
     ], section="Template")
     deck.table("Table slide", ["Column", "Column", "Column"], [
         ["Navy header row", "Alternate row shading", "16 pt text"],
@@ -316,191 +358,6 @@ def build_template() -> None:
     deck.save(OUT / "design_review_template.pptx")
 
 
-def build_track_ctrl_hw() -> None:
-    deck = Deck("Track Overflow \u00b7 Design Review \u00b7 Track Controller "
-                "(HW) \u00b7 Braden")
-    deck.title("Track Controller (HW)", "Design review",
-               "Braden \u00b7 Track Overflow \u00b7 2026-10-22")
-
-    deck.section("Overview")
-    deck.bullets("What the hardware Track Controller does", [
-        "Runs every wayside controller of the Red Line (Green: software "
-        "variant)",
-        "Each wayside: its own territory database and its own Boolean PLC "
-        "program",
-        "Knows blocks, never trains: everything it exchanges is keyed by "
-        "block",
-        ("A failure (broken rail, circuit, power) reaches it as an occupied "
-         "block", 1),
-        "Core on a Raspberry Pi 5; window on the PC; linked by one USB "
-        "cable",
-        "Stepped once per tick by the central harness, like every module",
-        ("Orange \u00abplanned\u00bb = designed, not built yet: the PC/Pi "
-         "split and the vital block", 1),
-    ], section="Overview")
-    deck.table("Requirements coverage", ["Rubric", "Requirement", "SRS",
-                                         "Use cases"], [
-        ["6.0", "Receive suggested speed and authority from the CTC",
-         "FUNC-049", "UC-08, UC-14"],
-        ["6.1", "Move switches by PLC execution", "FUNC-052",
-         "UC-07, UC-11"],
-        ["6.2", "Set traffic lights by PLC execution", "FUNC-053",
-         "UC-07, UC-12"],
-        ["6.3", "Receive train presence from the Track Model", "FUNC-054",
-         "UC-10"],
-        ["6.4", "Send track occupancy to the CTC", "FUNC-055",
-         "UC-15, UC-06"],
-        ["6.5", "Railway crossing lights and gates", "FUNC-056", "UC-13"],
-        ["6.6", "PLC language based only on Boolean variables", "FUNC-051",
-         "UC-02, UC-07"],
-        ["6.7", "Load PLC file", "FUNC-050", "UC-02"],
-        ["6.8", "Maintenance mode: set a switch position", "FUNC-057",
-         "UC-09, UC-11"],
-        ["6.9", "Safety-critical architecture", "FUNC-058", "UC-07, UC-16"],
-        ["9.0", "Sub-system user interface", "INTF-001.4", "UC-01 to UC-06"],
-    ], [1.0, 6.2, 1.8, 3.4], section="Overview", size=15)
-
-    deck.section("Use cases")
-    deck.diagram("Use case diagram", UML / "uc_track_ctrl_hw.png",
-                 section="Use cases",
-                 caption="Programmer actions are every control of the "
-                 "window; the scan cycle runs once per tick")
-
-    deck.section("Architecture")
-    deck.diagram("Software architecture", UML / "architecture.png",
-                 section="Architecture")
-    deck.bullets("Architecture: design choices", [
-        "One interface, three users: harness, window and test UI call only "
-        "the TrackController Protocol",
-        ("step, snapshot, load_territory, load_program, reset", 1),
-        "RemoteTrackController implements the same Protocol on the PC and "
-        "forwards each call to the Pi",
-        ("The window and the harness endpoint do not change when the core "
-         "moves", 1),
-        "Core is Qt-free: runs on the Pi in plain Python; 74 unit tests run "
-        "headless",
-        "Validate, then change: a bad tick is rejected before any state "
-        "changes",
-        "Two channels: every statement compiled twice, by different "
-        "algorithms, run every scan",
-    ], section="Architecture")
-
-    deck.section("Class diagrams")
-    deck.diagram("Core classes (Raspberry Pi)", UML / "class_core.png",
-                 section="Class diagrams")
-    deck.diagram("Boundary types", UML / "class_boundary.png",
-                 section="Class diagrams",
-                 caption="CTC Office names blocks by BlockRef (Red:15); "
-                 "Track Model by BlockKey (line, section, number)")
-    deck.diagram("Host-side classes (PC)", UML / "class_host.png",
-                 section="Class diagrams")
-
-    deck.section("Sequence diagrams")
-    for name, title in (
-        ("sd05_tick", "SD-05 One tick through the central harness"),
-        ("sd06_scan_cycle", "SD-06 Scan cycle of one wayside"),
-        ("sd01_load_database", "SD-01 Load wayside database"),
-        ("sd02_load_program", "SD-02 Load PLC program"),
-        ("sd03_monitor", "SD-03 Select wayside and monitor"),
-        ("sd04_details_and_report", "SD-04 PLC details and last report"),
-        ("sd07_maintenance_switch", "SD-07 Maintenance switch command"),
-    ):
-        deck.diagram(title, UML / f"{name}.png", section="Sequence diagrams")
-
-    deck.section("Deployment")
-    deck.diagram("Deployment", UML / "deployment.png", section="Deployment")
-
-    deck.section("System concepts", "Track Controller's part of the joint "
-                 "concepts, with Harry and Landis")
-    deck.bullets("Distribution of wayside controllers", [
-        "One variant per line: HW runs the Red Line, SW the Green Line "
-        "(D021)",
-        "A wayside owns a contiguous run of blocks and every switch, signal "
-        "and crossing on them",
-        "One Raspberry Pi 5 runs every Red Line wayside",
-        "A line runs only when every wayside on it is ready",
-        ("Ready: a person has loaded the database and the PLC program, and "
-         "the channels agree", 1),
-        ("Not ready anywhere on the line: the whole line holds fail-safe "
-         "and the CTC dispatches nothing", 1),
-        "Red Line boundaries: to be chosen; a switch must lie inside one "
-        "wayside",
-    ], section="System concepts")
-    deck.bullets("Authority, as the wayside handles it", [
-        "Authority = blocks ahead the train may still enter; 0 = stop (D013)",
-        "CTC Office computes it along the route and suggests it per block",
-        "The program's AUTH_n passes the CTC count down block n's track "
-        "circuit, or sends 0",
-        ("Withheld for a closed block, a switch not where commanded, an "
-         "occupied neighbour", 1),
-        "Speed travels with it as five bits, capped at the block's limit",
-        "Track Model delivers both to the train in the block, then clears "
-        "them",
-    ], section="System concepts")
-    deck.code("Wayside language", (
-        "// a comment\n"
-        "VAR_IN  OCC_12 OCC_13 SWREV_12\n"
-        "VAR_IN  CTCSW_12 CTCREV_12\n"
-        "VAR_OUT SW_12\n"
-        "\n"
-        "LOCK_12 := OCC_12 OR OCC_13\n"
-        "WANT_12 := CTCSW_12 AND CTCREV_12\n"
-        "SW_12   := (LOCK_12 AND SWREV_12)\n"
-        "           OR (NOT LOCK_12 AND WANT_12)"),
-        ["Boolean only: NOT, AND, XOR, OR, 0, 1, parentheses",
-         "Runs top to bottom once per tick; an unset name reads 0",
-         "Speed crosses in and out as five bits (SPD_n_0..4, CMD_n_0..4)",
-         "Every error reported with its line number; a program naming I/O "
-         "its wayside lacks is refused",
-         "Shared with the SW variant; the names still differ"],
-        section="System concepts")
-    deck.bullets("Vitality", [
-        "The OS only holds and parses the PLC program: every decision is "
-        "PLC code",
-        "Read-only vital block after the user's program \u00abplanned\u00bb",
-        ("Generated per territory; can only make outputs more restrictive", 1),
-        "Diverse execution: two compilers, two interpreters, compared every "
-        "scan",
-        "Diverse implementations: HW and SW share a language, not code",
-        "Fail-safe outputs: signals red, crossings active, speed and "
-        "authority 0, switches stay",
-        "Inputs checked whole before anything changes; a failure reads as "
-        "occupancy",
-    ], section="System concepts")
-    deck.bullets("Hardware/software interface", [
-        "Same TrackController Protocol and the same I/O in both variants "
-        "(D021)",
-        "Pi 5 in USB device mode: a standard USB serial (CDC-ACM) device "
-        "(D027)",
-        ("Windows' built-in driver: no installation, no admin rights", 1),
-        ("Found by its USB identity, never a fixed COM number", 1),
-        "Messages: the harness's newline JSON, with request ID and tick",
-        "The PC process owns the COM port and relays harness messages to "
-        "the Pi",
-        "10x: 100 ticks per second, so USB round trip + scan < 10 ms",
-    ], section="System concepts")
-
-    deck.section("Open items")
-    deck.table("Open items", ["#", "Item", "Owner"], [
-        ["1", "Read-only vital PLC block: assumed, to confirm for both "
-         "variants", "Braden, Harry"],
-        ["2", "Manual switch at the wayside in maintenance (rubric 6.8); "
-         "assumed CTC only", "Braden, Harry"],
-        ["3", "Red Line wayside boundaries, databases and programs",
-         "Braden"],
-        ["4", "USB message framing; the Pi's identification", "Kevin, Braden"],
-        ["5", "Pi 5 power through its USB-C port", "Braden, Kevin"],
-        ["6", "Measure USB round trip + scan against the 10 ms budget",
-         "Braden"],
-        ["7", "PLC names differ between the variants (REQ-INTF-009)",
-         "Braden, Harry"],
-        ["8", "Aspect values: lower case here, upper case system-wide",
-         "Braden"],
-    ], [0.6, 9.2, 2.6], section="Open items", size=16)
-    deck.save(OUT / "design_review_track_ctrl_hw.pptx")
-
-
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     build_template()
-    build_track_ctrl_hw()

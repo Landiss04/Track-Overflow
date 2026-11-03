@@ -24,8 +24,14 @@ Panel {
     // Whether a track map renderer is mounted in `mapCanvas`. Zoom and fit
     // stay disabled until then.
     readonly property bool mapAvailable: trackMap !== null
+    // The minimized Train occupancy window, docked in the bottom row
+    // beside the hint rather than over the map or its legend.
+    property bool occupancyDocked: false
+    property string occupancySummary: ""
 
     signal lineFilterActivated(int index)
+    signal occupancyExpandRequested()
+    signal occupancyCloseRequested()
     signal zoomOutRequested()
     signal zoomInRequested()
     signal fitRequested()
@@ -226,10 +232,24 @@ Panel {
         }
     }
 
-    HelperText {
+    RowLayout {
         Layout.fillWidth: true
-        visible: root.trackMap !== null
-        text: qsTr("Point at a block for its details. Zoom in (+) to see "
-            + "every block's number.")
+        spacing: theme.space_3
+
+        HelperText {
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            visible: root.trackMap !== null
+            text: qsTr("Point at a block for its details. Zoom in (+) to "
+                + "see every block's number.")
+        }
+
+        OccupancyDock {
+            Layout.preferredWidth: 300
+            visible: root.occupancyDocked
+            summary: root.occupancySummary
+            onExpandRequested: root.occupancyExpandRequested()
+            onCloseRequested: root.occupancyCloseRequested()
+        }
     }
 }

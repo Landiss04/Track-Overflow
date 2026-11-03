@@ -1,0 +1,103 @@
+@startuml system_deployment
+!include ../style.iuml
+top to bottom direction
+skinparam nodesep 30
+skinparam ranksep 45
+skinparam FrameBorderColor #1F3A5F
+skinparam CloudBorderColor #7A8794
+skinparam CloudBackgroundColor #EEF2F7
+
+title Physical deployment: the system as built along the railway
+
+node "Operations Control Center «building»\nPort Authority, downtown Pittsburgh" as OCC {
+  node "Dispatcher workstation «device»" as Disp {
+    component "CTC Office software «CTC Office»\nmap, dispatch, schedule, clock, closures" as CTC
+  }
+  node "CTC server «device»" as Srv {
+    artifact "Train schedule" as Sched
+    artifact "Track layouts" as Layouts
+    artifact "Event log" as Log
+  }
+}
+
+cloud "Non-vital data network «fiber along the right-of-way»\n↓ suggested speed and authority, closures, maintenance switch commands\n↑ occupancy, switch and crossing state, readiness, ticket sales" as Net
+
+frame "Green Line" as Green {
+  node "Wayside cabinet ×6 «bungalow»\none per contiguous run of blocks" as GW {
+    component "Wayside computer «Track Controller (SW)»\nterritory database + PLC program" as GPLC
+  }
+}
+
+frame "Red Line" as Red {
+  node "Wayside cabinet Red-1 «bungalow»\nblocks 1–24, 73–76" as RW1 {
+    component "Vital PLC controller\n«Track Controller (HW)»" as R1
+  }
+  node "Wayside cabinet Red-2 «bungalow»\nblocks 25–45, 67–72" as RW2 {
+    component "Vital PLC controller\n«Track Controller (HW)»" as R2
+  }
+  node "Wayside cabinet Red-3 «bungalow»\nblocks 46–66" as RW3 {
+    component "Vital PLC controller\n«Track Controller (HW)»" as R3
+  }
+}
+
+frame "Track and field equipment in every wayside territory «Track Model»" as Field {
+  node "Station platform\nticket vending machines" as Stn
+  node "Switch machine\n«at each switch»" as Sw
+  node "Grade crossing\ngates and lights" as Xing
+  node "Track heaters «per section»\nown thermostat (D026)" as Heat
+  node "Yard «depot»\ntrains enter and\nleave service" as Yard
+  node "Signal «at each switch»\nred, yellow, green,\nsuper green" as Sig
+  node "Beacon «transponder»\nnext to each station" as Bcn
+  node "Track circuit «every block»\ntransmitter and receiver\non the rails" as TC
+}
+
+node "Light rail vehicle «Bombardier Flexity 2, 5 sections» «Train Model»" as LRV {
+  node "Driver's cab «device»\nconsole; engineer's\ncommissioning port" as Cab
+  node "Beacon reader\n«antenna»" as Rdr
+  node "Pickup coils\n«front truck»" as Coil
+  node "Carborne controller «vital computer»\n«Train Controller»: SW on Green trains, HW on Red trains" as Carborne {
+    component "Speed law, safety path,\nfailure inference" as ATC
+  }
+  node "Vehicle systems\npropulsion 480 kW, service and emergency brakes,\ndoors, lights, HVAC, PA, passenger emergency brake" as Veh
+}
+
+Disp -[hidden]right- Srv
+OCC -- Net
+Net -- GW
+Net -- RW1
+Net -- RW2
+Net -- RW3
+
+GW -- Field : vital field wiring
+RW1 -- Field
+RW2 -- Field
+RW3 -- Field
+Stn -[hidden]right- Sw
+Sw -[hidden]down- Sig
+Xing -[hidden]down- Bcn
+Heat -[hidden]down- TC
+
+Sig ..> Cab : aspect seen\nby the driver
+Bcn --> Rdr : station, platform side,\nunderground
+TC --> Coil : ↓ commanded speed and authority, coded on the rails\n↑ the train's axles shunt the rails: block occupied
+Cab --> ATC : driver and\nengineer inputs
+Rdr --> ATC
+Coil --> ATC
+ATC --> Veh : ↓ power, brake, door, light, HVAC, PA commands\n↑ speed and equipment state
+
+note left of LRV
+  No radio link to the control center:
+  the CTC Office knows trains only from
+  track circuit occupancy, and a train gets
+  speed and authority only through the
+  rails of the block it is in.
+end note
+
+note right of OCC
+  In the simulation (D021, D027): one Windows 11 PC
+  simulates the control center, the Green Line cabinets,
+  the track and every vehicle. One Raspberry Pi 5 runs
+  all three Red Line cabinets; another runs the Red Line
+  carborne controllers. Each is linked to the PC by USB.
+end note
+@enduml

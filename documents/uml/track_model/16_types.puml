@@ -1,0 +1,103 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam classAttributeIconSize 0
+skinparam classBackgroundColor #EAF6EA
+skinparam classBorderColor #555555
+hide empty members
+skinparam nodesep 25
+skinparam ranksep 45
+class TrackModelInputs <<frozen dataclass>> {
+  controller : TrackControllerCommands
+  trains : Mapping[str, TrainReport]
+  ambient_temp_c : float
+}
+class TrackControllerCommands <<frozen dataclass>> {
+  commanded_speed_mps : Mapping[str, int]
+  commanded_authority : Mapping[str, int]
+  switch_commands : Mapping[str, SwitchPosition]
+  crossing_commands : Mapping[str, bool]
+  signal_commands : Mapping[str, SignalAspect]
+}
+class TrainReport <<frozen dataclass>> {
+  block_id : str
+  offset_m : float
+  actual_speed_mps : float
+  block_changed : bool
+  passenger_capacity : int
+  doors_open : bool
+}
+class TrackModelOutputs <<frozen dataclass>> {
+  controller : TrackControllerOutputs
+  ctc : CtcOutputs
+  train_feeds : Mapping[str, TrainFeed]
+  signal_seen : Mapping[str, SignalAspect | None]
+}
+class TrackControllerOutputs <<frozen dataclass>> {
+  block_occupancy : Mapping[str, bool]
+  switch_states : Mapping[str, SwitchPosition]
+  crossing_states : Mapping[str, bool]
+  signal_states : Mapping[str, SignalAspect]
+  failure_status : Mapping[str, TrackFailure]
+  heater_states : Mapping[str, bool]
+  track_temp_c : Mapping[str, float]
+}
+class CtcOutputs <<frozen dataclass>> {
+  tickets_sold_now : Mapping[str, int]
+}
+class TrainFeed <<frozen dataclass>> {
+  track_info : TrackInfo
+  track_signal : TrackSignal
+  beacon : Beacon | None
+  passengers_boarded : int
+}
+class TrackInfo <<frozen dataclass>> {
+  block_id : str
+  grade_deg : float
+  elevation_m : float
+  speed_limit_mps : float
+  polarity : bool
+  station_name : str | None
+}
+class TrackSignal <<frozen dataclass>> {
+  commanded_speed_mps : int
+  authority_blocks : int
+}
+class Beacon <<frozen dataclass>> {
+  station_name : str
+  platform_side : str | None
+  underground : bool
+}
+enum SwitchPosition {
+  NORMAL
+  REVERSE
+}
+enum SignalAspect {
+  RED
+  YELLOW
+  GREEN
+  SUPER_GREEN
+}
+enum TrackFailure {
+  NONE
+  BROKEN_RAIL
+  TRACK_CIRCUIT
+  POWER
+}
+TrackModelInputs *-- TrackControllerCommands
+TrackModelInputs *-- TrainReport
+TrackModelOutputs *-- TrackControllerOutputs
+TrackModelOutputs *-- CtcOutputs
+TrackModelOutputs *-- TrainFeed
+TrainFeed *-- TrackInfo
+TrainFeed *-- TrackSignal
+TrainFeed *-- Beacon
+TrackControllerCommands ..> SwitchPosition
+TrackControllerCommands ..> SignalAspect
+TrackControllerOutputs ..> TrackFailure
+@enduml

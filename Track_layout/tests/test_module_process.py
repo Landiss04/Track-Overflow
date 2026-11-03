@@ -71,7 +71,7 @@ def wire_inputs(**changes: Any) -> dict[str, Any]:
             "commanded_authority": {"GREEN K-63": 2},
             "switch_commands": {"GREEN K-63": "REVERSE"},
             "crossing_commands": {},
-            "signal_commands": {"GREEN K-64": "GREEN"},
+            "signal_commands": {"GREEN K-63": "GREEN"},
             "heater_commands": {"GREEN K": True},
         },
         "trains": {"G1": report()},
@@ -87,7 +87,7 @@ def test_inputs_decode_from_json() -> None:
     assert cmd.commanded_speed_mps == {"GREEN K-63": 12.5}
     assert cmd.commanded_authority == {"GREEN K-63": 2}
     assert cmd.switch_commands == {"GREEN K-63": SwitchPosition.REVERSE}
-    assert cmd.signal_commands == {"GREEN K-64": SignalAspect.GREEN}
+    assert cmd.signal_commands == {"GREEN K-63": SignalAspect.GREEN}
     assert cmd.heater_commands == {"GREEN K": True}
     assert inputs.trains == {"G1": TrainReport(**report())}
     assert inputs.ambient_temp_c is None
@@ -159,7 +159,7 @@ def test_outputs_encode_every_field_as_plain_json() -> None:
         "commanded_speed_mps": 12.5, "authority_blocks": 2,
     }
     assert data["controller"]["switch_states"]["GREEN K-63"] == "REVERSE"
-    assert data["controller"]["signal_states"]["GREEN K-64"] == "GREEN"
+    assert data["controller"]["signal_states"]["GREEN K-63"] == "GREEN"
     assert data["controller"]["failure_status"]["GREEN K-63"] == "NONE"
 
 

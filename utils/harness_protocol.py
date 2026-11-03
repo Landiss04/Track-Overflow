@@ -215,7 +215,7 @@ def validate(message: Mapping[str, Any]) -> None:
         ProtocolError: Naming the first thing wrong.
     """
     op = message.get("op")
-    if op not in _REQUIRED_FIELDS:
+    if not isinstance(op, str) or op not in _REQUIRED_FIELDS:
         raise ProtocolError(f"unknown op {op!r}")
     for field in ("id", "tick"):
         value = message.get(field)

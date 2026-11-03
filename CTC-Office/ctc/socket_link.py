@@ -329,9 +329,6 @@ class SocketLink(QObject):
                    destination_block_id=destination_block_id,
                    arrival_s=arrival_s)
 
-    def cancel_dispatch(self, train_id: str) -> None:
-        self._call("cancel_dispatch", train_id=train_id)
-
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
         self._call("set_block_closed", line=line, block_id=block_id,

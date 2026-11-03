@@ -11,32 +11,42 @@ participant "Central Harness\n(roster)" as H
 participant "Train Model and\nthe line's Train Controller" as TM
 
 == Release (step n) ==
-loop each line, waiting trains most behind schedule first
+Model -> Model : _release()
+Model -> Model : _waiting()
+note right of Model : ordered trains not on the track,\nmost behind schedule first
+loop each waiting train
   alt a released train on the line is not yet on the track
-    Model -> Model : skip the line (one at a time)
-  else line not ready, or yard exit block occupied, closed,\nclosing or within a train's authority, or the scheduler\nholds the run
-    Model -> Model : the train keeps waiting
+    note over Model : skip the line (one at a time)
+  else line not ready, or yard exit block occupied, closed,\nclosing or within a train's authority
+    note over Model : the train keeps waiting
+  else _scheduler_holds(train_id)
+    note over Model : the train keeps waiting
   else
-    Model -> Model : release it: it holds the yard exit block\n(Green 63, Red 9)
+    Model -> Model : _released[train_id] = line
+    note right of Model : it holds the yard exit block\n(Green 63, Red 9)
   end
 end
-Model --> H : new_trains = [NewTrain(train_id, line)]\n(once, on this step only)
-H -> TM : add the train at the yard exit block
+Model --> H : outputs.new_trains = [NewTrain(train_id, line)]\n(once, on this step only)
+H -> H : Roster.apply(outputs, sim_time_s)
+H -> TM : (next tick) placement_report(yard exit block)\nas the train's Train Model report
 
 == Leaving the yard (a later step) ==
 H -> Model : step (yard exit block now occupied)
-Model -> Tr : update(..., waiting = released trains)
+Model -> Tr : update(occupied, now_s, plans, waiting = released trains)
 Tr --> Model : the released train is on the track
-Model -> Model : it gets suggestions from now on (SD-21)
+note over Model : it gets suggestions from now on (SD-21)
 
 == Retire (step m) ==
-loop each train sent to the yard
-  opt its head and tail are in the yard entry block\n(Green 57, Red 9), its authority there is 0\nand it can no longer be moving
-    Model -> Model : drop its order; out of service
+Model -> Model : _retire()
+loop each train with authority
+  opt _sent_to_yard(train_id), its destination is a yard entry\nblock (Green 57, Red 9), authority 0 there\nand _at_a_stand(train, order)
+    Model -> Model : del _orders[train_id]
+    note right of Model : out of service
   end
 end
-Model --> H : retired_trains = [RetiredTrain(train_id)]
-H -> TM : remove the train
+Model --> H : outputs.retired_trains = [RetiredTrain(train_id)]
+H -> H : Roster.apply(outputs, sim_time_s)
+H -> TM : the train is removed
 H -> Model : (next step) the yard entry block is clear
-Model -> Model : a scheduled run is "done"
+note over Model : a scheduled run is "done" (SD-19)
 @enduml

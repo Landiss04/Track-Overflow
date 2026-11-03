@@ -13,6 +13,29 @@ MODULES = ("track-controller-hw", "train-controller-hw")
 HELLO, ACTION, ACK, VIEW = "HELLO", "ACTION", "ACK", "VIEW"
 
 
+def matches_hello(
+    reply: Mapping[str, Any],
+    *,
+    module: str,
+    session: str,
+    agent_version: str,
+    agent_hash: str,
+) -> bool:
+    """Match a decoded HELLO to the host's expected peer and session.
+
+    Framing and field types are checked by decode. Boot/recovery policy belongs
+    to the caller; a bringup probe does not require a boot identifier.
+    """
+    return (
+        reply.get("op") == HELLO
+        and reply.get("module") == module
+        and reply.get("protocol") == VERSION
+        and reply.get("session") == session
+        and reply.get("agent_version") == agent_version
+        and reply.get("agent_hash") == agent_hash
+    )
+
+
 def validate(message: Mapping[str, Any]) -> None:
     """Check framing fields and operation-specific payloads."""
     op = message.get("op")

@@ -183,8 +183,8 @@ def test_every_step_keeps_the_invariants(seed: int) -> None:
         ), where
 
         if snap.failures.signal_pickup:
-            assert ctl.commanded_speed_mps == 0.0, where
-            assert ctl.authority_blocks == 0, where
+            assert ctl.commanded_speed_mps is None, where
+            assert ctl.authority_blocks is None, where
         else:
             assert ctl.commanded_speed_mps == (
                 trk.track_signal.commanded_speed_mps), where

@@ -24,7 +24,7 @@ Panel {
     objectName: "testInputs"
 
     readonly property var s: controller.snapshot
-    readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
+    readonly property var aspects: ["RED", "YELLOW", "GREEN", "SUPER_GREEN"]
     // Shown in words, sent as the beacon encodes them (truth
     // beacon.md), index for index.
     readonly property var sideLabels: ["Left", "Right", "Both"]
@@ -41,10 +41,14 @@ Panel {
         "cabin_temperature": Math.round(s.cabin_temp_f),
         "signal_light_ahead": s.next_signal,
 <<<<<<< HEAD
+<<<<<<< HEAD
         "brake_state_emergency": s.fb_emergency_brake,
 =======
         "emergency_brake_state": s.fb_emergency_brake,
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        "emergency_brake_state": s.fb_emergency_brake,
+>>>>>>> integrate/quirky-into-development-resolved
         "door_state_left": s.fb_doors_left,
         "door_state_right": s.fb_doors_right,
         "light_state_interior": s.fb_interior_lights,
@@ -54,12 +58,18 @@ Panel {
         "failure_engine": s.inject_engine,
         "failure_signal_pickup": s.inject_pickup,
 <<<<<<< HEAD
+<<<<<<< HEAD
         "failure_brake": s.inject_brake
 =======
         "failure_brake": s.inject_brake,
         // The bench's own: whether the beacon is heard every tick.
         "at_station": s.bench_at_station
 >>>>>>> origin/Train_Ctrl_integration
+=======
+        "failure_brake": s.inject_brake,
+        // The bench's own: whether the beacon is heard every tick.
+        "at_station": s.bench_at_station
+>>>>>>> integrate/quirky-into-development-resolved
     })
 
     // What is typed but not sent, and which rows were typed in. The
@@ -136,7 +146,10 @@ Panel {
             variant: root.dirty ? "warning" : "ok"
         },
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         // An event, not a row: the Track Model's next count, sent at
         // once (REQUIREMENTS.md M16).
         AppButton {
@@ -147,7 +160,10 @@ Panel {
             text: qsTr("Block change")
             onClicked: controller.bench_block_change()
         },
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
         AppButton {
             size: "small"
             variant: root.paused ? "primary" : "ghost"
@@ -250,7 +266,10 @@ Panel {
                 }
             }
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
             // At a station the beacon rows below are heard every tick;
             // otherwise only once, when one of them is sent.
             SignalEditRow {
@@ -267,7 +286,10 @@ Panel {
                     && root.pending("at_station")
                 onEdited: function (v) { root.stage("at_station", v); }
             }
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
             SignalEditRow {
                 Layout.fillWidth: true
                 editable: true
@@ -344,12 +366,17 @@ Panel {
                 valueWidth: 160
                 unitWidth: 52
 <<<<<<< HEAD
+<<<<<<< HEAD
                 name: "brake_state_emergency"
+=======
+                name: "emergency_brake_state"
+>>>>>>> integrate/quirky-into-development-resolved
                 kind: "bool"
-                value: root.draft.brake_state_emergency
-                pending: root.touched["brake_state_emergency"] === true
-                    && root.pending("brake_state_emergency")
+                value: root.draft.emergency_brake_state
+                pending: root.touched["emergency_brake_state"] === true
+                    && root.pending("emergency_brake_state")
                 onEdited: function (v) {
+<<<<<<< HEAD
                     root.stage("brake_state_emergency", v);
 =======
                 name: "emergency_brake_state"
@@ -360,6 +387,9 @@ Panel {
                 onEdited: function (v) {
                     root.stage("emergency_brake_state", v);
 >>>>>>> origin/Train_Ctrl_integration
+=======
+                    root.stage("emergency_brake_state", v);
+>>>>>>> integrate/quirky-into-development-resolved
                 }
             }
             SignalEditRow {

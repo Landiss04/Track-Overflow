@@ -15,6 +15,8 @@ Item {
         anchors.fill: parent
         spacing: 0
 
+        // The numbers drawer is to be removed in the final iteration,
+        // and with it the hero row's visible binding below.
         NumbersDrawer {
             id: numbers
             objectName: "numbersDrawer"   // opened by main.py --check

@@ -1,14 +1,20 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Station announcement. The controller only sends the command and the
 // Train Model makes the announcement (REQUIREMENTS.md M7). In Automatic
 // the command goes out on the approach to a station, so the control
 // reports that instead of inviting a press.
 =======
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 // Announcements. The controller only sends the command and the Train
 // Model makes the announcement (REQUIREMENTS.md M7). They go out
 // automatically in both modes; in Manual the driver may repeat the last
 // one, so in Automatic the control says so instead of inviting a press.
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 import QtQuick
 import QtQuick.Layouts
 import "../../../ui"
@@ -29,12 +35,20 @@ Panel {
 
     AppButton {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+        id: button
+>>>>>>> integrate/quirky-into-development-resolved
         Layout.fillWidth: true
+        // Room for two lines whatever the label says, so the panel
+        // never changes height when the label does.
+        Layout.preferredHeight: 2 * fit.height + 2 * theme.space_3
         size: "large"
         variant: "secondary"
         text: root.s.announce_label
-        enabled: root.s.can_drive && !root.s.announcing
+        enabled: root.s.can_drive && root.s.can_announce
         onClicked: controller.announce()
+<<<<<<< HEAD
 =======
         id: button
         Layout.fillWidth: true
@@ -46,6 +60,8 @@ Panel {
         text: root.s.announce_label
         enabled: root.s.can_drive && root.s.can_announce
         onClicked: controller.announce()
+=======
+>>>>>>> integrate/quirky-into-development-resolved
 
         // The shared button's label, wrapping onto a second line
         // instead of eliding when the panel is narrow.
@@ -68,6 +84,9 @@ Panel {
             font.pixelSize: button.labelSize
             font.weight: theme.weight_bold
         }
+<<<<<<< HEAD
 >>>>>>> origin/Train_Ctrl_integration
+=======
+>>>>>>> integrate/quirky-into-development-resolved
     }
 }

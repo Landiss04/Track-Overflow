@@ -15,12 +15,17 @@ from .errors import InvalidInputError
 # heard near a station (truth beacon.md).
 EVERY_TICK = ("actual_speed", "commanded_speed", "authority_blocks",
 <<<<<<< HEAD
+<<<<<<< HEAD
               "brake_state", "door_state", "light_state",
               "cabin_temperature")
 =======
               "emergency_brake_state", "service_brake_state",
               "door_state", "light_state", "cabin_temperature")
 >>>>>>> origin/Train_Ctrl_integration
+=======
+              "emergency_brake_state", "service_brake_state",
+              "door_state", "light_state", "cabin_temperature")
+>>>>>>> integrate/quirky-into-development-resolved
 
 
 def _read_flags(values: dict, key: str, count: int) -> list[bool]:
@@ -51,6 +56,7 @@ def read_inputs(values: dict) -> dict[str, Any]:
     actual_speed (m/s, actual signed),
     cabin_temperature (C), authority_blocks, signal_light_ahead,
 <<<<<<< HEAD
+<<<<<<< HEAD
     beacon_station / beacon_side / beacon_underground, brake_state
     bool[2] (emergency, service), door_state bool[2] (left, right)
 =======
@@ -58,6 +64,11 @@ def read_inputs(values: dict) -> dict[str, Any]:
     emergency_brake_state and service_brake_state (bool each, what is
     engaged; REQUIREMENTS.md M18), door_state bool[2] (left, right)
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    beacon_station / beacon_side / beacon_underground,
+    emergency_brake_state and service_brake_state (bool each, what is
+    engaged; REQUIREMENTS.md M18), door_state bool[2] (left, right)
+>>>>>>> integrate/quirky-into-development-resolved
     and light_state bool[2] (interior, exterior). There is no
     failure status: the Train Model no longer sends one (truth
     modules/train-model.md); detect_failures() infers failures
@@ -68,9 +79,16 @@ def read_inputs(values: dict) -> dict[str, Any]:
     that cannot be read as its type.
     """
     staged: dict[str, Any] = {}
+    # A null commanded speed or authority is a Track Signal the Train
+    # Model could not read: a signal pickup failure (Kevin Schillinger
+    # 2026-10-28). The last values received are kept, unused.
+    signal = [key for key in ("commanded_speed", "authority_blocks")
+              if key in values]
+    if signal:
+        staged["signal_lost"] = any(values[key] is None for key in signal)
     # Commanded speed is the speed limit; a separate speed_limit is
     # ignored like any unknown key (REQUIREMENTS.md M1).
-    if "commanded_speed" in values:
+    if values.get("commanded_speed") is not None:
         staged["commanded_mps"] = max(
             0.0, _read_number(values, "commanded_speed"))
     if "actual_speed" in values:
@@ -78,7 +96,7 @@ def read_inputs(values: dict) -> dict[str, Any]:
     if "cabin_temperature" in values:
         staged["cabin_temp_c"] = _read_number(
             values, "cabin_temperature")
-    if "authority_blocks" in values:
+    if values.get("authority_blocks") is not None:
         staged["authority_blocks"] = max(
             0, int(_read_number(values, "authority_blocks")))
     if "beacon_station" in values:
@@ -91,6 +109,7 @@ def read_inputs(values: dict) -> dict[str, Any]:
     if values.get("signal_light_ahead") in ASPECTS:
         staged["next_signal"] = values["signal_light_ahead"]
 <<<<<<< HEAD
+<<<<<<< HEAD
     if "brake_state" in values:
         staged["brake_state"] = _read_flags(values, "brake_state", 2)
 =======
@@ -98,6 +117,11 @@ def read_inputs(values: dict) -> dict[str, Any]:
         if key in values:
             staged[key] = bool(values[key])
 >>>>>>> origin/Train_Ctrl_integration
+=======
+    for key in ("emergency_brake_state", "service_brake_state"):
+        if key in values:
+            staged[key] = bool(values[key])
+>>>>>>> integrate/quirky-into-development-resolved
     if "door_state" in values:
         staged["fb_doors_left"], staged["fb_doors_right"] = (
             _read_flags(values, "door_state", 2))

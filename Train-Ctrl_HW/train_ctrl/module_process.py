@@ -131,6 +131,7 @@ class TrainControllerProcess(QObject):
                     train_id: dict(entry["inputs"])
                     for train_id, entry in trains.items()
                 },
+                sim_time_s,
             )
         except TrainControllerError as error:
             raise TickRejectedError(str(error)) from error

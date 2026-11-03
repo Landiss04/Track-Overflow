@@ -165,7 +165,10 @@ someone else's work says what is left for them.
   block occupancy and the Track Model's own switch, crossing and signal
   read-back. It carries no failure (C1) and no train (B4).
 
-- [ ] **C6. Signal placement.** Ours and HW: one signal at every switch, named
+- [x] **C6. Signal placement.** Confirmed by Harry Tye 2026-10-28: one signal per
+  switch, at its point, named by the switch, and facing the oncoming train (TM-2,
+  `86f4658`). Before:
+  Ours and HW: one signal at every switch, named
   after the block it is on. Track Model: signals stand on the block **before**
   each switch. HW and the Track Model disagree with each other too. The harness
   maps each light through its switch (`common/harness/track_devices.py`): ours by
@@ -301,7 +304,11 @@ someone else's work says what is left for them.
       77 bound for 101 enters 76 with the switch reverse and waits there for good.
       Locking on the points block as well would be more restrictive, not less;
       moving the lock off the listed block would be less restrictive and would
-      clear that case. Not changed here.
+      clear that case. Not changed here. The waiting case is closed from the
+      CTC side instead (Landis and Harry Tye, 2026-10-28, relayed by Kevin): the
+      CTC counts a switch's blocks as next to each other whatever position it
+      reports, so a follower stays on 75 while a train is on 77. The lock is
+      unchanged, and the points-block question for a user program stays open.
     - A way in from another wayside's block is not seen. Green's default
       division has only one (150 to 28), which switch 28 stands for. Another
       division can have more; a cross-wayside input (the neighbour's occupancy

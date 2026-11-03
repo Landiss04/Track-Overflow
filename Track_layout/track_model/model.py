@@ -70,6 +70,9 @@ DEFAULT_ASPECT = SignalAspect.RED
 #: PROVISIONAL: the Track Model never learns door state, so a train
 #: counts as stopped at a station when its speed is exactly zero.
 STOPPED_SPEED_MPS = 0.0
+#: Ambient temperature at or below which every section's heater is on
+#: (TM-3, Track Model owner 2026-10-26).
+HEATER_ON_AT_C = 0.0
 #: PROVISIONAL: how far running heaters hold a section's track above
 #: ambient, once warmed up.
 HEATER_RISE_C = 10.0
@@ -159,13 +162,17 @@ class TrackModel:
         # A temperature set in the Track Model window wins over the one
         # a sender gives, until the module restarts. The central harness
         # sends none: the window is the source (G-SIG-18).
+        ambient: float | None = None
         if self._ambient_override_c is not None:
-            self._ambient_temp_c = self._ambient_override_c
+            ambient = self._ambient_override_c
         elif inputs.ambient_temp_c is not None:
-            self._ambient_temp_c = inputs.ambient_temp_c
+            ambient = inputs.ambient_temp_c
+        if ambient is not None:
+            self._ambient_temp_c = ambient
+        self._switch_heaters(ambient)
         self._update_track_temps(dt)
         self._move_trains(inputs.trains)
-        self._last_sales = self._sell_tickets()
+        self._last_sales = self._sell_tickets(dt)
         # A train that ran into the yard this tick gets no feed.
         feeds = {
             train_id: self._feed(self._trains[train_id], report)
@@ -293,7 +300,9 @@ class TrackModel:
         self._switch_cmd.update(commands.switch_commands)
         self._crossing_cmd.update(commands.crossing_commands)
         self._signal_cmd.update(commands.signal_commands)
-        self._heater_cmd.update(commands.heater_commands)
+        # Heater commands are not applied: the Track Model switches the
+        # heaters itself (D026, ``_switch_heaters``). The field stays on
+        # the boundary so a sender that still fills it is not refused.
         for switch_id, position in self._switch_cmd.items():
             if not self._powered_off(switch_id):
                 self._switches[switch_id] = position
@@ -316,8 +325,20 @@ class TrackModel:
         # Gates go down without power (fail-safe).
         return self._powered_off(block_id) or self._crossing_cmd[block_id]
 
+    def _switch_heaters(self, ambient_c: float | None) -> None:
+        # The Track Model switches the heaters itself (D026; TM-3, Track
+        # Model owner 2026-10-26): every section's heater is on at or
+        # below HEATER_ON_AT_C ambient and off above it, with no
+        # hysteresis. With no ambient this tick, or one not finite, they
+        # keep their last state.
+        if ambient_c is None or not is_finite(ambient_c):
+            return
+        on = ambient_c <= HEATER_ON_AT_C
+        for section_id in self._heater_cmd:
+            self._heater_cmd[section_id] = on
+
     def _heater_on(self, section_id: str) -> bool:
-        # A section's heaters run if commanded and none of its blocks
+        # A section's heaters run if switched on and none of its blocks
         # has lost power.
         return self._heater_cmd[section_id] and not any(
             self._powered_off(b) for b in self._sections[section_id]
@@ -434,12 +455,16 @@ class TrackModel:
     # Stations
     # ------------------------------------------------------------------ #
 
-    def _sell_tickets(self) -> dict[str, int]:
-        # Each station rolls for one new ticket per tick. Returns the
-        # tickets sold this tick by station. No running total is kept.
+    def _sell_tickets(self, dt: float) -> dict[str, int]:
+        # Each station rolls for one new ticket per tick, with the chance
+        # that gives tickets_per_minute whatever the tick length (TM-1):
+        # 0.02 at the 0.1 s system tick for the default 12 a minute.
+        # Returns the tickets sold this tick by station. No running total
+        # is kept.
+        chance = min(1.0, self.config.tickets_per_minute * dt / 60.0)
         sales: dict[str, int] = {}
         for station in self._waiting:
-            sold = int(self._rng.random() < self.config.ticket_probability)
+            sold = int(self._rng.random() < chance)
             self._waiting[station] += sold
             sales[station] = sold
         return sales
@@ -491,12 +516,22 @@ class TrackModel:
         )
 
     def _signal_seen(self, train: _Train) -> SignalAspect | None:
-        # A train sees a light once, on the tick it enters that block.
-        if not train.entered_this_tick:
-            return None
-        if train.block_id not in self._signal_set:
-            return None
-        return self._signal_state(train.block_id)
+        # The light ahead of a train, every tick (TM-2, B1): walk the
+        # rails ahead of it its way, with the switches as set, to the
+        # first switch it comes onto from the point's fixed side, where
+        # the light faces it. None when it reaches the yard or a dead end
+        # first, or has gone round the whole line.
+        here, came_from = train.block_id, train.previous_block_id
+        for _ in range(len(self._blocks)):
+            ahead = self._layout.next_block(here, came_from, self._switches)
+            if ahead is None or ahead == here:
+                return None
+            switch = self._layout.switches.get(ahead)
+            if switch is not None and here not in (
+                    switch.normal_block_id, switch.reverse_block_id):
+                return self._signal_state(ahead)
+            here, came_from = ahead, here
+        return None
 
     def _controller_outputs(self) -> TrackControllerOutputs:
         # Everything the Track Controller reads back: actual states.

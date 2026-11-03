@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 """What the test bench simulates in place of the rest of the system. No Qt.
+=======
+"""What the bench simulates in place of the rest of the system. No Qt.
+>>>>>>> integrate/quirky-into-development-resolved
 
 The bench drives the controller the way the central harness does
 (REQUIREMENTS.md M0): each tick it hands every train the input dict
@@ -61,7 +65,11 @@ class SimTrain:
     applied coasts forever, so the only ways down are the two brakes.
     An injected engine failure zeroes traction; an injected brake
     failure blocks the service brake only, and only then does rolling
+<<<<<<< HEAD
     resistance act. An injected signal pickup failure sends zeros for
+=======
+    resistance act. An injected signal pickup failure sends null for
+>>>>>>> integrate/quirky-into-development-resolved
     commanded speed and authority, as the Train Model does.
     """
 
@@ -98,11 +106,19 @@ class SimTrain:
         self._acted_lights: tuple[bool, bool] | None = None
 
     def outputs(self) -> dict[str, Any]:
+<<<<<<< HEAD
         """This tick's signals to the controller, as the harness sends them."""
         pickup = self.injected["signal_pickup"]
         values = {
             "commanded_speed": 0.0 if pickup else self.commanded_mps,
             "authority_blocks": 0 if pickup else self.authority_blocks,
+=======
+        """This tick's signals to the controller, as from a harness."""
+        pickup = self.injected["signal_pickup"]
+        values = {
+            "commanded_speed": None if pickup else self.commanded_mps,
+            "authority_blocks": None if pickup else self.authority_blocks,
+>>>>>>> integrate/quirky-into-development-resolved
             "actual_speed": self.actual_mps,
             "emergency_brake_state": self.emergency_brake or self._pull,
             "service_brake_state": self.service_brake,
@@ -118,7 +134,11 @@ class SimTrain:
         return values
 
     def apply(self, staged: dict[str, Any]) -> None:
+<<<<<<< HEAD
         """Take a bench edit, already read and checked by read_inputs()."""
+=======
+        """Take a bench edit, already checked by read_inputs()."""
+>>>>>>> integrate/quirky-into-development-resolved
         for key, value in staged.items():
             if key == "emergency_brake_state":
                 self._pull = self._pull or bool(value)

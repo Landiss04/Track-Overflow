@@ -18,6 +18,7 @@ import random
 from utils.beacon_codec import encode_beacon
 
 from train_model.interface import (
+    Beacon,
     ControllerOutputs,
     FailureState,
     TrainConfig,
@@ -120,6 +121,12 @@ class TrainModel:
         self._cabin_temp_c = INITIAL_CABIN_TEMP_C
         self._failures = FailureState()
         self._passenger_ebrake_pulled = False
+        # Whether last tick's controller emergency brake was on while a
+        # pull was latched. The pull clears when that command goes off.
+        self._pull_held_by_controller = False
+        # The last beacon heard. A beacon comes on the block before a
+        # station and is reported while the train is on that station.
+        self._held_beacon: Beacon | None = None
         self._last_polarity: bool | None = None
         self._door_left_open = False
         self._door_right_open = False
@@ -158,11 +165,15 @@ class TrainModel:
         self.validate_inputs(dt, inputs)
         cmd = inputs.controller
         track = inputs.track
-        if cmd.passenger_brake_release:
-            # The Train Controller releases a passenger pull
-            # (arbitration/passenger-emergency-brake). Its own
-            # emergency brake follows emergency_brake.
+        if self._pull_held_by_controller and not cmd.emergency_brake:
+            # A passenger pull stays latched until the Train Controller
+            # sends emergency brake false (Kevin Schillinger
+            # 2026-10-28). A pull made since its last true is kept.
             self._passenger_ebrake_pulled = False
+        self._pull_held_by_controller = (
+            cmd.emergency_brake and self._passenger_ebrake_pulled)
+        if track.beacon is not None:
+            self._held_beacon = track.beacon
 
         # Train Controller owns the door interlock (October 20 review).
         # Model follows commands at any speed; the disabled historical
@@ -220,7 +231,6 @@ class TrainModel:
             "exterior_lights": cmd.exterior_lights,
             "door_left_open": cmd.door_left_open,
             "door_right_open": cmd.door_right_open,
-            "passenger_brake_release": cmd.passenger_brake_release,
             "polarity": track.track_info.polarity,
         }
         if track.beacon is not None:
@@ -333,6 +343,7 @@ class TrainModel:
     def clear_passenger_brake_for_test(self) -> None:
         """Clear the latch for testing, without defining normal UI release."""
         self._passenger_ebrake_pulled = False
+        self._pull_held_by_controller = False
         self._refresh_discrete_outputs()
 
     def _refresh_discrete_outputs(self) -> None:
@@ -573,9 +584,8 @@ class TrainModel:
         failures = self._failures
         service_cmd = False
         emergency_cmd = False
-        commanded_speed_mps = 0.0
-        authority_blocks = 0
-        speed_limit_mps = 0.0
+        commanded_speed_mps: float | None = 0.0
+        authority_blocks: int | None = 0
         block_id = _NO_BLOCK_ID
         interior = False
         exterior = False
@@ -586,14 +596,22 @@ class TrainModel:
             service_cmd = cmd.service_brake
             emergency_cmd = cmd.emergency_brake
             block_id = track.track_info.block_id
-            speed_limit_mps = track.track_info.speed_limit_mps
             interior = cmd.interior_lights
             exterior = cmd.exterior_lights
-            # Pass this tick's beacon; None otherwise. Controller retains data.
-            beacon = track.beacon
-            # Under signal pickup failure, commanded speed
-            # is 0.0 and authority is 0 blocks.
-            if not failures.signal_pickup:
+            # The beacon of the block the train is on: the one heard on
+            # the block before, while this block is its station; None
+            # elsewhere (Kevin Schillinger 2026-10-28).
+            held = self._held_beacon
+            station = track.track_info.station_name
+            if held is not None and station == held.station_name:
+                beacon = held
+            # Under signal pickup failure the track signal cannot be
+            # read: commanded speed and authority are null, invalid
+            # data, not a valid 0 (Kevin Schillinger 2026-10-28).
+            if failures.signal_pickup:
+                commanded_speed_mps = None
+                authority_blocks = None
+            else:
                 commanded_speed_mps = track.track_signal.commanded_speed_mps
                 authority_blocks = track.track_signal.authority_blocks
         ebrake, service = _brakes_engaged(
@@ -613,7 +631,6 @@ class TrainModel:
                 cabin_temp_c=self._cabin_temp_c,
                 commanded_speed_mps=commanded_speed_mps,
                 authority_blocks=authority_blocks,
-                speed_limit_mps=speed_limit_mps,
                 beacon=beacon,
             ),
             track=TrackOutputs(

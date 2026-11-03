@@ -351,7 +351,9 @@ class TrainModelState(QObject):
             ),
             "actual_speed": ctl.actual_speed_mps,
             "commanded_speed": ctl.commanded_speed_mps,
-            "speed_limit": ctl.speed_limit_mps,
+            # Track Info, shown here; not sent to the Train Controller.
+            "speed_limit": (inputs.track.track_info.speed_limit_mps
+                            if inputs is not None else 0.0),
             "authority": ctl.authority_blocks,
             "acceleration": snap.acceleration_mps2,
             "passengers": snap.n_passengers,
@@ -386,10 +388,11 @@ class TrainModelState(QObject):
             inputs.track.track_info.station_name if inputs is not None
             else None
         ) or ""
-        if ctl.beacon is not None:
-            self._next_station = (
-                ctl.beacon.station_name, ctl.beacon.platform_side
-            )
+        # The beacon heard, on the block before a station: the
+        # controller output carries it only once the train is there.
+        heard = inputs.track.beacon if inputs is not None else None
+        if heard is not None:
+            self._next_station = (heard.station_name, heard.platform_side)
         if (self._next_station is not None
                 and station == self._next_station[0]):
             # Arrived: the station is now the current one.

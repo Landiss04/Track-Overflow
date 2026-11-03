@@ -1,4 +1,4 @@
-**Target:** truth/decisions/D033-red-test-plc-switch-routing.md
+**Target:** truth/decisions/D039-red-test-plc-switch-routing.md
 **Action:** create
 **Proposed by:** Integration on claude/quirky-fermi-sickg4
 **Provenance:** asserted by Kevin Schillinger 2026-10-22, choosing to reuse Braden's switch logic for the Red test PLC programs; supersedes Kevin Schillinger's earlier "wait for real" (2026-10-22) for Red switching.
@@ -16,7 +16,7 @@ for real" or says that the Red test programs do not route switches. The
 
 ---
 
-# D033-red-test-plc-switch-routing
+# D039-red-test-plc-switch-routing
 
 **Status:** current
 **Owner:** Braden (Track Controller HW); contract owner Harry Tye

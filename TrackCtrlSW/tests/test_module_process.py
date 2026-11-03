@@ -128,9 +128,10 @@ class ProcessTest(unittest.TestCase):
             {report.reason for report in decoded.ctc_reports},
             {"no PLC program"},
         )
-        # Fail-safe: every suggested block sends speed 0, authority 0.
-        self.assertEqual(self.circuits(outputs),
-                         {"63": (0, 0), "64": (0, 0)})
+        # A wayside running nothing transmits nothing (README, Startup).
+        # That is fail-safe: the Track Model reads a block not commanded
+        # this tick as speed 0, authority 0.
+        self.assertEqual(self.circuits(outputs), {})
 
     def test_started_up_it_passes_the_suggestions_on(self) -> None:
         self.state.loadStarterPrograms()

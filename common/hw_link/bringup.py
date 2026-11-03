@@ -217,13 +217,12 @@ def main(argv: list[str] | None = None) -> int:
                     return
                 reply_bytes += len(line) + 1
                 if index == -1:
-                    if (
-                        reply["op"] != p.HELLO
-                        or reply.get("module") != opts.module
-                        or reply.get("protocol") != p.VERSION
-                        or reply.get("session") != session
-                        or reply.get("agent_version") != AGENT_VERSION
-                        or reply.get("agent_hash") != bundle_hash
+                    if not p.matches_hello(
+                        reply,
+                        module=opts.module,
+                        session=session,
+                        agent_version=AGENT_VERSION,
+                        agent_hash=bundle_hash,
                     ):
                         finish(
                             "HELLO identity/version/session/"

@@ -385,8 +385,8 @@ class StationStopTest(unittest.TestCase):
 
     def test_authority_never_falls_from_two_blocks_to_none(self) -> None:
         # The preloaded next block carries the train's values as it
-        # enters; without it the Train Controller would read a pickup
-        # failure at every block (R49).
+        # enters; without it the train would read a stop at every
+        # block (R49).
         authority = [report["authority_blocks"]
                      for _, _, report, _, _ in self.trace]
         for before, after in zip(authority, authority[1:]):
@@ -448,10 +448,11 @@ class StationStopTest(unittest.TestCase):
         self.assertGreater(boarded, 0)
 
     def test_the_driver_sees_the_light_the_wayside_set(self) -> None:
-        # The light on block 64 is the yard switch's (Green 62). The
-        # starter program shows it YELLOW while the blocks past it, 63
-        # and 64, are occupied, as they are while G1 enters 64.
-        self.assertEqual(self.core.state.next_signal, "YELLOW")
+        # Out of the yard, G1 runs 63 -> 64 past switch 62's point, whose
+        # light faces the other way (TM-2): the light ahead of it is the
+        # next it comes onto from the fixed side, switch 85's at 85. The
+        # starter program shows that GREEN, with no train near it.
+        self.assertEqual(self.core.state.next_signal, "GREEN")
 
     def test_every_ticket_sold_reaches_the_ctc_office_once(self) -> None:
         # The last tick's sales are still on their way.
@@ -755,10 +756,10 @@ class SwitchAndLightTest(unittest.TestCase):
 
     def test_each_light_shows_what_its_wayside_commands(self) -> None:
         # The Track Controller names a light by its switch's block, the
-        # Track Model by the block it stands on.
-        lights = {"12": "GREEN D-14", "28": "GREEN F-27",
-                  "58": "GREEN I-56", "62": "GREEN K-64",
-                  "76": "GREEN N-78", "85": "GREEN N-84"}
+        # Track Model by the switch's point, where it stands (TM-2).
+        lights = {"12": "GREEN D-13", "28": "GREEN F-28",
+                  "58": "GREEN I-57", "62": "GREEN K-63",
+                  "76": "GREEN N-77", "85": "GREEN N-85"}
         commands = {
             entry["block"]["block_id"]: entry["value"]
             for entry in self.loop.outputs[TRACK_CONTROLLER_SW][
@@ -780,6 +781,10 @@ class SwitchAndLightTest(unittest.TestCase):
             {switch: commands[switch] for switch in lights},
         )
 
+    # Not ready, Harry's Track Controller SW sends no switches, signals
+    # or track circuits, but commands every crossing active (e5e51d4,
+    # 2026-10-28). Speed and authority are fail-safe: a block not
+    # commanded reads 0/0.
     def test_crossings_follow_their_wayside(self) -> None:
         # Not ready, every wayside holds its crossings down: fail-safe.
         # The Red Line's have no Track Controller yet, and stay up.
@@ -831,8 +836,10 @@ class FailureTest(unittest.TestCase):
             {key.block_id for wayside in snapshot.waysides
              for key in wayside.occupied_blocks},
         )
+        # It stops at 66, one empty block (67) short of the occupied
+        # 68 (CTC Office, one empty block between trains).
         stopped = loop.run_until(
-            lambda: loop.block == "67" and abs(loop.speed_mps) < 0.01,
+            lambda: loop.block == "66" and abs(loop.speed_mps) < 0.01,
             limit_s=120.0,
         )
         self.assertTrue(stopped, f"G1 is in block {loop.block}")
@@ -840,7 +847,7 @@ class FailureTest(unittest.TestCase):
         self.assertEqual((limit.reason, limit.at), ("occupied", "68"))
         for _ in range(100):
             loop.step()
-            self.assertEqual(loop.block, "67")
+            self.assertEqual(loop.block, "66")
         core = loop.controller_fleet.get("G1")
         self.assertFalse(core.state.emergency_brake)
 
@@ -851,6 +858,29 @@ class FailureTest(unittest.TestCase):
         self.assertTrue(loop.run_until(
             lambda: loop.followed[-1:] == ("69",), limit_s=1.0
         ))
+
+
+class SignalPickupTest(unittest.TestCase):
+    """A pickup failure injected in the Train Model reaches the Train
+    Controller as null, and it stops the train (Kevin Schillinger
+    2026-10-28)."""
+
+    def test_null_track_signal_stops_the_train(self) -> None:
+        loop = _Loop(dispatches=(Dispatch("G1", "Green", DORMONT),))
+        self.assertTrue(loop.run_until(
+            lambda: loop.has(TRAIN_MODEL) and loop.speed_mps > 5
+        ))
+        core = loop.controller_fleet.get("G1")
+        self.assertFalse(core.state.failures["signal_pickup"])
+        loop.model_fleet.get("G1").setFailure("signal_pickup_failure", True)
+        self.assertTrue(loop.run_until(
+            lambda: core.state.failures["signal_pickup"],
+            limit_s=4 * ECHO_TICKS * DT_S,
+        ))
+        self.assertIsNone(loop.report["commanded_speed_mps"])
+        self.assertIsNone(loop.report["authority_blocks"])
+        self.assertTrue(core.state.emergency_brake)
+        self.assertTrue(loop.run_until(lambda: loop.speed_mps == 0.0))
 
 
 class EmergencyBrakeTest(unittest.TestCase):
@@ -878,16 +908,21 @@ class EmergencyBrakeTest(unittest.TestCase):
             self.assertFalse(self.core.state.emergency_brake)
         self.assertTrue(self.loop.run_until(lambda: self.loop.speed_mps > 1))
 
+    # A pull stays latched until the Train Controller sends emergency
+    # brake false (Kevin Schillinger 2026-10-28).
     def test_passenger_pull_and_release(self) -> None:
         self.loop.model_fleet.get("G1").applyEmergencyBrake()
         self.assertTrue(self.loop.run_until(
             lambda: self.core.state.emergency_brake, limit_s=3 * DT_S
         ))
         self.stop_and_release()
-        self.loop.step()
-        self.assertTrue(self.loop.commands["passenger_brake_release"])
-        self.loop.step()
-        self.assertFalse(self.loop.report["emergency_brake_active"])
+        self.assertTrue(self.loop.run_until(
+            lambda: not self.loop.report["emergency_brake_active"],
+            limit_s=4 * ECHO_TICKS * DT_S,
+        ))
+        for _ in range(4 * ECHO_TICKS):
+            self.loop.step()
+            self.assertFalse(self.core.state.emergency_brake)
         self.assertFalse(self.core.state.emergency_brake)
         self.assertTrue(self.loop.run_until(lambda: self.loop.speed_mps > 1))
 

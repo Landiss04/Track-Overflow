@@ -113,7 +113,8 @@ def test_action_cache_restores_actual_train_state(tmp_path):
                     "commanded_speed": 12,
                     "authority_blocks": 5,
                     "actual_speed": 0,
-                    "brake_state": [False, False],
+                    "emergency_brake_state": False,
+                    "service_brake_state": False,
                     "door_state": [False, False],
                     "light_state": [True, True],
                     "cabin_temperature": 21,
@@ -166,21 +167,13 @@ def test_replayed_station_dwell_integral_and_latches_match_reference(tmp_path):
     restored = PiLinkServer("train-controller-hw", tmp_path / "journal")
     after = restored.core.fleet.get("R1")
     assert vars(before.state) == vars(after.state)
-    for name in (
-        "_dwell_steps_left",
-        "integral",
-        "_brake_unanswered_s",
-        "_station_pending",
-        "_dwelling",
-        "_closing",
-        "_last_signal",
-        "_sent_emergency",
-        "_engine_window",
-    ):
-        assert getattr(before, name) == getattr(after, name)
-    count = after._dwell_steps_left
+    # Every latch, timer and integral the core keeps, whatever it names
+    # them.
+    kept = {k: v for k, v in vars(before).items() if k != "state"}
+    assert kept == {k: v for k, v in vars(after).items() if k != "state"}
+    count = after._dwell_ticks
     restored.handle(frame)
-    assert after._dwell_steps_left == count
+    assert after._dwell_ticks == count
 
 
 def test_agent_import_is_standard_library_only():
@@ -227,3 +220,110 @@ def test_restored_session_requires_fresh_successful_hello(tmp_path):
     assert rebooted.handle(step(2))[0]["reason"] == "HELLO required"
     rebooted.handle(hello())
     assert rebooted.handle(step(2))[0]["op"] == "OUTPUTS"
+
+
+def run_with_actions(journal, ticks):
+    # A train, its gains set by actions, then ``ticks`` steps.
+    from common.hw_link.tests.test_transports_recovery import request
+
+    server = PiLinkServer("train-controller-hw", journal)
+    server.handle(hello())
+    server.handle(request(1))
+    actions = [
+        p.message(
+            p.ACTION,
+            100 + index,
+            action="set_state",
+            args={"train_id": "R1", "field": field, "value": value},
+        )
+        for index, (field, value) in enumerate((("kp", 120000), ("ki", 8000)))
+    ]
+    replies = [server.handle(action)[0] for action in actions]
+    for tick in range(2, ticks + 1):
+        server.handle(request(tick))
+    return server, actions, replies
+
+
+@pytest.mark.parametrize("ticks", [23, 230])
+def test_checkpoint_bounds_journal_cache_and_restart(
+    tmp_path, monkeypatch, ticks
+):
+    import common.hw_link.agent as agent
+    from common.hw_link.tests.test_transports_recovery import request
+
+    monkeypatch.setattr(agent, "CHECKPOINT_TICKS", 5)
+    journal = tmp_path / "journal"
+    server, actions, replies = run_with_actions(journal, ticks)
+    last = server.handle(request(ticks))
+    # Disk and memory stay flat however long the run.
+    assert len(journal.read_text().splitlines()) <= 1 + 5
+    assert len(list(tmp_path.glob("journal.ckpt*"))) == 1
+    assert [k for k in server.cache if k[0] == "STEP"] == [
+        ("STEP", ticks + 10, ticks)
+    ]
+    # A restart replays at most one checkpoint interval.
+    executed = []
+    original = PiLinkServer._execute
+    monkeypatch.setattr(
+        PiLinkServer,
+        "_execute",
+        lambda self, request: executed.append(request) or original(
+            self, request
+        ),
+    )
+    rebooted = PiLinkServer("train-controller-hw", journal)
+    assert len(executed) <= 5
+    before, after = server.core.fleet.get("R1"), rebooted.core.fleet.get("R1")
+    assert vars(before.state) == vars(after.state)
+    assert {k: v for k, v in vars(before).items() if k != "state"} == {
+        k: v for k, v in vars(after).items() if k != "state"
+    }
+    # A resumed agent still answers the loads and the pending step from
+    # its cache.
+    assert rebooted.handle(hello())[0]["resumed"]
+    assert [rebooted.handle(action)[0] for action in actions] == replies
+    # Journal replies come back with lists for tuples: compare the wire.
+    resent = rebooted.handle(request(ticks))
+    assert [p.encode(m) for m in resent] == [p.encode(last[0])]
+    assert not executed[5:]
+
+
+def test_stale_agent_hash_starts_fresh(tmp_path, monkeypatch):
+    import common.hw_link.agent as agent
+
+    monkeypatch.setattr(agent, "CHECKPOINT_TICKS", 5)
+    journal = tmp_path / "journal"
+    run_with_actions(journal, 12)
+    lines = journal.read_text().splitlines()
+    header = json.loads(lines[0])
+    header["agent_hash"] = "older-bundle"
+    journal.write_text("\n".join([json.dumps(header), *lines[1:]]) + "\n")
+    logs = []
+    rebooted = PiLinkServer("train-controller-hw", journal, logs.append)
+    assert rebooted.session is None and "R1" not in rebooted.core.fleet
+    assert any("JOURNAL_STALE" in line for line in logs)
+    assert not rebooted.handle(hello())[0]["resumed"]
+    assert not list(tmp_path.glob("journal.ckpt*"))
+
+
+def test_crash_mid_checkpoint_keeps_previous_checkpoint(tmp_path, monkeypatch):
+    import common.hw_link.agent as agent
+    from common.hw_link.tests.test_transports_recovery import request
+
+    monkeypatch.setattr(agent, "CHECKPOINT_TICKS", 5)
+    journal = tmp_path / "journal"
+    server, _, _ = run_with_actions(journal, 8)
+    # Power lost after the next checkpoint was written, before the
+    # journal moved onto it.
+    seq = server._checkpoint_seq
+    (tmp_path / f"journal.ckpt{seq + 1}").write_bytes(b"half written")
+    rebooted = PiLinkServer("train-controller-hw", journal)
+    assert rebooted._checkpoint_seq == seq
+    assert vars(rebooted.core.fleet.get("R1").state) == vars(
+        server.core.fleet.get("R1").state
+    )
+    rebooted.handle(hello())
+    for tick in range(9, 14):
+        rebooted.handle(request(tick))
+    assert rebooted._checkpoint_seq == seq + 1
+    assert rebooted.core.fleet.get("R1").state.kp == 120000

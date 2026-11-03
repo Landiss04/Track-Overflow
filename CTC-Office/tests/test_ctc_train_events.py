@@ -320,7 +320,7 @@ class ReturnToYardTest(unittest.TestCase):
         self.assertEqual(self._orders(ctc), {"T2": "70"})
 
     def test_safety_refusals_change_nothing(self) -> None:
-        # The yard entry block closed, or closing (a train still in it).
+        # The yard entry block closed, with or without a train in it.
         ctc = self._manual()
         ctc.set_maintenance_mode(True)
         ctc.set_block_closed("Green", "57", True)
@@ -332,7 +332,7 @@ class ReturnToYardTest(unittest.TestCase):
         ctc.stage_inputs(reports(occupied=[("Green", "56"),
                                            ("Green", "57")]))
         ctc.set_block_closed("Green", "57", True)
-        with self.assertRaisesRegex(UnsafeActionError, "closing"):
+        with self.assertRaisesRegex(UnsafeActionError, "closed"):
             ctc.return_to_yard("T1")
         self.assertEqual(self._orders(ctc), {"T1": "65"})
 
@@ -357,17 +357,13 @@ class ReturnToYardTest(unittest.TestCase):
     def test_a_new_order_withdraws_the_return(self) -> None:
         # Sent back, then given an order of its own (here, to 57 too):
         # it stops there like any manual train, and is not retired.
-        for withdraw in ("dispatch", "cancel"):
-            with self.subTest(withdraw=withdraw):
-                ctc = self._manual()
-                ctc.return_to_yard("T1")
-                if withdraw == "cancel":
-                    ctc.cancel_dispatch("T1")
-                ctc.dispatch("T1", "Green", "57")
-                ctc.place_train("T1", "Green", "57")
-                for _ in range(30):
-                    self.assertEqual(_retired(_step(ctc, "57")), [])
-                self.assertEqual(self._orders(ctc), {"T1": "57"})
+        ctc = self._manual()
+        ctc.return_to_yard("T1")
+        ctc.dispatch("T1", "Green", "57")
+        ctc.place_train("T1", "Green", "57")
+        for _ in range(30):
+            self.assertEqual(_retired(_step(ctc, "57")), [])
+        self.assertEqual(self._orders(ctc), {"T1": "57"})
 
 
 class WireTest(unittest.TestCase):

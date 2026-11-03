@@ -1,0 +1,21 @@
+@startuml sd13_crossings
+!include ../style.iuml
+autonumber
+
+participant "Central\nHarness" as H
+participant "Wayside" as W
+participant "Program\n(user + vital block)" as PLC
+
+H -> W : step → scan(...): image with OCC_n
+W -> PLC : scan_a(image); scan_b(image)
+alt a train on the crossing's block or beside it
+  PLC --> W : values["XING_c"] = True
+else clear
+  PLC --> W : values["XING_c"] = False
+end
+W -> W : _drive(values): self._crossing_commands[key] =\nvalues[f"XING_{key.block_id}"]
+W --> H : WaysideScan.crossing_commands\n→ OUTPUTS track_model.crossing_commands (tick k)
+H -> H : track_controller_to_track_model(outputs,\nnames, devices)
+H -> W : next STEP → scan(...):\ntrack_model.crossings_active[key]
+W -> W : self._crossing_reports[key] = active;\nCtcReport.blocks[key].crossing_active = active
+@enduml

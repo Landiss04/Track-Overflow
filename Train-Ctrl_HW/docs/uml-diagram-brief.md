@@ -30,9 +30,9 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
   ASCII JSON `[station_name, platform_side, underground]`, at most 128 characters
   including syntax and escapes, rejected without truncation. See the exact
   [serialization](module-interface.md#beacon-payload-encoding). The working tree
-  now has a complete-payload codec; station-name length alone is insufficient. Between beacons output
-  `None`; Train Controller retains prior information when needed.
-- Signal pickup failure outputs zero commanded speed and authority; terrain is
+  now has a complete-payload codec; station-name length alone is insufficient. The Train
+  Model holds the last beacon heard and outputs it on that station's block, `None` elsewhere.
+- Signal pickup failure outputs null commanded speed and authority; terrain is
   unaffected. Train Controller owns the door interlock; model follows commands.
 - 480 kW is confirmed. Rolling resistance uses configured coefficient 0.002 and is
   the only passive resistance term; grade and commanded brake forces remain.
@@ -40,9 +40,9 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
 - Offset references the train’s front. Add no new rollback/block-crossing behavior.
 - Identity/line come from the fleet roster. Keep next station/platform; omit arrival
   from intended window labels. Current QML already omits arrival.
-- Show controller `passenger_brake_release: bool = False`, a one-shot clearing only
-  the passenger latch. An independently held controller emergency command remains
-  active; the window has no release action. This command already exists.
+- Do not show `passenger_brake_release`: it was withdrawn on 2026-10-28. A pull
+  clears when the controller's `emergency_brake` goes from true to false; the
+  window has no release action.
 - Integrated deployment has separate module processes, direct harness mappings
   between module-owned types, and one harness-owned clock (D005/D008/D017).
   `common/interfaces.py` is stale, never an intermediate catalog.
@@ -89,9 +89,8 @@ The supplied CTC PDF is historical peer context, not an override of D005/D008.
   Model window, by "Murphy". They are **not** sent to the Train Controller.
   The `failure-status` signal is withdrawn.
 - The passenger emergency brake is pulled from the Train Model window and
-  latches. The window has no release. The Train Controller releases the latch
-  through one-shot `passenger_brake_release`, already implemented. A held
-  controller emergency command stays active.
+  latches. The window has no release. The latch clears when the Train
+  Controller's `emergency_brake` goes from true to false.
 
 ## 2. Use case diagram
 
@@ -115,7 +114,7 @@ utility is excluded from the product boundary and actor inventory.
 | Receive terrain, circuit and beacon | Track Model. REQ-FUNC-042/046; commanded speed and integer block authority, not CTC suggested speed. |
 | Board and disembark passengers | Passenger/Track Model. REQ-FUNC-041.2; station eligibility owned by Track Model, rest/doors/count/capacity by Train Model. |
 | Pull and release passenger emergency brake | Passenger applies; Train Controller releases via one-shot command. REQ-FUNC-047. No window release control. |
-| Inject / clear failure | Murphy. REQ-FUNC-048.1/048.2/048.3. Engine zeroes traction; service failure blocks only service; pickup zeroes circuit outputs. |
+| Inject / clear failure | Murphy. REQ-FUNC-048.1/048.2/048.3. Engine zeroes traction; service failure blocks only service; pickup makes circuit outputs null. |
 
 Keep module actors outside the Train Model subject. Use include/extend relations
 only when they clarify shared behavior; label any failure extension point on the
@@ -145,7 +144,7 @@ aren't named.
 - **FailureState**: `engine`, `signal_pickup`, `brake`, all `bool`.
 - **ControllerCommands**: `power_cmd_w`, `service_brake`, `emergency_brake`,
   `interior_lights`, `exterior_lights`, `door_left_open`, `door_right_open`,
-  `temp_setpoint_c`, `announcement`, `passenger_brake_release: bool = False`.
+  `temp_setpoint_c`, `announcement`.
 - **TrackInfo**: `block_id`, `grade_deg`, `elevation_m`, `speed_limit_mps`,
   `polarity`, `station_name: str | None`.
 - **TrackSignal**: `commanded_speed_mps`, `authority_blocks: int`.
@@ -156,7 +155,7 @@ aren't named.
 - **ControllerOutputs**: `actual_speed_mps`, `emergency_brake_active`,
   `service_brake_active`, `door_left_open`, `door_right_open`,
   `interior_lights_on`, `exterior_lights_on`, `cabin_temp_c`,
-  `commanded_speed_mps`, `authority_blocks`, `speed_limit_mps`,
+  `commanded_speed_mps`, `authority_blocks`,
   `beacon: Beacon | None`.
 - **TrackOutputs**: `block_id`, `offset_m`, `actual_speed_mps`,
   `block_changed`, `passenger_capacity`.

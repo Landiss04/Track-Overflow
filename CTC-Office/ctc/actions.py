@@ -60,8 +60,6 @@ def apply_action(module: CtcOffice, op: str,
         module.dispatch(_string(args, "train_id"), _string(args, "line"),
                         _string(args, "destination_block_id"),
                         _arrival(args))
-    elif op == "cancel_dispatch":
-        module.cancel_dispatch(_string(args, "train_id"))
     elif op == "set_block_closed":
         module.set_block_closed(_string(args, "line"),
                                 _string(args, "block_id"),

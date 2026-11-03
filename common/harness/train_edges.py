@@ -16,7 +16,11 @@ Train Controller -> Train Model, ``train_controller_to_train_model``::
     light_command [i, e]    -> interior_lights, exterior_lights
     temperature_setpoint_c  -> temp_setpoint_c
     announcement            -> announcement
-    passenger_brake_release -> passenger_brake_release
+
+There is no passenger brake release: a passenger pull stays latched in
+the Train Model until the Train Controller's emergency brake goes from
+true to false (Kevin Schillinger 2026-10-28). The Train Controller's
+``power_verified`` (M21) is its own and does not cross this edge.
 
 Train Model -> Train Controller, ``train_model_to_train_controller``,
 from the Train Model's ``controller`` outputs::
@@ -24,8 +28,8 @@ from the Train Model's ``controller`` outputs::
     actual_speed_mps            -> actual_speed
     commanded_speed_mps         -> commanded_speed
     authority_blocks            -> authority_blocks
-    emergency_brake_active,
-    service_brake_active        -> brake_state [emergency, service]
+    emergency_brake_active      -> emergency_brake_state
+    service_brake_active        -> service_brake_state
     door_left_open,
     door_right_open             -> door_state [left, right]
     interior_lights_on,
@@ -34,20 +38,25 @@ from the Train Model's ``controller`` outputs::
     beacon, when over one       -> beacon_station, beacon_side,
                                    beacon_underground
 
-The Train Model also passes the block's speed limit through; the
-Train Controller takes commanded speed as its limit and has no input
-for it (``Train-Ctrl_HW/REQUIREMENTS.md`` M1), so this edge drops it.
+Under a signal pickup failure the Train Model sends commanded speed and
+authority as null, invalid data rather than a valid 0, and the Train
+Controller reads a null as a pickup failure (Kevin Schillinger
+2026-10-28). The edge passes the null on.
+
+The Train Model sends no speed limit: the Train Controller takes
+commanded speed as its limit (``Train-Ctrl_HW/REQUIREMENTS.md`` M1; its
+owner, 2026-10-28).
 
 The light ahead goes from the Track Model to the Train Controller
-directly (``signals/signal-aspect-ahead``), through
-``aspect_to_train_controller``.
+directly (``signals/signal-aspect-ahead``), unchanged: both spell the
+fourth aspect ``SUPER_GREEN`` (the Train Model and Train Controller
+owners, 2026-10-28).
 """
 
 from __future__ import annotations
 
 __all__ = [
     "INERT_COMMANDS",
-    "aspect_to_train_controller",
     "train_controller_to_train_model",
     "train_model_to_train_controller",
 ]
@@ -71,17 +80,6 @@ INERT_COMMANDS: Mapping[str, Any] = {
     "door_right_open": False,
     "temp_setpoint_c": 21.0,
     "announcement": "",
-    "passenger_brake_release": False,
-}
-
-# The light ahead as the Track Model spells it (signal-aspect-ahead,
-# all caps), and as the Train Controller reads it. The Train
-# Controller still spells the fourth aspect with a space.
-_ASPECTS = {
-    "RED": "RED",
-    "YELLOW": "YELLOW",
-    "GREEN": "GREEN",
-    "SUPER_GREEN": "SUPER GREEN",
 }
 
 
@@ -108,7 +106,6 @@ def train_controller_to_train_model(
         "door_right_open": right,
         "temp_setpoint_c": commands["temperature_setpoint_c"],
         "announcement": commands["announcement"],
-        "passenger_brake_release": commands["passenger_brake_release"],
     }
 
 
@@ -128,10 +125,8 @@ def train_model_to_train_controller(
         "actual_speed": outputs["actual_speed_mps"],
         "commanded_speed": outputs["commanded_speed_mps"],
         "authority_blocks": outputs["authority_blocks"],
-        "brake_state": [
-            outputs["emergency_brake_active"],
-            outputs["service_brake_active"],
-        ],
+        "emergency_brake_state": outputs["emergency_brake_active"],
+        "service_brake_state": outputs["service_brake_active"],
         "door_state": [
             outputs["door_left_open"],
             outputs["door_right_open"],
@@ -148,12 +143,3 @@ def train_model_to_train_controller(
         inputs["beacon_side"] = beacon["platform_side"]
         inputs["beacon_underground"] = beacon["underground"]
     return inputs
-
-
-def aspect_to_train_controller(aspect: str) -> str:
-    """Map the light ahead to the Train Controller's spelling.
-
-    Raises:
-        KeyError: If ``aspect`` is not one of the four aspects.
-    """
-    return _ASPECTS[aspect]

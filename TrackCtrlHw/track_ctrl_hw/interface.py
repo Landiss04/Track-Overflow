@@ -296,6 +296,16 @@ class ProgramInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class VitalInfo:
+    """The read-only vital block scanned after the program, generated
+    from the wayside's territory (``track_ctrl_hw.vital``)."""
+
+    checksum: str
+    boolean_count: int
+    statement_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ScanInfo:
     """Health of a wayside's scan cycle since its program was loaded."""
 
@@ -350,6 +360,9 @@ class WaysideSnapshot:
     # program drives them.
     holding: str
     report: CtcReport | None
+    vital: VitalInfo | None = None
+    # Outputs the vital block changed on the last scan, ``NAME 1->0``.
+    overrides: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
