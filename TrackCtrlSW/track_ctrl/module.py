@@ -181,29 +181,23 @@ class SwTrackController:
             if controller.program is None
         )
 
-    def _waiting_lines(self) -> dict[str, str]:
-        """Each line that is not ready, with the first thing missing."""
-        waiting: dict[str, str] = {}
-        for wayside_id, controller in self._waysides.items():
-            if controller.program is None:
-                waiting.setdefault(
-                    controller.line, f"{wayside_id} has no PLC program"
-                )
-        return waiting
-
     def line_ready(self, line: str) -> bool:
         """Whether every wayside on one line has a program."""
-        return any(
-            controller.line == line for controller in self._waysides.values()
-        ) and line not in self._waiting_lines()
+        on_line = [
+            controller for controller in self._waysides.values()
+            if controller.line == line
+        ]
+        return bool(on_line) and all(
+            controller.program is not None for controller in on_line
+        )
 
     @property
     def ready(self) -> bool:
         """Whether a line is loaded and every wayside has a program.
 
-        The module is vital, so it stalls until this holds: while it does
-        not, no wayside runs its program and all of them drive their
-        fail-safe outputs.
+        Each wayside's own readiness is its layout being present and a
+        program being committed; this is every wayside's, for the header.
+        A wayside that is ready runs whatever the others are doing.
         """
         return not self.not_ready_reasons()
 
@@ -293,16 +287,15 @@ class SwTrackController:
             key in switch_keys for key in ctc.switch_commands
         )
 
-        # A line runs only once every wayside on it has a program; until
-        # then none of them runs, and a wayside running nothing
-        # transmits nothing. One line does not wait on another.
-        waiting = self._waiting_lines()
+        # A wayside is ready when its track layout is present (it exists
+        # here only because one was loaded) and it has a committed
+        # program. It runs as soon as it is, and does not wait on another
+        # wayside; one with no program runs nothing and transmits nothing.
         for controller in self._waysides.values():
             self._apply(controller, inputs)
-            if controller.line in waiting:
+            if controller.program is None:
                 controller.idle(
-                    f"line {controller.line} is not ready: "
-                    f"{waiting[controller.line]}"
+                    f"{controller.config.controller_id} has no PLC program"
                 )
             else:
                 controller.scan()
