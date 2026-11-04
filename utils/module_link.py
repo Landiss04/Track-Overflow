@@ -277,9 +277,11 @@ class ModuleLink(QObject):
         if self._deferred_handler is not None:
             if self._pending_request is not None:
                 return
+            # The stored copy is the link's own; the handler gets the
+            # decoded message, which nothing else here keeps.
             self._pending_request = copy.deepcopy(dict(message))
             try:
-                self._deferred_handler(self.pending_request or {})
+                self._deferred_handler(message)
             except Exception as error:
                 self.reply_rejected(
                     request_id, tick, _sendable(str(error) or "refused")

@@ -43,8 +43,15 @@ class TrainModelFleet(QObject):
     rosterChanged = Signal()
     currentChanged = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        *,
+        view_interval_s: float = 0.0,
+    ) -> None:
         super().__init__(parent)
+        # Passed to each train's Train Model; see TrainModelState.
+        self._view_interval_s = view_interval_s
         # Insertion order is the roster order.
         self._trains: dict[str, TrainModelState] = {}
         self._selected = ""
@@ -79,6 +86,7 @@ class TrainModelFleet(QObject):
                 config = TrainConfig(seed=zlib.crc32(train_id.encode()))
             state = TrainModelState(
                 config, parent=self, train_id=train_id, line=line,
+                view_interval_s=self._view_interval_s,
             )
         if self._harness_time_s is not None:
             state.set_harness_time(self._harness_time_s)

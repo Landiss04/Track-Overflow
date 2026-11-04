@@ -149,6 +149,12 @@ def encode(message: Mapping[str, Any]) -> bytes:
             Unicode.
     """
     validate(message)
+    return _dump(message)
+
+
+def _dump(message: Mapping[str, Any]) -> bytes:
+    # Strict JSON text for an already validated message; the Pi codec
+    # shares it.
     try:
         text = json.dumps(
             message,
@@ -183,6 +189,13 @@ def decode(line: bytes) -> dict[str, Any]:
             a double, which other ends would read as infinite; or if it
             holds text that is not valid Unicode.
     """
+    message = _parse(line)
+    validate(message)
+    return message
+
+
+def _parse(line: bytes) -> dict[str, Any]:
+    # Strict JSON object, before any op check; the Pi codec shares it.
     try:
         text = line.decode("utf-8")
     except UnicodeDecodeError as error:
@@ -204,7 +217,6 @@ def decode(line: bytes) -> dict[str, Any]:
         raise ProtocolError("line is not a JSON object")
     if _SURROGATE_ESCAPE.search(text):
         _check_unicode(message)
-    validate(message)
     return message
 
 
