@@ -612,5 +612,39 @@ class PreviewTest(unittest.TestCase):
         self.assertEqual(ctc.snapshot().orders, ())
 
 
+class RouteRequestTest(unittest.TestCase):
+    """The CTC asks the Track Controller to set each switch for the train
+    routed over it (``route_requests``); a request, not a command."""
+
+    def _two_trains(self, urgent: str) -> StubCtcOffice:
+        # A, at Red 25, is sent into the 72-76 siding (74): switch 27
+        # reverse. B, at 30, is sent down the main line through 27 to
+        # 20: switch 27 normal. The one with an arrival time is urgent.
+        ctc = ready_office()
+        trains = (_train("A", "25", "Red"), _train("B", "30", "Red"))
+        step_at(ctc, *trains)
+        due = 5 * 3600 + 600
+        ctc.dispatch("A", "Red", "74", due if urgent == "A" else None)
+        ctc.dispatch("B", "Red", "20", due if urgent == "B" else None)
+        step_at(ctc, *trains)
+        return ctc
+
+    def _requests(self, ctc: StubCtcOffice) -> list[tuple[str, str, str]]:
+        return [(r.line, r.switch_id, r.position) for r in
+                ctc.snapshot().outputs.track_controller.route_requests]
+
+    def test_the_switch_short_of_the_authority_is_requested(self) -> None:
+        # A's authority stops before 27, not set for the siding: the
+        # request is what lets the wayside set it.
+        ctc = self._two_trains("A")
+        self.assertEqual((_authority(ctc, "A").reason,
+                          _authority(ctc, "A").at), ("switch", "27"))
+        self.assertEqual(self._requests(ctc), [("Red", "27", "reverse")])
+
+    def test_the_most_urgent_train_has_the_switch(self) -> None:
+        self.assertEqual(self._requests(self._two_trains("B")),
+                         [("Red", "27", "normal")])
+
+
 if __name__ == "__main__":
     unittest.main()

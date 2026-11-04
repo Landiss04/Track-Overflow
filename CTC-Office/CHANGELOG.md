@@ -4,6 +4,17 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-04 — Route requests follow dispatch priority
+
+Checked against Braden's Track Controller HW plan for route requests.
+
+- `ctc/model.py` `_route_requests()`: where two trains want the same
+  switch, the most urgent train's request now stands (`_priority`, as for
+  contested blocks). Before, it said so but took the lower train ID.
+- `tests/test_ctc_authority.py` `RouteRequestTest`: the switch an
+  authority stops short of is requested; the urgent train has it.
+- Truth proposal `20261104-1038-switch-route-request.md`.
+
 ## 2026-11-03 — Runs stop at their stations in the file's order
 
 From Landis: a run stops at the stations its schedule lists, in that

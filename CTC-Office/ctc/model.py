@@ -1394,12 +1394,14 @@ class StubCtcOffice:
         """The position each switch should take for the train routed
         over it: every switch within a train's authority, and the one
         its authority stops short of. The most urgent train's request
-        stands where two trains want the same switch (authorities are
-        counted most urgent first)."""
+        stands where two trains want the same switch (``_priority``, as
+        for contested blocks)."""
         wanted: dict[tuple[str, str], SwitchCommand] = {}
-        for limit in self._authorities():
-            if limit.line not in ready:
-                continue
+        limits = [a for a in self._authorities()
+                  if a.line in ready and a.train_id in self._orders]
+        limits.sort(key=lambda a: self._priority(
+            self._orders[a.train_id], a.line, a.route))
+        for limit in limits:
             graph = self._graphs[limit.line]
             ahead = limit.route[:limit.blocks + 2]
             for here, after in zip(ahead, ahead[1:]):
