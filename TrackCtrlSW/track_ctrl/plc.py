@@ -33,7 +33,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Mapping
+from functools import cached_property
+from typing import Callable, Mapping
 
 #: Severities a diagnostic can carry. An ``error`` blocks compilation.
 SEVERITY_ERROR = "error"
@@ -69,15 +70,24 @@ class Diagnostic:
 
 # --- expression tree -------------------------------------------------
 
+#: An expression compiled for scanning: called with the scan's values
+#: and its list of undefined-read warnings, it returns the expression's
+#: value. Compiling once means a scan does not dispatch on node types.
+Evaluator = Callable[[dict[str, bool], list[Diagnostic]], bool]
+
+_UNSET = object()
+
+
 @dataclass(frozen=True)
 class Literal:
     """A constant ``0`` or ``1``."""
 
     value: bool
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the constant."""
-        return self.value
+    def compile(self) -> Evaluator:
+        """Return an evaluator that gives the constant."""
+        value = self.value
+        return lambda values, undefined_reads: value
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -91,9 +101,30 @@ class Reference:
     name: str
     line: int
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the current value, defaulting an unknown read low."""
-        return scope.read(self.name, self.line)
+    def compile(self) -> Evaluator:
+        """Return an evaluator that reads the current value.
+
+        An undefined read is ``False``. It is reported once per scan:
+        the first sets the name to ``False``, so later reads find it.
+        """
+        name = self.name
+        warning = Diagnostic(
+            SEVERITY_WARNING,
+            self.line,
+            f"{name} was never declared or assigned; read as 0",
+        )
+
+        def read(
+            values: dict[str, bool], undefined_reads: list[Diagnostic]
+        ) -> bool:
+            value = values.get(name, _UNSET)
+            if value is _UNSET:
+                undefined_reads.append(warning)
+                values[name] = False
+                return False
+            return value
+
+        return read
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -106,9 +137,12 @@ class Not:
 
     operand: "Expression"
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the inverted operand."""
-        return not self.operand.evaluate(scope)
+    def compile(self) -> Evaluator:
+        """Return an evaluator that inverts the operand."""
+        operand = self.operand.compile()
+        return lambda values, undefined_reads: not operand(
+            values, undefined_reads
+        )
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -123,20 +157,38 @@ class BinaryOp:
     left: "Expression"
     right: "Expression"
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the combined operands.
+    def compile(self) -> Evaluator:
+        """Return an evaluator that combines the operands.
 
         Both sides are evaluated even when the result is already
         decided, so an undefined-read warning is raised the same way on
         every scan regardless of input values.
         """
-        left = self.left.evaluate(scope)
-        right = self.right.evaluate(scope)
+        left = self.left.compile()
+        right = self.right.compile()
+        # One evaluator per operator, so a scan does not compare names.
         if self.operator == "AND":
-            return left and right
-        if self.operator == "OR":
-            return left or right
-        return left != right
+            def combine(
+                values: dict[str, bool], undefined_reads: list[Diagnostic]
+            ) -> bool:
+                first = left(values, undefined_reads)
+                second = right(values, undefined_reads)
+                return first and second
+        elif self.operator == "OR":
+            def combine(
+                values: dict[str, bool], undefined_reads: list[Diagnostic]
+            ) -> bool:
+                first = left(values, undefined_reads)
+                second = right(values, undefined_reads)
+                return first or second
+        else:
+            def combine(
+                values: dict[str, bool], undefined_reads: list[Diagnostic]
+            ) -> bool:
+                first = left(values, undefined_reads)
+                second = right(values, undefined_reads)
+                return first != second
+        return combine
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -144,32 +196,6 @@ class BinaryOp:
 
 
 Expression = Literal | Reference | Not | BinaryOp
-
-
-class _Scope:
-    """Values visible to one scan, plus the warnings it raised."""
-
-    def __init__(self, inputs: Mapping[str, bool]) -> None:
-        self.values: dict[str, bool] = dict(inputs)
-        self.undefined_reads: list[Diagnostic] = []
-
-    def read(self, name: str, line: int) -> bool:
-        """Return a value, defaulting an undefined read to ``False``."""
-        if name in self.values:
-            return self.values[name]
-        self.undefined_reads.append(
-            Diagnostic(
-                SEVERITY_WARNING,
-                line,
-                f"{name} was never declared or assigned; read as 0",
-            )
-        )
-        self.values[name] = False
-        return False
-
-    def write(self, name: str, value: bool) -> None:
-        """Store an assignment result."""
-        self.values[name] = value
 
 
 @dataclass(frozen=True)
@@ -216,12 +242,29 @@ class Program:
 
         The program is pure: nothing in ``self`` is mutated, so the
         same compiled program can be scanned against live inputs and
-        against a sandbox copy without the two interfering.
+        against a sandbox copy without the two interfering. (Its
+        evaluators are made on the first scan and only cached.)
         """
-        scope = _Scope(inputs)
-        for target, expression, _ in self.assignments:
-            scope.write(target, expression.evaluate(scope))
-        return scope.values, scope.undefined_reads
+        values: dict[str, bool] = dict(inputs)
+        undefined_reads: list[Diagnostic] = []
+        for target, evaluate in self._evaluators:
+            values[target] = evaluate(values, undefined_reads)
+        return values, undefined_reads
+
+    @cached_property
+    def _evaluators(self) -> tuple[tuple[str, Evaluator], ...]:
+        # Each assignment's target and compiled expression, in order.
+        return tuple(
+            (target, expression.compile())
+            for target, expression, _ in self.assignments
+        )
+
+    def __getstate__(self) -> dict[str, object]:
+        # Evaluators are functions and do not copy or pickle; a copy
+        # makes its own on its first scan.
+        state = dict(self.__dict__)
+        state.pop("_evaluators", None)
+        return state
 
 
 # --- parsing ---------------------------------------------------------

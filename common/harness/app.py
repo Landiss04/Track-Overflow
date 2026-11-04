@@ -76,6 +76,10 @@ STATUS_INTERVAL_S = 5.0
 # keeps them coming.
 SIGNAL_POLL_MS = 200
 MILLISECONDS_PER_SECOND = 1000
+# An automatic Run waits this long after the CTC Office is ready, so
+# the clock starts once every window has loaded rather than while the
+# windows' start-up saturates the CPU and the first ticks slip.
+AUTO_RUN_DELAY_S = 3.0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -173,6 +177,8 @@ def _specs(
         ctc_options += ["--speedup-at-tick", "0"]
     if options.stubs_only:
         return stub_specs({CTC_OFFICE: ctc_options}), None
+    if _presses_run(options):
+        ctc_options += ["--run-delay-s", str(AUTO_RUN_DELAY_S)]
     wayside_options = ["--load-starters"] if options.load_starters else []
     for order in options.dispatch:
         ctc_options += ["--dispatch", order]

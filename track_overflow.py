@@ -71,6 +71,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         # The agent owns --module too; preserve it after internal routing.
         return agent.main(["--module", known.module, *rest])
+    # Every window draws without waiting for the display's refresh. With
+    # vsync, resizing a window blocks its thread, which also answers the
+    # harness, for each frame, and a long resize slips the clock.
+    os.environ.setdefault("QSG_NO_VSYNC", "1")
     if known.module is None:
         # Imported here, so a module process loads only its own code.
         from common.harness import app

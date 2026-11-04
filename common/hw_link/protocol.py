@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -69,30 +68,16 @@ def validate(message: Mapping[str, Any]) -> None:
 def encode(message: Mapping[str, Any]) -> bytes:
     """Encode with the harness's finite-number and Unicode checks."""
     validate(message)
-    # Shared encoder recursively checks JSON types, finite numbers and Unicode.
-    line = hp.encode(
-        {"op": hp.STATE, "id": 0, "tick": 0, "state": dict(message)}
-    )
-    result = json.loads(line)["state"]
-    return (
-        json.dumps(
-            result, ensure_ascii=False, allow_nan=False, separators=(",", ":")
-        )
-        + "\n"
-    ).encode("utf-8")
+    # One strict pass; the receiver reads the same values that the old
+    # encode-parse-encode normalisation produced.
+    return hp._dump(dict(message))
 
 
 def decode(line: bytes) -> dict[str, Any]:
     """Decode strictly while keeping Pi-only ops out of the harness codec."""
-    try:
-        raw = json.loads(line.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError, RecursionError) as error:
-        raise hp.ProtocolError(f"not a Pi JSON object: {error}") from error
-    if not isinstance(raw, dict):
-        raise hp.ProtocolError("not a Pi JSON object")
-    # The shared decoder catches overflow, NaN, invalid surrogates and IDs.
-    checked = {"op": hp.STATE, "id": 0, "tick": 0, "state": raw}
-    hp.decode(json.dumps(checked, ensure_ascii=True).encode("utf-8"))
+    # The shared parser catches overflow, NaN, invalid surrogates and
+    # non-objects; Pi validation then checks IDs and the op's fields.
+    raw = hp._parse(line)
     validate(raw)
     return raw
 

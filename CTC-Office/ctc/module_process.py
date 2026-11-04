@@ -44,7 +44,8 @@ Test and demonstration options, never for a real run, stand in for the
 dispatcher as ``--engineer-gains`` stands in for the engineer and
 ``--load-starters`` for the person who loads the PLC programs:
 
-- ``--run-on-ready`` presses Run as soon as the process is ready;
+- ``--run-on-ready`` presses Run as soon as the process is ready, or
+  ``--run-delay-s`` seconds after, once the windows have settled;
 - ``--speedup-at-tick N`` presses 10x after step ``N``, or before the
   first step with ``0``;
 - ``--dispatch TRAIN:LINE:BLOCK`` dispatches a train from the yard to a
@@ -144,6 +145,7 @@ class CtcOfficeProcess(QObject):
         server_name: str,
         *,
         run_on_ready: bool = False,
+        run_delay_ms: int = 0,
         speedup_at_tick: int | None = None,
         dispatches: Sequence[Dispatch] = (),
         parent: QObject | None = None,
@@ -154,6 +156,8 @@ class CtcOfficeProcess(QObject):
             host: The window's host, which holds the module.
             server_name: The harness's local server.
             run_on_ready: Press Run once ready (tests only).
+            run_delay_ms: With ``run_on_ready``, press it this long
+                after ready instead (tests only).
             speedup_at_tick: Press 10x after this step; 0 before the
                 first (tests only).
             dispatches: Dispatches to give once each line is ready
@@ -163,6 +167,7 @@ class CtcOfficeProcess(QObject):
         super().__init__(parent)
         self._host = host
         self._run_on_ready = run_on_ready
+        self._run_delay_ms = run_delay_ms
         self._speedup_at_tick = speedup_at_tick
         self._dispatches = list(dispatches)
         self._announced = False
@@ -249,7 +254,9 @@ class CtcOfficeProcess(QObject):
             self._link.push_state(controls)
         if self._speedup_at_tick == 0:
             self._press_speedup()
-        if self._run_on_ready:
+        if self._run_on_ready and self._run_delay_ms:
+            QTimer.singleShot(self._run_delay_ms, self._clock.resume)
+        elif self._run_on_ready:
             self._clock.resume()
 
     def _press_speedup(self) -> None:
@@ -334,6 +341,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         host,
         options.harness,
         run_on_ready=options.run_on_ready,
+        run_delay_ms=round(options.run_delay_s * 1000),
         speedup_at_tick=options.speedup_at_tick,
         dispatches=options.dispatch,
         parent=host,
@@ -381,6 +389,13 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--run-on-ready",
         action="store_true",
         help="press Run as soon as the process is ready",
+    )
+    tests.add_argument(
+        "--run-delay-s",
+        type=float,
+        default=0.0,
+        help="with --run-on-ready, press Run this many seconds after "
+        "ready, once the windows have settled",
     )
     tests.add_argument(
         "--speedup-at-tick",

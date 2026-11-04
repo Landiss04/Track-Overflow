@@ -17,6 +17,7 @@ dictionary (v0.2). Deviations from the wireframes are recorded in
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from PySide6.QtCore import (
@@ -71,8 +72,11 @@ class TrainModelState(QObject):
         *,
         train_id: str = "",
         line: str = "",
+        view_interval_s: float = 0.0,
     ) -> None:
         super().__init__(parent)
+        # Ticks tell the views at most this often; 0 tells them of each.
+        self._view_interval_s = view_interval_s
         self._config = config if config is not None else TrainConfig()
         # Identity is metadata for the views; the model never reads it.
         self._train_id = train_id
@@ -86,6 +90,8 @@ class TrainModelState(QObject):
         self._snapshot: dict[str, Any] = self._initial_snapshot()
         self._running = False
         self._idle: QTimer | None = None
+        self._notified_at = float("-inf")
+        self._trailing: QTimer | None = None
         self._refresh()
 
     def _initial_snapshot(self) -> dict[str, Any]:
@@ -130,7 +136,7 @@ class TrainModelState(QObject):
             self._model.validate_inputs(dt, inputs)
             self._model.clear_passenger_brake_for_test()
         outputs = self._model.step(dt, inputs)
-        self._refresh()
+        self._refresh(from_tick=True)
         self._mark_running()
         return outputs
 
@@ -146,7 +152,7 @@ class TrainModelState(QObject):
     def set_harness_time(self, sim_time_s: float) -> None:
         """Publish global time on the owning Qt thread, even on rejection."""
         self._harness_time_s = sim_time_s
-        self._refresh()
+        self._refresh(from_tick=True)
 
     def set_clock_drift(self, drift_s: float, tick: int) -> bool:
         """Publish the check and return whether it detected a discrepancy."""
@@ -156,7 +162,7 @@ class TrainModelState(QObject):
             "clock_drift_detected": detected,
             "clock_drift_checked_tick": tick,
         })
-        self.snapshotChanged.emit()
+        self._notify()
         return detected
 
     @property
@@ -327,7 +333,7 @@ class TrainModelState(QObject):
     # Snapshot
     # ------------------------------------------------------------------ #
 
-    def _refresh(self) -> None:
+    def _refresh(self, *, from_tick: bool = False) -> None:
         # Republish the model's state. Before the first tick there are
         # no inputs, so only the model's own state is shown.
         snap = self._model.snapshot()
@@ -416,4 +422,27 @@ class TrainModelState(QObject):
         if any(self._snapshot.get(key) != value
                for key, value in updates.items()):
             self._snapshot.update(updates)
-            self.snapshotChanged.emit()
+            if from_tick:
+                self._notify()
+            else:
+                self._emit_snapshot()
+
+    def _notify(self) -> None:
+        # The snapshot is current at once; ticks tell the views at most
+        # every view interval, and always of the last change.
+        interval_s = self._view_interval_s
+        if time.monotonic() - self._notified_at >= interval_s:
+            self._emit_snapshot()
+            return
+        if QCoreApplication.instance() is None:
+            return  # No event loop, so no views to redraw.
+        if self._trailing is None:
+            self._trailing = QTimer(self)
+            self._trailing.setSingleShot(True)
+            self._trailing.timeout.connect(self._emit_snapshot)
+        if not self._trailing.isActive():
+            self._trailing.start(round(interval_s * 1000))
+
+    def _emit_snapshot(self) -> None:
+        self._notified_at = time.monotonic()
+        self.snapshotChanged.emit()

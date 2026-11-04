@@ -194,6 +194,38 @@ class Wayside:
     def __init__(self, territory: Territory) -> None:
         self._territory = territory
         self._keys = frozenset(territory.keys)
+        # The territory never changes, so neither do the names in the
+        # input image: work them out once, not on every scan.
+        self._block_inputs = tuple(
+            (
+                key,
+                f"OCC_{key.block_id}",
+                f"CLOSED_{key.block_id}",
+                _speed_names("SPD", key.block_id),
+            )
+            for key in territory.keys
+        )
+        self._neighbor_inputs = tuple(
+            (
+                BlockRef(territory.line, number),
+                f"OCC_{number}",
+                f"CLOSED_{number}",
+            )
+            for number in _neighbor_numbers(territory)
+        )
+        self._switch_inputs = tuple(
+            (
+                switch.key,
+                f"SWREV_{switch.switch_id}",
+                f"CTCSW_{switch.switch_id}",
+                f"CTCREV_{switch.switch_id}",
+            )
+            for switch in territory.switches
+        )
+        # Each output with the vital block's name for it, in one order.
+        self._outputs = tuple(
+            (name, OUT + name) for name in output_names(territory)
+        )
         self._vital = compile_program(vital_source(territory))
         if self._vital.diagnostics:
             raise RuntimeError(
@@ -407,39 +439,39 @@ class Wayside:
         if self._program is None:
             return None, "No PLC program is loaded."
         image: dict[str, bool] = {}
-        for key in self._territory.keys:
-            number = key.block_id
-            image[f"OCC_{number}"] = key in occupied
-            image[f"CLOSED_{number}"] = key in closed
+        for key, occupied_name, closed_name, speed_names in (
+            self._block_inputs
+        ):
+            image[occupied_name] = key in occupied
+            image[closed_name] = key in closed
             suggestion = suggestions.get(key)
             speed = 0 if suggestion is None else suggestion.speed_mps
-            for bit, name in enumerate(_speed_names("SPD", number)):
+            for bit, name in enumerate(speed_names):
                 image[name] = bool(speed >> bit & 1)
         occupied_refs = {key.ref for key in track_model.occupied_blocks}
-        for number in _neighbor_numbers(self._territory):
-            ref = BlockRef(self._territory.line, number)
-            image[f"OCC_{number}"] = ref in occupied_refs
-            image[f"CLOSED_{number}"] = ref in ctc.closed_blocks
-        for switch in self._territory.switches:
-            number = switch.switch_id
-            image[f"SWREV_{number}"] = (
-                track_model.switch_positions.get(switch.key) == "reverse"
-            )
-            image[f"CTCSW_{number}"] = switch.key in requests
-            image[f"CTCREV_{number}"] = requests.get(switch.key) == "reverse"
+        for ref, occupied_name, closed_name in self._neighbor_inputs:
+            image[occupied_name] = ref in occupied_refs
+            image[closed_name] = ref in ctc.closed_blocks
+        switch_positions = track_model.switch_positions
+        for key, reverse_name, command_name, command_reverse_name in (
+            self._switch_inputs
+        ):
+            image[reverse_name] = switch_positions.get(key) == "reverse"
+            image[command_name] = key in requests
+            image[command_reverse_name] = requests.get(key) == "reverse"
         channel_a = self._program.scan_a(image)
         channel_b = self._program.scan_b(image)
         if channel_a != channel_b:
             return None, self._channel_fault("", channel_a, channel_b)
         # Outputs the program does not declare read as 0.
-        program = {name: False for name in output_names(self._territory)}
+        program = {name: False for name, _ in self._outputs}
         program.update(channel_a)
         vital_image = {**image, **program}
         vital_a = self._vital.scan_a(vital_image)
         vital_b = self._vital.scan_b(vital_image)
         if vital_a != vital_b:
             return None, self._channel_fault("vital ", vital_a, vital_b)
-        values = {name: vital_a[OUT + name] for name in program}
+        values = {name: vital_a[out] for name, out in self._outputs}
         self._overrides = overrides(program, values)
         return values, ""
 
