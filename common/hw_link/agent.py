@@ -21,7 +21,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from utils.harness_protocol import LineBuffer, ProtocolError
 from utils.process_speed import keep_full_speed
@@ -217,6 +217,11 @@ class PiLinkServer:
 
     def handle(self, request: dict[str, Any]) -> list[dict[str, Any]]:
         """Handle a checked request once, preserving IDs on replay."""
+        return list(self._handle(request))
+
+    def _handle(self, request: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        # Lazy: the periodic VIEW is built only once the caller has taken
+        # (and main() has written) the reply before it.
         p.validate(request)
         op = request["op"]
         if op == p.HELLO:
@@ -224,71 +229,68 @@ class PiLinkServer:
                 request["protocol"] != p.VERSION
                 or request["module"] != self.module
             ):
-                return [
-                    p.message(
-                        "REJECTED",
-                        request["id"],
-                        request["tick"],
-                        reason="HELLO protocol or module mismatch",
-                    )
-                ]
+                yield p.message(
+                    "REJECTED",
+                    request["id"],
+                    request["tick"],
+                    reason="HELLO protocol or module mismatch",
+                )
+                return
             resumed = self.session == request["session"]
             if not resumed:
                 self._start(request["session"])
             self._hello_seen = True
-            return [
-                p.message(
-                    p.HELLO,
-                    request["id"],
-                    request["tick"],
-                    protocol=p.VERSION,
-                    module=self.module,
-                    session=self.session,
-                    agent_version=AGENT_VERSION,
-                    agent_hash=AGENT_HASH,
-                    boot=self.boot,
-                    resumed=resumed,
-                    **(
-                        {"echo": request.get("echo", "")}
-                        if self.echo_test
-                        else {}
-                    ),
-                )
-            ]
+            yield p.message(
+                p.HELLO,
+                request["id"],
+                request["tick"],
+                protocol=p.VERSION,
+                module=self.module,
+                session=self.session,
+                agent_version=AGENT_VERSION,
+                agent_hash=AGENT_HASH,
+                boot=self.boot,
+                resumed=resumed,
+                **(
+                    {"echo": request.get("echo", "")}
+                    if self.echo_test
+                    else {}
+                ),
+            )
+            return
         if op == "QUIT":
             self._start("")
             self.session = None
             self._hello_seen = False
             self.buffer = LineBuffer()
-            return []
+            return
         if not self.session or not self._hello_seen:
-            return [
-                p.message(
-                    "REJECTED",
-                    request["id"],
-                    request["tick"],
-                    reason="HELLO required",
-                )
-            ]
+            yield p.message(
+                "REJECTED",
+                request["id"],
+                request["tick"],
+                reason="HELLO required",
+            )
+            return
         if op not in ("STEP", p.ACTION):
-            return []
+            return
         key = self._key(request)
         request_bytes = p.encode(request)
         previous = self.cache.get(key)
         if previous is not None:
             if previous[0] != request_bytes:
-                return [
-                    p.message(
-                        "REJECTED",
-                        request["id"],
-                        request["tick"],
-                        reason=(
-                            "request identity reused " "with different payload"
-                        ),
-                    )
-                ]
+                yield p.message(
+                    "REJECTED",
+                    request["id"],
+                    request["tick"],
+                    reason=(
+                        "request identity reused " "with different payload"
+                    ),
+                )
+                return
             self.log(f"CACHE_HIT {key}")
-            return [previous[1]]
+            yield previous[1]
+            return
         reply, reply_bytes = self._execute(request)
         self._record(request_bytes, reply_bytes)
         self._remember(request, request_bytes, reply)
@@ -300,37 +302,41 @@ class PiLinkServer:
                 and self._steps_since_checkpoint >= CHECKPOINT_TICKS
             ):
                 self._checkpoint()
-        replies = [reply]
+        # Journalled, cached and checkpointed: the reply may go out now.
+        yield reply
         now = time.monotonic()
         if now - self.last_view >= VIEW_INTERVAL_S:
             self.last_view = now
-            replies.append(
-                p.message(p.VIEW, tick=request["tick"], view=self.core.view())
+            yield p.message(
+                p.VIEW, tick=request["tick"], view=self.core.view()
             )
-        return replies
 
     def feed(self, data: bytes) -> list[bytes]:
         """Parse chunks; log and skip modem probes and malformed lines."""
         return [line for _, line in self._feed(data)]
 
     def _feed(self, data: bytes) -> list[tuple[dict[str, Any], bytes]]:
-        # Each reply with its line; a fresh reply's line is the one
-        # encoded when it was checked.
-        outgoing: list[tuple[dict[str, Any], bytes]] = []
+        return list(self._replies(data))
+
+    def _replies(
+        self, data: bytes
+    ) -> Iterator[tuple[dict[str, Any], bytes]]:
+        # Each reply with its line, one at a time, so main() writes a
+        # STEP reply before its periodic VIEW is built; a fresh reply's
+        # line is the one encoded when it was checked.
         for line in self.buffer.feed(data):
             try:
                 if isinstance(line, ProtocolError):
                     raise line
                 self._fresh = None
-                for reply in self.handle(p.decode(line)):
+                for reply in self._handle(p.decode(line)):
                     fresh = self._fresh
                     if fresh is not None and reply is fresh[0]:
-                        outgoing.append(fresh)
+                        yield fresh
                     else:
-                        outgoing.append((reply, p.encode(reply)))
+                        yield reply, p.encode(reply)
             except ProtocolError as error:
                 self.log(f"SKIPPED_LINE {error}")
-        return outgoing
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -394,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
                     if not options.device:
                         return 0
                     break
-                for decoded, reply in server._feed(data):
+                for decoded, reply in server._replies(data):
                     if decoded["op"] == "OUTPUTS":
                         count += 1
                         fault = (
