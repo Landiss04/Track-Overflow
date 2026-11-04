@@ -154,6 +154,91 @@ class ModuleLinkTest(unittest.TestCase):
         self.assertFalse(self.link.reply_outputs(44, 5, {}))
         self.assertIsNone(self.link.pending_request)
 
+    def test_deferred_handler_mutation_cannot_change_pending(self) -> None:
+        kept = []
+
+        def handler(request: Mapping[str, Any]) -> None:
+            # Mutate during the call, and keep it to mutate after.
+            request["inputs"]["trains"]["T1"]["held"].append("during")
+            request["inputs"]["new"] = True
+            kept.append(request)
+
+        self.link._deferred_handler = handler
+        self.connect_ready()
+        inputs = {"trains": {"T1": {"held": [1], "name": "Ünï"}}}
+        self.harness.send(step_message(45, 6, 0.1, 18000.6, inputs))
+        self.assertTrue(wait_until(lambda: bool(kept)))
+        kept[0]["inputs"]["trains"]["T1"]["held"].append("after")
+        kept[0]["id"] = 99
+        snapshot = self.link.pending_request
+        self.assertEqual(snapshot["inputs"], inputs)
+        self.assertEqual((snapshot["id"], snapshot["tick"]), (45, 6))
+        snapshot["inputs"]["trains"]["T1"]["held"].clear()
+        snapshot["tick"] = 7
+        later = self.link.pending_request
+        self.assertEqual(later["inputs"], inputs)
+        self.assertEqual(later["tick"], 6)
+        # Matching follows the saved request, not the mutated copies.
+        self.assertFalse(self.link.reply_outputs(99, 6, {}))
+        self.assertFalse(self.link.reply_outputs(45, 7, {}))
+        self.assertIsNotNone(self.link.pending_request)
+        self.assertTrue(self.link.reply_outputs(45, 6, {"ok": 1}))
+        self.assertFalse(self.link.reply_rejected(45, 6, "late"))
+        self.assertTrue(wait_until(lambda: len(self.harness.received) == 2))
+        reply = self.harness.received[-1]
+        self.assertEqual(
+            (reply["op"], reply["id"], reply["tick"], reply["outputs"]),
+            (OUTPUTS, 45, 6, {"ok": 1}),
+        )
+        self.assertIsNone(self.link.pending_request)
+        self.assertEqual(self.steps, [])
+
+    def test_deferred_handler_exception_rejects_and_clears(self) -> None:
+        calls = []
+
+        def handler(request: Mapping[str, Any]) -> None:
+            calls.append(request["id"])
+            if len(calls) == 1:
+                raise RuntimeError("relay down")
+
+        self.link._deferred_handler = handler
+        self.connect_ready()
+        reply = self.reply_to(step_message(46, 7, 0.1, 18000.7, {}))
+        self.assertEqual(
+            (reply["op"], reply["id"], reply["tick"], reply["reason"]),
+            (REJECTED, 46, 7, "relay down"),
+        )
+        self.assertIsNone(self.link.pending_request)
+        self.assertFalse(self.link.reply_outputs(46, 7, {}))
+        # The next STEP is deferred afresh.
+        self.harness.send(step_message(47, 8, 0.1, 18000.8, {"a": [1]}))
+        self.assertTrue(wait_until(lambda: calls == [46, 47]))
+        self.assertEqual(self.link.pending_request["inputs"], {"a": [1]})
+        self.assertTrue(self.link.reply_outputs(47, 8, {}))
+        self.assertTrue(wait_until(lambda: len(self.harness.received) == 3))
+        self.assertEqual(self.steps, [])
+
+    def test_harness_loss_clears_deferred_request(self) -> None:
+        requests = []
+        self.link._deferred_handler = requests.append
+        self.connect_ready()
+        self.harness.send(step_message(48, 9, 0.1, 18000.9, {}))
+        self.assertTrue(wait_until(lambda: bool(requests)))
+        self.harness.close()
+        self.assertTrue(wait_until(lambda: self.losses == [True]))
+        self.assertIsNone(self.link.pending_request)
+        self.assertFalse(self.link.reply_outputs(48, 9, {}))
+
+    def test_synchronous_step_inputs_follow_each_request(self) -> None:
+        self.connect_ready()
+        first = {"trains": {"T1": [1]}}
+        self.reply_to(step_message(49, 10, 0.1, 18001.0, first))
+        self.steps[0][3]["trains"]["T1"].append("mutated")
+        reply = self.reply_to(step_message(50, 11, 0.1, 18001.1, first))
+        self.assertEqual(self.steps[1][3], {"trains": {"T1": [1]}})
+        self.assertEqual((reply["op"], reply["id"]), (OUTPUTS, 50))
+        self.assertIsNone(self.link.pending_request)
+
     def test_clock_state_is_delivered_between_steps_without_reply(self):
         states = []
         self.link.clockStateChanged.connect(states.append)
