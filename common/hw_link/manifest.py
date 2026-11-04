@@ -26,7 +26,7 @@ def sources(root: Path = ROOT) -> dict[str, bytes]:
     ]
     for folder in ("TrackCtrlHw/track_ctrl_hw", "Train-Ctrl_HW/train_ctrl"):
         names.extend(
-            str(path.relative_to(root))
+            path.relative_to(root).as_posix()
             for path in sorted((root / folder).glob("*.py"))
             if path.stem
             not in {

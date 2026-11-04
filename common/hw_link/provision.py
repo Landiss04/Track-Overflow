@@ -36,9 +36,7 @@ mkdir -p configs/c.1/strings/0x409
 printf '%s' 'Track Overflow CDC-ACM' > configs/c.1/strings/0x409/configuration
 mkdir functions/acm.usb0
 ln -s functions/acm.usb0 configs/c.1/acm.usb0
-set -- /sys/class/udc/*
-[ "$#" -eq 1 ] && [ -e "$1" ]
-printf '%s' "${1##*/}" > UDC
+
 # Do not depend on the distribution's default tty group.
 i=0
 while [ ! -e /dev/ttyGS0 ]; do
@@ -46,25 +44,45 @@ while [ ! -e /dev/ttyGS0 ]; do
 done
 chown trackoverflow:dialout /dev/ttyGS0
 chmod 0660 /dev/ttyGS0
+# Raw before bind: bytes a fast host sends before the agent opens the port
+# are queued, and must not be echoed back under the default cooked settings.
+stty -F /dev/ttyGS0 raw -echo
+# Early boot: wait for the USB controller driver to register.
+i=0
+while ! ls /sys/class/udc/* >/dev/null 2>&1; do
+    i=$((i+1)); [ "$i" -lt 100 ]; sleep 0.05
+done
+set -- /sys/class/udc/*
+[ "$#" -eq 1 ] && [ -e "$1" ]
+printf '%s' "${1##*/}" > UDC
 """
 GADGET_UNIT = """[Unit]
 Description=Track Overflow CDC-ACM gadget
-After=systemd-modules-load.service sys-kernel-config.mount
-Before=track-overflow-agent.service
+# Early boot: needs only configfs and the USB controller, not basic.target.
+DefaultDependencies=no
+After=systemd-modules-load.service sys-kernel-config.mount systemd-udev-trigger.service
+Wants=sys-kernel-config.mount
+Before=track-overflow-agent.service shutdown.target
+Conflicts=shutdown.target
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/track-overflow-gadget
 RemainAfterExit=yes
-TimeoutStartSec=10
+TimeoutStartSec=15
 
 [Install]
 WantedBy=multi-user.target
 """
 AGENT_UNIT = """[Unit]
 Description=Track Overflow @MODULE@ core
+# Early boot: start once the gadget is bound and /var/lib is writable.
+DefaultDependencies=no
 Requires=track-overflow-gadget.service
-After=track-overflow-gadget.service
+Wants=local-fs.target
+After=track-overflow-gadget.service local-fs.target
+Before=shutdown.target
+Conflicts=shutdown.target
 
 [Service]
 Type=simple
@@ -107,6 +125,7 @@ systemctl enable track-overflow-gadget.service track-overflow-agent.service
 printf '%s\\n' 'Enable dtoverlay=dwc2,dr_mode=peripheral under [all].'
 printf '%s\\n' 'Use the active config.txt; reboot.'
 printf '%s\\n' 'Inspect both track-overflow services and host HELLO.'
+sync
 """
 
 

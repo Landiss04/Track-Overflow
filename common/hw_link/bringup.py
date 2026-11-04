@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QCoreApplication, QTimer
+from PySide6.QtCore import QCoreApplication, QTimer, Qt
 from PySide6.QtSerialPort import QSerialPortInfo
 from utils.harness_protocol import LineBuffer, ProtocolError
 from . import protocol as p
@@ -178,6 +178,8 @@ def main(argv: list[str] | None = None) -> int:
             rendered = json.dumps(result, indent=2)
             print(rendered)
             if opts.output:
+                # A failed write must not skip app.quit() and hold the port.
+                opts.output.parent.mkdir(parents=True, exist_ok=True)
                 opts.output.write_text(rendered + "\n")
             app.quit()
 
@@ -254,9 +256,8 @@ def main(argv: list[str] | None = None) -> int:
                     rtts.append((time.monotonic() - sent) * 1000)
                     if "core_step_s" in reply.get("metrics", {}):
                         core.append(reply["metrics"]["core_step_s"] * 1000)
-                    QTimer.singleShot(
-                        max(0, math.ceil((due - time.monotonic()) * 1000)),
-                        next_frame,
+                    pacer.start(
+                        max(0, math.ceil((due - time.monotonic()) * 1000))
                     )
 
         transport.connected.connect(lambda: write(hello))
@@ -277,9 +278,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         watchdog.start()
+        # Qt's default coarse timers can fire several ms late on Windows,
+        # which lowers the achieved rate independently of the link.
+        pacer = QTimer()
+        pacer.setSingleShot(True)
+        pacer.setTimerType(Qt.TimerType.PreciseTimer)
+        pacer.timeout.connect(next_frame)
         transport.start()
         app.exec()
         watchdog.stop()
+        pacer.stop()
         transport.close()
         return int(failed)
 
