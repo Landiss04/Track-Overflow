@@ -23,6 +23,7 @@ def sources(root: Path = ROOT) -> dict[str, bytes]:
         "common/hw_link/manifest.py",
         "utils/__init__.py",
         "utils/harness_protocol.py",
+        "utils/process_speed.py",
     ]
     for folder in ("TrackCtrlHw/track_ctrl_hw", "Train-Ctrl_HW/train_ctrl"):
         names.extend(

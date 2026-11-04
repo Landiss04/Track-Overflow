@@ -183,11 +183,15 @@ The model uses two masses with different jobs.
 which the datasheet rates the vehicle's performance: two-thirds load. The
 datasheet gives 40,900 kg empty and 56,700 kg fully loaded (4 pass./m²), so
 the ⅔-load mass is 40,900 + ⅔ × (56,700 − 40,900) = 51,433 kg. It is used only
-to turn the rated rates into force limits, and never changes during a run:
+to turn the rated brake rates into force limits, and never changes during a run.
+The traction limit is sized instead to the datasheet's 60‰ maximum gradient: the
+force that holds a full train (222 passengers + 5 crew, 58,404 kg) on 6%. The
+datasheet's 0.5 m/s² is the medium acceleration (0 to 70 km/h average) at ⅔ load,
+not the starting pull, so it no longer sizes the cap:
 
-| Force | Rated rate × reference mass |
+| Force | Derivation |
 |---|---|
-| Max traction (`f_max_n`) | 0.5 m/s² × 51,433 = 25,717 N |
+| Max traction (`f_max_n`) | 58,404 × 9.81 × (sin θ + 0.002 cos θ), θ = atan 0.06 = 35,459 N |
 | Service brake (`f_service_n`) | 1.2 m/s² × 51,433 = 61,720 N |
 | Emergency brake (`f_emergency_n`) | 2.73 m/s² × 51,433 = 140,413 N |
 

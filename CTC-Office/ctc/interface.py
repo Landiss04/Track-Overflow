@@ -188,8 +188,15 @@ class TrackControllerOutputs:
     # listed block (``maintenance-closure-lock``, proposed on
     # ``ctc-interfacing``).
     closed_blocks: tuple[BlockRef, ...] = ()
-    # Only while in maintenance mode; cleared when it ends.
+    # The dispatcher's switch positions, set in maintenance mode; they
+    # outlast it until released (``maintenance-closure-lock``).
     switch_commands: tuple[SwitchCommand, ...] = ()
+    # The position each switch should take for the train the CTC routes
+    # over it: within its authority, or where its authority stops short
+    # of the switch (``switch-route-request``, proposed). A request, not
+    # a command: the Track Controller sets the switch when it is safe,
+    # and a ``switch_commands`` entry for the same switch wins.
+    route_requests: tuple[SwitchCommand, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,7 +291,7 @@ class CancelledOrder:
     train_id: str
     line: str
     destination_block_id: str
-    # "block closed" or "block closing"
+    # "block closed"
     reason: str
 
 
@@ -298,7 +305,7 @@ class TrainAuthority:
     # The last block the train may enter: its own when ``blocks`` is 0.
     end_block_id: str
     # "destination", "occupied" (a failed block too: the CTC never
-    # shows one), "closed", "closing", "reserved" (within another
+    # shows one), "closed", "reserved" (within another
     # train's authority), "switch", "held" (the schedule holds it there,
     # round a loop, until the zone ahead is clear) or "no route".
     reason: str
@@ -343,12 +350,13 @@ class CtcSnapshot:
     tickets_sold: Mapping[str, int] = field(default_factory=dict)
     # Every run of the loaded schedule, by departure time.
     scheduled_runs: tuple[ScheduledRun, ...] = ()
+    # The loaded schedule's time zero, in simulated seconds since
+    # midnight, once it has started (the clock ran with it loaded);
+    # None before then, or with no schedule.
+    schedule_start_s: float | None = None
     # Dispatcher orders, by train ID.
     orders: tuple[DispatchOrder, ...] = ()
-    # Closures waiting for a train to leave the block; they close by
-    # themselves once it is clear. Already in ``closed_blocks``.
-    pending_closures: tuple[BlockRef, ...] = ()
-    # The dispatcher's closed blocks (closing ones too) and switch
+    # The dispatcher's closed blocks and switch
     # commands. The same as in ``outputs`` while the Track Controller is
     # ready; kept here while it is not, when nothing is sent to it.
     closed_blocks: tuple[BlockRef, ...] = ()
@@ -421,9 +429,17 @@ class CtcOffice(Protocol):
         """Send a train toward a destination block on its line.
 
         A train that already has an order is rerouted: the new order
-        replaces the old one. Refused (safety) into a closed, closing or
+        replaces the old one. Refused (safety) into a closed or
         failed block, and onto a line other than the train's own.
         """
+        ...
+
+    def preview_dispatch(self, train_id: str, line: str,
+                         destination_block_id: str) -> TrainSuggestion:
+        """The suggested speed and authority ``dispatch`` would lead
+        to now, from the block the train is in (or its line's yard exit
+        block, for a train in the yard). Refused as ``dispatch`` is. No
+        side effects."""
         ...
 
     def return_to_yard(self, train_id: str) -> None:
@@ -437,8 +453,8 @@ class CtcOffice(Protocol):
     def set_block_closed(self, line: str, block_id: str,
                          closed: bool) -> None:
         """Close a block for maintenance, or reopen it. Maintenance
-        mode only. An occupied block closes once the train has left it;
-        orders into the block are cancelled at once."""
+        mode only. A block closes at once, even with a train in it,
+        and orders into it are cancelled."""
         ...
 
     def set_switch(self, line: str, switch_id: str,
@@ -448,12 +464,14 @@ class CtcOffice(Protocol):
         ...
 
     def release_switch(self, line: str, switch_id: str) -> None:
-        """Drop the command for one switch, if there is one."""
+        """Drop the command for one switch, if there is one.
+        Maintenance mode only."""
         ...
 
     def set_maintenance_mode(self, active: bool) -> None:
-        """Enter or leave maintenance mode; leaving it drops every
-        switch command."""
+        """Enter or leave maintenance mode. Closed blocks and switch
+        commands outlast it; only the dispatcher removes them, in
+        maintenance mode."""
         ...
 
     def set_clock_speedup(self, active: bool) -> None:
@@ -465,8 +483,10 @@ class CtcOffice(Protocol):
         ...
 
     def load_schedule(self, schedule: Schedule) -> None:
-        """Replace the schedule. In automatic mode its runs dispatch
-        themselves when due (``ctc.scheduler``)."""
+        """Replace the schedule. Its time zero is the moment it starts:
+        now if the clock is running, else when the clock next runs. In
+        automatic mode its runs dispatch themselves when due
+        (``ctc.scheduler``)."""
         ...
 
     def set_automatic_mode(self, active: bool) -> None:

@@ -33,9 +33,10 @@ primitive keeps everything consistent.
 | `p_max_w` | 480,000 W (4 × 120 kW) | Confirmed by Kevin Schillinger, 2026-10-20 |
 | `v_max_mps` | 19.444 m/s (70 km/h) | Datasheet; **not enforced** |
 | `ref_load_fraction` | 2/3 | Datasheet test condition |
-| `accel_ref_mps2` | 0.5 m/s² | Datasheet, at 2/3 load |
+| `accel_ref_mps2` | 0.5 m/s² | Datasheet medium (0 to 70 km/h average), at 2/3 load; nominal, not the cap |
 | `decel_service_mps2` | 1.2 m/s² | Datasheet, at 2/3 load |
 | `decel_emergency_mps2` | 2.73 m/s² | Datasheet, at 2/3 load |
+| `max_gradient` | 0.06 | Datasheet maximum gradient, 60‰ |
 | `c_rr` | 0.002 | Existing configured coefficient; retained scope |
 | `g_mps2` | 9.81 m/s² | |
 | `seed` | 0 | Disembark random generator |
@@ -43,14 +44,15 @@ primitive keeps everything consistent.
 | Derived | Formula | Value |
 |---|---|---|
 | `m_ref_kg` | m_empty + ⅔ × (m_loaded − m_empty) | 51,433 kg |
-| `f_max_n` | m_ref × 0.5 | 25,717 N |
+| `f_max_n` | m_full × g × (sin θ + c_rr cos θ), θ = atan(max_gradient), m_full = m_empty + (capacity + n_crew) × passenger_mass | 35,459 N |
 | `f_service_n` | m_ref × 1.2 | 61,720 N |
 | `f_emergency_n` | m_ref × 2.73 | 140,413 N |
 
 ## 2. Masses
 
-- **Reference mass** `m_ref` is fixed and used only to size the three forces
-  above, so the datasheet rates hold at ⅔ load.
+- **Reference mass** `m_ref` is fixed and used only to size the two brake
+  forces above, so the datasheet rates hold at ⅔ load. The traction limit
+  is sized to hold a full train on the 6% rated gradient instead.
 - **Operating mass** is the *m* in every force balance:
 
   m = m_empty + (n_crew + n_passengers) × passenger_mass
@@ -81,7 +83,7 @@ under an engine failure. Then
   they slow it and, where they can, stop it and drive the train forward.
 
 The speed where the two limits meet is the **base speed**
-v_b = P / F_max: at full power 18.66 m/s (67.2 km/h). Below v_b in speed
+v_b = P / F_max: at full power 13.54 m/s (48.7 km/h). Below v_b in speed
 (either direction) traction is force-limited (constant F_max); above it,
 power-limited (P/|v|).
 
@@ -313,8 +315,8 @@ that brake alone; the accepted simultaneous-brake design sums both forces.
 
 | | Crew only (41,286 kg) | Full (58,404 kg) |
 |---|---|---|
-| Launch acceleration (F_max − F_r)/m | 0.603 m/s² | 0.421 m/s² |
-| Steepest grade full power can start on | 6.16 % | 4.29 % |
+| Launch acceleration (F_max − F_r)/m | 0.839 m/s² | 0.588 m/s² |
+| Steepest grade full power can start on | 8.59 % | 6.00 % |
 | Steepest grade the service brake holds | 15.6 % | 11.0 % |
 | Steepest grade the emergency brake holds | 37.2 % | 25.5 % |
 | Service deceleration incl. rolling | 1.515 m/s² | 1.076 m/s² |

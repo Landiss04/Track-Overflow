@@ -227,6 +227,15 @@ the modules communicate. i am not here to fix modules."
 | Must PLC programs be fully working for the first integration? (CTC-2) | "no" (Kevin) | No change |
 | Train Controller #28 (engine rule), #23 (repaired engine), #34 (e-brake while latched) | "this are work in progress" (Kevin): module work, not integration | Dropped from the integration open list |
 
+## Answers, 2026-11-02
+
+Kevin's answers, 2026-11-02.
+
+| Question | Answer | Done on this branch |
+| --- | --- | --- |
+| Does the CTC's maintenance switch list persist after maintenance mode ends? (INPUT-1, Landis) | "any switch that is set in maintence mode should hold even if mode is switched to manual or automatic, meaning the only time that that list does not persist is when the CTC has removed all of the manually set switch states. waysides should be querying these switch values (if they exist) before they make any updates to the switch states." (Kevin) | Proposal `20261102-0829-maintenance-switches-persist.md` (replaces `20261025-2129`). Not yet in code: `CTC-Office/ctc/model.py` `set_maintenance_mode(False)` still clears every switch command (Landis). Each wayside must check the list before it sets a switch (Harry, Braden). The harness already carries `switch_commands` every tick, unchanged |
+| Should the CTC learn of track failures from the Track Model, or not at all? (C1) | "ctc doesn't learn of failures at all" (Kevin) | Proposal `20261102-0829-D041-ctc-not-told-of-track-failures.md`. Already so: a failed block reaches the CTC only as occupied, and the harness passes no failure field (`common/harness/wayside_edges.py`) |
+
 ## CTC-1: Red concurrency
 
 **Owner:** Landis, CTC Office.

@@ -285,8 +285,11 @@ def test_derived_forces_follow_primitives(cfg: TrainConfig) -> None:
     m_ref = cfg.m_empty_kg + cfg.ref_load_fraction * (
         cfg.m_loaded_kg - cfg.m_empty_kg)
     assert cfg.m_ref_kg == pytest.approx(m_ref, rel=1e-12)
+    m_full = cfg.m_empty_kg + (cfg.capacity + cfg.n_crew) * cfg.passenger_mass_kg
+    th = math.atan(cfg.max_gradient)
     assert cfg.f_max_n == pytest.approx(
-        m_ref * cfg.accel_ref_mps2, rel=1e-12)
+        m_full * cfg.g_mps2 * (math.sin(th) + cfg.c_rr * math.cos(th)),
+        rel=1e-12)
     assert cfg.f_service_n == pytest.approx(
         m_ref * cfg.decel_service_mps2, rel=1e-12)
     assert cfg.f_emergency_n == pytest.approx(
@@ -315,19 +318,19 @@ def test_config_is_immutable() -> None:
         CFG.p_max_w = 1.0  # type: ignore[misc]
 
 
-def test_traction_gives_rated_rate_at_reference_mass() -> None:
-    """Check F_max gives the datasheet 0.5 m/s^2 on the 2/3-load mass."""
-    assert CFG.f_max_n / CFG.m_ref_kg == pytest.approx(0.5, rel=1e-12)
+def test_traction_exceeds_medium_rate_at_reference_mass() -> None:
+    """Check F_max beats the datasheet 0.5 m/s^2 medium rate at 2/3 load."""
+    assert CFG.f_max_n / CFG.m_ref_kg > CFG.accel_ref_mps2
 
 
 @pytest.mark.parametrize(("force", "expected_n"), [
-    ("f_max_n", 25_717.0),
+    ("f_max_n", 35_459.0),
     ("f_service_n", 61_720.0),
     ("f_emergency_n", 140_413.0),
 ])
 def test_forces_match_instructor_values(
         force: str, expected_n: float) -> None:
-    """Check each force is the instructor's 51,433 kg figure, to 1 N."""
+    """Check each force against its documented value, to 1 N."""
     assert getattr(CFG, force) == pytest.approx(expected_n, abs=1.0)
 
 
@@ -338,9 +341,9 @@ def test_reference_mass_is_two_thirds_of_datasheet_load() -> None:
 
 
 def test_base_speed_where_power_limit_takes_over() -> None:
-    """Check P_max / F_max lies just below the maximum speed."""
+    """Check P_max / F_max is about 13.5 m/s, below the maximum speed."""
     base = CFG.p_max_w / CFG.f_max_n
-    assert 18.0 < base < CFG.v_max_mps
+    assert 13.0 < base < CFG.v_max_mps
 
 
 # --------------------------------------------------------------------------- #
@@ -555,11 +558,11 @@ def test_traction_slows_a_rollback_then_drives_forward() -> None:
 def test_traction_slows_a_rollback_it_cannot_stop() -> None:
     """Check the motors still help on a grade too steep for them."""
     model = fresh()
-    roll_back(model, 8.0, 1.0)
+    roll_back(model, 10.0, 1.0)
     m = mass_of(0)
-    f_grade, f_roll = grade_and_roll_n(m, 8.0)
+    f_grade, f_roll = grade_and_roll_n(m, 10.0)
     assert f_grade - f_roll > CFG.f_max_n
-    model.step(DT_S, inp(CFG.p_max_w, grade_deg=pct(8.0)))
+    model.step(DT_S, inp(CFG.p_max_w, grade_deg=pct(10.0)))
     assert acc(model) == pytest.approx(
         (CFG.f_max_n - f_grade + f_roll) / m, rel=1e-12)
     assert (f_roll - f_grade) / m < acc(model) < 0.0

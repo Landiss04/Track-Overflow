@@ -47,6 +47,10 @@ from utils.module_window import keep_windows_open
 #: This module's name, as the harness knows it.
 MODULE_NAME = "train-model"
 
+#: Real seconds between window redraws while steps arrive: 20 a second,
+#: where at 10x a moving train changes 100 times a second.
+VIEW_INTERVAL_S = 0.05
+
 EXIT_QUIT = 0
 EXIT_HARNESS_LOST = 2
 
@@ -176,7 +180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not isinstance(app, QGuiApplication):
             raise RuntimeError("the Train Model needs a QGuiApplication")
         keep_windows_open(app)
-        fleet = TrainModelFleet()
+        fleet = TrainModelFleet(view_interval_s=VIEW_INTERVAL_S)
         process = TrainModelProcess(fleet, options.harness, parent=fleet)
         process.finished.connect(app.exit)
         process.start()

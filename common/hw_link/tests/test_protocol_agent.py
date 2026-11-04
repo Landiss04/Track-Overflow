@@ -66,6 +66,25 @@ def test_duplicate_and_durable_reboot(tmp_path):
     assert len(journal.read_text().splitlines()) == 2
 
 
+def test_host_agent_journal_skips_fsync_but_survives_restart(
+    tmp_path, monkeypatch
+):
+    import common.hw_link.agent as agent
+
+    synced = []
+    monkeypatch.setattr(agent.os, "fsync", synced.append)
+    for durable in (True, False):
+        journal = tmp_path / f"agent-{durable}.jsonl"
+        server = PiLinkServer("train-controller-hw", journal, durable=durable)
+        server.handle(hello())
+        synced.clear()
+        first = server.handle(step())[0]
+        assert bool(synced) == durable
+        rebooted = PiLinkServer("train-controller-hw", journal)
+        assert rebooted.handle(hello())[0]["resumed"]
+        assert rebooted.handle(step()) == [first]
+
+
 def test_quit_resets_session_and_cache(tmp_path):
     server = PiLinkServer("train-controller-hw", tmp_path / "agent")
     server.handle(hello())

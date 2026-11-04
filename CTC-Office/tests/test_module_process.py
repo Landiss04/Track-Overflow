@@ -128,7 +128,8 @@ class ProcessTest(_ProcessCase):
         outputs = self.step()
         self.assertEqual(
             set(outputs["track_controller"]),
-            {"suggestions", "closed_blocks", "switch_commands"},
+            {"suggestions", "closed_blocks", "switch_commands",
+             "route_requests"},
         )
         self.assertIs(outputs["clock_paused"], True)
         self.assertIs(outputs["clock_speedup"], False)

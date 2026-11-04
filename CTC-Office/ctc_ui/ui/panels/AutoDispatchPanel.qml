@@ -9,6 +9,8 @@ Panel {
     id: root
 
     property string scheduleFile: ""
+    // When the schedule's time zero is, or that it starts at Run.
+    property string scheduleStart: ""
     // Dispatching a loaded schedule; paused by the dispatcher.
     property bool running: false
     property bool paused: false
@@ -99,6 +101,13 @@ Panel {
                     ? theme.text_primary : theme.text_muted
                 elide: Text.ElideMiddle
             }
+
+            MonoText {
+                Layout.fillWidth: true
+                visible: root.scheduleLoaded && root.scheduleStart !== ""
+                text: root.scheduleStart
+                color: theme.text_secondary
+            }
         }
     }
 
@@ -114,8 +123,8 @@ Panel {
     HelperText {
         Layout.fillWidth: true
         visible: root.departures.length > 0
-        text: qsTr("Each run leaves the yard when due (the schedule "
-            + "starts at 05:00), stops 45 s at each of its scheduled "
+        text: qsTr("Each run leaves the yard when due (its time in the "
+            + "file after T = 0), stops 45 s at each of its scheduled "
             + "stations in track order and nowhere else, then returns "
             + "to the yard. Held: waiting for a stretch of two-way "
             + "track ahead to clear.")

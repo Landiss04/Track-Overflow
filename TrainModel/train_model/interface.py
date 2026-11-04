@@ -10,6 +10,7 @@ temperature in degrees Celsius, grade in degrees, and authority as a count
 of blocks.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -44,9 +45,10 @@ class TrainConfig:
 
     # Rated performance, all at 2/3 load (datasheet)
     ref_load_fraction: float = 2.0 / 3.0
-    accel_ref_mps2: float = 0.5
+    accel_ref_mps2: float = 0.5             # medium, 0 to 70 km/h average; not the cap
     decel_service_mps2: float = 1.2
     decel_emergency_mps2: float = 2.73
+    max_gradient: float = 0.06              # 60 per mille, datasheet
 
     # Environment
     c_rr: float = 0.002                     # rolling resistance, assumed
@@ -63,7 +65,12 @@ class TrainConfig:
 
     @property
     def f_max_n(self) -> float:
-        return self.m_ref_kg * self.accel_ref_mps2
+        """Traction cap: holds a full train on max_gradient, about 35.5 kN."""
+        m_full_kg = (self.m_empty_kg
+                     + (self.capacity + self.n_crew) * self.passenger_mass_kg)
+        theta = math.atan(self.max_gradient)
+        return (m_full_kg * self.g_mps2
+                * (math.sin(theta) + self.c_rr * math.cos(theta)))
 
     @property
     def f_service_n(self) -> float:

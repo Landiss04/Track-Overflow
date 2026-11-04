@@ -197,6 +197,8 @@ class RetireTest(unittest.TestCase):
         ctc = ready_office()
         ctc.load_schedule(Schedule("G1 only", runs))
         ctc.set_automatic_mode(True)
+        # The clock runs: the schedule starts, and is timed from now.
+        ctc.set_clock_paused(False)
         stops = len(ctc._auto.plans[0].stops)
         ctc._auto.progress["G1"] = Progress(TO_YARD, stops)
         ctc.dispatch("G1", "Green", "57")
@@ -320,7 +322,7 @@ class ReturnToYardTest(unittest.TestCase):
         self.assertEqual(self._orders(ctc), {"T2": "70"})
 
     def test_safety_refusals_change_nothing(self) -> None:
-        # The yard entry block closed, or closing (a train still in it).
+        # The yard entry block closed, with or without a train in it.
         ctc = self._manual()
         ctc.set_maintenance_mode(True)
         ctc.set_block_closed("Green", "57", True)
@@ -332,7 +334,7 @@ class ReturnToYardTest(unittest.TestCase):
         ctc.stage_inputs(reports(occupied=[("Green", "56"),
                                            ("Green", "57")]))
         ctc.set_block_closed("Green", "57", True)
-        with self.assertRaisesRegex(UnsafeActionError, "closing"):
+        with self.assertRaisesRegex(UnsafeActionError, "closed"):
             ctc.return_to_yard("T1")
         self.assertEqual(self._orders(ctc), {"T1": "65"})
 

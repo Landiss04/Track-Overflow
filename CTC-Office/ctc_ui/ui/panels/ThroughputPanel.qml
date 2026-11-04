@@ -1,7 +1,8 @@
-// Throughput metrics: headline readouts (trains per hour, then tickets
-// per hour on each line, from Track Model ticket sales), tickets sold in
-// each of the last 12 simulated hours per line, and an optional per-line
-// breakdown.
+// Throughput metrics: headline readouts (tickets per hour on each line,
+// from Track Model ticket sales, as whole numbers), tickets sold in each
+// of the last 12 simulated hours per line, and an optional per-line
+// breakdown (trains per hour among it). Two readouts fit a value of six
+// digits at the telemetry size; a third would cut one short.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -25,12 +26,6 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_2
 
-        TelemetryReadout {
-            Layout.fillWidth: true
-            Layout.preferredWidth: 1
-            label: qsTr("Trains")
-            unit: "/hr"
-        }
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
