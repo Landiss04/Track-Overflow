@@ -31,6 +31,9 @@ FAILURE_MODES: tuple[str, ...] = tuple(f.name for f in TrackFailure)
 
 SECONDS_PER_DAY = 86_400.0
 
+#: One table's rows, as QML reads them.
+Rows = list[dict[str, Any]]
+
 
 def c_to_f(temp_c: float) -> float:
     """Convert degrees Celsius to Fahrenheit."""
@@ -53,6 +56,14 @@ class TrackModelState(QObject):
     viewChanged = Signal()
     linesChanged = Signal()
     loadMessageChanged = Signal()
+    # One per table, sent only when its rows change (see _publish).
+    blockRowsChanged = Signal()
+    switchRowsChanged = Signal()
+    signalRowsChanged = Signal()
+    sectionRowsChanged = Signal()
+    trainRowsChanged = Signal()
+    stationRowsChanged = Signal()
+    selectedDetailsChanged = Signal()
 
     def __init__(
         self,
@@ -70,6 +81,8 @@ class TrackModelState(QObject):
         self._selected = ""
         self._load_message = ""
         self._running = False
+        # The rows of each table as last told to QML.
+        self._tables: dict[str, Rows] = {}
         self._pause_timer = QTimer(self)
         self._pause_timer.setSingleShot(True)
         self._pause_timer.setInterval(PAUSED_AFTER_MS)
@@ -81,7 +94,39 @@ class TrackModelState(QObject):
     def refresh(self) -> None:
         """Re-read the module after a step or an action."""
         self._snap = self._model.snapshot()
+        self._publish()
+
+    def _publish(self) -> None:
+        # Every value may have changed: the header's re-read at once, a
+        # table only when its rows differ from those on show. A new
+        # rows array re-runs every cell binding, about 2,000 for a
+        # line's blocks, and at 10x that held up each step reply.
         self.changed.emit()
+        for name, (build, signal) in self._table_builders().items():
+            rows = build()
+            if rows != self._tables.get(name):
+                self._tables[name] = rows
+                signal.emit()
+
+    def _table_builders(self) -> dict[str, tuple[Callable[[], Rows], Any]]:
+        # Each table's rows builder and its change signal.
+        return {
+            "blockRows": (self._block_rows, self.blockRowsChanged),
+            "switchRows": (self._switch_rows, self.switchRowsChanged),
+            "signalRows": (self._signal_rows, self.signalRowsChanged),
+            "sectionRows": (self._section_rows, self.sectionRowsChanged),
+            "trainRows": (self._train_rows, self.trainRowsChanged),
+            "stationRows": (self._station_rows, self.stationRowsChanged),
+            "selectedDetails": (
+                self._selected_details, self.selectedDetailsChanged
+            ),
+        }
+
+    def _table(self, name: str) -> Rows:
+        # A table's rows as on show, built on first use.
+        if name not in self._tables:
+            self._tables[name] = self._table_builders()[name][0]()
+        return self._tables[name]
 
     @Slot()
     def mark_step(self) -> None:
@@ -159,7 +204,7 @@ class TrackModelState(QObject):
         self.linesChanged.emit()
         self.viewChanged.emit()
         self._on_ui_action()
-        self.changed.emit()
+        self._publish()
 
     @Slot()
     def clearLoadMessage(self) -> None:
@@ -177,20 +222,48 @@ class TrackModelState(QObject):
         if line in self._lines and line != self._line:
             self._line = line
             self.viewChanged.emit()
-            self.changed.emit()
+            self._publish()
 
     @Slot(str)
     def setFilter(self, text: str) -> None:
         """Show only blocks whose ID or station contains ``text``."""
         if text != self._filter:
             self._filter = text
-            self.changed.emit()
+            self._publish()
 
     # -- tables ------------------------------------------------------------
 
-    @Property(list, notify=changed)
-    def blockRows(self) -> list[dict[str, Any]]:
+    @Property(list, notify=blockRowsChanged)
+    def blockRows(self) -> Rows:
         """Blocks on the current line, after the filter."""
+        return self._table("blockRows")
+
+    @Property(list, notify=switchRowsChanged)
+    def switchRows(self) -> Rows:
+        """Switches on the current line and the light before each."""
+        return self._table("switchRows")
+
+    @Property(list, notify=signalRowsChanged)
+    def signalRows(self) -> Rows:
+        """Signal lights on the current line."""
+        return self._table("signalRows")
+
+    @Property(list, notify=sectionRowsChanged)
+    def sectionRows(self) -> Rows:
+        """Heaters and track temperature for each section of the line."""
+        return self._table("sectionRows")
+
+    @Property(list, notify=trainRowsChanged)
+    def trainRows(self) -> Rows:
+        """Every train on the track."""
+        return self._table("trainRows")
+
+    @Property(list, notify=stationRowsChanged)
+    def stationRows(self) -> Rows:
+        """Waiting passengers by station, on the current line."""
+        return self._table("stationRows")
+
+    def _block_rows(self) -> Rows:
         out = self._snap.outputs.controller
         circuit = self._snap.track_circuit
         needle = self._filter.strip().upper()
@@ -222,9 +295,7 @@ class TrackModelState(QObject):
             })
         return rows
 
-    @Property(list, notify=changed)
-    def switchRows(self) -> list[dict[str, Any]]:
-        """Switches on the current line and the light before each."""
+    def _switch_rows(self) -> Rows:
         states = self._snap.outputs.controller.switch_states
         return [
             {
@@ -237,18 +308,14 @@ class TrackModelState(QObject):
             for s in self._snap.switches if s.line == self._line
         ]
 
-    @Property(list, notify=changed)
-    def signalRows(self) -> list[dict[str, Any]]:
-        """Signal lights on the current line."""
+    def _signal_rows(self) -> Rows:
         return [
             {"id": block_id, "aspect": self._aspect(block_id)}
             for block_id in self._snap.signal_block_ids
             if block_id.startswith(self._line + " ")
         ]
 
-    @Property(list, notify=changed)
-    def sectionRows(self) -> list[dict[str, Any]]:
-        """Heaters and track temperature for each section of the line."""
+    def _section_rows(self) -> Rows:
         out = self._snap.outputs.controller
         sections: dict[str, None] = {}
         for b in self._snap.blocks:
@@ -263,9 +330,7 @@ class TrackModelState(QObject):
             for s in sections
         ]
 
-    @Property(list, notify=changed)
-    def trainRows(self) -> list[dict[str, Any]]:
-        """Every train on the track."""
+    def _train_rows(self) -> Rows:
         return [
             {
                 "id": t.train_id,
@@ -276,9 +341,7 @@ class TrackModelState(QObject):
             for t in self._snap.trains
         ]
 
-    @Property(list, notify=changed)
-    def stationRows(self) -> list[dict[str, Any]]:
-        """Waiting passengers by station, on the current line."""
+    def _station_rows(self) -> Rows:
         names = {
             b.station_name for b in self._snap.blocks
             if b.line == self._line and b.station_name is not None
@@ -310,16 +373,19 @@ class TrackModelState(QObject):
         if block_id != self._selected:
             self._selected = block_id
             self.viewChanged.emit()
-            self.changed.emit()
+            self._publish()
 
     @Property(str, notify=changed)
     def selectedSignal(self) -> str:
         """Signal colour on the block in focus, or empty with no light."""
         return self._aspect(self._selected)
 
-    @Property(list, notify=changed)
-    def selectedDetails(self) -> list[dict[str, str]]:
+    @Property(list, notify=selectedDetailsChanged)
+    def selectedDetails(self) -> Rows:
         """Key/value rows describing the block in focus."""
+        return self._table("selectedDetails")
+
+    def _selected_details(self) -> Rows:
         block = next(
             (b for b in self._snap.blocks if b.block_id == self._selected),
             None,

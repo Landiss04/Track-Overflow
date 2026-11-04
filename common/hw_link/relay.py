@@ -31,11 +31,15 @@ class RemoteActionError(ValueError):
 class HardwareRelay(QObject):
     """Hold harness replies during USB loss; never substitute a local core."""
 
+    # Messages pass as Python objects: a dict signal argument would be
+    # converted to a QVariantMap and back on every emit, which for the
+    # Track Controller's per-tick outputs costs more than the relay.
+    # Each message is freshly decoded, and receivers only read it.
     ready = Signal()
-    reply = Signal(dict)
-    viewChanged = Signal(dict)
+    reply = Signal(object)
+    viewChanged = Signal(object)
     diagnosticEvent = Signal(str)
-    completed = Signal(int, dict)
+    completed = Signal(int, object)
     closing = Signal()
 
     def __init__(
