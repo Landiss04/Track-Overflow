@@ -805,7 +805,7 @@ def _switch_rule(
 def _ctc_first(sid: str, own: str) -> str:
     """The CTC Office's command for switch ``sid`` if it gives one, else
     ``own``. The vital code still locks the switch under a train."""
-    return f"(CTCSW_{sid} AND CTCREV_{sid}) OR (NOT CTCSW_{sid} AND {own})"
+    return f"(CTCSW_{sid} AND CTCREV_{sid}) OR (NOT CTCSW_{sid} AND ({own}))"
 
 
 def _coming_off(config: ControllerConfig, sid: str, leg: str) -> str:
@@ -896,26 +896,32 @@ def default_program_source(controller: TrackController) -> str:
             f"{config.crossing_output(crossing_id)} := {occupied(near)}",
         ]
 
-    # Only a block with a train in it is held. A block with no train
-    # that still has a suggestion is the next block of the train beside
-    # it, preloaded by the CTC Office so the train finds its values
-    # there as it enters (truth signals/track-signal, suggested-speed).
-    # Holding it for that train's own occupancy would send it speed 0
-    # and authority 0 at every block it enters.
+    # Only a block with a train in it is held, and only for the block
+    # AHEAD of it: the layout's ``next_blocks`` gives the direction of
+    # travel. A block with no train that still has a suggestion is the
+    # next block of the train beside it, preloaded by the CTC Office so
+    # the train finds its values there as it enters (truth
+    # signals/track-signal, suggested-speed). Holding on the block behind
+    # would stall every train that is followed closely: each holds the
+    # next, and none can move. Where the layout joins two blocks both ways
+    # (a bidirectional section) the direction is not known to the program,
+    # so each holds for the other.
     lines += [
         "",
-        "// Separation: hold a train whose neighbour is occupied. A block "
+        "// Separation: hold a train whose next block is occupied. A block "
         "with no train",
         "// in it passes its suggestion: it is the next block of the train "
-        "beside it.",
+        "behind it.",
     ]
     for number in numbers:
-        beside = [int(n) for n in config.neighbours(str(number))
-                  if n.isdigit() and int(n) in owned]
-        if beside:
+        ahead = [
+            int(n) for n in config.next_blocks(str(number))
+            if n.isdigit() and int(n) in owned
+        ]
+        if ahead:
             others = (
-                f"OCC_{beside[0]}" if len(beside) == 1
-                else "(" + " OR ".join(f"OCC_{n}" for n in beside) + ")"
+                f"OCC_{ahead[0]}" if len(ahead) == 1
+                else "(" + " OR ".join(f"OCC_{n}" for n in ahead) + ")"
             )
             body = f"NOT (OCC_{number} AND {others})"
         else:

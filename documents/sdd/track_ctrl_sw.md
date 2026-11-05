@@ -169,7 +169,7 @@ a selected wayside, and UC-02 needs a loaded track.
 | **Description** | Installs the program that was just run on the selected wayside. |
 | **Data** | The verified source and its file name. |
 | **Stimulus** | The programmer clicks **Commit iteration**. |
-| **Response** | The program is compiled and checked again, then installed as the next iteration. The wayside keeps its last five iterations, and any of them can be reopened from the file list. It runs from the next scan, and the editor shows **COMMITTED**. Once every wayside on the line has a program, the header's **NOT READY** clears and the line's waysides report ready (UC-17). |
+| **Response** | The program is compiled and checked again, then installed as the next iteration. The wayside keeps its last five iterations, and any of them can be reopened from the file list. It runs from the next scan, and the editor shows **COMMITTED**. The wayside is then ready (its layout is present and a program is committed) and reports so (UC-17); the header's **NOT READY** clears once every wayside has a program. |
 | **Alternatives** | No clean run of exactly this text, or any diagnostic: refused, the terminal says why, and the previous program keeps running. |
 | **Requirements** | Rubric 6.7; REQ-FUNC-050 |
 | **Sequence** | SD-06 |
@@ -315,9 +315,9 @@ a selected wayside, and UC-02 needs a loaded track.
 |---|---|
 | **Actors** | Central Harness (extends UC-09) |
 | **Description** | A line where any wayside has no program runs nothing and transmits nothing. |
-| **Data** | Why: no track loaded, or a wayside on the line has no PLC program. |
+| **Data** | Why: no track loaded, or the wayside has no committed PLC program. |
 | **Stimulus** | Either condition at a scan. |
-| **Response** | Every wayside of that line idles. It sends no switch, signal or track-circuit command: those outputs are absent, not safe defaults, because a wayside running no program cannot drive anything. Its crossings are the exception: their default state is armed, so they are commanded active (lights on, gates down). The reports say not ready and why, the window shows **NOT READY** with the reason, and the CTC Office holds the line. Another, ready line is not held. |
+| **Response** | Each wayside that is not ready idles; the others run. It sends no switch, signal or track-circuit command: those outputs are absent, not safe defaults, because a wayside running no program cannot drive anything. Its crossings are the exception: their default state is armed, so they are commanded active (lights on, gates down). The reports say not ready and why, the window shows **NOT READY** with the reason, and the CTC Office holds the line until every wayside on it is ready. A ready wayside is not held by another. |
 | **Requirements** | Rubric 6.9; REQ-FUNC-058 |
 | **Sequence** | SD-18 |
 

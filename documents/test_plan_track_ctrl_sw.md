@@ -92,7 +92,7 @@ It runs every wayside of the Green Line (D021). Everything it exchanges crosses
 | Suggestion | The CTC Office's speed (m/s) and authority (blocks) for one block. |
 | Track circuit | The speed and authority sent to the train in a block, through the Track Model. |
 | Read-back | The Track Model's report of the actual switch, signal and crossing states. |
-| Ready | Every wayside on the line has a committed program. A line that is not ready transmits nothing. |
+| Ready | A wayside is ready when its layout is present and a program is committed. A wayside that is not ready transmits nothing; the others are not held. |
 | Maintenance | Inferred while the CTC Office has a switch command in effect. There is no flag. |
 | Rig | `tests/rig.py`: the module wired to `StandInWorld`, ticked without Qt. |
 | SUT | System under test. |
@@ -283,7 +283,7 @@ For a manual run, start the module window and then the test UI:
 | SW-M-12 | Unknown blocks are ignored | Inputs for a block no wayside governs | No error; no output for it | REQ-NFR-004 | test_boundary :: test_unknown_blocks_are_ignored |
 | SW-M-13 | Snapshot follows the last tick | Two ticks with different time | The snapshot shows the second tick's time and values | REQ-INTF-013 | test_boundary :: test_snapshot_follows_the_last_tick |
 | SW-M-14 | A new module is not ready | `SwTrackController()` with no track | `ready` false, reason "no track is loaded"; no track circuits even with suggestions | REQ-FUNC-058 | test_boundary :: test_a_new_module_is_not_ready_and_says_why |
-| SW-M-15 **S** | One missing program stalls the line | Five of six waysides programmed | Every Green wayside reports not ready; no command for the line | REQ-FUNC-058 | test_boundary :: test_one_missing_program_stalls_every_wayside; test_a_loaded_line_without_programs_stalls |
+| SW-M-15 **S** | A wayside with a program runs without waiting for the rest | Five of six waysides programmed | The module is not ready and names the sixth; the five transmit circuits; the sixth transmits none | REQ-FUNC-058 | test_boundary :: test_a_wayside_with_a_program_runs_without_waiting_for_the_rest; test_a_loaded_line_without_programs_stalls |
 | SW-M-16 | The last program starts the line | The sixth program committed | Every report is ready; commands flow | REQ-FUNC-055 | test_boundary :: test_the_last_program_starts_the_module; test_loading_the_last_program_by_hand_makes_it_ready |
 | SW-M-17 | A new line or a reset stalls it again | A ready module, then `load_track` or `reset` | Not ready again | REQ-FUNC-058 | test_boundary :: test_a_new_line_or_a_reset_stalls_a_ready_module_again |
 | SW-M-18 | Readiness is per wayside on the wire | A partly programmed line | Each report carries its own `ready` and `reason`; `outputs.ready` is true only when all are | REQ-FUNC-055 | test_boundary :: test_each_wayside_reports_its_own_readiness; test_the_whole_is_ready_only_when_every_wayside_is; test_readiness_crosses_the_wire_per_wayside |
@@ -311,7 +311,7 @@ For a manual run, start the module window and then the test UI:
 | SW-W-01 | Occupancy reaches the input card | Block 3 occupied, then cleared | `inputs.occupancy["3"]` true and `trains["3"] == "TEST"`; then false, with no train | REQ-FUNC-054 | test_world :: test_occupancy_reaches_the_input_card |
 | SW-W-02 | Occupancy on the signal block turns it red | Block 12 occupied | Signal at 12 commanded RED | REQ-FUNC-053 | test_world :: test_occupancy_on_the_signal_block_turns_it_red |
 | SW-W-03 | Occupancy ahead gives yellow | Block 14 occupied | Signal at 12 commanded YELLOW by the program | REQ-FUNC-053 | test_world :: test_occupancy_ahead_makes_the_program_show_yellow |
-| SW-W-04 **S** | A train holds the blocks beside it | Suggestions `(12, 4)` everywhere; block 6 occupied | Blocks 5 and 7 get `(0, 0)`; block 3 keeps `(12, 4)` | REQ-FUNC-058.1 | test_world :: test_a_train_holds_the_blocks_beside_it |
+| SW-W-04 **S** | A train waits for the train ahead of it | Suggestions `(12, 4)` everywhere; block 6 occupied, then block 5 too (6 leads to 5) | With only 6 occupied nothing is held. With 5 occupied, block 6 gets `(0, 0)`, block 5 keeps `(12, 4)`; block 3 keeps `(12, 4)` | REQ-FUNC-058.1 | test_world :: test_a_train_waits_for_the_train_ahead_of_it; test_boundary :: test_a_convoy_is_held_only_behind_its_leader |
 | SW-W-05 | Signals and crossings come back as read-back | One tick | The world's read-back equals the commands; the next report carries it | REQ-FUNC-055 | test_world :: test_signals_and_crossings_come_back_as_readback |
 | SW-W-06 | Closing a block zeroes only that block | Block 7 closed, then reopened; suggestions `(12, 4)` | Block 7 `(0, 0)` while closed, block 9 still `(12, 4)`; block 7 back to `(12, 4)` when reopened | REQ-FUNC-058.1 | test_world :: test_closing_a_block_zeroes_that_blocks_circuit_only |
 | SW-W-07 | Suggestions are per block | Different suggestions on two blocks | Each circuit carries its own | REQ-FUNC-049 | test_world :: test_suggestions_are_per_block; test_one_part_of_a_suggestion_can_change_alone |
