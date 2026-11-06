@@ -1,0 +1,55 @@
+// gtc01_invalid.plc: an INVALID program for wayside GTC-01 (Green Line, blocks 1..25).
+// Load it on GTC-01 and press RUN: the parser pane lists every problem and COMMIT
+// stays disabled. Each deliberate fault is marked "FAULT n"; fix them one at a time
+// (the file gtc01_valid.plc is the corrected version) and RUN again after each.
+//
+// Faults 1 to 3 are ERRORS: the compiler cannot read the line, so it is skipped.
+// Faults 4 to 8 are WARNINGS: the line compiles but would not do what it says.
+// Faults 9 and 10 are the "does it fit this wayside" check against GTC-01's own I/O.
+// Any diagnostic, error or warning, blocks a commit.
+
+VAR_IN   OCC_1..25
+VAR_IN   OCC_20                // FAULT 4: OCC_20 is already declared above (declared more than once)
+VAR_IN   CLOSED_1..25
+VAR_IN   MAINT
+VAR_IN   OCC_99                // FAULT 10: block 99 belongs to no wayside, so OCC_99 is not GTC-01's
+
+VAR_OUT  AUTH_1..20            // FAULT 8: AUTH_21..25 are not declared, so those blocks never pass authority
+VAR_OUT  SW_12
+VAR_OUT  SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG   // FAULT 6: SIG_12_SG is declared but never assigned
+VAR_OUT  XING_19
+VAR_OUT  SW_30                 // FAULT 9: SW_30 is another wayside's switch, not an output of GTC-01
+
+ROUTE_R_12 := OCC_1
+SW_12 := NOT MAINT AND ROUTE_R_12
+
+AHEAD_12 := OCC_13 OR OCC_14
+SIG_12_R = OCC_12 OR CLOSED_12                  // FAULT 1: "=" where ":=" is needed
+SIG_12_Y := NOT SIG_12_R AND AHEAD_12
+SIG_12_G := NOT SIG_12_R AND NOT AHEAD_12
+
+OCC_5 := 0                                      // FAULT 2: an input cannot be assigned
+
+XING_19 := OCC_18 OR OCC_19 OR OCC_20
+XING_19 := OCC_18 OR OCC_19 OR OCC_20 OR NEARBY // FAULT 5: XING_19 assigned twice; FAULT 7: NEARBY is never declared
+
+AUTH_1 := NOT (OCC_1 AND OCC_2)
+AUTH_2 := NOT (OCC_2 AND (OCC_1 OR OCC_3      // FAULT 3: the closing ")" is missing
+AUTH_3 := NOT (OCC_3 AND (OCC_2 OR OCC_4))
+AUTH_4 := NOT (OCC_4 AND (OCC_3 OR OCC_5))
+AUTH_5 := NOT (OCC_5 AND (OCC_4 OR OCC_6))
+AUTH_6 := NOT (OCC_6 AND (OCC_5 OR OCC_7))
+AUTH_7 := NOT (OCC_7 AND (OCC_6 OR OCC_8))
+AUTH_8 := NOT (OCC_8 AND (OCC_7 OR OCC_9))
+AUTH_9 := NOT (OCC_9 AND (OCC_8 OR OCC_10))
+AUTH_10 := NOT (OCC_10 AND (OCC_9 OR OCC_11))
+AUTH_11 := NOT (OCC_11 AND (OCC_10 OR OCC_12))
+AUTH_12 := NOT (OCC_12 AND (OCC_11 OR OCC_13))
+AUTH_13 := NOT (OCC_13 AND (OCC_12 OR OCC_14))
+AUTH_14 := NOT (OCC_14 AND (OCC_13 OR OCC_15))
+AUTH_15 := NOT (OCC_15 AND (OCC_14 OR OCC_16))
+AUTH_16 := NOT (OCC_16 AND (OCC_15 OR OCC_17))
+AUTH_17 := NOT (OCC_17 AND (OCC_16 OR OCC_18))
+AUTH_18 := NOT (OCC_18 AND (OCC_17 OR OCC_19))
+AUTH_19 := NOT (OCC_19 AND (OCC_18 OR OCC_20))
+AUTH_20 := NOT (OCC_20 AND (OCC_19 OR OCC_21))

@@ -11,7 +11,6 @@ package "ctc.interface" {
     +validate_inputs(inputs)
     +stage_inputs(inputs)
     +dispatch(train_id, line, destination_block_id, arrival_s)
-    +cancel_dispatch(train_id)
     +return_to_yard(train_id)
     +set_block_closed(line, block_id, closed)
     +set_switch(line, switch_id, position)

@@ -3214,8 +3214,8 @@ the stale `common/interfaces.py` catalog (D008).
 | Mass per person | 77.1107 kg | Applies to crew and passengers. |
 | Maximum power | 480,000 W | Confirmed by Kevin Schillinger in R10. |
 | Vehicle maximum speed | 70/3.6 m/s | Recorded, not enforced by this module. |
-| Reference mass | `40,900 + (2/3)*(56,700 - 40,900)` = approximately 51,433 kg | Used to derive the fixed force limits. |
-| Traction limit | `m_ref * 0.5` = approximately 25,717 N | Derived from rated reference-load acceleration. |
+| Reference mass | `40,900 + (2/3)*(56,700 - 40,900)` = approximately 51,433 kg | Used to derive the fixed brake force limits. |
+| Traction limit | `m_full * g * (sin θ + c_rr * cos θ)`, `θ = atan(0.06)`, `m_full` = 58,404 kg = approximately 35,459 N | Holds a full train on the datasheet's 60‰ maximum gradient. The datasheet 0.5 m/s² is the medium (0 to 70 km/h average) acceleration at 2/3 load, not the cap. |
 | Service brake force | `m_ref * 1.2` = 61,720 N | Fixed force; actual deceleration varies with operating mass. |
 | Emergency brake force | `m_ref * 2.73` = 140,413 N | Same reference-load basis. |
 | Rolling coefficient / gravity | 0.002 / 9.81 m/s² | Current configured values; rolling resistance is the only passive resistance term in scope. |

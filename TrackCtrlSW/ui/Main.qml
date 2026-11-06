@@ -1,23 +1,21 @@
 // Track Controller application window: tab bar, header, view switcher.
+// Sizing, the 1440 x 900 reference canvas and the letterbox all come from
+// the shared ui/ScaledWindow.qml; the host installs the matching aspect
+// lock. Never set window geometry here (documents/SCALING_GUIDE.md).
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 import "components"
+import "../../ui"
 
-ApplicationWindow {
+ScaledWindow {
     id: window
 
     readonly property var controller: wayside.controller
 
-    visible: true
-    width: 1440
-    height: 926
-    minimumWidth: 1100
-    minimumHeight: 720
     title: qsTr("Track Controller — ") + wayside.selectedController
-    color: theme.bg_app
 
     ColumnLayout {
         anchors.fill: parent

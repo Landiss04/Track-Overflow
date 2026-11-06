@@ -23,6 +23,7 @@ from ctc.interface import (  # noqa: E402
     CrossingReport,
     CtcInputs,
     CtcSnapshot,
+    NewTrain,
     SwitchReport,
     TrackControllerInputs,
     TrackedTrain,
@@ -39,7 +40,7 @@ from ctc.socket_link import (  # noqa: E402
 )
 from ctc.wire import inputs_from_wire, snapshot_from_wire, to_wire  # noqa
 from ctc_ui.test_harness import CtcTestHarness  # noqa: E402
-from tests.occupancy import ready_office, reports  # noqa: E402
+from tests.occupancy import own_block, ready_office, reports  # noqa: E402
 
 HOST = Path(__file__).with_name("link_host.py")
 
@@ -123,14 +124,24 @@ class SocketLinkTest(unittest.TestCase):
         self.link.dispatch("T1", "Green", "65", 30600.0)
         self.link.set_maintenance_mode(True)
         self.link.set_block_closed("Red", "2", True)
+        # The CTC releases T1 from the yard: the event survives the
+        # JSON round trip.
+        out = self.link.step(0.1, reports())
+        self.assertEqual(out.new_trains, (NewTrain("T1", "Green"),))
         # T1 leaves the yard into Green 63.
         out = self.link.step(0.1, CtcInputs(
             track_controller=reports(
                 occupied=[("Green", "63")]).track_controller,
             track_model=_green(5)))
-        (suggestion,) = out.track_controller.suggestions
+        self.assertEqual(out.new_trains, ())
+        # Its block, and the next block on its route.
+        suggestion = own_block(out.track_controller.suggestions)
+        (ahead,) = [s for s in out.track_controller.suggestions
+                    if s is not suggestion]
         self.assertEqual((suggestion.block_id, suggestion.authority_blocks),
                          ("63", 2))
+        self.assertEqual((ahead.block_id, ahead.authority_blocks),
+                         ("64", 1))
         # Still ints after the JSON round trip.
         self.assertIs(type(suggestion.suggested_speed_mps), int)
         self.assertIs(type(suggestion.authority_blocks), int)

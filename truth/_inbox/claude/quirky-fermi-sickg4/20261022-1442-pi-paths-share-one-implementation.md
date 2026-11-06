@@ -1,11 +1,11 @@
-**Target:** truth/decisions/D035-pi-paths-share-one-implementation.md
+**Target:** truth/decisions/D038-pi-paths-share-one-implementation.md
 **Action:** create
 **Proposed by:** Integration on claude/quirky-fermi-sickg4
 **Provenance:** asserted by Kevin Schillinger 2026-10-22: "do not repeat code for this reuse as much as possible so that changes can be applied in one place"
 
 ---
 
-# D035-pi-paths-share-one-implementation
+# D038-pi-paths-share-one-implementation
 
 **Status:** current
 **Owner:** Kevin

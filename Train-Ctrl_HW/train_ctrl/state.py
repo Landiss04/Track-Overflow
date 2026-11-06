@@ -39,6 +39,9 @@ class State:
     # changes only when a new count arrives (REQUIREMENTS.md M16).
     authority_blocks: int = 4
     authority_target: str = "GREEN K"
+    # Whether the Track Signal arrived null on the last update: the
+    # Train Model could not read it (a signal pickup failure).
+    signal_lost: bool = False
 
     power_w: float = 0.0
     service_brake: bool = False

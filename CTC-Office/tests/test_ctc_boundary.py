@@ -20,6 +20,7 @@ from ctc.interface import (  # noqa: E402
     CtcInputs,
     CtcSnapshot,
     DispatchOrder,
+    NewTrain,
     SwitchCommand,
     SwitchReport,
     TrackModelInputs,
@@ -43,7 +44,7 @@ from ctc_ui.test_harness import (  # noqa: E402
     MPS_TO_MPH,
     CtcTestHarness,
 )
-from tests.occupancy import ready_office, reports  # noqa: E402
+from tests.occupancy import own_block, ready_office, reports  # noqa: E402
 
 
 def _green(tickets: int) -> TrackModelInputs:
@@ -76,12 +77,20 @@ class StubModuleTest(unittest.TestCase):
     def test_dispatch_becomes_suggestion_and_authority(self) -> None:
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "65", arrival_s=8 * 3600)
-        # Not on the track yet (the yard is a black box): no suggestion.
-        out = ctc.step(DT_S, CtcInputs())
+        # The CTC releases T1 from the yard (D022). Not on the track
+        # yet (the yard is a black box): no suggestion.
+        out = ctc.step(DT_S, reports())
         self.assertEqual(out.track_controller.suggestions, ())
+        self.assertEqual(out.new_trains, (NewTrain("T1", "Green"),))
         # Green 63, the yard exit, becomes occupied: T1 has left the yard.
         out = ctc.step(DT_S, reports(occupied=[("Green", "63")]))
-        (suggestion,) = out.track_controller.suggestions
+        self.assertEqual(out.new_trains, ())
+        suggestion = own_block(out.track_controller.suggestions)
+        # And one for the next block on its route, authority one less.
+        self.assertEqual(
+            [(s.block_id, s.authority_blocks)
+             for s in out.track_controller.suggestions
+             if s is not suggestion], [("64", 1)])
         # Two blocks ahead of 63 to the destination: 64 and 65. The
         # suggestion says where T1 is, for the Track Controller, which
         # sees only occupancy.
@@ -146,8 +155,18 @@ class StubModuleTest(unittest.TestCase):
         ctc.release_switch("Red", "9")
         self.assertEqual(len(ctc.snapshot().outputs.track_controller
                              .switch_commands), 1)
-        # Leaving maintenance mode hands every switch back.
+        # Switch commands outlast maintenance mode, through Automatic
+        # and Manual, and are released only back in maintenance.
         ctc.set_maintenance_mode(False)
+        ctc.set_automatic_mode(True)
+        ctc.set_automatic_mode(False)
+        self.assertEqual(
+            ctc.snapshot().outputs.track_controller.switch_commands,
+            (SwitchCommand("Green", "12", "reverse"),))
+        with self.assertRaises(MaintenanceModeRequiredError):
+            ctc.release_switch("Green", "12")
+        ctc.set_maintenance_mode(True)
+        ctc.release_switch("Green", "12")
         self.assertEqual(
             ctc.snapshot().outputs.track_controller.switch_commands, ())
 
@@ -273,6 +292,12 @@ class TimeOfDayTest(unittest.TestCase):
         self.assertEqual(parse_time_of_day("23:59:59"), 86399.0)
         self.assertEqual(format_time_of_day(30600), "08:30")
         self.assertEqual(format_time_of_day(30605), "08:30:05")
+
+    def test_wraps_at_midnight(self) -> None:
+        # Never past 23:59: the unwrapped clock (D017) starts a new day.
+        self.assertEqual(format_time_of_day(86399), "23:59:59")
+        self.assertEqual(format_time_of_day(86400), "00:00")
+        self.assertEqual(format_time_of_day(86400 + 30600), "08:30")
 
     def test_rejects_non_times(self) -> None:
         for text in ("8.30", "24:00", "12:60", "noon", ""):

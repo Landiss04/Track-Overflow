@@ -80,8 +80,8 @@ ScaledWindow {
         }
 
         // Notices: a Track Controller update staged while the clock is
-        // paused, and orders the CTC cancelled itself (block closed,
-        // closing or failed).
+        // paused, and orders the CTC cancelled itself (block closed or
+        // failed).
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: theme.space_3
@@ -125,9 +125,14 @@ ScaledWindow {
                 }
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                occupancyDocked: window.occupancyState === "docked"
+                occupancySummary: ctc.trains.length === 1 ? qsTr("1 train")
+                    : qsTr("%1 trains").arg(ctc.trains.length)
                 onLineFilterActivated: function (index) {
                     lineFilterIndex = index;
                 }
+                onOccupancyExpandRequested: window.occupancyState = "open"
+                onOccupancyCloseRequested: window.occupancyState = "closed"
             }
 
             StackLayout {
@@ -144,6 +149,7 @@ ScaledWindow {
                     host: ctc
                     selectedTrainId: window.selectedTrainId
                     scheduleFile: ctc.scheduleFile
+                    scheduleStart: ctc.scheduleStart
                     scheduleError: ctc.scheduleError
                     departures: ctc.departures
                     dispatchRunning: ctc.dispatchRunning
@@ -166,18 +172,6 @@ ScaledWindow {
                 MaintenanceView { host: ctc }
             }
         }
-    }
-
-    OccupancyDock {
-        x: trackView.x + theme.space_7
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: theme.space_7
-        width: 360
-        summary: ctc.trains.length === 1 ? qsTr("1 train")
-            : qsTr("%1 trains").arg(ctc.trains.length)
-        visible: window.occupancyState === "docked"
-        onExpandRequested: window.occupancyState = "open"
-        onCloseRequested: window.occupancyState = "closed"
     }
 
     // Modal scrim: swallows clicks behind the open occupancy window.

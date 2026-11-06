@@ -1,0 +1,67 @@
+// gtc01_valid.plc: a VALID program for wayside GTC-01 (Green Line, blocks 1..25).
+// Load it on GTC-01, press RUN (no diagnostics), then COMMIT.
+//
+// Statements are read top to bottom, once per scan. A name must be a VAR_IN, or be
+// assigned on an earlier line, before it is read. Every output GTC-01 owns is
+// declared here and assigned, which is what lets the program commit.
+
+// ---- inputs the program reads ------------------------------------------------
+VAR_IN   OCC_1..25         // OCC_n    1 while block n is occupied (a train, or a failure)
+VAR_IN   CLOSED_1..25      // CLOSED_n 1 while the CTC Office has closed block n
+VAR_IN   MAINT             // 1 while the CTC Office has a switch command in effect
+
+// ---- outputs the program drives ----------------------------------------------
+VAR_OUT  AUTH_1..25        // AUTH_n   1 passes the CTC Office's speed and authority for block n
+VAR_OUT  SW_12             // SW_12    1 reverse, 0 normal
+VAR_OUT  SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG   // the four lights of signal 12
+VAR_OUT  XING_19           // XING_19  1 lights on, gates down
+
+// ---- switch 12: points at block 13, normal to block 12, reverse to block 1 ----
+// Reverse for a train on block 1 (the reverse leg), normal otherwise, and always
+// normal in maintenance (the CTC Office's command, or the programmer's hand-set
+// position, takes over there). The attached vital code holds the switch where it is
+// while a train stands on it, whatever this line says.
+ROUTE_R_12 := OCC_1
+SW_12 := NOT MAINT AND ROUTE_R_12
+
+// ---- signal 12: exactly one light is lit -------------------------------------
+// Red when its own block is occupied or closed; else yellow if the route ahead is
+// busy; else green. SIG_12_SG (super green) is not used here.
+AHEAD_12 := OCC_13 OR OCC_14
+SIG_12_R := OCC_12 OR CLOSED_12
+SIG_12_Y := NOT SIG_12_R AND AHEAD_12
+SIG_12_G := NOT SIG_12_R AND NOT AHEAD_12
+SIG_12_SG := 0
+
+// ---- crossing 19: armed while a train is on it or in a block beside it --------
+XING_19 := OCC_18 OR OCC_19 OR OCC_20
+
+// ---- separation: hold a train whose neighbour block is occupied ----------------
+// AUTH_n is 0 only for an occupied block that has an occupied neighbour. A block
+// with no train in it passes the CTC Office's suggestion, so the block ahead of a
+// train can be given its authority.
+AUTH_1 := NOT (OCC_1 AND OCC_2)
+AUTH_2 := NOT (OCC_2 AND (OCC_1 OR OCC_3))
+AUTH_3 := NOT (OCC_3 AND (OCC_2 OR OCC_4))
+AUTH_4 := NOT (OCC_4 AND (OCC_3 OR OCC_5))
+AUTH_5 := NOT (OCC_5 AND (OCC_4 OR OCC_6))
+AUTH_6 := NOT (OCC_6 AND (OCC_5 OR OCC_7))
+AUTH_7 := NOT (OCC_7 AND (OCC_6 OR OCC_8))
+AUTH_8 := NOT (OCC_8 AND (OCC_7 OR OCC_9))
+AUTH_9 := NOT (OCC_9 AND (OCC_8 OR OCC_10))
+AUTH_10 := NOT (OCC_10 AND (OCC_9 OR OCC_11))
+AUTH_11 := NOT (OCC_11 AND (OCC_10 OR OCC_12))
+AUTH_12 := NOT (OCC_12 AND (OCC_11 OR OCC_13))
+AUTH_13 := NOT (OCC_13 AND (OCC_12 OR OCC_14))
+AUTH_14 := NOT (OCC_14 AND (OCC_13 OR OCC_15))
+AUTH_15 := NOT (OCC_15 AND (OCC_14 OR OCC_16))
+AUTH_16 := NOT (OCC_16 AND (OCC_15 OR OCC_17))
+AUTH_17 := NOT (OCC_17 AND (OCC_16 OR OCC_18))
+AUTH_18 := NOT (OCC_18 AND (OCC_17 OR OCC_19))
+AUTH_19 := NOT (OCC_19 AND (OCC_18 OR OCC_20))
+AUTH_20 := NOT (OCC_20 AND (OCC_19 OR OCC_21))
+AUTH_21 := NOT (OCC_21 AND (OCC_20 OR OCC_22))
+AUTH_22 := NOT (OCC_22 AND (OCC_21 OR OCC_23))
+AUTH_23 := NOT (OCC_23 AND (OCC_22 OR OCC_24))
+AUTH_24 := NOT (OCC_24 AND (OCC_23 OR OCC_25))
+AUTH_25 := NOT (OCC_25 AND OCC_24)
