@@ -15,10 +15,7 @@ from __future__ import annotations
 import math
 import random
 
-from utils.beacon_codec import encode_beacon
-
 from train_model.interface import (
-    Beacon,
     ControllerOutputs,
     FailureState,
     TrainConfig,
@@ -57,6 +54,11 @@ class InvalidTimeStepError(TrainModelError):
 
 class InvalidInputError(TrainModelError, ValueError):
     """Raised for invalid numeric inputs, before state is changed."""
+
+
+#: The most characters a beacon's station name may have: the serialized
+#: beacon is limited to 128 (``truth/signals/beacon.md``).
+MAX_BEACON_CHARS = 128
 
 
 def _is_number(value: object) -> bool:
@@ -102,7 +104,9 @@ def _brakes_engaged(
     # Brake failure blocks the service brake only; the emergency brake,
     # commanded or pulled by a passenger, still works.
     emergency = emergency_cmd or passenger_pulled
-    service = service_cmd and not brake_failed
+    # OPEN(5.8): the emergency brake supersedes the service brake, so
+    # the service brake is not engaged while the emergency brake is.
+    service = service_cmd and not emergency and not brake_failed
     return emergency, service
 
 
@@ -121,12 +125,6 @@ class TrainModel:
         self._cabin_temp_c = INITIAL_CABIN_TEMP_C
         self._failures = FailureState()
         self._passenger_ebrake_pulled = False
-        # Whether last tick's controller emergency brake was on while a
-        # pull was latched. The pull clears when that command goes off.
-        self._pull_held_by_controller = False
-        # The last beacon heard. A beacon comes on the block before a
-        # station and is reported while the train is on that station.
-        self._held_beacon: Beacon | None = None
         self._last_polarity: bool | None = None
         self._door_left_open = False
         self._door_right_open = False
@@ -165,19 +163,13 @@ class TrainModel:
         self.validate_inputs(dt, inputs)
         cmd = inputs.controller
         track = inputs.track
-        if self._pull_held_by_controller and not cmd.emergency_brake:
-            # A passenger pull stays latched until the Train Controller
-            # sends emergency brake false (Kevin Schillinger
-            # 2026-10-28). A pull made since its last true is kept.
-            self._passenger_ebrake_pulled = False
-        self._pull_held_by_controller = (
-            cmd.emergency_brake and self._passenger_ebrake_pulled)
-        if track.beacon is not None:
-            self._held_beacon = track.beacon
 
-        # Train Controller owns the door interlock (October 20 review).
-        # Model follows commands at any speed; the disabled historical
-        # interlock below is not a pending ownership decision.
+        # The door interlock is commented out, not deleted: whether the
+        # Train Model enforces it is with the course instructor, and
+        # Kevin believes it does not (2026-10-06). Until that is
+        # settled the doors follow the commands, whatever the speed.
+        # Door interlock: a door can only open at 0 mph. An open command
+        # while moving is refused, and takes effect once the train stops.
         stopped = self._velocity_mps == 0.0
         # door_left = cmd.door_left_open and stopped
         # door_right = cmd.door_right_open and stopped
@@ -197,7 +189,8 @@ class TrainModel:
         grade_rad = math.radians(track.track_info.grade_deg)
         self._integrate(dt, inputs, grade_rad)
         if self._velocity_mps != 0.0:
-            # Historical model interlock, disabled; controller owns closure.
+            # Door interlock, commented out with the one above:
+            # The interlock holds: no door stays open once the train moves.
             # self._door_left_open = False
             # self._door_right_open = False
             self._stop_drawn = False
@@ -268,13 +261,16 @@ class TrainModel:
             if not isinstance(text, str):
                 raise InvalidInputError(f"{name} must be text, got {text!r}")
         if track.beacon is not None:
-            try:
-                encode_beacon(
-                    track.beacon.station_name, track.beacon.platform_side,
-                    track.beacon.underground,
+            if track.beacon.platform_side not in ("L", "R", "LR"):
+                raise InvalidInputError(
+                    "beacon platform_side must be L, R or LR, got "
+                    f"{track.beacon.platform_side!r}"
                 )
-            except ValueError as error:
-                raise InvalidInputError(str(error)) from error
+            if len(track.beacon.station_name) > MAX_BEACON_CHARS:
+                raise InvalidInputError(
+                    "beacon station_name must be at most "
+                    f"{MAX_BEACON_CHARS} characters"
+                )
         if cmd.power_cmd_w < 0.0:
             raise InvalidInputError("power_cmd_w must be nonnegative")
         # Values with no physical meaning (Kevin 2026-10-06).
@@ -343,7 +339,6 @@ class TrainModel:
     def clear_passenger_brake_for_test(self) -> None:
         """Clear the latch for testing, without defining normal UI release."""
         self._passenger_ebrake_pulled = False
-        self._pull_held_by_controller = False
         self._refresh_discrete_outputs()
 
     def _refresh_discrete_outputs(self) -> None:
@@ -378,15 +373,18 @@ class TrainModel:
         return cfg.f_max_n if p_eff_w > 0.0 else 0.0
 
     def _brake_n(self, service: bool, emergency: bool) -> float:
-        # Brake forces come from m_ref, so the deceleration they
+        # OPEN(1): brake forces come from m_ref, so the deceleration they
         # produce scales with operating mass; no cap.
         cfg = self.config
         emergency_on, service_on = _brakes_engaged(
             service, emergency,
             self._passenger_ebrake_pulled, self._failures.brake,
         )
-        return ((cfg.f_emergency_n if emergency_on else 0.0)
-                + (cfg.f_service_n if service_on else 0.0))
+        if emergency_on:
+            return cfg.f_emergency_n
+        if service_on:
+            return cfg.f_service_n
+        return 0.0
 
     def _integrate(
         self, dt: float, inputs: TrainModelInputs, grade_rad: float
@@ -558,9 +556,9 @@ class TrainModel:
         if door_open and stopped and not self._stop_drawn:
             self._n_passengers -= self._rng.randint(0, self._n_passengers)
             self._stop_drawn = True
-        # Track Model sends boarding events only at stations. Train Model
-        # checks rest, doors, count and capacity without a station gate.
-        # An ineligible event boards nobody and is not retained.
+        # Passengers can only board at rest with a door open, station or
+        # not (Kevin 2026-10-07); a count received at any other time
+        # boards nobody.
         if not (stopped and (door_left or door_right)):
             return
         room = cfg.capacity - self._n_passengers
@@ -584,8 +582,9 @@ class TrainModel:
         failures = self._failures
         service_cmd = False
         emergency_cmd = False
-        commanded_speed_mps: float | None = 0.0
-        authority_blocks: int | None = 0
+        commanded_speed_mps = 0.0
+        authority_blocks = 0
+        speed_limit_mps = 0.0
         block_id = _NO_BLOCK_ID
         interior = False
         exterior = False
@@ -596,22 +595,14 @@ class TrainModel:
             service_cmd = cmd.service_brake
             emergency_cmd = cmd.emergency_brake
             block_id = track.track_info.block_id
+            speed_limit_mps = track.track_info.speed_limit_mps
             interior = cmd.interior_lights
             exterior = cmd.exterior_lights
-            # The beacon of the block the train is on: the one heard on
-            # the block before, while this block is its station; None
-            # elsewhere (Kevin Schillinger 2026-10-28).
-            held = self._held_beacon
-            station = track.track_info.station_name
-            if held is not None and station == held.station_name:
-                beacon = held
-            # Under signal pickup failure the track signal cannot be
-            # read: commanded speed and authority are null, invalid
-            # data, not a valid 0 (Kevin Schillinger 2026-10-28).
-            if failures.signal_pickup:
-                commanded_speed_mps = None
-                authority_blocks = None
-            else:
+            # OPEN(5.7): pass through this tick's beacon; None otherwise.
+            beacon = track.beacon
+            # OPEN(5.3): under signal pickup failure, commanded speed
+            # is 0.0 and authority is 0 blocks.
+            if not failures.signal_pickup:
                 commanded_speed_mps = track.track_signal.commanded_speed_mps
                 authority_blocks = track.track_signal.authority_blocks
         ebrake, service = _brakes_engaged(
@@ -631,6 +622,7 @@ class TrainModel:
                 cabin_temp_c=self._cabin_temp_c,
                 commanded_speed_mps=commanded_speed_mps,
                 authority_blocks=authority_blocks,
+                speed_limit_mps=speed_limit_mps,
                 beacon=beacon,
             ),
             track=TrackOutputs(

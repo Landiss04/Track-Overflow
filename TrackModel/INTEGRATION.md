@@ -12,46 +12,6 @@ The code in section 5 was run against the current code on `track-model`.
 
 ---
 
-## 0. Under the central harness (Phases 2 and 3)
-
-The harness built on `claude/quirky-fermi-sickg4` runs each module as a process of its
-own (R4), not in the harness's process as sections 4 to 6 describe. Those sections
-still hold for the module's Python API; this one says how the harness actually drives
-it. Section 5's in-process loop and the catalog edges in `track_model_edges.py` are not
-on that path.
-
-- **The process.** `track_overflow.py --module track-model --harness <server>` runs
-  `track_model/module_process.py`. It loads the Green and Red Lines only (D023), shows
-  the Track Model window, and steps the model once per `STEP`. Invalid inputs refuse the
-  whole tick, and the model is unchanged. The step's simulation time goes to the window
-  as the time of day. The window redraws at most every 100 ms, after the reply.
-  Closing it hides it; only the harness ends the process.
-- **The form.** Inputs and outputs travel as JSON, field for field as in
-  `track_model/interface.py`, with enumerated values by name (`track_model/wire.py`).
-  The harness sends no ambient temperature: the window is its source.
-- **The edges.** `common/harness/track_edges.py` maps the Train Model's outputs to each
-  train's report (`doors_open` is either door open) and each train's feed to the Train
-  Model's track inputs. It translates the Track Model's block names (`GREEN K-63`) to
-  line and number (`Green`, `63`) for every other module. A released train is placed at
-  its line's yard exit block (D022) by a first report the harness sends for it, until
-  its Train Model reports it. The light a train saw on entering a signal block goes to
-  its Train Controller.
-- **Commands.** Since Phase 3 the Track Controller SW commands the Green Line through
-  `common/harness/wayside_edges.py`: commanded speed and authority per block, every
-  tick, which last one tick (section 3.1); switches, lights and crossings. A scripted
-  CTC Office in the harness (`common/harness/ctc_script.py`) gives it suggestions for
-  the occupied block and the next one until the CTC Office joins (Phase 4). The Track
-  Controller names a switch by the block it is listed on (truth `identifiers`); this
-  module names it by its point (`GREEN D-13`). The harness maps the one to the other,
-  and each light through its switch, from the layout files
-  (`common/harness/track_devices.py`). No heater commands are sent (D026), so heaters
-  never run while this module runs them only when commanded.
-- **Read-back.** `controller.block_occupancy`, `switch_states`, `crossing_states` and
-  `signal_states` go back to the Track Controller, with the names mapped the same way.
-  A failed block reads as occupied (R33).
-
----
-
 ## 1. The rules that shape everything
 
 | Rule | Source | Consequence for you |
@@ -134,20 +94,16 @@ the input by hand.
 
 | Field | Meaning |
 |---|---|
-| `commanded_speed_mps` | m/s (a float), per block. |
+| `commanded_speed_mps` | Whole m/s (`int`), per block. |
 | `authority_blocks` | Blocks the train may still enter past its own; 0 = stop (D013). |
 | `switch_positions` | Keyed by the switch's point block. |
 | `crossing_gates_closed` | Keyed by the crossing's block. |
 | `signal_aspects` | Keyed by the block the light stands on. |
 | `heaters_on` | Keyed by section. |
 
-Commanded speed and authority **last one tick** (truth
-`signals/track-signal.md`): a block not commanded on the latest tick reads
-zero, so the Track Model delivers each value once and then clears it.
-Send them for every block that needs them, on every tick. For the device
-commands, a key you leave out **keeps its last value**. Devices start
-safe: switches NORMAL, gates up, lights RED, heaters off. So for those,
-send only what changed, or resend everything; both work.
+A key you leave out **keeps its last value**. Devices start safe: switches
+NORMAL, gates up, lights RED, heaters off. So send only what changed, or
+resend everything; both work.
 
 Speed and authority are **per block**, not per train: the Track
 Controller knows which blocks are occupied, not which train is in them.
@@ -169,10 +125,10 @@ from the map to mean "no report this tick"; send its last report.
 
 **Ambient temperature** (°C) is set by a person in the Track Model
 window (Conditions, in °F). That value is the source and replaces whatever
-a sender gives until the module is reset (**Reset module** or **Load
-track…**). `ambient_temp_c` is optional: `None` leaves the temperature as
-it is, and the central harness sends none. A sender that gives one, such
-as the test UI, sets it until someone sets it in the window.
+the harness sends until the module is reset (**Reset module** or **Load
+track…**). `ambient_temp_c` is still a required input, so the harness
+passes a fixed default (the example uses 15 °C) that applies only until
+someone sets it in the window. After a reset the default applies again.
 
 ### 3.2 Out of the Track Model
 
@@ -406,4 +362,4 @@ Track Model owner's reading as of this branch; none is a decision.
 | Authority as block count | all | D013 is on `truth`; the module's boundary types follow it. |
 | Offset restarts at 0 per block | Train Model | Holds in the Train Model's code but is not recorded in `truth`. |
 | Clock speed command | CTC Office | `clock-speedup` is a boolean to the harness. The harness maps it to `SystemClock.set_speed(1 or 10)`. |
-| Ambient temperature source | Track Model owner | Set in the Track Model window; the harness sends none. |
+| Ambient temperature source | Track Model owner | Set in the Track Model window; the harness passes a default until then. |

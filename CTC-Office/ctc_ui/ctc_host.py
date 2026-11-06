@@ -13,12 +13,6 @@ same state:
 - Actions the test UI sends reach the window through the link server's
   ``changed`` signal, and every panel re-reads the module.
 
-Under the central harness (``ctc.module_process``) the harness owns the
-clock and steps the module (D005, D017), so the host opens no test link
-(D025: the test UI stands in for the Track Controller, which the harness
-runs itself). The process calls ``step_at`` once per tick and
-``refresh`` when the window is due a redraw, never inside a step.
-
 Values cross into QML in display units (mph); the module stays in SI.
 The Track Controller reports only occupancy, so trains are where the
 module has followed them to, and a block the module infers has failed
@@ -38,7 +32,6 @@ from ctc.interface import (
     BlockRef,
     CtcInputs,
     CtcOffice,
-    CtcOutputs,
     CtcSnapshot,
     DispatchOrder,
     ScheduledRun,
@@ -73,28 +66,15 @@ _SWITCH_POSITIONS = ("normal", "reverse")
 _BLOCKED_LABELS = {
     "occupied": "occupied",
     "closed": "closed",
+    "closing": "closing",
 }
 
 
-def _switch_legs(line: str, block_id: str, text: str) -> tuple[str, str]:
-    """A switch's normal and reverse connections from its layout text,
-    as ``("12-13", "1-13")``: normal first, as the Track Model reads
-    the file. A yard switch the file lists by its yard leg alone gets
-    its main-line leg too: ``"57-yard"`` is 57-58 or 57 to the yard,
-    ``"Yard-63"`` is 62-63 or the yard to 63, and Red 9's ``"75-yard"``
-    is 8-9 or the yard to 9 (D028, proposed)."""
-    if line == "Red" and block_id == "9" and text.strip() == "75-yard":
-        text = "Yard-9"
-    legs = ["-".join(end.strip() for end in part.split("-"))
-            for part in text.split(";")]
-    if len(legs) == 2:
-        return legs[0], legs[1]
-    first, last = (end.strip() for end in legs[0].split("-"))
-    if last.lower() == "yard":
-        return f"{first}-{int(first) + 1}", f"{first}-yard"
-    if first.lower() == "yard":
-        return f"{int(last) - 1}-{last}", f"yard-{last}"
-    return legs[0], NO_VALUE
+def _closed_only(snap: CtcSnapshot) -> list[BlockRef]:
+    """Closed blocks, without the ones still closing: ``closed_blocks``
+    lists both, since the Track Controller is locked out of either."""
+    pending = set(snap.pending_closures)
+    return [b for b in snap.closed_blocks if b not in pending]
 
 
 def _wayside_waiting(status: WaysideStatus) -> str:
@@ -142,8 +122,6 @@ def _authority_limit(limit: TrainAuthority) -> str:
         return f"Block {limit.at} held by {limit.held_by}"
     if limit.reason == "not ready":
         return "Track Controller not ready"
-    if limit.reason == "held":
-        return f"Held at {limit.at} by the schedule"
     return "No route"
 
 
@@ -184,24 +162,16 @@ class CtcHost(QObject):
 
     def __init__(self, module: CtcOffice | None = None,
                  layout: Mapping[str, Line] | None = None,
-                 parent: QObject | None = None,
-                 serve_test_ui: bool = True) -> None:
-        """Host ``module``, or a new one on ``layout``.
-
-        ``serve_test_ui`` False opens no test link: under the harness
-        nothing but the harness drives the module (D005, D025).
-        """
+                 parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._layout = dict(load_layout() if layout is None else layout)
         # Each named station's line, for throughput per line.
         self._station_lines = station_lines(self._layout)
         self._module = (module if module is not None
                         else StubCtcOffice(layout=self._layout))
-        self._server: CtcLinkServer | None = None
-        if serve_test_ui:
-            self._server = CtcLinkServer(self._module, parent=self,
-                                         set_inputs=self._receive_inputs)
-            self._server.changed.connect(self._refresh)
+        self._server = CtcLinkServer(self._module, parent=self,
+                                     set_inputs=self._receive_inputs)
+        self._server.changed.connect(self._refresh)
         # The latest Track Controller and Track Model inputs, stepped
         # with on every tick.
         self._inputs = CtcInputs()
@@ -225,7 +195,7 @@ class CtcHost(QObject):
 
     def start(self) -> None:
         """Start serving the test UI. The window works either way."""
-        if self._server is not None and not self._server.listen():
+        if not self._server.listen():
             print("CTC test UI link unavailable: could not listen.",
                   file=sys.stderr)
 
@@ -236,8 +206,7 @@ class CtcHost(QObject):
 
     def stop(self) -> None:
         """Stop serving the test UI; call before the app shuts down."""
-        if self._server is not None:
-            self._server.close()
+        self._server.close()
 
     # -- Clock --------------------------------------------------------
 
@@ -249,7 +218,7 @@ class CtcHost(QObject):
             self.setClockSpeedup(clock.speed == SPEEDUP_FACTOR)
 
         def apply_paused() -> None:
-            self.setClockPaused(bool(clock.paused))
+            self.setClockPaused(clock.paused)
         clock.speedChanged.connect(apply_speed)
         clock.pausedChanged.connect(apply_paused)
         apply_speed()
@@ -266,53 +235,16 @@ class CtcHost(QObject):
             # Inputs are validated on arrival, so this is a module bug.
             print(f"CTC step failed: {error}", file=sys.stderr)
             return
-        self._count_sales(sim_time_s, self._inputs)
+        self._current_hour = _hour(sim_time_s)
+        for station, tickets in self._inputs.track_model.ticket_sales.items():
+            key = (self._current_hour, self._station_lines[station])
+            self._hourly_sales[key] = self._hourly_sales.get(key, 0) + tickets
         # Ticket sales count tickets sold since the previous tick, so a
         # sale is stepped with once.
         if self._inputs.track_model.ticket_sales:
             self._inputs = dataclasses.replace(
                 self._inputs, track_model=TrackModelInputs())
         self._refresh()
-
-    def _count_sales(self, sim_time_s: float, inputs: CtcInputs) -> None:
-        """Add a step's ticket sales to the hour it falls in."""
-        self._current_hour = _hour(sim_time_s)
-        for station, tickets in inputs.track_model.ticket_sales.items():
-            key = (self._current_hour, self._station_lines[station])
-            self._hourly_sales[key] = self._hourly_sales.get(key, 0) + tickets
-
-    # -- Under the central harness ------------------------------------
-
-    def start_at(self, sim_time_s: float) -> None:
-        """Start the throughput history at the harness's time, before
-        the first step: the hour the simulation starts in (D017)."""
-        self._first_hour = self._current_hour = _hour(sim_time_s)
-
-    def step_at(self, dt: float, sim_time_s: float,
-                inputs: CtcInputs) -> CtcOutputs:
-        """Step the module once for the harness, at its time.
-
-        The module takes ``sim_time_s`` as its time (D017), so a tick
-        it refused or never got does not put its schedule behind. Each
-        step's ticket sales are counted once, in the hour of
-        ``sim_time_s``. The window is not redrawn: call ``refresh``.
-
-        Raises:
-            CtcError: If the module rejects the step; nothing changed.
-        """
-        outputs = self._module.step(dt, inputs, sim_time_s)
-        self._inputs = inputs
-        self._count_sales(sim_time_s, inputs)
-        return outputs
-
-    def refresh(self) -> None:
-        """Redraw whatever changed since the last redraw."""
-        self._refresh()
-
-    @property
-    def module(self) -> CtcOffice:
-        """The CTC Office module this host holds."""
-        return self._module
 
     def _receive_inputs(self, inputs: CtcInputs) -> None:
         """New inputs from the test UI.
@@ -351,7 +283,7 @@ class CtcHost(QObject):
         if changed or new_second:
             # Throughput moves with time and with every sale.
             self.clockChanged.emit()
-        if (changed or new_second) and self._server is not None:
+        if changed or new_second:
             self._server.push()
 
     def _act(self, action: Any, *args: Any) -> str:
@@ -388,9 +320,7 @@ class CtcHost(QObject):
         if layout_line is None:
             return []
         return [{"value": block.block_id,
-                 "text": "{}  ({}; {})".format(
-                     block.block_id,
-                     *_switch_legs(line, block.block_id, block.switch))}
+                 "text": f"{block.block_id}  ({block.switch})"}
                 for block in layout_line.blocks if block.switch]
 
     @Slot(str, result=list)
@@ -409,9 +339,6 @@ class CtcHost(QObject):
         return {order.train_id: order for order in snap.orders}
 
     def _suggestions(self, snap: CtcSnapshot) -> dict[str, TrainSuggestion]:
-        # Each train's suggestion for the block it is in. One with
-        # authority also has one for the next block (R49), listed
-        # before it, so the last per train is the one shown.
         return {s.train_id: s
                 for s in snap.outputs.track_controller.suggestions}
 
@@ -580,7 +507,7 @@ class CtcHost(QObject):
         """
         snap = self._module.snapshot()
         return {block_key(block.line, block.block_id): "closed"
-                for block in snap.closed_blocks}
+                for block in _closed_only(snap)}
 
     @Property(list, notify=stateChanged)
     def mapTrains(self) -> list[dict[str, Any]]:  # noqa: N802
@@ -616,11 +543,19 @@ class CtcHost(QObject):
 
     @Property(list, notify=stateChanged)
     def closures(self) -> list[dict[str, Any]]:
-        """Closed blocks, for Active closures."""
-        rows: list[dict[str, Any]] = [
-            {"block": f"{block.line} {block.block_id}", "state": "Closed",
-             "line": block.line, "blockId": block.block_id}
-            for block in self._module.snapshot().closed_blocks]
+        """Closed and closing blocks, for Active closures."""
+        snap = self._module.snapshot()
+        rows: list[dict[str, Any]] = []
+        for block in _closed_only(snap):
+            rows.append({"block": f"{block.line} {block.block_id}",
+                         "state": "Closed", "line": block.line,
+                         "blockId": block.block_id, "reopenable": True,
+                         "pending": False})
+        for block in snap.pending_closures:
+            rows.append({"block": f"{block.line} {block.block_id}",
+                         "state": "Closing \u2014 train in block",
+                         "line": block.line, "blockId": block.block_id,
+                         "reopenable": True, "pending": True})
         rows.sort(key=lambda r: (r["line"], _block_number(r["blockId"])))
         return rows
 
@@ -632,15 +567,15 @@ class CtcHost(QObject):
         block = layout_line.block(switch_id) if layout_line else None
         if block is None or not block.switch:
             return {}
-        normal, reverse = _switch_legs(line, switch_id, block.switch)
+        connections = [part.strip() for part in block.switch.split(";")]
         reported = {(s.line, s.switch_id): s.position
                     for s in self._applied().track_controller.switches}
         commanded = {
             (c.line, c.switch_id): c.position
             for c in self._module.snapshot().switch_commands}
         return {
-            "normal": normal,
-            "reverse": reverse,
+            "normal": connections[0],
+            "reverse": connections[1] if len(connections) > 1 else NO_VALUE,
             "reported": reported.get((line, switch_id), NO_VALUE),
             "commanded": commanded.get((line, switch_id), NO_VALUE),
         }
@@ -750,10 +685,9 @@ class CtcHost(QObject):
             return f"block {limit.at} is occupied"
         return {
             "closed": f"block {limit.at} is closed",
+            "closing": f"block {limit.at} is closing",
             "reserved": f"block {limit.at} is held by {limit.held_by}",
             "switch": f"switch {limit.at} is not set for its route",
-            "held": (f"the schedule holds it at block {limit.at} until "
-                     "the trains going the other way are through"),
         }.get(limit.reason, "there is no route without reversing")
 
     @Property(list, notify=noticesChanged)
@@ -810,21 +744,6 @@ class CtcHost(QObject):
         return self._act(self._module.dispatch, train_id, line, block_id,
                          arrival)
 
-    @Slot(str, str, str, result="QVariantMap")
-    def dispatchPreview(self, train_id: str, line: str,  # noqa: N802
-                        block_id: str) -> dict[str, str]:
-        """The suggested speed and authority a dispatch would lead to,
-        for the readouts before Dispatch; ``error`` says why there are
-        none."""
-        try:
-            preview = self._module.preview_dispatch(train_id, line, block_id)
-        except CtcError as error:
-            return {"suggestedSpeed": NO_VALUE, "authorityBlocks": NO_VALUE,
-                    "error": str(error)}
-        return {"suggestedSpeed": _mph(preview.suggested_speed_mps),
-                "authorityBlocks": str(preview.authority_blocks),
-                "error": ""}
-
     @Slot(str, str, str, result=str)
     def setAuthority(self, train_id: str, line: str,  # noqa: N802
                      block_id: str) -> str:
@@ -832,16 +751,10 @@ class CtcHost(QObject):
         return self._act(self._module.dispatch, train_id, line, block_id,
                          None)
 
-    @Slot(str, result=str)
-    def returnToYard(self, train_id: str) -> str:  # noqa: N802
-        """Send a manual train back to the yard, where it is retired
-        (R66, D022); return the refusal's text, or ""."""
-        return self._act(self._module.return_to_yard, train_id)
-
     @Slot(str, str, result=str)
     def closeBlock(self, line: str, block_id: str) -> str:  # noqa: N802
-        """Close a block; says so instead if it already is, which the
-        module would otherwise do silently."""
+        """Close a block; says so instead if it already is (or is
+        closing), which the module would otherwise do silently."""
         state = self.closureState(line, block_id)
         if state:
             return f"{line} {block_id} is already {state}."
@@ -850,10 +763,14 @@ class CtcHost(QObject):
 
     @Slot(str, str, result=str)
     def closureState(self, line: str, block_id: str) -> str:  # noqa: N802
-        """``closed``, or "" for an open block."""
+        """``closed``, ``closing`` (a train is still in it), or ""."""
+        snap = self._module.snapshot()
         block = BlockRef(line, block_id)
-        return ("closed" if block in self._module.snapshot().closed_blocks
-                else "")
+        if block in snap.pending_closures:
+            return "closing"
+        if block in snap.closed_blocks:
+            return "closed"
+        return ""
 
     @Slot(str, str, result=str)
     def reopenBlock(self, line: str, block_id: str) -> str:  # noqa: N802
@@ -911,17 +828,6 @@ class CtcHost(QObject):
     @Property(str, notify=scheduleChanged)
     def scheduleError(self) -> str:  # noqa: N802
         return self._schedule_error
-
-    @Property(str, notify=scheduleChanged)
-    def scheduleStart(self) -> str:  # noqa: N802
-        """When the loaded schedule's time zero is: set the moment the
-        clock runs with it loaded, whatever the time then."""
-        snap = self._module.snapshot()
-        if not snap.scheduled_runs:
-            return ""
-        if snap.schedule_start_s is None:
-            return "T = 0 when you press Run"
-        return f"T = 0 at {format_time_of_day(snap.schedule_start_s)}"
 
     @Property(list, notify=scheduleChanged)
     def departures(self) -> list[dict[str, Any]]:

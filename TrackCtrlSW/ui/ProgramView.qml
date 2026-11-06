@@ -709,12 +709,10 @@ Item {
         id: switchDialog
         parent: Overlay.overlay
         switches: wayside.switches.rows
-        onSwitchApplied: function (switchId, reverse) {
+        onApplied: function (switchId, reverse) {
             wayside.setSwitch(switchId, reverse);
         }
-        onSwitchReleased: function (switchId) {
-            wayside.releaseSwitch(switchId);
-        }
+        onReleased: function (switchId) { wayside.releaseSwitch(switchId); }
     }
 
     FileDialog {

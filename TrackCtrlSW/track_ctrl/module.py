@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from dataclasses import dataclass
 
 from track_ctrl.controller import TrackController, default_program_source
 from track_ctrl.errors import (
@@ -90,12 +91,23 @@ def _whole_count(value: object, what: str) -> int:
     return value
 
 
+@dataclass
+class _Wayside:
+    """One controller with the line it belongs to."""
+
+    controller: TrackController
+    line: str
+
+    def key(self, block_id: str) -> BlockKey:
+        return BlockKey(self.line, block_id)
+
+
 class SwTrackController:
     """Every wayside the module governs, stepped from outside."""
 
     def __init__(self) -> None:
         self._lines: list[LineLayout] = []
-        self._waysides: dict[str, TrackController] = {}
+        self._waysides: dict[str, _Wayside] = {}
         self._owner: dict[BlockKey, str] = {}
         self._readback = TrackModelInputs()
         self._maintenance = False
@@ -113,8 +125,8 @@ class SwTrackController:
         exist. Every other line keeps its waysides and programs.
         """
         removed = [
-            wayside_id for wayside_id, controller in self._waysides.items()
-            if controller.line == line.key
+            wayside_id for wayside_id, wayside in self._waysides.items()
+            if wayside.line == line.key
         ]
         for wayside_id in removed:
             del self._waysides[wayside_id]
@@ -132,11 +144,11 @@ class SwTrackController:
         self._install(line)
         # Put the waysides back in line order, so every list built from
         # them keeps the order the lines have.
-        ordered: dict[str, TrackController] = {}
+        ordered: dict[str, _Wayside] = {}
         for each in self._lines:
-            for wayside_id, controller in self._waysides.items():
-                if controller.line == each.key:
-                    ordered[wayside_id] = controller
+            for wayside_id, wayside in self._waysides.items():
+                if wayside.line == each.key:
+                    ordered[wayside_id] = wayside
         self._waysides = ordered
         return removed
 
@@ -145,7 +157,7 @@ class SwTrackController:
         by_id = {block.block_id: block for block in line.blocks}
         for config in line.controllers:
             blocks = tuple(by_id[each] for each in config.block_ids)
-            controller = TrackController(config, blocks, line.key)
+            controller = TrackController(config, blocks)
             controller.time_text = (
                 "" if self._time_s is None else clock_text(self._time_s)
             )
@@ -153,9 +165,10 @@ class SwTrackController:
             # program is committed the wayside holds its fail-safe
             # outputs, and so does the whole module (see ``ready``).
             controller.scan()
-            self._waysides[config.controller_id] = controller
+            wayside = _Wayside(controller, line.key)
+            self._waysides[config.controller_id] = wayside
             for block_id in config.block_ids:
-                self._owner[controller.key(block_id)] = config.controller_id
+                self._owner[wayside.key(block_id)] = config.controller_id
 
     def reset(self) -> None:
         """Return every wayside to its state just after loading."""
@@ -177,27 +190,33 @@ class SwTrackController:
             return ("no track is loaded",)
         return tuple(
             f"{wayside_id} has no PLC program"
-            for wayside_id, controller in self._waysides.items()
-            if controller.program is None
+            for wayside_id, wayside in self._waysides.items()
+            if wayside.controller.program is None
         )
+
+    def _waiting_lines(self) -> dict[str, str]:
+        """Each line that is not ready, with the first thing missing."""
+        waiting: dict[str, str] = {}
+        for wayside_id, wayside in self._waysides.items():
+            if wayside.controller.program is None:
+                waiting.setdefault(
+                    wayside.line, f"{wayside_id} has no PLC program"
+                )
+        return waiting
 
     def line_ready(self, line: str) -> bool:
         """Whether every wayside on one line has a program."""
-        on_line = [
-            controller for controller in self._waysides.values()
-            if controller.line == line
-        ]
-        return bool(on_line) and all(
-            controller.program is not None for controller in on_line
-        )
+        return any(
+            wayside.line == line for wayside in self._waysides.values()
+        ) and line not in self._waiting_lines()
 
     @property
     def ready(self) -> bool:
         """Whether a line is loaded and every wayside has a program.
 
-        Each wayside's own readiness is its layout being present and a
-        program being committed; this is every wayside's, for the header.
-        A wayside that is ready runs whatever the others are doing.
+        The module is vital, so it stalls until this holds: while it does
+        not, no wayside runs its program and all of them drive their
+        fail-safe outputs.
         """
         return not self.not_ready_reasons()
 
@@ -208,7 +227,8 @@ class SwTrackController:
         each wayside by hand. Returns the IDs that were loaded.
         """
         loaded: list[str] = []
-        for wayside_id, controller in self._waysides.items():
+        for wayside_id, wayside in self._waysides.items():
+            controller = wayside.controller
             if controller.program is None:
                 controller.commit(
                     default_program_source(controller),
@@ -232,7 +252,10 @@ class SwTrackController:
     @property
     def controllers(self) -> dict[str, TrackController]:
         """Every wayside's controller by ID, in line order."""
-        return dict(self._waysides)
+        return {
+            wayside_id: wayside.controller
+            for wayside_id, wayside in self._waysides.items()
+        }
 
     @property
     def maintenance(self) -> bool:
@@ -253,13 +276,13 @@ class SwTrackController:
 
     def controller(self, controller_id: str) -> TrackController:
         """Return one controller by ID."""
-        return self._wayside(controller_id)
+        return self._wayside(controller_id).controller
 
     def controllers_for(self, line_name: str) -> list[TrackController]:
         """Return the controllers on one line, in configuration order."""
         return [
-            controller for controller in self._waysides.values()
-            if controller.config.line_name == line_name
+            wayside.controller for wayside in self._waysides.values()
+            if wayside.controller.config.line_name == line_name
         ]
 
     def line_key(self, controller_id: str) -> str:
@@ -279,26 +302,27 @@ class SwTrackController:
         # in maintenance mode, so a command in effect on a switch this
         # module governs is what maintenance mode looks like from here.
         switch_keys = {
-            controller.key(switch_id)
-            for controller in self._waysides.values()
-            for switch_id in controller.config.switches
+            wayside.key(switch.block_id)
+            for wayside in self._waysides.values()
+            for switch in wayside.controller.config.switches
         }
         self._maintenance = any(
             key in switch_keys for key in ctc.switch_commands
         )
 
-        # A wayside is ready when its track layout is present (it exists
-        # here only because one was loaded) and it has a committed
-        # program. It runs as soon as it is, and does not wait on another
-        # wayside; one with no program runs nothing and transmits nothing.
-        for controller in self._waysides.values():
-            self._apply(controller, inputs)
-            if controller.program is None:
-                controller.idle(
-                    f"{controller.config.controller_id} has no PLC program"
+        # A line runs only once every wayside on it has a program; until
+        # then none of them runs, and a wayside running nothing
+        # transmits nothing. One line does not wait on another.
+        waiting = self._waiting_lines()
+        for wayside in self._waysides.values():
+            self._apply(wayside, inputs)
+            if wayside.line in waiting:
+                wayside.controller.idle(
+                    f"line {wayside.line} is not ready: "
+                    f"{waiting[wayside.line]}"
                 )
             else:
-                controller.scan()
+                wayside.controller.scan()
 
         self._readback = readback
         self._time_s = inputs.time_s
@@ -344,9 +368,10 @@ class SwTrackController:
                 )
 
     def _apply(
-        self, controller: TrackController, inputs: TrackControllerInputs
+        self, wayside: _Wayside, inputs: TrackControllerInputs
     ) -> None:
         """Write one tick's inputs onto a controller's input card."""
+        controller = wayside.controller
         ctc = inputs.ctc
         readback = inputs.track_model
         controller.time_text = clock_text(inputs.time_s)
@@ -355,7 +380,7 @@ class SwTrackController:
             controller.set_maintenance(self._maintenance)
 
         for block in controller.blocks:
-            key = controller.key(block.block_id)
+            key = wayside.key(block.block_id)
             controller.set_occupancy(
                 block.block_id, key in readback.occupied_blocks
             )
@@ -370,18 +395,18 @@ class SwTrackController:
                     suggestion.authority_blocks,
                 )
 
-        for switch_id in controller.config.switches:
-            key = controller.key(switch_id)
+        for switch in controller.config.switches:
+            key = wayside.key(switch.block_id)
             command = ctc.switch_commands.get(key)
             controller.set_ctc_switch_command(
-                switch_id,
+                switch.switch_id,
                 None if command is None else command == "reverse",
             )
             # Where the machine actually is: the vital code compares it
             # with the command to tell a switch that is still moving.
             actual = readback.switch_positions.get(key)
             controller.set_switch_position(
-                switch_id,
+                switch.switch_id,
                 None if actual is None else actual == "reverse",
             )
 
@@ -394,28 +419,32 @@ class SwTrackController:
         signals: dict[BlockKey, SignalAspect] = {}
         reports: list[CtcReport] = []
 
-        for wayside_id, controller in self._waysides.items():
+        for wayside_id, wayside in self._waysides.items():
+            controller = wayside.controller
+            driven = controller.outputs
             config = controller.config
-            for block_id, circuit in controller.track_circuits.items():
-                circuits[controller.key(block_id)] = TrackCircuitCommand(*circuit)
+            for block_id, circuit in driven.track_circuits.items():
+                circuits[wayside.key(block_id)] = TrackCircuitCommand(
+                    circuit.speed_mps, circuit.authority_blocks
+                )
             # Only what the wayside actually drives: one running no
             # program drives nothing, so nothing is listed for it.
-            for switch_id in config.switches:
-                if switch_id in controller.switch_commands:
-                    switches[controller.key(switch_id)] = _position(
-                        controller.switch_commands[switch_id]
+            for switch in config.switches:
+                if switch.switch_id in driven.switches:
+                    switches[wayside.key(switch.block_id)] = _position(
+                        driven.switches[switch.switch_id]
                     )
-            for crossing_id in config.crossings:
-                if crossing_id in controller.crossing_commands:
-                    crossings[controller.key(crossing_id)] = (
-                        controller.crossing_commands[crossing_id]
+            for crossing in config.crossings:
+                if crossing.crossing_id in driven.crossings:
+                    crossings[wayside.key(crossing.block_id)] = (
+                        driven.crossings[crossing.crossing_id]
                     )
-            for signal_id in config.signals:
-                if signal_id in controller.aspects:
-                    signals[controller.key(signal_id)] = _aspect_to_wire(
-                        controller.aspects[signal_id]
+            for signal in config.signals:
+                if signal.signal_id in driven.aspects:
+                    signals[wayside.key(signal.block_id)] = _aspect_to_wire(
+                        driven.aspects[signal.signal_id]
                     )
-            report = self._report(wayside_id, controller, time_s)
+            report = self._report(wayside_id, wayside, time_s)
             self._reports[wayside_id] = report
             reports.append(report)
 
@@ -430,16 +459,23 @@ class SwTrackController:
         )
 
     def _report(
-        self, wayside_id: str, controller: TrackController, time_s: float
+        self, wayside_id: str, wayside: _Wayside, time_s: float
     ) -> CtcReport:
         """Build the report one wayside sends the CTC Office."""
+        controller = wayside.controller
         readback = self._readback
-        switch_blocks = set(controller.config.switches)
-        crossing_blocks = set(controller.config.crossings)
-        signal_blocks = set(controller.config.signals)
+        switch_blocks = {
+            switch.block_id for switch in controller.config.switches
+        }
+        crossing_blocks = {
+            crossing.block_id for crossing in controller.config.crossings
+        }
+        signal_blocks = {
+            signal.block_id for signal in controller.config.signals
+        }
         blocks: dict[BlockKey, BlockReport] = {}
         for block in controller.blocks:
-            key = controller.key(block.block_id)
+            key = wayside.key(block.block_id)
             blocks[key] = BlockReport(
                 occupied=key in readback.occupied_blocks,
                 switch_position=(
@@ -458,7 +494,7 @@ class SwTrackController:
         ready = controller.program is not None
         return CtcReport(
             wayside_id=wayside_id,
-            line=controller.line,
+            line=wayside.line,
             sent_at_s=time_s,
             ready=ready,
             blocks=blocks,
@@ -471,7 +507,7 @@ class SwTrackController:
         self, wayside_id: str, source: str, file_name: str
     ) -> ProgramInfo:
         """Commit a PLC program to one wayside."""
-        controller = self._wayside(wayside_id)
+        controller = self._wayside(wayside_id).controller
         try:
             controller.commit(source, file_name)
         except ValueError as error:
@@ -480,7 +516,7 @@ class SwTrackController:
             file_name, controller.iteration, "", 0, 0
         )
 
-    def _wayside(self, wayside_id: str) -> TrackController:
+    def _wayside(self, wayside_id: str) -> _Wayside:
         try:
             return self._waysides[wayside_id]
         except KeyError:
@@ -508,38 +544,45 @@ class SwTrackController:
         """Current state for display. No side effects."""
         readback = self._readback
         waysides: list[WaysideSnapshot] = []
-        for wayside_id, controller in self._waysides.items():
+        for wayside_id, wayside in self._waysides.items():
+            controller = wayside.controller
             config = controller.config
-            keys = tuple(controller.key(each) for each in config.block_ids)
+            driven = controller.outputs
+            keys = tuple(wayside.key(each) for each in config.block_ids)
             switches = tuple(
                 SwitchState(
-                    switch=controller.key(switch_id),
+                    switch=wayside.key(switch.block_id),
                     commanded=(
-                        _position(controller.switch_commands[switch_id])
-                        if switch_id in controller.switch_commands else None
+                        _position(driven.switches[switch.switch_id])
+                        if switch.switch_id in driven.switches else None
                     ),
                     reported=readback.switch_positions.get(
-                        controller.key(switch_id)
+                        wayside.key(switch.block_id)
                     ),
                 )
-                for switch_id in config.switches
+                for switch in config.switches
             )
-            signal_keys = [controller.key(each) for each in config.signals]
-            crossing_keys = [controller.key(each) for each in config.crossings]
+            signal_keys = [
+                wayside.key(signal.block_id) for signal in config.signals
+            ]
+            crossing_keys = [
+                wayside.key(crossing.block_id)
+                for crossing in config.crossings
+            ]
             owned = set(keys)
             waysides.append(
                 WaysideSnapshot(
                     wayside_id=wayside_id,
-                    line=controller.line,
+                    line=wayside.line,
                     blocks=keys,
                     program=self._program_info(controller),
                     switches=switches,
                     signal_commands={
-                        controller.key(signal_id): _aspect_to_wire(
-                            controller.aspects[signal_id]
+                        wayside.key(signal.block_id): _aspect_to_wire(
+                            driven.aspects[signal.signal_id]
                         )
-                        for signal_id in config.signals
-                        if signal_id in controller.aspects
+                        for signal in config.signals
+                        if signal.signal_id in driven.aspects
                     },
                     signal_reports={
                         key: readback.signal_aspects[key]
@@ -547,11 +590,11 @@ class SwTrackController:
                         if key in readback.signal_aspects
                     },
                     crossing_commands={
-                        controller.key(crossing_id): controller.crossing_commands[
-                            crossing_id
+                        wayside.key(crossing.block_id): driven.crossings[
+                            crossing.crossing_id
                         ]
-                        for crossing_id in config.crossings
-                        if crossing_id in controller.crossing_commands
+                        for crossing in config.crossings
+                        if crossing.crossing_id in driven.crossings
                     },
                     crossing_reports={
                         key: readback.crossings_active[key]
@@ -559,26 +602,31 @@ class SwTrackController:
                         if key in readback.crossings_active
                     },
                     track_circuits={
-                        controller.key(block_id): TrackCircuitCommand(*circuit)
-                        for block_id, circuit in controller.track_circuits.items()
+                        wayside.key(block_id): TrackCircuitCommand(
+                            circuit.speed_mps, circuit.authority_blocks
+                        )
+                        for block_id, circuit in driven.track_circuits.items()
                     },
                     occupied_blocks=frozenset(
                         key for key in readback.occupied_blocks
                         if key in owned
                     ),
                     closed_blocks=frozenset(
-                        controller.key(block.block_id)
+                        wayside.key(block.block_id)
                         for block in controller.blocks
-                        if controller.closed.get(block.block_id)
+                        if controller.inputs.closed.get(block.block_id)
                     ),
                     suggestions={
-                        controller.key(block_id): Suggestion(*suggestion)
+                        wayside.key(block_id): Suggestion(
+                            suggestion.speed_mps,
+                            suggestion.authority_blocks,
+                        )
                         for block_id, suggestion
-                        in controller.suggestions.items()
+                        in controller.inputs.suggestions.items()
                     },
                     overrides=tuple(
                         Override(each.rule, each.signal, each.message)
-                        for each in controller.overrides
+                        for each in driven.overrides
                     ),
                     report=self._reports.get(wayside_id),
                 )

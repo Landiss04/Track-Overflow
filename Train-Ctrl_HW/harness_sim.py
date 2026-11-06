@@ -101,10 +101,10 @@ def main() -> int:
     clock.timeout.connect(harness.tick)
     clock.start(int(DT_S * 1000))
 
-    harness.spawn("G-1")
-    QTimer.singleShot(5_000, lambda: harness.spawn("G-2"))
-    QTimer.singleShot(10_000, lambda: harness.spawn("G-3"))
-    QTimer.singleShot(30_000, lambda: harness.retire("G-1"))
+    harness.spawn("T-1")
+    QTimer.singleShot(5_000, lambda: harness.spawn("T-2"))
+    QTimer.singleShot(10_000, lambda: harness.spawn("T-3"))
+    QTimer.singleShot(30_000, lambda: harness.retire("T-1"))
 
     # The console only: the bench would spawn trains the harness does
     # not know about, and the next step_all would refuse them.

@@ -36,11 +36,14 @@ Rectangle {
             elide: Text.ElideRight
         }
 
-        DecimalText {
-            Layout.alignment: Qt.AlignHCenter
+        Text {
+            Layout.fillWidth: true
             text: root.value
             color: root.valueColor
-            pixelSize: theme.size_hero
+            font.family: theme.mono_family
+            font.pixelSize: theme.size_hero
+            font.weight: theme.weight_bold
+            horizontalAlignment: Text.AlignHCenter
         }
 
         MonoText {

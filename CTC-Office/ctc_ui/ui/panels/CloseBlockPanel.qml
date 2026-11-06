@@ -13,8 +13,9 @@ Panel {
     property var host: null
     property string message: ""
     property bool messageIsError: false
-    // The picked block's closure: "closed" or "". A closed block cannot
-    // be closed again; the panel says so as soon as it is picked.
+    // The picked block's closure: "closed", "closing" or "". A block
+    // that is already either cannot be closed again; the panel says so
+    // as soon as it is picked.
     readonly property string closure: {
         if (!root.host || lineSelect.value === "" || blockSelect.value === "")
             return "";
@@ -38,14 +39,13 @@ Panel {
             onValueChanged: root.message = ""
         }
 
-        BlockField {
+        PickField {
             id: blockSelect
             Layout.fillWidth: true
-            Layout.alignment: Qt.AlignTop
             label: qsTr("Block")
-            enabled: lineSelect.value !== ""
             model: root.host && lineSelect.value !== ""
                 ? root.host.blockOptions(lineSelect.value) : []
+            currentIndex: -1
             onValueChanged: root.message = ""
         }
     }
@@ -67,6 +67,10 @@ Panel {
                 ? qsTr("%1 %2 is already closed. Reopen it under Active "
                     + "closures.").arg(lineSelect.value)
                     .arg(blockSelect.value)
+            : root.closure === "closing"
+                ? qsTr("%1 %2 is already closing: it closes once the train "
+                    + "has left. Cancel it under Active closures.")
+                    .arg(lineSelect.value).arg(blockSelect.value)
             : qsTr("Select a line and block to close.")
     }
 

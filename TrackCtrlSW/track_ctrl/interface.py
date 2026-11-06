@@ -178,10 +178,11 @@ class CtcReport:
     wayside_id: str
     line: str
     sent_at_s: float
-    # This wayside is ready: its track layout is present and a PLC program
-    # is committed on its territory. The CTC Office reads it for every
-    # wayside of every line, so it can see exactly which are not ready. A
-    # ready wayside runs and transmits whatever the others are doing.
+    # This wayside has been started up: it has a PLC program on its
+    # territory. The CTC Office reads it for every wayside of every line,
+    # so it can see exactly which are not ready. A wayside that is ready
+    # may still be held: while any wayside is not ready the whole module
+    # stalls, because the track is only safe with every wayside running.
     ready: bool
     blocks: Mapping[BlockKey, BlockReport] = field(default_factory=dict)
     # Why it is not ready, or "" when it is.

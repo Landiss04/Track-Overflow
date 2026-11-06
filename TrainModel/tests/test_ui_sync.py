@@ -87,8 +87,7 @@ def test_failure_state_and_affected_values_change_while_paused(pair, failure):
     # There is no power output, so engine failure changes no control.
     fields = {
         "engine_failure": {},
-        # Null readbacks leave the entered values (pickup sends null).
-        "signal_pickup_failure": {},
+        "signal_pickup_failure": {"commanded_speed": 0, "authority": 0},
         "brake_failure": {"service_brake_command": False},
     }[failure]
     for name, value in fields.items():
@@ -144,11 +143,10 @@ def test_beacon_disappearance_and_clock_refresh(pair):
         "beacon_underground": True,
     })
     # The beacon is not in the test UI's output table; the Train Model
-    # window shows it. The module outputs it only on the station's own
-    # block, which this one is not.
+    # window shows it, and the module still outputs it.
     assert "beacon_station" not in outputs(harness)
     assert state.snapshot["next_station"] == "Station"
-    assert state.outputs().controller.beacon is None
+    assert state.outputs().controller.beacon is not None
     send(harness, {"beacon_station": "", "beacon_underground": False})
     for _ in range(8):
         harness.advanceTick()
@@ -233,9 +231,7 @@ def test_the_rows_show_the_starting_values_until_the_first_tick(pair):
     assert ctl.actual_speed_mps == 0.0
     assert state.snapshot["next_station"] == "Station B"
     # From the first tick on, the rows read the module back.
-    # A null readback (signal pickup failure) keeps the entered value.
-    entered = harness.inputValues["commanded_speed"]
     state.setFailure("signal_pickup_failure", True)
-    assert harness.inputValues["commanded_speed"] == entered is not None
+    assert harness.inputValues["commanded_speed"] == 0
     harness.resetModule()
     assert harness.inputValues["interior_light_command"]

@@ -58,16 +58,9 @@ def read_inputs(values: dict) -> dict[str, Any]:
     that cannot be read as its type.
     """
     staged: dict[str, Any] = {}
-    # A null commanded speed or authority is a Track Signal the Train
-    # Model could not read: a signal pickup failure (Kevin Schillinger
-    # 2026-10-28). The last values received are kept, unused.
-    signal = [key for key in ("commanded_speed", "authority_blocks")
-              if key in values]
-    if signal:
-        staged["signal_lost"] = any(values[key] is None for key in signal)
     # Commanded speed is the speed limit; a separate speed_limit is
     # ignored like any unknown key (REQUIREMENTS.md M1).
-    if values.get("commanded_speed") is not None:
+    if "commanded_speed" in values:
         staged["commanded_mps"] = max(
             0.0, _read_number(values, "commanded_speed"))
     if "actual_speed" in values:
@@ -75,7 +68,7 @@ def read_inputs(values: dict) -> dict[str, Any]:
     if "cabin_temperature" in values:
         staged["cabin_temp_c"] = _read_number(
             values, "cabin_temperature")
-    if values.get("authority_blocks") is not None:
+    if "authority_blocks" in values:
         staged["authority_blocks"] = max(
             0, int(_read_number(values, "authority_blocks")))
     if "beacon_station" in values:

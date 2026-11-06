@@ -14,18 +14,14 @@ Panel {
     title: qsTr("Stop the train")
     headerItems: [
         // What the brakes are actually doing, as the Train Model
-        // reports it (Brake State), not what was asked of them; for the
-        // service brake, also why: the driver's press, holding the
-        // train stopped, or slowing it.
+        // reports it (Brake State), not what was asked of them.
         StatusBadge {
             // "Brake fault", as the header pill says it: "Brake
             // failure" left no room for the panel's title.
             label: root.s.fault_brake ? qsTr("Brake fault")
                 : root.s.fb_emergency_brake ? qsTr("Emergency")
-                : !root.s.fb_service_brake ? qsTr("Running")
-                : root.s.service_request ? qsTr("Driver brake")
-                : root.s.holding ? qsTr("Holding")
-                : qsTr("Braking")
+                : root.s.fb_service_brake ? qsTr("Braking")
+                : qsTr("Running")
             variant: root.s.fault_brake || root.s.fb_emergency_brake
                 ? "fault"
                 : root.s.fb_service_brake ? "warning" : "ok"

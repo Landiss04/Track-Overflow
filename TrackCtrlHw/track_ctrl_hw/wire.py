@@ -328,7 +328,6 @@ def territory_to_wire(territory: Territory) -> dict[str, Any]:
                 "block": key_to_wire(block.key),
                 "length_m": block.length_m,
                 "speed_limit_mps": block.speed_limit_mps,
-                "next_blocks": list(block.next_blocks),
             }
             for block in territory.blocks
         ],
@@ -364,7 +363,6 @@ def territory_from_wire(data: Any) -> Territory:
             key=key_from_wire(block.get("block")),
             length_m=_number(block, "length_m"),
             speed_limit_mps=_number(block, "speed_limit_mps"),
-            next_blocks=_neighbor_numbers(block.get("next_blocks", [])),
         ))
     switches = []
     for raw in raw_switches:
@@ -450,12 +448,3 @@ def _optional_choice(
     record: Mapping[str, Any], name: str, allowed: tuple[str, ...]
 ) -> Any:
     return None if record.get(name) is None else _choice(record, name, allowed)
-
-
-def _neighbor_numbers(value: Any) -> tuple[str, ...]:
-    if not isinstance(value, list) or any(
-        not isinstance(item, str) or not (item.isdigit() or item == "yard")
-        for item in value
-    ):
-        raise WireFormatError("next_blocks must list block numbers or yard")
-    return tuple(value)

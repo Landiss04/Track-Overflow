@@ -6,43 +6,27 @@ autonumber
 actor Dispatcher as D
 box "CTC Office process" #F7F9FC
 participant "TrackViewPanel\n/ TrackMap (QML)" as Map
-participant "Main.qml" as Main
 participant "TrackMapModel" as TM
 participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
-participant "CtcOfficeProcess" as Proc
 end box
 
 == At start ==
-TM -> TM : build_map(layout)
-Map -> TM : blocks, spurs, stations,\ncrossings, labels, yard
+Map -> TM : block geometry
 TM --> Map : both lines from the layout files,\ncoloured by line
 
 == After each step ==
-loop each STEP
-  Proc -> Proc : _redraw.start()
-  note right of Proc : single shot, WINDOW_REFRESH_MS = 200
-  Proc -> Host : refresh()
+loop at most every 200 ms
   Host -> Model : snapshot()
   Model --> Host : inputs (occupancy, crossings), closed and\npending blocks, followed trains
-  opt anything changed
-    Host -> Host : _revision += 1
-    Host -> Main : stateChanged()
-  end
-  Main -> Host : blockStates, crossingStates, mapTrains
-  Host --> Main : per block: occupied / closed / closing;\nactive crossings; each followed train\non its head block
-  Main -> Map : blockStates, crossingStates, mapTrains
-  Map -> TM : placeTrains(mapTrains)
-  TM --> Map : a tagged car per followed train
+  Host -> Host : revision += 1; stateChanged
+  Map -> Host : blockStates, crossingStates, mapTrains
+  Host --> Map : per block: occupied / closed / closing;\nactive crossings; each followed train\nas a tagged car on its head block
   Map -> D : redrawn map; any other occupied block\n(an inferred failure among them) has an untagged car
 end
 
-D -> Map : "+".clicked()
-Map -> Map : zoomInRequested()\nmapView.zoomBy(1.25)
-D -> Map : "−".clicked()
-Map -> Map : zoomOutRequested()\nmapView.zoomBy(0.8)
-note right of D : Up to 4x; drag to pan.
-D -> Map : "Fit".clicked()
-Map -> Map : fitRequested()\nmapView.fit()
+D -> Map : + / − (1.25x steps, up to 4x), drag to pan
+Map -> D : zoomed view
+D -> Map : Fit
 Map -> D : the whole map
 @enduml
