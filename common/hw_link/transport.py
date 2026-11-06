@@ -42,6 +42,27 @@ def matches_identity(info: Any, module: str) -> bool:
     )
 
 
+def _grow_windows_rx_buffer(port: QSerialPort, size: int = 1 << 20) -> str | None:
+    """Ask usbser.sys for a larger receive buffer.
+
+    With the default small buffer, the Windows CDC-ACM driver silently drops
+    whole 512-byte USB packets when a large reply arrives faster than the app
+    reads it (measured: 20 KiB echoes lost data; with 1 MiB, none). Returns an
+    error message, or None on success or on non-Windows hosts.
+    """
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    setup = ctypes.windll.kernel32.SetupComm
+    setup.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD)
+    setup.restype = wintypes.BOOL
+    if not setup(int(port.handle()), size, 4096):
+        return f"SetupComm failed, error {ctypes.GetLastError()}"
+    return None
+
+
 class ByteTransport(QObject):
     """An ordered asynchronous byte stream with connection state."""
 
@@ -108,6 +129,11 @@ class SerialTransport(ByteTransport):
             return
         self.port.setPort(ports[0])
         if self.port.open(QSerialPort.OpenModeFlag.ReadWrite):
+            error = _grow_windows_rx_buffer(self.port)
+            if error:
+                self.diagnostic.emit(f"SERIAL_RX_BUFFER {self.module} {error}")
+            # Drop bytes left over from an earlier session.
+            self.port.clear(QSerialPort.Direction.AllDirections)
             self._open = True
             self.connected.emit()
 

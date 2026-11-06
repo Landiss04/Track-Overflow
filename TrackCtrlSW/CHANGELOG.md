@@ -5,6 +5,25 @@ Changes to the owners' module code during Phase 5 integration, for review.
 ---
 
 
+## 2026-11-04 — PLC expressions compile once (Landis)
+
+`61e7796` (10x headroom on hybrid Windows laptops). The outputs and
+warnings are unchanged. For Harry to review.
+
+- `track_ctrl/plc.py`: each expression compiles once into an evaluator
+  (`compile()` on `Literal`, `Reference`, `Not` and `BinaryOp`;
+  `Program._evaluators`, made on the first scan and cached), in place of
+  the per-scan `evaluate()` walk and `_Scope`. An undefined read still
+  warns once per scan with the same text, and both sides of every
+  operator are still evaluated, so the warnings do not depend on the
+  inputs. The program is still pure.
+- Checked against the code before it: 205,982 live scans from the
+TrackCtrlHw and TrackCtrlSW suites and 8,000 random programs gave
+identical values and warnings; 1,500 captured Pi steps gave identical
+outputs.
+
+---
+
 ## 2026-11-03 — The starter's separation rule is direction-aware
 
 `AUTH_n := NOT (OCC_n AND <next blocks of n>)`, from the layout's `next_blocks`.
