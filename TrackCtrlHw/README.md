@@ -107,6 +107,7 @@ harness can send the whole line.
 | `time_s` | Clock | Simulation seconds since midnight |
 | `ctc.closed_blocks` | CTC Office | `frozenset[BlockRef]`, the full set every tick |
 | `ctc.switch_commands` | CTC Office | `{BlockRef of the switch: "normal" \| "reverse"}`; sent only in maintenance mode. The PLC program decides whether to obey |
+| `ctc.route_requests` | CTC Office | `{BlockRef of the switch: "normal" \| "reverse"}`; the position for the train routed over it. A request, not a command: the PLC program decides. Optional on the wire |
 | `ctc.suggestions` | CTC Office | `{BlockRef: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing. Speed 0 to 31 m/s: the program's speed input is 5 bits |
 | `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]`; a train or a failure, the module cannot tell which |
 | `track_model.switch_positions` | Track Model | Actual positions, `{switch block: position}` |
