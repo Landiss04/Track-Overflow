@@ -108,6 +108,7 @@ Rectangle {
             enabled: root.s.train_count > 0
             label: qsTr("Current selected train")
             trains: controller.trains
+            line: root.s.line_name
             currentId: root.s.has_train ? root.s.train_id : ""
             onPicked: function (trainId) { controller.select_train(trainId); }
         }

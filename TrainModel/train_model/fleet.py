@@ -43,11 +43,19 @@ class TrainModelFleet(QObject):
     rosterChanged = Signal()
     currentChanged = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        *,
+        view_interval_s: float = 0.0,
+    ) -> None:
         super().__init__(parent)
+        # Passed to each train's Train Model; see TrainModelState.
+        self._view_interval_s = view_interval_s
         # Insertion order is the roster order.
         self._trains: dict[str, TrainModelState] = {}
         self._selected = ""
+        self._harness_time_s: float | None = None
         # Shown while no train is selected, so the window always has a
         # train to bind to. It is never stepped.
         self._idle = TrainModelState(parent=self)
@@ -78,7 +86,10 @@ class TrainModelFleet(QObject):
                 config = TrainConfig(seed=zlib.crc32(train_id.encode()))
             state = TrainModelState(
                 config, parent=self, train_id=train_id, line=line,
+                view_interval_s=self._view_interval_s,
             )
+        if self._harness_time_s is not None:
+            state.set_harness_time(self._harness_time_s)
         self._trains[train_id] = state
         if not self._selected:
             self._selected = train_id
@@ -111,6 +122,13 @@ class TrainModelFleet(QObject):
     def ids(self) -> list[str]:
         """Every train's ID, in the order the trains were added."""
         return list(self._trains)
+
+    def set_harness_time(self, sim_time_s: float) -> None:
+        """Reconcile window time for every train and the empty-fleet view."""
+        self._harness_time_s = sim_time_s
+        self._idle.set_harness_time(sim_time_s)
+        for state in self._trains.values():
+            state.set_harness_time(sim_time_s)
 
     def __contains__(self, train_id: object) -> bool:
         return train_id in self._trains

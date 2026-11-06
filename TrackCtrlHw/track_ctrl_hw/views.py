@@ -15,6 +15,7 @@ from track_ctrl_hw.interface import (
     WaysideSnapshot,
 )
 from track_ctrl_hw.schematic import layout
+from track_ctrl_hw.vital import vital_source
 
 
 def block_state(snapshot: WaysideSnapshot, key: BlockKey) -> tuple[str, str]:
@@ -204,6 +205,7 @@ def program_details(snapshot: WaysideSnapshot) -> dict[str, Any]:
     """Everything the PLC details window shows."""
     program = snapshot.program
     scan = snapshot.scan
+    vital = snapshot.vital
     loaded = (
         display.EM_DASH
         if program is None
@@ -241,6 +243,14 @@ def program_details(snapshot: WaysideSnapshot) -> dict[str, Any]:
         "channelFault": scan.channel_fault or "None",
         "holding": snapshot.holding or "No: the program drives them",
         "running": not snapshot.holding,
+        "vitalChecksum": (
+            display.EM_DASH if vital is None else vital.checksum
+        ),
+        "vitalStatements": (
+            display.EM_DASH if vital is None else str(vital.statement_count)
+        ),
+        "overrides": list(snapshot.overrides),
+        "vitalSource": vital_source(snapshot.territory),
     }
 
 

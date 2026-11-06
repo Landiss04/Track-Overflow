@@ -4,12 +4,15 @@ sequenceDiagram
     participant H as Central Harness
     participant M as SwTrackController
     participant W as TrackController (wayside)
-    TM->>H: occupancy, switch positions, crossings, signal aspects
+    TM-->>H: return occupancy, switch positions, crossings, signal aspects (its STEP reply)
     Note right of TM: A failed block (broken rail, track circuit, power) is reported as occupied.
-    H->>M: step(dt, track_model)
-    M->>M: keep the read-back for the CTC report (UC-17)
-    loop each wayside
-        M->>W: set_occupancy(block, occupied) for each block
+    H->>H: track_model_to_track_controller internal: keyed by block
+    H->>M: step(dt, inputs.track_model)
+    Note over H,M: step reaches SwTrackController through TrackControllerProcess.step and TrackControllerState.step (SD-09).
+    M->>M: step internal: _readback := inputs.track_model, for _report (UC-17)
+    loop each wayside (_apply)
+        M->>W: set_occupancy(block, occupied), for each block
+        W->>W: set_occupancy internal: occupancy[block], and trains[block] for display
         M->>W: set_switch_position(switch, reverse)
     end
-    Note right of W: The PLC sees OCC_n and SWREV_s. FAIL_n is always 0: the wayside is told of no failures.
+    Note right of W: build_scan_inputs gives the PLC OCC_n and SWREV_s. FAIL_n is always 0.

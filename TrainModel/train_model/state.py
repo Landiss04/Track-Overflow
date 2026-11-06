@@ -7,7 +7,8 @@ class steps the model and refreshes the snapshot after each tick.
 
 Every value in the snapshot is in its backend unit, per D002; the views
 convert for display. Unavailable identity, line and arrival metadata is
-shown as unknown. The simulation clock comes from the model's elapsed time.
+shown as unknown. The clock shows harness time when integrated, with
+model elapsed time as the standalone fallback.
 
 Signal names, units and directions follow the Train Model interface
 dictionary (v0.2). Deviations from the wireframes are recorded in
@@ -16,6 +17,7 @@ dictionary (v0.2). Deviations from the wireframes are recorded in
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from PySide6.QtCore import (
@@ -70,8 +72,11 @@ class TrainModelState(QObject):
         *,
         train_id: str = "",
         line: str = "",
+        view_interval_s: float = 0.0,
     ) -> None:
         super().__init__(parent)
+        # Ticks tell the views at most this often; 0 tells them of each.
+        self._view_interval_s = view_interval_s
         self._config = config if config is not None else TrainConfig()
         # Identity is metadata for the views; the model never reads it.
         self._train_id = train_id
@@ -81,9 +86,12 @@ class TrainModelState(QObject):
         # The last beacon's station and platform side, kept until the
         # train is at that station: a beacon is sent only near it.
         self._next_station: tuple[str, str] | None = None
+        self._harness_time_s: float | None = None
         self._snapshot: dict[str, Any] = self._initial_snapshot()
         self._running = False
         self._idle: QTimer | None = None
+        self._notified_at = float("-inf")
+        self._trailing: QTimer | None = None
         self._refresh()
 
     def _initial_snapshot(self) -> dict[str, Any]:
@@ -93,6 +101,9 @@ class TrainModelState(QObject):
             "train_id": self._train_id or _NONE_SHOWN,
             "line": self._line or _NONE_SHOWN,
             "clock": "00:00:00",
+            "clock_drift_s": None,
+            "clock_drift_detected": False,
+            "clock_drift_checked_tick": None,
             "arrival": _NONE_SHOWN,
             "grade": 0.0,
             "elevation": 0.0,
@@ -125,13 +136,34 @@ class TrainModelState(QObject):
             self._model.validate_inputs(dt, inputs)
             self._model.clear_passenger_brake_for_test()
         outputs = self._model.step(dt, inputs)
-        self._refresh()
+        self._refresh(from_tick=True)
         self._mark_running()
         return outputs
 
     def validate_inputs(self, dt: float, inputs: TrainModelInputs) -> None:
         """Raise as :meth:`step` would, without changing the train."""
         self._model.validate_inputs(dt, inputs)
+
+    @property
+    def elapsed_s(self) -> float:
+        """Accepted physics time, independent of presentation time."""
+        return self._model.snapshot().elapsed_s
+
+    def set_harness_time(self, sim_time_s: float) -> None:
+        """Publish global time on the owning Qt thread, even on rejection."""
+        self._harness_time_s = sim_time_s
+        self._refresh(from_tick=True)
+
+    def set_clock_drift(self, drift_s: float, tick: int) -> bool:
+        """Publish the check and return whether it detected a discrepancy."""
+        detected = abs(drift_s) > 1e-6
+        self._snapshot.update({
+            "clock_drift_s": drift_s,
+            "clock_drift_detected": detected,
+            "clock_drift_checked_tick": tick,
+        })
+        self._notify()
+        return detected
 
     @property
     def train_id(self) -> str:
@@ -290,7 +322,7 @@ class TrainModelState(QObject):
 
     @Slot()
     def releaseEmergencyBrake(self) -> None:
-        """Do nothing: normal UI release policy is still undecided."""
+        """No window release action; controller releases the passenger latch."""
 
     def clear_passenger_brake_for_test(self) -> None:
         """Clear the passenger latch for an explicit harness override."""
@@ -301,7 +333,7 @@ class TrainModelState(QObject):
     # Snapshot
     # ------------------------------------------------------------------ #
 
-    def _refresh(self) -> None:
+    def _refresh(self, *, from_tick: bool = False) -> None:
         # Republish the model's state. Before the first tick there are
         # no inputs, so only the model's own state is shown.
         snap = self._model.snapshot()
@@ -311,15 +343,23 @@ class TrainModelState(QObject):
         trk = outputs.track
 
         block = trk.block_id or _NONE_SHOWN
+        clock_s = (snap.elapsed_s if self._harness_time_s is None
+                   else self._harness_time_s)
+        # Integrated time is unwrapped for checks; only display wraps.
+        total_s = int(clock_s + 1e-9)
+        hours = total_s // 3600
+        if self._harness_time_s is not None:
+            hours %= 24
         updates: dict[str, Any] = {
             "clock": (
-                f"{int(snap.elapsed_s + 1e-9) // 3600:02d}:"
-                f"{int(snap.elapsed_s + 1e-9) // 60 % 60:02d}:"
-                f"{int(snap.elapsed_s + 1e-9) % 60:02d}"
+                f"{hours:02d}:{total_s // 60 % 60:02d}:"
+                f"{total_s % 60:02d}"
             ),
             "actual_speed": ctl.actual_speed_mps,
             "commanded_speed": ctl.commanded_speed_mps,
-            "speed_limit": ctl.speed_limit_mps,
+            # Track Info, shown here; not sent to the Train Controller.
+            "speed_limit": (inputs.track.track_info.speed_limit_mps
+                            if inputs is not None else 0.0),
             "authority": ctl.authority_blocks,
             "acceleration": snap.acceleration_mps2,
             "passengers": snap.n_passengers,
@@ -354,10 +394,11 @@ class TrainModelState(QObject):
             inputs.track.track_info.station_name if inputs is not None
             else None
         ) or ""
-        if ctl.beacon is not None:
-            self._next_station = (
-                ctl.beacon.station_name, ctl.beacon.platform_side
-            )
+        # The beacon heard, on the block before a station: the
+        # controller output carries it only once the train is there.
+        heard = inputs.track.beacon if inputs is not None else None
+        if heard is not None:
+            self._next_station = (heard.station_name, heard.platform_side)
         if (self._next_station is not None
                 and station == self._next_station[0]):
             # Arrived: the station is now the current one.
@@ -381,4 +422,27 @@ class TrainModelState(QObject):
         if any(self._snapshot.get(key) != value
                for key, value in updates.items()):
             self._snapshot.update(updates)
-            self.snapshotChanged.emit()
+            if from_tick:
+                self._notify()
+            else:
+                self._emit_snapshot()
+
+    def _notify(self) -> None:
+        # The snapshot is current at once; ticks tell the views at most
+        # every view interval, and always of the last change.
+        interval_s = self._view_interval_s
+        if time.monotonic() - self._notified_at >= interval_s:
+            self._emit_snapshot()
+            return
+        if QCoreApplication.instance() is None:
+            return  # No event loop, so no views to redraw.
+        if self._trailing is None:
+            self._trailing = QTimer(self)
+            self._trailing.setSingleShot(True)
+            self._trailing.timeout.connect(self._emit_snapshot)
+        if not self._trailing.isActive():
+            self._trailing.start(round(interval_s * 1000))
+
+    def _emit_snapshot(self) -> None:
+        self._notified_at = time.monotonic()
+        self.snapshotChanged.emit()

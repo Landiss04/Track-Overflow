@@ -7,6 +7,10 @@ the path for ``common``.
 
 from __future__ import annotations
 
+import dataclasses
+
+import pytest
+
 from common.harness.track_model_edges import (
     build_track_model_inputs,
     track_model_to_ctc_office,
@@ -22,7 +26,7 @@ from common.interfaces import (
     TrainTrackReport,
     WaysideCommands,
 )
-from track_model.interface import TrackFailure
+from track_model.interface import Beacon, TrackFailure
 from tests.helpers import DT_S, make_model
 
 FAR_M = 10_000.0
@@ -49,20 +53,22 @@ def test_round_trip_through_every_edge() -> None:
         authority_blocks={"BLUE A-4": 4},
         switch_positions={"BLUE A-5": SwitchPosition.REVERSE},
         crossing_gates_closed={"BLUE A-3": True},
-        signal_aspects={"BLUE A-4": SignalAspect.SUPER_GREEN},
+        signal_aspects={"BLUE A-5": SignalAspect.SUPER_GREEN},
         heaters_on={"BLUE B": True},
     )
     model.step(DT_S, build_track_model_inputs(commands, at("BLUE A-3", 1.0),
                                               ambient_temp_c=-2.0))
     model.set_block_failure("BLUE A-2", TrackFailure.POWER)
+    # Commanded speed and authority last one tick, so the Track
+    # Controller sends them again on every tick.
     out = model.step(DT_S, build_track_model_inputs(
-        WaysideCommands(), at("BLUE A-3", FAR_M), ambient_temp_c=-2.0))
+        commands, at("BLUE A-3", FAR_M), ambient_temp_c=-2.0))
 
     readback = track_model_to_track_controller(out)
     assert readback.block_occupancy["BLUE A-4"]
     assert readback.switch_positions["BLUE A-5"] is SwitchPosition.REVERSE
     assert readback.crossing_gates_closed["BLUE A-3"] is True
-    assert readback.signal_aspects["BLUE A-4"] is SignalAspect.SUPER_GREEN
+    assert readback.signal_aspects["BLUE A-5"] is SignalAspect.SUPER_GREEN
     assert readback.failures["BLUE A-2"] is FailureMode.POWER_FAILURE
     assert readback.heaters_on["BLUE B"] is True
     # BLUE A-2 has lost power, so section A's heaters are off.
@@ -81,7 +87,7 @@ def test_round_trip_through_every_edge() -> None:
 
 def test_ticket_sales_reach_the_ctc_office_as_station_pairs() -> None:
     """Check the CTC edge carries (count, station) pairs and no total."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     for _ in range(2):
         out = model.step(DT_S, build_track_model_inputs(
             WaysideCommands(), {}, ambient_temp_c=0.0))
@@ -94,7 +100,7 @@ def test_ticket_sales_reach_the_ctc_office_as_station_pairs() -> None:
 
 def test_station_name_and_doors_cross_the_edges() -> None:
     """Check the station reaches the train and doors reach boarding."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     stopped = {"T1": TrainTrackReport(
         TrainPosition("GREEN A-2", 1.0), 0.0, False, 222, True)}
     out = model.step(DT_S, build_track_model_inputs(
@@ -121,3 +127,42 @@ def test_beacon_maps_to_the_catalog_beacon() -> None:
     assert feed is not None and feed.beacon is not None
     assert (feed.beacon.next_station, feed.beacon.platform_side) == (
         "PIONEER", "L")
+
+
+@pytest.mark.parametrize("side", ["L", "R", "LR"])
+def test_beacon_edge_checks_the_complete_payload(side: str) -> None:
+    """Producer-owned types stay intact while the edge enforces the bound."""
+    out = make_model().step(DT_S, build_track_model_inputs(
+        WaysideCommands(), at("GREEN A-3", 1.0), ambient_temp_c=0.0))
+    original = out.train_feeds["T1"]
+    # False costs 14 characters of punctuation, side and boolean for L/R.
+    name = '"\\é🚆' + "S" * (93 - len(side))
+    beacon = Beacon(name, side, False)
+    changed = dataclasses.replace(out, train_feeds={
+        "T1": dataclasses.replace(original, beacon=beacon),
+    })
+    feed = track_model_to_train_model(changed, "T1")
+    assert feed is not None and feed.beacon is not None
+    assert feed.beacon.next_station == name
+    overlong = dataclasses.replace(beacon, station_name=name + "S")
+    invalid = dataclasses.replace(out, train_feeds={
+        "T1": dataclasses.replace(original, beacon=overlong),
+    })
+    before = dataclasses.asdict(invalid)
+    with pytest.raises(ValueError, match="129"):
+        track_model_to_train_model(invalid, "T1")
+    assert dataclasses.asdict(invalid) == before
+
+
+@pytest.mark.parametrize("beacon", [
+    Beacon("S", None, False), Beacon("S", "Q", False),
+    Beacon(5, "L", False), Beacon("S", "L", "false"),
+])
+def test_malformed_beacon_is_rejected_at_the_edge(beacon: Beacon) -> None:
+    out = make_model().step(DT_S, build_track_model_inputs(
+        WaysideCommands(), at("GREEN A-3", 1.0), ambient_temp_c=0.0))
+    invalid = dataclasses.replace(out, train_feeds={
+        "T1": dataclasses.replace(out.train_feeds["T1"], beacon=beacon),
+    })
+    with pytest.raises(ValueError, match="beacon"):
+        track_model_to_train_model(invalid, "T1")

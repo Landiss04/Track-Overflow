@@ -71,14 +71,17 @@ def run_route(
     """Drive T1 from ``start`` one block per tick until it leaves.
 
     Acts as the Train Model: each tick it reports the block the feed
-    named, with an offset past that block's end.
+    named, with an offset past that block's end. Acts as the Track
+    Controller too, sending ``commands`` every tick, since commanded
+    speed and authority last only the tick they are sent.
     """
     out = model.step(DT_S, make_inputs({"T1": report(start, 1.0)},
                                        commands))
     path, history = [start], [out]
     for _ in range(max_ticks):
         block = path[-1]
-        out = model.step(DT_S, make_inputs({"T1": report(block, FAR_M)}))
+        out = model.step(DT_S, make_inputs({"T1": report(block, FAR_M)},
+                                           commands))
         history.append(out)
         feed = out.train_feeds.get("T1")
         if feed is None:
@@ -207,11 +210,11 @@ def test_green_has_exactly_six_switches(green: Layout) -> None:
     assert len(green.switches) == 6
 
 
-def test_green_signals_stand_before_each_switch(green: Layout) -> None:
-    """Check the six Green signal blocks."""
-    assert set(green.signal_block_ids) == {
-        "GREEN D-14", "GREEN F-27", "GREEN I-56",
-        "GREEN K-64", "GREEN N-78", "GREEN N-84",
+def test_green_signals_stand_at_each_switch(green: Layout) -> None:
+    """Check the six Green signals, one at each switch, by its point."""
+    assert set(green.signal_block_ids) == set(green.switches) == {
+        "GREEN D-13", "GREEN F-28", "GREEN I-57",
+        "GREEN K-63", "GREEN N-77", "GREEN N-85",
     }
 
 
@@ -320,11 +323,11 @@ def test_train_out_of_the_yard_does_not_roll_back_into_it() -> None:
 def test_per_block_speed_and_authority_round_the_loop(green: Layout) -> None:
     """Command every Green block differently; check what the train gets.
 
-    Each block's commanded speed is its speed limit in whole m/s, and its
+    Each block's commanded speed is its speed limit in m/s, and its
     authority is a count that differs from block to block.
     """
-    speeds: Mapping[str, int] = {
-        b.block_id: int(b.speed_limit_mps) for b in green.blocks.values()
+    speeds: Mapping[str, float] = {
+        b.block_id: b.speed_limit_mps for b in green.blocks.values()
     }
     authority = {
         b.block_id: b.number % 7 for b in green.blocks.values()
@@ -338,12 +341,13 @@ def test_per_block_speed_and_authority_round_the_loop(green: Layout) -> None:
     for block, out in zip(path[:-1], history):
         signal = out.train_feeds["T1"].track_signal
         assert signal.commanded_speed_mps == speeds[block]
-        assert isinstance(signal.commanded_speed_mps, int)
+        assert isinstance(signal.commanded_speed_mps, float)
         assert signal.authority_blocks == authority[block]
 
 
-def test_signals_seen_once_on_entry_round_the_loop(green: Layout) -> None:
-    """Check signal_seen fires on each signal-block entry, and only then."""
+def test_light_ahead_every_tick_round_the_loop(green: Layout) -> None:
+    """Check the train sees, every tick, the light of the first switch
+    ahead that it comes onto from the fixed side (TM-2, B1)."""
     aspects = dict(zip(
         green.signal_block_ids,
         [SignalAspect.GREEN, SignalAspect.YELLOW, SignalAspect.RED,
@@ -352,15 +356,22 @@ def test_signals_seen_once_on_entry_round_the_loop(green: Layout) -> None:
     model = make_model()
     path, history = run_route(model, "GREEN K-63", TrackControllerCommands(
         signal_commands=aspects, switch_commands=ROUTE_SWITCHES))
+
+    def facing_ahead(i: int) -> SignalAspect | None:
+        # The first point after path[i] entered from off both its legs.
+        for j in range(i + 1, len(path)):
+            switch = green.switches.get(path[j])
+            if switch is not None and path[j - 1] not in (
+                    switch.normal_block_id, switch.reverse_block_id):
+                return aspects[path[j]]
+        return None
+
+    # history[i] is the tick the train is in path[i].
     seen = [out.signal_seen.get("T1") for out in history[:-1]]
-    expected = [aspects.get(block) for block in path[:-1]]
-    assert seen == expected
-    # Each signal block is entered on this route: 64 once, the rest twice.
-    entries = [b for b in path if b in aspects]
-    assert sorted(entries) == sorted(
-        ["GREEN K-64", "GREEN I-56"]
-        + ["GREEN D-14", "GREEN F-27", "GREEN N-78", "GREEN N-84"] * 2
-    )
+    for i, aspect in enumerate(seen):
+        assert aspect == facing_ahead(i), (i, path[i])
+    # It sees a light nearly all the way round, not only on entering.
+    assert sum(a is not None for a in seen) > len(seen) // 2
 
 
 @pytest.mark.parametrize("block_id, station", [
@@ -370,7 +381,7 @@ def test_signals_seen_once_on_entry_round_the_loop(green: Layout) -> None:
 ])
 def test_boarding_at_green_stations(block_id: str, station: str) -> None:
     """Check a stopped train boards at a Green station, up to capacity."""
-    model = make_model(ticket_probability=1.0)
+    model = make_model(tickets_per_minute=600.0)
     for _ in range(5):
         model.step(DT_S, make_inputs())
     out = model.step(DT_S, make_inputs(

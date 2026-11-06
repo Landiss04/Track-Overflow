@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from track_ctrl import plc as sw  # noqa: E402
 from track_ctrl.controller import TrackController  # noqa: E402
-from track_ctrl.layout import build_line, parse_layout  # noqa: E402
+from track_ctrl.layout import parse_layout  # noqa: E402
 from track_ctrl_hw import plc as hw  # noqa: E402
 
 _HW_DATA = _REPO / "TrackCtrlHw" / "data"
@@ -50,7 +50,8 @@ def _expression(rng: random.Random, depth: int = 0) -> str:
 
 
 def _outputs(program: sw.Program, image: dict[str, bool]) -> dict[str, bool]:
-    return program.scan(image).outputs(tuple(program.outputs))
+    values, _ = program.scan(image)
+    return {name: values.get(name, False) for name in program.outputs}
 
 
 def _hw_territory_controller(wayside_file: str) -> TrackController:
@@ -60,7 +61,7 @@ def _hw_territory_controller(wayside_file: str) -> TrackController:
     parsed = parse_layout(data, wayside_file)
     # D014 wants two waysides per line; this territory is just the one.
     with mock.patch("track_ctrl.layout.MIN_CONTROLLERS", 1):
-        line = build_line(parsed, 1)
+        line = parsed.divide(1)
     config = line.controllers[0]
     blocks = tuple(b for b in line.blocks if config.owns(b.block_id))
     return TrackController(config, blocks)
@@ -157,9 +158,9 @@ class HwProgramsRunHere(unittest.TestCase):
         controller.commit(source, "green_wayside_1.plc")
         controller.set_all_suggestions(9, 2)
         controller.scan()
-        self.assertTrue(controller.outputs.track_circuits)
+        self.assertTrue(controller.track_circuits)
         self.assertEqual(
-            set(controller.outputs.aspects.values())
+            set(controller.aspects.values())
             - {"RED", "YELLOW", "GREEN", "SUPER GREEN"},
             set())
 

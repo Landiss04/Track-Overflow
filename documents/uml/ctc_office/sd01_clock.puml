@@ -5,7 +5,8 @@ autonumber
 
 actor Dispatcher as D
 box "CTC Office process" #F7F9FC
-participant "CtcHeader\nClockControls (QML)" as UI
+participant "ClockControls\n(in CtcHeader)" as UI
+participant "Main.qml" as Main
 participant "HarnessClockBridge" as Clock
 participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
@@ -19,38 +20,55 @@ note over Clock, H
   The harness allows Run once every module has said READY (D005).
 end note
 
-D -> UI : Run
-UI -> Clock : resume()
+D -> UI : "Run".clicked()
+UI -> Main : resumeRequested()
+Main -> Clock : resume()
 Clock -> Host : setClockPaused(False)
 Host -> Model : set_clock_paused(False)
-Clock -> Proc : on_change({clock_paused: False,\nclock_speedup: False})
-Proc -> H : STATE {clock_paused, clock_speedup}
+Clock -> Proc : on_change(controls())
+Proc -> H : push_state({clock_paused: False,\nclock_speedup: False}) : STATE
 note right of Proc
   Sent at once: while the clock is paused no
   STEP runs, so the reply to a step cannot carry it.
 end note
-H -> H : run the clock: a STEP every 0.1 s of\nsimulated time, to every module
+H -> H : _read_clock_controls(state)
+H -> H : _apply_clock_state()
+note right of H
+  Runs the clock: a STEP every 0.1 s
+  of simulated time, to every module.
+end note
 H -> Proc : STEP (tick, dt = 0.1, sim_time_s, inputs)
 Proc --> H : outputs, with clock_paused = False
 
-D -> UI : 10x
-UI -> Clock : setSpeed(10)
+D -> UI : "1× | 10×".activated(1)
+UI -> Main : speedRequested(10)
+Main -> Clock : setSpeed(10)
 Clock -> Host : setClockSpeedup(True)
 Host -> Model : set_clock_speedup(True)
-Clock -> Proc : on_change({clock_paused: False,\nclock_speedup: True})
-Proc -> H : STATE
-H -> H : 10 times as many ticks per real second;\ndt stays 0.1 s (D006, D017)
+Clock -> Proc : on_change(controls())
+Proc -> H : push_state({clock_paused: False,\nclock_speedup: True}) : STATE
+H -> H : _read_clock_controls(state)
+H -> H : _apply_clock_state()
+note right of H
+  10 times as many ticks per real second;
+  dt stays 0.1 s (D006, D017).
+end note
 
-D -> UI : Pause
-UI -> Clock : pause()
+D -> UI : "Pause".clicked()
+UI -> Main : pauseRequested()
+Main -> Clock : pause()
 Clock -> Host : setClockPaused(True)
 Host -> Model : set_clock_paused(True)
-Clock -> Proc : on_change({clock_paused: True, ...})
-Proc -> H : STATE
-H -> H : stop ticking every module
+Clock -> Proc : on_change(controls())
+Proc -> H : push_state({clock_paused: True, ...}) : STATE
+H -> H : _read_clock_controls(state)
+H -> H : _apply_clock_state()
+note right of H
+  Stops ticking every module.
+end note
 loop each STEP while running
   H -> Proc : STEP
   Proc -> Clock : show_time(sim_time_s)
-  Clock -> UI : timeText "HH:MM:SS" (24-hour)
+  Clock -> UI : timeTextChanged()\n(timeText "HH:MM:SS", 24-hour)
 end
 @enduml

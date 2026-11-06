@@ -10,7 +10,7 @@ rectangle "CTC Office" {
   usecase "UC-02 Change operating mode" as UC02
   usecase "UC-03 Dispatch a train\nto a station" as UC03
   usecase "UC-04 Dispatch a train\nto a block" as UC04
-  usecase "UC-05 Reroute or cancel\na train's order" as UC05
+  usecase "UC-05 Reroute\na train" as UC05
   usecase "UC-06 Return a train\nto the yard" as UC06
   usecase "UC-07 Load a schedule" as UC07
   usecase "UC-08 Monitor and pause\nautomatic dispatch" as UC08

@@ -90,7 +90,7 @@ class LinkTests(unittest.TestCase):
         # The stand-in CTC sends nothing until the controller is ready.
         self.assertTrue(
             wait_for(lambda: client.controllerReady and bool(
-                self.controller().inputs.suggestions)),
+                self.controller().suggestions)),
             "the controller never became ready",
         )
         return client
@@ -158,16 +158,16 @@ class LinkTests(unittest.TestCase):
         # the stand-in CTC sends it nothing.
         self.assertFalse(self.state.ready)
         self.assertFalse(client.controllerReady)
-        self.assertEqual(self.controller().inputs.suggestions, {})
+        self.assertEqual(self.controller().suggestions, {})
         self.assertTrue(all(
-            c.speed_mps == 0
+            c[0] == 0
             for each in self.state.system.controllers.values()
-            for c in each.outputs.track_circuits.values()))
+            for c in each.track_circuits.values()))
         # Starting it up, from the programmer's side, releases the stall.
         self.state.system.load_starter_programs()
         self.assertTrue(wait_for(lambda: client.controllerReady))
         self.assertTrue(wait_for(
-            lambda: bool(self.controller().inputs.suggestions)))
+            lambda: bool(self.controller().suggestions)))
         self.assertTrue(self.state.ready)
         self.assertEqual(self.state.notReadyReason, "")
 
@@ -216,7 +216,7 @@ class LinkTests(unittest.TestCase):
         client = self.connect()
         client.setBlockClosed("7", True)
         self.assertTrue(wait_for(lambda: (
-            self.controller().outputs.track_circuits["7"].authority_blocks
+            self.controller().track_circuits["7"][1]
             == 0)))
         self.assertTrue(wait_for(lambda: any(
             row["rule"] == "closed_block"
@@ -226,7 +226,7 @@ class LinkTests(unittest.TestCase):
         client.setSwitchCommand("12", "normal")
         self.assertTrue(wait_for(lambda: self.state.maintenance))
         self.assertEqual(
-            self.controller().outputs.track_circuits["3"].authority_blocks, 4)
+            self.controller().track_circuits["3"][1], 4)
 
     def test_yellow_and_super_green_reach_the_test_ui_and_fail_safe(self) -> None:
         client = self.connect()
@@ -253,7 +253,7 @@ class LinkTests(unittest.TestCase):
         client.setOccupancy("12", True)          # GTC-01's signal block
 
         self.assertTrue(wait_for(
-            lambda: self.controller().inputs.occupancy["12"]))
+            lambda: self.controller().occupancy["12"]))
         self.assertTrue(wait_for(lambda: client.occupied.get("12") is True))
         self.assertTrue(wait_for(
             lambda: {r["label"]: r["value"] for r in client.outputs["rows"]}.get(
@@ -288,9 +288,9 @@ class LinkTests(unittest.TestCase):
         client.selectTarget("GTC-01")
         client.setSuggestedSpeed("5", 20.0)       # 8.94 m/s, rounded down
         client.setSuggestedAuthority("5", 2)
-        suggestion = lambda: self.controller().inputs.suggestions["5"]  # noqa: E731
-        self.assertTrue(wait_for(lambda: suggestion().speed_mps == 8))
-        self.assertTrue(wait_for(lambda: suggestion().authority_blocks == 2))
+        suggestion = lambda: self.controller().suggestions["5"]  # noqa: E731
+        self.assertTrue(wait_for(lambda: suggestion()[0] == 8))
+        self.assertTrue(wait_for(lambda: suggestion()[1] == 2))
         # And the client reads it back as mph.
         self.assertTrue(wait_for(
             lambda: client.suggestedMph.get("5") == 17.9))
@@ -301,11 +301,11 @@ class LinkTests(unittest.TestCase):
         client.selectTarget("GTC-01")
         client.setAllSuggestions(11.2, 3)          # 5 m/s
         self.assertTrue(wait_for(lambda: all(
-            s.speed_mps == 5 and s.authority_blocks == 3
-            for s in self.controller().inputs.suggestions.values())))
+            s == (5, 3)
+            for s in self.controller().suggestions.values())))
         client.clearSuggestion("9")
         self.assertTrue(wait_for(
-            lambda: "9" not in self.controller().inputs.suggestions))
+            lambda: "9" not in self.controller().suggestions))
         self.assertTrue(wait_for(lambda: client.suggestedMph.get("9") == -1.0))
 
     def test_the_ctcs_maintenance_mode_reaches_every_controller(self) -> None:
@@ -324,12 +324,12 @@ class LinkTests(unittest.TestCase):
         client.setMaintenance(True)
         client.setSwitchCommand("12", "reverse")
         self.assertTrue(wait_for(
-            lambda: self.controller().outputs.switches["12"]))
+            lambda: self.controller().switch_commands["12"]))
         self.assertTrue(wait_for(
             lambda: client.ctcCommand.get("12") == "reverse"))
         client.setSwitchCommand("12", "none")
         self.assertTrue(wait_for(
-            lambda: not self.controller().outputs.switches["12"]))
+            lambda: not self.controller().switch_commands["12"]))
 
     def test_the_programmer_ui_is_told_about_a_physical_input(self) -> None:
         client = self.connect()
@@ -365,8 +365,8 @@ class LinkTests(unittest.TestCase):
 
         block = self.controller("GTC-02").blocks[3].block_id
         client.setSuggestedSpeed(block, 11.2)          # 5 m/s
-        wait_for(lambda: self.controller("GTC-02").inputs.suggestions[
-            block].speed_mps == 5)
+        wait_for(lambda: self.controller("GTC-02").suggestions[
+            block][0] == 5)
         # And the physical input left the programmer's view alone.
         self.assertEqual(self.state.activeTab, 1)
 
