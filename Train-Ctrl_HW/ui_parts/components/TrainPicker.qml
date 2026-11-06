@@ -5,7 +5,8 @@
 // as SelectField (guide 6.2), so the closed field looks the same.
 //
 // Type a number, an ID or a line ("114", "r-3", "green") to narrow
-// the list; the line chips narrow it further. Up and Down move, Enter
+// the list; the line chips narrow it further, unless the window
+// drives one line only (`line`). Up and Down move, Enter
 // picks, Escape closes. The list is reparented onto the window's
 // scaled canvas while it is open, so it scales with the window like
 // the gains dialog (a Popup would float at 1:1) and lies over every
@@ -21,6 +22,10 @@ FocusScope {
     property string label: ""
     // The roster, as ConsoleBackend.trains gives it: {id, line, label}.
     property var trains: []
+    // The one line this window drives, as "Green Line"; empty for every
+    // line. Set, the roster is that line's alone, so the line chips give
+    // way to a caption naming it.
+    property string line: ""
     property string currentId: ""
     // The search text, also settable by the self-check.
     property alias query: input.text
@@ -203,8 +208,15 @@ FocusScope {
             anchors.margins: theme.space_2
             spacing: theme.space_1
 
+            FieldLabel {
+                Layout.fillWidth: true
+                visible: root.line !== ""
+                text: qsTr("%1 trains only").arg(root.line).toUpperCase()
+            }
+
             SegmentedToggle {
                 Layout.fillWidth: true
+                visible: root.line === ""
                 options: [qsTr("All"), qsTr("Green"), qsTr("Red")]
                 currentIndex: root.lineIndex
                 onActivated: function (index) {
@@ -217,8 +229,11 @@ FocusScope {
 
             HelperText {
                 Layout.fillWidth: true
-                text: qsTr("%1 of %2 trains").arg(root.matches.length)
-                    .arg(root.trains.length)
+                text: root.line === ""
+                    ? qsTr("%1 of %2 trains").arg(root.matches.length)
+                        .arg(root.trains.length)
+                    : qsTr("%1 of %2 %3 trains").arg(root.matches.length)
+                        .arg(root.trains.length).arg(root.line)
             }
 
             ListView {

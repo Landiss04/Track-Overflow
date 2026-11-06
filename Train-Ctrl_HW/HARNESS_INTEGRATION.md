@@ -25,12 +25,12 @@ The Train Controller SW and HW are this one module, with the same console, diffe
 - **SW**, every Green Line train: the core and the console run in one process on the PC.
 - **HW**, every Red Line train: the core runs on a Raspberry Pi 5 connected to the PC by USB, and the console runs on the PC. On the PC the HW variant's host process owns the Pi's serial port. The harness drives that process like any other module, and it relays the harness's messages to the Pi and the replies back. The harness itself opens no port.
 
-This guide describes the fleet API both variants are built on. The process that wraps it for the harness, and the Pi link, are on `claude/quirky-fermi-sickg4`, not yet on this branch (`OPEN_ISSUES.md` #35):
+This guide describes the fleet API both variants are built on. The process that wraps it for the harness is in this folder but runs only on `claude/quirky-fermi-sickg4`, which has `utils/module_link`; the Pi link is on that branch alone:
 
 - `train_ctrl/module_process.py` holds every train's controller in one fleet and steps it once per `STEP`. A train named in a tick's inputs for the first time joins the fleet, and one no longer named leaves it. Inputs: `{"trains": {"G1": {"line": "Green", "inputs": {"commanded_speed": 12.0, ...}}}}`; the reply holds each train's `TrainModelCommands`, field by field.
 - `common/hw_link/` is the HW variant: the host process with the console and the serial relay, and the agent on the Pi that steps the core.
 
-That branch carries an older copy of this module, so some of what follows is not there yet (#35).
+Each variant's console is titled for it and its line, and lists only that line's trains: `module_process.py` runs `run(variant="SW")`, "SW Train Controller — Green Line"; the HW host runs `run()`, "HW Train Controller — Red Line" (M13).
 
 ## Getting the code
 
@@ -74,12 +74,12 @@ fleet = TrainControllerFleet(echo_ticks=ECHO_TICKS)
 time_s = clock.sim_time_s               # utils/system_clock.py, this tick
 
 # A train enters service.
-core = fleet.add("T-114", "GREEN LINE")     # returns its ControllerCore
+core = fleet.add("G-114", "GREEN LINE")     # returns its ControllerCore
 
 # Every tick: exactly one input dict per train in service, with every
 # key in EVERY_TICK.
 commands = fleet.step_all(TICK_S, {
-    "T-114": {
+    "G-114": {
         "commanded_speed": 12.0,        # m/s
         "authority_blocks": 10,
         "actual_speed": 0.0,            # m/s, from the Train Model
@@ -90,10 +90,10 @@ commands = fleet.step_all(TICK_S, {
         "cabin_temperature": 21.0,      # °C, as reported
     },
 }, time_s)
-cmd = commands["T-114"]                 # TrainModelCommands
+cmd = commands["G-114"]                 # TrainModelCommands
 
 # A train leaves service.
-fleet.remove("T-114")
+fleet.remove("G-114")
 ```
 
 Also available: `fleet.get(id)`, `fleet.ids()` in the order trains were added, `id in fleet`, `len(fleet)` for how many controllers exist, and iteration over the cores.
@@ -110,8 +110,8 @@ Each train's input dict uses the keys and shapes in truth `signals/`, in SI. The
 
 | Key | Unit or shape | Notes |
 | --- | --- | --- |
-| `commanded_speed` | m/s | Negative is clamped to 0. This is the speed limit: there is no separate one (M1) |
-| `authority_blocks` | int, blocks | Negative is clamped to 0 |
+| `commanded_speed` | m/s, or null | Negative is clamped to 0. This is the speed limit: there is no separate one (M1). Null is a signal pickup failure |
+| `authority_blocks` | int blocks, or null | Negative is clamped to 0. Null is a signal pickup failure |
 | `actual_speed` | m/s, signed | Kept signed for rollback |
 | `emergency_brake_state` | bool | Engaged, not commanded: true for the controller's command or a passenger pull. Train Model `ControllerOutputs.emergency_brake_active` |
 | `service_brake_state` | bool | Engaged, not commanded: false under a brake failure, and false while the e-brake is engaged. Train Model `ControllerOutputs.service_brake_active` |
@@ -126,9 +126,9 @@ Each train's input dict uses the keys and shapes in truth `signals/`, in SI. The
 | `beacon_station` | str | Station name |
 | `beacon_side` | `"L"`, `"R"`, `"LR"` | Any other value is ignored |
 | `beacon_underground` | bool | Turns the lights on when true, off when a later beacon says false (unless night; M8) |
-| `signal_light_ahead` | `"RED"`, `"YELLOW"`, `"GREEN"`, `"SUPER GREEN"` | Shown only; any other value is ignored. From the Track Model directly (truth `signals/signal-aspect-ahead`; M20). Truth spells the fourth aspect `SUPER_GREEN`, so the harness converts it; mapped on `claude/quirky-fermi-sickg4` (`OPEN_ISSUES.md` #27) |
+| `signal_light_ahead` | `"RED"`, `"YELLOW"`, `"GREEN"`, `"SUPER_GREEN"` | Shown only; any other value is ignored. From the Track Model directly, unchanged (truth `signals/signal-aspect-ahead`; M20). This controller takes truth's `SUPER_GREEN` (Kevin 2026-10-28; `OPEN_ISSUES.md` #27) |
 
-**Send the beacon keys every tick the train is on a station's block, and leave all three out otherwise** (M6). Arrival at a station is the beacon received with `authority_blocks` 0, `commanded_speed` 0 and the train at a stand, so a beacon sent only on the tick the train passes it would never coincide with the stop. Truth's `beacon.md` does not say what the Train Model sends between beacons; this is what the controller needs. The last values are kept between beacons, for the lights (M8).
+**Send the beacon keys every tick the train is on a station's block, and leave all three out otherwise** (M6). Arrival at a station is the beacon received with `authority_blocks` 0, `commanded_speed` 0 and the train at a stand, so a beacon sent only on the tick the train passes it would never coincide with the stop. The Train Model now sends it this way: the beacon heard on the block before a station, every tick the train is on that station's block (Kevin Schillinger 2026-10-28). Truth's `beacon.md` does not say what the Train Model sends between beacons; this is what the controller needs. The last values are kept between beacons, for the lights (M8).
 
 Not an input: the speed limit the Train Model passes through (`ControllerOutputs.speed_limit_mps`); leave it out, or it is ignored like any unknown key (M1). The harness on `claude/quirky-fermi-sickg4` drops it (`OPEN_ISSUES.md` #24).
 
@@ -155,7 +155,7 @@ Rules:
 | `temperature_setpoint_c` | °C | temperature-setpoint |
 | `announcement` | str | announcement: a command for the Train Model to play, otherwise empty |
 
-Not sent, by decision: truth's `passenger-brake-release`, a one-shot true on the tick the controller releases a passenger pull. Clearing the Train Model's passenger latch is deferred to the Train Model's own detection; until then a latch keeps reporting the emergency brake engaged after the driver's release (`OPEN_ISSUES.md` #25).
+No passenger brake release is sent: the Train Model holds a passenger pull until `emergency_brake` goes from true to false, which the driver's release does (Kevin Schillinger 2026-10-28; `OPEN_ISSUES.md` #25, closed).
 
 - **Speed.** The commanded speed is the only cap (M1): Automatic targets it; in Manual it caps the driver's setpoint, also when it drops. There is no 70 km/h cap, since the controller cannot know the true limit; keeping under it is the wayside's, through the commanded speed.
 - **Traction** is 0 while either brake is commanded, while a station stop holds the train, and while a door is commanded or reported open (M6). A train that is not commissioned commands 0 W (see Commissioning).
@@ -242,24 +242,24 @@ The controller infers failures from what the harness sends back, so three inputs
 
 | Failure inferred | Trigger | What the harness must send |
 | --- | --- | --- |
-| Brake | The command `echo_ticks` ago asked for the service brake with the e-brake off, and this tick's `service_brake_state`, its report, is false (M4). The service brake stays commanded under a brake failure | The service brake's real applied state, on the tick its report is due |
-| Engine | Power that should pull 0.1 m/s² or more, and `actual_speed` up by less than 0.05 m/s for 2 s. **Known false positive on grades:** against `development`'s Train Model it flags a healthy full train 2.4–2.9 s onto a +2 % or +5 % grade, latching the emergency brake. Kevin accepted a steady-fall rule to replace it (R91, `REQUIREMENTS.md` §4), built on `claude/quirky-fermi-sickg4`, not yet here (`OPEN_ISSUES.md` #28) | The real `actual_speed` every tick |
-| Signal pickup | `commanded_speed` and `authority_blocks` both drop to 0 in one update, from 2 or more blocks | Authority counting down normally, not a jump to 0 |
+| Brake | The command `echo_ticks` ago asked for the service brake, and this tick's `service_brake_state`, its report, is false (M4). The driver's unanswered press is dropped; they may press again, also under the e-brake | The service brake's real applied state, on the tick its report is due |
+| Engine | A steady fall (R91, `REQUIREMENTS.md` §4): over 6 s, power commanded and no brake commanded or reported on every tick, and `actual_speed` falling by more than 0.05 m/s along a straight line, with the train not within 0.05 m/s of its target. From a stand, 2 s of power with no rise runs the differential test below, and a dead verdict latches it. Against the Train Model it flags a dead engine 5.2–5.9 s after it fails, and no healthy train with up to about 125 passengers on Green's grades (`BUGS.md` B3) | The real `actual_speed` every tick |
+| Signal pickup | `commanded_speed` or `authority_blocks` arrives null: the Train Model could not read the Track Signal (Kevin Schillinger 2026-10-28). A valid 0 is never taken for one | Null only under a pickup failure |
 
-A brake failure resolves when a service brake, commanded with the e-brake off, reads applied in its report (`REQUIREMENTS.md` §4): once the train stands, the driver releases the e-brake in Manual and asks for the service brake. Engine and signal pickup failures latch for the run under the harness: the controller does not yet detect their resolution (M3), and the harness has no call to clear one (`OPEN_ISSUES.md` #23). The failure latches the e-brake once, on detection; at a stand the driver may release it in Manual with the failure still latched, and `emergency_brake` then stays false.
+The controller detects each resolution itself (M3, `REQUIREMENTS.md` §4); the harness has no call to clear a failure, and needs none. A brake failure resolves when a service brake the driver presses reads applied in its report; the press works under the e-brake, since the Train Model reports the service brake on its own. If the driver releases the e-brake with a brake failure latched and the train then moves 0.1 m/s either way, the controller engages the e-brake again ("rollback detected" or "runaway detected"). A signal pickup failure resolves on the first tick `commanded_speed` and `authority_blocks` both arrive non-null. An engine failure resolves by a differential test at a stand: with only an engine failure latched, releasing the e-brake starts it. With both brakes reported off, it sends full power, then 0 W, about 1 s each, and compares the acceleration `actual_speed` shows in the two halves; 0.2 m/s² more with power resolves it. The train may roll during it. A brake reported on abandons it, and the next release tests again; a dead engine is then held on the service brake, and tested again every 10 s while held. The failure latches the e-brake once, on detection; at a stand the driver may release it in either mode with the failure still latched, and `emergency_brake` then stays false.
 
 `door_state` must be faithful too: an Automatic train leaves a station only once `door_state` reports both doors closed. If it never does, the train waits at the station.
 
 Open issues:
 
 - [x] **Two ticks between a command and its report.** Each module reads the others' outputs from the tick before (D017), so a command sent on one tick reaches the Train Model on the next and its report comes back the tick after. Fixed Oct 24: build the fleet with `echo_ticks=ECHO_TICKS` (2); the bench's default is 1. Without it, the brake-failure rule (M4) takes every service brake application for a failure, and the controller's own emergency brake coming back reads as a passenger pull.
-- [ ] **The passenger brake release is deferred to the Train Model** (see Outputs; `OPEN_ISSUES.md` #25).
-- [ ] **Brake State on `claude/quirky-fermi-sickg4`.** That branch's harness edge sends one `brake_state` [emergency, service] input; this branch takes `emergency_brake_state` and `service_brake_state` (M18, `OPEN_ISSUES.md` #35).
-- [x] **Emergency echo re-latched the brake.** Fixed Oct 21: a pull is an `emergency_brake_state` that turns on while the controller isn't commanding it, so last tick's brake echoed back, or a passenger latch still held, does not undo the driver's release (M2). Still open with Kevin: what the Train Model reports after the driver's release, since only a test call clears its passenger latch (`OPEN_ISSUES.md` #25). One consequence: a pull reported within a tick or two of a release, before the reported state has gone false, is not seen.
+- [x] **The passenger brake release.** Closed 2026-10-28: the Train Model holds a pull until `emergency_brake` goes from true to false (see Outputs; `OPEN_ISSUES.md` #25).
+- [x] **Brake State on `claude/quirky-fermi-sickg4`.** That branch's harness edge sends `emergency_brake_state` and `service_brake_state` (M18; `common/harness/train_edges.py`, `51eca3b`).
+- [x] **Emergency echo re-latched the brake.** Fixed Oct 21: a pull is an `emergency_brake_state` that turns on while the controller isn't commanding it, so last tick's brake echoed back, or a passenger latch still held, does not undo the driver's release (M2). The Train Model now clears its passenger latch when `emergency_brake` goes off (#25, closed). One consequence: a pull reported within a tick or two of a release, before the reported state has gone false, is not seen.
 - [ ] **The bench breaks a harness fleet.** A train spawned from the bench is unknown to the harness, so the next `step_all` raises. The bench now refuses edits to a harness's trains, but not spawning. Open the console only.
 - [x] **No harness commissioning.** Decided: by design (see Commissioning).
 - [ ] **Exception classes differ from `TrainModelFleet`'s.** See the comparison above.
-- [ ] **Engine detection trips on grades.** A healthy train climbing a +2 % or steeper grade under full power is taken for an engine failure and stopped on the emergency brake (`OPEN_ISSUES.md` #28). Until the accepted rule is ported, expect this on the Green line's grades.
+- [x] **Engine detection tripped on grades.** Fixed 2026-10-31: the steady-fall rule (R91) is ported (`OPEN_ISSUES.md` #28, `BUGS.md` B3). It still stops a train with more than about 125 passengers on Green's 5 % grade, which cannot climb it at all on the Train Model.
 
 ## Trying it
 
@@ -275,10 +275,10 @@ The terminal prints the controller count at each change, and the console's train
 
 | Time | Event | Controllers |
 | --- | --- | --- |
-| 0 s | `T-1` spawned | 1 |
-| 5 s | `T-2` spawned | 2 |
-| 10 s | `T-3` spawned | 3 |
-| 30 s | `T-1` removed | 2 |
+| 0 s | `G-1` spawned | 1 |
+| 5 s | `G-2` spawned | 2 |
+| 10 s | `G-3` spawned | 3 |
+| 30 s | `G-1` removed | 2 |
 
 Every train gets the same inputs each tick, the full `EVERY_TICK` set at the 0.1 s step: 55 mph commanded, 20 blocks of authority, a 75 °F cabin, a GREEN signal ahead, and doors, lights and the service brake echoed from the last commands. It keeps its own clock, from 05:00:00, and passes it as `time_s`. Trains stay stopped until an engineer commissions each one from the console.
 
