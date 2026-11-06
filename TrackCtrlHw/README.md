@@ -159,7 +159,8 @@ decided. The CTC Office's interface is the one on `ctc-deployment`.
 3. **Ready.** The CTC Office takes one `ready` per line; this module reports
    one per wayside. A line is ready when every wayside's report says so, which
    is `TrackControllerOutputs.ready` for this module's line.
-4. **PLC names.** `CTCSW_n`, `CTCREV_n`, `SPD_n_b` and `CMD_n_b` are this
+4. **PLC names.** `CTCSW_n`, `CTCREV_n`, `REQSW_n`, `REQREV_n`, `SPD_n_b` and
+   `CMD_n_b` are this
    module's; the software Track Controller still uses `MAINT` and has no speed
    bits, so one program file no longer runs on both (REQ-INTF-009).
 
@@ -287,6 +288,14 @@ none is loaded, a new one has not scanned yet, or the channels have disagreed.
 The CTC Office sends no maintenance flag. Its switch commands reach the program
 as `CTCSW_n` (a command is in effect) and `CTCREV_n` (it is reverse); the
 vital block enforces them.
+
+Its route requests, the position each switch should take for the train routed
+over it, reach the program as `REQSW_n` (a request is in effect) and
+`REQREV_n` (it is reverse). A request is not a command: the program decides,
+and the vital block does not read it. Highest first: a train on the points or
+the listed block locks the switch, then a maintenance command, then a request
+whose leg is open, then the program's own rule. Only Red-2 reads requests, at
+the passing sidings (switches 27, 32, 38 and 43).
 
 ## Known gaps
 

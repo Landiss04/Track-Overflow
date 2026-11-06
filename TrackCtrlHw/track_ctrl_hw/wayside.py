@@ -26,6 +26,10 @@ Name            Kind   Meaning
 ``CTCSW_n``     in     The CTC Office commands the switch on block n (it
                        does so only in maintenance mode)
 ``CTCREV_n``    in     That command is reverse; 0 with no command
+``REQSW_n``     in     The CTC Office requests a position for the switch
+                       on block n, for a train routed over it. A request,
+                       not a command: the program decides
+``REQREV_n``    in     That request is reverse; 0 with no request
 ``SPD_n_b``     in     Bit b (0 to 4) of the CTC Office's speed for block
                        n, in whole m/s; 0 with no suggestion
 ``AUTH_n``      out    1 passes the CTC's authority down block n's track
@@ -107,7 +111,8 @@ def input_names(territory: Territory) -> frozenset[str]:
     for switch in territory.switches:
         number = switch.switch_id
         names.update(
-            (f"SWREV_{number}", f"CTCSW_{number}", f"CTCREV_{number}")
+            (f"SWREV_{number}", f"CTCSW_{number}", f"CTCREV_{number}",
+             f"REQSW_{number}", f"REQREV_{number}")
         )
     return frozenset(names)
 
@@ -219,6 +224,8 @@ class Wayside:
                 f"SWREV_{switch.switch_id}",
                 f"CTCSW_{switch.switch_id}",
                 f"CTCREV_{switch.switch_id}",
+                f"REQSW_{switch.switch_id}",
+                f"REQREV_{switch.switch_id}",
             )
             for switch in territory.switches
         )
@@ -453,12 +460,20 @@ class Wayside:
             image[occupied_name] = ref in occupied_refs
             image[closed_name] = ref in ctc.closed_blocks
         switch_positions = track_model.switch_positions
-        for key, reverse_name, command_name, command_reverse_name in (
-            self._switch_inputs
-        ):
+        for (
+            key,
+            reverse_name,
+            command_name,
+            command_reverse_name,
+            route_name,
+            route_reverse_name,
+        ) in self._switch_inputs:
             image[reverse_name] = switch_positions.get(key) == "reverse"
             image[command_name] = key in requests
             image[command_reverse_name] = requests.get(key) == "reverse"
+            route = ctc.route_requests.get(key.ref)
+            image[route_name] = route is not None
+            image[route_reverse_name] = route == "reverse"
         channel_a = self._program.scan_a(image)
         channel_b = self._program.scan_b(image)
         if channel_a != channel_b:
