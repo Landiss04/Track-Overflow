@@ -4,6 +4,18 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-04 — An automatic Run waits for the windows
+
+`0345b24` (Kevin, part of the 10x headroom work). A test and
+demonstration option only.
+
+- `ctc/module_process.py`: `--run-delay-s` (default 0). With
+  `--run-on-ready`, Run is pressed that many seconds after the process
+  is ready, not at once (`run_delay_ms`, a single-shot timer), so the
+  windows' start-up load is past before the clock runs. The harness
+  passes 3 s whenever it presses Run itself (`AUTO_RUN_DELAY_S` in
+  `common/harness/app.py`).
+
 ## 2026-11-04 — Route requests follow dispatch priority
 
 Checked against Braden's Track Controller HW plan for route requests.

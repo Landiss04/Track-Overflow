@@ -4,6 +4,29 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-11-04 — Cheaper PLC scans (Landis)
+
+`61e7796` (10x headroom on hybrid Windows laptops). The outputs are
+unchanged. For Braden to review.
+
+- `track_ctrl_hw/plc.py`: channel A turns each statement's tree into
+  nested functions once per program (`_walker`, made on the first scan
+  and cached) instead of walking the tree node by node on every scan;
+  its AND and OR may now stop early, since reads have no side effects.
+  Channel B runs its postfix code with the stack top replaced in place.
+  Both channels still run on every scan and are compared. The cached
+  functions are left out of pickles and copies (`__getstate__`), so a
+  Pi's checkpoint makes its own on its first scan.
+- `track_ctrl_hw/wayside.py`: the input-image names for the blocks,
+  their neighbours and the switches, and the vital block's output
+  names, are worked out once per territory, not on every scan.
+- A wayside step on a P-core: 5.1 → 3.1 ms. Checked against the code before it: 205,982 live scans from the
+TrackCtrlHw and TrackCtrlSW suites and 8,000 random programs gave
+identical values and warnings; 1,500 captured Pi steps gave identical
+outputs.
+
+---
+
 ## 2026-10-28 — Red switch test reads the SW layout's new form (integration)
 
 `tests/test_red_integration.py` only. Harry's `e5e51d4` folds the SW reader's

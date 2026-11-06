@@ -4,6 +4,19 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-11-04 — Window tables redraw only when their rows change (Landis)
+
+`61e7796` (10x headroom on hybrid Windows laptops). The window only:
+nothing the module sends or receives changes.
+
+- `track_model/state.py`: each table (`blockRows`, `switchRows`,
+  `signalRows`, `sectionRows`, `trainRows`, `stationRows`,
+  `selectedDetails`) has its own change signal and is sent to QML only
+  when its rows differ from those on show (`_publish`). Before, one
+  `changed` signal rebuilt every table, about 2,000 cell bindings for a
+  line's blocks, which at 10x held up each step reply. A refresh with
+  nothing changed: 13.7 → 1.3 ms.
+
 ## 2026-10-27 — Owner answers TM-1 and TM-3
 
 From the Track Model owner's answers to `documents/module-owner-review.md`
