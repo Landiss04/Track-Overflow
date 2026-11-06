@@ -4,6 +4,27 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-11-05 — CTC route requests at the Red passing sidings (Braden)
+
+Branch `feature/TrackCtrl-HW-route-requests-pr56`, rebased onto the harness
+integration branch. Landis's request of 2026-11-03; design and plan in `docs/`.
+
+- `CtcInputs.route_requests`: the position each switch should take for the
+  train routed over it. Validated like `switch_commands`; on the wire as
+  `ctc.route_requests` entries `{line, switch_id, position}`; a sender without
+  the field decodes as no requests.
+- Every switch gets two PLC inputs, `REQSW_n` and `REQREV_n`. A request is not
+  a command: the program decides, and the vital block does not read it.
+- Red-2 (`red_wayside_2_integration_test.plc`): at 27, 32, 38 and 43 a request
+  picks the leg, never a closed one; without one, the rule is unchanged. A
+  train on the points and a maintenance command still win. `CAUTION_n` does
+  not read requests.
+- The test UI sends route requests per switch.
+- The harness carries `route_requests` to both Track Controllers (Harry's
+  `746b2ce`).
+
+---
+
 ## 2026-11-04 — Cheaper PLC scans (Landis)
 
 `61e7796` (10x headroom on hybrid Windows laptops). The outputs are
