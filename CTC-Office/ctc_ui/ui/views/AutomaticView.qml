@@ -14,7 +14,6 @@ ScrollView {
 
     property string selectedTrainId: ""
     property string scheduleFile: ""
-    property string scheduleStart: ""
     property string scheduleError: ""
     property var departures: []
     property bool dispatchRunning: false
@@ -74,7 +73,6 @@ ScrollView {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 343
                 scheduleFile: root.scheduleFile
-                scheduleStart: root.scheduleStart
                 scheduleError: root.scheduleError
                 departures: root.departures
                 running: root.dispatchRunning

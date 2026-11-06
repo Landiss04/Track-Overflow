@@ -117,8 +117,7 @@ def _block(line: str, raw: dict[str, object]) -> Block:
         railway_crossing=bool(infrastructure.get("railway_crossing")),
         underground=bool(infrastructure.get("underground")),
         next_blocks=nexts,
-        to_yard=(str(raw["block_number"]) == "9" if line == "Red"
-                 else any(str(n).lower() == YARD for n in listed or ())),
+        to_yard=any(str(n).lower() == YARD for n in listed or ()),
     )
 
 

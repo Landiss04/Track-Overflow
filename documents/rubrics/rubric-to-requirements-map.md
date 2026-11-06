@@ -25,26 +25,6 @@ have to re-derive it by eye next time.
 | 9.4 Cost Analysis | 15 | REQ-DSN-007 | scope deferred to future customer discussion |
 | 10.0-10.3 Hours/bugs/lessons/retro | 2+3+2+2 = 9 | REQ-COMP-008/009/010/011 | |
 
-## Train Model review interpretation (2026-10-20)
-
-The functional rubric’s separate §5.9 item, **Train Controller activates Service
-Brake**, maps to the service command, physical response and engaged-state feedback;
-REQ-FUNC-029 covers driver activation, and REQ-FUNC-039 covers physical response.
-Do not invent an additional REQ-FUNC ID. Both brakes may engage simultaneously and
-their configured forces sum; service failure blocks service only.
-
-For REQ-FUNC-042 use downstream commanded speed and block-count authority (D013),
-with pickup-failure outputs zero. For REQ-FUNC-045 the Train Controller owns the
-interlock. REQ-FUNC-046 uses the complete bounded canonical JSON beacon payload;
-REQ-FUNC-047 includes controller one-shot latch release without canceling a held
-controller emergency command. The developer utility is not a product actor/use
-case. Local verification sources are references, not new execution results.
-
-See [the requirements matrix](../requirements-matrix.md#train-model-interpretation-and-traceability-october-20-2026)
-and [SDD v0.2](../Railway_Sim_SDD_Train_Model.md) for the full mapping and accepted
-design; [module follow-up](../../TrainModel/docs/open-issues.md) holds implementation
-status. New proposals await human truth promotion.
-
 ## Whole-semester rubric -> SRS section
 
 | Rubric item | SRS section |

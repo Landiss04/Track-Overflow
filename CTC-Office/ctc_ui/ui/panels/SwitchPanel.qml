@@ -1,7 +1,5 @@
 // Set a switch position and send it to the track controller. Only in
-// maintenance mode (REQ-FUNC-012). A commanded switch holds through
-// Automatic and Manual until it is released here
-// (maintenance-closure-lock); leaving maintenance mode keeps it.
+// maintenance mode (REQ-FUNC-012); leaving maintenance mode releases
 // every commanded switch. Normal is the first connection the layout file
 // lists for the switch, reverse the second.
 import QtQuick

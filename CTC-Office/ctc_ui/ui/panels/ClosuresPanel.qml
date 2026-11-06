@@ -1,5 +1,7 @@
-// Blocks closed by the dispatcher, which can be reopened here. (Failures
-// are not listed: the CTC sees one only as an occupied block.)
+// Blocks closed by the dispatcher, and blocks waiting to close until the
+// train in them leaves. A closed block can be reopened and a pending
+// closure cancelled here. (Failures are not listed: the CTC sees one only
+// as an occupied block.)
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -25,7 +27,7 @@ Panel {
     property string message: ""
 
     function keyOf(row) {
-        return row.line + "|" + row.blockId;
+        return row.line + "|" + row.blockId + "|" + row.reopenable;
     }
 
     title: qsTr("Active closures")
@@ -62,13 +64,17 @@ Panel {
             Layout.fillWidth: true
             color: root.message !== "" ? theme.danger : theme.text_muted
             text: root.message !== "" ? root.message
+                : root.selectedRow && root.selectedRow.pending
+                ? qsTr("Closes by itself once the train has left the "
+                    + "block.")
                 : qsTr("Select a closed block to reopen it.")
         }
 
         AppButton {
             variant: "secondary"
-            text: qsTr("Reopen block")
-            enabled: root.selectedRow !== null
+            text: root.selectedRow && root.selectedRow.pending
+                ? qsTr("Cancel closing") : qsTr("Reopen block")
+            enabled: root.selectedRow !== null && root.selectedRow.reopenable
             onClicked: root.message = root.host.reopenBlock(
                 root.selectedRow.line, root.selectedRow.blockId)
         }

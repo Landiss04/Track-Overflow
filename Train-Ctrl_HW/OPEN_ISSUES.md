@@ -2,15 +2,88 @@
 
 Found but not fixed. Each entry says what goes wrong and where, so it can be
 picked up later. Grouped by who has to act; numbers are kept, so references
-from `REQUIREMENTS.md` and the code stay valid. Last reviewed 2026-10-31,
-against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
+from `REQUIREMENTS.md` and the code stay valid. Last reviewed 2026-10-24,
+against `claude/quirky-fermi-sickg4` `f6ed1a1` and truth `84c7d44`
 (`REQUIREMENTS.md` M0–M21; M5 is merged into M3).
+
+## Waiting on other owners or branches
+
+19. **Module rules are not recorded outside this folder.** Rules M0–M21
+    in `REQUIREMENTS.md` are in neither truth's Train Controller contract
+    (still a placeholder) nor the SRS. Update the documentation later.
+
+23. **Brake and engine resolution cannot be seen while the emergency brake
+    is on.** Blocks M3. On detection the controller latches the
+    e-brake, and the pills are meant to clear before the driver releases
+    it. But on `development` (`TrainModel/docs/physics.md` §3–4):
+    - the Train Model reports the service brake as **not engaged whenever
+      the e-brake is engaged**, so a repaired service brake never reads
+      applied;
+    - the e-brake force (about 140 kN) is far above full traction (about
+      25.7 kN), so a repaired engine can never show rising speed.
+
+    Signal pickup is unaffected (a non-zero Track Signal can return at any
+    time). Decided in part (R29, M2, M3): once the train stands, the
+    driver may release the e-brake in Manual with the failure still
+    latched, and the failure does not engage it again. That lets a
+    repaired service brake read applied, since the driver may command it
+    under a brake failure (M4, R32), and the controller then concludes
+    the brake failure resolved (#44). It does not settle the engine: a
+    latched failure keeps the target at 0, so no power is commanded and
+    §4's "commanded power gives rising speed again" cannot happen.
+    Candidate approaches for the rest, none chosen:
+    - (a) Once stopped, hold an engine failure on the service brake
+      instead of the e-brake, and probe with power.
+    - (b) Once stopped, briefly drop the controller's e-brake command and
+      probe: command the service brake for a brake failure, a little power
+      for an engine failure. Risk: rollback on a grade.
+    - (c) Ask Kevin to report the service brake's state independently of
+      the e-brake.
+
+24. **The Train Model passes a speed limit to the controller**
+    (`ControllerOutputs.speed_limit_mps`, from `TrackInfo`). The
+    controller ignores it (M1; `read_inputs` drops unknown keys).
+    Settled on `claude/quirky-fermi-sickg4`: the harness drops it before
+    the controller (`common/harness/train_edges.py`). Closes when that
+    branch merges.
+
+25. **The passenger emergency brake release: deferred to the Train
+    Model** (decided 2026-10-24). Truth has
+    `signals/passenger-brake-release`: a one-shot from the Train
+    Controller, true on the tick it releases a passenger pull, after
+    which the Train Model clears the pull. No such signal will be added:
+    the Train Model is to detect the release itself. Until it does, a
+    Train Model latch keeps reporting the e-brake engaged after the
+    driver's release. The controller's own side of M2 is done (R16; and
+    since #42, its own command coming back is not a pull). Still open:
+    - A pull reported within a tick or two of a release, before the
+      reported state has gone false, is not seen.
+    - The bench's passenger pull is reported for one tick only, not
+      latched as the Train Model's is.
+
+27. **Signal light ahead** (M20). Mapped on `claude/quirky-fermi-sickg4`,
+    from the Track Model directly (`aspect_to_train_controller`), and truth
+    now has `signals/signal-aspect-ahead`. Truth spells the fourth aspect
+    `SUPER_GREEN`; this controller accepts only `"SUPER GREEN"`, so the
+    harness converts it. Closes when that branch merges, unless the
+    controller takes truth's spelling.
+
+35. **This module has diverged on `claude/quirky-fermi-sickg4`.** That
+    branch runs this module as both Train Controller variants (M13):
+    `train_ctrl/module_process.py` for the harness, and `common/hw_link`
+    for the Pi. But its copy of `Train-Ctrl_HW` is older than this
+    branch's: the toy plant is still inside `control.py`; its harness
+    edge still sends one `brake_state` [emergency, service] input, not
+    M18's two; its engine-failure rule is the steady-fall check (#28); and
+    it has none of M21, the M6 / M7 boarding or the Cab controls panel.
+    The two need reconciling before integration; that touches another
+    branch, so it waits for the owners.
 
 ## Controller: to decide or build
 
-26. **Which simulator the bench uses.** Deferred to later by decision
-    (2026-10-31). The bench's simulation is separate (`bench_sim.py`
-    `SimTrain`, R15), still the toy plant. The choice:
+26. **Which simulator the bench uses.** The bench's simulation is
+    separate (`bench_sim.py` `SimTrain`, R15), still the toy plant. Not
+    decided:
     - (a) keep the toy plant (Euler, rolling resistance only under a brake
       failure, no grade; its service brake state does not go false under
       the e-brake as the Train Model's does); or
@@ -18,6 +91,50 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
       from `development` inside `SimTrain`: one physics, with real rolling
       resistance and grade. D005 says modules do not import each other's
       boundary types, so this needs a team decision.
+
+28. **Engine-failure detection false-positives; the accepted rule is not
+    on this branch.** This branch still has the old rule (power that
+    should pull 0.1 m/s² by `F = P/v`, speed not up 0.05 m/s in 2 s),
+    which flags a healthy full train 2.4–2.9 s onto a +2 % or +5 % grade.
+    Kevin accepted a replacement on 2026-10-21 (R91), built on
+    `claude/quirky-fermi-sickg4` and proposed there for truth
+    (`truth/_inbox/claude/quirky-fermi-sickg4/20261021-1220-engine-failure-steady-fall-accepted.md`):
+    never within 0.05 m/s of the target; otherwise latch only when, over a
+    6 s window, power is above 0 on every tick, no brake is commanded or
+    reported on any tick, and the half-second speed means fall by more
+    than 0.05 m/s, each within 10 % of that fall of a straight line. Port
+    it here (#35); `REQUIREMENTS.md` §4 states it. Its own limits: a stationary dead engine is not
+    flagged, and a heavy train that cannot hold speed on Green 7's 5 %
+    grade can be.
+
+    Measured 2026-10-21: this controller against `development`'s
+    `TrainModel` (`de7a98f`), grades from `Track_layout/` (Green ±5 %,
+    Red ±2 %), commanded 15 m/s. Worst speed fall over a window with
+    power above 0, no brake, and outside a 0.1 m/s band of the target:
+
+    | Case | 2 s | 3 s | 4 s | 5 s |
+    |---|---|---|---|---|
+    | Healthy, flat | 0 | 0 | 0 | 0 |
+    | Healthy, onto +2 %, full load | 0.19 | 0.23 | 0.26 | 0.27 |
+    | Healthy, onto +5 %, crew only | 0.44 | 0.50 | 0.53 | 0.53 |
+    | Healthy, onto +5 %, full load | 0.55 | 0.67 | 0.74 | 0.81 |
+    | Engine failed, flat (any load, 5 or 15 m/s) | 0.04 | 0.06 | 0.08 | 0.10 |
+    | Engine failed, +2 % | 0.43 | 0.65 | 0.86 | 1.08 |
+    | Engine failed, +5 % | 1.02 | 1.53 | 2.04 | 2.55 |
+
+    (m/s; a 0.05 or 0.2 m/s band changes these by under 0.1.) On the
+    flat a dead engine loses only rolling resistance (0.0196 m/s²), less
+    than a healthy full train loses under full power on +5 %. On the
+    bench nothing falls at all: the bench simulation has no resistance,
+    so a dead engine coasts at constant speed.
+
+34. **E-brake left off in Automatic with a failure latched** (R31, to
+    test later). The driver releases the emergency brake in Manual at a
+    stand, failure still latched, then switches to Automatic: the brake
+    stays off, and the train is held only by the 0 target (and the
+    service brake if it moves). That follows M3 ("does not engage it
+    again"). To decide after testing: keep it, or have Automatic engage
+    it again while a failure is latched.
 
 ## Bench and console
 
@@ -54,35 +171,41 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
     inside the window, or a state the check never reaches (a very long
     station name, say).
 
-36. **The bench header runs out of room with many pills.** Seven pills
-    (mode, Underground, E-brake, three failures, Vitality breach) push
-    **Set time** and the clock past the window edge; five now fit
-    (`BUGS.md` B8). The console's header has no time controls and fits.
-    Left for the bench refactor.
+36. **The bench header runs out of room with five pills or more.** With
+    the mode, Underground, E-brake, a failure and the Station dwell pill
+    all showing, the bench's time wheels push its clock and **Set time**
+    past the window edge. The console's header has no time wheels and
+    fits.
 
-43. **Where the bench differs from the harness it stands in for.**
-    Decided 2026-10-31: the bench is a stand-in for the central harness
-    while the bench drives the system, and does nothing while the harness
-    is connected. Where it still differs from the harness:
+43. **The bench does not stand in for the rest of the system** (reported
+    2026-10-24). Its job is to simulate the controller's inputs, and how
+    they would behave with the whole system, without the other modules
+    connected: it substitutes for every connected module. Where it falls
+    short today:
     - **Timing.** It answers each command on the next tick; the harness
       answers two ticks later. The controller allows for it (`echo_ticks`,
       #42), but a rule tested only on the bench is tested at one tick.
     - **Train Model physics.** The toy plant has no grade, no load and no
-      rolling resistance outside an injected brake or engine failure, so
-      a dead engine coasts at constant speed. Nor does a healthy train
-      above its target slow back to it inside the 0.05 m/s band where
-      no brake is applied: measured 2026-11-01, speeding up to 20 mph
-      the bench settles at 20.07 (shows 20.1) and slowing to 8.2 mph at
-      8.27 (shows 8.3); against the Train Model, 20.005 and 8.21, shown
-      as 20.0 and 8.2 (a 0.02 mph overshoot on the way up). Deferred
-      with #26, for the bench refactor.
+      rolling resistance outside an injected brake failure, so a dead
+      engine coasts at constant speed and neither engine rule can trip at
+      a cruise (#26, #28).
+    - **Train Model reports.** Its service brake state does not go false
+      while the e-brake is engaged, as the Train Model's does (#23); its
+      passenger pull lasts one tick and is never latched, and it has no
+      passenger-brake-release handshake (#25).
     - **Track Model, Track Controller and CTC Office.** There is no track:
       authority changes only with the Block change button, commanded
       speed and the signal ahead only when edited, and the beacon only
-      with the `at_station` row.
-    - **Failures.** None left: clearing an injected failure clears it in
-      the bench's simulation only, and the controller resolves each one
-      itself (M0, M3, #23).
+      with the `at_station` row. Nothing moves the train through blocks,
+      stations and signals as the rest of the system would.
+    - **Failures.** Clearing an injected engine or signal pickup
+      failure clears it in the controller directly (M0, M3), so the bench
+      never exercises how the integrated controller would see those
+      resolved (#23). A brake failure the controller resolves itself
+      (#44).
+
+    Reusing the Train Model's physics (#26 (b)) would close the physics
+    and report gaps; the track side needs a track to run on.
 
 ## Outside the style guide and shared UI
 
@@ -93,8 +216,8 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
 
 38. **Other sizes kept to Ivan's design but outside the style guide**
     (restored 2026-10-07 at Jonathan's request): the speed and temperature
-    dial figures are computed from the dial radius (`Math.max(24, r * 0.45)`,
-    sized for "43.5", and `Math.max(30, r * 0.66)`) rather than a token, and the door and
+    dial figures are computed from the dial radius (`Math.max(32, r * 0.6)`
+    and `Math.max(30, r * 0.66)`) rather than a token, and the door and
     light tiles are 52 px tall (the guide's control heights are 28 / 36 /
     44) with Label-token text instead of the button type scale.
 
@@ -116,8 +239,7 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
     passed with 0 in 34 s. Run `--check` on its own; a fix would step the
     controller directly instead of waiting on the timer, as the checks
     added since 2026-10-24 do. `check.py` is a development self-check
-    only, run by the AI to test the module offline: it is never run with
-    the central harness, and the integration does not ship it.
+    only: the integration does not run or ship it.
 
 41. **The root `requirements.txt` on this branch lacks the PySide6 pin**
     that `development` has (`PySide6==6.11.2`).
@@ -135,9 +257,7 @@ Not issues: things to know.
   the backend's `_power_channels` and `_power_vote`;
   `ControllerCore.last_vote`; and the drawer step in `check.py`. M12's
   acceleration exception goes with it; the drawer's acceleration comes
-  from the bench simulation and reads 0 under a harness. The drawer is
-  for debugging outside integration, so what it shows under the central
-  harness is not tracked as a bug (`BUGS.md`).
+  from the bench simulation and reads 0 under a harness.
 - **The vote is shown failing only in `check.py`** (M21), which swaps
   power channels for faulty ones. The bench has no row for it: it would
   have to reach inside the controller (M0).
@@ -155,23 +275,7 @@ One line each; the details are in `CHANGELOG.md`.
 
 - **11.** Block lengths unknown: authority is used as given (M16, R13).
 - **14.** How a failure clears once integrated: decided, the controller
-  detects resolution (M3); built for the brake (#44), signal pickup (R40)
-  and the engine (R46).
-- **23.** Brake and engine resolution with the emergency brake on:
-  decided 2026-10-31. Brake: the driver presses the service brake, also
-  under the e-brake; an unanswered press is dropped, and the first press
-  the report reads applied resolves it (R47, 2026-11-01). If the train
-  moves 0.1 m/s with a brake failure latched and the e-brake released,
-  the e-brake engages again (R47). Engine:
-  a differential test at a stand (R46, 2026-11-01, in place of option
-  a's try, R44): with only an engine failure latched, the release starts
-  it, full power then none with no brake, and the difference in
-  acceleration shows whether the engine pulls; outside a test the
-  service brake holds the train, and the test runs again every 10 s
-  while it is held (R48) (`REQUIREMENTS.md` §4, measured there).
-- **28.** Engine-failure false positives on grades: the steady-fall rule
-  Kevin accepted (R91) is ported from `460579b` (R43,
-  `tests/test_engine_detection.py`); measured in `REQUIREMENTS.md` §4.
+  detects resolution (M3); building it waits on #23.
 - **16.** The gains hand-over signed a driver in unasked: fixed, it hands
   over only on the train just commissioned (M9, `bf277b1`).
 - **17.** No block-change dummy: none needed; the bench's Block change
@@ -181,12 +285,6 @@ One line each; the details are in `CHANGELOG.md`.
   are left alone by decision.
 - **22.** Harness-spawned trains never armed: decided, the engineer
   commissions every train (M9).
-- **24.** The Train Model's speed limit: no longer sent (2026-10-28, on
-  this owner's word, relayed by Kevin); commanded speed is the limit (M1).
-- **25.** The passenger brake release: closed by Kevin 2026-10-28. No
-  release signal; the Train Model holds a passenger pull until the
-  controller's emergency brake command goes from true to false, which the
-  driver's release does (M2).
 - **26 (most of it).** The bench's simulation moved out of the
   controller (M0, R15); the choice of simulator is still open (#26).
 - **29.** The dial's 70 km/h scale against M1: display only, accepted
@@ -195,25 +293,10 @@ One line each; the details are in `CHANGELOG.md`.
   Status column is the record.
 - **31 (first bullet).** The bench clock runs from the first
   commissioning (M11, R37).
-- **45.** The bench spawns the console for the line (2026-11-01):
-  `main.py --test` opens the bench alone; a train spawned on the Red Line
-  opens the HW console, on the Green Line the SW one, each on its own
-  backend, both stepped on the bench's one clock; the bench edits any
-  train. The time is typed (HH:MM or HH:MM:SS). `main.py --both` is gone.
-  The central harness asking for the bench is not built: its protocol
-  has no such request (Notes for other modules).
-- **34.** E-brake left off in Automatic with a failure latched: kept,
-  by decision (2026-10-31). The driver may also release the e-brake at a
-  stand during a failure in Automatic, not only in Manual (M2, M3, R42).
 - **42.** Two ticks between a command and its report under the harness:
   the fleet takes `echo_ticks` (ECHO_TICKS, 2, under the harness; 1 on
   the bench), and the brake-failure rule (M4) and the passenger-pull
   test (M2) use the report due for each command.
-- **35.** The module diverged on `claude/quirky-fermi-sickg4`: Kevin
-  pulled this branch's `e0e142d` there (`74159e9`), and `f05053b` brought
-  his changes back, so the two matched at `51eca3b`. That branch's harness
-  sends M18's two brake states. `module_process.py` runs only there, where
-  `utils/module_link` is.
 - **44.** Integrated, a brake failure never resolved: the controller
   now concludes it resolved when a service brake commanded with the
   e-brake off reads applied in its report (§4), and the bench clears
@@ -222,52 +305,6 @@ One line each; the details are in `CHANGELOG.md`.
 - `old_main.py`: removed in `c98393e`.
 - Rolling resistance: decided, the controller models none (M19); the
   bench simulation's goes with #26.
-- **27.** Signal light ahead (M20): truth has `signals/signal-aspect-ahead`,
-  and this controller takes its `SUPER_GREEN` spelling (Kevin, 2026-10-28),
-  so the harness passes the light through unchanged.
+- Signal aspect had no truth entry: truth has `signals/signal-aspect-ahead`
+  (#27).
 - "Arriving soon" on a rise to 3 blocks: accepted (M7, R29).
-
-## Several failures at once
-
-Simulated 2026-11-01 against the Train Model (`57e8847`), all three and
-each pair, injected at cruise, on +2 % and −5 %. Each failure clears by
-its own rule once repaired, and in every case the train ended with
-nothing latched and drove off. Two of them hide others while latched:
-
-- **Signal pickup hides the engine.** No authority means no power, so an
-  engine failure cannot show a steady fall; it is found only once the
-  pickup failure clears and power is asked for again (then the steady
-  fall's usual 5–6 s, expected; not measured).
-- **The brake shows only when asked for.** It is found when the
-  controller or the driver asks for the service brake, which it now does
-  under the emergency brake too, so it is no longer hidden by an engine
-  failure's stop.
-
-## Notes for other modules
-
-Questions and possible errors whose answer lies with another module or
-the team's shared documents.
-
-**Truth and the SRS:**
-
-19. **Module rules are not recorded outside this folder.** Rules M0–M21
-    in `REQUIREMENTS.md` are in neither truth's Train Controller contract
-    (still a placeholder) nor the SRS. Update the documentation later.
-
-**Train Model:**
-
-- A train with more than about 125 passengers cannot climb Green's 5 %
-  grade at all (`REQUIREMENTS.md` §7, `BUGS.md` B3).
-
-**Central harness:**
-
-- Opening a module's test bench on request: the harness protocol has
-  `SHOW` (reopen the module's window) but no request for a test bench
-  (`utils/harness_protocol.py` on `claude/quirky-fermi-sickg4`
-  `0a953bb`). Wanted: one, so the bench can be opened from the harness
-  (#45).
-
-**CTC Office:**
-
-- TC-1, a Green train over its limit after dispatch: should the commanded
-  speed drop before a slower block? (`BUGS.md`, Notes for other modules).

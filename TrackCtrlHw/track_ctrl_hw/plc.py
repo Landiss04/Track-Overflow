@@ -39,8 +39,7 @@ from __future__ import annotations
 import re
 import zlib
 from dataclasses import dataclass
-from functools import cached_property
-from typing import Callable, Mapping, Union
+from typing import Mapping, Union
 
 ERROR = "error"
 WARNING = "warning"
@@ -213,32 +212,20 @@ class _TreeParser:
         raise _SyntaxProblem(self._line, f"unexpected {token.text!r}")
 
 
-# A tree turned into a function of the scan's values (see _walker).
-Walker = Callable[[Mapping[str, bool]], bool]
-
-
-def _walker(node: Node) -> Walker:
-    # Turn a tree, once, into nested functions that walk it: each node
-    # becomes a function of the scan's values that calls its children's.
-    # A scan then walks the tree without asking each node what it is.
-    # Reads have no side effects, so AND and OR may stop early.
+def _evaluate(node: Node, scope: _Scope) -> bool:
     if isinstance(node, Constant):
-        value = node.value
-        return lambda values: value
+        return node.value
     if isinstance(node, Read):
-        name = node.name
-        # An undefined read is 0; the compiler has warned about it.
-        return lambda values: values.get(name, False)
+        return scope.read(node.name)
     if isinstance(node, Negate):
-        operand = _walker(node.operand)
-        return lambda values: not operand(values)
-    left = _walker(node.left)
-    right = _walker(node.right)
+        return not _evaluate(node.operand, scope)
+    left = _evaluate(node.left, scope)
+    right = _evaluate(node.right, scope)
     if node.operator == "AND":
-        return lambda values: left(values) and right(values)
+        return left and right
     if node.operator == "OR":
-        return lambda values: left(values) or right(values)
-    return lambda values: left(values) != right(values)
+        return left or right
+    return left != right
 
 
 def _tree_reads(node: Node) -> list[str]:
@@ -314,36 +301,40 @@ def _check_stack(code: list[Instruction], line: int) -> None:
         raise _SyntaxProblem(line, "operands are missing an operator")
 
 
-def _run_postfix(
-    code: tuple[Instruction, ...], values: Mapping[str, bool]
-) -> bool:
-    # A unary or binary operator replaces the stack top in place.
+def _run_postfix(code: tuple[Instruction, ...], scope: _Scope) -> bool:
     stack: list[bool] = []
-    push = stack.append
-    pop = stack.pop
-    read = values.get
     for kind, value in code:
-        if kind == "load":
-            # An undefined read is 0; the compiler has warned about it.
-            push(read(value, False))
-        elif kind == "push":
-            push(value == "1")
+        if kind == "push":
+            stack.append(value == "1")
+        elif kind == "load":
+            stack.append(scope.read(value))
         elif value == "NOT":
-            stack[-1] = not stack[-1]
+            stack.append(not stack.pop())
         else:
-            right = pop()
+            right = stack.pop()
+            left = stack.pop()
             if value == "AND":
-                stack[-1] = stack[-1] and right
+                stack.append(left and right)
             elif value == "OR":
-                stack[-1] = stack[-1] or right
+                stack.append(left or right)
             else:
-                stack[-1] = stack[-1] != right
-    return pop()
+                stack.append(left != right)
+    return stack.pop()
 
 
 # ------------------------------------------------------------------ #
 # Programs
 # ------------------------------------------------------------------ #
+
+class _Scope:
+    """The values one channel can see during one scan."""
+
+    def __init__(self, inputs: Mapping[str, bool]) -> None:
+        self.values: dict[str, bool] = dict(inputs)
+
+    def read(self, name: str) -> bool:
+        # An undefined read is 0; the compiler has warned about it.
+        return self.values.get(name, False)
 
 
 @dataclass(frozen=True)
@@ -397,35 +388,21 @@ class Program:
         text = f"{value:08X}"
         return f"{text[:4]}-{text[4:]}"
 
-    @cached_property
-    def _walkers(self) -> tuple[tuple[str, Walker], ...]:
-        # Channel A's trees as functions, made on the first scan.
-        return tuple(
-            (statement.target, _walker(statement.tree))
-            for statement in self.statements
-        )
-
-    def __getstate__(self) -> dict[str, object]:
-        # Functions do not pickle: a copy, or a Pi's checkpoint, makes
-        # its own walkers again on its first scan.
-        state = dict(self.__dict__)
-        state.pop("_walkers", None)
-        return state
-
     def scan_a(self, inputs: Mapping[str, bool]) -> dict[str, bool]:
         """Channel A: run every statement by walking its tree."""
-        values = {name: inputs[name] for name in self.inputs}
-        for target, walk in self._walkers:
-            values[target] = walk(values)
-        # An undefined read is 0; the compiler has warned about it.
-        return {name: values.get(name, False) for name in self.outputs}
+        scope = _Scope({name: inputs[name] for name in self.inputs})
+        for statement in self.statements:
+            scope.values[statement.target] = _evaluate(statement.tree, scope)
+        return {name: scope.read(name) for name in self.outputs}
 
     def scan_b(self, inputs: Mapping[str, bool]) -> dict[str, bool]:
         """Channel B: run every statement's postfix code on a stack."""
-        values = {name: inputs[name] for name in self.inputs}
+        scope = _Scope({name: inputs[name] for name in self.inputs})
         for statement in self.statements:
-            values[statement.target] = _run_postfix(statement.code, values)
-        return {name: values.get(name, False) for name in self.outputs}
+            scope.values[statement.target] = _run_postfix(
+                statement.code, scope
+            )
+        return {name: scope.read(name) for name in self.outputs}
 
 
 def compile_program(source: str) -> Program:

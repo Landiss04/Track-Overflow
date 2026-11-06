@@ -20,7 +20,6 @@ from ctc.interface import (
     CtcOutputs,
     SwitchReport,
     TrackControllerInputs,
-    TrainSuggestion,
     WaysideStatus,
 )
 from ctc.model import StubCtcOffice
@@ -61,15 +60,6 @@ def reports(*trains: At, occupied: Iterable[tuple[str, str]] = (),
                         for line, block_id in sorted(blocks)),
         switches=tuple(switches), crossings=tuple(crossings),
         waysides=waysides))
-
-
-def own_block(suggestions: Iterable[TrainSuggestion],
-              train_id: str = "T1") -> TrainSuggestion:
-    """A train's suggestion for the block it is in. While its authority
-    is at least 1 it also has one for the next block on its route, with
-    authority one less (``suggested-speed``, ``suggested-authority``)."""
-    return max((s for s in suggestions if s.train_id == train_id),
-               key=lambda s: s.authority_blocks)
 
 
 def ready_office() -> StubCtcOffice:

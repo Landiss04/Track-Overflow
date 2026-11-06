@@ -20,7 +20,7 @@ from ctc.interface import (  # noqa: E402
     SwitchReport,
     TrainAuthority,
 )
-from ctc.model import StubCtcOffice, UnsafeActionError  # noqa: E402
+from ctc.model import StubCtcOffice  # noqa: E402
 from ctc.routing import (  # noqa: E402
     TrackGraph,
     authority,
@@ -28,14 +28,7 @@ from ctc.routing import (  # noqa: E402
     reversing_route,
 )
 from ctc.track_layout import Line, load_layout, load_line  # noqa: E402
-from tests.occupancy import (  # noqa: E402
-    DT_S,
-    At,
-    at,
-    own_block,
-    ready_office,
-    step_at,
-)
+from tests.occupancy import DT_S, At, at, ready_office, step_at  # noqa: E402
 
 _LAYOUT = load_layout()
 _GREEN = TrackGraph(_LAYOUT["Green"])
@@ -199,19 +192,9 @@ class CountTest(unittest.TestCase):
                          _GREEN_30_TO_37)
 
     def test_stops_before_an_obstruction(self) -> None:
-        # A closed block: up to the block before it.
-        limit = authority(_GREEN, "30", "37", {"32": "closed"}, {})
-        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
-                          limit.at), (1, "31", "closed", "32"))
-
-    def test_one_empty_block_before_an_occupied_one(self) -> None:
-        # A train (or a failure) in 33: up to 31, leaving 32 empty.
-        limit = authority(_GREEN, "30", "37", {"33": "occupied"}, {})
-        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
-                          limit.at), (1, "31", "occupied", "33"))
-        # In 32, two ahead: none.
         limit = authority(_GREEN, "30", "37", {"32": "occupied"}, {})
-        self.assertEqual((limit.blocks, limit.end_block_id), (0, "30"))
+        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
+                          limit.at), (1, "31", "occupied", "32"))
 
     def test_own_block_is_not_an_obstruction(self) -> None:
         limit = authority(_GREEN, "30", "37", {"30": "occupied"}, {})
@@ -229,89 +212,30 @@ class CountTest(unittest.TestCase):
         self.assertEqual((limit.blocks, limit.reason), (4, "destination"))
 
 
-class GapTest(unittest.TestCase):
-    """No authority ends next to another train's block or authority:
-    the waysides would hold both trains (Landis 2026-10-28)."""
-
-    def test_no_move_into_the_one_empty_block(self) -> None:
-        # Landis's example: 30 and 32 occupied, 31 empty. The train in
-        # 30 may not take 31, next to 32.
-        limit = authority(_GREEN, "30", "37", {"32": "occupied"}, {})
-        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
-                          limit.at), (0, "30", "occupied", "32"))
-
-    def test_not_next_to_a_train_past_the_destination(self) -> None:
-        limit = authority(_GREEN, "30", "37", {"38": "occupied"}, {})
-        self.assertEqual((limit.blocks, limit.end_block_id, limit.at),
-                         (6, "36", "38"))
-
-    def test_not_next_to_a_train_on_a_switchs_other_leg(self) -> None:
-        # 28 joins 27, 29 and 150: a train in 150 is next to 28 though
-        # the route runs 27 to 28 to 29.
-        for obstructions, reserved, reason, held_by in (
-                ({"150": "occupied"}, {}, "occupied", ""),
-                ({}, {"150": "T9"}, "reserved", "T9")):
-            with self.subTest(reason=reason):
-                limit = authority(_GREEN, "26", "28", obstructions,
-                                  {"28": "normal"}, reserved)
-                self.assertEqual(
-                    (limit.blocks, limit.end_block_id, limit.reason,
-                     limit.at, limit.held_by),
-                    (1, "27", reason, "150", held_by))
-
-    def test_not_next_to_a_train_beyond_a_switch_set_against(self) -> None:
-        # CTC-3: switch 76 reversed joins 77 to 101, not 76. A train
-        # on 77 is still next to 76, so the follower on 75 waits there
-        # (Landis and Harry Tye 2026-10-28).
-        limit = authority(_GREEN, "75", "85", {"77": "occupied"},
-                          {"76": "reverse"})
-        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
-                          limit.at), (0, "75", "occupied", "77"))
-        # With 77 clear, the count still stops at the switch.
-        limit = authority(_GREEN, "75", "85", {}, {"76": "reverse"})
-        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
-                          limit.at), (1, "76", "switch", "76"))
-
-    def test_a_closed_block_ahead_needs_no_gap(self) -> None:
-        # Only trains hold each other; a closed block holds no one.
-        limit = authority(_GREEN, "30", "37", {"33": "closed"}, {})
-        self.assertEqual((limit.blocks, limit.end_block_id), (2, "32"))
-
-
 class StubAuthorityTest(unittest.TestCase):
     """The stub recomputes authority from the reports every step."""
 
     def test_a_train_ahead_shortens_authority_until_it_moves(self) -> None:
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
-        # T2 in 33: T1 may run to 31, one empty block short of it.
-        out = step_at(ctc, _train("T1", "30"), _train("T2", "33"))
-        suggestion = own_block(out.track_controller.suggestions)
+        out = step_at(ctc, _train("T1", "30"), _train("T2", "32"))
+        (suggestion,) = out.track_controller.suggestions
         self.assertEqual(suggestion.authority_blocks, 1)
         self.assertEqual(_authority(ctc), TrainAuthority(
-            "T1", "Green", 1, "31", "occupied", "33", _GREEN_30_TO_37))
-        # T2 moves on to 38, just past the destination: T1 may not
-        # end in 37, next to it (Landis 2026-10-28).
+            "T1", "Green", 1, "31", "occupied", "32", _GREEN_30_TO_37))
+        # T2 moves on, past the destination: the authority grows back.
         out = step_at(ctc, _train("T1", "30"), _train("T2", "38"))
         self.assertEqual(
-            own_block(out.track_controller.suggestions).authority_blocks,
-            6)
-        self.assertEqual(_authority(ctc).at, "38")
-        # Once T2 is a block further on, the authority grows back.
-        out = step_at(ctc, _train("T1", "30"), _train("T2", "39"))
-        self.assertEqual(
-            own_block(out.track_controller.suggestions).authority_blocks,
-            7)
+            out.track_controller.suggestions[0].authority_blocks, 7)
 
     def test_occupancy_no_train_explains_counts(self) -> None:
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "30"), occupied=[("Green", "34")])
         limit = _authority(ctc)
-        # Inferred to have failed, but held up as by any occupied block,
-        # a block short of it.
+        # Inferred to have failed, but held up as by any occupied block.
         self.assertEqual((limit.blocks, limit.reason, limit.at),
-                         (2, "occupied", "34"))
+                         (3, "occupied", "34"))
 
     def test_a_closed_block_shortens_authority_until_reopened(self) -> None:
         ctc = ready_office()
@@ -321,13 +245,12 @@ class StubAuthorityTest(unittest.TestCase):
         ctc.set_block_closed("Green", "35", True)
         self.assertEqual(_authority(ctc), TrainAuthority(
             "T1", "Green", 4, "34", "closed", "35", _GREEN_30_TO_37))
-        self.assertEqual(own_block(ctc.snapshot().outputs.track_controller
-                                   .suggestions).authority_blocks, 4)
+        self.assertEqual(ctc.snapshot().outputs.track_controller
+                         .suggestions[0].authority_blocks, 4)
         ctc.set_block_closed("Green", "35", False)
         self.assertEqual(_authority(ctc).blocks, 7)
 
-    def test_an_occupied_closed_block_shortens_authority(self) -> None:
-        # A block closes at once, even with a train in it.
+    def test_a_closing_block_shortens_authority(self) -> None:
         ctc = ready_office()
         ctc.set_maintenance_mode(True)
         ctc.dispatch("T1", "Green", "37")
@@ -335,7 +258,7 @@ class StubAuthorityTest(unittest.TestCase):
         ctc.set_block_closed("Green", "33", True)
         limit = _authority(ctc)
         self.assertEqual((limit.blocks, limit.reason, limit.at),
-                         (2, "closed", "33"))
+                         (2, "closing", "33"))
 
     def test_switches_count_only_as_reported(self) -> None:
         ctc = ready_office()
@@ -388,12 +311,10 @@ class ExclusiveAuthorityTest(unittest.TestCase):
         ctc = self._head_on()
         step_at(ctc, *self._FACING)
         t1, t2 = _authority(ctc, "T1"), _authority(ctc, "T2")
-        # No arrival times: T1 first, by train ID. T2 stops at 26,
-        # one empty block short of T1's authority: ending in 25, next
-        # to T1 in 24, would hold both trains (Landis 2026-10-28).
+        # No arrival times: T1 first, by train ID.
         self.assertEqual((t1.blocks, t1.reason), (4, "destination"))
-        self.assertEqual((t2.blocks, t2.end_block_id, t2.reason, t2.at,
-                          t2.held_by), (2, "26", "reserved", "24", "T1"))
+        self.assertEqual((t2.blocks, t2.reason, t2.at, t2.held_by),
+                         (3, "reserved", "24", "T1"))
         ahead = set(t1.route[1:t1.blocks + 1])
         self.assertFalse(ahead & set(t2.route[1:t2.blocks + 1]))
 
@@ -404,7 +325,7 @@ class ExclusiveAuthorityTest(unittest.TestCase):
         self.assertEqual(_authority(ctc, "T2").blocks, 4)
         t1 = _authority(ctc, "T1")
         self.assertEqual((t1.blocks, t1.reason, t1.held_by),
-                         (2, "reserved", "T2"))
+                         (3, "reserved", "T2"))
 
     def test_less_slack_goes_first(self) -> None:
         ctc = self._head_on()
@@ -427,13 +348,12 @@ class ExclusiveAuthorityTest(unittest.TestCase):
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "37")
         step_at(ctc, _train("T1", "30"))
-        # T1 moves on to 34; T2 behind it can now run up to 32, one
-        # empty block short of it.
+        # T1 moves on to 34; T2 behind it can now run up to 33.
         ctc.dispatch("T2", "Green", "37")
         step_at(ctc, _train("T1", "34"), _train("T2", "29"))
         t2 = _authority(ctc, "T2")
         self.assertEqual(t2.route[1:t2.blocks + 1],
-                         ("30", "31", "32"))
+                         ("30", "31", "32", "33"))
         self.assertEqual((t2.reason, t2.at), ("occupied", "34"))
 
 
@@ -527,10 +447,9 @@ class ReversalTest(unittest.TestCase):
         # The failure shows only as an occupied block.
         self.assertEqual((t5.reverse_at, t5.reason, t5.at),
                          ("27", "occupied", "29"))
-        # Held, not reversed: T4 still runs toward T5 and stops a block
-        # short of it.
+        # Held, not reversed: T4 still runs toward T5 and stops short.
         self.assertEqual(t4.route[1:t4.blocks + 1],
-                         tuple(str(n) for n in range(21, 27)))
+                         tuple(str(n) for n in range(21, 28)))
 
     def test_no_reversal_when_a_detour_will_do(self) -> None:
         t4 = _authority(self._held("35"), "T4")
@@ -550,16 +469,16 @@ class SafeSpeedTest(unittest.TestCase):
     """Suggested speed lets the train stop within its authority."""
 
     def _speed(self, out) -> int:
-        return own_block(out.track_controller.suggestions,
-                         "T1").suggested_speed_mps
+        (suggestion,) = [s for s in out.track_controller.suggestions
+                         if s.train_id == "T1"]
+        return suggestion.suggested_speed_mps
 
     def test_capped_by_the_room_to_stop(self) -> None:
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "70")
         # Green 63 is limited to 70 km/h (18 m/s suggested), but with
-        # only block 64 (100 m) ahead, a train in 66: sqrt(2 * 1.2 *
-        # 100) = 15.
-        out = step_at(ctc, _train("T1", "63"), _train("T2", "66"))
+        # only block 64 (100 m) ahead: sqrt(2 * 1.2 * 100) = 15.
+        out = step_at(ctc, _train("T1", "63"), _train("T2", "65"))
         self.assertEqual(self._speed(out), 15)
         out = step_at(ctc, _train("T1", "63"), _train("T2", "80"))
         self.assertEqual(self._speed(out), 18)
@@ -571,79 +490,6 @@ class SafeSpeedTest(unittest.TestCase):
         self.assertEqual(self._speed(out), 0)
         ctc.dispatch("T1", "Green", "63")
         self.assertEqual(self._speed(ctc.snapshot().outputs), 0)
-
-
-class PreviewTest(unittest.TestCase):
-    """Before Dispatch, the CTC shows what a dispatch would send."""
-
-    def _suggestion(self, ctc: StubCtcOffice) -> tuple[int, int]:
-        sent = own_block(ctc.snapshot().outputs.track_controller.suggestions)
-        return sent.suggested_speed_mps, sent.authority_blocks
-
-    def test_preview_matches_what_dispatch_sends(self) -> None:
-        ctc = ready_office()
-        step_at(ctc, _train("T1", "30"), _train("T2", "34"))
-        preview = ctc.preview_dispatch("T1", "Green", "37")
-        # Nothing ordered by previewing.
-        self.assertEqual(ctc.snapshot().orders, ())
-        self.assertEqual((preview.block_id, preview.authority_blocks),
-                         ("30", 2))
-        ctc.dispatch("T1", "Green", "37")
-        step_at(ctc, _train("T1", "30"), _train("T2", "34"))
-        self.assertEqual(self._suggestion(ctc),
-                         (preview.suggested_speed_mps,
-                          preview.authority_blocks))
-
-    def test_a_train_in_the_yard_counts_from_the_yard_exit(self) -> None:
-        ctc = ready_office()
-        step_at(ctc)
-        preview = ctc.preview_dispatch("T9", "Green", "73")
-        self.assertEqual((preview.block_id, preview.authority_blocks),
-                         ("63", 10))
-        self.assertGreater(preview.suggested_speed_mps, 0)
-
-    def test_refused_as_dispatch_is(self) -> None:
-        ctc = ready_office()
-        step_at(ctc)
-        ctc.set_maintenance_mode(True)
-        ctc.set_block_closed("Green", "73", True)
-        with self.assertRaisesRegex(UnsafeActionError, "closed"):
-            ctc.preview_dispatch("T9", "Green", "73")
-        self.assertEqual(ctc.snapshot().orders, ())
-
-
-class RouteRequestTest(unittest.TestCase):
-    """The CTC asks the Track Controller to set each switch for the train
-    routed over it (``route_requests``); a request, not a command."""
-
-    def _two_trains(self, urgent: str) -> StubCtcOffice:
-        # A, at Red 25, is sent into the 72-76 siding (74): switch 27
-        # reverse. B, at 30, is sent down the main line through 27 to
-        # 20: switch 27 normal. The one with an arrival time is urgent.
-        ctc = ready_office()
-        trains = (_train("A", "25", "Red"), _train("B", "30", "Red"))
-        step_at(ctc, *trains)
-        due = 5 * 3600 + 600
-        ctc.dispatch("A", "Red", "74", due if urgent == "A" else None)
-        ctc.dispatch("B", "Red", "20", due if urgent == "B" else None)
-        step_at(ctc, *trains)
-        return ctc
-
-    def _requests(self, ctc: StubCtcOffice) -> list[tuple[str, str, str]]:
-        return [(r.line, r.switch_id, r.position) for r in
-                ctc.snapshot().outputs.track_controller.route_requests]
-
-    def test_the_switch_short_of_the_authority_is_requested(self) -> None:
-        # A's authority stops before 27, not set for the siding: the
-        # request is what lets the wayside set it.
-        ctc = self._two_trains("A")
-        self.assertEqual((_authority(ctc, "A").reason,
-                          _authority(ctc, "A").at), ("switch", "27"))
-        self.assertEqual(self._requests(ctc), [("Red", "27", "reverse")])
-
-    def test_the_most_urgent_train_has_the_switch(self) -> None:
-        self.assertEqual(self._requests(self._two_trains("B")),
-                         [("Red", "27", "normal")])
 
 
 if __name__ == "__main__":

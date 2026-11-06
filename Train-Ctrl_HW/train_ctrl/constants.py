@@ -1,7 +1,5 @@
 """Rates, plant figures, detection thresholds and domain vocabulary."""
 
-import math
-
 from .units import KMH_PER_MPS
 
 # ---------------------------------------------------------------- rates
@@ -22,7 +20,8 @@ GAINS_HANDOVER_MS = 1500
 
 # Truth modules/train-model.md: 4 x 120 kW, the data sheet's 120 kW
 # per motor rather than for the whole car (provisional, pending the
-# instructor). The force cap binds up to about 49 km/h.
+# instructor). The car's 0.5 m/s^2 force cap now binds up to about
+# 67 km/h, nearly the whole 70 km/h range, as the sheet quotes it.
 MAX_POWER_W = 480_000.0
 
 # ---------------------------------------------------------------- cabin
@@ -48,6 +47,8 @@ CABIN_DRIFT_MAX_C = 0.011
 # at 4 pass./m^2, and the acceleration figure is quoted at 2/3 load,
 # so the plant runs at that mass.
 MASS_KG = 51_433.0
+MAX_ACCEL_MPS2 = 0.5            # and the car will not exceed it
+MAX_FORCE_N = MASS_KG * MAX_ACCEL_MPS2
 # The car's data-sheet top speed: the speed dial's fixed full scale,
 # display only, not a cap (REQUIREMENTS.md M1, M14).
 MAX_SPEED_MPS = 70 / KMH_PER_MPS
@@ -59,20 +60,11 @@ EBRAKE_DECEL_MPS2 = 2.73
 # its target (35 -> 30 mph ends at 30.08 at the 0.1 s step).
 SERVICE_BAND_MPS = 0.05
 # Rolling resistance, from truth modules/train-model.md. The bench
-# simulation applies it only under a brake or an engine failure; the
-# controller never models it (REQUIREMENTS.md M19).
+# simulation applies it only under a brake failure; the controller
+# never models it (REQUIREMENTS.md M19).
 ROLLING_RESISTANCE_COEFF = 0.002
 GRAVITY_MPS2 = 9.81
 ROLLING_DECEL_MPS2 = ROLLING_RESISTANCE_COEFF * GRAVITY_MPS2
-# Traction cap, as the Train Model sizes it (Kevin 2026-11-02): the
-# force that holds a full train, 222 passengers and 5 crew at 170 lb,
-# on the data sheet's 60 per mille maximum gradient, about 35.5 kN.
-# The 0.5 m/s^2 above is a 0-70 km/h average, not the cap.
-FULL_MASS_KG = 40_900.0 + (222 + 5) * 77.1107
-MAX_GRADIENT = 0.06
-_THETA = math.atan(MAX_GRADIENT)
-MAX_FORCE_N = FULL_MASS_KG * GRAVITY_MPS2 * (
-    math.sin(_THETA) + ROLLING_RESISTANCE_COEFF * math.cos(_THETA))
 # Below this the emergency brake may be released (D011).
 STANDSTILL_MPS = 0.1
 # Below this, with no power applied, the bench simulation settles to
@@ -82,61 +74,14 @@ SETTLE_MPS = 0.12
 # ---------------------------------------------------- failure detection
 # The Train Model no longer reports its failures, so the controller
 # infers them. Rules and thresholds are this controller's own design;
-# see ControllerCore.detect_failures() and REQUIREMENTS.md §4.
-#
-# Engine: a steady fall (Kevin Schillinger, 2026-10-21, R91). A failed
-# engine zeroes traction, so the slowest a real failure can show is
-# rolling resistance alone on the flat: C_rr x g = 0.0196 m/s^2. Any
-# up-grade makes it faster, and it never lets up.
-#
-# The window: a few seconds longer than the old 2 s, so one tick's
-# jitter cannot carry it, and long enough that rolling resistance
-# alone loses about twice ENGINE_FALL_MPS across it. 60 steps.
-ENGINE_DETECT_S = 6.0
-# The window is read as half-second means (5 steps each), so a
-# tick-to-tick wobble in the reported speed cancels out instead of
-# reading as a fall.
-ENGINE_SMOOTH_S = 0.5
-# The fall that counts, first mean to last: more than the control
-# band, the most the PI lets the speed wander while holding a target,
-# so a train doing what it was told never reaches it.
-ENGINE_FALL_MPS = SERVICE_BAND_MPS
-# And the fall has to be steady: every mean within this fraction of
-# the fall of the straight line from the first mean to the last. A
-# dead engine leaves a constant resistance and so a straight fall.
-# Running onto a grade the speed sags too, with power on and no brake,
-# but the PI catches it within a few seconds, so the sag curves out
-# and never reads as straight across a 6 s window (BUGS.md B3).
-ENGINE_STRAIGHT_FRACTION = 0.1
-# Within this of its target the train is holding the speed it was
-# told to: never an engine failure, whatever the power.
-ENGINE_HOLD_BAND_MPS = SERVICE_BAND_MPS
-# Resolution, and every departure from a stand: the engine test
-# (OPEN_ISSUES.md #23). The brake comes off as full power goes on; one
-# tick of full power, one of none, then the brake again (on a
-# departure, the speed law) while the reports come back. The speed's
-# change under power less its change without is the engine's pull
-# over the mass; grade, load and rolling resistance cancel. The least
-# a working engine can give is full traction (MAX_FORCE_N, 35.5 kN)
-# over the heaviest train (58.4 t, full load): 0.61 m/s^2. A dead
-# engine gives 0. The bar is a third of the least.
-ENGINE_TEST_POWER_W = MAX_POWER_W
-ENGINE_TEST_MIN_MPS2 = 0.2
-# Under way, run the same test this often, on a tick the speed law
-# asks for power with no brake and the train under its target: the
-# steady fall cannot see a dead engine on a down-grade, where
-# gravity holds the speed.
-ENGINE_PULSE_S = 5.0
-# Once this fast, the train is under way: coming back to a stand under
-# power (a stall on a climb) is a new start, tested again. A test's own
-# creep at a stand never reaches it.
-ENGINE_UNDER_WAY_MPS = 1.0
-# Held at a stand after a test found the engine dead, test again this
-# often, so a repair is seen without the driver doing anything.
-ENGINE_RETEST_S = 10.0
+# see ControllerCore.detect_failures() and OPEN_ISSUES.md.
+ENGINE_DETECT_ACCEL_MPS2 = 0.1
+ENGINE_DETECT_S = 2.0
+ENGINE_RISE_MPS = 0.05
+PICKUP_DETECT_MIN_BLOCKS = 2
 
 # ---------------------------------------------------------------- gains
-# Pull full traction from a stand, reach 70 km/h in about three
+# Pull the full 0.5 m/s^2 from a stand, reach 70 km/h in about three
 # quarters of a minute, then hold within a tenth of a mph of target.
 DEFAULT_KP = 400_000.0          # W per m/s of error
 DEFAULT_KI = 8_000.0            # W per (m/s x s) of accumulated error
@@ -159,12 +104,12 @@ ECHO_TICKS = 2
 DWELL_S = 45.0
 
 # ----------------------------------------------------------- vocabulary
-ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER_GREEN"]
+ASPECTS = ["RED", "YELLOW", "GREEN", "SUPER GREEN"]
 ASPECT_TEXT = {
     "RED": "Stop.",
     "YELLOW": "Slow down.",
     "GREEN": "Continue to cruise.",
-    "SUPER_GREEN": "All clear ahead.",
+    "SUPER GREEN": "All clear ahead.",
 }
 
 #: The Train Model's three failures (truth modules/train-model.md),
@@ -180,10 +125,7 @@ FAILURE_TEXT = {
 BEACON_SIDES = ("L", "R", "LR")
 
 #: Lines a train can be spawned on, and the id prefix each one uses.
-LINES = {"GREEN LINE": "G", "RED LINE": "R"}
-
-#: The line each variant drives (truth D021, REQUIREMENTS.md M13).
-VARIANT_LINES = {"SW": "GREEN LINE", "HW": "RED LINE"}
+LINES = {"GREEN LINE": "T", "RED LINE": "R"}
 
 #: Real time per simulated second, as the bench offers it.
 SIM_RATES = (1, 10)

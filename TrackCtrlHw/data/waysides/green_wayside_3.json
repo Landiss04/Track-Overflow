@@ -10,10 +10,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [
-        75
-      ]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 75,
@@ -23,10 +20,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [
-        76
-      ]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 76,
@@ -39,10 +33,7 @@
       "infrastructure": {
         "switch": "76-77;77-101"
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [
-        77
-      ]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 77,
@@ -56,11 +47,7 @@
         "station": "MT LEBANON"
       },
       "station_side": "Left/Right",
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        78,
-        101
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 78,
@@ -70,11 +57,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        77,
-        79
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 79,
@@ -84,11 +67,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        78,
-        80
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 80,
@@ -98,11 +77,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        79,
-        81
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 81,
@@ -112,11 +87,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        80,
-        82
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 82,
@@ -126,11 +97,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        81,
-        83
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 83,
@@ -140,11 +107,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        82,
-        84
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 84,
@@ -154,11 +117,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        83,
-        85
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 85,
@@ -171,11 +130,7 @@
       "infrastructure": {
         "switch": "85-86; 100-85"
       },
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [
-        84,
-        86
-      ]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 86,
@@ -185,10 +140,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 14.4,
-      "next_blocks": [
-        87
-      ]
+      "seconds_to_traverse": 14.4
     },
     {
       "block_number": 87,
@@ -198,10 +150,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12.4704,
-      "next_blocks": [
-        88
-      ]
+      "seconds_to_traverse": 12.4704
     },
     {
       "block_number": 88,
@@ -215,10 +164,7 @@
         "station": "POPLAR"
       },
       "station_side": "Left",
-      "seconds_to_traverse": 14.4,
-      "next_blocks": [
-        89
-      ]
+      "seconds_to_traverse": 14.4
     }
   ]
 }

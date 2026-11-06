@@ -180,20 +180,23 @@ def output_rows(controller: TrackController) -> list[dict[str, Any]]:
     Speed is shown in mph here and only here: the values underneath are
     whole m/s.
     """
+    outputs = controller.outputs
     rows: list[dict[str, Any]] = []
     for block in controller.blocks:
-        circuit = controller.track_circuits.get(block.block_id)
+        circuit = outputs.track_circuits.get(block.block_id)
         if circuit is None:
             continue
         rows.append(
             {
                 "name": f"TC_{block.block_id}",
                 "label": f"Block {block.block_id} ({block.label})",
-                "value": _circuit_text(*circuit),
+                "value": _circuit_text(
+                    circuit.speed_mps, circuit.authority_blocks
+                ),
                 "kind": "circuit",
             }
         )
-    for name, state in controller.switch_commands.items():
+    for name, state in outputs.switches.items():
         rows.append(
             {
                 "name": f"SW_{name}",
@@ -202,7 +205,7 @@ def output_rows(controller: TrackController) -> list[dict[str, Any]]:
                 "kind": "switch",
             }
         )
-    for name, aspect in controller.aspects.items():
+    for name, aspect in outputs.aspects.items():
         rows.append(
             {
                 "name": f"SIG_{name}",
@@ -211,7 +214,7 @@ def output_rows(controller: TrackController) -> list[dict[str, Any]]:
                 "kind": "aspect",
             }
         )
-    for name, state in controller.crossing_commands.items():
+    for name, state in outputs.crossings.items():
         rows.append(
             {
                 "name": f"XING_{name}",
@@ -227,14 +230,16 @@ def suggestion_rows(controller: TrackController) -> list[dict[str, Any]]:
     """What the CTC Office suggests for each block, as display rows."""
     rows: list[dict[str, Any]] = []
     for block in controller.blocks:
-        suggestion = controller.suggestions.get(block.block_id)
+        suggestion = controller.inputs.suggestions.get(block.block_id)
         rows.append(
             {
                 "name": f"SUG_{block.block_id}",
                 "label": f"Block {block.block_id} ({block.label})",
                 "value": (
                     "NONE SENT" if suggestion is None
-                    else _circuit_text(*suggestion)
+                    else _circuit_text(
+                        suggestion.speed_mps, suggestion.authority_blocks
+                    )
                 ),
                 "kind": "suggestion",
             }
@@ -247,46 +252,50 @@ def _describe(
 ) -> dict[str, Any]:
     """Everything the test UI shows about one controller."""
     labels = {block.block_id: block.label for block in controller.blocks}
+    inputs = controller.inputs
+    outputs = controller.outputs
     first, last = controller.blocks[0], controller.blocks[-1]
 
     blocks = []
     for block in controller.blocks:
-        suggestion = controller.suggestions.get(block.block_id)
-        circuit = controller.track_circuits.get(block.block_id)
+        suggestion = inputs.suggestions.get(block.block_id)
+        circuit = outputs.track_circuits.get(block.block_id)
         blocks.append(
             {
                 "id": block.block_id,
                 "label": block.label,
                 "limit_mps": block.whole_speed_limit_mps,
-                "occupied": controller.occupancy.get(block.block_id, False),
-                "closed": controller.closed.get(block.block_id, False),
+                "occupied": inputs.occupancy.get(block.block_id, False),
+                "closed": inputs.closed.get(block.block_id, False),
                 "suggested_speed": (
-                    None if suggestion is None else suggestion[0]
+                    None if suggestion is None else suggestion.speed_mps
                 ),
                 "suggested_authority": (
                     None if suggestion is None
-                    else suggestion[1]
+                    else suggestion.authority_blocks
                 ),
                 "commanded_speed": (
-                    None if circuit is None else circuit[0]
+                    None if circuit is None else circuit.speed_mps
                 ),
                 "commanded_authority": (
-                    None if circuit is None else circuit[1]
+                    None if circuit is None else circuit.authority_blocks
                 ),
             }
         )
 
     switches = []
-    for switch_id in controller.config.switches:
-        command = controller.ctc_switch_commands.get(switch_id)
+    for switch in controller.config.switches:
+        command = inputs.ctc_switch_commands.get(switch.switch_id)
         switches.append(
             {
-                "id": switch_id,
-                "block_id": switch_id,
-                "block": labels[switch_id],
-                "reverse": controller.switch_commands.get(switch_id, False),
-                "reported_reverse": controller.switch_reverse.get(switch_id),
-                "manual": switch_id in controller.manual_switches,
+                "id": switch.switch_id,
+                "block_id": switch.block_id,
+                "block": labels[switch.block_id],
+                "reverse": outputs.switches.get(switch.switch_id, False),
+                "reported_reverse": inputs.switch_reverse.get(
+                    switch.switch_id
+                ),
+                "manual": switch.switch_id in controller.manual_switches,
                 "ctc_command": (
                     None if command is None
                     else "reverse" if command else "normal"
@@ -303,12 +312,16 @@ def _describe(
         "file": controller.file_name,
         "blocks": blocks,
         "switches": switches,
-        "crossings": list(controller.config.crossings),
-        "signals": list(controller.config.signals),
+        "crossings": [
+            crossing.block_id for crossing in controller.config.crossings
+        ],
+        "signals": [
+            signal.block_id for signal in controller.config.signals
+        ],
         "outputs": output_rows(controller),
         "presence": [
             labels[block_id]
-            for block_id, occupied in controller.occupancy.items()
+            for block_id, occupied in inputs.occupancy.items()
             if occupied
         ],
         "overrides": [
@@ -317,7 +330,7 @@ def _describe(
                 "signal": override.signal,
                 "message": override.message,
             }
-            for override in controller.overrides
+            for override in outputs.overrides
         ],
     }
 

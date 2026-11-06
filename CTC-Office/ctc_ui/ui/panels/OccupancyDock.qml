@@ -1,4 +1,4 @@
-// Minimized Train Occupancy window, docked in the track view's bottom row.
+// Minimized Train Occupancy window, docked over the track view.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"

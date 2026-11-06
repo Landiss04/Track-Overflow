@@ -118,9 +118,7 @@ ScrollView {
                     TelemetryReadout {
                         Layout.fillWidth: true
                         label: qsTr("Commanded")
-                        // Null under signal pickup failure: no valid reading.
-                        value: root.s.commanded_speed == null ? "—"
-                            : root.fixed(root.mph(root.s.commanded_speed), 1)
+                        value: root.fixed(root.mph(root.s.commanded_speed), 1)
                         unit: "mph"
                     }
 
@@ -135,8 +133,7 @@ ScrollView {
                 KeyValueRow {
                     Layout.fillWidth: true
                     label: qsTr("Authority")
-                    value: root.s.authority == null ? "—"
-                        : root.s.authority
+                    value: root.s.authority
                         + (root.s.authority === 1 ? qsTr(" block") : qsTr(" blocks"))
                 }
 
@@ -247,11 +244,11 @@ ScrollView {
 
                     Layout.fillWidth: true
                     Layout.preferredHeight: theme.safety_emphasis_height
-                    Layout.topMargin: theme.space_2
+                    Layout.topMargin: theme.space_5
                     objectName: "passengerEmergencyBrake"
                     label: qsTr("Apply emergency brake")
-                    // The Train Controller owns passenger-brake release.
-                    // Disabled while the emergency brake is
+                    // Never offers a release: whether passengers may release
+                    // it is undecided. Disabled while the emergency brake is
                     // engaged from any source (a Train Controller command or
                     // a pull) and while a pull is latched.
                     enabled: !root.s.emergency_brake
@@ -298,21 +295,6 @@ ScrollView {
                             ? qsTr("Open") : qsTr("Closed")
                         variant: root.s.right_door ? "ok" : "idle"
                     }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: qsTr("Service brake")
-                        color: theme.text_secondary
-                        font.family: theme.ui_family
-                        font.pixelSize: theme.size_small
-                    }
-
-                    StatusBadge {
-                        objectName: "serviceBrakeStatus"
-                        label: root.s.service_brake
-                            ? qsTr("Applied") : qsTr("Released")
-                        variant: root.s.service_brake ? "warning" : "idle"
-                    }
                 }
 
             }
@@ -352,9 +334,9 @@ ScrollView {
                 KeyValueRow {
                     objectName: "nextStation"
                     Layout.fillWidth: true
-                    label: qsTr("Next station")
+                    label: qsTr("Next station · arrival")
                     value: root.s.next_station + " ("
-                        + root.s.platform_side + ")"
+                        + root.s.platform_side + ") · " + root.s.arrival
                     rule: false
                 }
             }

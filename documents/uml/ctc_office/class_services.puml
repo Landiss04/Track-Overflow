@@ -32,7 +32,6 @@ package "ctc.scheduler" {
     leg: int
     dwell_until_s: float
     at: int
-    wait: int
   }
   class World <<frozen>> {
     now_s: float
