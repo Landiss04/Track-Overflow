@@ -14,25 +14,41 @@ participant "Track Controller\n(Red)" as TC
 
 TC --> H : wayside W2 (Red): ready = false,\nreason "no PLC program"
 H -> Model : step (waysides input)
-Model -> Model : ready_lines(waysides): a line is ready when a\nwayside on it has reported and all on it are ready\n→ Green ready, Red not
-Model -> Model : Red: authority 0 ("not ready"), no grants,\nno train released from the yard,\nscheduled runs wait
+Model -> Model : _ready_lines() → ready_lines(waysides)
+note right of Model
+  A line is ready when a wayside on it has
+  reported and all on it are ready:
+  Green ready, Red not.
+end note
+Model -> Model : _compute_authorities()
+note right of Model
+  Red: TrainAuthority(..., 0, ..., "not ready");
+  no grants. _release() lets no train out of
+  the yard; _run_schedule() gives Red no orders.
+end note
+Model -> Model : _outputs()
 Model --> H : outputs with nothing for Red: no suggestions,\nclosed blocks or switch commands
 H -> TC : nothing from the CTC Office for Red
 note over Model
   Green keeps running. Closures and switch
   commands made for Red are kept, not sent.
 end note
+Host -> UI : noticesChanged()
 UI -> Host : notices
 Host --> UI : "Track Controller not ready on Red (W2: no PLC program) —\nnothing is sent to a line, and no train can be dispatched\non it, until every wayside on it has a PLC program."
 UI -> D : notice
-D -> UI : Dispatch train on Red
-UI -> Host : dispatchTrain(...)
-Host -> Model : dispatch(...)
+D -> UI : lineSelect.committed("Red")
+D -> UI : "Dispatch train".clicked()
+UI -> Host : dispatchTrain(train_id, "Red", block_id, "HH:MM")
+Host -> Model : dispatch(train_id, "Red", block_id, arrival_s)
 Model --> Host : UnsafeActionError "The Red line's Track Controller\nis not ready (W2: no PLC program); ..."
+Host --> UI : the refusal's text
+UI -> UI : report(error, done)
 UI -> D : the reason
 
 ...the programmer loads W2's PLC program...
 TC --> H : W2: ready = true
 H -> Model : step
-Model -> Model : Red ready: everything kept goes out\nfrom this step
+Model -> Model : _ready_lines()
+note right of Model : Red ready: everything kept goes out\nfrom this step
 @enduml

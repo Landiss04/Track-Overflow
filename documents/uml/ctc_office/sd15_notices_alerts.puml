@@ -7,32 +7,43 @@ actor Dispatcher as D
 box "CTC Office process" #F7F9FC
 participant "Notices\n(under the header)" as N
 participant "ReversalAlert" as A
+participant "Main.qml" as Main
 participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
 loop after each step
-  N -> Host : notices
+  Host -> Main : noticesChanged()
+  Main -> Host : notices
   Host -> Model : snapshot()
-  Host --> N : "Track Controller not ready on Red (W2: ...)";\n"Order for T1 to Green block 15 cancelled: block closed.";\n"Track Controller update staged ..."
-  A -> Host : reversalAlerts
-  Host -> Model : snapshot() (authorities with reverse_at)
-  Host --> A : train, line, block to reverse at,\ndestination, what holds it
+  Host --> Main : "Track Controller not ready on Red (W2: ...)";\n"Order for T1 to Green block 15 cancelled: block closed.";\n"Track Controller update staged ..."
+  Main -> N : body = notices.join()
+  Main -> Host : reversalAlerts
+  Host -> Model : snapshot()
+  note right of Host : authorities with reverse_at,\nless _reversals_seen
+  Host --> Main : train, line, block to reverse at,\ndestination, what holds it
+  Main -> A : alerts
 end
 N -> D : notices
-D -> N : Dismiss
+D -> N : "Dismiss".clicked()
 N -> Host : dismissNotices()
-Host -> Host : the cancelled-order notices seen so far\nare not shown again
+Host -> Host : _cancelled_seen = len(cancelled_orders)
+note right of Host : the cancelled-order notices seen so far\nare not shown again
 
 A -> D : "T3 must reverse at Red block 16 ..."
 alt Select train
-  D -> A : Select train
-  A -> D : the train in Selected train (SD-13)
+  D -> A : "Select train".clicked()
+  A -> Main : selectRequested(alert.train)
+  Main -> Host : dismissReversal(trainId)
+  Main -> Main : selectedTrainId = trainId
+  Main -> D : the train in Selected train (SD-13)
 else Dismiss
-  D -> A : Dismiss
-  A -> Host : dismissReversal(train_id)
-  Host -> Host : not shown again unless the situation\nclears and happens again
+  D -> A : "Dismiss".clicked()
+  A -> Main : dismissRequested(alert.train)
+  Main -> Host : dismissReversal(trainId)
 end
+Host -> Host : _reversals_seen |= the train's reversal keys
+note right of Host : not shown again unless the situation\nclears and happens again
 note over Model
   The CTC Office never reverses a train:
   it waits until the dispatcher acts or the way clears.

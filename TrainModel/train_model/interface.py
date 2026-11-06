@@ -10,6 +10,7 @@ temperature in degrees Celsius, grade in degrees, and authority as a count
 of blocks.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -40,13 +41,14 @@ class TrainConfig:
     n_crew: int = 5                         # 1 per car x 5 modules
 
     # Propulsion
-    p_max_w: float = 480_000.0              # 4 x 120 kW, provisional
+    p_max_w: float = 480_000.0              # 4 x 120 kW, confirmed 2026-10-20
 
     # Rated performance, all at 2/3 load (datasheet)
     ref_load_fraction: float = 2.0 / 3.0
-    accel_ref_mps2: float = 0.5
+    accel_ref_mps2: float = 0.5             # medium, 0 to 70 km/h average; not the cap
     decel_service_mps2: float = 1.2
     decel_emergency_mps2: float = 2.73
+    max_gradient: float = 0.06              # 60 per mille, datasheet
 
     # Environment
     c_rr: float = 0.002                     # rolling resistance, assumed
@@ -63,7 +65,12 @@ class TrainConfig:
 
     @property
     def f_max_n(self) -> float:
-        return self.m_ref_kg * self.accel_ref_mps2
+        """Traction cap: holds a full train on max_gradient, about 35.5 kN."""
+        m_full_kg = (self.m_empty_kg
+                     + (self.capacity + self.n_crew) * self.passenger_mass_kg)
+        theta = math.atan(self.max_gradient)
+        return (m_full_kg * self.g_mps2
+                * (math.sin(theta) + self.c_rr * math.cos(theta)))
 
     @property
     def f_service_n(self) -> float:
@@ -85,6 +92,8 @@ PlatformSide = Literal["L", "R", "LR"]  # "LR": platforms on both sides
 class Beacon:
     """Received near stations only. Serialized form must fit 128 characters."""
 
+    # Complete compact ASCII JSON [name, side, underground], including
+    # syntax/escapes, is bounded; keep these typed/named boundary fields.
     station_name: str
     platform_side: PlatformSide
     underground: bool
@@ -131,7 +140,7 @@ class TrackInfo:
     elevation_m: float
     speed_limit_mps: float
     polarity: bool
-    # Station in this block; None where there is none.
+    # Station display metadata; None where absent. Not a boarding gate.
     station_name: str | None = None
 
 
@@ -151,7 +160,8 @@ class TrackInputs:
     track_info: TrackInfo
     track_signal: TrackSignal
     beacon: Beacon | None           # None when not over a beacon
-    # 0 except when boarding; never exceeds last reported capacity.
+    # Track Model sends only at stations, once per event, within capacity.
+    # Train Model checks rest, doors, count/capacity without a station gate.
     passengers_boarded: int
 
 
@@ -171,7 +181,8 @@ class ControllerOutputs:
 
     actual_speed_mps: float
     # Brake State, bool[2]: emergency then service. Engaged, not
-    # commanded: a brake failure blocks only the service brake.
+    # commanded: failure blocks only service. Both can engage; configured
+    # forces sum (October 20 SDD review).
     emergency_brake_active: bool    # controller or passenger
     service_brake_active: bool
     door_left_open: bool
@@ -179,12 +190,15 @@ class ControllerOutputs:
     interior_lights_on: bool
     exterior_lights_on: bool
     cabin_temp_c: float
-    # Passed through; zeros or stale under pickup failure, open.
-    commanded_speed_mps: float
-    authority_blocks: int           # passed through; 0 = must stop
-    # Passed through from TrackInfo, provisional.
-    speed_limit_mps: float
-    beacon: Beacon | None           # between-beacon behaviour open
+    # Passed through; both None (null) under signal pickup failure,
+    # invalid data rather than a valid 0.
+    commanded_speed_mps: float | None
+    authority_blocks: int | None    # 0 = must stop
+    # No speed limit: the Train Controller takes commanded speed as its
+    # limit (its owner, 2026-10-28).
+    # The station beacon of the block the train is on, every tick it is
+    # there (heard on the block before); None elsewhere.
+    beacon: Beacon | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,7 +206,7 @@ class TrackOutputs:
     """To the Track Model."""
 
     block_id: str
-    offset_m: float                # reference point on the 32.2 m train open
+    offset_m: float                # signed front-of-train offset, m
     actual_speed_mps: float         # negative during rollback
     # True on the tick polarity reverses; table says int.
     block_changed: bool
@@ -258,5 +272,5 @@ class TrainModel(Protocol):
         ...
 
     def clear_passenger_brake_for_test(self) -> None:
-        """Test harness override only; normal UI release is undecided."""
+        """Developer override; normal release is the controller one-shot command."""
         ...

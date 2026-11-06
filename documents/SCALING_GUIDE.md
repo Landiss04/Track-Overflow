@@ -72,7 +72,9 @@ mouse move of an interactive resize. A Qt native event filter cannot do this:
 `WM_SIZING` is sent directly to the window procedure, not posted to the
 message queue, so the filter never sees it. The lock also snaps the initial
 window to 16:10, because Qt shrinks the 1440 x 900 window to fit smaller
-screens without keeping its shape. Windows itself then keeps the client area
+screens without keeping its shape. Initial sizing also includes the native
+frame and the screen's available work area, so the taskbar does not cover
+the bottom controls. Windows itself then keeps the client area
 at 16:10, so the dragged border tracks the pointer and the opposite border
 stays still. For a corner drag, the axis that moved further drives the size.
 The minimum is the window's `minimumWidth` in physical pixels.
@@ -80,6 +82,10 @@ The minimum is the window's `minimumWidth` in physical pixels.
 **At the minimum size, dragging inward does nothing.** The window stays
 exactly where it is instead of shrinking and snapping back; dragging outward
 still grows it.
+
+At fractional display scaling, the native minimum can differ by one physical
+pixel from an exact 16:10 rectangle. An inward drag preserves that existing
+minimum rectangle, avoiding a rounding correction between Qt and Windows.
 
 Maximized, snapped and fullscreen windows are sized by the system and are not
 16:10; the canvas is letterboxed in those states.

@@ -12,21 +12,27 @@ participant "StubCtcOffice" as Model
 end box
 
 TM --> H : tick outputs: tickets sold this tick, per station
-H -> H : TicketSales.add(): held until the CTC Office\nhas stepped on them
-H -> H : track_model_to_ctc(): whole numbers ≥ 0;\nstations with sales only
+H -> H : TicketSales.add(outputs)
+note right of H : held until the CTC Office\nhas stepped on them
+H -> H : track_model_to_ctc(outputs)
+note right of H : whole numbers ≥ 0;\nstations with sales only
 H -> Proc : STEP (inputs.track_model.ticket_sales:\n{"GLENBURY": 4, "DORMONT": 12})
-Proc -> Host : step_at(...)
-Host -> Model : step(...)
-Model -> Model : every station on the layout,\nevery count a whole number ≥ 0
+Proc -> Host : step_at(dt, sim_time_s, inputs)
+Host -> Model : step(dt, inputs, sim_time_s)
+Model -> Model : _layout.validate_inputs(inputs)
+note right of Model : every station on the layout,\nevery count a whole number ≥ 0
 alt invalid
   Model --> Host : InvalidInputError: the tick is refused
-  H -> H : the sales are sent again with the next step
+  H -> H : TicketSales.delivered(False)
+  note right of H : the sales are sent again with the next step
 else valid
-  Model -> Model : tickets_sold[station] += count
+  Model -> Model : _tickets[station] += tickets
   Model --> Host : outputs
-  Host -> Host : hourly sales[(clock hour, line)] += count
+  Host -> Host : _count_sales(sim_time_s, inputs)
+  note right of Host : _hourly_sales[(hour, line)] += tickets
   Host --> Proc : outputs
   Proc --> H : reply
-  H -> H : TicketSales.delivered(): each sale counted once
+  H -> H : TicketSales.delivered(True)
+  note right of H : each sale counted once
 end
 @enduml

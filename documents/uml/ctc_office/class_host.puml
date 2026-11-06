@@ -39,7 +39,6 @@ package "ctc_ui" {
     +step_at(dt, sim_time_s, inputs): CtcOutputs
     +dispatchTrain(train, line, block, arrival): str
     +setAuthority(train, line, block): str
-    +cancelDispatch(train): str
     +returnToYard(train): str
     +closeBlock(line, block): str
     +reopenBlock(line, block): str

@@ -133,8 +133,10 @@ class TrackConfig:
     """Construction-time configuration."""
 
     layout_paths: tuple[str, ...]
-    # Chance, per station per tick, that one new ticket is sold.
-    ticket_probability: float = 0.02
+    # Tickets sold per simulated minute at each station, on average
+    # (TM-1, Track Model owner 2026-10-26). Sales are time-based: the
+    # chance of a sale each tick is derived from the tick length.
+    tickets_per_minute: float = 12.0
     seed: int = 0
 
 
@@ -169,7 +171,7 @@ class TrackSignal:
     """Track circuit data of the occupied block: commanded speed and
     authority only."""
 
-    commanded_speed_mps: int        # whole m/s
+    commanded_speed_mps: float      # m/s (truth track-signal: a float)
     authority_blocks: int           # blocks it may still enter; 0 = stop
 
 
@@ -181,14 +183,17 @@ class TrackSignal:
 class TrackControllerCommands:
     """From the Track Controller, every tick.
 
-    A key that is absent keeps the last value commanded for it.
     Commanded speed and authority are per block: the Track Controller
     knows which blocks are occupied, not which train is in them, and the
-    track circuit carries one signal for the whole block.
+    track circuit carries one signal for the whole block. They last one
+    tick: a block not commanded on this tick reads zero, so a value is
+    delivered on the tick it is commanded and cleared after
+    (truth ``signals/track-signal.md``). Every other command is kept:
+    a key that is absent keeps the last value commanded for it.
     """
 
-    # Block ID -> whole m/s.
-    commanded_speed_mps: Mapping[str, int] = field(default_factory=dict)
+    # Block ID -> m/s.
+    commanded_speed_mps: Mapping[str, float] = field(default_factory=dict)
     # Block ID -> how many more blocks a train in that block may enter.
     commanded_authority: Mapping[str, int] = field(default_factory=dict)
     switch_commands: Mapping[str, SwitchPosition] = field(
@@ -224,7 +229,9 @@ class TrackModelInputs:
     controller: TrackControllerCommands
     # A train absent from this mapping has left the track.
     trains: Mapping[str, TrainReport]
-    ambient_temp_c: float
+    # The ambient temperature is set in the Track Model window. A value
+    # sent here applies until one is set there; None changes nothing.
+    ambient_temp_c: float | None = None
     # Simulated seconds since midnight of the first day, from the central
     # clock. None when the sender has no clock; the Track Model UI then
     # shows the sum of the dt values it has been stepped by.

@@ -230,16 +230,34 @@ Panel {
                     }
                 }
 
-                AppButton {
+                RowLayout {
                     Layout.fillWidth: true
-                    variant: "primary"
-                    text: qsTr("Reroute")
-                    enabled: rerouteSelect.value !== ""
-                    onClicked: root.report(
-                        root.host.dispatchTrain(root.trainId,
-                            root.train.line, rerouteSelect.value,
-                            rerouteArrival.text),
-                        qsTr("%1 rerouted.").arg(root.trainId))
+                    spacing: theme.space_2
+
+                    AppButton {
+                        Layout.fillWidth: true
+                        variant: "primary"
+                        text: qsTr("Reroute")
+                        enabled: rerouteSelect.value !== ""
+                        onClicked: root.report(
+                            root.host.dispatchTrain(root.trainId,
+                                root.train.line, rerouteSelect.value,
+                                rerouteArrival.text),
+                            qsTr("%1 rerouted.").arg(root.trainId))
+                    }
+
+                    // Return to yard (R66, D022): an order to the yard
+                    // entry block, where the train is retired. Only a
+                    // train on the track can be sent back.
+                    AppButton {
+                        variant: "secondary"
+                        text: qsTr("Return to yard")
+                        enabled: root.train.tracked === true
+                        onClicked: root.report(
+                            root.host.returnToYard(root.trainId),
+                            qsTr("%1 sent back to the yard.")
+                                .arg(root.trainId))
+                    }
                 }
 
                 HelperText {

@@ -83,6 +83,7 @@ from train_model.track_stub import TrackStub, load_blue_line
 # repository-level utils/ package.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.clock_driver import ClockDriver  # noqa: E402
+from utils.beacon_codec import encode_beacon  # noqa: E402
 from utils.system_clock import ALLOWED_SPEEDS, SystemClock  # noqa: E402
 
 #: Inputs, in interface-dictionary order. ``kind`` drives which editor
@@ -224,14 +225,17 @@ def _output_values(outputs: TrainModelOutputs) -> dict[str, Any]:
         "actual_speed": ctl.actual_speed_mps,
         "passenger_capacity": trk.passenger_capacity,
         "block_changed": trk.block_changed,
-        "speed_limit": ctl.speed_limit_mps,
     }
 
 
 def _live_values(outputs: TrainModelOutputs) -> dict[str, Any]:
-    """Input rows that read back what the train is actually doing."""
+    """Input rows that read back what the train is actually doing.
+
+    A null readback (the track signal under pickup failure) leaves its
+    row showing the entered value.
+    """
     ctl = outputs.controller
-    return {
+    values = {
         "service_brake_command": ctl.service_brake_active,
         "emergency_brake_command": ctl.emergency_brake_active,
         "interior_light_command": ctl.interior_lights_on,
@@ -241,6 +245,8 @@ def _live_values(outputs: TrainModelOutputs) -> dict[str, Any]:
         "commanded_speed": ctl.commanded_speed_mps,
         "authority": ctl.authority_blocks,
     }
+    return {name: value for name, value in values.items()
+            if value is not None}
 
 
 # Live before the first step: a passenger can pull the brake then.
@@ -516,7 +522,8 @@ class TestHarnessState(QObject):
             # Before the first step the module has been told nothing, so
             # the rows show the starting values the first tick sends.
             # Only a passenger can change it before then.
-            live = {name: live[name] for name in _PRE_START_LIVE}
+            live = {name: live[name] for name in _PRE_START_LIVE
+                    if name in live}
         return values | live
 
     def _sync_inputs(self) -> None:
@@ -1004,6 +1011,7 @@ class TestHarnessState(QObject):
                 raise ValueError(
                     f"beacon_platform_side must be L, R or LR, got {side!r}"
                 )
+            encode_beacon(station, side, values["beacon_underground"])
             beacon = Beacon(
                 station_name=station,
                 platform_side=side,
@@ -1042,6 +1050,8 @@ class TestHarnessState(QObject):
     @staticmethod
     def _to_display(unit: str, value: Any) -> Any:
         """Canonical display factors from truth/conventions/units.md."""
+        if value is None:
+            return None
         if unit == "°F":
             return value * 9 / 5 + 32
         factor = _DISPLAY_FACTORS.get(unit)
@@ -1059,6 +1069,8 @@ class TestHarnessState(QObject):
         kind: str, value: Any, decimals: int = _OUTPUT_DECIMALS,
     ) -> Any:
         """Round a numeric output for display in its declared kind."""
+        if value is None:
+            return None
         if kind in ("int", "uint"):
             return round(value)
         if kind == "float":

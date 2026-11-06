@@ -1,7 +1,7 @@
 // Manual dispatch: pick a line, a train and a destination station (or a
 // block directly); CTC computes the suggested speed and authority sent
-// to the wayside. Picking a train that already has an order reroutes
-// it.
+// to the wayside, shown as soon as all three are picked. Picking a train
+// that already has an order reroutes it.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -24,7 +24,21 @@ Panel {
         root.host.revision;
         return root.host.trainDetail(root.trainId);
     }
-    // Result of the last action: an error, or a confirmation.
+    // What the readouts show: the train's live values once it runs to
+    // the picked destination, else what dispatching it there would send
+    // (``error`` says why nothing would).
+    readonly property var computed: {
+        if (!root.host || root.trainId === "" || destinationSelect.value === "")
+            return root.train;
+        if (root.train.tracked
+                && root.train.destinationBlock === destinationSelect.value)
+            return root.train;
+        root.host.revision;
+        return root.host.dispatchPreview(root.trainId, root.line,
+                                         destinationSelect.value);
+    }
+    // Result of the last action: an error, or a confirmation. Cleared
+    // by any new pick or edit, so it never outlives what it was about.
     property string message: ""
     property bool messageIsError: false
 
@@ -52,6 +66,7 @@ Panel {
             label: qsTr("Line")
             model: root.host ? root.host.lineNames : []
             currentIndex: -1
+            onValueChanged: root.message = ""
         }
 
         PickField {
@@ -66,6 +81,7 @@ Panel {
                 root.host.revision;
                 return root.host.trainOptions(root.line);
             }
+            onValueChanged: root.message = ""
         }
 
         PickField {
@@ -77,12 +93,14 @@ Panel {
             model: root.host && root.line !== ""
                 ? root.host.stationOptions(root.line) : []
             currentIndex: -1
+            onValueChanged: root.message = ""
         }
 
         ValueField {
             id: arrivalField
             Layout.preferredWidth: 120
             label: qsTr("Arrival (HH:MM)")
+            onTextChanged: root.message = ""
         }
     }
 
@@ -96,22 +114,31 @@ Panel {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
             label: qsTr("Suggested speed")
-            value: root.train.suggestedSpeed || "—"
+            value: root.computed.suggestedSpeed || "—"
             unit: "mph"
         }
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
             label: qsTr("Authority")
-            value: root.train.authorityBlocks || "—"
+            value: root.computed.authorityBlocks || "—"
             unit: "blocks"
         }
     }
 
     HelperText {
         Layout.fillWidth: true
-        color: root.messageIsError ? theme.danger : theme.text_secondary
+        color: root.message !== ""
+            ? (root.messageIsError ? theme.danger : theme.text_secondary)
+            : root.computed.error ? theme.warning : theme.text_secondary
         text: root.message !== "" ? root.message
+            : root.computed.error ? root.computed.error
+            : root.computed.authorityBlocks
+                && root.computed.authorityBlocks !== "—"
+                && root.computed !== root.train
+                ? qsTr("What the CTC sends once %1 is dispatched; "
+                    + "recomputed every step after that.")
+                    .arg(root.trainId)
             : qsTr("Select a line, train and destination to compute "
                 + "speed and authority.")
     }
@@ -125,13 +152,14 @@ Panel {
         Layout.fillWidth: true
         spacing: theme.space_3
 
-        PickField {
+        BlockField {
             id: blockSelect
             Layout.fillWidth: true
             label: qsTr("Block on the selected line")
+            enabled: root.line !== ""
             model: root.host && root.line !== ""
                 ? root.host.blockOptions(root.line) : []
-            currentIndex: -1
+            onValueChanged: root.message = ""
         }
 
         AppButton {

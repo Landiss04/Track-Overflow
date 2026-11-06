@@ -11,23 +11,31 @@ participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
-D -> UI : Automatic, Manual or Maintenance
+D -> UI : "Automatic | Manual | Maintenance".activated(index)
 UI -> Main : modeActivated(index)
-Main -> Main : modeIndex = index;\nshow that mode's view
-Main -> Host : setAutomaticMode(index == Automatic)
+Main -> Main : modeIndex = index
+Main -> Host : setAutomaticMode(index === 0)
 Host -> Model : set_automatic_mode(active)
-Main -> Host : setMaintenanceMode(index == Maintenance)
+Main -> Host : setMaintenanceMode(index === 2)
 Host -> Model : set_maintenance_mode(active)
 alt leaving Maintenance
-  Model -> Model : drop every switch command;\nclosed blocks stay closed,\npending closures still close
+  note over Model
+    Every switch command is dropped; closed blocks
+    stay closed, and pending closures still close.
+  end note
 end
 alt Automatic
-  Model -> Model : the loaded schedule's runs\ndispatch themselves from the next step
+  note over Model
+    The loaded schedule's runs dispatch
+    themselves from the next step.
+  end note
 else Manual or Maintenance
-  Model -> Model : every scheduled run holds where it is
+  note over Model
+    Every scheduled run holds where it is.
+  end note
 end
-Host --> Main : revision += 1
-Main -> D : Automatic view: Selected train, Load schedule,\nAuto dispatch, Throughput\nManual view: Dispatch train, Selected train\n(reroute, cancel, return to yard), Throughput\nMaintenance view: Close block, Set switch position,\nActive closures, Throughput
+Host -> Main : stateChanged()
+Main -> D : Automatic view: Selected train, Load schedule,\nAuto dispatch, Throughput\nManual view: Dispatch train, Selected train\n(reroute, return to yard), Throughput\nMaintenance view: Close block, Set switch position,\nActive closures, Throughput
 note over Model
   The mode itself is sent to no module:
   the Track Controller gets the closed blocks instead.

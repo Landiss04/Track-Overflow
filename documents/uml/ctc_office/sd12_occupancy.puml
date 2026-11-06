@@ -6,24 +6,39 @@ autonumber
 actor Dispatcher as D
 box "CTC Office process" #F7F9FC
 participant "CtcHeader" as Hdr
+participant "Main.qml" as Main
 participant "OccupancyWindow\n/ OccupancyDock" as Occ
 participant "CtcHost" as Host
 participant "StubCtcOffice" as Model
 end box
 
-D -> Hdr : Train occupancy
-Hdr -> Occ : open
+D -> Hdr : "Train occupancy".clicked()
+Hdr -> Main : occupancyClicked()
+Main -> Main : occupancyState = "open"
 loop after each step
-  Occ -> Host : trains
+  Host -> Main : stateChanged()
+  Main -> Host : trains
   Host -> Model : snapshot()
   Model --> Host : followed trains, orders, authorities,\nsuggestions, lost trains
-  Host --> Occ : per train: line, block(s), suggested speed (mph),\nauthority (blocks, end block), destination,\narrival, status (En route, In yard, Not located, No order)
+  Host --> Main : per train: line, block(s), suggested speed (mph),\nauthority (blocks, end block), destination,\narrival, status (En route, In yard, Not located, No order)
+  Main -> Occ : trains
   Occ -> D : table
 end
-D -> Occ : filter by line or status; search train ID
+D -> Occ : "Search train".committed(value)
+Occ -> Occ : search = value
+D -> Occ : "All lines | Green | Red".activated(index)
+Occ -> Occ : lineFilterIndex = index
+D -> Occ : "All | En route".activated(index)
+Occ -> Occ : statusFilterIndex = index
 Occ -> D : matching rows
-D -> Occ : click a row, Select train
-Occ -> D : the train in Selected train (SD-13)
-D -> Occ : Keep open at bottom / minimize
-Occ -> D : docked over the track view
+D -> Occ : DataTable.rowActivated(index, row)
+Occ -> Occ : pickedTrain = row.train
+D -> Occ : "Select train".clicked()
+Occ -> Main : trainSelected(pickedTrain)
+Main -> Main : selectedTrainId = trainId\noccupancyState = "docked"
+Main -> D : the train in Selected train (SD-13)
+D -> Occ : "Keep open at bottom".clicked()
+Occ -> Main : minimizeRequested()
+Main -> Main : occupancyState = "docked"
+Main -> D : docked over the track view
 @enduml

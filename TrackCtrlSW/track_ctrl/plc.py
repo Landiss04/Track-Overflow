@@ -33,7 +33,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Mapping
+from functools import cached_property
+from typing import Callable, Mapping
 
 #: Severities a diagnostic can carry. An ``error`` blocks compilation.
 SEVERITY_ERROR = "error"
@@ -69,15 +70,24 @@ class Diagnostic:
 
 # --- expression tree -------------------------------------------------
 
+#: An expression compiled for scanning: called with the scan's values
+#: and its list of undefined-read warnings, it returns the expression's
+#: value. Compiling once means a scan does not dispatch on node types.
+Evaluator = Callable[[dict[str, bool], list[Diagnostic]], bool]
+
+_UNSET = object()
+
+
 @dataclass(frozen=True)
 class Literal:
     """A constant ``0`` or ``1``."""
 
     value: bool
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the constant."""
-        return self.value
+    def compile(self) -> Evaluator:
+        """Return an evaluator that gives the constant."""
+        value = self.value
+        return lambda values, undefined_reads: value
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -91,9 +101,30 @@ class Reference:
     name: str
     line: int
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the current value, defaulting an unknown read low."""
-        return scope.read(self.name, self.line)
+    def compile(self) -> Evaluator:
+        """Return an evaluator that reads the current value.
+
+        An undefined read is ``False``. It is reported once per scan:
+        the first sets the name to ``False``, so later reads find it.
+        """
+        name = self.name
+        warning = Diagnostic(
+            SEVERITY_WARNING,
+            self.line,
+            f"{name} was never declared or assigned; read as 0",
+        )
+
+        def read(
+            values: dict[str, bool], undefined_reads: list[Diagnostic]
+        ) -> bool:
+            value = values.get(name, _UNSET)
+            if value is _UNSET:
+                undefined_reads.append(warning)
+                values[name] = False
+                return False
+            return value
+
+        return read
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -106,9 +137,12 @@ class Not:
 
     operand: "Expression"
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the inverted operand."""
-        return not self.operand.evaluate(scope)
+    def compile(self) -> Evaluator:
+        """Return an evaluator that inverts the operand."""
+        operand = self.operand.compile()
+        return lambda values, undefined_reads: not operand(
+            values, undefined_reads
+        )
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -123,20 +157,38 @@ class BinaryOp:
     left: "Expression"
     right: "Expression"
 
-    def evaluate(self, scope: "_Scope") -> bool:
-        """Return the combined operands.
+    def compile(self) -> Evaluator:
+        """Return an evaluator that combines the operands.
 
         Both sides are evaluated even when the result is already
         decided, so an undefined-read warning is raised the same way on
         every scan regardless of input values.
         """
-        left = self.left.evaluate(scope)
-        right = self.right.evaluate(scope)
+        left = self.left.compile()
+        right = self.right.compile()
+        # One evaluator per operator, so a scan does not compare names.
         if self.operator == "AND":
-            return left and right
-        if self.operator == "OR":
-            return left or right
-        return left != right
+            def combine(
+                values: dict[str, bool], undefined_reads: list[Diagnostic]
+            ) -> bool:
+                first = left(values, undefined_reads)
+                second = right(values, undefined_reads)
+                return first and second
+        elif self.operator == "OR":
+            def combine(
+                values: dict[str, bool], undefined_reads: list[Diagnostic]
+            ) -> bool:
+                first = left(values, undefined_reads)
+                second = right(values, undefined_reads)
+                return first or second
+        else:
+            def combine(
+                values: dict[str, bool], undefined_reads: list[Diagnostic]
+            ) -> bool:
+                first = left(values, undefined_reads)
+                second = right(values, undefined_reads)
+                return first != second
+        return combine
 
     def names(self) -> frozenset[str]:
         """Return the names this expression reads."""
@@ -147,72 +199,33 @@ Expression = Literal | Reference | Not | BinaryOp
 
 
 @dataclass(frozen=True)
-class Assignment:
-    """One ``NAME := expression`` statement."""
-
-    target: str
-    expression: Expression
-    line: int
-
-
-class _Scope:
-    """Values visible to one scan, plus the warnings it raised."""
-
-    def __init__(self, inputs: Mapping[str, bool]) -> None:
-        self.values: dict[str, bool] = dict(inputs)
-        self.undefined_reads: list[Diagnostic] = []
-
-    def read(self, name: str, line: int) -> bool:
-        """Return a value, defaulting an undefined read to ``False``."""
-        if name in self.values:
-            return self.values[name]
-        self.undefined_reads.append(
-            Diagnostic(
-                SEVERITY_WARNING,
-                line,
-                f"{name} was never declared or assigned; read as 0",
-            )
-        )
-        self.values[name] = False
-        return False
-
-    def write(self, name: str, value: bool) -> None:
-        """Store an assignment result."""
-        self.values[name] = value
-
-
-@dataclass
-class ScanResult:
-    """What one pass of a program produced."""
-
-    values: dict[str, bool] = field(default_factory=dict)
-    warnings: list[Diagnostic] = field(default_factory=list)
-
-    def outputs(self, names: tuple[str, ...]) -> dict[str, bool]:
-        """Return just the declared outputs, defaulting missing to 0."""
-        return {name: self.values.get(name, False) for name in names}
-
-
-@dataclass(frozen=True)
 class Program:
     """A compiled, executable PLC program."""
 
     source: str
     inputs: tuple[str, ...]
     outputs: tuple[str, ...]
-    assignments: tuple[Assignment, ...]
+    #: ``(target, expression, line)`` for each assignment, in source
+    #: order.
+    assignments: tuple[tuple[str, Expression, int], ...]
     diagnostics: tuple[Diagnostic, ...] = ()
     #: Line each name was declared on, so a check made against a
     #: controller's I/O can point at the declaration.
     declared_at: Mapping[str, int] = field(default_factory=dict)
+    #: Set when the program is committed to a wayside: which commit it
+    #: was (counting from 1), the file it came from, and when. A program
+    #: that has not been committed has number 0.
+    number: int = 0
+    file_name: str = ""
+    committed_at: str = ""
 
     @property
     def boolean_count(self) -> int:
         """Total distinct booleans the program touches."""
         names: set[str] = set(self.inputs) | set(self.outputs)
-        for assignment in self.assignments:
-            names.add(assignment.target)
-            names |= assignment.expression.names()
+        for target, expression, _ in self.assignments:
+            names.add(target)
+            names |= expression.names()
         return len(names)
 
     @property
@@ -220,19 +233,38 @@ class Program:
         """Source lines, as shown in the editor gutter."""
         return len(self.source.splitlines())
 
-    def scan(self, inputs: Mapping[str, bool]) -> ScanResult:
-        """Run one scan cycle over ``inputs`` and return every value.
+    def scan(
+        self, inputs: Mapping[str, bool]
+    ) -> tuple[dict[str, bool], list[Diagnostic]]:
+        """Run one scan cycle over ``inputs``.
+
+        Returns every value, and the warnings the scan raised.
 
         The program is pure: nothing in ``self`` is mutated, so the
         same compiled program can be scanned against live inputs and
-        against a sandbox copy without the two interfering.
+        against a sandbox copy without the two interfering. (Its
+        evaluators are made on the first scan and only cached.)
         """
-        scope = _Scope(inputs)
-        for assignment in self.assignments:
-            scope.write(
-                assignment.target, assignment.expression.evaluate(scope)
-            )
-        return ScanResult(values=scope.values, warnings=scope.undefined_reads)
+        values: dict[str, bool] = dict(inputs)
+        undefined_reads: list[Diagnostic] = []
+        for target, evaluate in self._evaluators:
+            values[target] = evaluate(values, undefined_reads)
+        return values, undefined_reads
+
+    @cached_property
+    def _evaluators(self) -> tuple[tuple[str, Evaluator], ...]:
+        # Each assignment's target and compiled expression, in order.
+        return tuple(
+            (target, expression.compile())
+            for target, expression, _ in self.assignments
+        )
+
+    def __getstate__(self) -> dict[str, object]:
+        # Evaluators are functions and do not copy or pickle; a copy
+        # makes its own on its first scan.
+        state = dict(self.__dict__)
+        state.pop("_evaluators", None)
+        return state
 
 
 # --- parsing ---------------------------------------------------------
@@ -408,7 +440,7 @@ def compile_program(source: str) -> Program:
     """
     inputs: list[str] = []
     outputs: list[str] = []
-    assignments: list[Assignment] = []
+    assignments: list[tuple[str, Expression, int]] = []
     diagnostics: list[Diagnostic] = []
     assigned: set[str] = set()
     read_unknown: set[str] = set()
@@ -482,7 +514,7 @@ def compile_program(source: str) -> Program:
                         "a VAR_IN; it reads as 0",
                     )
                 )
-            assignments.append(Assignment(target_name, expression, number))
+            assignments.append((target_name, expression, number))
             assigned.add(target_name)
 
         except PlcSyntaxError as error:
