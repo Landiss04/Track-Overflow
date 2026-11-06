@@ -66,6 +66,10 @@ class Contract(unittest.TestCase):
                 suggestions={k["3"].ref: Suggestion(32, 2)})),
             replace(inputs(controller), ctc=CtcInputs(
                 switch_commands={k["12"].ref: "sideways"})),  # type: ignore
+            replace(inputs(controller), ctc=CtcInputs(
+                route_requests={k["12"].ref: "sideways"})),  # type: ignore
+            replace(inputs(controller), ctc=CtcInputs(
+                route_requests={k["12"]: "reverse"})),  # type: ignore
             # The CTC Office names blocks by BlockRef, not BlockKey.
             replace(inputs(controller), ctc=CtcInputs(
                 closed_blocks=frozenset({k["3"]}))),  # type: ignore

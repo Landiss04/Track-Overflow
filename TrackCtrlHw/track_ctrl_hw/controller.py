@@ -225,6 +225,8 @@ def _validate(inputs: Any) -> None:
     _keys(model.occupied_blocks, "occupied_blocks")
     _choices(ctc.switch_commands, SWITCH_POSITIONS, "switch_commands",
              BlockRef)
+    _choices(ctc.route_requests, SWITCH_POSITIONS, "route_requests",
+             BlockRef)
     _choices(model.switch_positions, SWITCH_POSITIONS, "switch_positions")
     _choices(model.signal_aspects, SIGNAL_ASPECTS, "signal_aspects")
     _keys(model.crossings_active, "crossings_active")
