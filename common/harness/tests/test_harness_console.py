@@ -155,6 +155,17 @@ class ConsoleStateTest(unittest.TestCase):
             self.console.refresh()
             self.assertEqual(self.console.snapshot["mean_ms"], "—")
 
+    def test_speed_shows_the_request_and_slipped_the_total(self) -> None:
+        """Keep the requested speed and the total dropped on show."""
+        self.harness.clock.set_speed(10)
+        with patch.object(
+            Harness, "dropped_ticks", new_callable=PropertyMock
+        ) as dropped:
+            dropped.return_value = 1234
+            self.console.refresh()
+        self.assertEqual(self.console.snapshot["speed"], "10x")
+        self.assertEqual(self.console.snapshot["slipped"], "1234")
+
     def test_source_and_frozen_resource_paths(self) -> None:
         """Resolve QML through the same helper in both builds."""
         self.assertTrue(resource_path("common/harness/ui/Main.qml").is_file())

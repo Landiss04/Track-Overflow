@@ -448,5 +448,47 @@ class StopWithTicksOwedTest(_FaultTest):
         self.assertEqual(run.events[-1][2], "HARNESS_STOPPED")
 
 
+class SlowModuleSlipTest(_FaultTest):
+    """A module too slow for 10x slips the run; no module notices."""
+
+    # Each slow reply is under the reply timeout, so the clock never
+    # pauses, but together they leave the run far behind real time.
+    SLOW_TICKS = range(FAULT_TICK, FAULT_TICK + 8)
+    SLOW_MS = 200
+
+    def test_slip_drops_real_time_not_ticks(self) -> None:
+        run = self.run_
+        harness = run.harness
+        for tick in self.SLOW_TICKS:
+            run.fakes[TRAIN_MODEL].delay_ms[tick] = self.SLOW_MS
+        run.run()
+        run.fakes[CTC_OFFICE].send(encode(state_message(
+            0, {"clock_paused": False, "clock_speedup": True}
+        )))
+        last_slow = self.SLOW_TICKS[-1]
+        self.assertTrue(wait_until(
+            lambda: last_slow + 20 in run.completed
+        ), run.events)
+        # The run slipped and said so.
+        self.assertGreater(harness.dropped_ticks, 0, run.events)
+        slipped = run.find("TIME_SLIPPED")
+        self.assertTrue(slipped, run.events)
+        self.assertRegex(slipped[0][3], r"^\d+ ticks behind real time")
+        # It did not pause: nothing was late.
+        self.assertEqual(run.find("REPLY_LATE"), [])
+        self.assertFalse(harness.clock.is_paused, run.events)
+        # Every module saw every tick, with one dt and the clock's time.
+        self.assert_every_module_stepped_every_tick()
+        start_s = harness.clock.sim_time_s - harness.clock.elapsed_s
+        for fake in run.fakes.values():
+            for step in fake.steps:
+                self.assertEqual(step["dt"], harness.clock.tick_s)
+                self.assertAlmostEqual(
+                    step["sim_time_s"],
+                    start_s + step["tick"] * step["dt"],
+                    places=6,
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
