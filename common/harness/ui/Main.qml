@@ -68,6 +68,12 @@ Shared.ScaledWindow {
                         label: "Speed"
                         value: backend.snapshot.speed
                     }
+                    Shared.TelemetryReadout {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 140
+                        label: "Actual"
+                        value: backend.snapshot.actual
+                    }
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 520
@@ -81,12 +87,15 @@ Shared.ScaledWindow {
                                  numeric: true},
                                 {key: "max", label: "Max (ms)",
                                  numeric: true},
+                                {key: "behind", label: "Behind (s)",
+                                 numeric: true},
                                 {key: "slipped", label: "Slipped",
                                  numeric: true}
                             ]
                             rows: [{
                                 mean: backend.snapshot.mean_ms,
                                 max: backend.snapshot.max_ms,
+                                behind: backend.snapshot.behind_s,
                                 slipped: backend.snapshot.slipped
                             }]
                         }

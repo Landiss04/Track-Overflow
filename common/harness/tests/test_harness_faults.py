@@ -39,6 +39,7 @@ from common.harness.modules import (  # noqa: E402
     TRAIN_MODEL,
     ModuleSpec,
 )
+from common.harness.slips import SlipEpisodes  # noqa: E402
 from common.harness.stub_edges import StubEdges  # noqa: E402
 from utils.event_log import EventLog  # noqa: E402
 from utils.harness_protocol import (  # noqa: E402
@@ -488,6 +489,38 @@ class SlowModuleSlipTest(_FaultTest):
                     start_s + step["tick"] * step["dt"],
                     places=6,
                 )
+
+    def test_a_slip_is_one_episode(self) -> None:
+        run = self.run_
+        harness = run.harness
+        # Short enough to see a slip end within the test.
+        quiet_s = 0.3
+        harness._slips = SlipEpisodes(report_interval_s=60, quiet_s=quiet_s)
+        slow_ticks = range(FAULT_TICK, FAULT_TICK + 12)
+        for tick in slow_ticks:
+            run.fakes[TRAIN_MODEL].delay_ms[tick] = self.SLOW_MS
+        run.run()
+        run.fakes[CTC_OFFICE].send(encode(state_message(
+            0, {"clock_paused": False, "clock_speedup": True}
+        )))
+        self.assertTrue(wait_until(
+            lambda: bool(run.find("TIME_SLIP_ENDED"))
+        ), run.events)
+        # One line to start it, one to end it, for several drops.
+        self.assertEqual(len(run.find("TIME_SLIPPED")), 1, run.events)
+        ended = run.find("TIME_SLIP_ENDED")
+        self.assertEqual(len(ended), 1)
+        self.assertRegex(
+            ended[0][3],
+            rf"^{harness.dropped_ticks} ticks dropped in \d+ batches",
+        )
+        self.assertFalse(harness.is_slipping)
+        self.assertEqual(run.find("REPLY_LATE"), [])
+        # Back to real time at 10x.
+        self.assertTrue(wait_until(
+            lambda: (harness.actual_speed or 0) > 9
+        ), harness.actual_speed)
+        self.assert_every_module_stepped_every_tick()
 
 
 if __name__ == "__main__":

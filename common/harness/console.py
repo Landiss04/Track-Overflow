@@ -49,6 +49,7 @@ FAULT_EVENTS = frozenset({
     "MODULE_DISCONNECTED",
     "PROTOCOL_ERROR",
     "TIME_SLIPPED",
+    "TIME_SLIPPING",
     "INPUTS_FAILED",
     "EDGES_FAILED",
     "MODULE_KILLED",
@@ -231,6 +232,8 @@ class HarnessConsole(QObject):
             "time": clock.format_time_of_day(),
             "tick": str(clock.tick_count),
             "speed": f"{clock.speed}x",
+            "actual": _speed_text(self._harness.actual_speed),
+            "behind_s": f"{self._harness.lag_s:.2f}",
             "state": "PAUSED" if clock.is_paused else "RUNNING",
             "hold": _display_reason(self._harness.hold_reason),
             "ready": len(self._harness.ready_modules),
@@ -312,3 +315,10 @@ def _format_outputs(values: Mapping[str, Any]) -> str:
         chunks.append(chunk)
         remaining -= len(chunk)
     return "".join(chunks)
+
+
+def _speed_text(speed: float | None) -> str:
+    # The speed the run achieves, or a dash while there is none.
+    if speed is None:
+        return EMPTY
+    return f"{speed:.1f}x"

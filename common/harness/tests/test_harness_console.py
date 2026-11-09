@@ -166,6 +166,22 @@ class ConsoleStateTest(unittest.TestCase):
         self.assertEqual(self.console.snapshot["speed"], "10x")
         self.assertEqual(self.console.snapshot["slipped"], "1234")
 
+    def test_actual_speed_and_lag_are_shown(self) -> None:
+        """Show the speed achieved and how far behind the run is."""
+        self.console.refresh()
+        self.assertEqual(self.console.snapshot["actual"], "—")
+        self.assertEqual(self.console.snapshot["behind_s"], "0.00")
+        with patch.object(
+            Harness, "actual_speed", new_callable=PropertyMock
+        ) as actual, patch.object(
+            Harness, "lag_s", new_callable=PropertyMock
+        ) as lag:
+            actual.return_value = 6.27
+            lag.return_value = 0.4321
+            self.console.refresh()
+        self.assertEqual(self.console.snapshot["actual"], "6.3x")
+        self.assertEqual(self.console.snapshot["behind_s"], "0.43")
+
     def test_source_and_frozen_resource_paths(self) -> None:
         """Resolve QML through the same helper in both builds."""
         self.assertTrue(resource_path("common/harness/ui/Main.qml").is_file())

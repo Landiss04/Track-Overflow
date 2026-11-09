@@ -78,6 +78,8 @@ class _StandInHarness(QObject):
         self.ready_modules = NAMES
         self.startup_timed_out_modules: tuple[str, ...] = ()
         self.dropped_ticks = 0
+        self.actual_speed: float | None = None
+        self.lag_s = 0.0
         self.log_path = "events.csv"
         self.outputs: dict[str, Any] = {}
 

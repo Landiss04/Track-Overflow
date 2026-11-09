@@ -28,8 +28,9 @@ Significant events go to the event log (R80), each also signalled as
 - ``MODULE_STARTED``, ``MODULE_READY``, ``ALL_READY``,
   ``STARTUP_TIMEOUT``;
 - ``MODULE_DISCONNECTED``, ``MODULE_EXITED``, ``MODULE_KILLED``;
-- ``CLOCK_PAUSED``, ``CLOCK_RESUMED``, ``SPEED_CHANGED``,
-  ``TIME_SLIPPED``;
+- ``CLOCK_PAUSED``, ``CLOCK_RESUMED``, ``SPEED_CHANGED``;
+- ``TIME_SLIPPED``, ``TIME_SLIPPING``, ``TIME_SLIP_ENDED``: one slip
+  behind real time, logged as an episode (``common.harness.slips``);
 - ``TICK_REJECTED``, ``INPUTS_FAILED``, ``REPLY_LATE``,
   ``LATE_REPLY_RECEIVED``, ``UNEXPECTED_REPLY``, ``PROTOCOL_ERROR``;
 - ``EDGES_FAILED``, and whatever the edges report, such as
@@ -58,6 +59,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from common.harness.modules import CTC_OFFICE, ModuleSpec
 from common.harness.pacer import TickPacer
+from common.harness.slips import SlipEpisodes
 from common.harness.stub_edges import StubEdges
 from common.harness.supervisor import (
     QUIT_TIMEOUT_S,
@@ -174,6 +176,7 @@ class Harness(QObject):
         self._reply_timeout_s = reply_timeout_s
         self._clock = SystemClock()
         self._pacer = TickPacer(self._clock, parent=self)
+        self._slips = SlipEpisodes()
         self._supervisor = ModuleSupervisor(
             specs, startup_timeout_s=startup_timeout_s, parent=self
         )
@@ -253,11 +256,30 @@ class Harness(QObject):
         """Ticks real time earned that never ran.
 
         The run fell too far behind, paused with ticks owed, or ended
-        with ticks owed; only the first two log ``TIME_SLIPPED``. No
-        module misses a tick; simulation time slips behind real time
-        instead.
+        with ticks owed; only the first two are a slip, logged as an
+        episode. No module misses a tick; simulation time slips behind
+        real time instead.
         """
         return self._pacer.dropped_ticks
+
+    @property
+    def actual_speed(self) -> float | None:
+        """Simulated seconds per real second the run achieves.
+
+        Measured over the last few seconds of running; None while the
+        clock is paused or has only just started.
+        """
+        return self._pacer.actual_speed
+
+    @property
+    def lag_s(self) -> float:
+        """Real seconds the run is behind real time, owed not dropped."""
+        return self._pacer.lag_s
+
+    @property
+    def is_slipping(self) -> bool:
+        """Whether a slip behind real time is going on."""
+        return self._slips.is_slipping
 
     @property
     def log_path(self) -> str:
@@ -448,6 +470,12 @@ class Harness(QObject):
         self._apply_clock_state()
         self.tickCompleted.emit(self._clock.tick_count, round_trip_s)
         self._pacer.tick_finished()
+        if self._slips.is_slipping:
+            self._log_slips(self._slips.ticked(
+                time.perf_counter(),
+                self._pacer.is_keeping_up,
+                self._pacer.actual_speed,
+            ))
 
     def _hand_to_edges(self, fresh: Mapping[str, Mapping[str, Any]]) -> None:
         # The edges see each tick's outputs exactly once, and say what
@@ -529,6 +557,7 @@ class Harness(QObject):
             self._log_event(HARNESS, "CLOCK_RESUMED", f"{speed}x")
         elif reason is not None and not self._clock.is_paused:
             self._clock.pause()
+            self._log_slips(self._slips.held())
             self._log_event(HARNESS, "CLOCK_PAUSED", reason)
 
     def _hold_reason(self) -> str | None:
@@ -609,11 +638,14 @@ class Harness(QObject):
         # owed when the run ends are not a slip: nothing was behind.
         if self._stopping:
             return
-        self._log_event(
-            HARNESS,
-            "TIME_SLIPPED",
-            f"{count} ticks behind real time, not made up",
-        )
+        self._log_slips(self._slips.dropped(
+            time.perf_counter(), count, self._pacer.actual_speed
+        ))
+
+    def _log_slips(self, events: Sequence[tuple[str, str]]) -> None:
+        # What the slip tracker says, from the harness.
+        for event, detail in events:
+            self._log_event(HARNESS, event, detail)
 
     def _log_event(self, source: str, event: str, detail: str = "") -> None:
         # One row in the event log, stamped with the clock's time.

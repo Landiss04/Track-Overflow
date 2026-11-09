@@ -20,8 +20,15 @@ if str(_REPO) not in sys.path:
 
 from PySide6.QtCore import QCoreApplication  # noqa: E402
 
-from common.harness.pacer import TickPacer  # noqa: E402
-from utils.clock_driver import MAX_CATCH_UP_TICKS  # noqa: E402
+from common.harness.pacer import (  # noqa: E402
+    KEEPING_UP_TICKS,
+    MAX_BUSY_FRACTION,
+    MAX_LAG_S,
+    MAX_REST_S,
+    MIN_SPEED_SPAN_S,
+    SPEED_WINDOW_S,
+    TickPacer,
+)
 from utils.system_clock import SystemClock  # noqa: E402
 
 _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
@@ -68,6 +75,14 @@ class PacerTest(unittest.TestCase):
         self.pacer.tick_finished()
         self.pacer.poll()
 
+    def use_pacer(self, **options: float) -> None:
+        """Pace the clock with a new pacer built with ``options``."""
+        self.pacer.stop()
+        self.pacer = TickPacer(self.clock, now_s=self.time, **options)
+        self.addCleanup(self.pacer.stop)
+        self.pacer.backlogDropped.connect(self.dropped.append)
+        self.pacer.start()
+
     def run_for(self, seconds: float) -> None:
         """Run with modules that reply at once."""
         end_s = self.time.now_s + seconds
@@ -96,17 +111,27 @@ class PacerTest(unittest.TestCase):
         self.advance(0.2)
         self.assertEqual(self.started, [1])
         self.assertTrue(self.pacer.is_in_flight)
-        # The owed ticks run back to back, each after the one before.
+        # Tick 1 took 0.2 s, so the run rests a quarter of that, then
+        # the owed ticks run back to back, each after the one before.
         self.finish()
+        self.assertEqual(self.started, [1])
+        self.advance(0.0495)
+        self.assertEqual(self.started, [1])
+        self.advance(0.001)
         self.assertEqual(self.started, [1, 2])
         self.finish()
         self.finish()
         self.finish()
         self.assertEqual(self.started, [1, 2, 3, 4, 5])
         self.finish()
-        self.assertEqual(self.started, [1, 2, 3, 4, 5])
-        self.advance(0.06)
         self.assertEqual(self.started, [1, 2, 3, 4, 5, 6])
+        self.finish()
+        self.assertEqual(self.started, [1, 2, 3, 4, 5, 6])
+        # Caught up: the next tick comes one interval after it fell due.
+        self.advance(0.09)
+        self.assertEqual(self.started, [1, 2, 3, 4, 5, 6])
+        self.advance(0.01)
+        self.assertEqual(self.started, [1, 2, 3, 4, 5, 6, 7])
 
     def test_backlog_past_the_limit_is_dropped(self) -> None:
         self.clock.set_speed(10)
@@ -115,10 +140,13 @@ class PacerTest(unittest.TestCase):
         self.assertEqual(self.started, [1])
         self.advance(1.5)
         self.finish()
-        # Owed: 150 ticks, more than the limit. One runs, the rest go.
+        # Tick 1 took 1.5 s: the run rests the longest rest first.
+        self.assertEqual(self.started, [1])
+        self.advance(MAX_REST_S)
+        # Owed: 155 ticks, more than the limit. One runs, the rest go.
         self.assertEqual(self.started, [1, 2])
-        self.assertEqual(self.dropped, [149])
-        self.assertEqual(self.pacer.dropped_ticks, 149)
+        self.assertEqual(self.dropped, [154])
+        self.assertEqual(self.pacer.dropped_ticks, 154)
         self.finish()
         self.assertEqual(self.started, [1, 2])
         self.advance(0.0105)
@@ -127,11 +155,15 @@ class PacerTest(unittest.TestCase):
     def test_backlog_within_the_limit_is_made_up(self) -> None:
         self.clock.set_speed(10)
         self.clock.resume()
+        # No rest, so the hold-up alone sets what is owed.
+        self.use_pacer(max_busy_fraction=1.0)
         self.advance(0.0105)
-        self.advance(0.0099 * MAX_CATCH_UP_TICKS)
+        limit = self.pacer.catch_up_limit
+        self.assertEqual(limit, round(MAX_LAG_S / 0.01))
+        self.advance(0.0099 * limit)
         while self.pacer.is_in_flight:
             self.finish()
-        self.assertEqual(len(self.started), MAX_CATCH_UP_TICKS)
+        self.assertEqual(len(self.started), limit)
         self.assertEqual(self.dropped, [])
 
     def test_pause_keeps_at_most_the_next_tick(self) -> None:
@@ -196,15 +228,8 @@ class PacerTest(unittest.TestCase):
         self.assertEqual(self.started, [1, 2])
 
 
-class PacerSlipRegressionTest(unittest.TestCase):
-    """What a slip must never change, however the pacer sheds load.
-
-    Each tick takes a set round trip of fake real time, as modules
-    replying after that long would. A slip may only drop wall-clock
-    time that was owed: the ticks that do run follow one another with
-    a constant ``dt``, one at a time, and a run that keeps up loses
-    nothing and runs every tick on time.
-    """
+class _TimedRun(unittest.TestCase):
+    """A pacer whose ticks each take a set round trip of fake time."""
 
     def setUp(self) -> None:
         self.time = _FakeTime()
@@ -264,6 +289,25 @@ class PacerSlipRegressionTest(unittest.TestCase):
             self.assertEqual(dt, self.clock.tick_s)
             self.assertAlmostEqual(sim_time_s, start_s + tick * dt, places=6)
 
+    def use_pacer(self, **options: float) -> None:
+        """Pace the clock with a new pacer built with ``options``."""
+        self.pacer.stop()
+        self.pacer = TickPacer(self.clock, now_s=self.time, **options)
+        self.addCleanup(self.pacer.stop)
+        self.pacer.backlogDropped.connect(self.dropped.append)
+        self.pacer.start()
+
+
+class PacerSlipRegressionTest(_TimedRun):
+    """What a slip must never change, however the pacer sheds load.
+
+    Each tick takes a set round trip of fake real time, as modules
+    replying after that long would. A slip may only drop wall-clock
+    time that was owed: the ticks that do run follow one another with
+    a constant ``dt``, one at a time, and a run that keeps up loses
+    nothing and runs every tick on time.
+    """
+
     def test_round_trips_inside_the_budget_cost_nothing_at_10x(self) -> None:
         # 7 ms of a 10 ms budget: every tick starts when it falls due.
         self.clock.set_speed(10)
@@ -281,7 +325,7 @@ class PacerSlipRegressionTest(unittest.TestCase):
     def test_round_trips_inside_the_budget_cost_nothing_at_1x(self) -> None:
         self.clock.resume()
         began_s = self.time.now_s
-        self.run_for(2.0, lambda _tick: 0.08)
+        self.run_for(2.0, lambda _tick: 0.07)
         self.assertEqual(len(self.ticks), 20)
         self.assertEqual(self.dropped, [])
         for real_s, tick, _sim_s, _dt in self.ticks:
@@ -325,7 +369,7 @@ class PacerSlipRegressionTest(unittest.TestCase):
         self.clock.set_speed(10)
         self.clock.resume()
         self.run_for(0.05)
-        self.run_for(1.6, lambda tick: 1.5 if tick == 6 else 0.0)
+        self.run_for(2.5, lambda tick: 1.5 if tick == 6 else 0.0)
         self.run_for(0.2, lambda tick: 0.1 if tick > 6 else 0.0)
         self.clock.pause()
         self.assertGreaterEqual(len(self.dropped), 2)
@@ -343,6 +387,155 @@ class PacerSlipRegressionTest(unittest.TestCase):
         self.run_for(0.1)
         # At most the one owed tick, then real time: 10 in 0.1 s.
         self.assertLessEqual(len(self.ticks) - count, 11)
+
+
+class PacerSheddingTest(_TimedRun):
+    """How the pacer sheds load the modules cannot carry."""
+
+    def test_limit_is_the_same_real_time_at_both_speeds(self) -> None:
+        self.assertEqual(self.pacer.catch_up_limit, round(MAX_LAG_S / 0.1))
+        self.clock.set_speed(10)
+        self.assertEqual(self.pacer.catch_up_limit, round(MAX_LAG_S / 0.01))
+
+    def test_hold_up_past_the_limit_is_dropped_at_1x(self) -> None:
+        # 0.7 s at 1x is 7 ticks owed, past the 5 kept.
+        self.clock.resume()
+        self.run_for(3.0, lambda tick: 0.7 if tick == 3 else 0.0)
+        self.assertEqual(len(self.dropped), 1)
+        self.assertGreater(self.dropped[0], 5)
+        self.assert_ticks_unbroken()
+
+    def test_overload_leaves_the_modules_idle_time(self) -> None:
+        # 25 ms round trips at 10x: each tick is followed by a rest of
+        # a quarter of it, so the modules are busy 80% of the time.
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(5.0, lambda _tick: 0.025)
+        rest_s = 0.025 * (1 - MAX_BUSY_FRACTION) / MAX_BUSY_FRACTION
+        starts = [real_s for real_s, _tick, _sim, _dt in self.ticks]
+        for before_s, after_s in zip(starts, starts[1:]):
+            self.assertGreaterEqual(
+                after_s - before_s, 0.025 + rest_s - STEP_S
+            )
+        self.assertAlmostEqual(
+            len(self.ticks), 5.0 / (0.025 + rest_s), delta=3
+        )
+        self.assert_ticks_unbroken()
+
+    def test_a_busy_fraction_of_one_never_rests(self) -> None:
+        self.use_pacer(max_busy_fraction=1.0)
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(5.0, lambda _tick: 0.025)
+        self.assertAlmostEqual(len(self.ticks), 5.0 / 0.025, delta=3)
+
+    def test_rest_after_a_long_stall_is_capped(self) -> None:
+        self.clock.resume()
+        self.run_for(3.0, lambda tick: 1.0 if tick == 3 else 0.0)
+        starts = {tick: real_s for real_s, tick, _sim, _dt in self.ticks}
+        self.assertLessEqual(
+            starts[4] - (starts[3] + 1.0), MAX_REST_S + 2 * STEP_S
+        )
+
+    def test_rest_never_delays_a_run_that_keeps_up(self) -> None:
+        # 9 ms then 3 ms at 10x: the long tick's rest ends before the
+        # next tick falls due, so it costs nothing.
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(2.0, lambda tick: 0.006 if tick % 2 else 0.003)
+        self.assertEqual(len(self.ticks), 200)
+        self.assertEqual(self.dropped, [])
+
+    def test_slowing_down_drops_the_backlog_past_the_new_limit(self) -> None:
+        # 30 ticks owed at 10x is 3 simulated seconds: 3 real seconds
+        # behind at 1x, past the limit. All but the next one go.
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(0.31, lambda tick: 0.3 if tick == 1 else 0.0)
+        self.assertTrue(self.pacer.is_in_flight)
+        self.clock.set_speed(1)
+        self.assertEqual(len(self.dropped), 1)
+        self.assertLessEqual(self.pacer.owed_ticks, 2.0)
+        self.assert_ticks_unbroken()
+
+    def test_speeding_up_keeps_the_backlog(self) -> None:
+        self.clock.resume()
+        # Tick 1 is still in flight, with 3.5 ticks owed at 1x.
+        self.run_for(0.45, lambda tick: 1.0 if tick == 1 else 0.0)
+        self.assertTrue(self.pacer.is_in_flight)
+        owed = self.pacer.owed_ticks
+        self.assertGreater(owed, 2.0)
+        self.clock.set_speed(10)
+        self.assertEqual(self.dropped, [])
+        self.assertAlmostEqual(self.pacer.owed_ticks, owed, places=6)
+
+    def test_actual_speed_waits_for_a_second_of_running(self) -> None:
+        self.assertIsNone(self.pacer.actual_speed)
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(MIN_SPEED_SPAN_S - 0.1)
+        self.assertIsNone(self.pacer.actual_speed)
+        self.run_for(0.2)
+        self.assertAlmostEqual(self.pacer.actual_speed, 10.0, delta=0.15)
+
+    def test_actual_speed_follows_the_run(self) -> None:
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(SPEED_WINDOW_S + 1)
+        self.assertAlmostEqual(self.pacer.actual_speed, 10.0, delta=0.05)
+        # Overloaded: 25 ms and its rest per 0.1 simulated seconds.
+        self.run_for(SPEED_WINDOW_S + 1, lambda _tick: 0.025)
+        expected = 0.1 / (0.025 / MAX_BUSY_FRACTION)
+        self.assertAlmostEqual(
+            self.pacer.actual_speed, expected, delta=0.1
+        )
+        # Paused, nothing is measured; resumed, it starts afresh.
+        self.clock.pause()
+        self.assertIsNone(self.pacer.actual_speed)
+        self.run_for(2.0)
+        self.clock.resume()
+        self.run_for(1.5)
+        self.assertAlmostEqual(self.pacer.actual_speed, 10.0, delta=0.15)
+
+    def test_actual_speed_restarts_at_a_new_speed(self) -> None:
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(3.0)
+        self.clock.set_speed(1)
+        self.assertIsNone(self.pacer.actual_speed)
+        self.run_for(2.0)
+        self.assertAlmostEqual(self.pacer.actual_speed, 1.0, delta=0.06)
+
+    def test_lag_and_keeping_up(self) -> None:
+        self.assertEqual(self.pacer.lag_s, 0.0)
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(0.5)
+        self.assertTrue(self.pacer.is_keeping_up)
+        self.assertLessEqual(self.pacer.lag_s, 0.01)
+        # A reply held 0.3 s: the run is that far behind.
+        self.run_for(0.3, lambda _tick: 0.3)
+        self.assertFalse(self.pacer.is_keeping_up)
+        self.assertAlmostEqual(self.pacer.lag_s, 0.3, delta=0.02)
+        self.run_for(1.0)
+        self.assertTrue(self.pacer.is_keeping_up)
+        self.assertLessEqual(
+            self.pacer.lag_s, KEEPING_UP_TICKS * 0.01 + 1e-9
+        )
+        # Nothing is owed while paused.
+        self.run_for(0.3, lambda _tick: 0.3)
+        self.clock.pause()
+        self.assertEqual(self.pacer.lag_s, 0.0)
+
+    def test_bad_settings_are_refused(self) -> None:
+        for options in (
+            {"max_lag_s": 0.0},
+            {"max_busy_fraction": 0.0},
+            {"max_busy_fraction": 1.5},
+        ):
+            with self.subTest(options=options):
+                with self.assertRaises(ValueError):
+                    TickPacer(self.clock, now_s=self.time, **options)
 
 
 if __name__ == "__main__":
