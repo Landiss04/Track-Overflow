@@ -115,6 +115,16 @@ if TYPE_CHECKING:
 #: proposed on ``ctc-interfacing``).
 SERVICE_DECEL_MPS2 = 1.2
 
+#: The service brake's force, in N: the reference mass times the service
+#: deceleration (``truth/modules/train-model.md``).
+SERVICE_BRAKE_FORCE_N = (40_900 + 2 / 3 * (56_700 - 40_900)) * 1.2
+
+#: A train with every seat and standing place taken, and its crew, in kg:
+#: the slowest it can stop (``truth/modules/train-model.md``).
+FULL_TRAIN_MASS_KG = 40_900 + (222 + 5) * 77.1107
+
+GRAVITY_MPS2 = 9.81
+
 #: A route around an unusable block or a train that is not moving is
 #: taken only if it is at most this many times as long as the shortest
 #: route; otherwise the train waits.
@@ -257,6 +267,9 @@ class _Layout:
         self.lengths_m = self._lengths
         # Each named station's line, by station name.
         self.station_lines = station_lines(dict(lines))
+        self.grades_percent = {(name, b.block_id): b.grade_percent
+                               for name, line in lines.items()
+                               for b in line.blocks}
         self.speed_limits_kmh = {(name, b.block_id): b.speed_limit_kmh
                                  for name, line in lines.items()
                                  for b in line.blocks}
@@ -914,19 +927,40 @@ class StubCtcOffice:
     def _make_plans(self) -> dict[str, Plan]:
         """What each followed train is told: the next block, if its
         authority lets it in, and the speed suggested in its head
-        block."""
+        block. A train told to stop may not manage it, so each also has
+        the block it would run on into: the one it was last heading
+        for, else the next on its route, else straight on."""
         plans = {}
-        for limit in self._authorities():
-            train = self._tracker.trains.get(limit.train_id)
-            if train is None:
+        limits = {a.train_id: a for a in self._authorities()}
+        for train_id, train in self._tracker.trains.items():
+            limit = limits.get(train_id)
+            last = self._plans.get(train_id)
+            onward = last.onward_block if last is not None else None
+            if onward in train.blocks:
+                onward = None
+            route = limit.route if limit is not None else ()
+            allowed = limit is not None and limit.blocks >= 1
+            if allowed or (onward is None and len(route) > 1):
+                onward = route[1]
+            if onward is None:
+                onward = self._straight_on(train)
+            if limit is None and onward is None:
                 continue
-            plans[limit.train_id] = Plan(
-                limit.route[1] if limit.blocks >= 1 else None,
-                self._layout.lengths_m[(limit.line, train.head)],
-                self._suggested_speed_mps(
-                    limit.line, train.head,
-                    limit.route[1:limit.blocks + 1]))
+            plans[train_id] = Plan(
+                route[1] if allowed else None,
+                self._layout.lengths_m[(train.line, train.head)],
+                (self._suggested_speed_mps(
+                    train.line, train.head, route[1:limit.blocks + 1])
+                 if limit is not None else 0.0),
+                onward)
         return plans
+
+    def _straight_on(self, train: Tracked) -> str | None:
+        """The block a train runs into past the end of its route: the
+        only one next to its head block that it did not come from."""
+        beyond = [n for n in self._graphs[train.line].neighbors(train.head)
+                  if n != train.came_from]
+        return beyond[0] if len(beyond) == 1 else None
 
     # -- The yard -----------------------------------------------------
 
@@ -960,17 +994,19 @@ class StubCtcOffice:
         and the most behind schedule first among those the scheduler is
         not holding. Only while the line's waysides are all ready, its
         yard exit block is clear (not occupied, not closed,
-        no train on it) and no train is authorized into it. A train is
-        reported in ``new_trains`` the step it is released, unless it
-        was already in service."""
+        no train on it) and no train is authorized into it, and the
+        same for the blocks next to it, closed or not, so a train never
+        comes out next to another (``keep_gap``; Landis 2026-11-03). A
+        train is reported in ``new_trains`` the
+        step it is released, unless it was already in service."""
         ready = self._ready_lines()
         applied = self._inputs if self._inputs is not None else CtcInputs()
-        blocked = (self._occupied(applied)
-                   | {(t.line, b) for t in self._tracker.trains.values()
-                      for b in t.blocks}
-                   | {(b.line, b.block_id) for b in self._closed}
-                   | {(a.line, b) for a in self._authorities()
-                      for b in a.route[1:a.blocks + 1]})
+        held = (self._occupied(applied)
+                | {(t.line, b) for t in self._tracker.trains.values()
+                   for b in t.blocks}
+                | {(a.line, b) for a in self._authorities()
+                   for b in a.route[1:a.blocks + 1]})
+        blocked = held | {(b.line, b.block_id) for b in self._closed}
         busy = set(self._released.values())
         released = []
         for waiting in self._waiting():
@@ -978,6 +1014,8 @@ class StubCtcOffice:
             exit_block = YARD_EXITS.get(line)
             if (exit_block is None or line in busy or line not in ready
                     or (line, exit_block) in blocked
+                    or any((line, n) in held for n in
+                           self._graphs[line].neighbors(exit_block))
                     or self._scheduler_holds(waiting.train_id)):
                 continue
             busy.add(line)
@@ -1098,19 +1136,28 @@ class StubCtcOffice:
 
         The lower of: a little under the block's speed limit (the
         limit in whole m/s, rounded down, less
-        ``SUGGESTED_SPEED_MARGIN_MPS``), and the speed the train can
-        stop from within the blocks ``ahead`` at ``SERVICE_DECEL_MPS2``
-        (0 with none). The distance left in the block itself is not
-        counted: which way it heads through it is not known. For the
+        ``SUGGESTED_SPEED_MARGIN_MPS``), and the speed a full train can
+        stop from within the blocks ``ahead``, on their grades, under
+        the service brake (0 with none). The distance left in the block
+        itself is not counted: which way it heads through it is not
+        known. For the
         next block on a train's route, ``ahead`` is one block shorter
         than for the block it is in (``suggested-speed``)."""
         limit_kmh = self._layout.speed_limits_kmh[(line, block_id)]
         under_limit = max(0, int(limit_kmh / _KMH_PER_MPS)
                           - SUGGESTED_SPEED_MARGIN_MPS)
-        stopping_m = sum(self._layout.lengths_m[(line, block)]
-                         for block in ahead)
-        can_stop = int(math.sqrt(2 * SERVICE_DECEL_MPS2 * stopping_m))
+        can_stop = int(math.sqrt(sum(
+            2 * self._full_train_braking_mps2(line, block)
+            * self._layout.lengths_m[(line, block)] for block in ahead)))
         return min(under_limit, can_stop)
+
+    def _full_train_braking_mps2(self, line: str, block_id: str) -> float:
+        """How fast the service brake slows a full train in a block:
+        less downhill, more uphill."""
+        slope = math.atan(
+            self._layout.grades_percent[(line, block_id)] / 100.0)
+        return (SERVICE_BRAKE_FORCE_N / FULL_TRAIN_MASS_KG
+                + GRAVITY_MPS2 * math.sin(slope))
 
     def _obstructions(self, inputs: CtcInputs,
                       line: str) -> dict[str, str]:

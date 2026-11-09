@@ -152,6 +152,52 @@ class MovingTest(unittest.TestCase):
         _occupied(ctc, "63", "64")
         self.assertEqual(_where(ctc), {"T1": ("63",)})
 
+    def _running_into_a_closure(self) -> StubCtcOffice:
+        # T1 running 30 to 37; 31 closes when it is too late to stop.
+        ctc = ready_office()
+        ctc.place_train("T1", "Green", "30")
+        ctc.dispatch("T1", "Green", "37")
+        _occupied(ctc, "30", steps=20)
+        ctc.set_maintenance_mode(True)
+        ctc.set_block_closed("Green", "31", True)
+        _occupied(ctc, "30")
+        self.assertEqual(_authority(ctc).blocks, 0)
+        return ctc
+
+    def test_a_train_too_late_to_stop_is_followed_on(self) -> None:
+        ctc = self._running_into_a_closure()
+        # Nothing says it is T1 until T1's own block clears.
+        _occupied(ctc, "30", "31")
+        self.assertEqual(_where(ctc), {"T1": ("30",)})
+        _occupied(ctc, "31")
+        self.assertEqual(_where(ctc), {"T1": ("31",)})
+        self.assertEqual(ctc.snapshot().lost_trains, ())
+        # Reopened, it carries on under its own name.
+        ctc.set_block_closed("Green", "31", False)
+        _occupied(ctc, "31")
+        self.assertGreater(_authority(ctc).blocks, 0)
+
+    def test_a_failure_ahead_of_a_standing_train_stays_a_failure(
+            self) -> None:
+        # T1 stays in 30, so what is in 31 is not T1.
+        ctc = self._running_into_a_closure()
+        _occupied(ctc, "30", "31", steps=60)
+        self.assertEqual(_where(ctc), {"T1": ("30",)})
+        self.assertEqual(ctc.snapshot().lost_trains, ())
+
+    def test_a_train_past_its_destination_is_followed_on(self) -> None:
+        # T1 stops at 31, but does not manage it and runs on into 32.
+        ctc = ready_office()
+        ctc.place_train("T1", "Green", "30")
+        ctc.dispatch("T1", "Green", "31")
+        _occupied(ctc, "30", steps=20)
+        _occupied(ctc, "30", "31")
+        _occupied(ctc, "31", steps=2)
+        _occupied(ctc, "31", "32")
+        _occupied(ctc, "32")
+        self.assertEqual(_where(ctc), {"T1": ("32",)})
+        self.assertEqual(ctc.snapshot().lost_trains, ())
+
     def test_unexplained_occupancy_is_a_failure(self) -> None:
         ctc = self._out_of_the_yard()
         _occupied(ctc, "63", "67")
@@ -162,9 +208,9 @@ class MovingTest(unittest.TestCase):
 
     def test_a_faster_past_counts(self) -> None:
         # T1 runs 2 s at 18 m/s; then a train standing on 66 cuts its
-        # authority to 64 and its suggested speed to 15 m/s. 64 becomes
-        # occupied a second later: 3 s in, too soon at 15 m/s (it would
-        # need 3.3 s for half of 63's 100 m), but T1 may well have gone
+        # authority to 64 and its suggested speed to 14 m/s. 64 becomes
+        # occupied a second later: 3 s in, too soon at 14 m/s (it would
+        # need 3.6 s for half of 63's 100 m), but T1 may well have gone
         # 54 m by then. That is T1, not a failure.
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "80")
@@ -175,7 +221,7 @@ class MovingTest(unittest.TestCase):
         ctc.place_train("T2", "Green", "66")
         _occupied(ctc, "63", "66", dt=2.0)
         self.assertEqual(own_block(ctc.snapshot().outputs.track_controller
-                                   .suggestions).suggested_speed_mps, 15)
+                                   .suggestions).suggested_speed_mps, 14)
         _occupied(ctc, "63", "64", "66", dt=1.0)
         self.assertEqual(_where(ctc)["T1"], ("63", "64"))
 

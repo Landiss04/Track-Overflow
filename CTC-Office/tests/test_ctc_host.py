@@ -25,6 +25,7 @@ from ctc.interface import (  # noqa: E402
     WaysideStatus,
 )
 from ctc.model import StubCtcOffice  # noqa: E402
+from ctc.schedule import load_schedule  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
 from ctc_ui.display import MPS_TO_MPH  # noqa: E402
 from ctc_ui.sim_clock import SimulationClockBridge  # noqa: E402
@@ -312,7 +313,23 @@ class PanelDataTest(unittest.TestCase):
         self.assertEqual(rows["T2"]["block"], "—")
         self.assertEqual(rows["T2"]["authority"], "—")
         self.assertEqual(
-            [o["value"] for o in host.trainOptions("Green")], ["T1", "T3"])
+            [o["value"] for o in host.trainOptions("Green")], ["T1", "G1"])
+
+    def test_a_new_train_is_named_for_its_line(self) -> None:
+        host, module, _ = _host()
+        self.assertEqual(host.trainOptions("Green")[-1],
+                         {"value": "G1", "text": "New train (G1)"})
+        self.assertEqual(host.trainOptions("Red")[-1]["value"], "R1")
+        host.dispatchTrain("G1", "Green", "65", "")
+        self.assertEqual(
+            [o["value"] for o in host.trainOptions("Green")], ["G1", "G2"])
+
+    def test_a_new_train_skips_the_schedules_runs(self) -> None:
+        host, module, _ = _host()
+        module.load_schedule(load_schedule(
+            Path(__file__).resolve().parents[2]
+            / "utils" / "schedule_v4.json"))
+        self.assertEqual(host.trainOptions("Green")[-1]["value"], "G11")
 
     def test_selected_train_route(self) -> None:
         # T1 on Green 30 toward 37, T2 standing on 33: authority 1,

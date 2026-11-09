@@ -556,17 +556,21 @@ class CtcHost(QObject):
 
     @Slot(str, result=list)
     def trainOptions(self, line: str) -> list[dict[str, str]]:  # noqa
-        """Trains on a line, then a new train with the next free ID."""
+        """Trains on a line, then a new train with the next free ID,
+        named as the schedule names its runs: the line's initial and a
+        number, not one a run of the loaded schedule has or will have."""
         snap = self._module.snapshot()
         known = self._train_lines(snap)
         options = [{"value": train_id, "text": train_id}
                    for train_id, train_line in known.items()
                    if train_line == line]
+        taken = {*known, *snap.lost_trains,
+                 *(run.train_id for run in snap.scheduled_runs)}
         number = 1
-        while f"T{number}" in known:
+        while f"{line[:1]}{number}" in taken:
             number += 1
-        options.append({"value": f"T{number}",
-                        "text": f"New train (T{number})"})
+        new_id = f"{line[:1]}{number}"
+        options.append({"value": new_id, "text": f"New train ({new_id})"})
         return options
 
     # -- Track state ----------------------------------------------------

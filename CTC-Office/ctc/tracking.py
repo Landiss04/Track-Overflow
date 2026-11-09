@@ -21,6 +21,11 @@ with the last, its trains' routes and the speeds it suggested
   failure, not the train. How far it could have gone assumes it went as
   fast as the CTC ever suggested and slowed no faster than braking
   allows, since it may carry speed from an earlier, faster block.
+- Running on: a train can go on into the block it was heading for
+  when the CTC did not expect it, too late to stop for a block that
+  just closed, say, or sooner than it seemed able to. That block first
+  counts as a failure; when the train's own blocks then all clear, the
+  occupied block is the train.
 - Unexplained occupancy is a failure. A failure ends when its block
   clears.
 - A train whose blocks all clear is dropped quietly ("lost"), unless it
@@ -95,6 +100,9 @@ class Plan:
     head_length_m: float
     # The speed suggested to it, in m/s.
     speed_mps: float
+    # The block it was heading for, which it may run on into even when
+    # it has no ``next_block``.
+    onward_block: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +200,17 @@ class TrainTracker:
                 continue
             if left:
                 self.trains[train_id] = replace(train, blocks=left)
+                continue
+            plan = plans.get(train_id)
+            onward = (train.line, plan.onward_block) if plan else None
+            if (onward in occupied and onward not in
+                    {(t.line, b) for t in self.trains.values()
+                     for b in t.blocks}):
+                self.failures.discard(onward)
+                claimed.add(onward)
+                self.trains[train_id] = replace(
+                    train, blocks=(plan.onward_block,),
+                    reach_m=0.0, came_from=train.head)
                 continue
             del self.trains[train_id]
             if train.head not in YARD_ENTRIES.get(train.line, ()):

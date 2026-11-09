@@ -169,7 +169,7 @@ stories cover every use case.
 |---|---|
 | **Actors** | Dispatcher |
 | **Description** | Orders a train to a station of its line, with an optional arrival time. |
-| **Data** | Line; train: one already on the line, or **New train (T*n*)** with the next free ID; destination station (the line's station blocks); arrival `HH:MM`, optional. |
+| **Data** | Line; train: one already on the line, or **New train (G*n* or R*n*)** with the line's initial and the next free number, skipping the loaded schedule's runs; destination station (the line's station blocks); arrival `HH:MM`, optional. |
 | **Stimulus** | **Dispatch train** (Manual view). It reads **Reroute train** when the train already has an order. |
 | **Response** | The order is recorded, replacing any earlier one. A new train waits in the yard until the CTC Office releases it (UC-20). From then on the train gets authority toward the station every step (UC-21). The panel shows the suggested speed and authority sent for it. The arrival time ranks the train for contested blocks: the train most behind schedule goes first. |
 | **Alternatives** | Refused with a message, and nothing changes: the line's waysides are not all ready (the message names the wayside and why); the destination is closed or closing; the train is on the other line; the train ID is empty, unprintable or longer than 32 characters; the arrival is not a time of day. A destination the CTC Office takes for a failure is accepted: the train waits short of it until it clears. |
@@ -386,7 +386,7 @@ stories cover every use case.
 | **Description** | Lets trains out of the yard and takes them back (D022). |
 | **Data** | `new_trains`: train ID and line; `retired_trains`: train ID. Each appears in exactly one step's outputs. |
 | **Stimulus** | Every step. |
-| **Response** | Release: per line, one train at a time, the waiting train most behind schedule first, and only when every wayside on the line is ready, the yard exit block is clear and not closed or closing, no train is authorized into it, and the scheduler is not holding the run. The harness adds the train to the Train Model and the line's Train Controller at the yard exit block. Retire: a train sent to the yard that has stopped at the yard entry block (Green 57, Red 9) with authority 0 at its destination. The harness removes it; its block clears; its run is done and its order dropped. |
+| **Response** | Release: per line, one train at a time, the waiting train most behind schedule first, and only when every wayside on the line is ready, the yard exit block is clear and not closed or closing, no train is authorized into it, the blocks next to it are clear with no train authorized into them (a wayside may hold a train next to another), and the scheduler is not holding the run. The harness adds the train to the Train Model and the line's Train Controller at the yard exit block. Retire: a train sent to the yard that has stopped at the yard entry block (Green 57, Red 9) with authority 0 at its destination. The harness removes it; its block clears; its run is done and its order dropped. |
 | **Requirements** | Rubric 2.0; REQ-FUNC-004; D022 |
 | **Sequence** | SD-20 |
 
@@ -483,7 +483,7 @@ Design choices:
 | Switches | Outside maintenance mode the CTC Office never commands a switch. Authority stops at the block before a switch not reported set for the route, and grows once the wayside sets it. |
 | Authority | Blocks ahead of the train's head block along its route, to the destination, ending before the first block that is closed, closing or within another train's authority, two blocks before the first that is occupied or failed (one empty block between trains), or before a switch not set. |
 | Contested blocks | A block no train holds yet goes to the train most behind schedule: the least slack between its requested arrival and the time it needs at each block's limit. A train with no arrival comes after; ties go to the lower ID. |
-| Suggested speed | The block's limit in m/s, rounded down, less 1 m/s; never more than √(2 × 1.2 m/s² × d), d being the length within authority; 0 at authority 0. The next block's value is worked out for that block, with one block less. |
+| Suggested speed | The block's limit in m/s, rounded down, less 1 m/s; never more than the speed a full train can stop from within its authority, √(Σ 2 × a × d) over the blocks within it, d being a block's length and a the service brake's 1.06 m/s² on a full train, less g × sin(slope) downhill and more uphill; 0 at authority 0. The next block's value is worked out for that block, with one block less. |
 | Tracking | UC-18. |
 | Automatic dispatch | UC-19. Track order is a first approach and may change. |
 | Yard | UC-20. |
