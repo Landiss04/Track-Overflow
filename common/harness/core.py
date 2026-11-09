@@ -9,6 +9,9 @@ the awaited request ID with another tick, is logged and ignored.
 
 - A module that rejects a tick keeps its previous outputs, and the run
   goes on (R19).
+- A module that has not replied after ``REPLY_SLOW_S`` is logged as
+  slow, at most every ``SLOW_REPORT_INTERVAL_S`` per module, and shown
+  as SLOW; the clock runs on.
 - A module that has not replied after ``REPLY_TIMEOUT_S`` pauses the
   clock and is named. The clock resumes once the reply comes. A reply
   that does not decode, or is ignored, leaves the module waited on, so
@@ -31,7 +34,7 @@ Significant events go to the event log (R80), each also signalled as
 - ``CLOCK_PAUSED``, ``CLOCK_RESUMED``, ``SPEED_CHANGED``;
 - ``TIME_SLIPPED``, ``TIME_SLIPPING``, ``TIME_SLIP_ENDED``: one slip
   behind real time, logged as an episode (``common.harness.slips``);
-- ``TICK_REJECTED``, ``INPUTS_FAILED``, ``REPLY_LATE``,
+- ``TICK_REJECTED``, ``INPUTS_FAILED``, ``REPLY_SLOW``, ``REPLY_LATE``,
   ``LATE_REPLY_RECEIVED``, ``UNEXPECTED_REPLY``, ``PROTOCOL_ERROR``;
 - ``EDGES_FAILED``, and whatever the edges report, such as
   ``TRAIN_ADDED`` and ``TRAIN_REMOVED`` (``common.harness.edges``).
@@ -45,7 +48,9 @@ from __future__ import annotations
 
 __all__ = [
     "PAUSED_KEY",
+    "REPLY_SLOW_S",
     "REPLY_TIMEOUT_S",
+    "SLOW_REPORT_INTERVAL_S",
     "SPEEDUP_KEY",
     "Edges",
     "Harness",
@@ -78,6 +83,11 @@ from utils.system_clock import SystemClock
 
 #: Real seconds to wait for a reply before the clock pauses.
 REPLY_TIMEOUT_S = 1.0
+#: Real seconds without a reply before a module is logged as slow. The
+#: clock runs on: this only warns before ``REPLY_TIMEOUT_S``.
+REPLY_SLOW_S = 0.25
+#: Fewest real seconds between two slow reports for one module.
+SLOW_REPORT_INTERVAL_S = 10.0
 
 #: The CTC Office's clock controls, in its outputs and its STATE
 #: (``signals/clock-speedup``; ``clock-pause`` is pending).
@@ -152,6 +162,8 @@ class Harness(QObject):
         edges: Edges | None = None,
         *,
         reply_timeout_s: float = REPLY_TIMEOUT_S,
+        reply_slow_s: float | None = REPLY_SLOW_S,
+        slow_report_interval_s: float = SLOW_REPORT_INTERVAL_S,
         startup_timeout_s: float = STARTUP_TIMEOUT_S,
         parent: QObject | None = None,
     ) -> None:
@@ -165,11 +177,25 @@ class Harness(QObject):
                 expect.
             reply_timeout_s: Real seconds before a missing reply
                 pauses the clock.
+            reply_slow_s: Real seconds before a missing reply is
+                logged as slow; None, or not under
+                ``reply_timeout_s``, never warns.
+            slow_report_interval_s: Fewest real seconds between two
+                slow reports for one module.
             startup_timeout_s: Real seconds before modules that are
                 not ready are reported.
             parent: Optional Qt parent.
+
+        Raises:
+            ValueError: If ``reply_slow_s`` is not positive.
         """
         super().__init__(parent)
+        if reply_slow_s is not None and not reply_slow_s > 0:
+            raise ValueError(
+                f"reply_slow_s must be positive, got {reply_slow_s}"
+            )
+        if reply_slow_s is not None and reply_slow_s >= reply_timeout_s:
+            reply_slow_s = None
         self._log = log
         self._log_path = str(log.path.resolve())
         self._edges: Edges = edges if edges is not None else StubEdges()
@@ -189,6 +215,12 @@ class Harness(QObject):
         # Request ID awaited from each module during the tick.
         self._pending: dict[str, int] = {}
         self._late: set[str] = set()
+        # Modules slow to reply to the tick in flight, and for each,
+        # when it was last reported and how many slow replies since.
+        self._slow: set[str] = set()
+        self._slow_reports: dict[str, tuple[float, int]] = {}
+        self._reply_slow_s = reply_slow_s
+        self._slow_report_interval_s = slow_report_interval_s
         self._down: set[str] = set()
         self._all_ready = False
         self._ctc_paused = True
@@ -206,6 +238,13 @@ class Harness(QObject):
             round(reply_timeout_s * MILLISECONDS_PER_SECOND)
         )
         self._reply_timer.timeout.connect(self._on_reply_timeout)
+        self._slow_timer = QTimer(self)
+        self._slow_timer.setSingleShot(True)
+        if reply_slow_s is not None:
+            self._slow_timer.setInterval(
+                round(reply_slow_s * MILLISECONDS_PER_SECOND)
+            )
+        self._slow_timer.timeout.connect(self._on_reply_slow)
         self._clock.add_tick_listener(self._on_tick)
         self._clock.add_state_listener(self._broadcast_clock_state)
         self._pacer.backlogDropped.connect(self._on_backlog_dropped)
@@ -245,6 +284,11 @@ class Harness(QObject):
     def late_modules(self) -> frozenset[str]:
         """Modules the tick in flight is waiting on past the timeout."""
         return frozenset(self._late)
+
+    @property
+    def slow_modules(self) -> frozenset[str]:
+        """Modules the tick in flight waits on past the slow warning."""
+        return frozenset(self._slow)
 
     @property
     def down_modules(self) -> frozenset[str]:
@@ -301,7 +345,7 @@ class Harness(QObject):
     def module_statuses(self) -> tuple[dict[str, Any], ...]:
         """Return independent rows describing each process and link.
 
-        States are STARTING, READY, LATE, DOWN or EXITED. An exit
+        States are STARTING, READY, SLOW, LATE, DOWN or EXITED. An exit
         description retains the code, or explains why none exists.
         """
         ready = self.ready_modules
@@ -314,6 +358,8 @@ class Harness(QObject):
                 state = "DOWN"
             elif name in self._late:
                 state = "LATE"
+            elif name in self._slow:
+                state = "SLOW"
             elif name in ready:
                 state = "READY"
             rows.append({
@@ -369,6 +415,7 @@ class Harness(QObject):
             return dict(self._exit_codes)
         self._stopping = True
         self._reply_timer.stop()
+        self._slow_timer.stop()
         self._pacer.stop()
         self._clock.pause()
         self._exit_codes = self._supervisor.stop(
@@ -390,6 +437,7 @@ class Harness(QObject):
         tick = self._clock.tick_count
         self._tick_outputs = {}
         self._pending = {}
+        self._slow.clear()
         self._tick_started_s = time.perf_counter()
         for name in self._supervisor.ready_modules:
             try:
@@ -420,6 +468,8 @@ class Harness(QObject):
                 self._pending[name] = request_id
         if self._pending:
             self._reply_timer.start()
+            if self._reply_slow_s is not None:
+                self._slow_timer.start()
         else:
             self._finish_tick()
 
@@ -443,6 +493,7 @@ class Harness(QObject):
             )
             return
         del self._pending[name]
+        self._slow.discard(name)
         if message["op"] == OUTPUTS:
             self._tick_outputs[name] = message["outputs"]
             if name == CTC_OFFICE:
@@ -463,6 +514,7 @@ class Harness(QObject):
         # the new ones to the edges once, apply the CTC Office's clock
         # controls, and let the next tick come.
         self._reply_timer.stop()
+        self._slow_timer.stop()
         fresh, self._tick_outputs = self._tick_outputs, {}
         self._outputs.update(fresh)
         round_trip_s = time.perf_counter() - self._tick_started_s
@@ -491,6 +543,34 @@ class Harness(QObject):
         for source, event, detail in events:
             self._log_event(source, event, detail)
 
+    def _on_reply_slow(self) -> None:
+        # Name every module not yet replied, at most once a report
+        # interval each; the clock runs on.
+        if self._stopping:
+            return
+        now_s = time.perf_counter()
+        for name in self._supervisor.module_names:
+            if name not in self._pending or name in self._late:
+                continue
+            self._slow.add(name)
+            last_s, since = self._slow_reports.get(name, (None, 0))
+            if (
+                last_s is not None
+                and now_s - last_s < self._slow_report_interval_s
+            ):
+                self._slow_reports[name] = (last_s, since + 1)
+                continue
+            detail = (
+                f"no reply to tick {self._clock.tick_count} after "
+                f"{self._reply_slow_s:.2f} s; the clock runs on"
+            )
+            if since:
+                detail += (
+                    f"; {since} more slow replies since the last report"
+                )
+            self._slow_reports[name] = (now_s, 0)
+            self._log_event(name, "REPLY_SLOW", detail)
+
     def _on_reply_timeout(self) -> None:
         # Pause the clock and name every module not yet replied.
         late = [
@@ -499,6 +579,7 @@ class Harness(QObject):
             if name in self._pending
         ]
         self._late.update(late)
+        self._slow.difference_update(late)
         for name in late:
             self._log_event(
                 name,
@@ -579,6 +660,7 @@ class Harness(QObject):
             return
         self._down.add(name)
         self._late.discard(name)
+        self._slow.discard(name)
         awaited = self._pending.pop(name, None) is not None
         if awaited and not self._pending:
             self._finish_tick()

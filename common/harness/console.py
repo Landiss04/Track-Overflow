@@ -215,9 +215,9 @@ class HarnessConsole(QObject):
             row["label"] = MODULE_LABELS.get(row["name"], row["name"])
             row["pid_text"] = str(row["pid"]) if row["pid"] else EMPTY
             row["exit_text"] = row["exit"] or EMPTY
-            row["can_show"] = row["state"] in ("READY", "LATE")
+            row["can_show"] = row["state"] in ("READY", "SLOW", "LATE")
             row["variant"] = {
-                "READY": "ok", "LATE": "warning",
+                "READY": "ok", "SLOW": "warning", "LATE": "warning",
                 "DOWN": "fault", "EXITED": "fault",
             }.get(row["state"], "idle")
             if row["exit"] == "exit code 0":

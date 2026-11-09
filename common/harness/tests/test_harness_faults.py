@@ -149,7 +149,7 @@ class _FakeModule:
 class _Run:
     """The harness, its fake modules and what it logged."""
 
-    def __init__(self, edges: Any = None) -> None:
+    def __init__(self, edges: Any = None, **options: Any) -> None:
         self._folder = tempfile.TemporaryDirectory()
         self.log = EventLog(Path(self._folder.name) / "events.csv")
         self.harness = Harness(
@@ -157,6 +157,7 @@ class _Run:
             self.log,
             edges,
             reply_timeout_s=REPLY_TIMEOUT_S,
+            **options,
         )
         # The fakes stand in for the processes.
         self.harness._supervisor._launch = (  # type: ignore[method-assign]
@@ -208,9 +209,11 @@ class _FaultTest(unittest.TestCase):
     """One run per test, cleaned up after it."""
 
     edges: Any = None
+    #: Further Harness options for each test's run.
+    harness_options: dict[str, Any] = {}
 
     def setUp(self) -> None:
-        self.run_ = _Run(self.edges)
+        self.run_ = _Run(self.edges, **self.harness_options)
         self.addCleanup(self.run_.clean_up)
 
     def assert_held_on(self, module: str) -> None:
@@ -541,6 +544,157 @@ class ReplyTimeoutRegressionTest(_FaultTest):
         # The clock waits for the last of them.
         self.assertEqual(len(run.find("CLOCK_RESUMED")), 2)
         self.assert_every_module_stepped_every_tick()
+
+
+class SlowReplyTest(_FaultTest):
+    """A slow reply is named early, and the clock runs on."""
+
+    harness_options = {"reply_slow_s": 0.1}
+
+    def test_slow_reply_is_named_and_the_clock_runs_on(self) -> None:
+        run = self.run_
+        harness = run.harness
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 250
+        run.run()
+        self.assertTrue(wait_until(
+            lambda: TRAIN_MODEL in harness.slow_modules
+        ), run.events)
+        row = next(
+            r for r in harness.module_statuses if r["name"] == TRAIN_MODEL
+        )
+        self.assertEqual(row["state"], "SLOW")
+        self.assertFalse(harness.clock.is_paused)
+        self.assertTrue(wait_until(
+            lambda: FAULT_TICK + 3 in run.completed
+        ), run.events)
+        slow = run.find("REPLY_SLOW")
+        self.assertEqual(slow, [(
+            FAULT_TICK, TRAIN_MODEL, "REPLY_SLOW",
+            f"no reply to tick {FAULT_TICK} after 0.10 s; "
+            "the clock runs on",
+        )])
+        self.assertEqual(harness.slow_modules, frozenset())
+        self.assertEqual(run.find("REPLY_LATE"), [])
+        self.assertEqual(run.find("CLOCK_PAUSED"), [])
+        self.assert_every_module_stepped_every_tick()
+
+    def test_slow_replies_are_reported_at_most_once_an_interval(
+        self,
+    ) -> None:
+        run = self.run_
+        for tick in range(FAULT_TICK, FAULT_TICK + 5):
+            run.fakes[TRAIN_MODEL].delay_ms[tick] = 150
+        run.run()
+        self.assertTrue(wait_until(
+            lambda: FAULT_TICK + 6 in run.completed
+        ), run.events)
+        # Five slow replies inside one interval: one report.
+        self.assertEqual(
+            [e[1] for e in run.find("REPLY_SLOW")], [TRAIN_MODEL]
+        )
+
+    def test_a_module_that_replies_is_no_longer_slow(self) -> None:
+        # Both slow; the Train Model replies first while the Track
+        # Model is still awaited.
+        run = self.run_
+        harness = run.harness
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 200
+        run.fakes[TRACK_MODEL].delay_ms[FAULT_TICK] = 600
+        seen: list[frozenset[str]] = []
+
+        def after_reply(name: str, message: Mapping[str, Any]) -> None:
+            # Connected after the harness's own slot, so it runs once
+            # the harness has taken the reply.
+            if name == TRAIN_MODEL and message.get("tick") == FAULT_TICK:
+                seen.append(harness.slow_modules)
+
+        harness._supervisor.messageReceived.connect(after_reply)
+        run.run()
+        self.assertTrue(wait_until(
+            lambda: FAULT_TICK + 2 in run.completed
+        ), run.events)
+        self.assertEqual(seen, [frozenset({TRACK_MODEL})])
+
+    def test_a_late_module_is_slow_first_then_late(self) -> None:
+        run = self.run_
+        harness = run.harness
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 600
+        run.run()
+        self.assertTrue(wait_until(
+            lambda: TRAIN_MODEL in harness.late_modules
+        ), run.events)
+        row = next(
+            r for r in harness.module_statuses if r["name"] == TRAIN_MODEL
+        )
+        self.assertEqual(row["state"], "LATE")
+        self.assertEqual(harness.slow_modules, frozenset())
+        self.assertTrue(wait_until(
+            lambda: FAULT_TICK + 2 in run.completed
+        ), run.events)
+        names = [
+            event for _t, source, event, _d in run.events
+            if source == TRAIN_MODEL
+            and event in ("REPLY_SLOW", "REPLY_LATE", "LATE_REPLY_RECEIVED")
+        ]
+        self.assertEqual(
+            names, ["REPLY_SLOW", "REPLY_LATE", "LATE_REPLY_RECEIVED"]
+        )
+
+
+class SlowReportIntervalTest(_FaultTest):
+    """A slow module goes on being reported, with a count between."""
+
+    harness_options = {"reply_slow_s": 0.05, "slow_report_interval_s": 0.4}
+
+    def test_reports_repeat_with_what_was_held_back(self) -> None:
+        run = self.run_
+        for tick in range(FAULT_TICK, FAULT_TICK + 12):
+            run.fakes[TRAIN_MODEL].delay_ms[tick] = 100
+        run.run()
+        self.assertTrue(wait_until(
+            lambda: FAULT_TICK + 13 in run.completed
+        ), run.events)
+        slow = run.find("REPLY_SLOW")
+        self.assertGreaterEqual(len(slow), 2, run.events)
+        self.assertLess(len(slow), 12)
+        self.assertNotIn("more slow replies", slow[0][3])
+        self.assertRegex(
+            slow[1][3], r"; \d+ more slow replies since the last report$"
+        )
+        self.assertEqual(run.find("CLOCK_PAUSED"), [])
+
+
+class SlowWarningOffTest(_FaultTest):
+    """With no soft limit, or one not under the timeout, no warning."""
+
+    harness_options = {"reply_slow_s": None}
+
+    def test_no_warning_without_a_soft_limit(self) -> None:
+        run = self.run_
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 250
+        run.run()
+        self.assertTrue(wait_until(
+            lambda: FAULT_TICK + 2 in run.completed
+        ), run.events)
+        self.assertEqual(run.find("REPLY_SLOW"), [])
+
+    def test_soft_limit_at_or_past_the_timeout_never_warns(self) -> None:
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        log = EventLog(Path(folder.name) / "events.csv")
+        self.addCleanup(log.close)
+        harness = Harness(
+            [ModuleSpec(name, ()) for name in NAMES], log,
+            reply_timeout_s=0.3, reply_slow_s=0.3,
+        )
+        self.assertIsNone(harness._reply_slow_s)
+        for bad in (0.0, -1.0):
+            with self.subTest(reply_slow_s=bad):
+                with self.assertRaises(ValueError):
+                    Harness(
+                        [ModuleSpec(name, ()) for name in NAMES], log,
+                        reply_slow_s=bad,
+                    )
 
 
 class SlowModuleSlipTest(_FaultTest):

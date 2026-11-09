@@ -182,6 +182,21 @@ class ConsoleStateTest(unittest.TestCase):
         self.assertEqual(self.console.snapshot["actual"], "6.3x")
         self.assertEqual(self.console.snapshot["behind_s"], "0.43")
 
+    def test_slow_module_is_a_warning_and_can_be_shown(self) -> None:
+        """Show SLOW as a warning, like LATE, while the clock runs."""
+        rows = [
+            {"name": TRAIN_MODEL, "state": "SLOW", "pid": 7, "exit": None}
+        ]
+        with patch.object(
+            Harness, "module_statuses", new_callable=PropertyMock
+        ) as statuses:
+            statuses.return_value = tuple(rows)
+            self.console.refresh()
+        row = self.console.modules[0]
+        self.assertEqual(row["state"], "SLOW")
+        self.assertEqual(row["variant"], "warning")
+        self.assertTrue(row["can_show"])
+
     def test_source_and_frozen_resource_paths(self) -> None:
         """Resolve QML through the same helper in both builds."""
         self.assertTrue(resource_path("common/harness/ui/Main.qml").is_file())
