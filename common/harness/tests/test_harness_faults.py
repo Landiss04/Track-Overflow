@@ -449,6 +449,100 @@ class StopWithTicksOwedTest(_FaultTest):
         self.assertEqual(run.events[-1][2], "HARNESS_STOPPED")
 
 
+class ReplyTimeoutRegressionTest(_FaultTest):
+    """What the reply timeout does, which a soft warning must not change.
+
+    Only a reply missing past ``REPLY_TIMEOUT_S`` pauses the clock and
+    names the module; the clock resumes when it comes, and no module
+    misses a tick either way.
+    """
+
+    def ticks_past_the_fault(self) -> None:
+        """Run until three ticks after the scripted one are over."""
+        self.assertTrue(wait_until(
+            lambda: FAULT_TICK + 3 in self.run_.completed
+        ), self.run_.events)
+
+    def events_from(self, tick: int) -> list[tuple[str, str, str]]:
+        """Every event logged at ``tick`` or later, without the tick."""
+        return [
+            (source, event, detail)
+            for at, source, event, detail in self.run_.events
+            if at >= tick
+        ]
+
+    def test_slow_reply_inside_the_limit_neither_pauses_nor_names(
+        self,
+    ) -> None:
+        run = self.run_
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 200
+        run.run()
+        self.ticks_past_the_fault()
+        events = [event for _s, event, _d in self.events_from(1)]
+        self.assertNotIn("REPLY_LATE", events)
+        self.assertNotIn("CLOCK_PAUSED", events)
+        self.assertNotIn("LATE_REPLY_RECEIVED", events)
+        self.assertEqual(run.harness.late_modules, frozenset())
+        self.assertIsNone(run.harness.hold_reason)
+        self.assertEqual(
+            run.harness.outputs[TRAIN_MODEL]["tick"],
+            run.harness.clock.tick_count,
+        )
+        self.assert_every_module_stepped_every_tick()
+
+    def test_reply_past_the_limit_pauses_names_then_resumes(self) -> None:
+        run = self.run_
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 600
+        run.run()
+        self.ticks_past_the_fault()
+        at_fault = [
+            (source, event)
+            for source, event, _detail in self.events_from(FAULT_TICK)
+            if event in (
+                "REPLY_LATE", "CLOCK_PAUSED",
+                "LATE_REPLY_RECEIVED", "CLOCK_RESUMED",
+            )
+        ]
+        self.assertEqual(at_fault, [
+            (TRAIN_MODEL, "REPLY_LATE"),
+            ("harness", "CLOCK_PAUSED"),
+            (TRAIN_MODEL, "LATE_REPLY_RECEIVED"),
+            ("harness", "CLOCK_RESUMED"),
+        ])
+        late = run.find("REPLY_LATE")
+        self.assertEqual(
+            late[0][3],
+            f"no reply to tick {FAULT_TICK} after {REPLY_TIMEOUT_S:.1f} s",
+        )
+        self.assertEqual(
+            run.find("CLOCK_PAUSED")[-1][3], f"waiting on {TRAIN_MODEL}"
+        )
+        self.assertRegex(
+            run.find("LATE_REPLY_RECEIVED")[0][3], r"^after 0\.\d\d s$"
+        )
+        self.assertEqual(run.harness.late_modules, frozenset())
+        self.assertFalse(run.harness.clock.is_paused)
+        self.assert_every_module_stepped_every_tick()
+
+    def test_every_late_module_is_named(self) -> None:
+        run = self.run_
+        run.fakes[TRAIN_MODEL].delay_ms[FAULT_TICK] = 600
+        run.fakes[TRACK_MODEL].delay_ms[FAULT_TICK] = 700
+        run.run()
+        self.ticks_past_the_fault()
+        self.assertEqual(
+            sorted(source for _t, source, _e, _d in run.find("REPLY_LATE")),
+            sorted([TRAIN_MODEL, TRACK_MODEL]),
+        )
+        self.assertEqual(
+            run.find("CLOCK_PAUSED")[-1][3],
+            "waiting on " + ", ".join(sorted([TRACK_MODEL, TRAIN_MODEL])),
+        )
+        # The clock waits for the last of them.
+        self.assertEqual(len(run.find("CLOCK_RESUMED")), 2)
+        self.assert_every_module_stepped_every_tick()
+
+
 class SlowModuleSlipTest(_FaultTest):
     """A module too slow for 10x slips the run; no module notices."""
 
