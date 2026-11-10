@@ -287,6 +287,10 @@ scan, and HW's own sample programs must compile cleanly here.
 A program can only name what its own controller has, and the names are HW's.
 The inputs are `OCC_n`, `CLOSED_n` and `FAIL_n` for each block it owns, `SWREV_s`
 (the Track Model's read-back of the switch, reverse) for each switch, and
+`CTCSW_s` and `CTCREV_s` (the CTC Office's command for the switch, which the
+program obeys or not as it decides; the vital code only gates the result),
+`REQSW_s` and `REQREV_s` (the CTC Office's route request: a request exists, and it is
+reverse; not a command, not maintenance, and never cleared when maintenance ends), and
 `MAINT`. A suggestion's numbers never enter a user program; only the vital code
 sees the speed. The outputs are
 `AUTH_n` for each block, `SW_s` for each switch (1 is reverse),

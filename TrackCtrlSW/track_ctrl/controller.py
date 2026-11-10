@@ -125,6 +125,11 @@ class TrackController:
         #: Switch id -> position the CTC Office commands, True for
         #: reverse. Sent only in maintenance mode.
         self.ctc_switch_commands: dict[str, bool] = {}
+        #: Switch id -> position a routed train needs, True for reverse.
+        #: Not a command and not maintenance: the program reads it
+        #: (``REQSW_s``, ``REQREV_s``). Sent in any mode, so ending
+        #: maintenance does not clear it.
+        self.route_requests: dict[str, bool] = {}
         self.manual_switches: dict[str, bool] = {}
 
         # --- the output state: what the last scan drove --------------------
@@ -182,6 +187,8 @@ class TrackController:
             names.add(f"SWREV_{switch_id}")
             names.add(f"CTCSW_{switch_id}")
             names.add(f"CTCREV_{switch_id}")
+            names.add(f"REQSW_{switch_id}")
+            names.add(f"REQREV_{switch_id}")
         return frozenset(names)
 
     def output_names(self) -> tuple[str, ...]:
@@ -355,6 +362,8 @@ class TrackController:
             image[f"CTCREV_{sid}"] = self.ctc_switch_commands.get(
                 sid, False
             )
+            image[f"REQSW_{sid}"] = sid in self.route_requests
+            image[f"REQREV_{sid}"] = self.route_requests.get(sid, False)
             image[f"HAND_{sid}"] = sid in self.manual_switches
             image[f"HANDREV_{sid}"] = self.manual_switches.get(sid, False)
         image["MAINT"] = self.maintenance
@@ -439,7 +448,7 @@ class TrackController:
         candidate = copy.copy(self)
         for name in ("occupancy", "closed", "suggestions", "trains",
                      "switch_reverse", "ctc_switch_commands",
-                     "manual_switches"):
+                     "route_requests", "manual_switches"):
             setattr(candidate, name, dict(getattr(self, name)))
         candidate.history = list(self.history)
         candidate._run(program)
@@ -584,6 +593,16 @@ class TrackController:
         else:
             self.ctc_switch_commands[switch_id] = reverse
 
+    def set_route_request(
+        self, switch_id: str, reverse: bool | None
+    ) -> None:
+        """Set, or with ``None`` withdraw, the CTC's route request."""
+        self._require_switch(switch_id)
+        if reverse is None:
+            self.route_requests.pop(switch_id, None)
+        else:
+            self.route_requests[switch_id] = reverse
+
     # --- log ----------------------------------------------------------------
 
     def _format_log(self, values: Mapping[str, bool]) -> list[str]:
@@ -710,7 +729,8 @@ def _switch_rule(
     """
     out = config.switch_output(sid)
     point, normal_end, reverse_end = config.switches[sid]
-    held = [f"{out} := {_ctc_first(sid, f'SWREV_{sid}')}"]
+    own_held = f"SWREV_{sid}"
+    held = [f"{out} := {_ctc_first(config, owned, sid, own_held)}"]
     legs = {
         end: position
         for end, position in ((normal_end, False), (reverse_end, True))
@@ -796,16 +816,39 @@ def _switch_rule(
     move = f"NOT WANT_N_{sid}" if rest_reverse else f"WANT_R_{sid}"
     lines.append(
         f"{out} := " + _ctc_first(
-            sid, f"(HOLD_{sid} AND SWREV_{sid}) OR "
+            config, owned, sid, f"(HOLD_{sid} AND SWREV_{sid}) OR "
             f"(NOT HOLD_{sid} AND NOT MAINT AND {move})")
     )
     return lines
 
 
-def _ctc_first(sid: str, own: str) -> str:
-    """The CTC Office's command for switch ``sid`` if it gives one, else
-    ``own``. The vital code still locks the switch under a train."""
-    return f"(CTCSW_{sid} AND CTCREV_{sid}) OR (NOT CTCSW_{sid} AND ({own}))"
+def _ctc_first(
+    config: ControllerConfig, owned: set[int], sid: str, own: str
+) -> str:
+    """What drives switch ``sid``, in order: the CTC Office's maintenance
+    command, then its route request, then ``own``, the starter's rule.
+
+    A train on the points locks the switch first of all, but that is the
+    vital code's, not the program's. A request is skipped when the leg it
+    asks for is closed (``CLOSED_n``), for a leg on this wayside; a leg
+    this wayside cannot see is taken as open.
+    """
+    _, normal_end, reverse_end = config.switches[sid]
+
+    def open_leg(end: str) -> str:
+        if end.isdigit() and int(end) in owned:
+            return f" AND NOT CLOSED_{end}"
+        return ""
+
+    to_reverse = f"(REQSW_{sid} AND REQREV_{sid}{open_leg(reverse_end)})"
+    to_normal = f"(REQSW_{sid} AND NOT REQREV_{sid}{open_leg(normal_end)})"
+    requested = (
+        f"{to_reverse} OR (NOT ({to_reverse} OR {to_normal}) AND ({own}))"
+    )
+    return (
+        f"(CTCSW_{sid} AND CTCREV_{sid}) OR "
+        f"(NOT CTCSW_{sid} AND ({requested}))"
+    )
 
 
 def _coming_off(config: ControllerConfig, sid: str, leg: str) -> str:
@@ -855,6 +898,9 @@ def default_program_source(controller: TrackController) -> str:
         ))
         lines.append("VAR_IN   " + " ".join(
             f"CTCSW_{s} CTCREV_{s}" for s in config.switches
+        ))
+        lines.append("VAR_IN   " + " ".join(
+            f"REQSW_{s} REQREV_{s}" for s in config.switches
         ))
     lines += _declare("VAR_OUT", "AUTH", numbers)
     if config.switches:

@@ -5,6 +5,26 @@ Changes to the owners' module code during Phase 5 integration, for review.
 ---
 
 
+
+## 2026-11-10 — Route requests (`route_requests`) reach the program
+
+The CTC Office's `route_requests` (the switch position each routed train
+needs) are now an input: `CtcInputs.route_requests`, in `inputs.ctc` on the wire
+(same shape as `switch_commands`), and `REQSW_s` / `REQREV_s` in the program.
+A request is not a command: it does not set maintenance mode, which stays keyed
+on `switch_commands` only, and it is not cleared when maintenance ends. For a
+switch the first rule that applies wins: a train on the points locks it (vital
+code), then a maintenance command, then the request, then the program's own
+rule. The starter generator does this and skips a request whose target leg is
+closed. The wire decoder accepts `route_requests` when sent and treats it as
+none when a sender leaves it out. The harness now carries the field
+(`wayside_edges.py`, `hw_wayside_edges.py` in the HW shape, `edges.py` `_NO_CTC`
+and the typed `ctc_edges.py`), as its own list, never merged into
+`switch_commands` and not filtered against them. Tests added:
+`test_boundary.RouteRequests` (7), two in `test_harness_edges.py` and one in
+`test_ctc_edge.py`.
+
+---
 ## 2026-11-04 — PLC expressions compile once (Landis)
 
 `61e7796` (10x headroom on hybrid Windows laptops). The outputs and
