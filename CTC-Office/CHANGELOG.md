@@ -4,6 +4,56 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-10 — Selected train: an arrival estimate; occupancy list scrolls
+
+From Landis.
+
+- **Arrival estimate.** The Selected train panel's arrival was the
+  time the schedule (or the dispatcher) asked for, which a late train
+  showed long after it had passed. It is now an estimate from where the
+  train is: the time now plus the run over the rest of its route at the
+  suggested speed (`CtcHost.arrivalEstimate()`, for the selected train
+  only, re-read each simulated second through `clockSecond`). The time
+  asked for moves to a "Due" row, and Deviation shows the minutes
+  between the two. The Train occupancy table's Arrive column is still
+  the time asked for.
+- **Train occupancy window.** `OccupancyWindow.qml`: the train list
+  scrolls, so with every train out the footer and its Select train
+  button stay in view.
+- Tests: `test_ctc_host.py` (the estimate runs from now, moves on while
+  the train waits, reads "Arrived" at the destination).
+
+## 2026-11-10 — Fixes from the Schedule v4 integration findings
+
+From the findings of the 2026-11-09 full-system run (C1, C2, C6, C7).
+
+- **C1, a train that overruns past a switch is followed.**
+  `ctc/model.py` `_straight_on()`: the block a train runs on into is the
+  one the track leads it into. A block that joins its head block at the
+  end it came in by (a switch's other connection) is left out, and where
+  it faces the points, the switch's reported position decides. Before,
+  any block with more than one other neighbour gave no answer and the
+  train was lost (R3, in by 15 to 16 and on into 17).
+- **C2, authority never ends on a block that locks the switch it waits
+  for.** `ctc/routing.py` `authority()`: when the count stops for a
+  switch not set for the route, it ends short of the block the switch
+  is listed on and of its points block (new
+  `TrackGraph.locking_blocks()`), a block further back than before. A
+  train standing on either locks the switch, so it could never be set
+  for it (G5 on Green 76, R1 on Red 16). `ctc/model.py`
+  `_route_requests()` still requests that switch.
+- **C6, runs held in the yard leave the schedule's headway apart.**
+  `ctc/model.py` `_release()`, new `_too_soon_after()`: a run of the
+  schedule leaves no closer behind the last run released on its line
+  than their departure times are apart in the schedule. Manual trains
+  are not affected.
+- **C7.** `tests/test_sim_clock.py` `test_ten_x_runs_faster` only tells
+  10x from 1x (5 to 13 simulated seconds in about one real second).
+- Tests: `test_ctc_authority.py` (the locking blocks, the request for a
+  switch stopped short of; three expectations moved a block back),
+  `test_ctc_tracking.py` `OverrunAtASwitchTest`,
+  `test_ctc_train_events.py` (headway after a hold).
+
 ## 2026-11-04 — An automatic Run waits for the windows
 
 `0345b24` (Kevin, part of the 10x headroom work). A test and

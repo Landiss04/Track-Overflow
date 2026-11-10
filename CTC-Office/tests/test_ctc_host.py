@@ -27,7 +27,7 @@ from ctc.interface import (  # noqa: E402
 from ctc.model import StubCtcOffice  # noqa: E402
 from ctc.schedule import load_schedule  # noqa: E402
 from ctc_ui.ctc_host import CtcHost  # noqa: E402
-from ctc_ui.display import MPS_TO_MPH  # noqa: E402
+from ctc_ui.display import MPS_TO_MPH, parse_time_of_day  # noqa: E402
 from ctc_ui.sim_clock import SimulationClockBridge  # noqa: E402
 from tests.occupancy import (  # noqa: E402
     At,
@@ -330,6 +330,40 @@ class PanelDataTest(unittest.TestCase):
             Path(__file__).resolve().parents[2]
             / "utils" / "schedule_v4.json"))
         self.assertEqual(host.trainOptions("Green")[-1]["value"], "G11")
+
+    def test_arrival_estimate_runs_from_now(self) -> None:
+        # T1 on Green 30 toward 37, with 05:02 asked for: the estimate
+        # is the time now plus the run left, whatever was asked for.
+        host, module, clock = _host()
+        _report(host, module, at("T1", "30"))
+        clock.clock.tick()
+        host.dispatchTrain("T1", "Green", "37", "05:02")
+        host.dispatchTrain("T2", "Green", "65", "")
+        first = host.arrivalEstimate("T1")
+        now_s = 5 * 3600 + module.snapshot().elapsed_s
+        estimate_s = parse_time_of_day(first["time"])
+        # 7 blocks and a half: later than now, by under ten minutes.
+        self.assertGreater(estimate_s, now_s)
+        self.assertLess(estimate_s, now_s + 600)
+        self.assertAlmostEqual(
+            int(first["deviation"]),
+            (estimate_s - (5 * 3600 + 120)) / 60, delta=1)
+        # Standing still for half an hour, it is half an hour later.
+        for _ in range(3):
+            module.step(600.0, reports(at("T1", "30")))
+        later = parse_time_of_day(host.arrivalEstimate("T1")["time"])
+        self.assertEqual(later - estimate_s, 1800)
+        # Still in the yard: nothing to estimate from.
+        self.assertEqual(host.arrivalEstimate("T2"), {})
+        self.assertEqual(host.arrivalEstimate("nobody"), {})
+
+    def test_arrival_estimate_at_the_destination(self) -> None:
+        host, module, clock = _host()
+        _report(host, module, at("T1", "37"))
+        clock.clock.tick()
+        host.dispatchTrain("T1", "Green", "37", "08:30")
+        self.assertEqual(host.arrivalEstimate("T1"),
+                         {"time": "Arrived", "deviation": ""})
 
     def test_selected_train_route(self) -> None:
         # T1 on Green 30 toward 37, T2 standing on 33: authority 1,

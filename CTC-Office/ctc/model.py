@@ -490,6 +490,10 @@ class StubCtcOffice:
         # by train ID, with their line, in the order released: at most
         # one per line. Each holds its line's yard exit block.
         self._released: dict[str, str] = {}
+        # Per line, when the last run of the schedule was released and
+        # when it was due out: the next leaves no closer behind it than
+        # the schedule's headway between the two.
+        self._last_release: dict[str, tuple[float, float]] = {}
         # Trains the CTC has created (released) and not retired: a
         # train already in service that went back into the yard
         # without being retired leaves it again with no second event.
@@ -848,6 +852,8 @@ class StubCtcOffice:
         ``start_s``."""
         schedule = self._schedule
         assert schedule is not None
+        # The runs are timed afresh: headway is counted from scratch.
+        self._last_release = {}
         self._auto = AutoDispatcher([
             plan_run(train, self._graphs[train.line],
                      lambda route, line=train.line: self._run_time_s(
@@ -957,9 +963,25 @@ class StubCtcOffice:
 
     def _straight_on(self, train: Tracked) -> str | None:
         """The block a train runs into past the end of its route: the
-        only one next to its head block that it did not come from."""
-        beyond = [n for n in self._graphs[train.line].neighbors(train.head)
-                  if n != train.came_from]
+        one next to its head block that the track leads it into. Not
+        the block it came from, nor one that joins at the same end (a
+        switch's other connection). Where that still leaves a choice,
+        the train faces a switch's points, and the switch's reported
+        position decides. None when nothing settles it."""
+        graph = self._graphs[train.line]
+        beyond = [n for n in graph.neighbors(train.head)
+                  if n != train.came_from
+                  and not graph.turns_back(train.came_from, train.head, n)]
+        if len(beyond) > 1:
+            applied = (self._inputs if self._inputs is not None
+                       else CtcInputs())
+            reported = {r.switch_id: r.position
+                        for r in applied.track_controller.switches
+                        if r.line == train.line}
+            legs = {n: graph.leg(train.head, n) for n in beyond}
+            beyond = [n for n, leg in legs.items()
+                      if leg is None
+                      or reported.get(leg.switch_id) == leg.position]
         return beyond[0] if len(beyond) == 1 else None
 
     # -- The yard -----------------------------------------------------
@@ -977,6 +999,28 @@ class StubCtcOffice:
                    or (progress.status == HELD and progress.wait >= 0))
         return (not self._automatic or self._dispatch_paused
                 or not leaving)
+
+    def _departure_s(self, train_id: str) -> float | None:
+        """When a run of the loaded schedule is due out of the yard;
+        None for a train that is not one."""
+        if self._auto is None:
+            return None
+        return next((plan.departure_s for plan in self._auto.plans
+                     if plan.train_id == train_id), None)
+
+    def _too_soon_after(self, train_id: str, line: str) -> bool:
+        """Whether a run would leave the yard closer behind the last
+        run released on its line than the schedule puts them: runs kept
+        in the yard past their time leave the schedule's headway apart,
+        not one straight after another. A train that is not a run of the
+        schedule, and a run due no later than the last one released, is
+        never too soon."""
+        departure_s = self._departure_s(train_id)
+        last = self._last_release.get(line)
+        if departure_s is None or last is None:
+            return False
+        released_s, last_departure_s = last
+        return self._now_s() - released_s < departure_s - last_departure_s
 
     def _sent_to_yard(self, train_id: str) -> bool:
         """Whether a train has been sent back to the yard: a run of the
@@ -997,7 +1041,9 @@ class StubCtcOffice:
         no train on it) and no train is authorized into it, and the
         same for the blocks next to it, closed or not, so a train never
         comes out next to another (``keep_gap``; Landis 2026-11-03). A
-        train is reported in ``new_trains`` the
+        run of the schedule also leaves no closer behind the last run
+        released on its line than the schedule puts them
+        (``_too_soon_after``). A train is reported in ``new_trains`` the
         step it is released, unless it was already in service."""
         ready = self._ready_lines()
         applied = self._inputs if self._inputs is not None else CtcInputs()
@@ -1016,10 +1062,14 @@ class StubCtcOffice:
                     or (line, exit_block) in blocked
                     or any((line, n) in held for n in
                            self._graphs[line].neighbors(exit_block))
-                    or self._scheduler_holds(waiting.train_id)):
+                    or self._scheduler_holds(waiting.train_id)
+                    or self._too_soon_after(waiting.train_id, line)):
                 continue
             busy.add(line)
             self._released[waiting.train_id] = line
+            departure_s = self._departure_s(waiting.train_id)
+            if departure_s is not None:
+                self._last_release[line] = (self._now_s(), departure_s)
             if waiting.train_id not in self._in_service:
                 self._in_service.add(waiting.train_id)
                 released.append(NewTrain(waiting.train_id, line))
@@ -1451,6 +1501,16 @@ class StubCtcOffice:
         for limit in limits:
             graph = self._graphs[limit.line]
             ahead = limit.route[:limit.blocks + 2]
+            if limit.reason == "switch":
+                # Its authority may end a block further back, clear of
+                # the blocks that lock the switch (``ctc.routing``): the
+                # request still reaches the switch it waits for.
+                for index in range(limit.blocks, len(limit.route) - 1):
+                    leg = graph.leg(limit.route[index],
+                                    limit.route[index + 1])
+                    if leg is not None and leg.switch_id == limit.at:
+                        ahead = limit.route[:index + 2]
+                        break
             for here, after in zip(ahead, ahead[1:]):
                 leg = graph.leg(here, after)
                 if leg is not None:
