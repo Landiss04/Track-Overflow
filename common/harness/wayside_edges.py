@@ -28,6 +28,12 @@ line's::
     track_controller.closed_blocks[]   -> closed_blocks[]
     track_controller.switch_commands[]: line, switch_id, position
                     -> switch_commands[]: block (the switch's ID), value
+    track_controller.route_requests[]: line, switch_id, position
+                    -> route_requests[]: block (the switch's ID), value.
+                       The position a routed train needs, not a command:
+                       its own field, never merged into switch_commands,
+                       and not filtered against them. The controller
+                       decides which wins
 
 Track Model -> Track Controller, ``track_model_to_track_controller``,
 one line's::
@@ -137,6 +143,12 @@ def ctc_to_track_controller(
              "value": command["position"]}
             for command in sent["switch_commands"]
             if command["line"] == line
+        ],
+        "route_requests": [
+            {"block": _block(line, request["switch_id"]),
+             "value": request["position"]}
+            for request in sent.get("route_requests", ())
+            if request["line"] == line
         ],
         "suggestions": [
             {"block": _block(line, block_id),

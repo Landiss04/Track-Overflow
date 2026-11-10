@@ -533,6 +533,7 @@ class WaysideEdgesTest(unittest.TestCase):
             "switch_commands": [
                 {"block": _green("62"), "value": "reverse"},
             ],
+            "route_requests": [],
             "suggestions": [
                 {"block": _green("63"),
                  "value": {"speed_mps": 12, "authority_blocks": 2}},
@@ -540,6 +541,46 @@ class WaysideEdgesTest(unittest.TestCase):
                  "value": {"speed_mps": 12, "authority_blocks": 1}},
             ],
         })
+
+    def test_a_route_request_has_its_own_field_and_is_never_a_command(
+        self,
+    ) -> None:
+        sent = {"track_controller": {
+            "suggestions": [],
+            "closed_blocks": [],
+            "switch_commands": [],
+            "route_requests": [
+                {"line": "Green", "switch_id": "76", "position": "normal"},
+                {"line": "Red", "switch_id": "15", "position": "reverse"},
+            ],
+        }}
+        mapped = ctc_to_track_controller(sent, "Green")
+        self.assertEqual(mapped["route_requests"], [
+            {"block": _green("76"), "value": "normal"},
+        ])
+        self.assertEqual(mapped["switch_commands"], [])
+        # The HW shape, for Red.
+        from common.harness.hw_wayside_edges import (
+            ctc_to_track_controller as hw_ctc,
+        )
+        hw = hw_ctc(sent, "Red")
+        self.assertEqual(hw["route_requests"], [
+            {"line": "Red", "switch_id": "15", "position": "reverse"},
+        ])
+        self.assertEqual(hw["switch_commands"], [])
+        # A request is not filtered against a command for the same switch.
+        both = {"track_controller": {**sent["track_controller"],
+                "switch_commands": [{"line": "Green", "switch_id": "76",
+                                     "position": "reverse"}]}}
+        mapped = ctc_to_track_controller(both, "Green")
+        self.assertEqual(len(mapped["route_requests"]), 1)
+        self.assertEqual(len(mapped["switch_commands"]), 1)
+
+    def test_a_ctc_that_sends_no_requests_maps_to_none(self) -> None:
+        mapped = ctc_to_track_controller({"track_controller": {
+            "suggestions": [], "closed_blocks": [], "switch_commands": [],
+        }}, "Green")
+        self.assertEqual(mapped["route_requests"], [])
 
     def test_two_suggestions_for_one_block_take_the_lower_of_each(
         self,
@@ -860,7 +901,7 @@ class SystemEdgesTest(unittest.TestCase):
     ) -> None:
         self.assertEqual(self.inputs(TRACK_CONTROLLER_SW, {}), {
             "ctc": {"closed_blocks": [], "switch_commands": [],
-                    "suggestions": []},
+                    "route_requests": [], "suggestions": []},
             "track_model": {"occupied_blocks": [], "switch_positions": [],
                             "crossings_active": [], "signal_aspects": []},
         })

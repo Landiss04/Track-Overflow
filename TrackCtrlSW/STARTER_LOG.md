@@ -15,7 +15,7 @@ silently.
 | Where | `origin/development`, `controller.py` as of commit `3b0e170` ("match language to hw", 2026-10-20) | `Track-Ctrl-SW`, from `234c353` (2026-10-21, "set each switch for the train coming (Q7)"), carried on through `e5e51d4` and the work after it |
 | Switch rule | One line: `SW_s := OCC_leg AND NOT OCC_point AND NOT OCC_normal AND NOT MAINT`, so the switch is reverse only while a train waits on the reverse leg and the main line is clear, else normal. Reverse end not on this wayside: `SW_s := 0`. | `_switch_rule`: set the switch for the train coming. Works out the fixed side of the points from `next_blocks`, then `WANT_N_s`, `WANT_R_s`, `HOLD_s := OCC_point OR (WANT_N_s AND WANT_R_s)`, `SW_s := (HOLD_s AND SWREV_s) OR (NOT HOLD_s AND NOT MAINT AND move)`. Held where it stands (`SW_s := SWREV_s`) if the points or the way in belong to another wayside, or the layout gives no direction. |
 | Follower case | Commands normal. | Held while the points are occupied; a train coming for each position holds it where it stands. |
-| Inputs it reads | `OCC`, `CLOSED`, `MAINT` | the same, plus, when the wayside has a switch, `SWREV_s` (the read-back) and `CTCSW_s`, `CTCREV_s` (the CTC Office's command, obeyed first) |
+| Inputs it reads | `OCC`, `CLOSED`, `MAINT` | the same, plus, when the wayside has a switch, `SWREV_s` (the read-back) and `CTCSW_s`, `CTCREV_s` (the CTC Office's command, obeyed first) and `REQSW_s`, `REQREV_s` (its route request, obeyed next) |
 | Signals, crossings | `AHEAD` = blocks `point+1`, `point+2`; crossing = its block and `number ± 1` | **Not the same code any more:** since 2026-10-30 these and the separation rule use the layout's physical neighbours (`config.neighbours`, `config.within`), not block numbers. Block 101 joins block 77. |
 | Separation | `AUTH_n := NOT neighbour` for neighbours `n ± 1`, so an empty block beside a train is held | `AUTH_n := NOT (OCC_n AND next block)`: only a block with a train in it is held, and only for the block ahead of it (from the layout's `next_blocks`). An empty block passes the CTC Office's preloaded suggestion. |
 
@@ -30,16 +30,16 @@ changes included). Regenerate and update this table whenever the starter is chan
 
 | Wayside | Fingerprint | Lines | Switches |
 |---|---|---|---|
-| GTC-01 | e50493208a4e | 60 | 12 |
-| GTC-02 | 445778f3e50e | 56 | 28 |
-| GTC-03 | e3e271fc4e1e | 73 | 58, 62 |
-| GTC-04 | 4e8ff0f3ba41 | 73 | 76, 85 |
+| GTC-01 | cbc6cc8dade3 | 60 | 12 |
+| GTC-02 | bb9009149134 | 56 | 28 |
+| GTC-03 | 5d1485738d3b | 73 | 58, 62 |
+| GTC-04 | c8fd94e84b6f | 73 | 76, 85 |
 | GTC-05 | f2ac5c30c278 | 40 | none |
 | GTC-06 | 6cb878630a54 | 36 | none |
-| RTC-01 | 17212ca33105 | 69 | 9, 15 |
-| RTC-02 | be308e41fa7a | 47 | 27 |
-| RTC-03 | 5297cb851d87 | 83 | 32, 38, 43 |
-| RTC-04 | a23a83dc6272 | 51 | 52 |
+| RTC-01 | 12f00adaa6cb | 69 | 9, 15 |
+| RTC-02 | ee2d1cee916e | 47 | 27 |
+| RTC-03 | 6cb3de05f774 | 83 | 32, 38, 43 |
+| RTC-04 | b2f05bcc58f3 | 51 | 52 |
 | RTC-05 | 6af88a2d8c5b | 26 | none |
 
 Regenerate them from `TrackCtrlSW` with a script that builds the default module without programs
@@ -64,6 +64,9 @@ for each controller.
 
 ## History
 
+- 2026-11-10: the switch rule reads the CTC Office's route request (`REQSW_s`, `REQREV_s`) after the
+  maintenance command and before its own rule, and skips a request whose target leg is `CLOSED_n`.
+  The 8 waysides with switches have new fingerprints (GTC-05, GTC-06 and RTC-05 are unchanged).
 - 2026-11-03: separation is direction-aware. `AUTH_n := NOT (OCC_n AND <next blocks of n>)`, with the
   next blocks from the layout's `next_blocks`, so a train is held only for the block ahead of it.
   Before, it was held for either neighbour, and a convoy of adjacent trains (Green 62, 63, 64) held
