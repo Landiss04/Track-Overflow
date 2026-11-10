@@ -103,19 +103,41 @@ class ReleaseTest(unittest.TestCase):
         # T2 in Green 62 is sent through 63: its authority holds 63.
         ctc = ready_office()
         ctc.place_train("T2", "Green", "62")
-        ctc.dispatch("T2", "Green", "64")
+        ctc.dispatch("T2", "Green", "70")
         ctc.dispatch("T1", "Green", "70")
         out = _step(ctc, "62")
         self.assertEqual(_released(out), [])
         (limit,) = [a for a in ctc.snapshot().authorities
                     if a.train_id == "T2"]
         self.assertIn("63", limit.route[1:limit.blocks + 1])
-        # T2 passes through 63 and on to 64; then T1 may go.
-        for blocks in (("62", "63"), ("63",), ("63", "64")):
+        # T2 passes through 63 and 64 and on to 65; then T1 may go.
+        for blocks in (("62", "63"), ("63",), ("63", "64"), ("64",),
+                       ("64", "65")):
             ctc.place_train("T2", "Green", blocks[-1])
             self.assertEqual(_released(_step(ctc, *blocks)), [])
+        ctc.place_train("T2", "Green", "65")
+        self.assertEqual(_released(_step(ctc, "65")), [("T1", "Green")])
+
+    def test_not_next_to_a_train(self) -> None:
+        # Out on 63 next to T2 in 64, the wayside would hold them both.
+        ctc = ready_office()
         ctc.place_train("T2", "Green", "64")
-        self.assertEqual(_released(_step(ctc, "64")), [("T1", "Green")])
+        ctc.dispatch("T2", "Green", "70")
+        ctc.dispatch("T1", "Green", "70")
+        self.assertEqual(_released(_step(ctc, "64")), [])
+
+    def test_not_next_to_a_block_a_train_is_authorized_into(self) -> None:
+        ctc = ready_office()
+        ctc.place_train("T2", "Green", "61")
+        ctc.dispatch("T2", "Green", "62")
+        ctc.dispatch("T1", "Green", "70")
+        self.assertEqual(_released(_step(ctc, "61")), [])
+
+    def test_not_next_to_a_failed_block(self) -> None:
+        # A failed block reads occupied, so the wayside holds beside it.
+        ctc = ready_office()
+        ctc.dispatch("T1", "Green", "70")
+        self.assertEqual(_released(_step(ctc, "62")), [])
 
     def test_not_while_the_scheduler_holds_the_run(self) -> None:
         runs = tuple(t for t in SCHEDULE.trains
@@ -139,6 +161,35 @@ class ReleaseTest(unittest.TestCase):
         ctc.set_automatic_mode(True)
         self.assertEqual(_released(_step(ctc)), [("G1", "Green")])
 
+    def test_runs_held_past_their_time_leave_a_headway_apart(self) -> None:
+        # G1 and G2 are due 180 s apart. Both are kept in the yard past
+        # their times (63 reads occupied); once it clears they still
+        # leave 180 s apart, not one straight after the other.
+        runs = tuple(t for t in SCHEDULE.trains
+                     if t.line == "Green" and t.train_id in ("1", "2"))
+        ctc = ready_office()
+        ctc.load_schedule(Schedule("G1 and G2", runs))
+        ctc.set_automatic_mode(True)
+        ctc.stage_inputs(reports(occupied=[("Green", "63")]))
+        self.assertEqual(_released(_step(ctc, "63")), [])
+        self.assertEqual(_released(_step(ctc, "63", dt=400.0)), [])
+        self.assertEqual(_released(_step(ctc)), [("G1", "Green")])
+        # G1 is out and gone (lost here, to leave the track clear).
+        _step(ctc, "63")
+        self.assertEqual(_released(_step(ctc)), [])
+        self.assertEqual(ctc.snapshot().lost_trains, ("G1",))
+        self.assertEqual(_released(_step(ctc, dt=100.0)), [])
+        self.assertEqual(_released(_step(ctc, dt=70.0)), [])
+        self.assertEqual(_released(_step(ctc, dt=10.0)), [("G2", "Green")])
+
+    def test_manual_trains_keep_no_headway(self) -> None:
+        ctc = ready_office()
+        ctc.dispatch("T1", "Green", "70")
+        ctc.dispatch("T2", "Green", "70")
+        self.assertEqual(_released(_step(ctc)), [("T1", "Green")])
+        _step(ctc, "63")
+        self.assertEqual(_released(_step(ctc)), [("T2", "Green")])
+
     def test_one_per_line_at_a_time_most_behind_schedule_first(
             self) -> None:
         ctc = ready_office()
@@ -156,8 +207,11 @@ class ReleaseTest(unittest.TestCase):
         for _ in range(10):
             self.assertEqual(_released(_step(ctc, "63")), [])
         self.assertEqual(_released(_step(ctc, "63", "64")), [])
-        # 63 clear, T2 in 64 and its authority runs on from there.
-        self.assertEqual(_released(_step(ctc, "64")), [("T1", "Green")])
+        # 63 clear, but T2 in 64 is next to it.
+        self.assertEqual(_released(_step(ctc, "64")), [])
+        self.assertEqual(_released(_step(ctc, "64", "65")), [])
+        # One block clear behind T2, and its authority runs on from there.
+        self.assertEqual(_released(_step(ctc, "65")), [("T1", "Green")])
 
     def test_a_released_train_holds_its_exit_block(self) -> None:
         # Released, not yet seen: no other train is given 63.

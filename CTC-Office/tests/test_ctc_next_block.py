@@ -24,7 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ctc.interface import TrainSuggestion  # noqa: E402
 from ctc.model import (  # noqa: E402
-    SERVICE_DECEL_MPS2,
+    FULL_TRAIN_MASS_KG,
+    GRAVITY_MPS2,
+    SERVICE_BRAKE_FORCE_N,
     SUGGESTED_SPEED_MARGIN_MPS,
 )
 from ctc.track_layout import load_layout  # noqa: E402
@@ -44,8 +46,11 @@ def _expected_speed(line: str, block_id: str,
                     ahead: tuple[str, ...]) -> int:
     """The suggested speed for a block: a little under its limit, and
     no faster than a train can stop from over the blocks ``ahead``."""
-    stopping_m = sum(_BLOCKS[(line, b)].length_m for b in ahead)
-    can_stop = int(math.sqrt(2 * SERVICE_DECEL_MPS2 * stopping_m))
+    can_stop = int(math.sqrt(sum(
+        2 * _BLOCKS[(line, b)].length_m
+        * (SERVICE_BRAKE_FORCE_N / FULL_TRAIN_MASS_KG + GRAVITY_MPS2
+           * math.sin(math.atan(_BLOCKS[(line, b)].grade_percent / 100)))
+        for b in ahead)))
     return min(max(0, _limit_mps(line, block_id)
                    - SUGGESTED_SPEED_MARGIN_MPS), can_stop)
 

@@ -219,14 +219,41 @@ class CountTest(unittest.TestCase):
 
     def test_stops_before_a_switch_not_set_for_the_route(self) -> None:
         # Green 26 to 30 runs 28 -> 29: switch 28's normal connection.
+        # Block 28 holds the points, and a train on it locks the
+        # switch, so the count ends a block short of it, at 27.
         for switches in ({}, {"28": "reverse"}):
             with self.subTest(switches=switches):
                 limit = authority(_GREEN, "26", "30", {}, switches)
                 self.assertEqual((limit.blocks, limit.end_block_id,
                                   limit.reason, limit.at),
-                                 (2, "28", "switch", "28"))
+                                 (1, "27", "switch", "28"))
         limit = authority(_GREEN, "26", "30", {}, {"28": "normal"})
         self.assertEqual((limit.blocks, limit.reason), (4, "destination"))
+
+    def test_never_ends_on_a_block_that_locks_the_switch(self) -> None:
+        # A train standing on the block a switch is listed on, or on
+        # its points block, locks it: authorized there with the switch
+        # set against it, it would wait for a switch that can no longer
+        # move (the Green 76 and Red 16 lockups of 2026-11-09).
+        red = TrackGraph(_LAYOUT["Red"])
+        for graph, start, destination, switches, expected in (
+                # Green 76 is listed on 76; its points are on 77.
+                (_GREEN, "73", "80", {"76": "reverse"}, (2, "75")),
+                (_GREEN, "76", "80", {"76": "reverse"}, (0, "76")),
+                # Back in by 78 -> 77 -> 101, off the points block.
+                (_GREEN, "80", "102", {"76": "normal"}, (2, "78")),
+                # Red 15 is listed on 15; its points are on 16.
+                (red, "12", "17", {"15": "reverse"}, (2, "14")),
+                (red, "19", "14", {"15": "reverse"}, (2, "17")),
+                (red, "19", "1", {"15": "normal"}, (2, "17")),
+                # From 1, neither the listed block nor the points.
+                (red, "3", "17", {"15": "normal"}, (2, "1"))):
+            with self.subTest(start=start, destination=destination):
+                limit = authority(graph, start, destination, {}, switches)
+                (switch,) = switches
+                self.assertEqual(
+                    (limit.blocks, limit.end_block_id, limit.reason,
+                     limit.at), (*expected, "switch", switch))
 
 
 class GapTest(unittest.TestCase):
@@ -265,12 +292,12 @@ class GapTest(unittest.TestCase):
         # (Landis and Harry Tye 2026-10-28).
         limit = authority(_GREEN, "75", "85", {"77": "occupied"},
                           {"76": "reverse"})
-        self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
-                          limit.at), (0, "75", "occupied", "77"))
-        # With 77 clear, the count still stops at the switch.
+        self.assertEqual((limit.blocks, limit.end_block_id), (0, "75"))
+        # With 77 clear, the count still stops short of the switch, and
+        # of block 76, from which the train would lock it.
         limit = authority(_GREEN, "75", "85", {}, {"76": "reverse"})
         self.assertEqual((limit.blocks, limit.end_block_id, limit.reason,
-                          limit.at), (1, "76", "switch", "76"))
+                          limit.at), (0, "75", "switch", "76"))
 
     def test_a_closed_block_ahead_needs_no_gap(self) -> None:
         # Only trains hold each other; a closed block holds no one.
@@ -341,14 +368,25 @@ class StubAuthorityTest(unittest.TestCase):
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "30")
         step_at(ctc, _train("T1", "26"))
-        self.assertEqual(_authority(ctc).blocks, 2)
+        self.assertEqual(_authority(ctc).blocks, 1)
         # A command is not a report: still stops before the switch.
         ctc.set_maintenance_mode(True)
         ctc.set_switch("Green", "28", "normal")
-        self.assertEqual(_authority(ctc).blocks, 2)
+        self.assertEqual(_authority(ctc).blocks, 1)
         step_at(ctc, _train("T1", "26"),
                 switches=[SwitchReport("Green", "28", "normal")])
         self.assertEqual(_authority(ctc).blocks, 4)
+
+    def test_the_switch_it_stops_short_of_is_still_requested(self) -> None:
+        # Its authority ends at 27, clear of switch 28's points, and
+        # the route request for 28 goes out all the same.
+        ctc = ready_office()
+        ctc.dispatch("T1", "Green", "30")
+        out = step_at(ctc, _train("T1", "26"))
+        self.assertEqual(
+            [(r.switch_id, r.position)
+             for r in out.track_controller.route_requests],
+            [("28", "normal")])
 
     def test_zero_once_at_the_destination(self) -> None:
         ctc = ready_office()
@@ -557,12 +595,20 @@ class SafeSpeedTest(unittest.TestCase):
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "70")
         # Green 63 is limited to 70 km/h (18 m/s suggested), but with
-        # only block 64 (100 m) ahead, a train in 66: sqrt(2 * 1.2 *
-        # 100) = 15.
+        # only block 64 (100 m, flat) ahead, a train in 66: a full
+        # train brakes at 1.06 m/s^2, sqrt(2 * 1.06 * 100) = 14.
         out = step_at(ctc, _train("T1", "63"), _train("T2", "66"))
-        self.assertEqual(self._speed(out), 15)
+        self.assertEqual(self._speed(out), 14)
         out = step_at(ctc, _train("T1", "63"), _train("T2", "80"))
         self.assertEqual(self._speed(out), 18)
+
+    def test_a_downhill_block_leaves_less_room_to_stop(self) -> None:
+        # 100 m flat (Green 64) against 100 m at -4.5 % (Green 10).
+        ctc = ready_office()
+        self.assertEqual(
+            ctc._suggested_speed_mps("Green", "63", ("64",)), 14)
+        self.assertEqual(
+            ctc._suggested_speed_mps("Green", "63", ("10",)), 11)
 
     def test_zero_with_no_authority(self) -> None:
         ctc = ready_office()

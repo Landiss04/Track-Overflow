@@ -2,6 +2,7 @@
 // rather than a Popup, because Popups reparent to the window overlay and
 // would escape the canvas scale transform.
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import "../../../../ui"
 
@@ -141,44 +142,70 @@ Rectangle {
             color: theme.border
         }
 
-        DataTable {
+        // With every train out, the list is taller than the window: it
+        // scrolls, so the footer and its Select train button stay put.
+        ScrollView {
+            id: trainsScroll
+
+            readonly property bool overflows:
+                contentHeight > availableHeight + 1
+
             Layout.fillWidth: true
+            Layout.fillHeight: true
             Layout.margins: theme.space_4
-            columns: [
-                { label: qsTr("Train"), key: "train", width: 72,
-                  mono: true },
-                { label: qsTr("Line"), key: "line", width: 72 },
-                { label: qsTr("Block"), key: "block", width: 64,
-                  mono: true },
-                { label: qsTr("Suggested (mph)"),
-                  key: "suggestedSpeed", width: 112, numeric: true },
-                { label: qsTr("Authority"), key: "authority", width: 104,
-                  mono: true },
-                { label: qsTr("Destination"), key: "destination" },
-                { label: qsTr("Arrive"), key: "eta", width: 64,
-                  mono: true },
-                { label: qsTr("Status"), key: "status", width: 110 }
-            ]
-            rows: root.shownTrains
-            currentIndex: root.pickedIndex
-            onRowActivated: function (index, row) {
-                root.pickedTrain = row.train;
+            clip: true
+            contentWidth: availableWidth
+            // Always shown while there is more to scroll to, so the
+            // dispatcher can see the list goes on.
+            ScrollBar.vertical.policy: overflows
+                ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+            ColumnLayout {
+                width: trainsScroll.availableWidth
+                    - (trainsScroll.overflows
+                       ? trainsScroll.ScrollBar.vertical.width
+                         + theme.space_2 : 0)
+                spacing: 0
+
+                DataTable {
+                    Layout.fillWidth: true
+                    stickyFlickable: trainsScroll.contentItem
+                    columns: [
+                        { label: qsTr("Train"), key: "train", width: 72,
+                          mono: true },
+                        { label: qsTr("Line"), key: "line", width: 72 },
+                        { label: qsTr("Block"), key: "block", width: 64,
+                          mono: true },
+                        { label: qsTr("Suggested (mph)"),
+                          key: "suggestedSpeed", width: 112, numeric: true },
+                        { label: qsTr("Authority"), key: "authority", width: 104,
+                          mono: true },
+                        { label: qsTr("Destination"), key: "destination" },
+                        { label: qsTr("Arrive"), key: "eta", width: 64,
+                          mono: true },
+                        { label: qsTr("Status"), key: "status", width: 110 }
+                    ]
+                    rows: root.shownTrains
+                    currentIndex: root.pickedIndex
+                    onRowActivated: function (index, row) {
+                        root.pickedTrain = row.train;
+                    }
+                }
+
+                HelperText {
+                    Layout.fillWidth: true
+                    Layout.topMargin: theme.space_2
+                    visible: root.shownTrains.length === 0
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.trains.length === 0
+                        ? qsTr("No trains on the network")
+                        : qsTr("No trains match the filters")
+                }
             }
         }
 
-        HelperText {
-            Layout.fillWidth: true
-            Layout.topMargin: theme.space_2
-            visible: root.shownTrains.length === 0
-            horizontalAlignment: Text.AlignHCenter
-            text: root.trains.length === 0
-                ? qsTr("No trains on the network")
-                : qsTr("No trains match the filters")
-        }
-
-        Item { Layout.fillHeight: true }
-
-        // Footer.
+        // Footer: outside the scrolling list, always in view.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 1

@@ -29,6 +29,16 @@ Panel {
         root.host.revision;
         return root.host.routeDetail(root.trainId);
     }
+    // When it should get there, from where it is now
+    // (CtcHost.arrivalEstimate): re-read as the clock runs too, so a
+    // train that waits is never shown arriving in the past.
+    readonly property var arrival: {
+        if (!root.host || root.trainId === "")
+            return ({});
+        root.host.revision;
+        root.host.clockSecond;
+        return root.host.arrivalEstimate(root.trainId);
+    }
     property string message: ""
     property bool messageIsError: false
 
@@ -116,13 +126,19 @@ Panel {
                 }
                 TelemetryReadout {
                     Layout.fillWidth: true
-                    label: qsTr("Arrival")
-                    value: root.show("eta")
+                    // The estimate; the requested time until the
+                    // train is on the track.
+                    label: root.arrival.time ? qsTr("Est. arrival")
+                        : qsTr("Arrival")
+                    value: root.arrival.time || root.show("eta")
                 }
                 TelemetryReadout {
                     Layout.fillWidth: true
+                    // Minutes after (+) or before (-) the requested
+                    // arrival.
                     label: qsTr("Deviation")
-                    unit: "s"
+                    value: root.arrival.deviation || "—"
+                    unit: "min"
                 }
             }
 
@@ -190,6 +206,11 @@ Panel {
                 Layout.fillWidth: true
                 label: qsTr("Status")
                 value: root.show("status")
+            }
+            KeyValueRow {
+                Layout.fillWidth: true
+                label: qsTr("Due")
+                value: root.show("eta")
             }
             KeyValueRow { Layout.fillWidth: true; label: qsTr("Next station") }
             KeyValueRow {

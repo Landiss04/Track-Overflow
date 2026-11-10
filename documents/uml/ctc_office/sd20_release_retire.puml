@@ -17,7 +17,7 @@ note right of Model : ordered trains not on the track,\nmost behind schedule fir
 loop each waiting train
   alt a released train on the line is not yet on the track
     note over Model : skip the line (one at a time)
-  else line not ready, or yard exit block occupied, closed,\nclosing or within a train's authority
+  else line not ready, or yard exit block occupied, closed,\nclosing or within a train's authority,\nor a block next to it occupied or within a train's authority
     note over Model : the train keeps waiting
   else _scheduler_holds(train_id)
     note over Model : the train keeps waiting
