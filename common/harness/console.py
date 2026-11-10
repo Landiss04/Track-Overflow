@@ -49,6 +49,7 @@ FAULT_EVENTS = frozenset({
     "MODULE_DISCONNECTED",
     "PROTOCOL_ERROR",
     "TIME_SLIPPED",
+    "TIME_SLIPPING",
     "INPUTS_FAILED",
     "EDGES_FAILED",
     "MODULE_KILLED",
@@ -214,9 +215,9 @@ class HarnessConsole(QObject):
             row["label"] = MODULE_LABELS.get(row["name"], row["name"])
             row["pid_text"] = str(row["pid"]) if row["pid"] else EMPTY
             row["exit_text"] = row["exit"] or EMPTY
-            row["can_show"] = row["state"] in ("READY", "LATE")
+            row["can_show"] = row["state"] in ("READY", "SLOW", "LATE")
             row["variant"] = {
-                "READY": "ok", "LATE": "warning",
+                "READY": "ok", "SLOW": "warning", "LATE": "warning",
                 "DOWN": "fault", "EXITED": "fault",
             }.get(row["state"], "idle")
             if row["exit"] == "exit code 0":
@@ -231,6 +232,8 @@ class HarnessConsole(QObject):
             "time": clock.format_time_of_day(),
             "tick": str(clock.tick_count),
             "speed": f"{clock.speed}x",
+            "actual": _speed_text(self._harness.actual_speed),
+            "behind_s": f"{self._harness.lag_s:.2f}",
             "state": "PAUSED" if clock.is_paused else "RUNNING",
             "hold": _display_reason(self._harness.hold_reason),
             "ready": len(self._harness.ready_modules),
@@ -312,3 +315,10 @@ def _format_outputs(values: Mapping[str, Any]) -> str:
         chunks.append(chunk)
         remaining -= len(chunk)
     return "".join(chunks)
+
+
+def _speed_text(speed: float | None) -> str:
+    # The speed the run achieves, or a dash while there is none.
+    if speed is None:
+        return EMPTY
+    return f"{speed:.1f}x"

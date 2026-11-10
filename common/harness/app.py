@@ -234,8 +234,12 @@ class _StatusLine:
         harness = self._harness
         clock = harness.clock
         state = "PAUSED" if clock.is_paused else "RUNNING"
+        actual = harness.actual_speed
+        speed = f"{clock.speed}x"
+        if actual is not None:
+            speed += f" (actual {actual:.1f}x)"
         line = (
-            f"{clock.format_time_of_day()} {state} {clock.speed}x, "
+            f"{clock.format_time_of_day()} {state} {speed}, "
             f"tick {clock.tick_count}, "
             f"{len(harness.ready_modules)} ready"
         )
