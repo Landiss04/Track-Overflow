@@ -585,5 +585,91 @@ class Wire(unittest.TestCase):
             wire.outputs_from_wire("nothing")
 
 
+class RouteRequests(unittest.TestCase):
+    """The CTC Office's route requests: what a routed train needs a switch
+    set to. Not a command: they do not set maintenance mode, and they reach
+    only the program (REQSW_s, REQREV_s)."""
+
+    @staticmethod
+    def key(block: str) -> BlockKey:
+        return BlockKey("Green", block)
+
+    def position(
+        self, ctc: CtcInputs, occupied: set[str] | None = None,
+        positions: dict[str, str] | None = None,
+    ) -> tuple[str, bool]:
+        module = _green()
+        out = _tick(
+            module, ctc=ctc,
+            track_model=TrackModelInputs(
+                occupied_blocks=frozenset(
+                    self.key(b) for b in (occupied or ())),
+                switch_positions={
+                    self.key(b): v for b, v in (positions or {}).items()},
+            ),
+        )
+        return (
+            out.track_model.switch_commands.get(self.key("12"), "?"),
+            module.snapshot().maintenance_mode,
+        )
+
+    def test_a_request_moves_a_switch_and_is_not_maintenance(self) -> None:
+        # Switch 12: points on 13, normal to 12, reverse to 1.
+        ctc = CtcInputs(route_requests={self.key("12"): "reverse"})
+        self.assertEqual(self.position(ctc), ("reverse", False))
+
+    def test_a_maintenance_command_beats_a_request(self) -> None:
+        ctc = CtcInputs(
+            switch_commands={self.key("12"): "normal"},
+            route_requests={self.key("12"): "reverse"},
+        )
+        self.assertEqual(self.position(ctc), ("normal", True))
+
+    def test_a_train_on_the_points_locks_the_switch(self) -> None:
+        # The request is for reverse, but a train on the points block
+        # (13) holds the switch where the Track Model reports it.
+        ctc = CtcInputs(route_requests={self.key("12"): "reverse"})
+        position, _ = self.position(
+            ctc, occupied={"13"}, positions={"12": "normal"})
+        self.assertEqual(position, "normal")
+
+    def test_a_request_never_moves_a_switch_into_a_closed_leg(self) -> None:
+        ctc = CtcInputs(
+            closed_blocks=frozenset({self.key("1")}),
+            route_requests={self.key("12"): "reverse"},
+        )
+        position, _ = self.position(ctc)
+        self.assertEqual(position, "normal")
+
+    def test_a_program_can_read_the_request(self) -> None:
+        controller = _green().controller("GTC-01")
+        self.assertIn("REQSW_12", controller.input_names())
+        self.assertIn("REQREV_12", controller.input_names())
+        self.assertIn("REQSW_12", default_program_source(controller))
+
+    def test_a_bad_request_position_is_refused(self) -> None:
+        with self.assertRaises(InvalidInputError):
+            _tick(_green(), ctc=CtcInputs(
+                route_requests={self.key("12"): "sideways"}))  # type: ignore[dict-item]
+
+    def test_requests_cross_the_wire_and_may_be_left_out(self) -> None:
+        inputs = TrackControllerInputs(
+            time_s=1.0,
+            ctc=CtcInputs(route_requests={self.key("76"): "normal"}),
+        )
+        sent = wire.inputs_to_wire(inputs)
+        self.assertEqual(
+            sent["ctc"]["route_requests"],
+            [{"block": {"line": "Green", "block_id": "76"},
+              "value": "normal"}],
+        )
+        self.assertEqual(wire.inputs_from_wire(json.loads(json.dumps(sent))),
+                         inputs)
+        # A sender that predates the field leaves it out: none requested.
+        del sent["ctc"]["route_requests"]
+        self.assertEqual(
+            wire.inputs_from_wire(sent).ctc.route_requests, {})
+
+
 if __name__ == "__main__":
     unittest.main()

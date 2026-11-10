@@ -48,6 +48,10 @@ def ctc_to_track_controller(
             BlockKey(command.line, command.switch_id): command.position
             for command in outputs.switch_commands
         },
+        route_requests={
+            BlockKey(request.line, request.switch_id): request.position
+            for request in outputs.route_requests
+        },
         suggestions=_by_block(outputs.suggestions),
     )
 
