@@ -111,11 +111,12 @@ class PacerTest(unittest.TestCase):
         self.advance(0.2)
         self.assertEqual(self.started, [1])
         self.assertTrue(self.pacer.is_in_flight)
-        # Tick 1 took 0.2 s, so the run rests a quarter of that, then
-        # the owed ticks run back to back, each after the one before.
+        # Tick 1 took 0.2 s, 0.1 s over its interval, so the run rests
+        # a quarter of the overrun, then the owed ticks run back to
+        # back, each after the one before.
         self.finish()
         self.assertEqual(self.started, [1])
-        self.advance(0.0495)
+        self.advance(0.0245)
         self.assertEqual(self.started, [1])
         self.advance(0.001)
         self.assertEqual(self.started, [1, 2])
@@ -124,6 +125,10 @@ class PacerTest(unittest.TestCase):
         self.finish()
         self.assertEqual(self.started, [1, 2, 3, 4, 5])
         self.finish()
+        # Tick 6 is not owed yet: it falls due 0.6 s into the run.
+        self.advance(0.024)
+        self.assertEqual(self.started, [1, 2, 3, 4, 5])
+        self.advance(0.001)
         self.assertEqual(self.started, [1, 2, 3, 4, 5, 6])
         self.finish()
         self.assertEqual(self.started, [1, 2, 3, 4, 5, 6])
@@ -407,11 +412,12 @@ class PacerSheddingTest(_TimedRun):
 
     def test_overload_leaves_the_modules_idle_time(self) -> None:
         # 25 ms round trips at 10x: each tick is followed by a rest of
-        # a quarter of it, so the modules are busy 80% of the time.
+        # a quarter of the 15 ms it overran by, to the nearest whole
+        # millisecond, as the timer wakes: 4 ms.
         self.clock.set_speed(10)
         self.clock.resume()
         self.run_for(5.0, lambda _tick: 0.025)
-        rest_s = 0.025 * (1 - MAX_BUSY_FRACTION) / MAX_BUSY_FRACTION
+        rest_s = 0.004
         starts = [real_s for real_s, _tick, _sim, _dt in self.ticks]
         for before_s, after_s in zip(starts, starts[1:]):
             self.assertGreaterEqual(
@@ -444,6 +450,17 @@ class PacerSheddingTest(_TimedRun):
         self.clock.resume()
         self.run_for(2.0, lambda tick: 0.006 if tick % 2 else 0.003)
         self.assertEqual(len(self.ticks), 200)
+        self.assertEqual(self.dropped, [])
+
+    def test_a_tick_inside_its_interval_is_never_followed_by_a_rest(
+        self,
+    ) -> None:
+        # 9 ms round trips at 10x fit the 10 ms budget: the run holds
+        # 10x, where a rest after every tick would hold it near 8.3x.
+        self.clock.set_speed(10)
+        self.clock.resume()
+        self.run_for(5.0, lambda _tick: 0.009)
+        self.assertAlmostEqual(len(self.ticks), 500, delta=3)
         self.assertEqual(self.dropped, [])
 
     def test_slowing_down_drops_the_backlog_past_the_new_limit(self) -> None:
@@ -485,7 +502,8 @@ class PacerSheddingTest(_TimedRun):
         self.assertAlmostEqual(self.pacer.actual_speed, 10.0, delta=0.05)
         # Overloaded: 25 ms and its rest per 0.1 simulated seconds.
         self.run_for(SPEED_WINDOW_S + 1, lambda _tick: 0.025)
-        expected = 0.1 / (0.025 / MAX_BUSY_FRACTION)
+        rest_s = 0.015 * (1 - MAX_BUSY_FRACTION) / MAX_BUSY_FRACTION
+        expected = 0.1 / (0.025 + rest_s)
         self.assertAlmostEqual(
             self.pacer.actual_speed, expected, delta=0.1
         )

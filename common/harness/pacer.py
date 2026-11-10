@@ -19,15 +19,16 @@ How the pacer sheds load when the modules cannot keep up:
   Past it the backlog is dropped, all but the next tick, and real time
   counts from now. The limit is in real time, so a run tolerates the
   same lag at 1x and 10x: 5 ticks at 1x, 50 at 10x.
-- **Rest after each tick.** The modules' windows draw on the threads
-  that answer ``STEP``, so a run that never stops ticking starves them,
-  and they slow every later reply. After each tick the pacer rests in
-  proportion to the tick's round trip, so the harness keeps the
-  modules busy for at most ``MAX_BUSY_FRACTION`` of real time. A run
-  that keeps up never waits for the rest: the next tick is not due
-  yet. Under overload it holds the run at that fraction of what the
-  modules can do, instead of at all of it. The rest is at most
-  ``MAX_REST_S``: one long stall is not followed by a long idle.
+- **Rest after a tick that overruns.** The modules' windows draw on
+  the threads that answer ``STEP``, so a run that never stops ticking
+  starves them, and they slow every later reply. After a tick whose
+  round trip is longer than the tick interval, the pacer rests in
+  proportion to the overrun, so under heavy overload the harness
+  keeps the modules busy for about ``MAX_BUSY_FRACTION`` of real time
+  instead of all of it. A tick inside its interval is never followed
+  by a rest: the whole interval is the budget, and what the tick left
+  of it is the modules' idle time. The rest is at most ``MAX_REST_S``:
+  one long stall is not followed by a long idle.
 - **Speed changes** keep what is owed, up to the limit at the new
   speed.
 - **A pause** keeps at most the next tick owed, so a run resumes where
@@ -64,7 +65,8 @@ MILLISECONDS_PER_SECOND = 1000
 
 #: Real seconds of owed ticks kept for catching up; more are dropped.
 MAX_LAG_S = 0.5
-#: Most of real time the harness keeps the modules busy for.
+#: Most of real time the harness keeps the modules busy for, under
+#: heavy overload.
 MAX_BUSY_FRACTION = 0.8
 #: Longest rest after one tick, in real seconds.
 MAX_REST_S = 0.05
@@ -120,7 +122,8 @@ class TickPacer(QObject):
         self._clock = clock
         self._now_s = now_s
         self._max_lag_s = max_lag_s
-        # Real seconds of rest per real second of a tick's round trip.
+        # Real seconds of rest per real second a tick overruns its
+        # interval.
         self._rest_ratio = (1 - max_busy_fraction) / max_busy_fraction
         self._running = False
         self._in_flight = False
@@ -227,9 +230,19 @@ class TickPacer(QObject):
         if self._in_flight:
             self._in_flight = False
             now_s = self._now_s()
-            busy_s = max(0.0, now_s - self._tick_started_s)
-            self._rest_until_s = now_s + min(
-                busy_s * self._rest_ratio, MAX_REST_S
+            # Only the overrun earns a rest: resting after a tick that
+            # fit its interval would take the rest out of the budget.
+            overrun_s = max(
+                0.0,
+                now_s - self._tick_started_s - self._anchor_interval_s,
+            )
+            # The timer wakes on whole milliseconds. Rounding the rest
+            # to the nearest one here keeps the wake from rounding
+            # every rest up, which would cost up to 1 ms a tick.
+            rest_s = min(overrun_s * self._rest_ratio, MAX_REST_S)
+            self._rest_until_s = now_s + (
+                round(rest_s * MILLISECONDS_PER_SECOND)
+                / MILLISECONDS_PER_SECOND
             )
             self._schedule()
 
@@ -335,7 +348,11 @@ class TickPacer(QObject):
         if wait_s <= 0:
             self._timer.start(0)
             return
-        self._timer.start(math.ceil(wait_s * MILLISECONDS_PER_SECOND))
+        # Less a hair: float error on a whole number of milliseconds
+        # must not round up to one more.
+        self._timer.start(
+            math.ceil(wait_s * MILLISECONDS_PER_SECOND - _EPSILON)
+        )
 
     def _forget_starts(self, now_s: float) -> None:
         # Keep only the starts inside the speed window.
