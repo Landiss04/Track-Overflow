@@ -421,12 +421,12 @@ class PiLinkServer:
                 if isinstance(line, ProtocolError):
                     raise line
                 self._fresh = None
-                for reply in self._handle(p.decode(line)):
+                for reply in self._handle(p.decode(p.unframe(line))):
                     fresh = self._fresh
                     if fresh is not None and reply is fresh[0]:
-                        yield fresh
+                        yield reply, p.frame(fresh[1])
                     else:
-                        yield reply, p.encode(reply)
+                        yield reply, p.frame(p.encode(reply))
             except ProtocolError as error:
                 self.log(f"SKIPPED_LINE {error}")
 

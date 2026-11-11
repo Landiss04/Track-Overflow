@@ -48,6 +48,8 @@ class HardwareRelay(QObject):
 
     # The Pi discards bytes that arrive while its agent has no tty open.
     HELLO_RETRY_MS = 1000
+    # A repeat is answered from the Pi's cache, so asking again is safe.
+    REPLY_TIMEOUT_MS = 1000
 
     def __init__(
         self,
@@ -86,6 +88,10 @@ class HardwareRelay(QObject):
         self._hello_timer = QTimer(self)
         self._hello_timer.setInterval(self.HELLO_RETRY_MS)
         self._hello_timer.timeout.connect(self._send_hello)
+        self._reply_timer = QTimer(self)
+        self._reply_timer.setSingleShot(True)
+        self._reply_timer.setInterval(self.REPLY_TIMEOUT_MS)
+        self._reply_timer.timeout.connect(self._resend)
         self.transport.connected.connect(self._connected)
         self.transport.disconnected.connect(self._disconnected)
         self.transport.received.connect(self._received)
@@ -116,17 +122,16 @@ class HardwareRelay(QObject):
         self.diagnosticEvent.emit("PI_CONNECTED " + self.module)
         self._hello_answered = False
         # A host that closed mid-write leaves a partial line on the Pi; end it.
-        self._hello = b"\n" + p.encode(
-            p.message(
-                p.HELLO,
-                self._next_id(),
-                protocol=p.VERSION,
-                module=self.module,
-                session=self.session,
-                agent_version="host-1",
-                agent_hash="host",
-            )
+        hello = p.message(
+            p.HELLO,
+            self._next_id(),
+            protocol=p.VERSION,
+            module=self.module,
+            session=self.session,
+            agent_version="host-1",
+            agent_hash="host",
         )
+        self._hello = b"\n" + p.frame(p.encode(hello))
         self._send_hello()
         self._hello_timer.start()
 
@@ -139,6 +144,7 @@ class HardwareRelay(QObject):
             return
         self._hello = None
         self._hello_timer.stop()
+        self._reply_timer.stop()
         self._online = self._ready = False
         if not self._recovering:
             self._lost_running = self._clock_running
@@ -154,11 +160,29 @@ class HardwareRelay(QObject):
             try:
                 if isinstance(line, ProtocolError):
                     raise line
-                incoming = p.decode(line)
+                incoming = p.decode(p.unframe(line))
             except ProtocolError as error:
                 self.diagnosticEvent.emit(f"PI_SKIPPED_LINE {error}")
+                # Lines lose bytes mid-way, so a cut VIEW still starts as one;
+                # anything else may have been the awaited reply.
+                if line[9:21] != b'{"op":"VIEW"':
+                    self._resend()
                 continue
             self._handle(incoming)
+
+    def _send_inflight(self) -> None:
+        assert self._inflight is not None
+        self.transport.write(p.frame(p.encode(self._inflight)))
+        self._reply_timer.start()
+
+    def _resend(self) -> None:
+        if self._inflight is None or not self._online or self._closed:
+            return
+        self.diagnosticEvent.emit(
+            f"PI_RESENT {self._inflight['op']} id={self._inflight['id']} "
+            f"tick={self._inflight['tick']}"
+        )
+        self._send_inflight()
 
     def _handle(self, incoming: dict[str, Any]) -> None:
         if self._closed:
@@ -195,6 +219,7 @@ class HardwareRelay(QObject):
                 if not self._recovering:
                     self._saved_inflight = self._inflight
                 self._inflight = None
+                self._reply_timer.stop()
                 lost = self._lost_requests(incoming)
                 # A resumed agent answers these from its cache; a replaced
                 # one runs them again.
@@ -244,6 +269,7 @@ class HardwareRelay(QObject):
         if op not in (p.ACK, "OUTPUTS", "REJECTED"):
             return
         self._inflight = None
+        self._reply_timer.stop()
         if "view" in incoming:
             self._take_view(incoming["view"])
         if self._recovering:
@@ -329,7 +355,7 @@ class HardwareRelay(QObject):
     def _pump_recovery(self) -> None:
         if self._recovery:
             self._inflight = self._recovery.popleft()
-            self.transport.write(p.encode(self._inflight))
+            self._send_inflight()
             return
         self._recovering = False
         self._inflight, self._saved_inflight = self._saved_inflight, None
@@ -338,7 +364,7 @@ class HardwareRelay(QObject):
             self.diagnosticEvent.emit(
                 f"PI_RESEND_PENDING tick={self._inflight['tick']}"
             )
-            self.transport.write(p.encode(self._inflight))
+            self._send_inflight()
         else:
             self._pump()
         self.diagnosticEvent.emit("PI_RECOVERED " + self.module)
@@ -364,7 +390,7 @@ class HardwareRelay(QObject):
             if self._action_depth and self._queue[0]["op"] == "STEP":
                 return
             self._inflight = self._queue.popleft()
-            self.transport.write(p.encode(self._inflight))
+            self._send_inflight()
 
     def call_action(
         self, name: str, args: dict[str, Any], timeout_ms: int = 5000
@@ -414,9 +440,10 @@ class HardwareRelay(QObject):
     def close(self) -> None:
         self._closed = True
         self._hello_timer.stop()
+        self._reply_timer.stop()
         self.closing.emit()
         self._queue.clear()
         self._inflight = None
         if self._online:
-            self.transport.write(p.encode(p.message("QUIT")))
+            self.transport.write(p.frame(p.encode(p.message("QUIT"))))
         self.transport.close()

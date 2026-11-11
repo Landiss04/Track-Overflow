@@ -67,7 +67,7 @@ class RecordingTransport(IdleTransport):
 
     def hellos(self):
         return sum(
-            p.decode(line)["op"] == p.HELLO
+            p.decode(p.unframe(line))["op"] == p.HELLO
             for data in self.sent
             for line in data.split(b"\n")
             if line
@@ -92,7 +92,7 @@ def test_hello_survives_a_partial_line_left_by_a_closed_host():
         server.feed(b'{"op":"ACTION","id":7,"args":{"territory":{"blo')
         transport.connected.emit()
         replies = [
-            p.decode(line)
+            p.decode(p.unframe(line.rstrip(b"\n")))
             for data in transport.sent
             for line in server.feed(data)
         ]
@@ -125,13 +125,13 @@ def test_relay_keeps_identity_diagnostic_and_requires_boot(
     if field == "boot" and value is None:
         del bad_reply["boot"]
     try:
-        relay._received(p.encode(bad_reply))
+        relay._received(p.frame(p.encode(bad_reply)))
         assert not ready
         assert relay._boot is None
         assert events == [
             "PI_HELLO_REJECTED identity, version or bundle hash mismatch"
         ]
-        relay._received(p.encode(reply))
+        relay._received(p.frame(p.encode(reply)))
         assert ready == [True]
         assert relay._boot == "first-boot"
     finally:
@@ -139,14 +139,14 @@ def test_relay_keeps_identity_diagnostic_and_requires_boot(
 
 
 def hello_reply(relay):
-    return p.encode(
+    return p.frame(p.encode(
         p.message(
             p.HELLO,
             protocol=p.VERSION,
             **dict(EXPECTED, session=relay.session),
             boot="first-boot",
         )
-    )
+    ))
 
 
 def test_relay_resends_hello_until_the_pi_answers(monkeypatch):
@@ -209,7 +209,7 @@ def test_bringup_hello_identity_and_optional_boot(
             QTimer.singleShot(0, self.connected.emit)
 
         def write(self, data):
-            request = p.decode(data)
+            request = p.decode(p.unframe(data.rstrip(b"\n")))
             reply = p.message(
                 p.HELLO,
                 protocol=p.VERSION,
@@ -218,7 +218,8 @@ def test_bringup_hello_identity_and_optional_boot(
             if mismatch is not None:
                 field, value = mismatch
                 reply[field] = value
-            QTimer.singleShot(0, lambda: self.received.emit(p.encode(reply)))
+            line = p.frame(p.encode(reply))
+            QTimer.singleShot(0, lambda: self.received.emit(line))
 
     monkeypatch.setattr(bringup, "ProcessTransport", Peer)
     monkeypatch.setattr(bringup, "expected_hash", lambda: "bundle")

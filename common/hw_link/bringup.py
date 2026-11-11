@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
 
         def write(frame: dict[str, Any]) -> None:
             nonlocal sent, request_bytes
-            data = p.encode(frame)
+            data = p.frame(p.encode(frame))
             request_bytes += len(data)
             sent = time.monotonic()
             transport.write(data)
@@ -213,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
                 if done:
                     return
                 try:
-                    reply = p.decode(line)
+                    reply = p.decode(p.unframe(line))
                 except ProtocolError as error:
                     finish(str(error))
                     return

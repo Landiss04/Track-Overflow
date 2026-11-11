@@ -160,7 +160,7 @@ class Ready:
                 pass
 
             def write(self, data):
-                sent.append(p.decode(data))
+                sent.append(p.decode(p.unframe(data.rstrip(b"\n"))))
 
             def close(self):
                 pass
