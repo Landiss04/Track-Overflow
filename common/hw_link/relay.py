@@ -21,6 +21,10 @@ REPLAYED_ACTIONS = frozenset(
 )
 
 
+def _key(frame: Mapping[str, Any]) -> list[Any]:
+    return [frame["op"], frame["id"], frame["tick"]]
+
+
 class RemoteActionError(ValueError):
     """A refused Pi action, including the original module diagnostic."""
 
@@ -66,6 +70,10 @@ class HardwareRelay(QObject):
         self._clock_running = False
         self._lost_running = False
         self._history: list[dict[str, Any]] = []
+        # Answered requests the Pi has not yet reported on its disk, with
+        # how it answered; a power cut can take them back.
+        self._unsaved: list[tuple[dict[str, Any], str]] = []
+        self._expect_rejected: set[tuple[Any, ...]] = set()
         self._recovery: deque[dict[str, Any]] = deque()
         self._recovering = False
         self._inflight: dict[str, Any] | None = None
@@ -187,9 +195,15 @@ class HardwareRelay(QObject):
                 if not self._recovering:
                     self._saved_inflight = self._inflight
                 self._inflight = None
+                lost = self._lost_requests(incoming)
                 # A resumed agent answers these from its cache; a replaced
                 # one runs them again.
-                self._recovery = deque(self._history)
+                self._recovery = deque(
+                    frame
+                    for frame in self._history
+                    if all(frame is not other for other in lost)
+                )
+                self._recovery.extend(lost)
                 if self.module == "train-controller-hw" and (
                     rebooted or self._lost_running
                 ):
@@ -233,17 +247,22 @@ class HardwareRelay(QObject):
         if "view" in incoming:
             self._take_view(incoming["view"])
         if self._recovering:
-            if op == "REJECTED":
+            if (
+                op == "REJECTED"
+                and tuple(_key(current)) not in self._expect_rejected
+            ):
                 self.diagnosticEvent.emit(
                     "PI_RECOVERY_REJECTED " + incoming["reason"]
                 )
                 return  # Hold the clock: recovery has not succeeded.
+            self._keep_until_durable(current, op, incoming.get("durable"))
             self.diagnosticEvent.emit(
                 f"PI_REPLAYED {current['op']} id={current['id']} "
                 f"tick={current['tick']}"
             )
             self._pump_recovery()
             return
+        self._keep_until_durable(current, op, incoming.get("durable"))
         if op != "REJECTED" and current.get("action") in REPLAYED_ACTIONS:
             self._history.append(current)
         if current["op"] == "STEP":
@@ -258,6 +277,44 @@ class HardwareRelay(QObject):
         else:
             self.completed.emit(current["id"], incoming)
         self._pump()
+
+    def _keep_until_durable(
+        self, frame: dict[str, Any], op: str, durable: Any
+    ) -> None:
+        key = _key(frame)
+        if all(_key(kept) != key for kept, _ in self._unsaved):
+            self._unsaved.append((frame, op))
+        if durable is not None:
+            for index, (kept, _) in enumerate(self._unsaved):
+                if _key(kept) == list(durable):
+                    del self._unsaved[: index + 1]
+                    break
+
+    def _lost_requests(self, hello: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """What a resumed Pi lost with its power, oldest first."""
+        self._expect_rejected = set()
+        if not hello.get("resumed"):
+            self._unsaved.clear()
+            return []
+        applied = hello.get("applied")
+        pending = self._saved_inflight
+        if pending is not None and applied == _key(pending):
+            return []
+        keys = [_key(frame) for frame, _ in self._unsaved]
+        if applied in keys:
+            lost = self._unsaved[keys.index(applied) + 1 :]
+        else:
+            # The Pi stopped exactly where the host last trimmed.
+            lost = self._unsaved
+        self._expect_rejected = {
+            tuple(_key(frame)) for frame, op in lost if op == "REJECTED"
+        }
+        if lost:
+            self.diagnosticEvent.emit(
+                f"PI_RESENDING_UNSAVED count={len(lost)} "
+                f"from_tick={lost[0][0]['tick']}"
+            )
+        return [frame for frame, _ in lost]
 
     def _take_view(self, view: dict[str, Any]) -> None:
         self._last_view = view

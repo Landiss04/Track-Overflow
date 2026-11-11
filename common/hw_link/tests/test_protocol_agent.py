@@ -79,6 +79,7 @@ def test_host_agent_journal_skips_fsync_but_survives_restart(
         server.handle(hello())
         synced.clear()
         first = server.handle(step())[0]
+        server.wait_durable()
         assert bool(synced) == durable
         rebooted = PiLinkServer("train-controller-hw", journal)
         assert rebooted.handle(hello())[0]["resumed"]

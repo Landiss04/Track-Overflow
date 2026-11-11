@@ -430,6 +430,7 @@ def test_retire_and_reuse_before_next_view_cannot_recover_old_gains():
             agent_hash=relay.expected_agent_hash,
             boot="second-boot",
             resumed=True,
+            applied=["STEP", reused["id"], 3],
         )
     )
     assert transport.frames[-1]["action"] == "recovery_gains"
