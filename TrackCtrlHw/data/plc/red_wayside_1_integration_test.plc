@@ -6,10 +6,12 @@
 // Braden Bosilovich, 2026-10-26. Replaces the Red integration test
 // copies (Kevin, K4). After this program the wayside scans its
 // read-only vital block, which can only restrict these outputs.
+// 2026-11-11: the CTC Office's route requests pick switch 15's leg.
 
 VAR_IN  OCC_1..25 OCC_27 OCC_72..76
 VAR_IN  CLOSED_1..24 CLOSED_73..76
 VAR_IN  SWREV_9 CTCSW_9 CTCREV_9 SWREV_15 CTCSW_15 CTCREV_15
+VAR_IN  REQSW_15 REQREV_15
 VAR_IN  SPD_1_0..4 SPD_2_0..4 SPD_3_0..4 SPD_4_0..4 SPD_5_0..4 SPD_6_0..4
 VAR_IN  SPD_7_0..4 SPD_8_0..4 SPD_9_0..4 SPD_10_0..4 SPD_11_0..4 SPD_12_0..4
 VAR_IN  SPD_13_0..4 SPD_14_0..4 SPD_15_0..4 SPD_16_0..4 SPD_17_0..4 SPD_18_0..4
@@ -27,7 +29,7 @@ VAR_OUT CMD_73_0..4 CMD_74_0..4 CMD_75_0..4 CMD_76_0..4
 
 // Switch 9: points at 9, normal leg to 8, reverse leg to yard.
 // The yard leg is the CTC Office's to choose (maintenance); the
-// program never routes into the yard on its own.
+// program never routes into the yard on its own, nor on a request.
 AUTO_9 := 0
 // The CTC Office's command wins while it sends one (maintenance).
 WANT_9 := (CTCSW_9 AND CTCREV_9) OR (NOT CTCSW_9 AND AUTO_9)
@@ -38,9 +40,12 @@ SW_9 := (LOCK_9 AND SWREV_9) OR (NOT LOCK_9 AND WANT_9)
 BAD_9 := SW_9 XOR SWREV_9
 
 // Switch 15: points at 16, normal leg to 15, reverse leg to 1.
-// Reverse for a train waiting on 1, or when 15 is closed; never
-// into a train on 15 or a closed 1.
-AUTO_15 := (OCC_1 OR CLOSED_15) AND NOT OCC_15 AND NOT CLOSED_1
+// The CTC Office's route request picks the leg, never a closed one.
+REQ_R_15 := REQSW_15 AND REQREV_15 AND NOT CLOSED_1
+REQ_N_15 := REQSW_15 AND NOT REQREV_15 AND NOT CLOSED_15
+// Without one: reverse for a train waiting on 1, or when 15 is
+// closed; never into a train on 15 or a closed 1.
+AUTO_15 := REQ_R_15 OR (NOT REQ_N_15 AND NOT REQ_R_15 AND (OCC_1 OR CLOSED_15) AND NOT OCC_15 AND NOT CLOSED_1)
 // The CTC Office's command wins while it sends one (maintenance).
 WANT_15 := (CTCSW_15 AND CTCREV_15) OR (NOT CTCSW_15 AND AUTO_15)
 // A train on 15 or 16 locks it where it reports.

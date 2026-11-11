@@ -19,6 +19,8 @@ integration branch. Landis's request of 2026-11-03; design and plan in `docs/`.
   picks the leg, never a closed one; without one, the rule is unchanged. A
   train on the points and a maintenance command still win. `CAUTION_n` does
   not read requests.
+- 2026-11-11: the same rule on Red-1 switch 15 and Red-3 switch 52. Switch 9
+  (the yard) ignores requests and moves only on a maintenance command.
 - The test UI sends route requests per switch.
 - The harness carries `route_requests` to both Track Controllers (Harry's
   `746b2ce`).

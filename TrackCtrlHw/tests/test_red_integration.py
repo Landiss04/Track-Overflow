@@ -311,8 +311,13 @@ class RedSwitchRouting(unittest.TestCase):
         for kwargs in ({}, {"occupied": ["8"]}, {"closed": ["8"]}):
             self.assertEqual(self.scan("9", **kwargs)[0], "normal")
 
-    # The passing sidings on Red-2: the CTC Office's route requests.
-    SIDINGS = tuple(r for r in ROUTES if r[0] in ("27", "32", "38", "43"))
+    # Every switch with two routed legs follows the CTC Office's requests.
+    SIDINGS = ROUTES
+
+    def test_yard_switch_ignores_route_requests(self):
+        # Decided 2026-11-11: switch 9 moves only on a maintenance command.
+        self.assertEqual(self.scan(
+            "9", route_requests={"9": "reverse"})[0], "normal")
 
     def test_a_route_request_selects_the_leg(self):
         for key, point, normal, reverse in self.SIDINGS:
