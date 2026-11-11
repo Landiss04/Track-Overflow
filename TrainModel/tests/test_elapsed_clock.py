@@ -18,8 +18,8 @@ DT = 0.1
 
 
 def clock_of(seconds: float) -> str:
-    """Format elapsed seconds as the test UI does."""
-    total = int(seconds + 1e-9)
+    """Format elapsed seconds as the test UI does, from 05:00:00."""
+    total = int(18_000 + seconds + 1e-9)
     return f"{total // 3600:02d}:{total // 60 % 60:02d}:{total % 60:02d}"
 
 

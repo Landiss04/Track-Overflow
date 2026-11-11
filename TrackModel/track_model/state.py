@@ -20,6 +20,7 @@ from track_model.interface import (
     TrackModelError,
     TrackModelSnapshot,
 )
+from utils.system_clock import DEFAULT_START_TIME_S
 
 FT_PER_M = 3.280840
 MPH_PER_MPS = 2.236936
@@ -143,11 +144,11 @@ class TrackModelState(QObject):
 
     @Property(str, notify=changed)
     def elapsed(self) -> str:
-        """Central clock time of day, or time stepped since reset."""
+        """Simulated time of day as 24-hour ``HH:MM:SS`` (D017)."""
         sim_time_s = self._snap.sim_time_s
         if sim_time_s is None:
-            return _clock(self._snap.elapsed_s)
-        # Central clock: 24-hour time of day (D017).
+            # Standalone, the clock starts where the shared one does.
+            sim_time_s = DEFAULT_START_TIME_S + self._snap.elapsed_s
         return _clock(sim_time_s % SECONDS_PER_DAY)
 
     @Property(str, notify=changed)

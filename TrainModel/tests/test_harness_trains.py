@@ -66,7 +66,7 @@ def test_every_tick_steps_every_train_on_its_own_inputs() -> None:
         harness.advanceTick()
     # T-2 was given power; T-1 was not, but was stepped all the same.
     assert speed(fleet, "T-2") > 0 and speed(fleet, "T-1") == 0
-    assert fleet.get("T-1").snapshot["clock"] == "00:00:02"
+    assert fleet.get("T-1").snapshot["clock"] == "05:00:02"
     assert harness.tick == 21
 
 
@@ -97,7 +97,7 @@ def test_a_rejected_edit_names_its_train_and_steps_none() -> None:
     assert not harness.sendInputs()
     assert harness.inputError.startswith("T-2: ")
     assert harness.tick == 0
-    assert fleet.get("T-1").snapshot["clock"] == "00:00:00"
+    assert fleet.get("T-1").snapshot["clock"] == "05:00:00"
     # Both drafts are kept for correction.
     assert harness.pendingInputs == {"power_command": True}
 
@@ -145,8 +145,8 @@ def test_a_train_added_mid_run_starts_fresh_without_drift() -> None:
     for _ in range(30):
         harness.advanceTick()
     assert harness.driftTicks == 0
-    assert fleet.get("T-2").snapshot["clock"] == "00:00:03"
-    assert harness.elapsed == "00:00:06"
+    assert fleet.get("T-2").snapshot["clock"] == "05:00:03"
+    assert harness.elapsed == "05:00:06"
 
 
 def test_reset_resets_every_train_and_keeps_the_roster() -> None:

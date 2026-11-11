@@ -173,9 +173,9 @@ def test_next_station_is_kept_until_the_train_is_there() -> None:
 
 
 @pytest.mark.parametrize(("ticks", "shown"), [
-    (9, "00:00:00"), (10, "00:00:01"), (600, "00:01:00")])
+    (9, "05:00:00"), (10, "05:00:01"), (600, "05:01:00")])
 def test_elapsed_clock_formatting(ticks: int, shown: str) -> None:
-    """Check elapsed simulated time is shown as hh:mm:ss."""
+    """Check simulated time of day is shown as HH:MM:SS from 05:00:00."""
     _, harness = make()
     harness.sendInputs()
     for _ in range(ticks - 1):

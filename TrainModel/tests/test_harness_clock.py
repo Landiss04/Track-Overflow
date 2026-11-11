@@ -115,7 +115,7 @@ def test_same_ticks_same_train_at_any_speed() -> None:
         for _ in range(49):
             harness.advanceTick()
         assert harness.property("tick") == 50
-        assert harness.property("elapsed") == "00:00:05"
+        assert harness.property("elapsed") == "05:00:05"
         snapshots.append(state.property("snapshot"))
     assert snapshots[0] == snapshots[1]
 
@@ -149,7 +149,7 @@ def test_reset_holds_clock_and_keeps_speed() -> None:
     harness.resetModule()
     assert not harness.property("running")
     assert harness.property("tick") == 0
-    assert harness.property("elapsed") == "00:00:00"
+    assert harness.property("elapsed") == "05:00:00"
     assert harness.property("speed") == 10
 
 
@@ -230,7 +230,7 @@ def test_rejected_send_does_not_tick_the_clock(name: str, value: Any) -> None:
     assert not harness.sendInputs()
     assert harness.property("inputError")
     assert clock_ticks(harness) == 0
-    assert state.property("snapshot")["clock"] == "00:00:00"
+    assert state.property("snapshot")["clock"] == "05:00:00"
     harness.setInput(name, 0.0 if name != "beacon_platform_side" else "L")
     assert harness.sendInputs()
     assert clock_ticks(harness) == harness.property("tick") == 1

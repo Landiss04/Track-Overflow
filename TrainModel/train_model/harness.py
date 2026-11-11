@@ -84,7 +84,11 @@ from train_model.track_stub import TrackStub, load_blue_line
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from utils.clock_driver import ClockDriver  # noqa: E402
 from utils.beacon_codec import encode_beacon  # noqa: E402
-from utils.system_clock import ALLOWED_SPEEDS, SystemClock  # noqa: E402
+from utils.system_clock import (  # noqa: E402
+    ALLOWED_SPEEDS,
+    DEFAULT_START_TIME_S,
+    SystemClock,
+)
 
 #: Inputs, in interface-dictionary order. ``kind`` drives which editor
 #: the view renders; ``unit`` is empty where the signal is
@@ -674,8 +678,9 @@ class TestHarnessState(QObject):
 
     @Property(str, notify=runControlChanged)
     def elapsed(self) -> str:
-        """Elapsed simulated time as ``hh:mm:ss``."""
-        total = int(self._tick * self._clock.tick_s + 1e-9)
+        """Simulated time of day as 24-hour ``HH:MM:SS`` (D017)."""
+        total = int(DEFAULT_START_TIME_S + self._tick * self._clock.tick_s
+                    + 1e-9) % 86_400
         return f"{total // 3600:02d}:{total // 60 % 60:02d}:{total % 60:02d}"
 
     @Property(int, notify=driftChanged)
