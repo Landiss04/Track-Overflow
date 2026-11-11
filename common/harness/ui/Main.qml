@@ -222,6 +222,10 @@ Shared.ScaledWindow {
                     Shared.Panel {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 190
+                        // Never squeeze the empty state out of its frame;
+                        // the outputs themselves scroll.
+                        Layout.minimumHeight: outputScroll.visible
+                            ? 0 : implicitHeight
                         title: "Last outputs"
                         RowLayout {
                             Layout.fillWidth: true
@@ -312,9 +316,9 @@ Shared.ScaledWindow {
                                 }
                             }
                         }
+                        // Centred at its own size, as the Events panel's.
                         Shared.EmptyState {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
+                            Layout.alignment: Qt.AlignCenter
                             visible: backend.output_text === "—"
                                 || backend.output_module
                                     !== backend.selected_module

@@ -6,7 +6,9 @@ bounded Python data, so the scene never updates at the tick rate.
 
 from __future__ import annotations
 
+import ctypes
 import json
+import sys
 import time
 from collections import deque
 from collections.abc import Mapping, Sequence
@@ -193,6 +195,10 @@ class HarnessConsole(QObject):
     @Slot(str, result=bool)
     def show_window(self, module: str) -> bool:
         """Forward a window request through the harness."""
+        if sys.platform == "win32":
+            # Windows lets only the foreground process, the harness that
+            # was just clicked, pass focus to another: ASFW_ANY.
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)
         return self._harness.show_window(module)
 
     @Slot()
