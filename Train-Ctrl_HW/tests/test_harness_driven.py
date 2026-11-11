@@ -332,6 +332,12 @@ class ModuleProcessTest(unittest.TestCase):
         with self.assertRaises(TickRejectedError):
             self.process.step(1, TICK_S, 18_000.1, {"trains": []})
 
+    def test_the_console_clock_runs_with_no_trains(self) -> None:
+        from train_ctrl.backend import ConsoleBackend
+        console = ConsoleBackend(fleet=self.fleet, variant="SW")
+        self.process.step(1, TICK_S, 21_600.0, {"trains": {}})
+        self.assertEqual(console.snapshot["clock"], "06:00:00")
+
 
 if __name__ == "__main__":
     unittest.main()
