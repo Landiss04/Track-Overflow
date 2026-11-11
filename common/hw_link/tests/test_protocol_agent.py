@@ -30,11 +30,19 @@ def step(tick=1):
 def test_chunked_split_unicode_and_probes():
     logs = []
     server = PiLinkServer("train-controller-hw", log=logs.append)
-    wire = b"AT+GMM\r\n" + p.encode(hello()) + p.encode(step())
+    wire = (
+        b"AT+GMM\r\n"
+        + p.frame(p.encode(hello()))
+        + p.frame(p.encode(step()))
+    )
     replies = []
     for byte in wire:
         replies.extend(server.feed(bytes([byte])))
-    assert [p.decode(v)["op"] for v in replies] == [p.HELLO, "OUTPUTS", p.VIEW]
+    assert [p.decode(p.unframe(v.rstrip(b"\n")))["op"] for v in replies] == [
+        p.HELLO,
+        "OUTPUTS",
+        p.VIEW,
+    ]
     assert len(logs) == 1 and "SKIPPED_LINE" in logs[0]
 
 
@@ -79,6 +87,7 @@ def test_host_agent_journal_skips_fsync_but_survives_restart(
         server.handle(hello())
         synced.clear()
         first = server.handle(step())[0]
+        server.wait_durable()
         assert bool(synced) == durable
         rebooted = PiLinkServer("train-controller-hw", journal)
         assert rebooted.handle(hello())[0]["resumed"]

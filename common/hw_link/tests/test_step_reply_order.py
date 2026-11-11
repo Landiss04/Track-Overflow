@@ -108,7 +108,11 @@ def rig(monkeypatch, tmp_path):
 
 
 def lines(data):
-    return [p.decode(line) for line in data.split(b"\n")[:-1]]
+    return [p.decode(p.unframe(line)) for line in data.split(b"\n")[:-1]]
+
+
+def wire(message):
+    return p.frame(p.encode(message))
 
 
 def completed(rig, predicate):
@@ -128,7 +132,7 @@ def is_outputs(tick):
 
 
 def test_step_reply_is_fully_written_before_view_is_built(rig):
-    written = rig.run(p.encode(hello()) + p.encode(step(1)))
+    written = rig.run(wire(hello()) + wire(step(1)))
 
     assert [e for e in rig.trace if e[0] == "step"] == [("step", 1)]
     done = completed(rig, is_outputs(1))
@@ -159,11 +163,11 @@ def test_step_reply_is_fully_written_before_view_is_built(rig):
 def test_one_chunk_keeps_order_throttle_and_action_view(rig):
     action = p.message(p.ACTION, 50, 1, action="set_gains", args={"kp": 2})
     written = rig.run(
-        p.encode(hello())
-        + p.encode(step(1))
-        + p.encode(action)
-        + p.encode(step(2))
-        + p.encode(step(3))
+        wire(hello())
+        + wire(step(1))
+        + wire(action)
+        + wire(step(2))
+        + wire(step(3))
     )
     replies = lines(written)
     # Steps end at 10.125, 10.25 and 10.375 s: only 0.125 s after the
@@ -193,7 +197,7 @@ def test_one_chunk_keeps_order_throttle_and_action_view(rig):
 
 
 def test_duplicate_step_is_answered_from_cache_without_executing(rig):
-    written = rig.run(p.encode(hello()) + p.encode(step(1)), p.encode(step(1)))
+    written = rig.run(wire(hello()) + wire(step(1)), wire(step(1)))
     outputs = [
         line for line in written.split(b"\n") if b'"OUTPUTS"' in line
     ]
@@ -204,7 +208,7 @@ def test_duplicate_step_is_answered_from_cache_without_executing(rig):
 def test_view_failure_after_sent_reply_cannot_reexecute_or_contradict(rig):
     rig.fail_view = True
     with pytest.raises(RuntimeError, match="display broke"):
-        rig.run(p.encode(hello()) + p.encode(step(1)))
+        rig.run(wire(hello()) + wire(step(1)))
     written = rig.trace[completed(rig, is_outputs(1))][1]
     sent = [m for m in lines(written) if m["op"] == "OUTPUTS"]
     assert len(sent) == 1 and sent[0]["id"] == step(1)["id"]
@@ -223,11 +227,11 @@ def test_handle_and_feed_still_return_lists(rig):
     server = PiLinkServer(MODULE)
     replies = server.handle(hello())
     assert isinstance(replies, list) and replies[0]["op"] == p.HELLO
-    fed = server.feed(p.encode(step(1)) + p.encode(step(2)))
+    fed = server.feed(wire(step(1)) + wire(step(2)))
     assert isinstance(fed, list) and all(isinstance(b, bytes) for b in fed)
-    assert [(p.decode(b)["op"], p.decode(b)["tick"]) for b in fed] == [
+    assert [(m["op"], m["tick"]) for m in lines(b"".join(fed))] == [
         ("OUTPUTS", 1),
         (p.VIEW, 1),
         ("OUTPUTS", 2),
     ]
-    assert server.handle(step(2)) == [p.decode(fed[2])]
+    assert server.handle(step(2)) == [lines(fed[2])[0]]

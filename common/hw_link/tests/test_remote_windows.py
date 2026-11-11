@@ -119,7 +119,7 @@ def test_engineer_compound_action_precedes_queued_next_step(tmp_path):
     def observe(data):
         from common.hw_link import protocol as p
 
-        sent.append(p.decode(data))
+        sent.append(p.decode(p.unframe(data.rstrip(b"\n"))))
         original_write(data)
 
     relay.transport.write = observe
