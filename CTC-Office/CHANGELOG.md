@@ -4,6 +4,23 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-11 — The yard as a destination in Manual mode
+
+From Landis.
+
+- **Yard in the destination lists.** The Dispatch train panel's
+  Destination station list and the Selected train panel's New
+  destination list now start with "Yard · return and retire". Picking
+  it sends the train back to the yard through
+  `CtcHost.returnToYard()` (R66, D022), as the Return to yard button
+  does; the Dispatch train button reads "Return to yard" then. Only a
+  train on the track can be sent back, so the button stays disabled
+  for one still waiting in the yard, and the Dispatch panel says why.
+  The arrival time is ignored for the yard, and there is no speed or
+  authority preview, since the yard is not a block.
+
+---
+
 ## 2026-11-10 — Selected train: an arrival estimate; occupancy list scrolls
 
 From Landis.

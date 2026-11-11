@@ -41,6 +41,8 @@ Panel {
     }
     property string message: ""
     property bool messageIsError: false
+    // The New destination entry for the yard; no block ID is "yard".
+    readonly property string yardValue: "yard"
 
     function show(field) {
         return root.train[field] || "—";
@@ -239,8 +241,15 @@ Panel {
                         label: qsTr("New destination")
                         textRole: "text"
                         valueRole: "value"
+                        // The yard first (R66, D022), then the stations.
+                        // Picking it sends the train back to the yard,
+                        // as the Return to yard button does.
                         model: root.host && root.train.line
-                            ? root.host.stationOptions(root.train.line) : []
+                            ? [{ value: root.yardValue,
+                                 text: qsTr("Yard · return and retire") }]
+                                .concat(root.host.stationOptions(
+                                    root.train.line))
+                            : []
                         currentIndex: -1
                     }
 
@@ -260,11 +269,18 @@ Panel {
                         variant: "primary"
                         text: qsTr("Reroute")
                         enabled: rerouteSelect.value !== ""
-                        onClicked: root.report(
-                            root.host.dispatchTrain(root.trainId,
-                                root.train.line, rerouteSelect.value,
-                                rerouteArrival.text),
-                            qsTr("%1 rerouted.").arg(root.trainId))
+                            && (rerouteSelect.value !== root.yardValue
+                                || root.train.tracked === true)
+                        onClicked: rerouteSelect.value === root.yardValue
+                            ? root.report(
+                                root.host.returnToYard(root.trainId),
+                                qsTr("%1 sent back to the yard.")
+                                    .arg(root.trainId))
+                            : root.report(
+                                root.host.dispatchTrain(root.trainId,
+                                    root.train.line, rerouteSelect.value,
+                                    rerouteArrival.text),
+                                qsTr("%1 rerouted.").arg(root.trainId))
                     }
 
                     // Return to yard (R66, D022): an order to the yard
