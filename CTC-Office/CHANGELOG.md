@@ -4,6 +4,42 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-12 — A pass not yet used gives way; four trains in section N's loop
+
+From Landis, after the Schedule v4 full-system run of 2026-11-12, in
+which Green stopped for good at the 1–12 loop.
+
+- **A pass a train is not in yet gives way.** `ctc/scheduler.py`
+  `_reach()`, new `_awaited()` and `_gives_way()`. Once a train waits
+  round a loop to come back into a two-way zone, a train sent into the
+  zone the other way that is not in it yet gives up its pass and waits
+  short of the zone. Before, only a run still in the yard did
+  (`eea89f8`). A train already in the zone keeps its pass.
+  - **The run's deadlock:** G10 had the pass into 13–28 on its way to
+    the loop and stood on 148, held there by the Green Track
+    Controller's D–F loop guard while trains were in 7–12. G1 waited at
+    2 for G10's pass, and the wayside set switch 28 for G1, against the
+    CTC's request. Nothing moved again.
+  - **The same rule at section N:** a run no longer keeps a pass into N
+    claimed from far off (G7 from block 59) while a train waits at 99.
+- **Four trains in the loop through section N.** `ctc/scheduler.py`
+  new `LOOP_LIMITS`, read by `_loop_room()`: Green's loop through
+  section N takes 4 trains, not the 7 it holds. The Green Track
+  Controller holds the train on 75 while more than 5 of blocks 76–100
+  are occupied, which the CTC cannot see. With 7 let in, a train with
+  the pass into N could be held on 75 while the trains round the loop
+  waited for N.
+- **Tests.** New `tests/test_ctc_green_76.py`:
+  - section N both ways: the switch 76 requests, holds at 75 and 99,
+    and following trains;
+  - the loop limit;
+  - the whole Green schedule on a railway that sets switches only as
+    the CTC requests and holds 75 as the wayside does. All ten runs
+    finish, no train stands over 600 s with no authority near 76, and
+    76–100 never holds more than 5 trains.
+- Truth proposal `20261112-1334-two-way-zone-pass-and-loop-limit.md`.
+  It replaces the unpromoted `20261112-1045-two-way-zone-yard-pass.md`.
+
 ## 2026-11-12 — A run still in the yard gives up its zone pass
 
 From Landis, after the Green Line locked up at section N in the
