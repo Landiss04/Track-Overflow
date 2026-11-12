@@ -103,10 +103,38 @@ Item {
                        + "they can never change whether it stops.")
         }
 
-        HelperText {
+        // Whether the gains took, in the dialog itself, the moment the
+        // train confirms them: the bar's badge is hidden behind this
+        // dialog until it closes. Always laid out, a badge over one
+        // line in every state, so the buttons never move when the
+        // state changes.
+        ColumnLayout {
+            objectName: "gainsStatus"
             Layout.fillWidth: true
-            visible: root.s.gains_note !== ""
-            text: root.s.gains_note
+            spacing: theme.space_2
+
+            StatusBadge {
+                label: !root.s.has_train ? qsTr("No train")
+                    : root.s.gains_locked ? qsTr("Gains set")
+                    : root.s.gains_pending ? qsTr("Setting")
+                    : qsTr("Not set")
+                variant: root.s.gains_locked ? "ok"
+                    : root.s.gains_pending ? "info"
+                    : root.s.has_train && root.s.gains_note !== ""
+                        ? "warning" : "idle"
+            }
+
+            HelperText {
+                Layout.fillWidth: true
+                wrapMode: Text.NoWrap
+                elide: Text.ElideRight
+                text: !root.s.has_train
+                    ? qsTr("Waiting for a train to join.")
+                    : root.s.gains_pending
+                    ? qsTr("Sending them to %1…").arg(root.s.train_id)
+                    : root.s.gains_note !== "" ? root.s.gains_note
+                    : qsTr("Not sent yet.")
+            }
         }
 
         RowLayout {
@@ -120,11 +148,15 @@ Item {
             }
 
             AppButton {
+                objectName: "setGains"
                 Layout.fillWidth: true
                 variant: "primary"
                 size: "large"
-                text: qsTr("Set gains")
-                enabled: !root.s.gains_locked && kp.valid && ki.valid
+                text: root.s.gains_locked ? qsTr("Gains set")
+                    : root.s.gains_pending ? qsTr("Setting gains…")
+                    : qsTr("Set gains")
+                enabled: root.s.has_train && !root.s.gains_locked
+                    && !root.s.gains_pending && kp.valid && ki.valid
                 onClicked: controller.commission_gains(Number(kp.text),
                                                       Number(ki.text))
             }

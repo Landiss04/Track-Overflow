@@ -125,6 +125,7 @@ class ConsoleBackend(QObject):
 
         self.operator: str = ""         # "" | "driver" | "engineer"
         self.gains_note = ""
+        self.gains_pending = False
 
         # Nothing runs until somebody spawns it. This one is never
         # stepped and never shown: it exists so that the snapshot and
@@ -354,7 +355,14 @@ class ConsoleBackend(QObject):
             # Gains are commissioned once per train, so both of these
             # follow that train's controller rather than the console.
             "gains_locked": self.core.armed,
-            "gains_note": self.gains_note,
+            "gains_pending": self.gains_pending,
+            # Read from the train itself once armed, so the window
+            # confirms what the controller holds, even when the Pi's
+            # acknowledgement arrived after the press gave up on it.
+            "gains_note": (
+                f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. Fixed for this run."
+                if self.core.armed else self.gains_note
+            ),
             # The system time the fleet last received, train or not.
             "clock": _clock_text(self.fleet.time_s),
 
@@ -834,7 +842,7 @@ class ConsoleBackend(QObject):
         back to the driver a moment later, so the confirmation can be
         read.
         """
-        if not self.has_train:
+        if not self.has_train or self.gains_pending:
             return
         if self.core.armed or self.operator != "engineer":
             return
@@ -848,14 +856,29 @@ class ConsoleBackend(QObject):
             self.gains_note = "Kp and Ki cannot be negative."
             self._publish()
             return
+        # On the HW train each write below is a round trip to the Pi,
+        # and the window still takes presses while it waits. Pending
+        # greys the button and refuses a second press, which would
+        # otherwise write the gains again.
+        self.gains_pending = True
+        self._publish()
         s = self.core.state
-        s.kp = kp
-        s.ki = ki
-        self.core.integral = 0.0
-        self.core.armed = True
-        self.gains_note = (
-            f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. Fixed for this run."
-        )
+        try:
+            s.kp = kp
+            s.ki = ki
+            self.core.integral = 0.0
+            self.core.armed = True
+        except (ConnectionError, ValueError):
+            # The Pi did not acknowledge, or refused. Arming is the
+            # last write, so the gains are set only if it landed.
+            if not self.core.armed:
+                self.gains_note = ("The train did not confirm the gains. "
+                                   "Press Set gains again.")
+                return
+        finally:
+            self.gains_pending = False
+            self._publish()
+        self.gains_note = ""
         train_id = self.selected
         QTimer.singleShot(GAINS_HANDOVER_MS,
                           lambda: self._retire_engineer(train_id))

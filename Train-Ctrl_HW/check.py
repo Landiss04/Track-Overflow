@@ -201,6 +201,32 @@ def run_check(
     backend.apply_bench_inputs({"commanded_speed": 27, "authority_blocks": 2})
     backend.toggle_emergency_brake()
 
+    # A dialog without the button counts as pressable, so an older
+    # dialog fails these checks rather than crashing them.
+    def can_set_gains() -> bool:
+        button = window.findChild(QObject, "setGains")
+        return button is None or bool(button.property("enabled"))
+
+    # Where the dialog's status row and button sit, or None without
+    # them: nothing in the dialog may move when the gains are set.
+    def gains_layout() -> Any:
+        status = window.findChild(QObject, "gainsStatus")
+        button = window.findChild(QObject, "setGains")
+        if status is None or button is None:
+            return None
+        return (status.property("y"), status.property("height"),
+                button.property("y"))
+
+    # With no train to take them, Set gains is greyed and the dialog
+    # says why, rather than a press that silently does nothing.
+    backend.select_operator(1)
+    _settle(app, 100)
+    expect(not can_set_gains(),
+           "Set gains was pressable with no train")
+    expect(on_screen(window, "Waiting for a train to join."),
+           "the gains dialog did not say it has no train")
+    backend.select_operator(-1)
+
     backend.spawn_train(114, "GREEN LINE", "GREEN K")
     expect(backend.snapshot["has_train"], "spawning did not produce a train")
     expect(backend.snapshot["train_id"] == "G-114",
@@ -256,8 +282,52 @@ def run_check(
     expect(not backend.core.armed and backend.snapshot["gains_note"]
            == "Kp and Ki cannot be negative.",
            "a negative gain was not refused with its reason")
+    # A second press while the train is still confirming the first
+    # (each write is a round trip to the Pi on the HW train, and the
+    # window takes presses meanwhile) is refused, not written again.
+    # Played here by pressing from inside the first press's kp write.
+    status_before = gains_layout()
+    state = backend.core.state
+    kp_writes = []
+
+    class PressAgain:
+        def __getattr__(self, name: str) -> Any:
+            return getattr(state, name)
+
+        def __setattr__(self, name: str, value: Any) -> None:
+            if name == "kp":
+                kp_writes.append(value)
+                if len(kp_writes) == 1:
+                    _settle(app, 50)
+                    expect(backend.snapshot.get("gains_pending")
+                           and not can_set_gains()
+                           and on_screen(window, "Setting gains…"),
+                           "Set gains stayed pressable while sending")
+                    backend.commission_gains(1, 1)
+            setattr(state, name, value)
+
+    backend.core.state = PressAgain()
     backend.commission_gains(400000, 8000)
+    backend.core.state = state
+    expect(kp_writes == [400000],
+           f"a second press wrote the gains again: {kp_writes}")
     expect(backend.core.armed, "commissioning did not arm the controller")
+    # Confirmed inside the dialog at once, before it closes, without
+    # moving anything in it.
+    _settle(app, 50)
+    expect(backend.snapshot["operator"] == "engineer"
+           and on_screen(window, "Gains set")
+           and on_screen(window,
+                         "Set to Kp 400000, Ki 8000. Fixed for this run.")
+           and not can_set_gains(),
+           "the gains dialog did not confirm the gains while open")
+    status_after = gains_layout()
+    expect(status_before is not None and status_before == status_after,
+           f"the gains dialog moved when the gains were set: "
+           f"{status_before} -> {status_after}")
+    scan("03-gains-set")
+    if shots:
+        window.grabWindow().save(str(shots / "03-gains-set.png"))
     _settle(app, mod.GAINS_HANDOVER_MS + 400)
     expect(backend.snapshot["operator"] == "driver",
            "console not handed over")
