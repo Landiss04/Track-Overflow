@@ -1140,7 +1140,8 @@ class StubCtcOffice:
             orders={train_id: o.destination_block_id
                     for train_id, o in self._orders.items()},
             lost=frozenset(self._tracker.lost),
-            released=frozenset(self._released))
+            released=frozenset(self._released),
+            can_stop_by=self._can_stop_by)
         pending = list(self._auto.step(world))
         while pending:
             action = pending.pop(0)
@@ -1157,6 +1158,24 @@ class StubCtcOffice:
                 skipped = self._auto.skip_stop(action.train_id)
                 if skipped is not None:
                     pending.insert(0, skipped)
+
+    def _can_stop_by(self, train_id: str, block_id: str) -> bool:
+        """Whether a train, at the speed it was last suggested, could
+        stop by the end of ``block_id`` ahead of it on its route: that
+        speed is no more than the one suggested with its authority
+        ending there (``_suggested_speed_mps``). A train with no
+        authority was suggested none. Not on its route: it could not."""
+        limit = {a.train_id: a for a in self._authorities()}.get(train_id)
+        if limit is None or limit.blocks == 0:
+            return True
+        if block_id not in limit.route:
+            return False
+        end = limit.route.index(block_id)
+        given = self._suggested_speed_mps(
+            limit.line, limit.route[0], limit.route[1:limit.blocks + 1])
+        stopping = self._suggested_speed_mps(
+            limit.line, limit.route[0], limit.route[1:end + 1])
+        return given <= stopping
 
     def _scheduled_runs(self) -> tuple[ScheduledRun, ...]:
         if self._auto is None:

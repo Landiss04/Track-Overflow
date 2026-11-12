@@ -358,6 +358,51 @@ class ReturningTrainTest(unittest.TestCase):
         self.assertEqual(_requests(ctc).get("76"), "normal")
 
 
+class GiveWayTest(unittest.TestCase):
+    """A train sent up N but not in it yet gives its pass up to a train
+    that starts waiting at 99 to come back, if it can still stop short of
+    N. One that cannot keeps it: cut off on 75 at speed, it ran on onto
+    76, where the switch the waiting train needs reverse is locked under
+    it (full-system run, 2026-11-12)."""
+
+    def _g3_up_at(self, block: str) -> StubCtcOffice:
+        """G3 sent up N to Mt Lebanon and at ``block``; then G4, round
+        the loop, starts waiting at 99."""
+        ctc = _loaded()
+        step_at(ctc)
+        _up_to_mt_lebanon(ctc, "G3", block)
+        step_at(ctc, at("G3", block), switches=_normal())
+        self.assertGreater(_limit(ctc, "G3").blocks, 0)
+        auto = ctc._auto
+        plan = _plans(ctc)["G4"]
+        back = [s for s in auto._spans["G4"] if s[0] == "77"][1]
+        wait = auto._loop_wait(plan, back)
+        leg = next(i for i, index in enumerate(plan.stop_indexes)
+                   if index > back[1])
+        auto.progress["G4"] = Progress(HELD, leg=leg, at=wait, wait=wait)
+        ctc.dispatch("G4", "Green", GREEN_ORDER[leg])
+        for _ in range(2):
+            step_at(ctc, at("G3", block), at("G4", "99"),
+                    switches=_normal())
+        return ctc
+
+    def test_far_off_it_gives_way_and_waits_at_75(self) -> None:
+        ctc = self._g3_up_at("66")
+        self.assertEqual(_status(ctc, "G3"), HELD)
+        self.assertEqual(ctc._auto.hold_at("G3"), "75")
+        self.assertEqual(_limit(ctc, "G3").end_block_id, "75")
+        # G4 then has N.
+        step_at(ctc, at("G3", "66"), at("G4", "99"), switches=_normal())
+        self.assertEqual(_status(ctc, "G4"), EN_ROUTE)
+
+    def test_on_75_at_speed_it_keeps_its_pass(self) -> None:
+        ctc = self._g3_up_at("75")
+        self.assertEqual(_status(ctc, "G3"), EN_ROUTE)
+        self.assertIsNone(ctc._auto.hold_at("G3"))
+        self.assertGreater(_limit(ctc, "G3").blocks, 0)
+        self.assertEqual(_status(ctc, "G4"), HELD)
+
+
 class LoopCapTest(unittest.TestCase):
     """The scheduler lets only so many trains into the loop at once."""
 

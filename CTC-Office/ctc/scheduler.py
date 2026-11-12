@@ -64,7 +64,10 @@ mode, carries the plans out:
     when due: the trains following it go round the loop, and the next
     runs wait in the yard. A run sent through the zone before then but
     not in it yet gives up its pass: one not yet released from the
-    yard waits there, one on the track waits short of the zone. Holding
+    yard waits there, one on the track waits short of the zone if it
+    can still stop there at the speed it was given (one too close
+    would run onto the switch into the zone and stop on it, where the
+    train coming back needs the switch: it goes through). Holding
     the pass would keep the waiting train out while the trains in
     front of it wait for that train (and the Green Track Controller's
     loop guard holds a train coming to 13..28 while the loop 12..1
@@ -406,6 +409,10 @@ class World:
     # Trains the model has released from the yard that are not yet
     # found on the track: they are coming out, so they keep their way.
     released: frozenset[str] = frozenset()
+    # Whether a train, at the speed it was last given, could stop by the
+    # end of a block ahead of it: a train gives up a zone pass only if
+    # it can stop short of the zone. None: any train could.
+    can_stop_by: Callable[[str, str], bool] | None = None
 
 
 class AutoDispatcher:
@@ -427,10 +434,12 @@ class AutoDispatcher:
         self._spans = {
             plan.train_id: zone_spans(plan.path, self.zones[plan.line])
             for plan in self.plans}
+        self._can_stop_by: Callable[[str, str], bool] | None = None
 
     def step(self, world: World) -> list[Action]:
         """Advance every run one step; return the orders to give. Call
         only while automatic dispatch runs."""
+        self._can_stop_by = world.can_stop_by
         for plan in self.plans:
             self._locate(plan, world)
         actions: list[Action] = []
@@ -611,16 +620,28 @@ class AutoDispatcher:
                 return True
         return False
 
-    def _gives_way(self, plan: RunPlan, progress: Progress) -> bool:
-        """Whether a run on the track, sent through a zone it is not in
-        yet for the first time, must give up that pass: a train waits
-        round a loop to come back into the zone the other way."""
-        if progress.at < 0:
+    def _gives_up(self, plan: RunPlan, progress: Progress,
+                  span: tuple[str, int, int]) -> bool:
+        """Whether a run on the track gives up a first pass through a
+        zone it has been sent on but is not in yet: a train waits round
+        a loop to come back into the zone the other way, and the run can
+        still stop where it would wait short of the zone. One that could
+        not would run into the zone, or onto the switch into it, and
+        stop there: it keeps the pass and goes through."""
+        if (progress.at < 0 or not progress.at < span[1]
+                or self._returns(plan, span)
+                or not self._awaited(plan, span)):
             return False
+        wait = self._wait_before(plan, progress, span)
+        return wait is not None and (
+            self._can_stop_by is None
+            or self._can_stop_by(plan.train_id, plan.path[wait]))
+
+    def _gives_way(self, plan: RunPlan, progress: Progress) -> bool:
+        """Whether a run on the track must give up a zone pass it has
+        been sent on (``_gives_up``)."""
         sent = self._released_to(plan, progress)
-        return any(progress.at < span[1] <= sent
-                   and not self._returns(plan, span)
-                   and self._awaited(plan, span)
+        return any(span[1] <= sent and self._gives_up(plan, progress, span)
                    for span in self._spans[plan.train_id])
 
     def _waiting_span(self, plan: RunPlan) -> tuple[str, int, int] | None:
@@ -685,7 +706,8 @@ class AutoDispatcher:
         A pass it has been sent into already (up to ``sent``) is its own,
         until a train waits round a loop to come back into the zone the
         other way while it is not in the zone yet: it then gives the pass
-        up and waits short of the zone, wherever it was sent from. (The
+        up and waits short of the zone, wherever it was sent from, if it
+        can still stop there (``_gives_up``). (The
         Green Track Controller's loop guard holds a train coming to
         13..28 while the loop 12..1 drains, and sets the way out;
         keeping the pass deadlocked them, 2026-11-12.)
@@ -695,8 +717,7 @@ class AutoDispatcher:
             if not progress.at < span[1] <= target:
                 continue
             if span[1] <= sent:
-                if (progress.at >= 0 and not self._returns(plan, span)
-                        and self._awaited(plan, span)):
+                if self._gives_up(plan, progress, span):
                     return self._wait_before(plan, progress, span), True
                 claimed = True
                 continue

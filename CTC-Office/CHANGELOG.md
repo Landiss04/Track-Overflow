@@ -4,6 +4,30 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-12 — A train gives up a pass only if it can stop short
+
+From Landis: the confirmation run of `a520ee3` deadlocked at 76.
+
+- **What happened.** G3 was on 75 at line speed with authority into
+  section N when G1 started waiting at 99. G3 gave up its pass, and its
+  authority dropped to 0. It could not stop and ran on onto 76, the
+  block switch 76 is listed on. G1 then had N, came down to 78 and
+  needed 76 reverse, which the wayside holds normal while a train is
+  on 76. Neither moved again.
+- **The fix.** `ctc/scheduler.py` new `_gives_up()`, `World.can_stop_by`,
+  and `ctc/model.py` new `_can_stop_by()`. A train gives up a pass only
+  if, at the speed it was last suggested, it can stop by the end of the
+  block where it would wait short of the zone. That speed must be no
+  more than the one suggested with its authority ending there. A train
+  too close or too fast keeps the pass and goes through. The returning
+  train waits for it, as before. A train held at low speed still gives
+  way, as G10 on 148 did at the 1–12 loop.
+- **Tests.** `tests/test_ctc_green_76.py` `GiveWayTest`: sent up N from
+  66, a train gives way and waits at 75. On 75 at speed, it keeps its
+  pass. The second test fails without the fix.
+- Truth proposal `20261112-1433-two-way-zone-pass-can-stop.md`. It
+  replaces the unpromoted `20261112-1334-two-way-zone-pass-and-loop-limit.md`.
+
 ## 2026-11-12 — A pass not yet used gives way; four trains in section N's loop
 
 From Landis, after the Schedule v4 full-system run of 2026-11-12, in
