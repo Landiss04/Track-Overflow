@@ -205,7 +205,7 @@ def test_snapshot_notifications_stay_on_owning_thread() -> None:
 def test_standalone_elapsed_clock_remains_available() -> None:
     state = TrainModelState()
     state.step(60.0, make_inputs())
-    assert state.snapshot["clock"] == "00:01:00"
+    assert state.snapshot["clock"] == "05:01:00"
     assert state.elapsed_s == 60.0
     assert state.snapshot["clock_drift_s"] is None
     assert not state.snapshot["clock_drift_detected"]

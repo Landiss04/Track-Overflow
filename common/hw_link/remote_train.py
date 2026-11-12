@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Iterator
 from .cores import TrainCore
 from .relay import HardwareRelay
+from train_ctrl.constants import CLOCK_START_S
 
 
 class RemoteState:
@@ -71,12 +72,15 @@ class RemoteTrainFleet:
     def __init__(self, relay: HardwareRelay) -> None:
         self.relay = relay
         self._cores: dict[str, RemoteTrainCore] = {}
+        self.time_s = CLOCK_START_S
         relay.viewChanged.connect(self._view)
 
     def _view(self, view: dict[str, Any]) -> None:
         if "trains" not in view:
             return
         trains = view["trains"]
+        # A Pi on older code sends no time; keep the last one.
+        self.time_s = view.get("time_s", self.time_s)
         for key in list(self._cores):
             if key not in trains:
                 del self._cores[key]

@@ -16,6 +16,10 @@ Panel {
     // What the dispatcher picked; '' until they pick (PickField).
     readonly property string line: lineSelect.value
     readonly property string trainId: trainSelect.value
+    // The Destination station entry for the yard (R66, D022); no block
+    // ID is "yard".
+    readonly property string yardValue: "yard"
+    readonly property bool yardPicked: destinationSelect.value === yardValue
     // The selected train's current row; re-read whenever the module
     // changes.
     readonly property var train: {
@@ -30,6 +34,11 @@ Panel {
     readonly property var computed: {
         if (!root.host || root.trainId === "" || destinationSelect.value === "")
             return root.train;
+        // The yard is not a block, so there is nothing to preview.
+        if (root.yardPicked)
+            return root.train.tracked ? root.train
+                : ({ error: qsTr("Only a train on the track can be sent "
+                    + "back to the yard.") });
         if (root.train.tracked
                 && root.train.destinationBlock === destinationSelect.value)
             return root.train;
@@ -90,8 +99,13 @@ Panel {
             label: qsTr("Destination station")
             textRole: "text"
             valueRole: "value"
+            // The yard first, then the stations. Picking it sends a
+            // train on the track back to the yard, where it is retired.
             model: root.host && root.line !== ""
-                ? root.host.stationOptions(root.line) : []
+                ? [{ value: root.yardValue,
+                     text: qsTr("Yard · return and retire") }]
+                    .concat(root.host.stationOptions(root.line))
+                : []
             currentIndex: -1
             onValueChanged: root.message = ""
         }
@@ -180,14 +194,19 @@ Panel {
         Layout.fillWidth: true
         variant: "primary"
         size: "large"
-        text: root.train.destinationBlock
+        text: root.yardPicked ? qsTr("Return to yard")
+            : root.train.destinationBlock
             ? qsTr("Reroute train") : qsTr("Dispatch train")
         enabled: root.trainId !== "" && destinationSelect.value !== ""
-        onClicked: root.report(
-            root.host.dispatchTrain(root.trainId, root.line,
-                destinationSelect.value, arrivalField.text),
-            qsTr("%1 dispatched to %2.").arg(root.trainId)
-                .arg(destinationSelect.model[
-                    destinationSelect.currentIndex].text))
+            && (!root.yardPicked || root.train.tracked === true)
+        onClicked: root.yardPicked
+            ? root.report(root.host.returnToYard(root.trainId),
+                qsTr("%1 sent back to the yard.").arg(root.trainId))
+            : root.report(
+                root.host.dispatchTrain(root.trainId, root.line,
+                    destinationSelect.value, arrivalField.text),
+                qsTr("%1 dispatched to %2.").arg(root.trainId)
+                    .arg(destinationSelect.model[
+                        destinationSelect.currentIndex].text))
     }
 }

@@ -134,7 +134,7 @@ def test_reset_clears_drafts_faults_beacons_and_terrain(pair):
     assert state.activeFailureCount == 0
     assert state.snapshot["grade"] == state.snapshot["elevation"] == 0
     assert state.snapshot["next_station"] == "—"
-    assert state.snapshot["clock"] == harness.elapsed == "00:00:00"
+    assert state.snapshot["clock"] == harness.elapsed == "05:00:00"
 
 
 def test_beacon_disappearance_and_clock_refresh(pair):
@@ -156,7 +156,7 @@ def test_beacon_disappearance_and_clock_refresh(pair):
     # as the next one until the train reaches it.
     assert state.outputs().controller.beacon is None
     assert state.snapshot["next_station"] == "Station"
-    assert state.snapshot["clock"] == harness.elapsed == "00:00:01"
+    assert state.snapshot["clock"] == harness.elapsed == "05:00:01"
 
 
 def test_the_window_names_the_station_on_the_blue_line(pair):

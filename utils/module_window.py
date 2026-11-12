@@ -54,6 +54,7 @@ def show_module_windows() -> None:
     app = QGuiApplication.instance()
     if not isinstance(app, QGuiApplication):
         return
+    wayland = app.platformName() == "wayland"
     for window in app.topLevelWindows():
         if (
             window.type() != Qt.WindowType.Window
@@ -63,5 +64,10 @@ def show_module_windows() -> None:
         if window.windowState() == Qt.WindowState.WindowMinimized:
             window.showNormal()
         else:
+            if wayland and window.isVisible():
+                # The compositor ignores raise and activate from a
+                # process without focus, but focuses a freshly shown
+                # window, so show it afresh.
+                window.hide()
             window.show()
         window.requestActivate()

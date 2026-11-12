@@ -355,8 +355,8 @@ class ConsoleBackend(QObject):
             # follow that train's controller rather than the console.
             "gains_locked": self.core.armed,
             "gains_note": self.gains_note,
-            # The system time the controller last received.
-            "clock": _clock_text(s.time_s),
+            # The system time the fleet last received, train or not.
+            "clock": _clock_text(self.fleet.time_s),
 
             # Converted here and nowhere else. Keys carry the unit the
             # operator sees, so a reader can tell which side of the

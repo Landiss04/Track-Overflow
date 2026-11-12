@@ -141,8 +141,8 @@ class TrackModelTestHarness(QObject):
 
     @Property(str, notify=runControlChanged)
     def elapsed(self) -> str:
-        """Simulated time sent so far, as hh:mm:ss."""
-        total = int(self._tick * DT_S)
+        """Simulated time of day sent, as 24-hour ``HH:MM:SS`` (D017)."""
+        total = int(DEFAULT_START_TIME_S + self._tick * DT_S) % 86_400
         hours, rest = divmod(total, 3600)
         minutes, seconds = divmod(rest, 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"

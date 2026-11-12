@@ -36,6 +36,7 @@ from train_model.interface import (
     TrainModelOutputs,
 )
 from train_model.model import TrainModel
+from utils.system_clock import DEFAULT_START_TIME_S
 
 #: The three failure modes injected by Murphy, in ``Failure Status``
 #: (``bool[3]``) element order: engine, signal pickup, brake.
@@ -100,7 +101,7 @@ class TrainModelState(QObject):
         return {
             "train_id": self._train_id or _NONE_SHOWN,
             "line": self._line or _NONE_SHOWN,
-            "clock": "00:00:00",
+            "clock": "05:00:00",
             "clock_drift_s": None,
             "clock_drift_detected": False,
             "clock_drift_checked_tick": None,
@@ -343,13 +344,13 @@ class TrainModelState(QObject):
         trk = outputs.track
 
         block = trk.block_id or _NONE_SHOWN
-        clock_s = (snap.elapsed_s if self._harness_time_s is None
+        # Standalone, the clock starts where the shared one does (D017).
+        clock_s = (DEFAULT_START_TIME_S + snap.elapsed_s
+                   if self._harness_time_s is None
                    else self._harness_time_s)
         # Integrated time is unwrapped for checks; only display wraps.
         total_s = int(clock_s + 1e-9)
-        hours = total_s // 3600
-        if self._harness_time_s is not None:
-            hours %= 24
+        hours = total_s // 3600 % 24
         updates: dict[str, Any] = {
             "clock": (
                 f"{hours:02d}:{total_s // 60 % 60:02d}:"

@@ -66,7 +66,7 @@ def test_trains_are_independent() -> None:
         moving.step(DT_S, make_inputs())
     assert moving.outputs().controller.actual_speed_mps > 0.0
     assert still.outputs() == before
-    assert still.snapshot["clock"] == "00:00:00"
+    assert still.snapshot["clock"] == "05:00:00"
 
 
 def test_seed_follows_the_train_id_unless_given() -> None:

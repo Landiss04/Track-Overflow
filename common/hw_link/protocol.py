@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import zlib
 from collections.abc import Mapping
 from typing import Any
 
@@ -80,6 +81,27 @@ def decode(line: bytes) -> dict[str, Any]:
     raw = hp._parse(line)
     validate(raw)
     return raw
+
+
+def frame(line: bytes) -> bytes:
+    """Prefix an encoded line with its CRC-32 for the USB link."""
+    # The link has been seen to drop chunks mid-line; some damaged lines
+    # still parse as JSON, so only a checksum can tell.
+    return b"%08x " % zlib.crc32(line.rstrip(b"\n")) + line
+
+
+def unframe(line: bytes) -> bytes:
+    """Return a link line's JSON, refusing it unless its CRC-32 matches."""
+    body = line[9:]
+    try:
+        expected = int(line[:8], 16) if line[8:9] == b" " else None
+    except ValueError:
+        expected = None
+    if expected is None:
+        raise hp.ProtocolError("line has no checksum")
+    if zlib.crc32(body) != expected:
+        raise hp.ProtocolError("line checksum does not match")
+    return body
 
 
 def message(

@@ -70,12 +70,9 @@ Rectangle {
             font.pixelSize: theme.size_small
         }
 
-        Text {
+        Shared.MonoText {
             text: root.clock
             color: theme.text_muted
-            font.family: theme.mono_family
-            font.pixelSize: theme.size_small
-            font.bold: true
         }
     }
 
