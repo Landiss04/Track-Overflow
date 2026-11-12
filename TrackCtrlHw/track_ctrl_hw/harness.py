@@ -86,6 +86,7 @@ class BlockInputs:
     suggested_authority: int = 1
     block_closed: bool = False
     switch_command: str = "NONE"
+    route_request: str = "NONE"
     block_occupancy: bool = False
     switch_state: str = "NORMAL"
     crossing_state: str = "GATES UP"
@@ -98,6 +99,7 @@ _FIELD_KINDS = {
     "suggested_authority": "uint",
     "block_closed": "bool",
     "switch_command": "enum",
+    "route_request": "enum",
     "block_occupancy": "bool",
     "switch_state": "enum",
     "crossing_state": "enum",
@@ -105,6 +107,7 @@ _FIELD_KINDS = {
 }
 _FIELD_OPTIONS = {
     "switch_command": list(SWITCH_COMMANDS),
+    "route_request": list(SWITCH_COMMANDS),
     "switch_state": list(POSITIONS),
     "crossing_state": list(GATES),
     "signal_aspect": list(ASPECTS),
@@ -112,7 +115,7 @@ _FIELD_OPTIONS = {
 _GROUP_FIELDS = {
     CTC_GROUP: (
         "suggestion", "suggested_speed", "suggested_authority",
-        "block_closed", "switch_command",
+        "block_closed", "switch_command", "route_request",
     ),
     TRACK_MODEL_GROUP: (
         "block_occupancy", "switch_state",
@@ -392,6 +395,7 @@ class TestHarness(QObject):
                     k.ref for k, v in items if v.block_closed
                 ),
                 switch_commands=self._switch_commands(switch_keys),
+                route_requests=self._route_requests(switch_keys),
                 suggestions={
                     k.ref: Suggestion(
                         v.suggested_speed, v.suggested_authority
@@ -435,6 +439,22 @@ class TestHarness(QObject):
             if k in switch_keys and SWITCH_COMMANDS[v.switch_command]
         }
 
+    def _route_requests(
+        self, switch_keys: set[BlockKey]
+    ) -> dict[BlockRef, Any]:
+        return {
+            k.ref: SWITCH_COMMANDS[v.route_request]
+            for k, v in self._inputs.items()
+            if k in switch_keys and SWITCH_COMMANDS[v.route_request]
+        }
+
+    def _switch_keys(self) -> set[BlockKey]:
+        return {
+            switch.key
+            for territory in self._territories.values()
+            for switch in territory.switches
+        }
+
     def _sent_order(self) -> list[BlockKey]:
         return sorted(
             self._inputs, key=lambda k: (k.line, int(k.block_id))
@@ -471,6 +491,7 @@ class TestHarness(QObject):
             "suggested_speed": inputs.suggestion,
             "suggested_authority": inputs.suggestion,
             "switch_command": has_switch,
+            "route_request": has_switch,
             "switch_state": has_switch,
             "crossing_state": has_crossing,
             "signal_aspect": has_switch,
@@ -619,15 +640,19 @@ class TestHarness(QObject):
     @Property(str, notify=statusChanged)
     def switchCommandsText(self) -> str:  # noqa: N802
         """Every switch command sent, as the CTC Office writes them."""
-        switch_keys = {
-            switch.key
-            for territory in self._territories.values()
-            for switch in territory.switches
-        }
-        commands = self._switch_commands(switch_keys)
+        commands = self._switch_commands(self._switch_keys())
         return "; ".join(
             f"{k.ref.label}={commands[k.ref]}" for k in self._sent_order()
             if k.ref in commands
+        )
+
+    @Property(str, notify=statusChanged)
+    def routeRequestsText(self) -> str:  # noqa: N802
+        """Every route request sent, as the CTC Office writes them."""
+        requests = self._route_requests(self._switch_keys())
+        return "; ".join(
+            f"{k.ref.label}={requests[k.ref]}" for k in self._sent_order()
+            if k.ref in requests
         )
 
     @Property(QObject, constant=True)

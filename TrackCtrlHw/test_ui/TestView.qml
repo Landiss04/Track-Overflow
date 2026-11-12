@@ -142,7 +142,9 @@ Item {
                             text: qsTr("Sent for the whole line, as the CTC "
                                 + "Office names blocks (line:block). It sends "
                                 + "no maintenance flag, and a switch command "
-                                + "only in maintenance mode: NONE sends none.")
+                                + "only in maintenance mode: NONE sends none. "
+                                + "A route request is not a command: the "
+                                + "program decides.")
                         }
 
                         KeyValueRow {
@@ -155,6 +157,12 @@ Item {
                             Layout.fillWidth: true
                             label: "switch_commands"
                             value: harness.switchCommandsText
+                        }
+
+                        KeyValueRow {
+                            Layout.fillWidth: true
+                            label: "route_requests"
+                            value: harness.routeRequestsText
                             rule: false
                         }
                     }

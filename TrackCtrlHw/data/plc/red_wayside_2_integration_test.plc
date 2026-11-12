@@ -6,11 +6,14 @@
 // Braden Bosilovich, 2026-10-26. Replaces the Red integration test
 // copies (Kevin, K4). After this program the wayside scans its
 // read-only vital block, which can only restrict these outputs.
+// 2026-11-05: the CTC Office's route requests pick the siding legs.
 
 VAR_IN  OCC_24..46 OCC_67..73 OCC_76
 VAR_IN  CLOSED_25..45 CLOSED_67..72 CLOSED_76
 VAR_IN  SWREV_27 CTCSW_27 CTCREV_27 SWREV_32 CTCSW_32 CTCREV_32
 VAR_IN  SWREV_38 CTCSW_38 CTCREV_38 SWREV_43 CTCSW_43 CTCREV_43
+VAR_IN  REQSW_27 REQREV_27 REQSW_32 REQREV_32 REQSW_38 REQREV_38
+VAR_IN  REQSW_43 REQREV_43
 VAR_IN  SPD_25_0..4 SPD_26_0..4 SPD_27_0..4 SPD_28_0..4 SPD_29_0..4 SPD_30_0..4
 VAR_IN  SPD_31_0..4 SPD_32_0..4 SPD_33_0..4 SPD_34_0..4 SPD_35_0..4 SPD_36_0..4
 VAR_IN  SPD_37_0..4 SPD_38_0..4 SPD_39_0..4 SPD_40_0..4 SPD_41_0..4 SPD_42_0..4
@@ -28,9 +31,12 @@ VAR_OUT CMD_43_0..4 CMD_44_0..4 CMD_45_0..4 CMD_67_0..4 CMD_68_0..4 CMD_69_0..4
 VAR_OUT CMD_70_0..4 CMD_71_0..4 CMD_72_0..4
 
 // Switch 27: points at 27, normal leg to 28, reverse leg to 76.
-// Reverse for a train waiting on 76, or when 28 is closed; never
-// into a train on 28 or a closed 76.
-AUTO_27 := (OCC_76 OR CLOSED_28) AND NOT OCC_28 AND NOT CLOSED_76
+// The CTC Office's route request picks the leg, never a closed one.
+REQ_R_27 := REQSW_27 AND REQREV_27 AND NOT CLOSED_76
+REQ_N_27 := REQSW_27 AND NOT REQREV_27 AND NOT CLOSED_28
+// Without one: reverse for a train waiting on 76, or when 28 is
+// closed; never into a train on 28 or a closed 76.
+AUTO_27 := REQ_R_27 OR (NOT REQ_N_27 AND NOT REQ_R_27 AND (OCC_76 OR CLOSED_28) AND NOT OCC_28 AND NOT CLOSED_76)
 // The CTC Office's command wins while it sends one (maintenance).
 WANT_27 := (CTCSW_27 AND CTCREV_27) OR (NOT CTCSW_27 AND AUTO_27)
 // A train on 27 locks it where it reports.
@@ -40,9 +46,12 @@ SW_27 := (LOCK_27 AND SWREV_27) OR (NOT LOCK_27 AND WANT_27)
 BAD_27 := SW_27 XOR SWREV_27
 
 // Switch 32: points at 33, normal leg to 32, reverse leg to 72.
-// Reverse for a train waiting on 72, or when 32 is closed; never
-// into a train on 32 or a closed 72.
-AUTO_32 := (OCC_72 OR CLOSED_32) AND NOT OCC_32 AND NOT CLOSED_72
+// The CTC Office's route request picks the leg, never a closed one.
+REQ_R_32 := REQSW_32 AND REQREV_32 AND NOT CLOSED_72
+REQ_N_32 := REQSW_32 AND NOT REQREV_32 AND NOT CLOSED_32
+// Without one: reverse for a train waiting on 72, or when 32 is
+// closed; never into a train on 32 or a closed 72.
+AUTO_32 := REQ_R_32 OR (NOT REQ_N_32 AND NOT REQ_R_32 AND (OCC_72 OR CLOSED_32) AND NOT OCC_32 AND NOT CLOSED_72)
 // The CTC Office's command wins while it sends one (maintenance).
 WANT_32 := (CTCSW_32 AND CTCREV_32) OR (NOT CTCSW_32 AND AUTO_32)
 // A train on 32 or 33 locks it where it reports.
@@ -52,9 +61,12 @@ SW_32 := (LOCK_32 AND SWREV_32) OR (NOT LOCK_32 AND WANT_32)
 BAD_32 := SW_32 XOR SWREV_32
 
 // Switch 38: points at 38, normal leg to 39, reverse leg to 71.
-// Reverse for a train waiting on 71, or when 39 is closed; never
-// into a train on 39 or a closed 71.
-AUTO_38 := (OCC_71 OR CLOSED_39) AND NOT OCC_39 AND NOT CLOSED_71
+// The CTC Office's route request picks the leg, never a closed one.
+REQ_R_38 := REQSW_38 AND REQREV_38 AND NOT CLOSED_71
+REQ_N_38 := REQSW_38 AND NOT REQREV_38 AND NOT CLOSED_39
+// Without one: reverse for a train waiting on 71, or when 39 is
+// closed; never into a train on 39 or a closed 71.
+AUTO_38 := REQ_R_38 OR (NOT REQ_N_38 AND NOT REQ_R_38 AND (OCC_71 OR CLOSED_39) AND NOT OCC_39 AND NOT CLOSED_71)
 // The CTC Office's command wins while it sends one (maintenance).
 WANT_38 := (CTCSW_38 AND CTCREV_38) OR (NOT CTCSW_38 AND AUTO_38)
 // A train on 38 locks it where it reports.
@@ -64,9 +76,12 @@ SW_38 := (LOCK_38 AND SWREV_38) OR (NOT LOCK_38 AND WANT_38)
 BAD_38 := SW_38 XOR SWREV_38
 
 // Switch 43: points at 44, normal leg to 43, reverse leg to 67.
-// Reverse for a train waiting on 67, or when 43 is closed; never
-// into a train on 43 or a closed 67.
-AUTO_43 := (OCC_67 OR CLOSED_43) AND NOT OCC_43 AND NOT CLOSED_67
+// The CTC Office's route request picks the leg, never a closed one.
+REQ_R_43 := REQSW_43 AND REQREV_43 AND NOT CLOSED_67
+REQ_N_43 := REQSW_43 AND NOT REQREV_43 AND NOT CLOSED_43
+// Without one: reverse for a train waiting on 67, or when 43 is
+// closed; never into a train on 43 or a closed 67.
+AUTO_43 := REQ_R_43 OR (NOT REQ_N_43 AND NOT REQ_R_43 AND (OCC_67 OR CLOSED_43) AND NOT OCC_43 AND NOT CLOSED_67)
 // The CTC Office's command wins while it sends one (maintenance).
 WANT_43 := (CTCSW_43 AND CTCREV_43) OR (NOT CTCSW_43 AND AUTO_43)
 // A train on 43 or 44 locks it where it reports.

@@ -107,6 +107,7 @@ harness can send the whole line.
 | `time_s` | Clock | Simulation seconds since midnight |
 | `ctc.closed_blocks` | CTC Office | `frozenset[BlockRef]`, the full set every tick |
 | `ctc.switch_commands` | CTC Office | `{BlockRef of the switch: "normal" \| "reverse"}`; sent only in maintenance mode. The PLC program decides whether to obey |
+| `ctc.route_requests` | CTC Office | `{BlockRef of the switch: "normal" \| "reverse"}`; the position for the train routed over it. A request, not a command: the PLC program decides. Optional on the wire |
 | `ctc.suggestions` | CTC Office | `{BlockRef: Suggestion(speed_mps: int, authority_blocks: int)}`; a block not listed sends nothing. Speed 0 to 31 m/s: the program's speed input is 5 bits |
 | `track_model.occupied_blocks` | Track Model | `frozenset[BlockKey]`; a train or a failure, the module cannot tell which |
 | `track_model.switch_positions` | Track Model | Actual positions, `{switch block: position}` |
@@ -159,7 +160,8 @@ decided. The CTC Office's interface is the one on `ctc-deployment`.
 3. **Ready.** The CTC Office takes one `ready` per line; this module reports
    one per wayside. A line is ready when every wayside's report says so, which
    is `TrackControllerOutputs.ready` for this module's line.
-4. **PLC names.** `CTCSW_n`, `CTCREV_n`, `SPD_n_b` and `CMD_n_b` are this
+4. **PLC names.** `CTCSW_n`, `CTCREV_n`, `REQSW_n`, `REQREV_n`, `SPD_n_b` and
+   `CMD_n_b` are this
    module's; the software Track Controller still uses `MAINT` and has no speed
    bits, so one program file no longer runs on both (REQ-INTF-009).
 
@@ -287,6 +289,14 @@ none is loaded, a new one has not scanned yet, or the channels have disagreed.
 The CTC Office sends no maintenance flag. Its switch commands reach the program
 as `CTCSW_n` (a command is in effect) and `CTCREV_n` (it is reverse); the
 vital block enforces them.
+
+Its route requests, the position each switch should take for the train routed
+over it, reach the program as `REQSW_n` (a request is in effect) and
+`REQREV_n` (it is reverse). A request is not a command: the program decides,
+and the vital block does not read it. Highest first: a train on the points or
+the listed block locks the switch, then a maintenance command, then a request
+whose leg is open, then the program's own rule. Only Red-2 reads requests, at
+the passing sidings (switches 27, 32, 38 and 43).
 
 ## Known gaps
 

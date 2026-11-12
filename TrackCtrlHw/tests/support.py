@@ -62,6 +62,7 @@ def inputs(
     closed: Iterable[str] = (),
     suggestions: dict[str, tuple[int, int]] | None = None,
     switch_commands: dict[str, str] | None = None,
+    route_requests: dict[str, str] | None = None,
     reported: dict[str, str] | None = None,
     lit: dict[str, str] | None = None,
 ) -> TrackControllerInputs:
@@ -85,6 +86,10 @@ def inputs(
             switch_commands={
                 by_number[n].ref: p  # type: ignore[misc]
                 for n, p in (switch_commands or {}).items()
+            },
+            route_requests={
+                by_number[n].ref: p  # type: ignore[misc]
+                for n, p in (route_requests or {}).items()
             },
             suggestions={
                 by_number[n].ref: Suggestion(*value)

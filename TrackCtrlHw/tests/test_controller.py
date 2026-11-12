@@ -15,6 +15,7 @@ from track_ctrl_hw.errors import (
     TerritoryError,
 )
 from track_ctrl_hw.interface import (
+    BlockRef,
     CtcInputs,
     Suggestion,
     TrackCircuitCommand,
@@ -23,7 +24,7 @@ from track_ctrl_hw.interface import (
 )
 from track_ctrl_hw.plc import Program
 from track_ctrl_hw.territory import parse_territory
-from track_ctrl_hw.wayside import speed_limit_whole_mps
+from track_ctrl_hw.wayside import input_names, speed_limit_whole_mps
 
 from tests.support import inputs, keys, loaded, program_source, territory
 
@@ -66,6 +67,10 @@ class Contract(unittest.TestCase):
                 suggestions={k["3"].ref: Suggestion(32, 2)})),
             replace(inputs(controller), ctc=CtcInputs(
                 switch_commands={k["12"].ref: "sideways"})),  # type: ignore
+            replace(inputs(controller), ctc=CtcInputs(
+                route_requests={k["12"].ref: "sideways"})),  # type: ignore
+            replace(inputs(controller), ctc=CtcInputs(
+                route_requests={k["12"]: "reverse"})),  # type: ignore
             # The CTC Office names blocks by BlockRef, not BlockKey.
             replace(inputs(controller), ctc=CtcInputs(
                 closed_blocks=frozenset({k["3"]}))),  # type: ignore
@@ -392,6 +397,38 @@ class Maintenance(unittest.TestCase):
         k = keys(controller)
         circuits(controller, switch_commands={"12": "reverse"})
         out, _ = circuits(controller)
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
+
+
+class RouteRequests(unittest.TestCase):
+    FOLLOW = ("VAR_IN REQSW_12 REQREV_12\nVAR_OUT SW_12\n"
+              "SW_12 := REQSW_12 AND REQREV_12\n")
+
+    def test_every_switch_gets_request_inputs(self) -> None:
+        names = input_names(territory(1))
+        self.assertIn("REQSW_12", names)
+        self.assertIn("REQREV_12", names)
+
+    def test_a_program_reads_the_request(self) -> None:
+        controller = loaded(1, programs=False)
+        controller.load_program("1", self.FOLLOW, "follow.plc")
+        k = keys(controller)
+        for requests, expected in (({"12": "reverse"}, "reverse"),
+                                   ({"12": "normal"}, "normal"),
+                                   ({}, "normal")):
+            with self.subTest(requests=requests):
+                out, _ = circuits(controller, route_requests=requests)
+                self.assertEqual(
+                    out.track_model.switch_commands[k["12"]], expected)
+
+    def test_a_request_for_another_line_is_ignored(self) -> None:
+        controller = loaded(1, programs=False)
+        controller.load_program("1", self.FOLLOW, "follow.plc")
+        k = keys(controller)
+        sent = inputs(controller)
+        sent = replace(sent, ctc=replace(
+            sent.ctc, route_requests={BlockRef("Red", "27"): "reverse"}))
+        out = controller.step(0.1, sent)
         self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
 
     def test_closures_are_named_by_line_and_block(self) -> None:
