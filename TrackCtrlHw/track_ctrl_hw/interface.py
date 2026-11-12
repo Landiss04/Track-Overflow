@@ -160,6 +160,11 @@ class CtcInputs:
     switch_commands: Mapping[BlockRef, SwitchPosition] = field(
         default_factory=dict
     )
+    # The position each switch should take for the train routed over
+    # it. A request, not a command: the PLC program decides.
+    route_requests: Mapping[BlockRef, SwitchPosition] = field(
+        default_factory=dict
+    )
     # A block not listed has nothing to send down its track circuit.
     suggestions: Mapping[BlockRef, Suggestion] = field(default_factory=dict)
 

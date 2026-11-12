@@ -147,6 +147,9 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
             "switch_commands": _ref_entries(
                 ctc.switch_commands, lambda p: {"position": p}, "switch_id"
             ),
+            "route_requests": _ref_entries(
+                ctc.route_requests, lambda p: {"position": p}, "switch_id"
+            ),
             "suggestions": _ref_entries(
                 ctc.suggestions,
                 lambda s: {
@@ -183,6 +186,12 @@ def inputs_from_wire(data: Any) -> TrackControllerInputs:
             closed_blocks=_ref_set(ctc.get("closed_blocks"), "closed_blocks"),
             switch_commands=_from_ref_entries(
                 ctc.get("switch_commands"), "switch_commands",
+                lambda r: _choice(r, "position", SWITCH_POSITIONS),
+                "switch_id",
+            ),
+            # Absent from senders that predate route requests.
+            route_requests=_from_ref_entries(
+                ctc.get("route_requests", []), "route_requests",
                 lambda r: _choice(r, "position", SWITCH_POSITIONS),
                 "switch_id",
             ),
