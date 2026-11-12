@@ -297,7 +297,6 @@ class EngineDetectionTest(unittest.TestCase):
         self.assertGreater(rig.core.state.power_w, 0.0)
         self.assertEqual(rig.core.failed, [])
 
-
     def test_a_failure_on_a_down_grade_is_found_under_way(self) -> None:
         # Gravity holds the speed, so it never falls; the engine test
         # under way finds it within a few pulses.
@@ -333,7 +332,6 @@ class EngineDetectionTest(unittest.TestCase):
                 with steady_fall_only:
                     without = overshoot(grade)
                 self.assertLess(overshoot(grade), without + 0.01)
-
 
     def test_a_pulse_then_a_climb_does_not_latch(self) -> None:
         # The test's tick of full power lifts the speed a little, and
@@ -371,6 +369,31 @@ class EngineDetectionTest(unittest.TestCase):
                 rig.plant.grade = math.atan(-5.0 / 100.0)
                 rig.run(10.0)
                 self.assertEqual(rig.core.failed, [])
+
+    def test_a_grade_change_inside_a_pulse_does_not_pass_a_dead_engine(
+            self) -> None:
+        # The other way round: down -5 % onto flat, or flat onto +5 %,
+        # between two of the test's ticks, gravity reads 0.49 m/s^2 of
+        # pull from a dead engine. Before the under-way test ran none,
+        # full, none, a step at two of the positions passed it and the
+        # engine was found 5.8-7.0 s later.
+        for before, after in ((-5.0, 0.0), (0.0, 5.0)):
+            for shift in range(6):
+                with self.subTest(before=before, after=after,
+                                  shift=shift):
+                    rig = Rig(Plant(0.0, before, LOADED_KG), 15.0)
+                    rig.plant.rolls_back = True
+                    rig.run(40.0)
+                    rig.plant.engine_failed = True
+                    for _ in range(round(30.0 / TICK_S)):
+                        if rig.core._engine_test:
+                            break
+                        rig.tick()
+                    self.assertTrue(rig.core._engine_test)
+                    for _ in range(shift):
+                        rig.tick()
+                    rig.plant.grade = math.atan(after / 100.0)
+                    self.assertIsNotNone(rig.run_until_failed(1.5))
 
     def test_a_stall_right_after_a_start_latches_the_engine(self) -> None:
         # The engine dies just after the departure test passes, before

@@ -118,9 +118,10 @@ class ControllerCore:
         self._engine_window: deque[float] = deque(
             maxlen=round(ENGINE_DETECT_S / self.dt))
         # The engine test (_test_engine): its phase ("" when none
-        # runs, else "on", "off" or "verdict"), the ticks it has run,
-        # and the speeds it reads.
+        # runs, else "on", "off" or "verdict"), the phases it runs, the
+        # ticks it has run, and the speeds it reads.
         self._engine_test = ""
+        self._engine_steps: tuple[str, ...] = ()
         self._engine_test_ticks = 0
         self._engine_test_speeds: list[float] = []
         # Whether this test repeats one that found the engine dead
@@ -400,6 +401,13 @@ class ControllerCore:
         # on both ticks, so the difference is the engine's pull. A dead
         # engine moves only as gravity rolls it for those two ticks:
         # under 1 cm at 5 % on the Train Model.
+        # Under way it runs none, full, none, and passes only if the
+        # full tick beats both: a grade step between two ticks (Green
+        # 7-9, 5 %, reads 0.49 m/s^2) would otherwise pass a dead
+        # engine. A step falls in one gap at most, as blocks (35 m and
+        # up) are longer than the test's run, so the other gap reads
+        # the true pull. At a stand no step can be reached, so a
+        # latched failure's resolution keeps the two ticks.
         s = self.state
         if not self._engine_test:
             held = (not s.emergency_brake and self.at_stand
@@ -414,8 +422,10 @@ class ControllerCore:
             return
         n, e = self._engine_test_ticks, self.echo_ticks
         self._engine_test_ticks += 1
-        self._engine_test = ("on", "off")[n] if n < 2 else "verdict"
-        if n in (e, e + 1) and (s.fb_service_brake or s.fb_emergency_brake):
+        steps = self._engine_steps
+        self._engine_test = steps[n] if n < len(steps) else "verdict"
+        if e <= n < e + len(steps) and (s.fb_service_brake
+                                        or s.fb_emergency_brake):
             # A brake was on under one of the two commands (a passenger
             # pull): no verdict.
             self._engine_test = ""
@@ -424,11 +434,13 @@ class ControllerCore:
             return
         speeds = self._engine_test_speeds
         speeds.append(s.actual_mps)
-        if n < e + 1:
+        if n < e + len(steps) - 1:
             return
-        on, off = speeds[1] - speeds[0], speeds[2] - speeds[1]
+        d = [b - a for a, b in zip(speeds, speeds[1:])]
+        pull = (d[0] - d[1] if len(d) == 2
+                else min(d[1] - d[0], d[1] - d[2])) / self.dt
         self._engine_test = ""
-        if (on - off) / self.dt < ENGINE_TEST_MIN_MPS2 and not (
+        if pull < ENGINE_TEST_MIN_MPS2 and not (
                 self.at_stand or s.failures["engine"]
                 or self._engine_recheck):
             # Dead, under way: a grade change between the two ticks
@@ -440,7 +452,7 @@ class ControllerCore:
             self._test_engine()
             return
         self._engine_recheck = False
-        if (on - off) / self.dt >= ENGINE_TEST_MIN_MPS2:
+        if pull >= ENGINE_TEST_MIN_MPS2:
             # Answered: the steady fall asks again only on a fresh
             # window, not on every tick of the one that asked.
             s.failures["engine"] = False
@@ -488,7 +500,10 @@ class ControllerCore:
             self._test_engine()
 
     def _start_engine_test(self) -> None:
-        self._engine_test, self._engine_test_ticks = "on", 0
+        self._engine_steps = (("on", "off") if self.at_stand
+                              else ("off", "on", "off"))
+        self._engine_test = self._engine_steps[0]
+        self._engine_test_ticks = 0
         self._engine_recheck = False
         self._engine_test_speeds = []
         self._engine_held_s = 0.0
