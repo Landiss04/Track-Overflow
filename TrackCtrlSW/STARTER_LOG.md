@@ -30,16 +30,16 @@ changes included). Regenerate and update this table whenever the starter is chan
 
 | Wayside | Fingerprint | Lines | Switches |
 |---|---|---|---|
-| GTC-01 | 76e8b7b1f123 | 60 | 12 |
-| GTC-02 | 01d86dcdd78c | 56 | 28 |
-| GTC-03 | 5d1485738d3b | 74 | 58, 62 |
-| GTC-04 | 865ac28fb1dd | 74 | 76, 85 |
+| GTC-01 | f800be9a413f | 68 | 12 |
+| GTC-02 | 03521ed70810 | 64 | 28 |
+| GTC-03 | cc2f362bc3ef | 81 | 58, 62 |
+| GTC-04 | 998414455400 | 76 | 76, 85 |
 | GTC-05 | f2ac5c30c278 | 40 | none |
-| GTC-06 | 6cb878630a54 | 36 | none |
-| RTC-01 | fcb4abddbaa8 | 69 | 9, 15 |
-| RTC-02 | ee2d1cee916e | 47 | 27 |
-| RTC-03 | 6cb3de05f774 | 83 | 32, 38, 43 |
-| RTC-04 | b2f05bcc58f3 | 51 | 52 |
+| GTC-06 | a13ce33ac008 | 41 | none |
+| RTC-01 | a2130ba5d790 | 72 | 9, 15 |
+| RTC-02 | 2b7896c407b0 | 49 | 27 |
+| RTC-03 | bdc197605153 | 87 | 32, 38, 43 |
+| RTC-04 | e9471cc143fb | 53 | 52 |
 | RTC-05 | 6af88a2d8c5b | 26 | none |
 
 Regenerate them from `TrackCtrlSW` with a script that builds the default module without programs
@@ -64,6 +64,33 @@ for each controller.
 
 ## History
 
+- 2026-11-13: loop guard N replaced by a count guard. GTC-04 tells GTC-03 how many of its blocks are
+  occupied (`PEER_CNT_GTC04_0..4`); over 5, GTC-03 holds the train on 75 (`AUTH_75 := NOT FULL_GTC04`).
+  Switches 76 and 85 are no longer forced, and GTC-04 is no longer told 71..75 (so the test ranking no
+  longer sees a train on 75 for switch 76). The top-loop guard is unchanged. GTC-03 and GTC-04 have new
+  fingerprints.
+- 2026-11-13: loop guard N watches 82..87 (was 86..91) and acts only while 99 is occupied too:
+  `DRAIN_N := (82..87) AND OCC_99 AND (71..75)`. GTC-03 is told 82..87 and 99. GTC-03 and GTC-04 have
+  new fingerprints.
+- 2026-11-13 (latest): the test ranking is back, alongside the relaxed vital lock: the starter's own
+  rule, while it sees a train (`ACT_s`), outranks the CTC Office's route request, and a leg's approach
+  block is read over the peer link (GTC-04 sees 75 for switch 76). Fingerprints as in the first test.
+- 2026-11-13 (later): the test ranking is undone. The CTC Office's route request ranks above the
+  starter's own rule again, and the starter no longer reads a leg's approach block over the peer
+  link. The 8 waysides with switches are back to their loop-guard fingerprints.
+- 2026-11-13 (test): the CTC Office's route request ranks below the starter's own rule while that rule
+  sees a train it sets the switch for, or holds it (`ACT_s := HOLD_s OR WANT_N_s OR WANT_R_s`); with
+  no train seen, the request still sets the switch. A trailing train's approach block is also read
+  over the peer link where the wayside is told it (GTC-04: `PEER_OCC_75` for switch 76). Order now:
+  points lock (vital), maintenance command, loop guard, own rule while active, route request, own
+  rule at rest. The 8 waysides with switches have new fingerprints.
+- 2026-11-13: loop guards (`DRAIN_N`, `DRAIN_DEF`), over a reopened peer link (`PEER_OCC_n`). While a
+  train is in 86..91 and another on 71..76, 71..76 are held and switches 85 and 76 set reverse; while a
+  train is in 12..7 and another on 145..150, 145..150 are held, switch 12 set reverse and 28 normal.
+  The guard ranks below a maintenance command and above a route request. Revised the same day: the N
+  approach is 71..75 (a train on 76 locks switch 76, the way out, so it goes on), and the switches
+  are set only while the two-way section is clear (`SET_g`; 76..85 for N, 13..28 for the top loop),
+  so a train already in it finishes first. GTC-01, -02, -03, -04 and -06 have new fingerprints.
 - 2026-11-13: S1 of the Schedule v4 findings. The switch rule no longer sets a switch for a train on
   its fixed side where the layout runs that block both ways into the points (Green 76 from 78, 28 from
   27, 12 from 14, 85 from 84, and Red 9/15 where the same holds). A train there may be heading away,

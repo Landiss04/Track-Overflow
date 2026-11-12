@@ -159,6 +159,34 @@ class Switch76(unittest.TestCase):
             "reverse",
         )
 
+    def test_a_train_held_on_76_does_not_lock_it(self) -> None:
+        # 76 is the listed block, the points are on 77. A train on 76
+        # commanded speed 0 does not move onto the points, so the CTC
+        # Office's request may set the switch for another train.
+        line = _Line()
+        line.tick(occupied={"78"}, suggested={"78", "77"},
+                  requests={"76": "reverse"})
+        self.assertEqual(line.switches["76"], "reverse")
+        self.assertEqual(
+            line.tick(occupied={"76"}, requests={"76": "normal"})["76"],
+            "normal",
+        )
+
+    def test_a_train_moving_on_76_still_locks_it(self) -> None:
+        line = _Line()
+        line.tick(occupied={"78"}, suggested={"78", "77"},
+                  requests={"76": "reverse"})
+        self.assertEqual(
+            line.tick(occupied={"76"}, suggested={"76"},
+                      requests={"76": "normal"})["76"],
+            "reverse",
+        )
+
+    def test_with_no_train_seen_the_request_still_sets_it(self) -> None:
+        line = _Line()
+        self.assertEqual(line.tick(requests={"76": "reverse"})["76"],
+                         "reverse")
+
     def test_held_reverse_while_the_train_is_on_the_points(self) -> None:
         line = _Line()
         line.tick(occupied={"78"}, suggested={"78", "77"},

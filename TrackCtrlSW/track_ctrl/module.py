@@ -375,6 +375,19 @@ class SwTrackController:
                     suggestion.authority_blocks,
                 )
 
+        # Other waysides' blocks this one is told about over the link
+        # between track controllers: the same Track Model occupancy.
+        for block_id in controller.peer_occupancy:
+            controller.set_peer_occupancy(
+                block_id, controller.key(block_id) in readback.occupied_blocks
+            )
+        for wayside_id in controller.peer_counts:
+            source = self._waysides[wayside_id]
+            controller.set_peer_count(wayside_id, sum(
+                source.key(block.block_id) in readback.occupied_blocks
+                for block in source.blocks
+            ))
+
         for switch_id in controller.config.switches:
             key = controller.key(switch_id)
             command = ctc.switch_commands.get(key)

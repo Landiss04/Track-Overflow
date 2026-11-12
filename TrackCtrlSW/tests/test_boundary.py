@@ -671,5 +671,114 @@ class RouteRequests(unittest.TestCase):
             wire.inputs_from_wire(sent).ctc.route_requests, {})
 
 
+class LoopGuards(unittest.TestCase):
+    """A loop that drains through a two-way section is let out first:
+    while a train is in the loop's first blocks and another approaches
+    the section from its other end, the approach is held and the switches
+    are set for the loop's way out. The waysides tell each other the
+    blocks over the link between track controllers (``PEER_OCC_n``)."""
+
+    @staticmethod
+    def key(block: str) -> BlockKey:
+        return BlockKey("Green", block)
+
+    def run_it(
+        self, occupied: set[str], watched: tuple[str, ...],
+        requests: dict[str, str] | None = None,
+    ) -> tuple[dict[str, tuple[int, int]], dict[str, str]]:
+        out = _tick(
+            _green(),
+            ctc=CtcInputs(
+                suggestions={self.key(b): Suggestion(12, 4) for b in watched},
+                route_requests={
+                    self.key(s): p  # type: ignore[misc]
+                    for s, p in (requests or {}).items()},
+            ),
+            track_model=TrackModelInputs(
+                occupied_blocks=frozenset(self.key(b) for b in occupied)),
+        )
+        circuits = {
+            k.block_id: (c.speed_mps, c.authority_blocks)
+            for k, c in out.track_model.track_circuits.items()
+            if k.block_id in watched
+        }
+        switches = {
+            k.block_id: v
+            for k, v in out.track_model.switch_commands.items()
+        }
+        return circuits, switches
+
+    def test_each_wayside_is_told_the_blocks_it_needs(self) -> None:
+        module = _green()
+        peers = {
+            wayside_id: module.controller(wayside_id).config.peer_blocks
+            for wayside_id in module.wayside_ids
+        }
+        self.assertEqual(peers["GTC-03"], ())
+        self.assertEqual(peers["GTC-04"], ())
+        # GTC-01 and GTC-02 set the top loop's switches, so they are also
+        # told the part of 13..28 the other owns.
+        self.assertEqual(peers["GTC-01"][-3:], ("26", "27", "28"))
+        self.assertEqual(peers["GTC-06"], ("12", "11", "10", "9", "8", "7"))
+        self.assertEqual(peers["GTC-05"], ())
+        self.assertIn("PEER_OCC_145",
+                      module.controller("GTC-01").input_names())
+
+    def test_the_top_loop_drains_the_same_way(self) -> None:
+        circuits, switches = self.run_it({"10", "147"}, ("10", "147"))
+        self.assertEqual(circuits["147"], (0, 0))
+        self.assertEqual((switches["12"], switches["28"]),
+                         ("reverse", "normal"))
+
+    def test_the_top_loop_waits_for_13_to_28_to_clear(self) -> None:
+        # 28 stands reverse at rest, for a train from 150.
+        circuits, switches = self.run_it(
+            {"10", "147", "20"}, ("10", "147"))
+        self.assertEqual(circuits["147"], (0, 0))
+        self.assertEqual((switches["12"], switches["28"]),
+                         ("normal", "reverse"))
+
+
+
+class CountGuardGtc04(unittest.TestCase):
+    """GTC-04 tells GTC-03 how many of its blocks (76..100) are
+    occupied; over 5, GTC-03 holds the train on 75."""
+
+    @staticmethod
+    def key(block: str) -> BlockKey:
+        return BlockKey("Green", block)
+
+    def block_75(self, occupied: set[str]) -> tuple[int, int]:
+        out = _tick(
+            _green(),
+            ctc=CtcInputs(suggestions={self.key("75"): Suggestion(12, 4)}),
+            track_model=TrackModelInputs(
+                occupied_blocks=frozenset(self.key(b) for b in occupied)),
+        )
+        circuit = out.track_model.track_circuits[self.key("75")]
+        return (circuit.speed_mps, circuit.authority_blocks)
+
+    def test_gtc_03_reads_gtc_04s_count(self) -> None:
+        controller = _green().controller("GTC-03")
+        names = controller.input_names()
+        self.assertIn("PEER_CNT_GTC04_0", names)
+        self.assertIn("PEER_CNT_GTC04_4", names)
+        self.assertNotIn("PEER_CNT_GTC04_5", names)
+
+    def test_five_trains_in_gtc_04_hold_nothing(self) -> None:
+        crowd = {"80", "86", "90", "94", "98"}
+        self.assertGreater(self.block_75(crowd | {"75"})[1], 0)
+
+    def test_six_trains_in_gtc_04_hold_the_train_on_75(self) -> None:
+        crowd = {"80", "86", "90", "94", "98", "100"}
+        self.assertEqual(self.block_75(crowd | {"75"}), (0, 0))
+
+    def test_every_count_up_to_all_25_blocks(self) -> None:
+        blocks = [str(n) for n in range(76, 101)]
+        for count in range(0, 26):
+            held = self.block_75(set(blocks[:count]) | {"75"})
+            self.assertEqual(held == (0, 0), count > 5, count)
+
+
 if __name__ == "__main__":
     unittest.main()

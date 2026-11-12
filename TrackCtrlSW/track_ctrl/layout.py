@@ -35,7 +35,7 @@ import json
 import math
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -51,6 +51,86 @@ MIN_CONTROLLERS = 2
 #: track, like the blocks: the user never chooses it. A line not listed
 #: is built with the fewest D014 allows.
 WAYSIDE_COUNTS: dict[str, int] = {"Green": 6, "Red": 5}
+
+@dataclass(frozen=True)
+class LoopGuard:
+    """Keeps a one-way loop from backing up into the two-way section it
+    drains through.
+
+    Trains leave a loop through a stretch of single track that trains
+    heading into the loop also use. If the loop fills while a train is
+    coming the other way, neither can move. A worst-case guard behind the
+    CTC Office's own planning: while a train is in the first blocks of the
+    loop (``loop``) and another is approaching the two-way section from
+    the other end (``approach``), the approaching trains are stopped. The
+    ``switches`` are set for the loop's way out only once the two-way
+    section (``section``) is clear: a train already in it, or on a block
+    that commits it to it, finishes its run first. The approach stops
+    short of any block whose train would lock a switch of the way out.
+    The waysides involved tell each other these blocks' occupancy over
+    the link between track controllers (``ControllerConfig.peer_blocks``).
+    """
+
+    #: Names the PLC bit ``DRAIN_<name>``: the two-way section it guards.
+    name: str
+    #: The first blocks of the loop after its entry.
+    loop: tuple[str, ...]
+    #: The blocks before the two-way section's other end.
+    approach: tuple[str, ...]
+    #: Switch id -> the position the loop's way out needs, True for
+    #: reverse.
+    switches: tuple[tuple[str, bool], ...]
+    #: The two-way section, with any block that commits a train to it:
+    #: the switches are only set while all of it is clear.
+    section: tuple[str, ...]
+
+
+def _blocks(first: int, last: int) -> tuple[str, ...]:
+    step = 1 if last >= first else -1
+    return tuple(str(n) for n in range(first, last + step, step))
+
+
+#: Each line's loop guards, fixed by the track chart. Green: the loop
+#: 86..100 drains through section N (77..85) to 101; the loop 12..1 drains
+#: through 13..28 (sections D to F) to 29.
+LOOP_GUARDS: dict[str, tuple[LoopGuard, ...]] = {
+    "Green": (
+        LoopGuard("DEF", _blocks(12, 7), _blocks(145, 150),
+                  (("12", True), ("28", False)), _blocks(13, 28)),
+    ),
+}
+
+@dataclass(frozen=True)
+class CountGuard:
+    """Holds trains out of a wayside's territory while it is crowded.
+
+    The ``source`` wayside tells another, over the link between track
+    controllers, how many of its blocks are occupied, as a whole number
+    in ``width`` bits (``PEER_CNT_<source>_b``, least significant
+    first). While that count is over ``limit``, the receiving wayside
+    holds its ``hold`` blocks, the ones a train enters the source's
+    territory from.
+    """
+
+    source: str
+    limit: int
+    hold: tuple[str, ...]
+    #: Bits in the count: enough for every block of the source. Set when
+    #: the line is divided.
+    width: int = 0
+
+    @property
+    def token(self) -> str:
+        """The source's id as it appears in a PLC name: ``GTC04``."""
+        return self.source.replace("-", "")
+
+
+#: Each line's count guards. Green: while more than 5 of GTC-04's blocks
+#: (76..100: section N and the loop) are occupied, GTC-03 holds the train
+#: on 75, its block into GTC-04.
+COUNT_GUARDS: dict[str, tuple[CountGuard, ...]] = {
+    "Green": (CountGuard("GTC-04", 5, ("75",)),),
+}
 
 #: Identity colours from the track chart. Any other line is neutral.
 LINE_COLORS: dict[str, str] = {"Green": "#2F7D4F", "Red": "#B03A3A"}
@@ -119,6 +199,33 @@ class ControllerConfig:
     #: this territory: the track chart a starter program is written
     #: from. Fixed by the layout; never an input.
     line_next_blocks: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    #: The loop guards this wayside takes part in: it owns an approach
+    #: block or one of the switches. Fixed by the layout.
+    guards: tuple[LoopGuard, ...] = ()
+    #: The count guards this wayside holds trains for. Fixed by the
+    #: layout.
+    count_guards: tuple[CountGuard, ...] = ()
+
+    @property
+    def peer_blocks(self) -> tuple[str, ...]:
+        """Other waysides' blocks whose occupancy this one is told, over
+        the link between track controllers: every loop and approach
+        block of its guards that it does not own, and the two-way
+        section's where it sets one of the guard's switches."""
+        found: dict[str, None] = {}
+        for guard in self.guards:
+            sets_switch = any(self.owns(s) for s, _ in guard.switches)
+            for block_id in (*guard.loop, *guard.approach,
+                             *(guard.section if sets_switch else ())):
+                if not self.owns(block_id):
+                    found[block_id] = None
+        return tuple(found)
+
+    def occupancy_name(self, block_id: str) -> str:
+        """The PLC input that reads a block's occupancy: ``OCC_n`` for an
+        owned block, ``PEER_OCC_n`` for one told by another wayside."""
+        return f"{'OCC' if self.owns(block_id) else 'PEER_OCC'}_{block_id}"
+
     @property
     def signals(self) -> tuple[str, ...]:
         """Signal ids: a four-aspect light stands at every switch.
@@ -346,8 +453,23 @@ class LineLayout:
                         if block_id in self.crossings
                     ),
                     line_next_blocks=directions,
+                    guards=tuple(
+                        guard for guard in LOOP_GUARDS.get(self.key, ())
+                        if any(b in owned_ids for b in guard.approach)
+                        or any(s in owned_ids for s, _ in guard.switches)
+                    ),
                 )
             )
+        sizes = {c.controller_id: len(c.block_ids) for c in configs}
+        configs = [
+            replace(config, count_guards=tuple(
+                replace(guard, width=sizes[guard.source].bit_length())
+                for guard in COUNT_GUARDS.get(self.key, ())
+                if guard.source in sizes
+                and any(b in config.block_ids for b in guard.hold)
+            ))
+            for config in configs
+        ]
         return LineLayout(
             key=self.key,
             blocks=self.blocks,

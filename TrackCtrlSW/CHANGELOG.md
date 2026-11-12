@@ -7,6 +7,90 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 
 
+
+
+
+
+
+
+## 2026-11-13 — Count guard: GTC-04 crowded holds GTC-03's train on 75
+
+Simplified from loop guard N. GTC-04 tells GTC-03, over the link between track
+controllers, how many of its blocks (76..100) are occupied, as a whole number in
+5 bits (`PEER_CNT_GTC04_0..4`, least significant first; `layout.CountGuard`,
+`COUNT_GUARDS`). The starter compares it in Boolean code
+(`FULL_GTC04 := count > 5`, `vital.greater_than_bits`) and holds block 75:
+`AUTH_75 := NOT FULL_GTC04`. Loop guard N is removed: no switch forcing at 76/85,
+and GTC-04 is no longer told 71..75. The top-loop guard (DEF) stays. Tests:
+`test_boundary.CountGuardGtc04` (4, including every count from 0 to 25); the
+N loop-guard tests and the test-ranking test that relied on GTC-04 seeing 75 are
+removed.
+
+---
+## 2026-11-13 — Loop guard N watches 82..87 and needs a train on 99
+
+`DRAIN_N := (82..87 occupied) AND OCC_99 AND (71..75 occupied)`: the approach is
+held only while a train is in 82..87 and another waits on 99. `LoopGuard.required`
+holds the blocks that must all be occupied. GTC-03 is now told 82..87 and 99. The
+switches still move only while 76..85 is clear (`SET_N`). 2 tests added.
+
+---
+## 2026-11-13 — Test ranking restored: the wayside's own rule over a route request
+
+Back in, for testing alongside the relaxed vital lock: while the starter sees a
+train it sets a switch for, or holds it (`ACT_s`), its own rule outranks the CTC
+Office's route request; with no train seen the request sets the switch. A leg's
+approach block is read over the peer link (GTC-04 sees 75 for switch 76). Switch
+order: points lock (vital), maintenance command, loop guard, own rule while
+active, route request, own rule at rest.
+
+---
+## 2026-11-13 — Vital lock: a train held on a switch's listed block no longer locks it
+
+The deadlock: a train stood on 76 (switch 76's listed block; its points are on 77)
+with speed and authority 0, and the vital lock kept switch 76 reverse for good,
+so the train it was held for could never be given its route. The vital lock now
+reads, for a switch listed on a block other than its points,
+`V_LOCK_s := OCC_point OR (OCC_s AND NOT (NOT AUTH_s OR CLOSED_s OR speed 0))`:
+a train on the points always locks the switch; a train on the listed block locks
+it only while it is commanded a speed (the program gives it authority, the block
+is open, and the suggested speed is not 0). Applies to Green 12, 58, 62, 76 and
+Red 15, 32, 43. Also: the test ranking above is undone, so the CTC Office's route
+request again ranks above the starter's own rule. 2 tests in
+`test_starter_switches.py`.
+
+---
+## 2026-11-13 — Test: the wayside's own switch rule outranks a route request
+
+A test ranking, after a deadlock with switch 76 held reverse by a CTC route
+request while the train on 75 needed normal. The starter writes
+`ACT_s := HOLD_s OR WANT_N_s OR WANT_R_s` (it sees a train it sets the switch for,
+or holds it) and, while `ACT_s`, its own rule wins over the CTC Office's route
+request; with no train seen the request still sets the switch. A train coming off
+a leg is also read from the block before the leg over the peer link where the
+wayside is told it, so GTC-04 sees a train on 75 for switch 76. This reverses the
+order in the route-request change list (request above the program's own rule).
+Switch order: points lock (vital), maintenance command, loop guard, own rule while
+active, route request, own rule at rest. 2 tests in `test_starter_switches.py`.
+
+---
+## 2026-11-13 — Loop guards over a peer link between waysides
+
+A worst-case guard behind the CTC Office, so a loop cannot back up into the
+two-way section it drains through. `layout.LOOP_GUARDS` (Green): loop 86..100
+through section N, watched on 86..91, approach 71..75, switches 85 and 76 reverse;
+loop 12..1 through 13..28, watched on 12..7, approach 145..150, switch 12 reverse
+and 28 normal. The waysides involved are told the blocks they do not own
+(`ControllerConfig.peer_blocks`, program input `PEER_OCC_n`). In the starter,
+`DRAIN_g` is a train in the watched loop blocks AND one on the approach; then the
+approach blocks' `AUTH_n` are 0. The switches are forced only while the two-way
+section is also clear (`SET_g`: 76..85 for N, 13..28 for the top loop), so a
+train already in it, or on 76 (which locks switch 76), finishes first; 76 is not
+in N's approach for the same reason (71..75). Precedence for the switches: train
+on the points (vital), maintenance command, the guard, route request, the
+starter's own rule. 9 tests (`test_boundary.LoopGuards`).
+
+---
 ## 2026-11-13 — S1: the starter no longer throws a switch behind an outbound train
 
 From the Schedule v4 findings (S1): the starter generated `WANT_R_76 := NOT OCC_77
