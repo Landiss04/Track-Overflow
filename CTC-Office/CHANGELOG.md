@@ -4,6 +4,29 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-12 — A run still in the yard gives up its zone pass
+
+From Landis, after the Green Line locked up at section N in the
+Schedule v4 run (every module, both lines).
+
+- **The lock-up.** G9 was ordered out through N (77 to 85) while
+  still in the yard, held there by the yard headway. That order
+  counted as its pass through N, so G4, waiting at 99 to come back
+  through N, stayed held. G1, G2 and G3, on their next lap, were held
+  at 75 for G4, and G9 came out behind them. G4 waited for G9, G9
+  behind G1, G1 for G4: nothing moved again from 05:44.
+- **The fix** (`ctc.scheduler`). A run with its order that the model
+  has not yet released from the yard gives up its pass, and waits in
+  the yard, once the first zone pass on its way is blocked, as when a
+  train waits round a loop to come back. This is the rule as decided
+  (the next runs wait in the yard), now also for a run ordered before
+  the other train got there. A run the model has already released
+  keeps its pass: it is coming out. The model passes the released runs
+  to the scheduler (`World.released`).
+- Tests: `ZoneTest` in `tests/test_ctc_scheduler.py` (2 new).
+
+---
+
 ## 2026-11-11 — The yard as a destination in Manual mode
 
 From Landis.

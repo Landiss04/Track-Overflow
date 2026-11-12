@@ -62,7 +62,10 @@ mode, carries the plans out:
   - Once a train waits round a loop to come back into a zone,
     no train is sent into it the other way for the first time, even
     when due: the trains following it go round the loop, and the next
-    runs wait in the yard.
+    runs wait in the yard. A run ordered out through the zone before
+    then, but not yet released from the yard, gives up its pass and
+    waits there too: holding it would keep the waiting train out while
+    the trains in front of it wait for that train.
 
   Following trains are kept apart by the authority rules, not here.
 
@@ -386,6 +389,9 @@ class World:
     orders: Mapping[str, str]
     # Trains the CTC lost track of.
     lost: frozenset[str]
+    # Trains the model has released from the yard that are not yet
+    # found on the track: they are coming out, so they keep their way.
+    released: frozenset[str] = frozenset()
 
 
 class AutoDispatcher:
@@ -715,6 +721,16 @@ class AutoDispatcher:
             return new, [act] if act else []
         if status == IN_YARD:
             if train not in world.heads:
+                if (train in world.orders and train not in world.lost
+                        and train not in world.released
+                        and self._way_out_blocked(plan, progress)):
+                    # Not out yet, and a train now waits round a loop to
+                    # come back through the zone it was sent into: it
+                    # gives up its pass and waits in the yard. Holding
+                    # the pass would keep the waiting train out while
+                    # the trains in front of it on the way to the zone
+                    # wait for that train: none would move again.
+                    return replace(progress, status=HELD, wait=-1), []
                 if train in world.orders or train in world.lost:
                     return progress, []
                 # Its order went before it left the yard: give it again.
@@ -747,6 +763,16 @@ class AutoDispatcher:
             # Its blocks cleared at the yard entry: back in the yard.
             return replace(progress, status=DONE), [Cancel(train)]
         return progress, []
+
+    def _way_out_blocked(self, plan: RunPlan, progress: Progress) -> bool:
+        """Whether a run still in the yard could not be sent out now on
+        its leg: the first zone pass on its way is blocked, so it would
+        wait in the yard (``_reach``)."""
+        target = self._leg_target(plan, progress.leg)
+        if target is None:
+            return False
+        reach, _ = self._reach(plan, progress, target, -1)
+        return reach is None
 
     def _out_of_yard(self, plan: RunPlan, progress: Progress,
                      leg: int) -> tuple[Progress, list[Action]]:

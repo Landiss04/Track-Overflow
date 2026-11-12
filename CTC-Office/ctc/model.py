@@ -1139,7 +1139,8 @@ class StubCtcOffice:
                    for train_id, t in self._tracker.trains.items()},
             orders={train_id: o.destination_block_id
                     for train_id, o in self._orders.items()},
-            lost=frozenset(self._tracker.lost))
+            lost=frozenset(self._tracker.lost),
+            released=frozenset(self._released))
         pending = list(self._auto.step(world))
         while pending:
             action = pending.pop(0)
