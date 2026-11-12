@@ -68,6 +68,13 @@ Window {
         return best
     }
 
+    // One of a tile's two image buffers.
+    component TileFrame: Image {
+        anchors.fill: parent
+        cache: false
+        fillMode: Image.PreserveAspectFit
+    }
+
     Timer {
         interval: wall.refreshIntervalMs
         running: wall.visible
@@ -153,17 +160,42 @@ Window {
                         label: modelData.state ?? ""
                         variant: modelData.variant ?? "idle"
                     }
-                    Image {
+                    Item {
                         id: image
                         objectName: "tileImage"
                         y: wall.stripHeight
                         width: parent.width
                         height: parent.height - y
                         visible: tile.live
-                        cache: false
-                        fillMode: Image.PreserveAspectFit
-                        source: tile.live
-                            ? modelData.snapshot_url + "?" + wall.frame : ""
+                        implicitWidth: shown.implicitWidth
+                        // Each frame loads into the hidden buffer and is
+                        // shown once it loads. On Windows a read fails
+                        // while the module replaces the file; the last
+                        // good frame then stays up instead of a blank.
+                        property Image shown: bufferA
+                        readonly property Image hidden:
+                            shown === bufferA ? bufferB : bufferA
+
+                        Connections {
+                            target: wall
+                            function onFrameChanged() {
+                                if (tile.live)
+                                    image.hidden.source = tile.modelData
+                                        .snapshot_url + "?" + wall.frame
+                            }
+                        }
+                        TileFrame {
+                            id: bufferA
+                            visible: image.shown === bufferA
+                            onStatusChanged: if (status === Image.Ready)
+                                image.shown = bufferA
+                        }
+                        TileFrame {
+                            id: bufferB
+                            visible: image.shown === bufferB
+                            onStatusChanged: if (status === Image.Ready)
+                                image.shown = bufferB
+                        }
                     }
                     Shared.EmptyState {
                         anchors.centerIn: image
