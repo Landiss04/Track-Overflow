@@ -32,9 +32,11 @@ from ctc.scheduler import (  # noqa: E402
     DWELL_S,
     EN_ROUTE,
     HELD,
+    IN_YARD,
     QUEUED,
     SIMULATION_START_S,
     Progress,
+    World,
     opposed,
     train_id_for,
     two_way_zones,
@@ -232,6 +234,46 @@ class ZoneTest(unittest.TestCase):
         self.assertEqual(
             set(two_way_zones([("1", "2", "3", "4", "5", "3", "2", "1")])),
             {"1", "2", "3"})
+
+    def _waiting_at_99_and_g9_in_yard(self):
+        # G4 waits round the 86-100 loop (at 99) to come back through
+        # N; G9 was ordered out through N before G4 got there and is
+        # still in the yard: the state the schedule v4 run locked in.
+        # As the file lists it, G9's first stop (Pioneer, 2) is beyond N.
+        auto = _loaded(schedule=SCHEDULE)._auto
+        plan = auto._plan["G4"]
+        back = [s for s in auto._spans["G4"] if s[0] == "77"][1]
+        wait = auto._loop_wait(plan, back)
+        leg = next(i for i, index in enumerate(plan.stop_indexes)
+                   if index > back[1])
+        auto.progress["G4"] = Progress(HELD, leg=leg, at=wait, wait=wait)
+        auto.progress["G9"] = Progress(IN_YARD, leg=0, at=-1)
+        orders = {"G4": plan.stops[leg].block_id,
+                  "G9": auto._plan["G9"].stops[0].block_id}
+        return auto, plan.path[wait], orders
+
+    def _world(self, heads, orders, released=frozenset()):
+        return World(now_s=SIMULATION_START_S,
+                     ready_lines=frozenset({"Green"}), heads=heads,
+                     orders=orders, lost=frozenset(), released=released)
+
+    def test_a_run_not_out_gives_up_its_pass_to_a_waiting_train(self):
+        auto, head, orders = self._waiting_at_99_and_g9_in_yard()
+        self.assertEqual(head, "99")
+        actions = auto.step(self._world({"G4": head}, orders))
+        # G9 waits in the yard; it is not sent again.
+        self.assertEqual(auto.progress["G9"].status, HELD)
+        self.assertEqual(auto.progress["G9"].wait, -1)
+        self.assertNotIn("G9", [a.train_id for a in actions])
+        # G4 then comes back through N.
+        auto.step(self._world({"G4": head}, orders))
+        self.assertEqual(auto.progress["G4"].status, EN_ROUTE)
+
+    def test_a_run_coming_out_of_the_yard_keeps_its_pass(self):
+        auto, head, orders = self._waiting_at_99_and_g9_in_yard()
+        auto.step(self._world({"G4": head}, orders, frozenset({"G9"})))
+        self.assertEqual(auto.progress["G9"].status, IN_YARD)
+        self.assertEqual(auto.progress["G4"].status, HELD)
 
     def test_opposed(self) -> None:
         path = ("1", "2", "3", "4", "5", "3", "2", "1")
