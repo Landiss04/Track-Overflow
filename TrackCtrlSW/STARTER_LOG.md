@@ -30,13 +30,13 @@ changes included). Regenerate and update this table whenever the starter is chan
 
 | Wayside | Fingerprint | Lines | Switches |
 |---|---|---|---|
-| GTC-01 | cbc6cc8dade3 | 60 | 12 |
-| GTC-02 | bb9009149134 | 56 | 28 |
-| GTC-03 | 5d1485738d3b | 73 | 58, 62 |
-| GTC-04 | c8fd94e84b6f | 73 | 76, 85 |
+| GTC-01 | 76e8b7b1f123 | 60 | 12 |
+| GTC-02 | 01d86dcdd78c | 56 | 28 |
+| GTC-03 | 5d1485738d3b | 74 | 58, 62 |
+| GTC-04 | 865ac28fb1dd | 74 | 76, 85 |
 | GTC-05 | f2ac5c30c278 | 40 | none |
 | GTC-06 | 6cb878630a54 | 36 | none |
-| RTC-01 | 12f00adaa6cb | 69 | 9, 15 |
+| RTC-01 | fcb4abddbaa8 | 69 | 9, 15 |
 | RTC-02 | ee2d1cee916e | 47 | 27 |
 | RTC-03 | 6cb3de05f774 | 83 | 32, 38, 43 |
 | RTC-04 | b2f05bcc58f3 | 51 | 52 |
@@ -64,6 +64,22 @@ for each controller.
 
 ## History
 
+- 2026-11-13: S1 of the Schedule v4 findings. The switch rule no longer sets a switch for a train on
+  its fixed side where the layout runs that block both ways into the points (Green 76 from 78, 28 from
+  27, 12 from 14, 85 from 84, and Red 9/15 where the same holds). A train there may be heading away,
+  and the starter threw switch 76 reverse behind outbound trains. The CTC Office's route request sets
+  those switches now. GTC-01, GTC-02, GTC-04 and RTC-01 have new fingerprints.
+- 2026-11-12 (later): the section N priority rules are taken out of the starter again. They fought the
+  CTC Office's own routing and deadlocked G1 on 99 against G6 on 75. Which train goes first is the
+  CTC Office's. The peer occupancy inputs (`PEER_OCC_n`) stay available to programs; the starter does
+  not read them. GTC-03 and GTC-04 are back to their 2026-11-10 fingerprints. The peer link itself
+  was removed afterwards (see the CHANGELOG): `PEER_OCC_n` no longer exists.
+- 2026-11-12: contested section N (Green 77..85, single track used both ways). GTC-03 is told the
+  occupancy of 98, 99, 100 and 76 and GTC-04 of 75 (`PEER_OCC_n`, over the link between track
+  controllers). A train on 99 or 100 goes first; one on 98 goes unless one is on 76; otherwise one on
+  75/76 goes. While side 98..100 goes, `AUTH_75` and `AUTH_76` are 0 and switches 76 and 85 are set
+  reverse; while 75/76 goes they are set normal. GTC-03 and GTC-04 have new fingerprints; the other
+  nine are unchanged.
 - 2026-11-10: the switch rule reads the CTC Office's route request (`REQSW_s`, `REQREV_s`) after the
   maintenance command and before its own rule, and skips a request whose target leg is `CLOSED_n`.
   The 8 waysides with switches have new fingerprints (GTC-05, GTC-06 and RTC-05 are unchanged).

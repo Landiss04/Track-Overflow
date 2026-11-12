@@ -119,7 +119,6 @@ class ControllerConfig:
     #: this territory: the track chart a starter program is written
     #: from. Fixed by the layout; never an input.
     line_next_blocks: tuple[tuple[str, tuple[str, ...]], ...] = ()
-
     @property
     def signals(self) -> tuple[str, ...]:
         """Signal ids: a four-aspect light stands at every switch.

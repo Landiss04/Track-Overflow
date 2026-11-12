@@ -765,7 +765,14 @@ def _switch_rule(
 
     wants: dict[bool, list[str]] = {False: [], True: []}
     unseen: set[bool] = set()
-    if point in after(fixed):
+    # A train on the fixed side is only known to be coming to the points
+    # where the layout runs that block one way, into the points. Where it
+    # runs both ways (a bidirectional section, as at switch 76 with 78), a
+    # train there may be heading away, and setting the switch for it would
+    # throw it behind an outbound train. There the CTC Office's route
+    # request sets the switch; the program does not guess.
+    facing_one_way = point in after(fixed) and fixed not in after(point)
+    if facing_one_way:
         exits = [leg for leg in legs if leg in after(point)]
         if len(exits) == 1:
             position = legs[exits[0]]

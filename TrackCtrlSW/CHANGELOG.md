@@ -6,6 +6,54 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 
 
+
+## 2026-11-13 — S1: the starter no longer throws a switch behind an outbound train
+
+From the Schedule v4 findings (S1): the starter generated `WANT_R_76 := NOT OCC_77
+AND OCC_78`, reading any train on 78 as coming to 77, but 77..85 is run both ways
+and outbound trains run 77 to 78. It threw switch 76 reverse behind them and
+started the Green lockup. A facing term (a train on the fixed side, points clear)
+is now written only where the layout runs the fixed block one way into the
+points. Where it runs both ways the program cannot tell direction, and the CTC
+Office's route request sets the switch (it ranks above the program's own rule).
+This also drops the same guess at Green 12, 28 and 85 and at Red where it held.
+`tests/test_starter_switches.py` updated (Switch76, Switch28, Maintenance).
+
+---
+## 2026-11-12 (last) — The peer occupancy link is removed
+
+With the section N priority rules gone from the starter, nothing used the
+wireless link between track controllers. It is removed: `PEER_OCC_n`,
+`TrackController.peer_occupancy` and `set_peer_occupancy`, the module's pass of
+occupancy between waysides, `ControllerConfig.peer_blocks` and `contested`, and
+`layout.ContestedSection` / `CONTESTED_SECTIONS`, with their 1 test class. The
+CHANGELOG entries above for them describe code that is no longer there.
+
+---
+## 2026-11-12 (later) — Section N priority taken out of the starter
+
+The priority rules added earlier today fought the CTC Office: with G1 on 99 and G6
+on 75 the CTC gave G1 speed 0 and G6 a speed, while the wayside held G6 and set
+the switches for G1, so neither moved. Which train goes first through a
+bidirectional section is the CTC Office's. The starter no longer holds 75/76 or
+sets switches 76 and 85 by priority; it is back to its 2026-11-10 text. Kept: the
+peer occupancy link (`PEER_OCC_n`, `ControllerConfig.peer_blocks`,
+`layout.CONTESTED_SECTIONS`) as program inputs a program may read.
+
+---
+## 2026-11-12 — Priority for a train waiting at contested section N
+
+Green section N (77..85) is single track used both ways. GTC-03 is now told the
+occupancy of blocks 98, 99, 100 and 76, and GTC-04 of block 75 (`PEER_OCC_n`, a
+program input; `ControllerConfig.peer_blocks`, `layout.CONTESTED_SECTIONS`), as if
+over the wireless link between track controllers. In the starter: a train on 99 or
+100 goes first; one on 98 goes unless one is on 76; otherwise one on 75/76 goes.
+While the 98..100 side goes, `AUTH_75` and `AUTH_76` are 0 and switches 76 and 85
+are set reverse; while 75/76 goes they are set normal. A maintenance command and a
+route request still win over it, and a train on the points still locks a switch.
+9 tests (`test_boundary.ContestedSectionN`).
+
+---
 ## 2026-11-10 — Route requests (`route_requests`) reach the program
 
 The CTC Office's `route_requests` (the switch position each routed train

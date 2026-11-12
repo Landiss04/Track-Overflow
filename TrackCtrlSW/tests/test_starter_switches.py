@@ -79,6 +79,7 @@ class _Line:
         occupied: Iterable[str] = (),
         suggested: Iterable[str] = (),
         commands: dict[str, SwitchPosition] | None = None,
+        requests: dict[str, SwitchPosition] | None = None,
     ) -> dict[str, SwitchPosition]:
         """Step once; return every switch's commanded position by ID.
 
@@ -95,6 +96,10 @@ class _Line:
                 switch_commands={
                     _key(block): position
                     for block, position in (commands or {}).items()
+                },
+                route_requests={
+                    _key(block): position
+                    for block, position in (requests or {}).items()
                 },
             ),
             track_model=TrackModelInputs(
@@ -133,27 +138,31 @@ class Switch76(unittest.TestCase):
     """Points at 77: from 76 out to 78 (normal), from 78 on to 101
     (reverse). The reverse leg is in GTC-05."""
 
-    def test_reverse_for_a_train_on_78_about_to_enter_77(self) -> None:
-        line = _Line()
-        self.assertEqual(
-            line.tick(occupied={"78"}, suggested={"78", "77"})["76"],
-            "reverse",
-        )
-
-    def test_a_train_on_78_is_taken_to_be_coming_whichever_way_it_heads(
-        self,
-    ) -> None:
-        # The program cannot see the suggestion that would say it is
-        # heading out from 77 toward 79, so it takes it to be coming in.
+    def test_an_outbound_train_on_78_does_not_throw_it(self) -> None:
+        # 77..85 is run both ways, so a train on 78 may be heading out
+        # toward 79 (S1 in the Schedule v4 findings): the switch stays.
         line = _Line()
         self.assertEqual(
             line.tick(occupied={"78"}, suggested={"78", "79"})["76"],
+            "normal",
+        )
+
+    def test_reverse_for_a_train_on_78_when_the_ctc_requests_it(
+        self,
+    ) -> None:
+        # Only the CTC Office knows the train on 78 is coming back to 77
+        # and on to 101; its route request says so.
+        line = _Line()
+        self.assertEqual(
+            line.tick(occupied={"78"}, suggested={"78", "77"},
+                      requests={"76": "reverse"})["76"],
             "reverse",
         )
 
     def test_held_reverse_while_the_train_is_on_the_points(self) -> None:
         line = _Line()
-        line.tick(occupied={"78"}, suggested={"78", "77"})
+        line.tick(occupied={"78"}, suggested={"78", "77"},
+                  requests={"76": "reverse"})
         # On 77, its next block (101) is another wayside's.
         for _ in range(3):
             self.assertEqual(
@@ -168,9 +177,8 @@ class Switch76(unittest.TestCase):
         # the block switch 76 is listed on, so the switch locks once the
         # train is in it: it must be normal before.
         line = _Line()
-        line.tick(occupied={"78"}, suggested={"78", "77"})
-        line.tick()
-        line.tick(occupied={"78"}, suggested={"78", "77"})
+        line.tick(occupied={"78"}, suggested={"78", "77"},
+                  requests={"76": "reverse"})
         self.assertEqual(line.switches["76"], "reverse")
         self.assertEqual(line.tick(suggested={"76"})["76"], "normal")
         self.assertEqual(
@@ -200,10 +208,21 @@ class Switch28(unittest.TestCase):
     """Points at 28: from 150 on to 27 (reverse), from 27 out to 29
     (normal). The reverse leg is in GTC-06."""
 
-    def test_normal_for_a_train_on_27_about_to_enter_28(self) -> None:
+    def test_a_train_on_27_does_not_throw_it(self) -> None:
+        # 13..28 is run both ways: a train on 27 may be heading to 26.
         line = _Line()
         self.assertEqual(
-            line.tick(occupied={"27"}, suggested={"27", "28"})["28"],
+            line.tick(occupied={"27"}, suggested={"27", "26"})["28"],
+            "reverse",
+        )
+
+    def test_normal_for_a_train_on_27_when_the_ctc_requests_it(
+        self,
+    ) -> None:
+        line = _Line()
+        self.assertEqual(
+            line.tick(occupied={"27"}, suggested={"27", "28"},
+                      requests={"28": "normal"})["28"],
             "normal",
         )
         # On 28 it is locked, and held, normal.
@@ -219,12 +238,10 @@ class Switch28(unittest.TestCase):
         line.tick()
         self.assertEqual(line.tick(occupied={"28"}, suggested={"28", "27"})
                          ["28"], "reverse")
-        # With no suggestion bit the wayside cannot tell which way a train
-        # on 27 is heading, so it takes it to be coming for the points
-        # from the one-way leg: normal.
+        # Gone on to 27, heading to 26: nothing throws it behind the train.
         self.assertEqual(
             line.tick(occupied={"27"}, suggested={"27", "26"})["28"],
-            "normal",
+            "reverse",
         )
 
 
@@ -301,7 +318,8 @@ class Maintenance(unittest.TestCase):
 
     def test_normal_unless_a_train_is_on_the_points(self) -> None:
         line = _Line()
-        line.tick(occupied={"78"}, suggested={"78", "77"})
+        line.tick(occupied={"78"}, suggested={"78", "77"},
+                  requests={"76": "reverse"})
         line.tick(occupied={"77"}, suggested={"77"})
         self.assertEqual(line.switches["76"], "reverse")
         # The dispatcher sets switch 12: maintenance mode, system-wide.
