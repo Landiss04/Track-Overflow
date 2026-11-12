@@ -18,9 +18,21 @@ MODULE_DIR = Path(__file__).resolve().parents[1]
 LAYOUT_PATHS = tuple(str(p) for p in sorted(MODULE_DIR.glob("*_line.json")))
 
 
-def make_model(tickets_per_minute: float = 0.0, seed: int = 0) -> TrackModel:
-    """Return a Track Model over every course line."""
-    return TrackModel(TrackConfig(LAYOUT_PATHS, tickets_per_minute, seed))
+def make_model(
+    tickets_per_minute: float = 0.0,
+    seed: int = 0,
+    demand_open: bool = True,
+) -> TrackModel:
+    """Return a Track Model over every course line.
+
+    Ticket demand starts on a line only once a train has been on it.
+    ``demand_open`` skips that wait for tests that are not about it;
+    pass False to see the model as freshly started.
+    """
+    model = TrackModel(TrackConfig(LAYOUT_PATHS, tickets_per_minute, seed))
+    if demand_open:
+        model._open_lines = {b.line for b in model.snapshot().blocks}
+    return model
 
 
 def report(
