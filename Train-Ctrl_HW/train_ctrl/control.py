@@ -65,6 +65,9 @@ class ControllerCore:
         self.last_vote: VitalVote | None = None
         # Inert until an engineer commissions the gains.
         self.armed = False
+        # Whether the last armed tick was in Manual: entering Manual
+        # starts the driver's setpoint from Automatic's target.
+        self._was_manual = False
         # Station boarding (REQUIREMENTS.md M6), in both modes. The
         # stop's phase: "" away from one; "opening" from arrival until
         # Door State reports the doors open; "dwell" while the dwell
@@ -191,12 +194,17 @@ class ControllerCore:
         if self.armed:
             # The commanded speed is the only cap, in both modes: the
             # controller cannot know the true limit (REQUIREMENTS.md
-            # M1). In Manual it lowers the driver's setpoint when it
-            # drops, rather than springing back when it rises again.
+            # M1). In Manual it caps the driver's setpoint each tick
+            # without lowering it, so a one-tick dip, such as a wayside
+            # halving a switch block's speed as the train nears it,
+            # does not hold the train at the dip (R53).
             if s.manual:
-                s.target_mps = min(s.target_mps, self.commanded_mps)
+                if not self._was_manual:
+                    s.setpoint_mps = s.target_mps
+                s.target_mps = min(s.setpoint_mps, self.commanded_mps)
             else:
                 s.target_mps = self.commanded_mps
+            self._was_manual = s.manual
         self._station_stop()
         if self.armed:
             error = s.target_mps - s.actual_mps
@@ -221,6 +229,10 @@ class ControllerCore:
         self._check_start()
         self.respond_to_failures()
         self.enforce_safety()
+        if s.manual and s.target_mps <= 0.0:
+            # A stop clears the setpoint: the driver sets a speed
+            # again after it (M6, M17).
+            s.setpoint_mps = 0.0
         self._service_asked.append(s.service_brake)
         self._emergency_sent.append(s.emergency_brake)
 
@@ -652,12 +664,13 @@ class ControllerCore:
     def set_target_mps(self, mps: float) -> None:
         """Set the driver's target (m/s), capped at the commanded speed.
 
-        The only cap (REQUIREMENTS.md M1); step() keeps it under the
-        commanded speed as that changes.
+        The only cap (REQUIREMENTS.md M1); step() caps the target at
+        the commanded speed as that changes, and keeps the setpoint.
         """
         s = self.state
         if s.manual and self.authority_blocks > 0 and not self.failed:
-            s.target_mps = max(0.0, min(mps, self.commanded_mps))
+            s.setpoint_mps = max(0.0, min(mps, self.commanded_mps))
+            s.target_mps = s.setpoint_mps
 
     def platform_on(self, side: str) -> bool:
         """Whether the last beacon put a platform on this side."""
