@@ -270,6 +270,49 @@ class BrakeFailureTest(unittest.TestCase):
                 self.step(emergency=True)
 
 
+class ManualDipTest(unittest.TestCase):
+    """In Manual a one-tick dip in the commanded speed is not kept.
+
+    The SW wayside's starter halves a switch block's speed for one tick
+    while a train approaches it (Green 28: 4 m/s with the train on 27,
+    8 m/s once it is on 28). The driver's setpoint is capped by the
+    commanded speed each tick, not lowered by it, so the target comes
+    back with it (REQUIREMENTS.md M1, R53). A stop still clears it.
+    """
+
+    def setUp(self) -> None:
+        self.fleet = TrainControllerFleet(echo_ticks=ECHO_TICKS)
+        self.core = self.fleet.add("G1", "Green")
+        arm(self.core)
+        self.core.state.manual = True
+        # The service brake each report answers, ECHO_TICKS late, so
+        # the brake applied at a stop is not read as a brake failure.
+        self.braked = [False] * ECHO_TICKS
+        self.step()
+        self.core.set_target_mps(8.0)
+
+    def step(self, commanded_mps: float = 8.0, authority: int = 4) -> float:
+        """Step at 8 m/s on one report; return the target after it."""
+        commands = self.fleet.step_all(TICK_S, {"G1": report(
+            speed_mps=8.0, commanded_mps=commanded_mps,
+            service=self.braked.pop(0), authority=authority)},
+            _START_S)["G1"]
+        self.braked.append(commands.service_brake)
+        return self.core.state.target_mps
+
+    def test_the_target_comes_back_after_a_dip(self) -> None:
+        targets = [self.step(commanded) for commanded in (8.0, 8.0, 4.0, 8.0)]
+        self.assertEqual(targets, [8.0, 8.0, 4.0, 8.0])
+
+    def test_a_commanded_stop_clears_the_setpoint(self) -> None:
+        targets = [self.step(commanded) for commanded in (8.0, 0.0, 8.0)]
+        self.assertEqual(targets, [8.0, 0.0, 0.0])
+
+    def test_no_authority_clears_the_setpoint(self) -> None:
+        targets = [self.step(authority=blocks) for blocks in (4, 0, 4)]
+        self.assertEqual(targets, [8.0, 0.0, 0.0])
+
+
 class ConsoleFleetTest(unittest.TestCase):
     """The console's own fleet reads reports as answering this step."""
 
