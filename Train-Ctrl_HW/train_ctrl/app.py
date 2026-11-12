@@ -119,6 +119,12 @@ def run(console: bool, bench: bool, check: bool = False,
     if check:
         # Must be set before QGuiApplication is constructed.
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        # The offscreen plugin has no font directory of its own on
+        # Windows; without one text is measured with no font and the
+        # cut-off scan fails on every label.
+        if sys.platform == "win32":
+            os.environ.setdefault("QT_QPA_FONTDIR", str(
+                Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"))
 
     warnings: list[str] = []
     if check:

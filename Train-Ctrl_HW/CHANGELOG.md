@@ -179,6 +179,9 @@ the Cab controls badge.
 - Venv at `Train-Ctrl_HW/.venv` (PySide6 6.11.2, PyInstaller 6.22.2), per truth
   `conventions/toolchain.md`. Not committed.
 - The console no longer needs `check.py` on the import path (2026-10-24).
+- Root `.gitignore` ignores `__pycache__/` and `*.pyc`, and the two
+  `ui/__pycache__` files are untracked; the root `requirements.txt` pins
+  `PySide6==6.11.2` (#41). Both as on `development` (2026-11-11).
 - `OPEN_ISSUES.md` and this file added; `REQUIREMENTS.md` and
   `HARNESS_INTEGRATION.md` (how the central harness drives the fleet)
   added 2026-10-16.
@@ -261,7 +264,8 @@ the Cab controls badge.
 | `f6cd8c4` | 11-01 | The bench settling just above its target noted under #43 (no rolling resistance in the toy plant). |
 | `872457f` | 11-01 | A target of 0 holds the train on the service brake at a stand with no power and the integrator cleared; it chattered every tick (R51). The start check tests at once on a rollback. |
 | `696d4df` | 11-01 | The *Stop the train* badge says why the service brake is on: BRAKING while slowing, HOLDING stopped at a target of 0, DRIVER BRAKE for the driver's press (was BRAKING for all three). |
-| (next) | 11-01 | Trains spawned on the Green Line are named G-# (was T-#); Red Line trains stay R-#. |
+| `7565542` | 11-01 | Trains spawned on the Green Line are named G-# (was T-#); Red Line trains stay R-#. |
+| (next) | 11-11 | `--check` gives the offscreen plugin the Windows font directory (`QT_QPA_FONTDIR`, unless set): with none, text was measured with no font and the scan reported 41 cut-off texts and a QML warning; now 0 and 0. `tests/test_harness_driven.py` skips only `ModuleProcessTest` when `utils.module_link` is missing (it is only on the harness branch); before, the import error stopped all 16 tests in the file, now 12 run. `ui/__pycache__` untracked; PySide6 pinned (#41). |
 
 ---
 

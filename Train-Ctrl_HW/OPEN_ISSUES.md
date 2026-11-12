@@ -119,9 +119,6 @@ against `claude/quirky-fermi-sickg4` `57e8847` and truth `84c7d44`
     only, run by the AI to test the module offline: it is never run with
     the central harness, and the integration does not ship it.
 
-41. **The root `requirements.txt` on this branch lacks the PySide6 pin**
-    that `development` has (`PySide6==6.11.2`).
-
 ## Notes
 
 Not issues: things to know.
@@ -178,7 +175,9 @@ One line each; the details are in `CHANGELOG.md`.
   button stands in for the Track Model (R13).
 - **18.** Automatic lights: built (M8, R20).
 - **20.** flake8 clean (`7a1f581`). The committed `ui/__pycache__` files
-  are left alone by decision.
+  are untracked and ignored, as on `development` (2026-11-11).
+- **41.** The root `requirements.txt` pins `PySide6==6.11.2`, as
+  `development` does (2026-11-11).
 - **22.** Harness-spawned trains never armed: decided, the engineer
   commissions every train (M9).
 - **24.** The Train Model's speed limit: no longer sent (2026-10-28, on

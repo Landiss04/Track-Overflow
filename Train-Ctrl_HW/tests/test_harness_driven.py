@@ -31,8 +31,15 @@ from train_ctrl import (  # noqa: E402
     TrainControllerFleet,
 )
 from train_ctrl.control import ControllerCore  # noqa: E402
-from train_ctrl.module_process import TrainControllerProcess  # noqa: E402
-from utils.module_link import TickRejectedError  # noqa: E402
+
+# utils/module_link is only on the harness branch; without it only
+# ModuleProcessTest is skipped, not the whole file.
+try:
+    from train_ctrl.module_process import TrainControllerProcess
+    from utils.module_link import TickRejectedError
+    HAS_MODULE_LINK = True
+except ModuleNotFoundError:
+    HAS_MODULE_LINK = False
 
 _APP = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
 
@@ -285,6 +292,8 @@ class ConsoleFleetTest(unittest.TestCase):
         self.assertTrue(core.state.emergency_brake)
 
 
+@unittest.skipUnless(HAS_MODULE_LINK,
+                     "utils.module_link is only on the harness branch")
 class ModuleProcessTest(unittest.TestCase):
     """The process steps the fleet on the harness's roster."""
 
