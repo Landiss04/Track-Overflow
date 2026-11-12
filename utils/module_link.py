@@ -19,8 +19,9 @@ the link is lost, nothing more is sent.
 
 Messages are defined in ``utils.harness_protocol``.
 
-GUI modules reopen their main windows on ``showRequested`` through
-the shared ``utils.module_window`` policy. Core-only stubs ignore it.
+GUI modules reopen their main windows on ``showRequested``, and save
+an image of them on ``snapshotRequested``, through the shared
+``utils.module_window`` policy. Core-only stubs ignore both.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from utils.harness_protocol import (
     QUIT,
     CLOCK_STATE,
     SHOW,
+    SNAPSHOT,
     STEP,
     LineBuffer,
     ProtocolError,
@@ -72,8 +74,11 @@ class ModuleLink(QObject):
     quitRequested = Signal()
     #: The harness clock changed; host relays use this for recovery.
     clockStateChanged = Signal(object)
-    #: The harness asked to reopen this module's window.
-    showRequested = Signal()
+    #: The harness asked to reopen this module's window; True for
+    #: full screen.
+    showRequested = Signal(bool)
+    #: The harness asked for an image of this module's window at a path.
+    snapshotRequested = Signal(str)
     #: The harness could not be reached, or the connection closed.
     harnessLost = Signal()
 
@@ -100,6 +105,7 @@ class ModuleLink(QObject):
         """
         super().__init__(parent)
         self.showRequested.connect(_show_module_windows)
+        self.snapshotRequested.connect(_save_module_snapshot)
         self._module = module
         self._server_name = server_name
         self._step = step
@@ -252,7 +258,8 @@ class ModuleLink(QObject):
             self._handle(message)
 
     def _handle(self, message: Mapping[str, Any]) -> None:
-        # SHOW has no reply and leaves the stepping state alone.
+        # SHOW and SNAPSHOT have no reply and leave the stepping state
+        # alone.
         op = message["op"]
         if op == STEP:
             self._answer_step(message)
@@ -264,7 +271,9 @@ class ModuleLink(QObject):
         elif op == QUIT:
             self.quitRequested.emit()
         elif op == SHOW:
-            self.showRequested.emit()
+            self.showRequested.emit(message.get("fullscreen", False))
+        elif op == SNAPSHOT:
+            self.snapshotRequested.emit(message["path"])
         else:
             self._complain(f"ignored an unexpected {op} from the harness")
 
@@ -331,11 +340,20 @@ def _sendable(reason: str) -> str:
     return reason.encode("utf-8", "backslashreplace").decode("utf-8")
 
 
-def _show_module_windows() -> None:
+def _show_module_windows(fullscreen: bool) -> None:
     # GUI modules share one window policy. Core-only stubs do nothing,
     # and do not import GUI bindings just to ignore a SHOW.
     app = QCoreApplication.instance()
     if app is not None and app.inherits("QGuiApplication"):
         from utils.module_window import show_module_windows
 
-        show_module_windows()
+        show_module_windows(fullscreen)
+
+
+def _save_module_snapshot(path: str) -> None:
+    # As for SHOW: core-only stubs have no window to save.
+    app = QCoreApplication.instance()
+    if app is not None and app.inherits("QGuiApplication"):
+        from utils.module_window import save_module_snapshot
+
+        save_module_snapshot(path)

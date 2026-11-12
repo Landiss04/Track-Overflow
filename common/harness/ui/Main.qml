@@ -114,6 +114,16 @@ Shared.ScaledWindow {
                                 + backend.snapshot.total + " READY"
                             variant: backend.snapshot.ready
                                 === backend.snapshot.total ? "ok" : "warning"
+                        },
+                        Shared.AppButton {
+                            objectName: "tiledViewButton"
+                            text: "Tiled view"
+                            size: "small"
+                            Accessible.name: "Show every module window tiled"
+                            onClicked: {
+                                tileWall.showMaximized()
+                                tileWall.requestActivate()
+                            }
                         }
                     ]
                     Shared.HelperText {
@@ -347,6 +357,19 @@ Shared.ScaledWindow {
                 }
             }
         }
+    }
+
+    TileWall {
+        id: tileWall
+        harnessWindow: window
+    }
+
+    // The tiled view can show this window full screen, as it does the
+    // modules' windows; Escape returns it to normal.
+    Shortcut {
+        sequence: "Esc"
+        enabled: window.visibility === Window.FullScreen
+        onActivated: window.showNormal()
     }
 
     Dialog {

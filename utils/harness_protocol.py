@@ -24,7 +24,10 @@ Harness to module:
   "sim_time_s": 18001.2, "inputs": {...}}``. ``sim_time_s`` is the
   unwrapped simulation time at the end of the step (D017).
 - ``QUIT``: end the process.
-- ``SHOW``: reopen the module window; no reply (additive in v1).
+- ``SHOW``: reopen the module window; no reply (additive in v1). An
+  optional boolean ``fullscreen`` shows it full screen instead.
+- ``SNAPSHOT``: save an image of the module window to the file
+  ``path``; no reply (additive in v1).
 - ``CLOCK_STATE``: actual harness pause/speed state for HW hosts, initially
   and on transitions, including between steps (additive in v1). Carries
   id 0 and state with boolean clock_paused and clock_speedup.
@@ -57,6 +60,7 @@ __all__ = [
     "REJECTED",
     "STATE",
     "SHOW",
+    "SNAPSHOT",
     "STEP",
     "CLOCK_STATE",
     "LineBuffer",
@@ -68,6 +72,7 @@ __all__ = [
     "rejected_message",
     "state_message",
     "show_message",
+    "snapshot_message",
     "step_message",
     "validate",
 ]
@@ -100,9 +105,10 @@ OUTPUTS = "OUTPUTS"
 REJECTED = "REJECTED"
 STATE = "STATE"
 SHOW = "SHOW"
+SNAPSHOT = "SNAPSHOT"
 CLOCK_STATE = "CLOCK_STATE"
 
-HARNESS_TO_MODULE = frozenset({STEP, QUIT, SHOW, CLOCK_STATE})
+HARNESS_TO_MODULE = frozenset({STEP, QUIT, SHOW, SNAPSHOT, CLOCK_STATE})
 MODULE_TO_HARNESS = frozenset({READY, OUTPUTS, REJECTED, STATE})
 
 # Fields each message must carry beyond op, id and tick, with a check
@@ -121,6 +127,7 @@ _REQUIRED_FIELDS: dict[str, dict[str, str]] = {
     },
     QUIT: {},
     SHOW: {},
+    SNAPSHOT: {"path": _STRING},
     READY: {"module": _STRING, "protocol": _INTEGER},
     OUTPUTS: {"outputs": _OBJECT},
     REJECTED: {"reason": _STRING},
@@ -250,6 +257,8 @@ def validate(message: Mapping[str, Any]) -> None:
             raise ProtocolError(
                 "CLOCK_STATE needs id 0 and boolean clock_paused/clock_speedup"
             )
+    if op == SHOW and not isinstance(message.get("fullscreen", False), bool):
+        raise ProtocolError("SHOW fullscreen must be a boolean")
 
 
 def step_message(
@@ -275,9 +284,21 @@ def quit_message(tick: int) -> dict[str, Any]:
     return {"op": QUIT, "id": 0, "tick": tick}
 
 
-def show_message(tick: int) -> dict[str, Any]:
-    """Return a ``SHOW`` without requesting a reply."""
-    return {"op": SHOW, "id": 0, "tick": tick}
+def show_message(tick: int, fullscreen: bool = False) -> dict[str, Any]:
+    """Return a ``SHOW`` without requesting a reply.
+
+    ``fullscreen`` is sent only when set, so a plain ``SHOW`` is
+    unchanged on the wire.
+    """
+    message = {"op": SHOW, "id": 0, "tick": tick}
+    if fullscreen:
+        message["fullscreen"] = True
+    return message
+
+
+def snapshot_message(tick: int, path: str) -> dict[str, Any]:
+    """Return a ``SNAPSHOT`` asking for the window image at ``path``."""
+    return {"op": SNAPSHOT, "id": 0, "tick": tick, "path": path}
 
 
 def ready_message(module: str) -> dict[str, Any]:

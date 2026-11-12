@@ -14,6 +14,7 @@ from common.harness.console import HarnessConsole
 from ui.app_icon import install_app_icon
 from ui.aspect_lock import install_window_scaling
 from ui.theme import build_theme
+from utils.module_window import save_window_snapshot
 
 
 def resource_path(relative: str) -> Path:
@@ -52,6 +53,9 @@ class HarnessWindow:
         if not isinstance(self.root, QQuickWindow):
             raise RuntimeError("The harness QML root must be a window")
         self.scaling = install_window_scaling(self.root)
+        console.harnessSnapshotRequested.connect(
+            lambda path: save_window_snapshot(self.root, path)
+        )
 
     def close(self) -> None:
         """Destroy QML while its Python context objects still exist."""

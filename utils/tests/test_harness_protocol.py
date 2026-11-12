@@ -17,6 +17,7 @@ from utils.harness_protocol import (
     REJECTED,
     STATE,
     SHOW,
+    SNAPSHOT,
     STEP,
     LineBuffer,
     ProtocolError,
@@ -28,6 +29,7 @@ from utils.harness_protocol import (
     rejected_message,
     state_message,
     show_message,
+    snapshot_message,
     step_message,
 )
 
@@ -40,6 +42,8 @@ class RoundTripTest(unittest.TestCase):
             step_message(41, 12, 0.1, 18001.2, {"ctc-office": {"tick": 11}}),
             quit_message(12),
             show_message(12),
+            show_message(12, fullscreen=True),
+            snapshot_message(12, "/tmp/tiles/ctc-office.png"),
             ready_message("track-model"),
             outputs_message(41, 12, {"clock_paused": False}),
             rejected_message(41, 12, "grade out of range"),
@@ -57,7 +61,8 @@ class RoundTripTest(unittest.TestCase):
         self.assertEqual(line.count(b"\n"), 1)
 
     def test_ops_are_capitals(self) -> None:
-        for op in (STEP, QUIT, SHOW, READY, OUTPUTS, REJECTED, STATE):
+        for op in (STEP, QUIT, SHOW, SNAPSHOT, READY, OUTPUTS, REJECTED,
+                   STATE):
             self.assertEqual(op, op.upper())
 
     def test_ready_carries_the_protocol_version(self) -> None:
@@ -80,6 +85,23 @@ class ClockStateTest(unittest.TestCase):
             encode({"op": CLOCK_STATE, "id": 9, "tick": 1,
                     "state": {"clock_paused": True,
                               "clock_speedup": False}})
+
+
+class WindowRequestTest(unittest.TestCase):
+    """SHOW's full-screen flag and SNAPSHOT's path are checked."""
+
+    def test_plain_show_is_unchanged_on_the_wire(self) -> None:
+        self.assertEqual(show_message(3), {"op": SHOW, "id": 0, "tick": 3})
+
+    def test_fullscreen_must_be_a_boolean(self) -> None:
+        with self.assertRaises(ProtocolError):
+            decode(b'{"op": "SHOW", "id": 0, "tick": 1, "fullscreen": 1}')
+
+    def test_snapshot_needs_a_path(self) -> None:
+        for line in (b'{"op": "SNAPSHOT", "id": 0, "tick": 1}',
+                     b'{"op": "SNAPSHOT", "id": 0, "tick": 1, "path": ""}'):
+            with self.subTest(line=line), self.assertRaises(ProtocolError):
+                decode(line)
 
 
 class ValidationTest(unittest.TestCase):

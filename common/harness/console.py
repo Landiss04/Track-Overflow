@@ -7,6 +7,8 @@ bounded Python data, so the scene never updates at the tick rate.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import time
 from collections import deque
 from collections.abc import Mapping, Sequence
@@ -19,6 +21,7 @@ from PySide6.QtCore import (
     Property,
     Qt,
     QTimer,
+    QUrl,
     Signal,
     Slot,
 )
@@ -32,6 +35,8 @@ RECENT_INTERVAL_S = 5.0
 MAX_EVENTS = 3000
 MAX_OUTPUT_CHARS = 8000
 EMPTY = "—"
+#: The harness window's own tile in the tiled view.
+HARNESS_TILE = "harness"
 WINDOW_TITLE = "Track Overflow — Central Harness"
 
 MODULE_LABELS = {
@@ -128,6 +133,8 @@ class HarnessConsole(QObject):
     selectionChanged = Signal()
     outputChanged = Signal()
     endRunRequested = Signal()
+    #: The harness window should save its tiled-view image at a path.
+    harnessSnapshotRequested = Signal(str)
 
     def __init__(
         self, harness: Harness, parent: QObject | None = None
@@ -144,6 +151,11 @@ class HarnessConsole(QObject):
         self._output = EMPTY
         self._output_module = ""
         self._next_output_s = 0.0
+        # Tiled-view snapshots for this run; removed when the console
+        # is collected or the process exits.
+        self._snapshot_dir = tempfile.TemporaryDirectory(
+            prefix="track-overflow-tiles-"
+        )
         harness.eventLogged.connect(self._collect_event)
         harness.tickCompleted.connect(self._collect_tick)
         self._timer = QTimer(self)
@@ -195,6 +207,33 @@ class HarnessConsole(QObject):
         """Forward a window request through the harness."""
         return self._harness.show_window(module)
 
+    @Slot(str, result=bool)
+    def show_full_screen(self, module: str) -> bool:
+        """Ask a module to show its window full screen."""
+        return self._harness.show_window(module, fullscreen=True)
+
+    @Slot()
+    def request_snapshots(self) -> None:
+        """Ask the harness window and every shown module for an image."""
+        # ponytail: file-based frames, fine at about 2 fps; shared
+        # memory if smoother video is ever needed.
+        self.harnessSnapshotRequested.emit(self._snapshot_path(HARNESS_TILE))
+        for row in self._modules:
+            if row["can_show"]:
+                self._harness.snapshot_window(
+                    row["name"], self._snapshot_path(row["name"])
+                )
+
+    def _snapshot_path(self, module: str) -> str:
+        # One image per module in the run's snapshot folder.
+        return os.path.join(self._snapshot_dir.name, f"{module}.png")
+
+    def _snapshot_url(self, module: str) -> str:
+        # Empty until the first image is saved.
+        path = self._snapshot_path(module)
+        return QUrl.fromLocalFile(path).toString() if os.path.exists(
+            path) else ""
+
     @Slot()
     def end_run(self) -> None:
         """Request loop exit after QML has confirmed ending the run."""
@@ -215,6 +254,7 @@ class HarnessConsole(QObject):
             row["pid_text"] = str(row["pid"]) if row["pid"] else EMPTY
             row["exit_text"] = row["exit"] or EMPTY
             row["can_show"] = row["state"] in ("READY", "LATE")
+            row["snapshot_url"] = self._snapshot_url(row["name"])
             row["variant"] = {
                 "READY": "ok", "LATE": "warning",
                 "DOWN": "fault", "EXITED": "fault",
@@ -249,6 +289,7 @@ class HarnessConsole(QObject):
             ),
             "slipped": str(self._harness.dropped_ticks),
             "log_path": self._harness.log_path,
+            "harness_snapshot_url": self._snapshot_url(HARNESS_TILE),
         }
         if snapshot != self._snapshot:
             self._snapshot = snapshot

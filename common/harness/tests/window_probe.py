@@ -9,6 +9,9 @@ import unittest
 from pathlib import Path
 
 from PySide6.QtCore import (
+    Q_ARG,
+    Q_RETURN_ARG,
+    QMetaObject,
     QEventLoop,
     QObject,
     Qt,
@@ -43,6 +46,17 @@ def wait_until(condition, timeout_s: float = 15.0) -> bool:
         _APP.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 20)
         time.sleep(0.001)
     return True
+
+
+def find_item(item, name: str):
+    """Return the first item named ``name`` in a visual item tree."""
+    if item.objectName() == name:
+        return item
+    for child in item.childItems():
+        found = find_item(child, name)
+        if found is not None:
+            return found
+    return None
 
 
 class WindowProbe(unittest.TestCase):
@@ -114,6 +128,32 @@ class WindowProbe(unittest.TestCase):
                     self.assertEqual(console.snapshot["state"], "PAUSED")
                     self.assertIn("Track Model", console.snapshot["hold"])
                     self.assertTrue(console.show_window(CTC_OFFICE))
+                    self.assertTrue(console.show_full_screen(CTC_OFFICE))
+                    tiled = window.root.findChild(
+                        QObject, "tiledViewButton"
+                    )
+                    wall = window.root.findChild(QObject, "tileWall")
+                    self.assertFalse(wall.isVisible())
+                    tiled.forceActiveFocus()
+                    QTest.keyClick(window.root, Qt.Key.Key_Space)
+                    self.assertTrue(wait_until(wall.isVisible))
+                    # The harness is the first tile, grabbed in-process.
+                    harness_image = find_item(find_item(
+                        wall.contentItem(), "tile-harness"
+                    ), "tileImage")
+                    self.assertTrue(wait_until(
+                        lambda: harness_image.implicitWidth() > 0
+                    ))
+                    # The chosen column count gives the widest tiles.
+                    widths = [QMetaObject.invokeMethod(
+                        wall, "tileWidthFor", Q_RETURN_ARG("QVariant"),
+                        Q_ARG("QVariant", count),
+                    ) for count in range(1, len(console.modules) + 2)]
+                    self.assertGreater(wall.property("tileWidth"), 0)
+                    self.assertEqual(wall.property("tileWidth"), max(widths))
+                    wall.hide()
+                    window.root.requestActivate()
+                    self.assertTrue(wait_until(window.root.isActive))
                     self.assertTrue(wait_until(lambda: any(
                         r["name"] == TRAIN_CONTROLLER_SW
                         and r["state"] == "EXITED"
