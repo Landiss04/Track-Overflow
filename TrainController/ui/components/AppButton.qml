@@ -42,6 +42,7 @@ Button {
     implicitWidth: label.implicitWidth + 2 * hPadding
     leftPadding: hPadding
     rightPadding: hPadding
+    focusPolicy: Qt.StrongFocus
     hoverEnabled: true
     opacity: enabled ? 1.0 : 0.42
 
@@ -55,10 +56,10 @@ Button {
 
         Rectangle {
             anchors.fill: parent
-            anchors.margins: -2
+            anchors.margins: -4
             visible: control.visualFocus
             color: "transparent"
-            radius: theme.radius_md + 2
+            radius: theme.radius_md + 4
             border.width: 2
             border.color: theme.focus_ring
         }
@@ -77,12 +78,6 @@ Button {
         elide: Text.ElideRight
     }
 
-    // Tooltip rides the button's own hover state, so it never blocks clicks.
-    onHoveredChanged: {
-        if (control.tooltip === "") return
-        if (control.hovered)
-            ToolTip.show(control.tooltip)
-        else
-            ToolTip.hide()
-    }
+    ToolTip.visible: hovered && tooltip !== ""
+    ToolTip.text: tooltip
 }

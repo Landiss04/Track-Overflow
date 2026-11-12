@@ -207,7 +207,7 @@ def test_a_test_ui_that_takes_over_starts_a_fresh_train(served):
     served_outputs = outputs_of(taker.messages[-1])
     assert served_outputs.controller.actual_speed_mps == 0
     assert served_outputs.track.block_id == ""
-    assert state.snapshot["clock"] == "00:00:00"
+    assert state.snapshot["clock"] == "05:00:00"
     assert not state.isFailed("engine_failure")
 
 
@@ -484,7 +484,7 @@ def test_a_test_ui_that_reconnects_starts_its_stand_ins_fresh(app):
         harness.setInput("temperature_setpoint", 25.0)
         model = start()
         wait_for(lambda: link.connected, timeout=15)
-        assert harness.tick == 0 and harness.elapsed == "00:00:00"
+        assert harness.tick == 0 and harness.elapsed == "05:00:00"
         assert harness.inputError == ""
         assert harness.pendingInputs == {"temperature_setpoint": True}
         assert harness.inputValues["block"] == "1"

@@ -77,6 +77,14 @@ class CtcEdge(unittest.TestCase):
         self.assertEqual(
             mapped.switch_commands, {BlockKey("Green", "12"): "reverse"})
 
+    def test_a_route_request_is_not_a_switch_command(self) -> None:
+        mapped = ctc_to_track_controller(TrackControllerOutputs(
+            route_requests=(SwitchCommand("Green", "76", "normal"),),
+        ))
+        self.assertEqual(
+            mapped.route_requests, {BlockKey("Green", "76"): "normal"})
+        self.assertEqual(mapped.switch_commands, {})
+
     def test_nothing_sent_maps_to_nothing(self) -> None:
         mapped = ctc_to_track_controller(TrackControllerOutputs())
         self.assertEqual(mapped.suggestions, {})

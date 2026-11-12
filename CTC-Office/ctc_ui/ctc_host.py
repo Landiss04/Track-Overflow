@@ -28,6 +28,7 @@ shows only as occupied.
 from __future__ import annotations
 
 import dataclasses
+import math
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
@@ -47,8 +48,14 @@ from ctc.interface import (
     TrainSuggestion,
     WaysideStatus,
 )
-from ctc.model import CtcError, StubCtcOffice, ready_lines
+from ctc.model import (
+    SUGGESTED_SPEED_MARGIN_MPS,
+    CtcError,
+    StubCtcOffice,
+    ready_lines,
+)
 from ctc.schedule import load_schedule
+from ctc.scheduler import SIMULATION_START_S
 from ctc.socket_link import CtcLinkServer
 from ctc.track_layout import Line, load_layout, station_lines
 from ctc_ui.display import (
@@ -149,6 +156,12 @@ def _authority_limit(limit: TrainAuthority) -> str:
 
 #: Blocks within authority shown as chips in the Selected train panel.
 ROUTE_CHIPS = 8
+
+#: The Selected train panel's arrival once the train is at its
+#: destination.
+ARRIVED = "Arrived"
+
+_KMH_PER_MPS = 3.6
 
 #: Hours of ticket sales the throughput history shows.
 HISTORY_HOURS = 12
@@ -482,6 +495,51 @@ class CtcHost(QObject):
         if line is None:
             return {}
         return self._train_row(train_id, line, snap)
+
+    @Property(int, notify=clockChanged)
+    def clockSecond(self) -> int:  # noqa: N802
+        """The simulated second last shown: changes as the clock runs,
+        for what moves with time alone (``arrivalEstimate``)."""
+        return self._last_second
+
+    @Slot(str, result="QVariantMap")
+    def arrivalEstimate(self, train_id: str) -> dict[str, str]:  # noqa
+        """When one train should reach its destination, from where it
+        is now: ``time`` (``HH:MM``, or "Arrived") and ``deviation``
+        (whole minutes after its requested arrival, signed; "" with
+        none). Empty for a train not on the track or with no route.
+
+        The time now plus the run over the rest of its route at the
+        speed the CTC suggests (each block's limit less the margin),
+        from the middle of the block it is in. A train that waits makes
+        no progress, so its estimate moves on with the clock and is
+        never in the past.
+        """
+        snap = self._module.snapshot()
+        limit = {a.train_id: a for a in snap.authorities}.get(train_id)
+        layout_line = self._layout.get(limit.line) if limit else None
+        if limit is None or not limit.route or layout_line is None:
+            return {}
+        run_s = 0.0
+        for i, block_id in enumerate(limit.route):
+            block = layout_line.block(block_id)
+            if block is None:
+                return {}
+            speed_mps = (block.speed_limit_kmh / _KMH_PER_MPS
+                         - SUGGESTED_SPEED_MARGIN_MPS)
+            if speed_mps > 0:
+                run_s += block.length_m / speed_mps * (1.0 if i else 0.5)
+        there = len(limit.route) == 1
+        estimate_s = SIMULATION_START_S + snap.elapsed_s + run_s
+        order = self._orders(snap).get(train_id)
+        due_s = order.arrival_s if order else None
+        return {
+            # To the minute, rounded up: it is an estimate.
+            "time": (ARRIVED if there else format_time_of_day(
+                math.ceil(estimate_s / 60) * 60)),
+            "deviation": ("" if due_s is None or there
+                          else f"{round((estimate_s - due_s) / 60):+d}"),
+        }
 
     def _authority(self, train_id: str) -> TrainAuthority | None:
         snap = self._module.snapshot()

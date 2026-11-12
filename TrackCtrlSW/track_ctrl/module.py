@@ -332,6 +332,11 @@ class SwTrackController:
                 raise InvalidInputError(
                     f"switch command for {key.label} is not a position"
                 )
+        for key, position in inputs.ctc.route_requests.items():
+            if position not in SWITCH_POSITIONS:
+                raise InvalidInputError(
+                    f"route request for {key.label} is not a position"
+                )
         for key, position in inputs.track_model.switch_positions.items():
             if position not in SWITCH_POSITIONS:
                 raise InvalidInputError(
@@ -370,12 +375,32 @@ class SwTrackController:
                     suggestion.authority_blocks,
                 )
 
+        # Other waysides' blocks this one is told about over the link
+        # between track controllers: the same Track Model occupancy.
+        for block_id in controller.peer_occupancy:
+            controller.set_peer_occupancy(
+                block_id, controller.key(block_id) in readback.occupied_blocks
+            )
+        for wayside_id in controller.peer_counts:
+            source = self._waysides[wayside_id]
+            controller.set_peer_count(wayside_id, sum(
+                source.key(block.block_id) in readback.occupied_blocks
+                for block in source.blocks
+            ))
+
         for switch_id in controller.config.switches:
             key = controller.key(switch_id)
             command = ctc.switch_commands.get(key)
             controller.set_ctc_switch_command(
                 switch_id,
                 None if command is None else command == "reverse",
+            )
+            # A route request is not a command: it does not set
+            # maintenance mode and it reaches only the program.
+            request = ctc.route_requests.get(key)
+            controller.set_route_request(
+                switch_id,
+                None if request is None else request == "reverse",
             )
             # Where the machine actually is: the vital code compares it
             # with the command to tell a switch that is still moving.

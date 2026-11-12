@@ -110,7 +110,8 @@ HARNESS = "harness"
 
 # A Track Controller's inputs before its producers have replied.
 _NO_CTC: Mapping[str, Any] = {
-    "closed_blocks": [], "switch_commands": [], "suggestions": [],
+    "closed_blocks": [], "switch_commands": [], "route_requests": [],
+    "suggestions": [],
 }
 _NO_TRACK_MODEL: Mapping[str, Any] = {
     "occupied_blocks": [], "switch_positions": [], "crossings_active": [],

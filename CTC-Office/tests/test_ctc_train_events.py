@@ -161,6 +161,35 @@ class ReleaseTest(unittest.TestCase):
         ctc.set_automatic_mode(True)
         self.assertEqual(_released(_step(ctc)), [("G1", "Green")])
 
+    def test_runs_held_past_their_time_leave_a_headway_apart(self) -> None:
+        # G1 and G2 are due 180 s apart. Both are kept in the yard past
+        # their times (63 reads occupied); once it clears they still
+        # leave 180 s apart, not one straight after the other.
+        runs = tuple(t for t in SCHEDULE.trains
+                     if t.line == "Green" and t.train_id in ("1", "2"))
+        ctc = ready_office()
+        ctc.load_schedule(Schedule("G1 and G2", runs))
+        ctc.set_automatic_mode(True)
+        ctc.stage_inputs(reports(occupied=[("Green", "63")]))
+        self.assertEqual(_released(_step(ctc, "63")), [])
+        self.assertEqual(_released(_step(ctc, "63", dt=400.0)), [])
+        self.assertEqual(_released(_step(ctc)), [("G1", "Green")])
+        # G1 is out and gone (lost here, to leave the track clear).
+        _step(ctc, "63")
+        self.assertEqual(_released(_step(ctc)), [])
+        self.assertEqual(ctc.snapshot().lost_trains, ("G1",))
+        self.assertEqual(_released(_step(ctc, dt=100.0)), [])
+        self.assertEqual(_released(_step(ctc, dt=70.0)), [])
+        self.assertEqual(_released(_step(ctc, dt=10.0)), [("G2", "Green")])
+
+    def test_manual_trains_keep_no_headway(self) -> None:
+        ctc = ready_office()
+        ctc.dispatch("T1", "Green", "70")
+        ctc.dispatch("T2", "Green", "70")
+        self.assertEqual(_released(_step(ctc)), [("T1", "Green")])
+        _step(ctc, "63")
+        self.assertEqual(_released(_step(ctc)), [("T2", "Green")])
+
     def test_one_per_line_at_a_time_most_behind_schedule_first(
             self) -> None:
         ctc = ready_office()

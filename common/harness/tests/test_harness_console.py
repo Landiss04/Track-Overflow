@@ -155,6 +155,48 @@ class ConsoleStateTest(unittest.TestCase):
             self.console.refresh()
             self.assertEqual(self.console.snapshot["mean_ms"], "—")
 
+    def test_speed_shows_the_request_and_slipped_the_total(self) -> None:
+        """Keep the requested speed and the total dropped on show."""
+        self.harness.clock.set_speed(10)
+        with patch.object(
+            Harness, "dropped_ticks", new_callable=PropertyMock
+        ) as dropped:
+            dropped.return_value = 1234
+            self.console.refresh()
+        self.assertEqual(self.console.snapshot["speed"], "10x")
+        self.assertEqual(self.console.snapshot["slipped"], "1234")
+
+    def test_actual_speed_and_lag_are_shown(self) -> None:
+        """Show the speed achieved and how far behind the run is."""
+        self.console.refresh()
+        self.assertEqual(self.console.snapshot["actual"], "—")
+        self.assertEqual(self.console.snapshot["behind_s"], "0.00")
+        with patch.object(
+            Harness, "actual_speed", new_callable=PropertyMock
+        ) as actual, patch.object(
+            Harness, "lag_s", new_callable=PropertyMock
+        ) as lag:
+            actual.return_value = 6.27
+            lag.return_value = 0.4321
+            self.console.refresh()
+        self.assertEqual(self.console.snapshot["actual"], "6.3x")
+        self.assertEqual(self.console.snapshot["behind_s"], "0.43")
+
+    def test_slow_module_is_a_warning_and_can_be_shown(self) -> None:
+        """Show SLOW as a warning, like LATE, while the clock runs."""
+        rows = [
+            {"name": TRAIN_MODEL, "state": "SLOW", "pid": 7, "exit": None}
+        ]
+        with patch.object(
+            Harness, "module_statuses", new_callable=PropertyMock
+        ) as statuses:
+            statuses.return_value = tuple(rows)
+            self.console.refresh()
+        row = self.console.modules[0]
+        self.assertEqual(row["state"], "SLOW")
+        self.assertEqual(row["variant"], "warning")
+        self.assertTrue(row["can_show"])
+
     def test_source_and_frozen_resource_paths(self) -> None:
         """Resolve QML through the same helper in both builds."""
         self.assertTrue(resource_path("common/harness/ui/Main.qml").is_file())

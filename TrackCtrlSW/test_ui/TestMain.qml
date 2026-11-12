@@ -174,9 +174,7 @@ ApplicationWindow {
 
                 MonoText {
                     text: stimulus.clock
-                    color: theme.text_primary
-                    font.pixelSize: theme.size_h3
-                    font.weight: theme.weight_bold
+                    color: theme.text_muted
                 }
             }
         }

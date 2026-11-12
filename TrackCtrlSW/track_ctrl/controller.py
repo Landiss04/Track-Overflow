@@ -36,7 +36,13 @@ from typing import Iterable, Mapping
 from track_ctrl import vital
 from track_ctrl.display import format_mph
 from track_ctrl.interface import BlockKey
-from track_ctrl.layout import YARD, Block, ControllerConfig
+from track_ctrl.layout import (
+    YARD,
+    Block,
+    ControllerConfig,
+    CountGuard,
+    LoopGuard,
+)
 from track_ctrl.plc import (
     SEVERITY_ERROR,
     SEVERITY_WARNING,
@@ -111,6 +117,18 @@ class TrackController:
         self.closed: dict[str, bool] = {
             block.block_id: False for block in blocks
         }
+        #: Occupancy of other waysides' blocks, told over the link between
+        #: track controllers (``ControllerConfig.peer_blocks``). Read by a
+        #: program as ``PEER_OCC_n``.
+        self.peer_occupancy: dict[str, bool] = {
+            block_id: False for block_id in config.peer_blocks
+        }
+        #: How many blocks other waysides report occupied, by wayside,
+        #: over the same link (``ControllerConfig.count_guards``). Read by
+        #: a program as the bits ``PEER_CNT_<wayside>_b``.
+        self.peer_counts: dict[str, int] = {
+            guard.source: 0 for guard in config.count_guards
+        }
         #: The CTC Office's suggestion for each block, as ``(speed in
         #: m/s, authority in blocks)``. A block that is not listed sends
         #: nothing, and gets no track circuit.
@@ -125,6 +143,11 @@ class TrackController:
         #: Switch id -> position the CTC Office commands, True for
         #: reverse. Sent only in maintenance mode.
         self.ctc_switch_commands: dict[str, bool] = {}
+        #: Switch id -> position a routed train needs, True for reverse.
+        #: Not a command and not maintenance: the program reads it
+        #: (``REQSW_s``, ``REQREV_s``). Sent in any mode, so ending
+        #: maintenance does not clear it.
+        self.route_requests: dict[str, bool] = {}
         self.manual_switches: dict[str, bool] = {}
 
         # --- the output state: what the last scan drove --------------------
@@ -178,10 +201,16 @@ class TrackController:
             names.add(f"OCC_{block.block_id}")
             names.add(f"CLOSED_{block.block_id}")
             names.add(f"FAIL_{block.block_id}")
+        for block_id in self.config.peer_blocks:
+            names.add(f"PEER_OCC_{block_id}")
+        for guard in self.config.count_guards:
+            names.update(_count_bits(guard))
         for switch_id in self.config.switches:
             names.add(f"SWREV_{switch_id}")
             names.add(f"CTCSW_{switch_id}")
             names.add(f"CTCREV_{switch_id}")
+            names.add(f"REQSW_{switch_id}")
+            names.add(f"REQREV_{switch_id}")
         return frozenset(names)
 
     def output_names(self) -> tuple[str, ...]:
@@ -349,12 +378,21 @@ class TrackController:
                 image[vital.speed_bit(block.block_id, bit)] = bool(
                     (speed >> bit) & 1
                 )
+        for block_id, occupied in self.peer_occupancy.items():
+            image[f"PEER_OCC_{block_id}"] = occupied
+        for guard in self.config.count_guards:
+            count = min(self.peer_counts.get(guard.source, 0),
+                        (1 << guard.width) - 1)
+            for bit, name in enumerate(_count_bits(guard)):
+                image[name] = bool((count >> bit) & 1)
         for sid in self.config.switches:
             image[f"SWREV_{sid}"] = self.switch_reverse.get(sid, False)
             image[f"CTCSW_{sid}"] = sid in self.ctc_switch_commands
             image[f"CTCREV_{sid}"] = self.ctc_switch_commands.get(
                 sid, False
             )
+            image[f"REQSW_{sid}"] = sid in self.route_requests
+            image[f"REQREV_{sid}"] = self.route_requests.get(sid, False)
             image[f"HAND_{sid}"] = sid in self.manual_switches
             image[f"HANDREV_{sid}"] = self.manual_switches.get(sid, False)
         image["MAINT"] = self.maintenance
@@ -437,9 +475,11 @@ class TrackController:
         copy's output attributes.
         """
         candidate = copy.copy(self)
-        for name in ("occupancy", "closed", "suggestions", "trains",
+        for name in ("occupancy", "peer_occupancy", "peer_counts", "closed",
+                     "suggestions",
+                     "trains",
                      "switch_reverse", "ctc_switch_commands",
-                     "manual_switches"):
+                     "route_requests", "manual_switches"):
             setattr(candidate, name, dict(getattr(self, name)))
         candidate.history = list(self.history)
         candidate._run(program)
@@ -496,6 +536,24 @@ class TrackController:
             self.trains.setdefault(block_id, EXTERNAL_TRAIN_ID)
         else:
             self.trains.pop(block_id, None)
+
+    def set_peer_occupancy(self, block_id: str, occupied: bool) -> None:
+        """Set another wayside's block, told over the controller link."""
+        if block_id not in self.peer_occupancy:
+            raise KeyError(
+                f"{self.config.controller_id} is not told about block "
+                f"{block_id}"
+            )
+        self.peer_occupancy[block_id] = occupied
+
+    def set_peer_count(self, wayside_id: str, count: int) -> None:
+        """Set how many of another wayside's blocks are occupied."""
+        if wayside_id not in self.peer_counts:
+            raise KeyError(
+                f"{self.config.controller_id} is not told the count of "
+                f"{wayside_id}"
+            )
+        self.peer_counts[wayside_id] = count
 
     def clear_occupancy(self) -> None:
         """Mark every owned block clear."""
@@ -583,6 +641,16 @@ class TrackController:
             self.ctc_switch_commands.pop(switch_id, None)
         else:
             self.ctc_switch_commands[switch_id] = reverse
+
+    def set_route_request(
+        self, switch_id: str, reverse: bool | None
+    ) -> None:
+        """Set, or with ``None`` withdraw, the CTC's route request."""
+        self._require_switch(switch_id)
+        if reverse is None:
+            self.route_requests.pop(switch_id, None)
+        else:
+            self.route_requests[switch_id] = reverse
 
     # --- log ----------------------------------------------------------------
 
@@ -710,7 +778,8 @@ def _switch_rule(
     """
     out = config.switch_output(sid)
     point, normal_end, reverse_end = config.switches[sid]
-    held = [f"{out} := {_ctc_first(sid, f'SWREV_{sid}')}"]
+    own_held = f"SWREV_{sid}"
+    held = [f"{out} := {_ctc_first(config, owned, sid, own_held)}"]
     legs = {
         end: position
         for end, position in ((normal_end, False), (reverse_end, True))
@@ -745,7 +814,14 @@ def _switch_rule(
 
     wants: dict[bool, list[str]] = {False: [], True: []}
     unseen: set[bool] = set()
-    if point in after(fixed):
+    # A train on the fixed side is only known to be coming to the points
+    # where the layout runs that block one way, into the points. Where it
+    # runs both ways (a bidirectional section, as at switch 76 with 78), a
+    # train there may be heading away, and setting the switch for it would
+    # throw it behind an outbound train. There the CTC Office's route
+    # request sets the switch; the program does not guess.
+    facing_one_way = point in after(fixed) and fixed not in after(point)
+    if facing_one_way:
         exits = [leg for leg in legs if leg in after(point)]
         if len(exits) == 1:
             position = legs[exits[0]]
@@ -792,20 +868,101 @@ def _switch_rule(
         f"WANT_N_{sid} := {term(False)}",
         f"WANT_R_{sid} := {term(True)}",
         f"HOLD_{sid} := OCC_{point} OR (WANT_N_{sid} AND WANT_R_{sid})",
+        f"ACT_{sid} := HOLD_{sid} OR WANT_N_{sid} OR WANT_R_{sid}",
     ]
     move = f"NOT WANT_N_{sid}" if rest_reverse else f"WANT_R_{sid}"
     lines.append(
         f"{out} := " + _ctc_first(
-            sid, f"(HOLD_{sid} AND SWREV_{sid}) OR "
-            f"(NOT HOLD_{sid} AND NOT MAINT AND {move})")
+            config, owned, sid, f"(HOLD_{sid} AND SWREV_{sid}) OR "
+            f"(NOT HOLD_{sid} AND NOT MAINT AND {move})",
+            active=f"ACT_{sid}")
     )
     return lines
 
 
-def _ctc_first(sid: str, own: str) -> str:
-    """The CTC Office's command for switch ``sid`` if it gives one, else
-    ``own``. The vital code still locks the switch under a train."""
-    return f"(CTCSW_{sid} AND CTCREV_{sid}) OR (NOT CTCSW_{sid} AND ({own}))"
+def _count_bits(guard: CountGuard) -> list[str]:
+    """The input bits of a count guard's count, least significant first."""
+    return [f"PEER_CNT_{guard.token}_{bit}" for bit in range(guard.width)]
+
+
+def _guard_lines(config: ControllerConfig, guard: LoopGuard) -> list[str]:
+    """``DRAIN_g``: a train is in the loop's first blocks while another
+    approaches the two-way section it drains through; the approach blocks
+    are then held. ``SET_g``, where this wayside sets a switch of the
+    guard: ``DRAIN_g`` and the section clear; the switches are then set
+    for the way out."""
+    def occupied(blocks: tuple[str, ...]) -> str:
+        return " OR ".join(config.occupancy_name(b) for b in blocks)
+
+    ways = ", ".join(
+        f"{sid} {'reverse' if reverse else 'normal'}"
+        for sid, reverse in guard.switches
+    )
+    lines = [
+        "",
+        f"// Loop guard {guard.name}: a train in "
+        f"{guard.loop[0]}..{guard.loop[-1]} and another on "
+        f"{guard.approach[0]}..{guard.approach[-1]}: hold the approach,",
+        f"// and once {guard.section[0]}..{guard.section[-1]} is clear set "
+        f"{ways}, so the loop drains first.",
+        f"DRAIN_{guard.name} := ({occupied(guard.loop)}) AND "
+        f"({occupied(guard.approach)})",
+    ]
+    if any(config.owns(s) for s, _ in guard.switches):
+        lines.append(
+            f"SET_{guard.name} := DRAIN_{guard.name} AND "
+            f"NOT ({occupied(guard.section)})"
+        )
+    return lines
+
+
+def _ctc_first(
+    config: ControllerConfig, owned: set[int], sid: str, own: str,
+    active: str | None = None,
+) -> str:
+    """What drives switch ``sid``, in order: the CTC Office's maintenance
+    command, then a loop guard draining its loop (``SET_g``), then
+    ``own``, the starter's rule, while ``active`` (it sees a train it sets
+    the switch for, or holds it), then the CTC Office's route request,
+    then ``own`` at rest. With no ``active`` the request ranks above
+    ``own`` throughout.
+
+    A train on the points locks the switch first of all, but that is the
+    vital code's, not the program's. A request is skipped when the leg it
+    asks for is closed (``CLOSED_n``), for a leg on this wayside; a leg
+    this wayside cannot see is taken as open.
+    """
+    _, normal_end, reverse_end = config.switches[sid]
+
+    def open_leg(end: str) -> str:
+        if end.isdigit() and int(end) in owned:
+            return f" AND NOT CLOSED_{end}"
+        return ""
+
+    to_reverse = f"(REQSW_{sid} AND REQREV_{sid}{open_leg(reverse_end)})"
+    to_normal = f"(REQSW_{sid} AND NOT REQREV_{sid}{open_leg(normal_end)})"
+    requested = (
+        f"{to_reverse} OR (NOT ({to_reverse} OR {to_normal}) AND ({own}))"
+    )
+    if active is not None:
+        # Test ranking: the wayside's own rule, when it sees a train,
+        # overrides the CTC Office's route request.
+        requested = (
+            f"({active} AND ({own})) OR (NOT {active} AND ({requested}))"
+        )
+    for guard in config.guards:
+        forced = dict(guard.switches).get(sid)
+        if forced is None:
+            continue
+        drain = f"SET_{guard.name}"
+        requested = (
+            f"{drain} OR (NOT {drain} AND ({requested}))" if forced
+            else f"NOT {drain} AND ({requested})"
+        )
+    return (
+        f"(CTCSW_{sid} AND CTCREV_{sid}) OR "
+        f"(NOT CTCSW_{sid} AND ({requested}))"
+    )
 
 
 def _coming_off(config: ControllerConfig, sid: str, leg: str) -> str:
@@ -815,8 +972,10 @@ def _coming_off(config: ControllerConfig, sid: str, leg: str) -> str:
     before = [
         block for block, nexts in config.line_next_blocks if leg in nexts
     ]
-    if len(before) == 1 and config.owns(before[0]):
-        return f"OCC_{leg} OR OCC_{before[0]}"
+    if len(before) == 1 and (
+        config.owns(before[0]) or before[0] in config.peer_blocks
+    ):
+        return f"OCC_{leg} OR {config.occupancy_name(before[0])}"
     return f"OCC_{leg}"
 
 
@@ -856,6 +1015,15 @@ def default_program_source(controller: TrackController) -> str:
         lines.append("VAR_IN   " + " ".join(
             f"CTCSW_{s} CTCREV_{s}" for s in config.switches
         ))
+        lines.append("VAR_IN   " + " ".join(
+            f"REQSW_{s} REQREV_{s}" for s in config.switches
+        ))
+    if config.peer_blocks:
+        lines.append("VAR_IN   " + " ".join(
+            f"PEER_OCC_{b}" for b in config.peer_blocks
+        ))
+    for count_guard in config.count_guards:
+        lines.append("VAR_IN   " + " ".join(_count_bits(count_guard)))
     lines += _declare("VAR_OUT", "AUTH", numbers)
     if config.switches:
         lines.append("VAR_OUT  " + " ".join(
@@ -867,6 +1035,19 @@ def default_program_source(controller: TrackController) -> str:
         lines.append("VAR_OUT  " + " ".join(
             config.crossing_output(c) for c in config.crossings
         ))
+
+    for guard in config.guards:
+        lines += _guard_lines(config, guard)
+    for count_guard in config.count_guards:
+        lines += [
+            "",
+            f"// {count_guard.source} reports how many of its blocks are "
+            f"occupied; over {count_guard.limit}",
+            f"// it is crowded, and the train on "
+            f"{'/'.join(count_guard.hold)} waits.",
+            f"FULL_{count_guard.token} := " + vital.greater_than_bits(
+                _count_bits(count_guard), count_guard.limit),
+        ]
 
     for sid in config.switches:
         lines.append("")
@@ -926,6 +1107,14 @@ def default_program_source(controller: TrackController) -> str:
             body = f"NOT (OCC_{number} AND {others})"
         else:
             body = "1"
+        for guard in config.guards:
+            if str(number) in guard.approach:
+                held = f"NOT DRAIN_{guard.name}"
+                body = held if body == "1" else f"{body} AND {held}"
+        for count_guard in config.count_guards:
+            if str(number) in count_guard.hold:
+                held = f"NOT FULL_{count_guard.token}"
+                body = held if body == "1" else f"{body} AND {held}"
         lines.append(f"AUTH_{number} := {body}")
 
     return "\n".join(lines) + "\n"

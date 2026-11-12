@@ -62,7 +62,16 @@ mode, carries the plans out:
   - Once a train waits round a loop to come back into a zone,
     no train is sent into it the other way for the first time, even
     when due: the trains following it go round the loop, and the next
-    runs wait in the yard.
+    runs wait in the yard. A run sent through the zone before then but
+    not in it yet gives up its pass: one not yet released from the
+    yard waits there, one on the track waits short of the zone. Holding
+    the pass would keep the waiting train out while the trains in
+    front of it wait for that train (and the Green Track Controller's
+    loop guard holds a train coming to 13..28 while the loop 12..1
+    drains: the two deadlocked, 2026-11-12).
+  - No more trains go into a loop than it holds, nor more than
+    ``LOOP_LIMITS``: 4 into Green's loop through section N (Landis
+    2026-11-12), under the Green Track Controller's limit of 5.
 
   Following trains are kept apart by the authority rules, not here.
 
@@ -111,6 +120,14 @@ SIMULATION_START_S = 5 * 3600
 #: Off until the Track Controller sets switches for the CTC's route
 #: requests.
 PASSING_SIDINGS = False
+
+#: The most trains let into a loop through a two-way zone, by (line,
+#: zone name), where fewer than the loop holds. Green 77 (section N and
+#: the loop 86 to 100): 4 (Landis 2026-11-12), so the Green Track
+#: Controller, which holds the train on 75 while more than 5 of blocks
+#: 76 to 100 are occupied, never has to: while trains come back down N
+#: no train goes up it, so 76 to 100 never holds more than 4.
+LOOP_LIMITS: dict[tuple[str, str], int] = {("Green", "77"): 4}
 
 #: With passing sidings, what running a block the run has already run
 #: the other way costs on top of the block itself: enough to prefer a
@@ -386,6 +403,9 @@ class World:
     orders: Mapping[str, str]
     # Trains the CTC lost track of.
     lost: frozenset[str]
+    # Trains the model has released from the yard that are not yet
+    # found on the track: they are coming out, so they keep their way.
+    released: frozenset[str] = frozenset()
 
 
 class AutoDispatcher:
@@ -531,14 +551,16 @@ class AutoDispatcher:
 
     def _loop_room(self, plan: RunPlan,
                    span: tuple[str, int, int]) -> int | None:
-        """How many trains the loop a zone pass leads into holds, a
-        block apart and the first a block short of its end; None if the
+        """How many trains may go into the loop a zone pass leads into:
+        as many as it holds, a block apart and the first a block short
+        of its end, or ``LOOP_LIMITS`` where that is fewer; None if the
         run does not come back through the zone after it."""
         later = [other for other in self._spans[plan.train_id]
                  if other[0] == span[0] and other[1] > span[2]]
         if not later or not self._returns(plan, later[0]):
             return None
-        return max(1, (later[0][1] - span[2] - 1) // 2)
+        holds = max(1, (later[0][1] - span[2] - 1) // 2)
+        return min(holds, LOOP_LIMITS.get((plan.line, span[0]), holds))
 
     def _in_loop(self, plan: RunPlan, zone: str) -> bool:
         """Whether a run has been sent into a zone on its way into a
@@ -573,14 +595,33 @@ class AutoDispatcher:
             if any(opposed(plan.path, span, other.path, held)
                    for held in self._held_spans(other, zone)):
                 return True
-            # A train waiting to come back has the zone next: no other
-            # is sent into it the other way for the first time.
+        return not returning and self._awaited(plan, span)
+
+    def _awaited(self, plan: RunPlan, span: tuple[str, int, int]) -> bool:
+        """Whether another train waits round a loop to come back into a
+        zone the other way from this pass. It has the zone next: no
+        other is sent into it the other way for the first time, and one
+        sent but not yet in it gives up its pass (``_reach``)."""
+        for other in self.plans:
+            if other.train_id == plan.train_id or other.line != plan.line:
+                continue
             waiting = self._waiting_span(other)
-            if (not returning and waiting is not None
-                    and waiting[0] == zone
+            if (waiting is not None and waiting[0] == span[0]
                     and opposed(plan.path, span, other.path, waiting)):
                 return True
         return False
+
+    def _gives_way(self, plan: RunPlan, progress: Progress) -> bool:
+        """Whether a run on the track, sent through a zone it is not in
+        yet for the first time, must give up that pass: a train waits
+        round a loop to come back into the zone the other way."""
+        if progress.at < 0:
+            return False
+        sent = self._released_to(plan, progress)
+        return any(progress.at < span[1] <= sent
+                   and not self._returns(plan, span)
+                   and self._awaited(plan, span)
+                   for span in self._spans[plan.train_id])
 
     def _waiting_span(self, plan: RunPlan) -> tuple[str, int, int] | None:
         """The zone pass a held run waits to make to come back, if it
@@ -641,13 +682,22 @@ class AutoDispatcher:
         through earlier it makes from the end of the loop it turned
         round, held there until the zone is free. A blocked pass holds
         it short of the zone (``_wait_before``). None: it may not move.
-        A pass it has been sent into already (up to ``sent``) is its own.
+        A pass it has been sent into already (up to ``sent``) is its own,
+        until a train waits round a loop to come back into the zone the
+        other way while it is not in the zone yet: it then gives the pass
+        up and waits short of the zone, wherever it was sent from. (The
+        Green Track Controller's loop guard holds a train coming to
+        13..28 while the loop 12..1 drains, and sets the way out;
+        keeping the pass deadlocked them, 2026-11-12.)
         """
         claimed = False
         for span in self._spans[plan.train_id]:
             if not progress.at < span[1] <= target:
                 continue
             if span[1] <= sent:
+                if (progress.at >= 0 and not self._returns(plan, span)
+                        and self._awaited(plan, span)):
+                    return self._wait_before(plan, progress, span), True
                 claimed = True
                 continue
             if self._returns(plan, span):
@@ -715,6 +765,16 @@ class AutoDispatcher:
             return new, [act] if act else []
         if status == IN_YARD:
             if train not in world.heads:
+                if (train in world.orders and train not in world.lost
+                        and train not in world.released
+                        and self._way_out_blocked(plan, progress)):
+                    # Not out yet, and a train now waits round a loop to
+                    # come back through the zone it was sent into: it
+                    # gives up its pass and waits in the yard. Holding
+                    # the pass would keep the waiting train out while
+                    # the trains in front of it on the way to the zone
+                    # wait for that train: none would move again.
+                    return replace(progress, status=HELD, wait=-1), []
                 if train in world.orders or train in world.lost:
                     return progress, []
                 # Its order went before it left the yard: give it again.
@@ -730,13 +790,15 @@ class AutoDispatcher:
                 # Its order went (the stop was closed): the next stop.
                 new, act = self._release(plan, progress, progress.leg + 1)
                 return new, [act] if act else []
-            if progress.wait >= 0:
-                # Short of its stop for now: on as far as it may go.
+            if progress.wait >= 0 or (train in world.heads
+                                      and self._gives_way(plan, progress)):
+                # Short of its stop for now, or giving up a zone pass it
+                # is not in yet: on as far as it may go.
                 new, act = self._release(plan, progress, progress.leg)
                 return new, [act] if act else []
             return progress, []
-        if status == TO_YARD and progress.wait >= 0 \
-                and train in world.heads:
+        if status == TO_YARD and train in world.heads and (
+                progress.wait >= 0 or self._gives_way(plan, progress)):
             new, act = self._release(plan, progress, progress.leg)
             return new, [act] if act else []
         if status == DWELLING and world.now_s >= progress.dwell_until_s:
@@ -747,6 +809,16 @@ class AutoDispatcher:
             # Its blocks cleared at the yard entry: back in the yard.
             return replace(progress, status=DONE), [Cancel(train)]
         return progress, []
+
+    def _way_out_blocked(self, plan: RunPlan, progress: Progress) -> bool:
+        """Whether a run still in the yard could not be sent out now on
+        its leg: the first zone pass on its way is blocked, so it would
+        wait in the yard (``_reach``)."""
+        target = self._leg_target(plan, progress.leg)
+        if target is None:
+            return False
+        reach, _ = self._reach(plan, progress, target, -1)
+        return reach is None
 
     def _out_of_yard(self, plan: RunPlan, progress: Progress,
                      leg: int) -> tuple[Progress, list[Action]]:

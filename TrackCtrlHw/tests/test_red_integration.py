@@ -310,3 +310,45 @@ class RedSwitchRouting(unittest.TestCase):
     def test_yard_switch_never_automatically_selects_yard(self):
         for kwargs in ({}, {"occupied": ["8"]}, {"closed": ["8"]}):
             self.assertEqual(self.scan("9", **kwargs)[0], "normal")
+
+    # Every switch with two routed legs follows the CTC Office's requests.
+    SIDINGS = ROUTES
+
+    def test_yard_switch_ignores_route_requests(self):
+        # Decided 2026-11-11: switch 9 moves only on a maintenance command.
+        self.assertEqual(self.scan(
+            "9", route_requests={"9": "reverse"})[0], "normal")
+
+    def test_a_route_request_selects_the_leg(self):
+        for key, point, normal, reverse in self.SIDINGS:
+            with self.subTest(switch=key):
+                self.assertEqual(self.scan(
+                    key, route_requests={key: "reverse"})[0], "reverse")
+                self.assertEqual(self.scan(key)[0], "normal")
+                # A train waiting in the siding no longer wins.
+                self.assertEqual(self.scan(
+                    key, occupied=[reverse],
+                    route_requests={key: "normal"})[0], "normal")
+
+    def test_a_route_request_never_overrides_a_protection(self):
+        for key, point, normal, reverse in self.SIDINGS:
+            request = {key: "reverse"}
+            with self.subTest(switch=key, case="leg closed"):
+                self.assertEqual(self.scan(
+                    key, closed=[reverse], route_requests=request)[0],
+                    "normal")
+            with self.subTest(switch=key, case="train on the points"):
+                self.assertEqual(self.scan(
+                    key, occupied=[point], reported={key: "normal"},
+                    route_requests=request)[0], "normal")
+            with self.subTest(switch=key, case="maintenance command"):
+                self.assertEqual(self.scan(
+                    key, switch_commands={key: "normal"},
+                    route_requests=request)[0], "normal")
+
+    def test_a_requested_siding_shows_caution(self):
+        for key, point, normal, reverse in self.SIDINGS:
+            with self.subTest(switch=key):
+                self.assertEqual(self.scan(
+                    key, route_requests={key: "reverse"},
+                    reported={key: "reverse"})[1], "yellow")

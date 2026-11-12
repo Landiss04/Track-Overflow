@@ -40,14 +40,14 @@ def test_raw_device_reopens_same_session_without_traceback(tmp_path):
     )
 
     def exchange(fd, frame):
-        os.write(fd, p.encode(frame))
+        os.write(fd, p.frame(p.encode(frame)))
         buffer = LineBuffer()
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             readable, _, _ = select.select([fd], [], [], 0.1)
             if readable:
                 for line in buffer.feed(os.read(fd, 65536)):
-                    value = p.decode(line)
+                    value = p.decode(p.unframe(line))
                     if value["id"] == frame["id"]:
                         return value
         raise AssertionError("raw tty did not reply")

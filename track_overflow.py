@@ -21,6 +21,27 @@ from pathlib import Path
 
 EXIT_USAGE = 2
 
+
+def _add_qt_dll_directory() -> None:
+    """Let Qt's QML plugins find Qt's own DLLs on Windows.
+
+    Qt loads QML plugins with LoadLibrary, and Python 3.8+ no longer
+    searches PATH for the DLLs they depend on, so every module window
+    fails with "Cannot load library ...plugin.dll: The specified module
+    could not be found". Done once here, it covers the harness window
+    and every module this program starts.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import PySide6
+    except ImportError:
+        return
+    os.add_dll_directory(str(Path(PySide6.__file__).resolve().parent))
+
+
+_add_qt_dll_directory()
+
 # The repository root, or a built executable's bundle root, where the
 # module folders sit as they do in the source.
 _ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))

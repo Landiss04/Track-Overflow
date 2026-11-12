@@ -153,6 +153,7 @@ class TrainCore:
 
     def view(self) -> dict[str, Any]:
         return {
+            "time_s": self.fleet.time_s,
             "trains": {
                 core.state.train_id: {
                     "state": dataclasses.asdict(core.state),

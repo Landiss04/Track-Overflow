@@ -4,6 +4,132 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-12 — A pass not yet used gives way; four trains in section N's loop
+
+From Landis, after the Schedule v4 full-system run of 2026-11-12, in
+which Green stopped for good at the 1–12 loop.
+
+- **A pass a train is not in yet gives way.** `ctc/scheduler.py`
+  `_reach()`, new `_awaited()` and `_gives_way()`. Once a train waits
+  round a loop to come back into a two-way zone, a train sent into the
+  zone the other way that is not in it yet gives up its pass and waits
+  short of the zone. Before, only a run still in the yard did
+  (`eea89f8`). A train already in the zone keeps its pass.
+  - **The run's deadlock:** G10 had the pass into 13–28 on its way to
+    the loop and stood on 148, held there by the Green Track
+    Controller's D–F loop guard while trains were in 7–12. G1 waited at
+    2 for G10's pass, and the wayside set switch 28 for G1, against the
+    CTC's request. Nothing moved again.
+  - **The same rule at section N:** a run no longer keeps a pass into N
+    claimed from far off (G7 from block 59) while a train waits at 99.
+- **Four trains in the loop through section N.** `ctc/scheduler.py`
+  new `LOOP_LIMITS`, read by `_loop_room()`: Green's loop through
+  section N takes 4 trains, not the 7 it holds. The Green Track
+  Controller holds the train on 75 while more than 5 of blocks 76–100
+  are occupied, which the CTC cannot see. With 7 let in, a train with
+  the pass into N could be held on 75 while the trains round the loop
+  waited for N.
+- **Tests.** New `tests/test_ctc_green_76.py`:
+  - section N both ways: the switch 76 requests, holds at 75 and 99,
+    and following trains;
+  - the loop limit;
+  - the whole Green schedule on a railway that sets switches only as
+    the CTC requests and holds 75 as the wayside does. All ten runs
+    finish, no train stands over 600 s with no authority near 76, and
+    76–100 never holds more than 5 trains.
+- Truth proposal `20261112-1334-two-way-zone-pass-and-loop-limit.md`.
+  It replaces the unpromoted `20261112-1045-two-way-zone-yard-pass.md`.
+
+## 2026-11-12 — A run still in the yard gives up its zone pass
+
+From Landis, after the Green Line locked up at section N in the
+Schedule v4 run (every module, both lines).
+
+- **The lock-up.** G9 was ordered out through N (77 to 85) while
+  still in the yard, held there by the yard headway. That order
+  counted as its pass through N, so G4, waiting at 99 to come back
+  through N, stayed held. G1, G2 and G3, on their next lap, were held
+  at 75 for G4, and G9 came out behind them. G4 waited for G9, G9
+  behind G1, G1 for G4: nothing moved again from 05:44.
+- **The fix** (`ctc.scheduler`). A run with its order that the model
+  has not yet released from the yard gives up its pass, and waits in
+  the yard, once the first zone pass on its way is blocked, as when a
+  train waits round a loop to come back. This is the rule as decided
+  (the next runs wait in the yard), now also for a run ordered before
+  the other train got there. A run the model has already released
+  keeps its pass: it is coming out. The model passes the released runs
+  to the scheduler (`World.released`).
+- Tests: `ZoneTest` in `tests/test_ctc_scheduler.py` (2 new).
+
+---
+
+## 2026-11-11 — The yard as a destination in Manual mode
+
+From Landis.
+
+- **Yard in the destination lists.** The Dispatch train panel's
+  Destination station list and the Selected train panel's New
+  destination list now start with "Yard · return and retire". Picking
+  it sends the train back to the yard through
+  `CtcHost.returnToYard()` (R66, D022), as the Return to yard button
+  does; the Dispatch train button reads "Return to yard" then. Only a
+  train on the track can be sent back, so the button stays disabled
+  for one still waiting in the yard, and the Dispatch panel says why.
+  The arrival time is ignored for the yard, and there is no speed or
+  authority preview, since the yard is not a block.
+
+---
+
+## 2026-11-10 — Selected train: an arrival estimate; occupancy list scrolls
+
+From Landis.
+
+- **Arrival estimate.** The Selected train panel's arrival was the
+  time the schedule (or the dispatcher) asked for, which a late train
+  showed long after it had passed. It is now an estimate from where the
+  train is: the time now plus the run over the rest of its route at the
+  suggested speed (`CtcHost.arrivalEstimate()`, for the selected train
+  only, re-read each simulated second through `clockSecond`). The time
+  asked for moves to a "Due" row, and Deviation shows the minutes
+  between the two. The Train occupancy table's Arrive column is still
+  the time asked for.
+- **Train occupancy window.** `OccupancyWindow.qml`: the train list
+  scrolls, so with every train out the footer and its Select train
+  button stay in view.
+- Tests: `test_ctc_host.py` (the estimate runs from now, moves on while
+  the train waits, reads "Arrived" at the destination).
+
+## 2026-11-10 — Fixes from the Schedule v4 integration findings
+
+From the findings of the 2026-11-09 full-system run (C1, C2, C6, C7).
+
+- **C1, a train that overruns past a switch is followed.**
+  `ctc/model.py` `_straight_on()`: the block a train runs on into is the
+  one the track leads it into. A block that joins its head block at the
+  end it came in by (a switch's other connection) is left out, and where
+  it faces the points, the switch's reported position decides. Before,
+  any block with more than one other neighbour gave no answer and the
+  train was lost (R3, in by 15 to 16 and on into 17).
+- **C2, authority never ends on a block that locks the switch it waits
+  for.** `ctc/routing.py` `authority()`: when the count stops for a
+  switch not set for the route, it ends short of the block the switch
+  is listed on and of its points block (new
+  `TrackGraph.locking_blocks()`), a block further back than before. A
+  train standing on either locks the switch, so it could never be set
+  for it (G5 on Green 76, R1 on Red 16). `ctc/model.py`
+  `_route_requests()` still requests that switch.
+- **C6, runs held in the yard leave the schedule's headway apart.**
+  `ctc/model.py` `_release()`, new `_too_soon_after()`: a run of the
+  schedule leaves no closer behind the last run released on its line
+  than their departure times are apart in the schedule. Manual trains
+  are not affected.
+- **C7.** `tests/test_sim_clock.py` `test_ten_x_runs_faster` only tells
+  10x from 1x (5 to 13 simulated seconds in about one real second).
+- Tests: `test_ctc_authority.py` (the locking blocks, the request for a
+  switch stopped short of; three expectations moved a block back),
+  `test_ctc_tracking.py` `OverrunAtASwitchTest`,
+  `test_ctc_train_events.py` (headway after a hold).
+
 ## 2026-11-04 — An automatic Run waits for the windows
 
 `0345b24` (Kevin, part of the 10x headroom work). A test and

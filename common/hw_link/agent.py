@@ -1,8 +1,10 @@
 """PiLinkServer: standard-library newline JSON over stdio or a raw tty.
 
 No clock runs here. A durable request journal reconstructs the core and reply
-cache after a process/Pi restart. It records accepted and rejected transactions
-before replying; replay is internal reconstruction, never a new harness tick.
+cache after a process/Pi restart. It writes accepted and rejected transactions
+before replying and fsyncs them on a worker thread; each reply names the last
+one on disk, so the host can resend what a power cut takes. Replay is internal
+reconstruction, never a new harness tick.
 
 Every ``CHECKPOINT_TICKS`` steps the agent pickles its core and reply cache and
 starts a new journal on top of that checkpoint, so a restart replays at most
@@ -18,6 +20,7 @@ import os
 import pickle
 import random
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -36,6 +39,10 @@ VIEW_INTERVAL_S = 0.2
 
 # Steps between checkpoints: one minute at 10x, ten at 1x.
 CHECKPOINT_TICKS = 600
+
+# Records written but not yet fsynced. Past this a reply waits for the disk,
+# which bounds what the host holds to resend after a power cut.
+MAX_UNSYNCED = 50
 
 AGENT_HASH = expected_hash()
 
@@ -58,6 +65,13 @@ class PiLinkServer:
         # fsync each record, so it survives a power loss and not only a
         # restart of this process.
         self.durable = durable
+        self._applied: list[Any] | None = None
+        self._sync = threading.Condition()
+        self._written = self._synced = 0
+        self._written_key: list[Any] | None = None
+        self._durable_key: list[Any] | None = None
+        self._syncer: threading.Thread | None = None
+        self._closing = False
         self.log = log or (lambda text: None)
         self.boot = uuid.uuid4().hex
         self.session: str | None = None
@@ -84,7 +98,11 @@ class PiLinkServer:
             if not line.endswith(b"\n"):
                 self.log("JOURNAL_INCOMPLETE_TAIL")
                 break
-            entry = json.loads(line)
+            entry = json.loads(line) if index == 0 else _record_entry(line)
+            if entry is None:
+                # Unsynced appends can reach the disk as garbage.
+                self.log("JOURNAL_CORRUPT_TAIL")
+                break
             if index == 0:
                 if entry["module"] != self.module:
                     raise ValueError("journal module mismatch")
@@ -104,11 +122,13 @@ class PiLinkServer:
                 request = entry["request"]
                 self._execute(request)
                 self._remember(request, p.encode(request), entry["reply"])
+                self._applied = list(self._key(request))
                 if request["op"] == "STEP":
                     self._steps_since_checkpoint += 1
             complete.extend(line)
         if len(complete) != self.journal.stat().st_size:
             self.journal.write_bytes(complete)
+        self._written_key = self._durable_key = self._applied
         self.log(f"JOURNAL_RESTORED transactions={len(self.cache)}")
 
     @staticmethod
@@ -123,9 +143,20 @@ class PiLinkServer:
         self.session = session
         self.core = make_core(self.module)
         self.cache.clear()
+        self._applied = None
+        with self._sync:
+            self._written_key = None
         if self.journal is not None:
             self.journal.parent.mkdir(parents=True, exist_ok=True)
             self._new_journal(0)
+        else:
+            self._all_durable()
+
+    def _all_durable(self) -> None:
+        # A durable header or checkpoint now covers every record written.
+        with self._sync:
+            self._synced, self._durable_key = self._written, self._written_key
+            self._sync.notify_all()
 
     def _new_journal(self, seq: int) -> None:
         # Swap in a journal holding only its header, then drop the
@@ -138,7 +169,10 @@ class PiLinkServer:
             "agent_hash": AGENT_HASH,
             "checkpoint": seq or None,
         }
+        # Windows cannot replace a file the fsync worker has open.
+        self.wait_durable()
         _write_durably(self.journal, (json.dumps(header) + "\n").encode())
+        self._all_durable()
         if self._checkpoint_seq and self._checkpoint_seq != seq:
             self._checkpoint_path(self._checkpoint_seq).unlink(missing_ok=True)
         self._checkpoint_seq = seq
@@ -155,16 +189,69 @@ class PiLinkServer:
         self._new_journal(seq)
         self.log(f"CHECKPOINT {seq}")
 
-    def _record(self, request: bytes, reply: bytes) -> None:
-        if self.journal is None:
+    def _record(self, request: bytes, reply: bytes, key: list[Any]) -> None:
+        if self.journal is not None:
+            # Both are already compact JSON lines; splice, do not re-encode.
+            line = b'{"request":' + request[:-1] + b',"reply":' + reply[:-1]
+            with self.journal.open("ab") as stream:
+                stream.write(line + b"}\n")
+        with self._sync:
+            self._written += 1
+            self._written_key = key
+        if self.journal is None or not self.durable:
+            self._all_durable()
             return
-        # Both are already compact JSON lines; splice, do not re-encode.
-        line = b'{"request":' + request[:-1] + b',"reply":' + reply[:-1]
-        with self.journal.open("ab") as stream:
-            stream.write(line + b"}\n")
-            stream.flush()
-            if self.durable:
-                os.fsync(stream.fileno())
+        with self._sync:
+            if self._syncer is None:
+                self._syncer = threading.Thread(
+                    target=self._sync_journal, name="journal-fsync", daemon=True
+                )
+                self._syncer.start()
+            self._sync.notify_all()
+            while self._written - self._synced > MAX_UNSYNCED:
+                self._sync.wait()
+
+    def _sync_journal(self) -> None:
+        # The SD card's ~10 ms fsync runs here, beside the next step,
+        # instead of before every reply.
+        assert self.journal is not None
+        while True:
+            with self._sync:
+                while self._synced == self._written and not self._closing:
+                    self._sync.wait()
+                if self._closing:
+                    return
+                count, key = self._written, self._written_key
+            try:
+                # fsync flushes the file, whichever descriptor names it.
+                descriptor = os.open(self.journal, os.O_RDWR)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+            except OSError as error:
+                self.log(f"JOURNAL_SYNC_RETRY {error}")
+                time.sleep(0.1)
+                continue
+            with self._sync:
+                # A checkpoint may already have covered more than this.
+                if count > self._synced:
+                    self._synced, self._durable_key = count, key
+                self._sync.notify_all()
+
+    def wait_durable(self) -> None:
+        """Block until every record written so far is on disk."""
+        with self._sync:
+            while self._synced < self._written:
+                self._sync.wait()
+
+    def close(self) -> None:
+        """Stop the fsync worker; unsynced records stay in the OS cache."""
+        with self._sync:
+            self._closing = True
+            self._sync.notify_all()
+        if self._syncer is not None:
+            self._syncer.join()
 
     def _remember(
         self, request: dict[str, Any], request_bytes: bytes, reply: Any
@@ -212,6 +299,9 @@ class PiLinkServer:
                 error=type(error).__name__,
                 diagnostics=list(getattr(error, "diagnostics", ())),
             )
+        # The host may forget requests up to here; a cached copy is only
+        # older, never wrong.
+        reply["durable"] = self._durable_key
         # Fail before journalling if a core returned something un-sendable.
         return reply, p.encode(reply)
 
@@ -251,6 +341,7 @@ class PiLinkServer:
                 agent_hash=AGENT_HASH,
                 boot=self.boot,
                 resumed=resumed,
+                applied=self._applied,
                 **(
                     {"echo": request.get("echo", "")}
                     if self.echo_test
@@ -292,7 +383,8 @@ class PiLinkServer:
             yield previous[1]
             return
         reply, reply_bytes = self._execute(request)
-        self._record(request_bytes, reply_bytes)
+        self._applied = list(key)
+        self._record(request_bytes, reply_bytes, self._applied)
         self._remember(request, request_bytes, reply)
         self._fresh = (reply, reply_bytes)
         if op == "STEP":
@@ -329,12 +421,12 @@ class PiLinkServer:
                 if isinstance(line, ProtocolError):
                     raise line
                 self._fresh = None
-                for reply in self._handle(p.decode(line)):
+                for reply in self._handle(p.decode(p.unframe(line))):
                     fresh = self._fresh
                     if fresh is not None and reply is fresh[0]:
-                        yield fresh
+                        yield reply, p.frame(fresh[1])
                     else:
-                        yield reply, p.encode(reply)
+                        yield reply, p.frame(p.encode(reply))
             except ProtocolError as error:
                 self.log(f"SKIPPED_LINE {error}")
 
@@ -436,6 +528,20 @@ def main(argv: list[str] | None = None) -> int:
         server._hello_seen = False
         log("DEVICE_RECONNECT_WAIT")
         time.sleep(0.3)
+
+
+def _record_entry(line: bytes) -> dict[str, Any] | None:
+    """A well-formed journal record, or None for a torn one."""
+    try:
+        entry = json.loads(line)
+        if not isinstance(entry["request"], dict) or not isinstance(
+            entry["reply"], dict
+        ):
+            return None
+        p.validate(entry["request"])
+    except (ValueError, TypeError, KeyError, ProtocolError):
+        return None
+    return entry
 
 
 def _write_durably(path: Path, data: bytes) -> None:

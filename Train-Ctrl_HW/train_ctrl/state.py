@@ -25,6 +25,9 @@ class State:
     actual_mps: float = 0.0
     commanded_mps: float = 0.0
     target_mps: float = 0.0
+    # The driver's dial setting in Manual. The target is this, capped
+    # at the commanded speed each tick (REQUIREMENTS.md M1).
+    setpoint_mps: float = 0.0
 
     # System time as last received: seconds since midnight of the
     # first simulated day, as utils/system_clock.py counts it, from

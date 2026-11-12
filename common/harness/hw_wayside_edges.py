@@ -31,6 +31,12 @@ def ctc_to_track_controller(
              "position": entry["value"]}
             for entry in mapped["switch_commands"]
         ],
+        "route_requests": [
+            {"line": entry["block"]["line"],
+             "switch_id": entry["block"]["block_id"],
+             "position": entry["value"]}
+            for entry in mapped["route_requests"]
+        ],
     }
 
 

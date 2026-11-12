@@ -6,7 +6,9 @@ CTC recomputes it every step: the count runs along the train's route
 toward its destination and ends at the earliest of the destination, the
 block before the first closed block, and the
 block before a switch not reported set for the route
-(``authority-stops-before-obstruction``, proposed on ``ctc-interfacing``).
+(``authority-stops-before-obstruction``, proposed on ``ctc-interfacing``),
+or a block further back where that block would lock the switch: the one
+the switch is listed on, or its points block (``locking_blocks``).
 No block is within two trains' authorities (``exclusive-authority``):
 another train's blocks stop the count too. And it never ends next to
 another train's block or authority, along the route or off it: one empty
@@ -130,6 +132,8 @@ class TrackGraph:
             block.block_id: frozenset(block.next_blocks)
             for block in line.blocks if block.next_blocks is not None}
 
+        # switch -> the blocks a train locks it from (``locking_blocks``).
+        self._locking: dict[str, frozenset[str]] = {}
         switches: list[tuple[str, list[tuple[str, str]]]] = []
         far_ends: set[str] = set()
         for block in line.blocks:
@@ -152,6 +156,12 @@ class TrackGraph:
                 if not self._next_in_file(a, b):
                     far_ends.update(leg)
             switches.append((block.block_id, legs))
+            # A train on the block the switch is listed on, or on its
+            # points block (the one both connections share), locks it.
+            shared = (set(legs[0]).intersection(*legs[1:])
+                      if len(legs) > 1 else set())
+            self._locking[block.block_id] = frozenset(
+                {block.block_id} | shared)
 
         for a, b in zip(order, order[1:]):
             if not (a in far_ends and b in far_ends):
@@ -210,6 +220,12 @@ class TrackGraph:
     def leg(self, a: str, b: str) -> SwitchLeg | None:
         """The switch connection joining two blocks, if it is one."""
         return self._legs.get(frozenset((a, b)))
+
+    def locking_blocks(self, switch_id: str) -> frozenset[str]:
+        """The blocks from which a train locks a switch, so that it
+        cannot be moved: the block the switch is listed on and its
+        points block, the one both of its connections share."""
+        return self._locking.get(switch_id, frozenset())
 
     def end(self, block_id: str, neighbor: str) -> str:
         """The end of ``block_id`` ("low" or "high") ``neighbor`` joins."""
@@ -364,8 +380,13 @@ def authority(graph: TrackGraph, start: str, destination: str,
     for count, after in enumerate(path[1:]):
         leg = graph.leg(here, after)
         if leg is not None and switches.get(leg.switch_id) != leg.position:
+            # Not onto a block that locks the switch: a train standing
+            # there would keep it from ever being set for it.
+            locking = graph.locking_blocks(leg.switch_id)
+            while count > 0 and path[count] in locking:
+                count -= 1
             return keep_gap(graph, AuthorityLimit(
-                count, here, "switch", leg.switch_id, path),
+                count, path[count], "switch", leg.switch_id, path),
                 obstructions, reserved)
         reason = obstructions.get(after)
         if reason is not None:

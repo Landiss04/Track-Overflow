@@ -81,6 +81,8 @@ def show_module_windows(fullscreen: bool = False) -> None:
     Args:
         fullscreen: Show them full screen and on top.
     """
+    app = QGuiApplication.instance()
+    wayland = app is not None and app.platformName() == "wayland"
     for window in _main_windows():
         if fullscreen:
             window.showFullScreen()
@@ -88,6 +90,11 @@ def show_module_windows(fullscreen: bool = False) -> None:
         elif window.windowState() == Qt.WindowState.WindowMinimized:
             window.showNormal()
         else:
+            if wayland and window.isVisible():
+                # The compositor ignores raise and activate from a
+                # process without focus, but focuses a freshly shown
+                # window, so show it afresh.
+                window.hide()
             window.show()
         window.requestActivate()
 

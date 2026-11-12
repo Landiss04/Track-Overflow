@@ -79,20 +79,26 @@ def speed_bit(block_id: str, bit: int) -> str:
 
 
 def _greater_than(n: str, limit: int, width: int) -> str:
-    """PLC expression: the suggested speed of block ``n`` exceeds ``limit``.
+    """PLC expression: the suggested speed of block ``n`` exceeds ``limit``."""
+    return greater_than_bits([speed_bit(n, i) for i in range(width)], limit)
 
-    Compares from the most significant bit down: the speed is greater at
+
+def greater_than_bits(bits: Sequence[str], limit: int) -> str:
+    """PLC expression: the whole number in ``bits`` (least significant
+    first) exceeds ``limit``.
+
+    Compares from the most significant bit down: the number is greater at
     the first bit where it is 1 and the limit is 0, provided every bit
     above it matches.
     """
+    width = len(bits)
     terms: list[str] = []
     for i in range(width - 1, -1, -1):
         if (limit >> i) & 1:
             continue
-        factors = [speed_bit(n, i)]
+        factors = [bits[i]]
         for j in range(width - 1, i, -1):
-            bit = speed_bit(n, j)
-            factors.append(bit if (limit >> j) & 1 else f"NOT {bit}")
+            factors.append(bits[j] if (limit >> j) & 1 else f"NOT {bits[j]}")
         terms.append("(" + " AND ".join(factors) + ")")
     return " OR ".join(terms) if terms else "0"
 
@@ -153,13 +159,14 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
     moving: dict[str, str] = {}
     for s in config.switches:
         b = s
-        lock = _lock_terms(config, s, numbers)
+        lock = _lock_terms(config, s, numbers, speed_width(blocks))
         lines += [
             "",
             f"// Switch {s}: the programmer's hand-set position, else the",
-            "// program. Under a train, on its listed block or its",
-            "// points block, it stays where it is.",
-            f"V_LOCK_{s} := {' OR '.join(lock)}",
+            "// program. Under a train on its points block it stays where",
+            "// it is; under one on its listed block too, unless that train",
+            "// is commanded speed 0 (no authority, closed, or no speed).",
+            f"V_LOCK_{s} := {' OR '.join(term for _, term in lock)}",
             f"V_REQ_{s} := (HAND_{s} AND HANDREV_{s}) OR "
             f"(NOT HAND_{s} AND SW_{s})",
             f"{OUT}SW_{s} := (V_LOCK_{s} AND SWREV_{s}) OR "
@@ -221,15 +228,27 @@ def vital_source(config: ControllerConfig, blocks: Sequence[Block]) -> str:
 # --- what the vital code changed, for display ------------------------------
 
 def _lock_terms(
-    config: ControllerConfig, switch: str, numbers: Sequence[str]
-) -> list[str]:
-    """Occupancy bits that lock a switch: its listed block, and its
-    points block when it is a different one this wayside can see."""
+    config: ControllerConfig, switch: str, numbers: Sequence[str],
+    width: int,
+) -> list[tuple[str, str]]:
+    """``(block, expression)`` for each block whose train locks a switch.
+
+    A train on the points block always locks it. Where the switch is
+    listed on a different block, a train there locks it too, unless it is
+    commanded speed 0: the program withholds its authority, the block is
+    closed, or the suggested speed is 0 (or none). A train held there
+    does not move onto the points, so the switch may be set for another
+    train.
+    """
     point = config.switches[switch][0]
-    terms = [f"OCC_{switch}"]
-    if point != switch and point in numbers:
-        terms.append(f"OCC_{point}")
-    return terms
+    if point == switch or point not in numbers:
+        return [(switch, f"OCC_{switch}")]
+    speed = " OR ".join(speed_bit(switch, b) for b in range(width))
+    stopped = f"NOT AUTH_{switch} OR CLOSED_{switch} OR NOT ({speed})"
+    return [
+        (point, f"OCC_{point}"),
+        (switch, f"(OCC_{switch} AND NOT ({stopped}))"),
+    ]
 
 
 def _blocks_text(names: Sequence[str]) -> str:
@@ -265,10 +284,11 @@ def report_overrides(
                 "held by the programmer in maintenance mode, program "
                 "output ignored"))
         if on(f"V_LOCK_{s}") and on(f"V_REQ_{s}") != on(f"{OUT}SW_{s}"):
-            held = _lock_terms(config, s, [x.block_id for x in blocks])
+            held = _lock_terms(config, s, [x.block_id for x in blocks],
+                               speed_width(blocks))
             found.append(VitalOverride(
                 "switch_locked_under_train", f"SW_{s}",
-                f"block {' or '.join(t[4:] for t in held)} is occupied; "
+                f"block {' or '.join(b for b, _ in held)} is occupied; "
                 "the switch is locked and will not move"))
 
     for s in config.signals:

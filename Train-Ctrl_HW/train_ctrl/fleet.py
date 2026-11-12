@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterator, Mapping
 
-from .constants import BENCH_ECHO_TICKS, TICK_S
+from .constants import BENCH_ECHO_TICKS, CLOCK_START_S, TICK_S
 from .control import ControllerCore
 from .errors import (DuplicateTrainError, InvalidInputError,
                      TrainControllerError, UnknownTrainError)
@@ -35,6 +35,9 @@ class TrainControllerFleet:
         # Insertion order is the roster order.
         self._cores: dict[str, ControllerCore] = {}
         self._echo_ticks = echo_ticks
+        #: The system time of the last step, kept with no trains too, so
+        #: the console's clock follows every tick (D017).
+        self.time_s = CLOCK_START_S
 
     def add(self, train_id: str, line: str = "") -> ControllerCore:
         """Put a train's controller in service and return it."""
@@ -112,9 +115,10 @@ class TrainControllerFleet:
                     f"{train_id} is missing {short} this tick")
         staged = {train_id: read_inputs(inputs_by_id[train_id])
                   for train_id in self._cores}
+        self.time_s = float(time_s)
         commands = {}
         for train_id, core in self._cores.items():
-            core.state.time_s = float(time_s)
+            core.state.time_s = self.time_s
             core.apply_staged(staged[train_id])
             core.step()
             commands[train_id] = core.commands()

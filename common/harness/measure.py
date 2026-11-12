@@ -88,6 +88,7 @@ class _Meter:
         self._seconds = seconds
         self.round_trips_s: list[float] = []
         self.late_replies = 0
+        self.slips = 0
         self.launched_s = time.perf_counter()
         self.ready_s: float | None = None
         self.started_s: float | None = None
@@ -137,9 +138,13 @@ class _Meter:
         self.ready_s = time.perf_counter()
 
     def _on_event(self, _source: str, event: str, _detail: str) -> None:
-        # Count the replies that ran past the timeout.
-        if event == "REPLY_LATE" and not self.done:
+        # Count the replies that ran past the timeout, and the slips.
+        if self.done:
+            return
+        if event == "REPLY_LATE":
             self.late_replies += 1
+        elif event == "TIME_SLIPPED":
+            self.slips += 1
 
     def _end(self) -> None:
         # Close the measured while and leave the event loop.
@@ -277,7 +282,7 @@ def _report(
         f"max {round_trips_ms[-1]:.2f}",
         f"  budget per tick: {tick_interval_s * MILLISECONDS_PER_SECOND:.0f}"
         " ms",
-        f"  ticks slipped:   {dropped_ticks}",
+        f"  ticks slipped:   {dropped_ticks} in {meter.slips} slips",
         f"  late replies:    {meter.late_replies}",
         f"  harness CPU:     {meter.cpu_s / meter.wall_s * PERCENT:.0f}% "
         "of one core",

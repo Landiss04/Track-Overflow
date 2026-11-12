@@ -176,6 +176,18 @@ class OverAPermissiveProgram(unittest.TestCase):
                     by_number(out.track_model.switch_commands)["32"],
                     "normal")
 
+    def test_a_route_request_weakens_neither_command_nor_lock(self) -> None:
+        controller, out = run_permissive(
+            red(2), route_requests={"27": "reverse"},
+            switch_commands={"27": "normal"})
+        self.assertEqual(
+            by_number(out.track_model.switch_commands)["27"], "normal")
+        out = controller.step(0.1, inputs(
+            controller, occupied=["27"], reported={"27": "normal"},
+            route_requests={"27": "reverse"}))
+        self.assertEqual(
+            by_number(out.track_model.switch_commands)["27"], "normal")
+
     def test_a_moving_switch_stops_its_points_and_listed_block(self) -> None:
         _, out = run_permissive(
             red(2), reported={"32": "normal"},
