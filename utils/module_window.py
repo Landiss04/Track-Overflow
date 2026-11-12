@@ -85,6 +85,10 @@ def show_module_windows(fullscreen: bool = False) -> None:
     wayland = app is not None and app.platformName() == "wayland"
     for window in _main_windows():
         if fullscreen:
+            if window.windowState() == Qt.WindowState.WindowMinimized:
+                # On Windows, a minimized window sent full screen keeps
+                # its normal size and loses its title bar; restore first.
+                window.showNormal()
             window.showFullScreen()
             window.raise_()
         elif window.windowState() == Qt.WindowState.WindowMinimized:
