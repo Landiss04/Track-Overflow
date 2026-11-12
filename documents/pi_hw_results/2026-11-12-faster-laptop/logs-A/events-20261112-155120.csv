@@ -1,0 +1,38 @@
+wall_time,sim_time_s,time_of_day,tick,source,event,detail
+2026-11-12T15:51:20.704,18000.0,05:00:00,0,harness,HARNESS_STARTED,7 modules; server track-overflow-16648-8cf061bfea29
+2026-11-12T15:51:20.716,18000.0,05:00:00,0,ctc-office,MODULE_STARTED,pid 19052
+2026-11-12T15:51:20.725,18000.0,05:00:00,0,track-controller-sw,MODULE_STARTED,pid 26936
+2026-11-12T15:51:20.734,18000.0,05:00:00,0,track-controller-hw,MODULE_STARTED,pid 11572
+2026-11-12T15:51:20.745,18000.0,05:00:00,0,track-model,MODULE_STARTED,pid 5148
+2026-11-12T15:51:20.754,18000.0,05:00:00,0,train-model,MODULE_STARTED,pid 12700
+2026-11-12T15:51:20.764,18000.0,05:00:00,0,train-controller-sw,MODULE_STARTED,pid 23096
+2026-11-12T15:51:20.775,18000.0,05:00:00,0,train-controller-hw,MODULE_STARTED,pid 5984
+2026-11-12T15:51:21.753,18000.0,05:00:00,0,train-controller-hw,PI_TRACE,C:\Users\320316~1\AppData\Local\Temp\track-overflow-pi-4fhp4ov_\train-controller-hw.log
+2026-11-12T15:51:21.757,18000.0,05:00:00,0,train-controller-sw,MODULE_READY,
+2026-11-12T15:51:21.770,18000.0,05:00:00,0,train-controller-hw,PI_CONNECTED,train-controller-hw
+2026-11-12T15:51:21.795,18000.0,05:00:00,0,track-controller-hw,PI_TRACE,C:\Users\320316~1\AppData\Local\Temp\track-overflow-pi-4bl40mwu\track-controller-hw.log
+2026-11-12T15:51:21.810,18000.0,05:00:00,0,track-controller-hw,PI_CONNECTED,track-controller-hw
+2026-11-12T15:51:21.863,18000.0,05:00:00,0,train-model,MODULE_READY,
+2026-11-12T15:51:21.940,18000.0,05:00:00,0,track-controller-sw,MODULE_READY,
+2026-11-12T15:51:22.107,18000.0,05:00:00,0,train-controller-hw,PI_HELLO,train-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+2026-11-12T15:51:22.113,18000.0,05:00:00,0,train-controller-hw,MODULE_READY,
+2026-11-12T15:51:22.141,18000.0,05:00:00,0,track-controller-hw,PI_HELLO,track-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+2026-11-12T15:51:22.326,18000.0,05:00:00,0,track-controller-hw,MODULE_READY,
+2026-11-12T15:51:22.436,18000.0,05:00:00,0,track-model,MODULE_READY,
+2026-11-12T15:51:22.785,18000.0,05:00:00,0,ctc-office,MODULE_READY,
+2026-11-12T15:51:22.785,18000.0,05:00:00,0,harness,ALL_READY,
+2026-11-12T15:51:22.787,18000.0,05:00:00,0,harness,SPEED_CHANGED,10x
+2026-11-12T15:51:25.791,18000.0,05:00:00,0,harness,CLOCK_RESUMED,10x
+2026-11-12T15:51:25.832,18000.1,05:00:00,1,track-controller-sw,WAYSIDES_READY,Green
+2026-11-12T15:51:25.832,18000.1,05:00:00,1,track-controller-hw,WAYSIDES_READY,Red
+2026-11-12T15:51:25.898,18000.3,05:00:00,3,harness,TRAIN_ADDED,G1 on Green
+2026-11-12T15:51:25.898,18000.3,05:00:00,3,harness,TRAIN_ADDED,R1 on Red
+2026-11-12T15:51:28.046,18022.5,05:00:22,225,harness,TRAIN_ADDED,R2 on Red
+2026-11-12T15:55:20.954,20349.8,05:39:09,23498,ctc-office,MODULE_EXITED,exit code 0
+2026-11-12T15:55:20.954,20349.8,05:39:09,23498,track-controller-sw,MODULE_EXITED,exit code 0
+2026-11-12T15:55:21.929,20349.8,05:39:09,23498,track-controller-hw,MODULE_EXITED,exit code 0
+2026-11-12T15:55:21.930,20349.8,05:39:09,23498,track-model,MODULE_EXITED,exit code 0
+2026-11-12T15:55:21.930,20349.8,05:39:09,23498,train-model,MODULE_EXITED,exit code 0
+2026-11-12T15:55:21.930,20349.8,05:39:09,23498,train-controller-sw,MODULE_EXITED,exit code 0
+2026-11-12T15:55:21.930,20349.8,05:39:09,23498,train-controller-hw,MODULE_EXITED,exit code 0
+2026-11-12T15:55:21.930,20349.8,05:39:09,23498,harness,HARNESS_STOPPED,ctc-office exit code 0; track-controller-sw exit code 0; track-controller-hw exit code 0; track-model exit code 0; train-model exit code 0; train-controller-sw exit code 0; train-controller-hw exit code 0

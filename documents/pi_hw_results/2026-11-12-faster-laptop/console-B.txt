@@ -1,0 +1,116 @@
+﻿Event log: C:\probe\logs-B\events-20261112-155522.csv
+05:00:00 tick      0 harness              HARNESS_STARTED: 7 modules; server track-overflow-6164-6a7fdaf3ac3c
+05:00:00 tick      0 ctc-office           MODULE_STARTED: pid 19768
+05:00:00 tick      0 track-controller-sw  MODULE_STARTED: pid 11616
+05:00:00 tick      0 track-controller-hw  MODULE_STARTED: pid 24180
+05:00:00 tick      0 track-model          MODULE_STARTED: pid 30572
+05:00:00 tick      0 train-model          MODULE_STARTED: pid 9160
+05:00:00 tick      0 train-controller-sw  MODULE_STARTED: pid 15464
+05:00:00 tick      0 train-controller-hw  MODULE_STARTED: pid 11228
+05:00:00 tick      0 track-controller-sw  MODULE_READY
+05:00:00 tick      0 train-model          MODULE_READY
+05:00:00 tick      0 train-controller-hw  PI_TRACE: C:\Users\320316~1\AppData\Local\Temp\track-overflow-pi-9bnzcpz7\train-controller-hw.log
+05:00:00 tick      0 train-controller-sw  MODULE_READY
+05:00:00 tick      0 train-controller-hw  PI_CONNECTED: train-controller-hw
+05:00:00 tick      0 track-controller-hw  PI_TRACE: C:\Users\320316326\AppData\Local\ECE1140 Team 3\Track Controller\logs\track-controller-hw-pi.log
+05:00:00 tick      0 track-controller-hw  PI_SEARCH: module=track-controller-hw manufacturer='Track Overflow' product='Track Overflow Track Controller HW' serial=TO-TRACK-CTRL-HW-01 vid:pid=1d6b:0104 matches=1 ports=['\\\\.\\COM3']
+05:00:00 tick      0 track-controller-hw  PI_CONNECTED: track-controller-hw
+05:00:00 tick      0 track-controller-hw  PI_HELLO: track-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+05:00:00 tick      0 train-controller-hw  PI_HELLO: train-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+05:00:00 tick      0 train-controller-hw  MODULE_READY
+05:00:00 tick      0 track-controller-hw  PI_SKIPPED_LINE: line checksum does not match
+05:00:00 tick      0 track-controller-hw  PI_RESENT: ACTION id=1000000004 tick=0
+05:00:00 tick      0 ctc-office           MODULE_READY
+05:00:00 tick      0 harness              SPEED_CHANGED: 10x
+05:00:00 tick      0 track-controller-hw  MODULE_READY
+05:00:00 tick      0 track-model          MODULE_READY
+05:00:00 tick      0 harness              ALL_READY
+05:00:00 tick      0 harness              CLOCK_RESUMED: 10x
+05:00:00 tick      1 track-controller-sw  WAYSIDES_READY: Green
+05:00:00 tick      1 track-controller-hw  WAYSIDES_READY: Red
+05:00:00 tick      3 harness              TRAIN_ADDED: G1 on Green
+05:00:00 tick      3 harness              TRAIN_ADDED: R1 on Red
+05:00:04 RUNNING 10x, tick 43, 7 ready, 42 ticks, round trip mean 13.0 ms, max 38.4 ms
+05:00:22 tick    225 harness              TRAIN_ADDED: R2 on Red
+05:00:29 tick    292 harness              TIME_SLIPPED: 52 ticks behind real time, not made up
+05:00:48 RUNNING 10x (actual 8.8x), tick 481, 7 ready, 438 ticks, round trip mean 10.9 ms, max 51.6 ms, 52 ticks dropped
+05:01:30 RUNNING 10x (actual 8.4x), tick 904, 7 ready, 423 ticks, round trip mean 11.3 ms, max 66.0 ms, 154 ticks dropped
+05:02:00 tick   1200 harness              TIME_SLIPPING: 155 more ticks dropped in 10.6 s; 207 since the slip began; running at 8.6x
+05:02:13 RUNNING 10x (actual 8.6x), tick 1332, 7 ready, 428 ticks, round trip mean 11.2 ms, max 67.5 ms, 207 ticks dropped
+05:02:56 RUNNING 10x (actual 8.7x), tick 1769, 7 ready, 437 ticks, round trip mean 11.0 ms, max 22.8 ms, 257 ticks dropped
+05:03:35 tick   2154 harness              TIME_SLIPPING: 150 more ticks dropped in 11.1 s; 357 since the slip began; running at 8.5x
+05:03:39 RUNNING 10x (actual 8.5x), tick 2194, 7 ready, 425 ticks, round trip mean 11.3 ms, max 67.2 ms, 357 ticks dropped
+05:04:22 RUNNING 10x (actual 8.5x), tick 2622, 7 ready, 428 ticks, round trip mean 11.2 ms, max 71.7 ms, 407 ticks dropped
+05:05:05 RUNNING 10x (actual 8.6x), tick 3050, 7 ready, 428 ticks, round trip mean 11.2 ms, max 79.4 ms, 457 ticks dropped
+05:05:05 tick   3053 harness              TIME_SLIPPING: 150 more ticks dropped in 10.5 s; 507 since the slip began; running at 8.6x
+05:05:49 RUNNING 10x (actual 8.9x), tick 3494, 7 ready, 444 ticks, round trip mean 10.9 ms, max 18.6 ms, 557 ticks dropped
+05:06:30 RUNNING 10x (actual 8.3x), tick 3909, 7 ready, 415 ticks, round trip mean 11.5 ms, max 80.6 ms, 607 ticks dropped
+05:06:36 tick   3968 harness              TIME_SLIPPING: 150 more ticks dropped in 10.7 s; 657 since the slip began; running at 8.3x
+05:07:10 RUNNING 10x (actual 8.0x), tick 4309, 7 ready, 400 ticks, round trip mean 11.9 ms, max 134.3 ms, 714 ticks dropped
+05:07:54 RUNNING 10x (actual 8.8x), tick 4749, 7 ready, 440 ticks, round trip mean 11.0 ms, max 22.0 ms, 764 ticks dropped
+05:08:32 tick   5122 harness              TIME_SLIPPING: 214 more ticks dropped in 13.7 s; 871 since the slip began; running at 8.6x
+05:08:37 RUNNING 10x (actual 8.5x), tick 5175, 7 ready, 427 ticks, round trip mean 11.3 ms, max 75.0 ms, 871 ticks dropped
+05:09:20 RUNNING 10x (actual 8.6x), tick 5608, 7 ready, 432 ticks, round trip mean 11.2 ms, max 68.5 ms, 921 ticks dropped
+05:10:03 RUNNING 10x (actual 8.6x), tick 6038, 7 ready, 430 ticks, round trip mean 11.2 ms, max 68.8 ms, 971 ticks dropped
+05:10:07 tick   6076 harness              TIME_SLIPPING: 150 more ticks dropped in 11.1 s; 1021 since the slip began; running at 8.6x
+05:10:47 RUNNING 10x (actual 8.8x), tick 6477, 7 ready, 439 ticks, round trip mean 11.0 ms, max 19.5 ms, 1071 ticks dropped
+05:11:30 RUNNING 10x (actual 8.6x), tick 6908, 7 ready, 431 ticks, round trip mean 11.2 ms, max 78.6 ms, 1121 ticks dropped
+05:11:48 tick   7087 harness              TIME_SLIPPING: 150 more ticks dropped in 11.6 s; 1171 since the slip began; running at 8.7x
+05:12:13 RUNNING 10x (actual 8.6x), tick 7339, 7 ready, 431 ticks, round trip mean 11.2 ms, max 70.1 ms, 1171 ticks dropped
+05:12:56 RUNNING 10x (actual 8.5x), tick 7763, 7 ready, 424 ticks, round trip mean 11.3 ms, max 47.1 ms, 1271 ticks dropped
+05:13:16 tick   7965 harness              TIME_SLIPPING: 150 more ticks dropped in 10.3 s; 1321 since the slip began; running at 8.4x
+05:13:40 RUNNING 10x (actual 8.7x), tick 8200, 7 ready, 437 ticks, round trip mean 11.1 ms, max 68.3 ms, 1321 ticks dropped
+05:14:23 RUNNING 10x (actual 8.8x), tick 8638, 7 ready, 438 ticks, round trip mean 11.1 ms, max 70.8 ms, 1371 ticks dropped
+05:15:00 tick   9000 harness              TIME_SLIPPING: 154 more ticks dropped in 11.9 s; 1475 since the slip began; running at 8.6x
+05:15:06 RUNNING 10x (actual 8.5x), tick 9064, 7 ready, 426 ticks, round trip mean 11.3 ms, max 74.8 ms, 1475 ticks dropped
+05:15:50 RUNNING 10x (actual 8.8x), tick 9506, 7 ready, 442 ticks, round trip mean 11.0 ms, max 22.8 ms, 1525 ticks dropped
+05:16:34 RUNNING 10x (actual 8.7x), tick 9940, 7 ready, 434 ticks, round trip mean 11.2 ms, max 69.1 ms, 1575 ticks dropped
+05:16:42 tick  10024 harness              TIME_SLIPPING: 150 more ticks dropped in 11.7 s; 1625 since the slip began; running at 8.6x
+05:17:17 RUNNING 10x (actual 8.6x), tick 10372, 7 ready, 432 ticks, round trip mean 11.2 ms, max 73.7 ms, 1675 ticks dropped
+05:17:59 RUNNING 10x (actual 8.6x), tick 10799, 7 ready, 427 ticks, round trip mean 11.2 ms, max 39.1 ms, 1725 ticks dropped
+05:18:07 tick  10879 harness              TIME_SLIPPING: 150 more ticks dropped in 10.1 s; 1775 since the slip began; running at 8.4x
+05:18:42 RUNNING 10x (actual 8.6x), tick 11227, 7 ready, 428 ticks, round trip mean 11.3 ms, max 91.8 ms, 1775 ticks dropped
+05:19:25 RUNNING 10x (actual 8.6x), tick 11656, 7 ready, 429 ticks, round trip mean 11.3 ms, max 73.4 ms, 1875 ticks dropped
+05:19:45 tick  11859 harness              TIME_SLIPPING: 150 more ticks dropped in 11.3 s; 1925 since the slip began; running at 8.7x
+05:20:08 RUNNING 10x (actual 8.6x), tick 12088, 7 ready, 432 ticks, round trip mean 11.2 ms, max 72.5 ms, 1925 ticks dropped
+05:20:53 RUNNING 10x (actual 8.8x), tick 12530, 7 ready, 442 ticks, round trip mean 11.0 ms, max 17.0 ms, 1975 ticks dropped
+05:21:26 tick  12865 harness              TIME_SLIPPING: 150 more ticks dropped in 11.6 s; 2075 since the slip began; running at 8.7x
+05:21:36 RUNNING 10x (actual 8.7x), tick 12963, 7 ready, 433 ticks, round trip mean 11.2 ms, max 72.3 ms, 2075 ticks dropped
+05:22:18 RUNNING 10x (actual 8.4x), tick 13384, 7 ready, 421 ticks, round trip mean 11.4 ms, max 70.9 ms, 2125 ticks dropped
+05:23:00 RUNNING 10x (actual 8.3x), tick 13800, 7 ready, 416 ticks, round trip mean 11.4 ms, max 38.3 ms, 2226 ticks dropped
+05:23:13 tick  13936 harness              TIME_SLIPPING: 201 more ticks dropped in 12.7 s; 2276 since the slip began; running at 8.4x
+05:23:42 RUNNING 10x (actual 8.4x), tick 14220, 7 ready, 420 ticks, round trip mean 11.5 ms, max 71.7 ms, 2326 ticks dropped
+05:24:23 RUNNING 10x (actual 8.4x), tick 14639, 7 ready, 419 ticks, round trip mean 11.5 ms, max 70.5 ms, 2376 ticks dropped
+05:25:00 tick  15000 harness              TIME_SLIPPING: 203 more ticks dropped in 12.7 s; 2479 since the slip began; running at 8.4x
+05:25:05 RUNNING 10x (actual 8.4x), tick 15059, 7 ready, 420 ticks, round trip mean 11.5 ms, max 72.9 ms, 2479 ticks dropped
+05:25:48 RUNNING 10x (actual 8.5x), tick 15486, 7 ready, 427 ticks, round trip mean 11.2 ms, max 21.4 ms, 2529 ticks dropped
+05:26:30 RUNNING 10x (actual 8.3x), tick 15903, 7 ready, 417 ticks, round trip mean 11.5 ms, max 67.5 ms, 2629 ticks dropped
+05:26:49 tick  16098 harness              TIME_SLIPPING: 200 more ticks dropped in 13.0 s; 2679 since the slip began; running at 8.5x
+05:27:12 RUNNING 10x (actual 8.4x), tick 16322, 7 ready, 419 ticks, round trip mean 11.5 ms, max 64.3 ms, 2679 ticks dropped
+05:27:53 RUNNING 10x (actual 8.3x), tick 16737, 7 ready, 415 ticks, round trip mean 11.5 ms, max 42.1 ms, 2779 ticks dropped
+05:28:00 tick  16800 track-controller-hw  REPLY_SLOW: no reply to tick 16800 after 0.25 s; the clock runs on
+05:28:00 tick  16800 track-controller-hw  REPLY_LATE: no reply to tick 16800 after 1.0 s
+05:28:00 tick  16800 harness              TIME_SLIP_ENDED: 2934 ticks dropped in 57 batches over 194.0 s
+05:28:00 tick  16800 harness              CLOCK_PAUSED: waiting on track-controller-hw
+05:28:00 tick  16800 track-controller-hw  PI_RESENT: STEP id=117596 tick=16800
+05:28:00 tick  16800 track-controller-hw  LATE_REPLY_RECEIVED: after 1.44 s
+05:28:00 tick  16800 harness              CLOCK_RESUMED: 10x
+05:28:00 tick  16800 track-controller-hw  PI_UNMATCHED_REPLY: id=117596 tick=16800
+05:28:13 tick  16936 harness              TIME_SLIPPED: 50 ticks behind real time, not made up
+05:28:20 RUNNING 10x (actual 7.7x), tick 17005, 7 ready, 268 ticks, round trip mean 17.8 ms, max 1442.4 ms, 2984 ticks dropped
+05:29:00 RUNNING 10x (actual 8.1x), tick 17408, 7 ready, 403 ticks, round trip mean 11.8 ms, max 67.3 ms, 3089 ticks dropped
+05:29:43 RUNNING 10x (actual 8.6x), tick 17837, 7 ready, 429 ticks, round trip mean 11.2 ms, max 21.5 ms, 3139 ticks dropped
+05:29:58 tick  17989 harness              TIME_SLIPPING: 205 more ticks dropped in 12.6 s; 255 since the slip began; running at 8.6x
+05:30:25 RUNNING 10x (actual 8.4x), tick 18259, 7 ready, 422 ticks, round trip mean 11.4 ms, max 71.3 ms, 3239 ticks dropped
+05:31:08 RUNNING 10x (actual 8.4x), tick 18681, 7 ready, 422 ticks, round trip mean 11.4 ms, max 72.7 ms, 3289 ticks dropped
+05:31:51 RUNNING 10x (actual 8.6x), tick 19114, 7 ready, 433 ticks, round trip mean 11.2 ms, max 18.5 ms, 3339 ticks dropped
+05:31:54 tick  19141 harness              TIME_SLIPPING: 200 more ticks dropped in 13.5 s; 455 since the slip began; running at 8.6x
+05:32:33 RUNNING 10x (actual 8.4x), tick 19537, 7 ready, 423 ticks, round trip mean 11.4 ms, max 70.5 ms, 3439 ticks dropped
+05:33:15 tick  19957 ctc-office           MODULE_EXITED: exit code 0
+05:33:15 tick  19957 track-controller-sw  MODULE_EXITED: exit code 0
+05:33:15 tick  19957 track-controller-hw  MODULE_EXITED: exit code 0
+05:33:15 tick  19957 track-model          MODULE_EXITED: exit code 0
+05:33:15 tick  19957 train-model          MODULE_EXITED: exit code 0
+05:33:15 tick  19957 train-controller-sw  MODULE_EXITED: exit code 0
+05:33:15 tick  19957 train-controller-hw  MODULE_EXITED: exit code 0
+05:33:15 tick  19957 harness              HARNESS_STOPPED: ctc-office exit code 0; track-controller-sw exit code 0; track-controller-hw exit code 0; track-model exit code 0; train-model exit code 0; train-controller-sw exit code 0; train-controller-hw exit code 0

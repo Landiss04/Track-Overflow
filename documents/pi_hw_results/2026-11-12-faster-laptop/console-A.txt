@@ -1,0 +1,85 @@
+﻿Event log: C:\probe\logs-A\events-20261112-155120.csv
+05:00:00 tick      0 harness              HARNESS_STARTED: 7 modules; server track-overflow-16648-8cf061bfea29
+05:00:00 tick      0 ctc-office           MODULE_STARTED: pid 19052
+05:00:00 tick      0 track-controller-sw  MODULE_STARTED: pid 26936
+05:00:00 tick      0 track-controller-hw  MODULE_STARTED: pid 11572
+05:00:00 tick      0 track-model          MODULE_STARTED: pid 5148
+05:00:00 tick      0 train-model          MODULE_STARTED: pid 12700
+05:00:00 tick      0 train-controller-sw  MODULE_STARTED: pid 23096
+05:00:00 tick      0 train-controller-hw  MODULE_STARTED: pid 5984
+05:00:00 tick      0 train-controller-hw  PI_TRACE: C:\Users\320316~1\AppData\Local\Temp\track-overflow-pi-4fhp4ov_\train-controller-hw.log
+05:00:00 tick      0 train-controller-sw  MODULE_READY
+05:00:00 tick      0 train-controller-hw  PI_CONNECTED: train-controller-hw
+05:00:00 tick      0 track-controller-hw  PI_TRACE: C:\Users\320316~1\AppData\Local\Temp\track-overflow-pi-4bl40mwu\track-controller-hw.log
+05:00:00 tick      0 track-controller-hw  PI_CONNECTED: track-controller-hw
+05:00:00 tick      0 train-model          MODULE_READY
+05:00:00 tick      0 track-controller-sw  MODULE_READY
+05:00:00 tick      0 train-controller-hw  PI_HELLO: train-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+05:00:00 tick      0 train-controller-hw  MODULE_READY
+05:00:00 tick      0 track-controller-hw  PI_HELLO: track-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+05:00:00 tick      0 track-controller-hw  MODULE_READY
+05:00:00 tick      0 track-model          MODULE_READY
+05:00:00 tick      0 ctc-office           MODULE_READY
+05:00:00 tick      0 harness              ALL_READY
+05:00:00 tick      0 harness              SPEED_CHANGED: 10x
+05:00:00 PAUSED 10x, tick 0, 7 ready
+05:00:00 tick      0 harness              CLOCK_RESUMED: 10x
+05:00:00 tick      1 track-controller-sw  WAYSIDES_READY: Green
+05:00:00 tick      1 track-controller-hw  WAYSIDES_READY: Red
+05:00:00 tick      3 harness              TRAIN_ADDED: G1 on Green
+05:00:00 tick      3 harness              TRAIN_ADDED: R1 on Red
+05:00:22 tick    225 harness              TRAIN_ADDED: R2 on Red
+05:00:49 RUNNING 10x (actual 10.0x), tick 499, 7 ready, 498 ticks, round trip mean 6.3 ms, max 44.4 ms
+05:01:39 RUNNING 10x (actual 10.0x), tick 999, 7 ready, 501 ticks, round trip mean 6.1 ms, max 25.7 ms
+05:02:29 RUNNING 10x (actual 10.0x), tick 1498, 7 ready, 499 ticks, round trip mean 5.7 ms, max 23.3 ms
+05:03:19 RUNNING 10x (actual 10.0x), tick 1999, 7 ready, 500 ticks, round trip mean 5.7 ms, max 21.5 ms
+05:04:09 RUNNING 10x (actual 10.0x), tick 2499, 7 ready, 501 ticks, round trip mean 6.1 ms, max 32.4 ms
+05:05:00 RUNNING 10x (actual 10.0x), tick 3000, 7 ready, 500 ticks, round trip mean 5.9 ms, max 18.6 ms
+05:05:49 RUNNING 10x (actual 10.0x), tick 3499, 7 ready, 500 ticks, round trip mean 6.1 ms, max 21.3 ms
+05:06:39 RUNNING 10x (actual 10.0x), tick 3999, 7 ready, 500 ticks, round trip mean 6.0 ms, max 20.8 ms
+05:07:30 RUNNING 10x (actual 10.0x), tick 4500, 7 ready, 500 ticks, round trip mean 6.0 ms, max 24.5 ms
+05:08:19 RUNNING 10x (actual 10.0x), tick 4999, 7 ready, 499 ticks, round trip mean 6.0 ms, max 19.9 ms
+05:09:09 RUNNING 10x (actual 10.0x), tick 5499, 7 ready, 501 ticks, round trip mean 5.9 ms, max 25.8 ms
+05:10:00 RUNNING 10x (actual 10.0x), tick 6000, 7 ready, 500 ticks, round trip mean 5.7 ms, max 13.7 ms
+05:10:49 RUNNING 10x (actual 10.0x), tick 6499, 7 ready, 500 ticks, round trip mean 5.7 ms, max 22.3 ms
+05:11:39 RUNNING 10x (actual 10.0x), tick 6999, 7 ready, 500 ticks, round trip mean 5.7 ms, max 28.4 ms
+05:12:29 RUNNING 10x (actual 10.0x), tick 7499, 7 ready, 500 ticks, round trip mean 5.6 ms, max 20.9 ms
+05:13:19 RUNNING 10x (actual 10.0x), tick 7999, 7 ready, 500 ticks, round trip mean 5.4 ms, max 21.5 ms
+05:14:09 RUNNING 10x (actual 10.0x), tick 8499, 7 ready, 500 ticks, round trip mean 5.5 ms, max 24.0 ms
+05:14:59 RUNNING 10x (actual 10.0x), tick 8999, 7 ready, 500 ticks, round trip mean 5.6 ms, max 14.5 ms
+05:15:49 RUNNING 10x (actual 10.0x), tick 9499, 7 ready, 500 ticks, round trip mean 5.5 ms, max 21.7 ms
+05:16:39 RUNNING 10x (actual 10.0x), tick 9999, 7 ready, 500 ticks, round trip mean 5.5 ms, max 27.0 ms
+05:17:29 RUNNING 10x (actual 10.0x), tick 10499, 7 ready, 500 ticks, round trip mean 5.7 ms, max 24.4 ms
+05:18:19 RUNNING 10x (actual 10.0x), tick 10999, 7 ready, 500 ticks, round trip mean 6.3 ms, max 102.8 ms
+05:19:09 RUNNING 10x (actual 10.0x), tick 11499, 7 ready, 500 ticks, round trip mean 5.6 ms, max 21.4 ms
+05:19:59 RUNNING 10x (actual 10.0x), tick 11999, 7 ready, 500 ticks, round trip mean 5.6 ms, max 13.2 ms
+05:20:49 RUNNING 10x (actual 10.0x), tick 12499, 7 ready, 500 ticks, round trip mean 5.7 ms, max 20.7 ms
+05:21:39 RUNNING 10x (actual 10.0x), tick 12999, 7 ready, 500 ticks, round trip mean 5.6 ms, max 40.5 ms
+05:22:29 RUNNING 10x (actual 10.0x), tick 13499, 7 ready, 500 ticks, round trip mean 5.8 ms, max 23.4 ms
+05:23:19 RUNNING 10x (actual 10.0x), tick 13999, 7 ready, 500 ticks, round trip mean 5.7 ms, max 22.0 ms
+05:24:09 RUNNING 10x (actual 10.0x), tick 14499, 7 ready, 500 ticks, round trip mean 5.6 ms, max 20.2 ms
+05:24:59 RUNNING 10x (actual 10.0x), tick 14999, 7 ready, 500 ticks, round trip mean 5.6 ms, max 41.3 ms
+05:25:49 RUNNING 10x (actual 10.0x), tick 15499, 7 ready, 500 ticks, round trip mean 5.5 ms, max 24.0 ms
+05:26:39 RUNNING 10x (actual 10.0x), tick 15999, 7 ready, 500 ticks, round trip mean 5.6 ms, max 22.0 ms
+05:27:29 RUNNING 10x (actual 10.0x), tick 16499, 7 ready, 500 ticks, round trip mean 5.8 ms, max 21.7 ms
+05:28:19 RUNNING 10x (actual 10.0x), tick 16999, 7 ready, 500 ticks, round trip mean 6.0 ms, max 21.2 ms
+05:29:09 RUNNING 10x (actual 10.0x), tick 17499, 7 ready, 500 ticks, round trip mean 5.8 ms, max 22.2 ms
+05:29:59 RUNNING 10x (actual 10.0x), tick 17999, 7 ready, 499 ticks, round trip mean 5.7 ms, max 18.4 ms
+05:30:49 RUNNING 10x (actual 10.0x), tick 18499, 7 ready, 501 ticks, round trip mean 6.1 ms, max 23.5 ms
+05:31:39 RUNNING 10x (actual 10.0x), tick 18999, 7 ready, 500 ticks, round trip mean 5.7 ms, max 22.3 ms
+05:32:29 RUNNING 10x (actual 10.0x), tick 19499, 7 ready, 500 ticks, round trip mean 6.8 ms, max 58.4 ms
+05:33:19 RUNNING 10x (actual 10.0x), tick 19999, 7 ready, 499 ticks, round trip mean 8.1 ms, max 57.5 ms
+05:34:09 RUNNING 10x (actual 10.0x), tick 20499, 7 ready, 501 ticks, round trip mean 6.4 ms, max 22.9 ms
+05:35:00 RUNNING 10x (actual 10.0x), tick 21000, 7 ready, 500 ticks, round trip mean 6.5 ms, max 28.9 ms
+05:35:49 RUNNING 10x (actual 10.0x), tick 21499, 7 ready, 500 ticks, round trip mean 6.1 ms, max 20.4 ms
+05:36:39 RUNNING 10x (actual 10.0x), tick 21999, 7 ready, 500 ticks, round trip mean 5.8 ms, max 20.8 ms
+05:37:30 RUNNING 10x (actual 10.0x), tick 22500, 7 ready, 500 ticks, round trip mean 5.8 ms, max 25.0 ms
+05:38:19 RUNNING 10x (actual 10.0x), tick 22999, 7 ready, 499 ticks, round trip mean 5.8 ms, max 20.5 ms
+05:39:09 tick  23498 ctc-office           MODULE_EXITED: exit code 0
+05:39:09 tick  23498 track-controller-sw  MODULE_EXITED: exit code 0
+05:39:09 tick  23498 track-controller-hw  MODULE_EXITED: exit code 0
+05:39:09 tick  23498 track-model          MODULE_EXITED: exit code 0
+05:39:09 tick  23498 train-model          MODULE_EXITED: exit code 0
+05:39:09 tick  23498 train-controller-sw  MODULE_EXITED: exit code 0
+05:39:09 tick  23498 train-controller-hw  MODULE_EXITED: exit code 0
+05:39:09 tick  23498 harness              HARNESS_STOPPED: ctc-office exit code 0; track-controller-sw exit code 0; track-controller-hw exit code 0; track-model exit code 0; train-model exit code 0; train-controller-sw exit code 0; train-controller-hw exit code 0

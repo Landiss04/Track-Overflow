@@ -1,0 +1,69 @@
+wall_time,sim_time_s,time_of_day,tick,source,event,detail
+2026-11-12T15:55:22.269,18000.0,05:00:00,0,harness,HARNESS_STARTED,7 modules; server track-overflow-6164-6a7fdaf3ac3c
+2026-11-12T15:55:22.284,18000.0,05:00:00,0,ctc-office,MODULE_STARTED,pid 19768
+2026-11-12T15:55:22.301,18000.0,05:00:00,0,track-controller-sw,MODULE_STARTED,pid 11616
+2026-11-12T15:55:22.314,18000.0,05:00:00,0,track-controller-hw,MODULE_STARTED,pid 24180
+2026-11-12T15:55:22.337,18000.0,05:00:00,0,track-model,MODULE_STARTED,pid 30572
+2026-11-12T15:55:22.356,18000.0,05:00:00,0,train-model,MODULE_STARTED,pid 9160
+2026-11-12T15:55:22.372,18000.0,05:00:00,0,train-controller-sw,MODULE_STARTED,pid 15464
+2026-11-12T15:55:22.389,18000.0,05:00:00,0,train-controller-hw,MODULE_STARTED,pid 11228
+2026-11-12T15:55:23.327,18000.0,05:00:00,0,track-controller-sw,MODULE_READY,
+2026-11-12T15:55:23.352,18000.0,05:00:00,0,train-model,MODULE_READY,
+2026-11-12T15:55:23.391,18000.0,05:00:00,0,train-controller-hw,PI_TRACE,C:\Users\320316~1\AppData\Local\Temp\track-overflow-pi-9bnzcpz7\train-controller-hw.log
+2026-11-12T15:55:23.394,18000.0,05:00:00,0,train-controller-sw,MODULE_READY,
+2026-11-12T15:55:23.413,18000.0,05:00:00,0,train-controller-hw,PI_CONNECTED,train-controller-hw
+2026-11-12T15:55:23.460,18000.0,05:00:00,0,track-controller-hw,PI_TRACE,C:\Users\320316326\AppData\Local\ECE1140 Team 3\Track Controller\logs\track-controller-hw-pi.log
+2026-11-12T15:55:23.490,18000.0,05:00:00,0,track-controller-hw,PI_SEARCH,module=track-controller-hw manufacturer='Track Overflow' product='Track Overflow Track Controller HW' serial=TO-TRACK-CTRL-HW-01 vid:pid=1d6b:0104 matches=1 ports=['\\\\.\\COM3']
+2026-11-12T15:55:23.493,18000.0,05:00:00,0,track-controller-hw,PI_CONNECTED,track-controller-hw
+2026-11-12T15:55:23.581,18000.0,05:00:00,0,track-controller-hw,PI_HELLO,track-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+2026-11-12T15:55:23.669,18000.0,05:00:00,0,train-controller-hw,PI_HELLO,train-controller-hw version=1 hash=c5ffae7df449107e20eab848d06cce4287e190066068e230530ec90129f851ec
+2026-11-12T15:55:23.671,18000.0,05:00:00,0,train-controller-hw,MODULE_READY,
+2026-11-12T15:55:23.739,18000.0,05:00:00,0,track-controller-hw,PI_SKIPPED_LINE,line checksum does not match
+2026-11-12T15:55:23.740,18000.0,05:00:00,0,track-controller-hw,PI_RESENT,ACTION id=1000000004 tick=0
+2026-11-12T15:55:23.760,18000.0,05:00:00,0,ctc-office,MODULE_READY,
+2026-11-12T15:55:23.762,18000.0,05:00:00,0,harness,SPEED_CHANGED,10x
+2026-11-12T15:55:23.807,18000.0,05:00:00,0,track-controller-hw,MODULE_READY,
+2026-11-12T15:55:23.896,18000.0,05:00:00,0,track-model,MODULE_READY,
+2026-11-12T15:55:23.896,18000.0,05:00:00,0,harness,ALL_READY,
+2026-11-12T15:55:26.774,18000.0,05:00:00,0,harness,CLOCK_RESUMED,10x
+2026-11-12T15:55:26.800,18000.1,05:00:00,1,track-controller-sw,WAYSIDES_READY,Green
+2026-11-12T15:55:26.800,18000.1,05:00:00,1,track-controller-hw,WAYSIDES_READY,Red
+2026-11-12T15:55:26.874,18000.3,05:00:00,3,harness,TRAIN_ADDED,G1 on Green
+2026-11-12T15:55:26.874,18000.3,05:00:00,3,harness,TRAIN_ADDED,R1 on Red
+2026-11-12T15:55:29.409,18022.5,05:00:22,225,harness,TRAIN_ADDED,R2 on Red
+2026-11-12T15:55:30.232,18029.2,05:00:29,292,harness,TIME_SLIPPED,"52 ticks behind real time, not made up"
+2026-11-12T15:55:40.869,18120.0,05:02:00,1200,harness,TIME_SLIPPING,155 more ticks dropped in 10.6 s; 207 since the slip began; running at 8.6x
+2026-11-12T15:55:51.923,18215.4,05:03:35,2154,harness,TIME_SLIPPING,150 more ticks dropped in 11.1 s; 357 since the slip began; running at 8.5x
+2026-11-12T15:56:02.421,18305.3,05:05:05,3053,harness,TIME_SLIPPING,150 more ticks dropped in 10.5 s; 507 since the slip began; running at 8.6x
+2026-11-12T15:56:13.078,18396.8,05:06:36,3968,harness,TIME_SLIPPING,150 more ticks dropped in 10.7 s; 657 since the slip began; running at 8.3x
+2026-11-12T15:56:26.779,18512.2,05:08:32,5122,harness,TIME_SLIPPING,214 more ticks dropped in 13.7 s; 871 since the slip began; running at 8.6x
+2026-11-12T15:56:37.832,18607.6,05:10:07,6076,harness,TIME_SLIPPING,150 more ticks dropped in 11.1 s; 1021 since the slip began; running at 8.6x
+2026-11-12T15:56:49.442,18708.7,05:11:48,7087,harness,TIME_SLIPPING,150 more ticks dropped in 11.6 s; 1171 since the slip began; running at 8.7x
+2026-11-12T15:56:59.726,18796.5,05:13:16,7965,harness,TIME_SLIPPING,150 more ticks dropped in 10.3 s; 1321 since the slip began; running at 8.4x
+2026-11-12T15:57:11.620,18900.0,05:15:00,9000,harness,TIME_SLIPPING,154 more ticks dropped in 11.9 s; 1475 since the slip began; running at 8.6x
+2026-11-12T15:57:23.368,19002.4,05:16:42,10024,harness,TIME_SLIPPING,150 more ticks dropped in 11.7 s; 1625 since the slip began; running at 8.6x
+2026-11-12T15:57:33.422,19087.9,05:18:07,10879,harness,TIME_SLIPPING,150 more ticks dropped in 10.1 s; 1775 since the slip began; running at 8.4x
+2026-11-12T15:57:44.728,19185.9,05:19:45,11859,harness,TIME_SLIPPING,150 more ticks dropped in 11.3 s; 1925 since the slip began; running at 8.7x
+2026-11-12T15:57:56.291,19286.5,05:21:26,12865,harness,TIME_SLIPPING,150 more ticks dropped in 11.6 s; 2075 since the slip began; running at 8.7x
+2026-11-12T15:58:09.022,19393.6,05:23:13,13936,harness,TIME_SLIPPING,201 more ticks dropped in 12.7 s; 2276 since the slip began; running at 8.4x
+2026-11-12T15:58:21.704,19500.0,05:25:00,15000,harness,TIME_SLIPPING,203 more ticks dropped in 12.7 s; 2479 since the slip began; running at 8.4x
+2026-11-12T15:58:34.687,19609.8,05:26:49,16098,harness,TIME_SLIPPING,200 more ticks dropped in 13.0 s; 2679 since the slip began; running at 8.5x
+2026-11-12T15:58:43.528,19680.0,05:28:00,16800,track-controller-hw,REPLY_SLOW,no reply to tick 16800 after 0.25 s; the clock runs on
+2026-11-12T15:58:44.265,19680.0,05:28:00,16800,track-controller-hw,REPLY_LATE,no reply to tick 16800 after 1.0 s
+2026-11-12T15:58:44.266,19680.0,05:28:00,16800,harness,TIME_SLIP_ENDED,2934 ticks dropped in 57 batches over 194.0 s
+2026-11-12T15:58:44.266,19680.0,05:28:00,16800,harness,CLOCK_PAUSED,waiting on track-controller-hw
+2026-11-12T15:58:44.268,19680.0,05:28:00,16800,track-controller-hw,PI_RESENT,STEP id=117596 tick=16800
+2026-11-12T15:58:44.722,19680.0,05:28:00,16800,track-controller-hw,LATE_REPLY_RECEIVED,after 1.44 s
+2026-11-12T15:58:44.722,19680.0,05:28:00,16800,harness,CLOCK_RESUMED,10x
+2026-11-12T15:58:44.741,19680.0,05:28:00,16800,track-controller-hw,PI_UNMATCHED_REPLY,id=117596 tick=16800
+2026-11-12T15:58:46.583,19693.6,05:28:13,16936,harness,TIME_SLIPPED,"50 ticks behind real time, not made up"
+2026-11-12T15:58:59.177,19798.9,05:29:58,17989,harness,TIME_SLIPPING,205 more ticks dropped in 12.6 s; 255 since the slip began; running at 8.6x
+2026-11-12T15:59:12.701,19914.1,05:31:54,19141,harness,TIME_SLIPPING,200 more ticks dropped in 13.5 s; 455 since the slip began; running at 8.6x
+2026-11-12T15:59:22.534,19995.7,05:33:15,19957,ctc-office,MODULE_EXITED,exit code 0
+2026-11-12T15:59:22.552,19995.7,05:33:15,19957,track-controller-sw,MODULE_EXITED,exit code 0
+2026-11-12T15:59:22.552,19995.7,05:33:15,19957,track-controller-hw,MODULE_EXITED,exit code 0
+2026-11-12T15:59:22.552,19995.7,05:33:15,19957,track-model,MODULE_EXITED,exit code 0
+2026-11-12T15:59:22.552,19995.7,05:33:15,19957,train-model,MODULE_EXITED,exit code 0
+2026-11-12T15:59:22.552,19995.7,05:33:15,19957,train-controller-sw,MODULE_EXITED,exit code 0
+2026-11-12T15:59:23.504,19995.7,05:33:15,19957,train-controller-hw,MODULE_EXITED,exit code 0
+2026-11-12T15:59:23.504,19995.7,05:33:15,19957,harness,HARNESS_STOPPED,ctc-office exit code 0; track-controller-sw exit code 0; track-controller-hw exit code 0; track-model exit code 0; train-model exit code 0; train-controller-sw exit code 0; train-controller-hw exit code 0
