@@ -372,21 +372,21 @@ class Harness(QObject):
             })
         return tuple(rows)
 
-    def show_window(self, module: str, fullscreen: bool = False) -> bool:
+    def show_window(self, module: str, maximized: bool = False) -> bool:
         """Ask a connected module to reopen its window, without a tick.
 
         Return False if the run is stopping or the module is absent.
         """
         if self._stopping or module in self._down:
             return False
-        if fullscreen and sys.platform == "win32" and module in self._pids:
+        if maximized and sys.platform == "win32" and module in self._pids:
             # Windows lets another process take the foreground only if
             # the foreground process, the harness here, allows it.
             import ctypes
 
             ctypes.windll.user32.AllowSetForegroundWindow(self._pids[module])
         return self._supervisor.send(
-            module, show_message(self._clock.tick_count, fullscreen)
+            module, show_message(self._clock.tick_count, maximized)
         )
 
     def snapshot_window(self, module: str, path: str) -> bool:

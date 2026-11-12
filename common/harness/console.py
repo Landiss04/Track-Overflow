@@ -215,9 +215,9 @@ class HarnessConsole(QObject):
         return self._harness.show_window(module)
 
     @Slot(str, result=bool)
-    def show_full_screen(self, module: str) -> bool:
-        """Ask a module to show its window full screen."""
-        return self._harness.show_window(module, fullscreen=True)
+    def show_maximized(self, module: str) -> bool:
+        """Ask a module to show its window maximized."""
+        return self._harness.show_window(module, maximized=True)
 
     @Slot()
     def request_snapshots(self) -> None:

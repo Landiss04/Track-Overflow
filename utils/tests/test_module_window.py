@@ -41,13 +41,12 @@ window.hide()
 """
 
 # A hidden QML window still saves a tile-sized image of itself, and a
-# full-screen SHOW is undone by Escape.
+# maximized SHOW maximizes it.
 _SNAPSHOT_PROBE = """
 import os, sys
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtTest import QTest
 from utils.harness_protocol import show_message, snapshot_message
 from utils.module_link import ModuleLink
 from utils.module_window import SNAPSHOT_WIDTH_PX, keep_windows_open
@@ -67,13 +66,10 @@ image = QImage(path)
 assert not image.isNull() and image.width() == SNAPSHOT_WIDTH_PX
 assert image.pixelColor(10, 10).name() == "#ff0000"
 assert os.listdir(sys.argv[1]) == ["train-model.png"]
-link._handle(show_message(7, fullscreen=True))
+link._handle(show_message(7, maximized=True))
 app.processEvents()
 assert window.isVisible()
-assert window.windowState() == Qt.WindowState.WindowFullScreen
-QTest.keyClick(window, Qt.Key.Key_Escape)
-app.processEvents()
-assert window.windowState() != Qt.WindowState.WindowFullScreen
+assert window.windowState() == Qt.WindowState.WindowMaximized
 assert link.tick == 0 and link.last_reply is None
 link.close()
 window.hide()
@@ -95,8 +91,8 @@ class ModuleWindowTest(unittest.TestCase):
                          result.stdout + result.stderr)
         self.assertEqual(result.stderr, "")
 
-    def test_snapshot_of_a_hidden_window_and_full_screen(self) -> None:
-        """Save a non-blank image while hidden; Escape leaves full screen."""
+    def test_snapshot_of_a_hidden_window_and_maximized(self) -> None:
+        """Save a non-blank image while hidden; SHOW can maximize."""
         with tempfile.TemporaryDirectory() as folder:
             result = subprocess.run(
                 [sys.executable, "-c", _SNAPSHOT_PROBE, folder],

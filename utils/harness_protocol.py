@@ -25,7 +25,7 @@ Harness to module:
   unwrapped simulation time at the end of the step (D017).
 - ``QUIT``: end the process.
 - ``SHOW``: reopen the module window; no reply (additive in v1). An
-  optional boolean ``fullscreen`` shows it full screen instead.
+  optional boolean ``maximized`` shows it maximized instead.
 - ``SNAPSHOT``: save an image of the module window to the file
   ``path``; no reply (additive in v1).
 - ``CLOCK_STATE``: actual harness pause/speed state for HW hosts, initially
@@ -257,8 +257,8 @@ def validate(message: Mapping[str, Any]) -> None:
             raise ProtocolError(
                 "CLOCK_STATE needs id 0 and boolean clock_paused/clock_speedup"
             )
-    if op == SHOW and not isinstance(message.get("fullscreen", False), bool):
-        raise ProtocolError("SHOW fullscreen must be a boolean")
+    if op == SHOW and not isinstance(message.get("maximized", False), bool):
+        raise ProtocolError("SHOW maximized must be a boolean")
 
 
 def step_message(
@@ -284,15 +284,15 @@ def quit_message(tick: int) -> dict[str, Any]:
     return {"op": QUIT, "id": 0, "tick": tick}
 
 
-def show_message(tick: int, fullscreen: bool = False) -> dict[str, Any]:
+def show_message(tick: int, maximized: bool = False) -> dict[str, Any]:
     """Return a ``SHOW`` without requesting a reply.
 
-    ``fullscreen`` is sent only when set, so a plain ``SHOW`` is
+    ``maximized`` is sent only when set, so a plain ``SHOW`` is
     unchanged on the wire.
     """
     message = {"op": SHOW, "id": 0, "tick": tick}
-    if fullscreen:
-        message["fullscreen"] = True
+    if maximized:
+        message["maximized"] = True
     return message
 
 

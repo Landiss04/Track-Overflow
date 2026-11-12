@@ -8,7 +8,7 @@ Call ``keep_windows_open`` once, right after creating the
 ``QGuiApplication``.
 ``ModuleLink.showRequested`` restores the main windows through
 ``show_module_windows``, leaving transient dialogs hidden, and can show
-them full screen; Escape returns a full-screen window to normal.
+them maximized.
 ``ModuleLink.snapshotRequested`` saves a tile-sized image of the main
 window through ``save_module_snapshot``, shown or hidden.
 """
@@ -27,7 +27,7 @@ import os
 from collections.abc import Iterator
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QGuiApplication, QKeyEvent, QWindow
+from PySide6.QtGui import QGuiApplication, QWindow
 from PySide6.QtQuick import QQuickWindow
 
 #: Width of a saved snapshot; the harness's tiled view shows several
@@ -36,7 +36,7 @@ SNAPSHOT_WIDTH_PX = 720
 
 
 class _HideOnClose(QObject):
-    """Turn a window's close into a hide; Escape leaves full screen."""
+    """Turn a window's close into a hide."""
 
     def eventFilter(  # noqa: N802 - Qt API
         self, watched: QObject, event: QEvent
@@ -49,16 +49,6 @@ class _HideOnClose(QObject):
             event.ignore()
             watched.hide()
             return True
-        if (
-            event.type() == QEvent.Type.KeyPress
-            and isinstance(watched, QWindow)
-            and isinstance(event, QKeyEvent)
-            and event.key() == Qt.Key.Key_Escape
-            and watched.windowState() == Qt.WindowState.WindowFullScreen
-        ):
-            # The key still reaches the module, so an open popup closes
-            # as it would anyway.
-            watched.showNormal()
         return False
 
 
@@ -72,26 +62,20 @@ def keep_windows_open(app: QGuiApplication) -> None:
     app.installEventFilter(_HideOnClose(app))
 
 
-def show_module_windows(fullscreen: bool = False) -> None:
+def show_module_windows(maximized: bool = False) -> None:
     """Reopen this module's main windows without reopening dialogs.
 
     ModuleLink connects its showRequested signal to this shared policy.
     Each module owns one process, so no other module's windows appear.
 
     Args:
-        fullscreen: Show them full screen and on top.
+        maximized: Show them maximized and on top.
     """
     app = QGuiApplication.instance()
     wayland = app is not None and app.platformName() == "wayland"
     for window in _main_windows():
-        if fullscreen:
-            if window.windowState() == Qt.WindowState.WindowMinimized:
-                # On Windows, a minimized window sent full screen keeps
-                # its normal size and loses its title bar; restore first.
-                window.showNormal()
-            window.showFullScreen()
-            window.raise_()
-        elif window.windowState() == Qt.WindowState.WindowMinimized:
+        if (not maximized
+                and window.windowState() == Qt.WindowState.WindowMinimized):
             window.showNormal()
         else:
             if wayland and window.isVisible():
@@ -99,7 +83,11 @@ def show_module_windows(fullscreen: bool = False) -> None:
                 # process without focus, but focuses a freshly shown
                 # window, so show it afresh.
                 window.hide()
-            window.show()
+            if maximized:
+                window.showMaximized()
+                window.raise_()
+            else:
+                window.show()
         window.requestActivate()
 
 

@@ -42,7 +42,7 @@ class RoundTripTest(unittest.TestCase):
             step_message(41, 12, 0.1, 18001.2, {"ctc-office": {"tick": 11}}),
             quit_message(12),
             show_message(12),
-            show_message(12, fullscreen=True),
+            show_message(12, maximized=True),
             snapshot_message(12, "/tmp/tiles/ctc-office.png"),
             ready_message("track-model"),
             outputs_message(41, 12, {"clock_paused": False}),
@@ -88,14 +88,14 @@ class ClockStateTest(unittest.TestCase):
 
 
 class WindowRequestTest(unittest.TestCase):
-    """SHOW's full-screen flag and SNAPSHOT's path are checked."""
+    """SHOW's maximized flag and SNAPSHOT's path are checked."""
 
     def test_plain_show_is_unchanged_on_the_wire(self) -> None:
         self.assertEqual(show_message(3), {"op": SHOW, "id": 0, "tick": 3})
 
-    def test_fullscreen_must_be_a_boolean(self) -> None:
+    def test_maximized_must_be_a_boolean(self) -> None:
         with self.assertRaises(ProtocolError):
-            decode(b'{"op": "SHOW", "id": 0, "tick": 1, "fullscreen": 1}')
+            decode(b'{"op": "SHOW", "id": 0, "tick": 1, "maximized": 1}')
 
     def test_snapshot_needs_a_path(self) -> None:
         for line in (b'{"op": "SNAPSHOT", "id": 0, "tick": 1}',

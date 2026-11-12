@@ -377,14 +377,6 @@ Shared.ScaledWindow {
         harnessWindow: window
     }
 
-    // The tiled view can show this window full screen, as it does the
-    // modules' windows; Escape returns it to normal.
-    Shortcut {
-        sequence: "Esc"
-        enabled: window.visibility === Window.FullScreen
-        onActivated: window.showNormal()
-    }
-
     Dialog {
         id: endDialog
         objectName: "endRunDialog"

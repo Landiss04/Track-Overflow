@@ -75,7 +75,7 @@ class ModuleLink(QObject):
     #: The harness clock changed; host relays use this for recovery.
     clockStateChanged = Signal(object)
     #: The harness asked to reopen this module's window; True for
-    #: full screen.
+    #: maximized.
     showRequested = Signal(bool)
     #: The harness asked for an image of this module's window at a path.
     snapshotRequested = Signal(str)
@@ -271,7 +271,7 @@ class ModuleLink(QObject):
         elif op == QUIT:
             self.quitRequested.emit()
         elif op == SHOW:
-            self.showRequested.emit(message.get("fullscreen", False))
+            self.showRequested.emit(message.get("maximized", False))
         elif op == SNAPSHOT:
             self.snapshotRequested.emit(message["path"])
         else:
@@ -340,14 +340,14 @@ def _sendable(reason: str) -> str:
     return reason.encode("utf-8", "backslashreplace").decode("utf-8")
 
 
-def _show_module_windows(fullscreen: bool) -> None:
+def _show_module_windows(maximized: bool) -> None:
     # GUI modules share one window policy. Core-only stubs do nothing,
     # and do not import GUI bindings just to ignore a SHOW.
     app = QCoreApplication.instance()
     if app is not None and app.inherits("QGuiApplication"):
         from utils.module_window import show_module_windows
 
-        show_module_windows(fullscreen)
+        show_module_windows(maximized)
 
 
 def _save_module_snapshot(path: str) -> None:

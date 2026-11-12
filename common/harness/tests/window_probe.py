@@ -128,7 +128,7 @@ class WindowProbe(unittest.TestCase):
                     self.assertEqual(console.snapshot["state"], "PAUSED")
                     self.assertIn("Track Model", console.snapshot["hold"])
                     self.assertTrue(console.show_window(CTC_OFFICE))
-                    self.assertTrue(console.show_full_screen(CTC_OFFICE))
+                    self.assertTrue(console.show_maximized(CTC_OFFICE))
                     tiled = window.root.findChild(
                         QObject, "tiledViewButton"
                     )

@@ -1,8 +1,7 @@
 // Every window on one screen, for projector demonstrations: the harness
 // first, then each module. Each tile is a recent image of that window,
-// saved by the process that owns it. Selecting
-// a tile brings that window up full screen, and Escape in it returns it
-// to normal.
+// saved by the process that owns it. Selecting a tile brings that
+// window up maximized.
 //
 // A plain window rather than a ScaledWindow: the wall is a harness tool,
 // not a module UI, and a 16:10 canvas letterboxed on a 16:9 screen would
@@ -22,7 +21,7 @@ Window {
     width: 1440
     height: 900
 
-    // The harness window, which its tile shows full screen.
+    // The harness window, which its tile shows maximized.
     required property var harnessWindow
     // How often the tiles ask for new images while the wall is shown.
     // Tune on the projector machine.
@@ -90,8 +89,7 @@ Window {
         id: hint
         x: theme.space_5
         y: theme.space_5
-        text: "Select a tile to show that window full screen. "
-            + "Press Esc there to come back."
+        text: "Select a tile to show that window maximized."
     }
 
     Item {
@@ -115,11 +113,11 @@ Window {
                         && modelData.snapshot_url !== ""
                     function open() {
                         if (modelData.name === "harness") {
-                            wall.harnessWindow.showFullScreen()
+                            wall.harnessWindow.showMaximized()
                             wall.harnessWindow.raise()
                             wall.harnessWindow.requestActivate()
                         } else {
-                            backend.show_full_screen(modelData.name)
+                            backend.show_maximized(modelData.name)
                         }
                     }
                     objectName: "tile-" + modelData.name
@@ -133,7 +131,7 @@ Window {
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
                     Accessible.name: "Show " + modelData.label
-                        + " full screen"
+                        + " maximized"
                     Keys.onReturnPressed: open()
                     Keys.onSpacePressed: open()
 
