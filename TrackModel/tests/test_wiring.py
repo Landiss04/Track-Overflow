@@ -11,12 +11,11 @@ from track_model.interface import (
     InvalidInputError,
     SignalAspect,
     SwitchPosition,
-    TrackConfig,
     TrackControllerCommands,
     TrackFailure,
     UnknownIdError,
 )
-from track_model.model import TrackModel
+from track_model.model import IDLE_NO_SUPPLY_S, MAX_WAITING, TrackModel
 from tests.helpers import (
     DT_S,
     LAYOUT_PATHS,
@@ -432,16 +431,120 @@ def test_ticket_sales_are_reproducible_with_a_seed() -> None:
 
 def test_ticket_rate_holds_at_any_tick_length() -> None:
     """Check sales are time-based: the default 12 a minute per station
-    holds whether the tick is 0.1 s or 0.5 s (TM-1)."""
+    holds whether the tick is 0.1 s or 0.5 s (TM-1). Measured over the
+    first minute, before the wait at a station changes the rate."""
     for dt in (0.1, 0.5):
-        model = TrackModel(TrackConfig(LAYOUT_PATHS, seed=3))
+        model = make_model(12.0, seed=3)   # the default rate
         sold: dict[str, int] = {}
-        for _ in range(round(10 * 60 / dt)):         # ten simulated minutes
+        for _ in range(round(60 / dt)):
             for station, count in model.step(
                     dt, make_inputs()).ctc.tickets_sold_now.items():
                 sold[station] = sold.get(station, 0) + count
-        per_minute = sum(sold.values()) / len(sold) / 10
-        assert 11.0 < per_minute < 13.0, (dt, per_minute)
+        per_minute = sum(sold.values()) / len(sold)
+        assert 10.5 < per_minute < 13.5, (dt, per_minute)
+
+
+def _total_sales(trains: dict, ticks: int = 300) -> int:
+    # Same seed every run, so the dice are the same and only the rate differs.
+    model = make_model(tickets_per_minute=30.0, seed=3)
+    return sum(
+        sum(model.step(DT_S, make_inputs(trains))
+            .ctc.tickets_sold_now.values())
+        for _ in range(ticks)
+    )
+
+
+def test_trains_with_free_spaces_raise_ticket_sales() -> None:
+    """Check a moving train with room on the line sells more tickets."""
+    none = _total_sales({})
+    moving = _total_sales({"T1": report(
+        "BLUE B-10", 1.0, speed_mps=10.0, capacity=200)})
+    assert moving > none
+
+
+def test_a_full_train_adds_no_demand() -> None:
+    """Check a train with no free spaces leaves the rate at its base."""
+    full = _total_sales({"T1": report(
+        "BLUE B-10", 1.0, speed_mps=10.0, capacity=0)})
+    assert full == _total_sales({})
+
+
+def test_faster_trains_raise_sales_more_than_stopped_ones() -> None:
+    """Check speed counts: a running train beats a stopped one."""
+    stopped = _total_sales({"T1": report(
+        "BLUE B-10", 1.0, speed_mps=0.0, capacity=200)})
+    moving = _total_sales({"T1": report(
+        "BLUE B-10", 1.0, speed_mps=15.0, capacity=200)})
+    assert moving > stopped
+
+
+def test_no_tickets_sell_until_a_train_is_on_the_line() -> None:
+    """Check demand starts only once a train has appeared on the line."""
+    model = make_model(tickets_per_minute=600.0, demand_open=False)
+    for _ in range(20):
+        out = model.step(DT_S, make_inputs())
+        assert set(out.ctc.tickets_sold_now.values()) == {0}
+    assert set(model.snapshot().waiting_passengers.values()) == {0}
+
+
+def test_demand_opens_per_line_and_stays_open() -> None:
+    """Check a BLUE train opens BLUE only, and demand survives its leaving."""
+    model = make_model(tickets_per_minute=600.0, demand_open=False)
+    out = model.step(DT_S, make_inputs(
+        {"T1": report("BLUE B-10", 1.0, speed_mps=5.0)}))
+    sold = dict(out.ctc.tickets_sold_now)
+    assert sold["B"] == 1 and sold["PIONEER"] == 0   # GREEN not opened
+    out = model.step(DT_S, make_inputs())            # train gone
+    assert dict(out.ctc.tickets_sold_now)["B"] == 1
+
+
+def test_the_wait_is_timed_from_when_demand_opens() -> None:
+    """Check a late first train does not start with a long-wait penalty."""
+    model = make_model(demand_open=False)
+    for _ in range(int(1000 / DT_S)):
+        model.step(DT_S, make_inputs())
+    model.step(DT_S, make_inputs({"T1": report("BLUE B-10", 1.0)}))
+    assert model._wait_factor("B") == 1.0
+
+
+def test_a_train_idle_for_two_minutes_adds_no_demand() -> None:
+    """Check a stuck train stops counting, and counts again once it moves."""
+    model = make_model(tickets_per_minute=30.0)
+    stuck = {"T1": report("BLUE B-10", 1.0, speed_mps=0.0, capacity=200)}
+    model.step(DT_S, make_inputs(stuck))
+    assert model._supply_factor("B", model._line_supply()) > 1.0
+    # Run a little past the limit, clear of float rounding.
+    for _ in range(int(IDLE_NO_SUPPLY_S / DT_S) + 5):
+        model.step(DT_S, make_inputs(stuck))
+    assert model._supply_factor("B", model._line_supply()) == 1.0
+    model.step(DT_S, make_inputs(
+        {"T1": report("BLUE B-10", 1.0, speed_mps=5.0, capacity=200)}))
+    assert model._supply_factor("B", model._line_supply()) > 1.0
+
+
+def test_the_queue_at_a_station_is_capped() -> None:
+    """Check sales stop at MAX_WAITING and resume once people board."""
+    model = make_model(tickets_per_minute=600.0)
+    for _ in range(MAX_WAITING + 50):
+        out = model.step(DT_S, make_inputs())
+    assert model.snapshot().waiting_passengers["B"] == MAX_WAITING
+    assert dict(out.ctc.tickets_sold_now)["B"] == 0
+    model.step(DT_S, make_inputs(
+        {"T1": report("BLUE B-10", 1.0, speed_mps=0.0, capacity=10,
+                      doors_open=True)}))
+    out = model.step(DT_S, make_inputs())
+    assert dict(out.ctc.tickets_sold_now)["B"] == 1
+
+
+def test_a_long_wait_makes_people_give_up() -> None:
+    """Check the rate rises while a crowd builds, then falls below base."""
+    model = make_model()
+    model._elapsed_s = 30.0
+    assert model._wait_factor("B") == 1.0
+    model._elapsed_s = 180.0
+    assert model._wait_factor("B") == 1.5
+    model._elapsed_s = 1000.0
+    assert model._wait_factor("B") == 0.5
 
 
 def test_stopped_train_boards_up_to_its_capacity() -> None:

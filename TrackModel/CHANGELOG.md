@@ -4,6 +4,19 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 ---
 
+## 2026-11-12 — Ticket demand follows the track
+
+`tickets_per_minute` is now the base rate. Each station's rate is scaled by
+the free spaces and speed of the trains on its line (up to double) and by
+how long the station has gone without a boarding (flat for 60 s, up to 1.5x
+at 180 s, down to 0.5x by 600 s). No station sells until a train has been on
+its line. A train at rest for 120 s adds nothing, and a station holds at most
+300 waiting passengers. Tuning values are PROVISIONAL, at the top of
+`track_model/model.py`. `make_model` in the tests opens demand by default;
+pass `demand_open=False` to test the lock.
+
+---
+
 ## 2026-11-04 — Window tables redraw only when their rows change (Landis)
 
 `61e7796` (10x headroom on hybrid Windows laptops). The window only:

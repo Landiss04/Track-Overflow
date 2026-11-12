@@ -79,6 +79,33 @@ HEATER_RISE_C = 10.0
 #: PROVISIONAL: how quickly track temperature follows its target. After
 #: one time constant it has closed about 63% of the gap.
 TRACK_TIME_CONSTANT_S = 300.0
+#: PROVISIONAL: ticket demand. No station sells until a train has been
+#: on its line. ``tickets_per_minute`` is the base rate per station. It
+#: is scaled by how much service the station's line offers (free spaces on its trains, weighted by how fast they run)
+#: and by how long the station has gone without a train boarding.
+#: Free spaces on a line that fill the boost: at or above this, the full
+#: SUPPLY_GAIN applies.
+SUPPLY_FULL_SPACES = 200.0
+#: Extra rate at full supply: 1.0 means up to double the base rate.
+SUPPLY_GAIN = 1.0
+#: A train at or above this speed counts as running at full speed.
+SUPPLY_FULL_SPEED_MPS = 15.0
+#: A moving train counts this fraction of its free spaces; a stopped one
+#: counts the rest, so faster service means a bigger boost.
+SUPPLY_STOPPED_SHARE = 0.5
+#: Wait at a station before the crowd starts to grow, the wait at which
+#: the rate peaks, and the wait at which people give up and turn away.
+WAIT_FLAT_S = 60.0
+WAIT_PEAK_S = 180.0
+WAIT_GIVE_UP_S = 600.0
+#: Rate multiplier at the peak, and once people have given up.
+WAIT_PEAK_FACTOR = 1.5
+WAIT_GIVE_UP_FACTOR = 0.5
+#: PROVISIONAL: most people waiting at one station. Past this, no more
+#: tickets sell until a train takes some.
+MAX_WAITING = 300
+#: PROVISIONAL: a train that has not moved for this long adds no supply.
+IDLE_NO_SUPPLY_S = 120.0
 #: Failures that cut the block's track circuit.
 CIRCUIT_DEAD = frozenset({
     TrackFailure.BROKEN_RAIL, TrackFailure.TRACK_CIRCUIT, TrackFailure.POWER,
@@ -97,6 +124,10 @@ class _Train:
     offset_m: float = 0.0
     actual_speed_mps: float = 0.0
     entered_this_tick: bool = True
+    # Free passenger spaces, from its last report.
+    free_spaces: int = 0
+    # When it last came to rest; None while moving.
+    still_since_s: float | None = None
     # The block it last moved out of, either way. A report naming it is
     # stale: the Train Model has not yet seen the new Track Info.
     left_block_id: str | None = None
@@ -132,6 +163,9 @@ class TrackModel:
     _trains: dict[str, _Train]
     _waiting: dict[str, int]
     _last_sales: dict[str, int]                  # this tick, by station
+    _last_boarded_s: dict[str, float]            # elapsed time, by station
+    _station_lines: dict[str, set[str]]
+    _open_lines: set[str]                        # lines a train has been on
     _rng: random.Random
     _ambient_temp_c: float
     _ambient_override_c: float | None   # set in the Track Model UI
@@ -389,6 +423,11 @@ class TrackModel:
             else:
                 train.entered_this_tick = False
             train.actual_speed_mps = report.actual_speed_mps
+            train.free_spaces = report.passenger_capacity
+            if report.actual_speed_mps != STOPPED_SPEED_MPS:
+                train.still_since_s = None
+            elif train.still_since_s is None:
+                train.still_since_s = self._elapsed_s
             if report.block_id != train.block_id:
                 # Stale report from the block this train just left: the
                 # Train Model has not seen the new Track Info yet. It has
@@ -456,18 +495,83 @@ class TrackModel:
     # ------------------------------------------------------------------ #
 
     def _sell_tickets(self, dt: float) -> dict[str, int]:
-        # Each station rolls for one new ticket per tick, with the chance
-        # that gives tickets_per_minute whatever the tick length (TM-1):
-        # 0.02 at the 0.1 s system tick for the default 12 a minute.
+        # Each station rolls for one new ticket per tick. The base chance
+        # gives tickets_per_minute whatever the tick length (TM-1): 0.02
+        # at the 0.1 s system tick for the default 12 a minute. It is
+        # scaled by the trains on the station's line and by its wait.
         # Returns the tickets sold this tick by station. No running total
         # is kept.
-        chance = min(1.0, self.config.tickets_per_minute * dt / 60.0)
+        base = self.config.tickets_per_minute * dt / 60.0
+        supply = self._line_supply()
+        self._open_demand()
         sales: dict[str, int] = {}
         for station in self._waiting:
-            sold = int(self._rng.random() < chance)
+            if not self._station_lines[station] & self._open_lines:
+                sales[station] = 0   # no train has run on its line yet
+                continue
+            chance = min(1.0, (
+                base
+                * self._supply_factor(station, supply)
+                * self._wait_factor(station)
+            ))
+            sold = int(
+                self._rng.random() < chance
+                and self._waiting[station] < MAX_WAITING
+            )
             self._waiting[station] += sold
             sales[station] = sold
         return sales
+
+    def _open_demand(self) -> None:
+        # Demand on a line starts when its first train appears, and stays
+        # on. The wait at its stations is timed from that moment.
+        for train in self._trains.values():
+            line = self._blocks[train.block_id].line
+            if line in self._open_lines:
+                continue
+            self._open_lines.add(line)
+            for station, lines in self._station_lines.items():
+                if line in lines:
+                    self._last_boarded_s[station] = self._elapsed_s
+
+    def _line_supply(self) -> dict[str, float]:
+        # Free spaces on each line's trains, counted more the faster the
+        # train runs; a train at rest for IDLE_NO_SUPPLY_S counts for none.
+        # A line with no trains is absent.
+        supply: dict[str, float] = {}
+        for train in self._trains.values():
+            if (train.still_since_s is not None
+                    and self._elapsed_s - train.still_since_s
+                    >= IDLE_NO_SUPPLY_S):
+                continue   # stuck: it is not serving anyone
+            line = self._blocks[train.block_id].line
+            speed = min(
+                abs(train.actual_speed_mps) / SUPPLY_FULL_SPEED_MPS, 1.0
+            )
+            share = SUPPLY_STOPPED_SHARE + (1.0 - SUPPLY_STOPPED_SHARE) * speed
+            supply[line] = supply.get(line, 0.0) + train.free_spaces * share
+        return supply
+
+    def _supply_factor(self, station: str, supply: dict[str, float]) -> float:
+        # 1.0 with no service; up to 1 + SUPPLY_GAIN with plenty. A station
+        # on several lines counts all of them.
+        spaces = sum(
+            supply.get(line, 0.0) for line in self._station_lines[station]
+        )
+        return 1.0 + SUPPLY_GAIN * min(spaces / SUPPLY_FULL_SPACES, 1.0)
+
+    def _wait_factor(self, station: str) -> float:
+        # Flat for a short wait, rising as the crowd builds, then falling
+        # as people give up and leave.
+        wait = self._elapsed_s - self._last_boarded_s[station]
+        if wait <= WAIT_FLAT_S:
+            return 1.0
+        if wait <= WAIT_PEAK_S:
+            span = (wait - WAIT_FLAT_S) / (WAIT_PEAK_S - WAIT_FLAT_S)
+            return 1.0 + (WAIT_PEAK_FACTOR - 1.0) * span
+        span = min((wait - WAIT_PEAK_S) / (WAIT_GIVE_UP_S - WAIT_PEAK_S), 1.0)
+        drop = (WAIT_PEAK_FACTOR - WAIT_GIVE_UP_FACTOR) * span
+        return WAIT_PEAK_FACTOR - drop
 
     def _board(self, block: Block, report: TrainReport) -> int:
         # Board only when the Train Model will accept them: stopped in a
@@ -478,6 +582,8 @@ class TrackModel:
             return 0
         boarded = min(self._waiting.get(station, 0), report.passenger_capacity)
         self._waiting[station] -= boarded
+        if boarded:
+            self._last_boarded_s[station] = self._elapsed_s
         return boarded
 
     # ------------------------------------------------------------------ #
@@ -664,6 +770,12 @@ class TrackModel:
             for b in self._blocks.values() if b.station_name is not None
         }
         self._last_sales = dict.fromkeys(self._waiting, 0)
+        self._last_boarded_s = dict.fromkeys(self._waiting, 0.0)
+        self._station_lines = {station: set() for station in self._waiting}
+        for b in self._blocks.values():
+            if b.station_name is not None:
+                self._station_lines[b.station_name].add(b.line)
+        self._open_lines = set()
         self._rng = random.Random(self.config.seed)
         self._ambient_temp_c = 0.0
         self._ambient_override_c = None
