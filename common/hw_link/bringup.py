@@ -27,12 +27,14 @@ from .transport import (
 
 
 def summary(values: list[float]) -> dict[str, float | None]:
-    """Nearest-rank p95; empty samples are unavailable, never zero latency."""
+    """Nearest-rank p95 and p99; empty samples are unavailable, never zero."""
     if not values:
-        return dict(mean=None, p95=None, maximum=None)
+        return dict(mean=None, p95=None, p99=None, maximum=None)
+    ordered = sorted(values)
     return dict(
         mean=statistics.mean(values),
-        p95=sorted(values)[math.ceil(0.95 * len(values)) - 1],
+        p95=ordered[math.ceil(0.95 * len(values)) - 1],
+        p99=ordered[math.ceil(0.99 * len(values)) - 1],
         maximum=max(values),
     )
 

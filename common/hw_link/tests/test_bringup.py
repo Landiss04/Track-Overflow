@@ -237,3 +237,11 @@ def test_bundle_identity_comes_only_from_shared_table(
             "@SERIAL@",
         )
     )
+
+
+def test_summary_reports_nearest_rank_p99():
+    from common.hw_link.bringup import summary
+
+    values = [float(n) for n in range(1, 101)]
+    assert summary(values) == dict(mean=50.5, p95=95.0, p99=99.0, maximum=100.0)
+    assert summary([]) == dict(mean=None, p95=None, p99=None, maximum=None)
