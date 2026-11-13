@@ -114,18 +114,18 @@ Every member runs the system tests.
 
 | Role | Responsibility | Owner |
 |------|-----------------|-------|
-| QA lead | Owns this plan; keeps it in step with the SRS; runs the weekly bug count | [team to assign] |
-| CTC Office owner | Module test plan, unit and component tests, CTC system cases | Landis Stroh |
+| QA lead | Owns this plan; keeps it in step with the SRS; runs the weekly bug count | Landis Strohecker |
+| CTC Office owner | Module test plan, unit and component tests, CTC system cases | Landis Strohecker |
 | Track Controller SW owner | Module test plan, unit and component tests | Harry Tye |
 | Track Controller HW owner | Module test plan, unit, component and Pi tests | Braden Bosilovich |
-| Train Controller SW owner | Module test plan, unit and component tests | Jonathan Tsang [confirm] |
-| Train Controller HW owner | Module test plan, unit, component and Pi tests | Ivan Zheng [confirm] |
+| Train Controller SW owner | Module test plan, unit and component tests | Jonathan Tsang  |
+| Train Controller HW owner | Module test plan, unit, component and Pi tests | Ivan Zheng |
 | Track Model owner | Module test plan, unit and component tests | Deni Ephraim |
 | Train Model owner | Module test plan, unit and component tests | Kevin Schillinger |
 | Harness and integration | Edge-mapping, clock and end-to-end tests; CI workflow | Kevin Schillinger |
 | HW/SW equivalence | Shows the two variants of a module expose the same interface (REQ-INTF-009, REQ-INTF-010) | Both variant owners of that module |
 | System tester | Runs section 6 on the lab machine and records results | Every team member |
-| Reviewer | Reviews the plan and its results | Course instructor and team |
+| Reviewer | Reviews the plan and its results | Team |
 
 ### 2.2. Schedules
 | Milestone | Date | Testing deliverable |
