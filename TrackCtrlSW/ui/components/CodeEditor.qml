@@ -25,11 +25,13 @@ Rectangle {
         spacing: 0
 
         // Gutter. Scrolls with the buffer and marks the lines the
-        // compiler rejected.
+        // compiler rejected. Clipped like the buffer, so numbers that
+        // scroll out of view leave with their lines.
         Rectangle {
             Layout.fillHeight: true
             implicitWidth: 46
             color: theme.editor_gutter_bg
+            clip: true
 
             Rectangle {
                 anchors.right: parent.right

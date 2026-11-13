@@ -159,6 +159,17 @@ class Switch76(unittest.TestCase):
             "reverse",
         )
 
+    def test_a_request_for_a_train_on_78_beats_a_train_on_76(self) -> None:
+        # G1 on 78 is routed on to 101; G3 waits on 76. The CTC Office's
+        # request sets reverse, so G1 does not reach 77 with the switch
+        # against it and lock it there.
+        line = _Line()
+        self.assertEqual(
+            line.tick(occupied={"78", "76"}, suggested={"78", "77"},
+                      requests={"76": "reverse"})["76"],
+            "reverse",
+        )
+
     def test_a_train_held_on_76_does_not_lock_it(self) -> None:
         # 76 is the listed block, the points are on 77. A train on 76
         # commanded speed 0 does not move onto the points, so the CTC

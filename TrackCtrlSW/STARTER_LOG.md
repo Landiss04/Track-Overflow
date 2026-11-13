@@ -30,16 +30,16 @@ changes included). Regenerate and update this table whenever the starter is chan
 
 | Wayside | Fingerprint | Lines | Switches |
 |---|---|---|---|
-| GTC-01 | f800be9a413f | 68 | 12 |
-| GTC-02 | 03521ed70810 | 64 | 28 |
-| GTC-03 | cc2f362bc3ef | 81 | 58, 62 |
-| GTC-04 | 998414455400 | 76 | 76, 85 |
+| GTC-01 | 5a16c2ab08f8 | 67 | 12 |
+| GTC-02 | fe5e09a05f7f | 63 | 28 |
+| GTC-03 | 0504f3a03049 | 79 | 58, 62 |
+| GTC-04 | 865ac28fb1dd | 74 | 76, 85 |
 | GTC-05 | f2ac5c30c278 | 40 | none |
 | GTC-06 | a13ce33ac008 | 41 | none |
-| RTC-01 | a2130ba5d790 | 72 | 9, 15 |
-| RTC-02 | 2b7896c407b0 | 49 | 27 |
-| RTC-03 | bdc197605153 | 87 | 32, 38, 43 |
-| RTC-04 | e9471cc143fb | 53 | 52 |
+| RTC-01 | fcb4abddbaa8 | 70 | 9, 15 |
+| RTC-02 | ee2d1cee916e | 48 | 27 |
+| RTC-03 | 6cb3de05f774 | 84 | 32, 38, 43 |
+| RTC-04 | b2f05bcc58f3 | 52 | 52 |
 | RTC-05 | 6af88a2d8c5b | 26 | none |
 
 Regenerate them from `TrackCtrlSW` with a script that builds the default module without programs
@@ -64,6 +64,11 @@ for each controller.
 
 ## History
 
+- 2026-11-13: the test ranking is removed for good. With a train on 76, the starter's own rule
+  overrode the CTC Office's reverse request for a train on 78 routed to 101; that train reached 77
+  with the switch normal, locked it there and deadlocked the train on 76. The CTC Office's route
+  request again ranks above the starter's own rule. The 8 waysides with switches have new
+  fingerprints.
 - 2026-11-13: loop guard N replaced by a count guard. GTC-04 tells GTC-03 how many of its blocks are
   occupied (`PEER_CNT_GTC04_0..4`); over 5, GTC-03 holds the train on 75 (`AUTH_75 := NOT FULL_GTC04`).
   Switches 76 and 85 are no longer forced, and GTC-04 is no longer told 71..75 (so the test ranking no
@@ -128,3 +133,10 @@ for each controller.
   layout, not block numbers. Fingerprints regenerated.
 - 2026-10-21: `234c353`, the original one-line switch rule replaced by `_switch_rule`.
 - 2026-10-20: `3b0e170`, the original starter (on `development`).
+
+## Saved program files
+
+The Green starters are also saved as `programs/green/gtc0N_starter.plc`, one per wayside, to load
+in the Track Controller window at start-up. `tests/test_program_files.py` fails when a file no
+longer matches the generated starter: whenever the starter changes on purpose, regenerate the
+files (write `default_program_source(controller)` for each Green wayside) and update the table above.

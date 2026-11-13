@@ -1,0 +1,40 @@
+// GTC-05  Green Line  blocks 101..125
+// OCC_n and CLOSED_n report block n. AUTH_n passes the CTC Office's speed and
+// authority for block n to the train in it (1), or sends speed 0, authority 0 (0).
+
+VAR_IN   OCC_101..125
+VAR_IN   CLOSED_101..125
+VAR_IN   MAINT
+VAR_OUT  AUTH_101..125
+VAR_OUT  XING_108
+
+// Crossing 108: lights and gates while a train is on it or beside it.
+XING_108 := OCC_107 OR OCC_108 OR OCC_109
+
+// Separation: hold a train whose next block is occupied. A block with no train
+// in it passes its suggestion: it is the next block of the train behind it.
+AUTH_101 := NOT (OCC_101 AND OCC_102)
+AUTH_102 := NOT (OCC_102 AND OCC_103)
+AUTH_103 := NOT (OCC_103 AND OCC_104)
+AUTH_104 := NOT (OCC_104 AND OCC_105)
+AUTH_105 := NOT (OCC_105 AND OCC_106)
+AUTH_106 := NOT (OCC_106 AND OCC_107)
+AUTH_107 := NOT (OCC_107 AND OCC_108)
+AUTH_108 := NOT (OCC_108 AND OCC_109)
+AUTH_109 := NOT (OCC_109 AND OCC_110)
+AUTH_110 := NOT (OCC_110 AND OCC_111)
+AUTH_111 := NOT (OCC_111 AND OCC_112)
+AUTH_112 := NOT (OCC_112 AND OCC_113)
+AUTH_113 := NOT (OCC_113 AND OCC_114)
+AUTH_114 := NOT (OCC_114 AND OCC_115)
+AUTH_115 := NOT (OCC_115 AND OCC_116)
+AUTH_116 := NOT (OCC_116 AND OCC_117)
+AUTH_117 := NOT (OCC_117 AND OCC_118)
+AUTH_118 := NOT (OCC_118 AND OCC_119)
+AUTH_119 := NOT (OCC_119 AND OCC_120)
+AUTH_120 := NOT (OCC_120 AND OCC_121)
+AUTH_121 := NOT (OCC_121 AND OCC_122)
+AUTH_122 := NOT (OCC_122 AND OCC_123)
+AUTH_123 := NOT (OCC_123 AND OCC_124)
+AUTH_124 := NOT (OCC_124 AND OCC_125)
+AUTH_125 := 1

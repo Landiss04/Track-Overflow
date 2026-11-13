@@ -868,14 +868,12 @@ def _switch_rule(
         f"WANT_N_{sid} := {term(False)}",
         f"WANT_R_{sid} := {term(True)}",
         f"HOLD_{sid} := OCC_{point} OR (WANT_N_{sid} AND WANT_R_{sid})",
-        f"ACT_{sid} := HOLD_{sid} OR WANT_N_{sid} OR WANT_R_{sid}",
     ]
     move = f"NOT WANT_N_{sid}" if rest_reverse else f"WANT_R_{sid}"
     lines.append(
         f"{out} := " + _ctc_first(
             config, owned, sid, f"(HOLD_{sid} AND SWREV_{sid}) OR "
-            f"(NOT HOLD_{sid} AND NOT MAINT AND {move})",
-            active=f"ACT_{sid}")
+            f"(NOT HOLD_{sid} AND NOT MAINT AND {move})")
     )
     return lines
 
@@ -917,15 +915,11 @@ def _guard_lines(config: ControllerConfig, guard: LoopGuard) -> list[str]:
 
 
 def _ctc_first(
-    config: ControllerConfig, owned: set[int], sid: str, own: str,
-    active: str | None = None,
+    config: ControllerConfig, owned: set[int], sid: str, own: str
 ) -> str:
     """What drives switch ``sid``, in order: the CTC Office's maintenance
-    command, then a loop guard draining its loop (``SET_g``), then
-    ``own``, the starter's rule, while ``active`` (it sees a train it sets
-    the switch for, or holds it), then the CTC Office's route request,
-    then ``own`` at rest. With no ``active`` the request ranks above
-    ``own`` throughout.
+    command, then a loop guard draining its loop (``SET_g``), then the
+    CTC Office's route request, then ``own``, the starter's rule.
 
     A train on the points locks the switch first of all, but that is the
     vital code's, not the program's. A request is skipped when the leg it
@@ -944,12 +938,6 @@ def _ctc_first(
     requested = (
         f"{to_reverse} OR (NOT ({to_reverse} OR {to_normal}) AND ({own}))"
     )
-    if active is not None:
-        # Test ranking: the wayside's own rule, when it sees a train,
-        # overrides the CTC Office's route request.
-        requested = (
-            f"({active} AND ({own})) OR (NOT {active} AND ({requested}))"
-        )
     for guard in config.guards:
         forced = dict(guard.switches).get(sid)
         if forced is None:
@@ -972,10 +960,8 @@ def _coming_off(config: ControllerConfig, sid: str, leg: str) -> str:
     before = [
         block for block, nexts in config.line_next_blocks if leg in nexts
     ]
-    if len(before) == 1 and (
-        config.owns(before[0]) or before[0] in config.peer_blocks
-    ):
-        return f"OCC_{leg} OR {config.occupancy_name(before[0])}"
+    if len(before) == 1 and config.owns(before[0]):
+        return f"OCC_{leg} OR OCC_{before[0]}"
     return f"OCC_{leg}"
 
 

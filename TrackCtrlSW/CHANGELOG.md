@@ -13,6 +13,18 @@ Changes to the owners' module code during Phase 5 integration, for review.
 
 
 
+
+## 2026-11-13 — Test ranking removed: the CTC Office's route request outranks the starter again
+
+Schedule v4 deadlock: G1 on 78 routed 77 to 101, G3 waiting on 76. The test ranking
+let the starter, seeing G3 on 76, keep switch 76 normal against the CTC Office's
+reverse request. G1 still reached 77 (findings C2) and locked the switch normal,
+and neither train could move. `ACT_s` and the override are gone, and a leg's
+approach block is no longer read over the peer link. Switch order: points lock
+(vital), maintenance command, loop guard, route request, the starter's own rule.
+Regression test: `test_a_request_for_a_train_on_78_beats_a_train_on_76`.
+
+---
 ## 2026-11-13 — Count guard: GTC-04 crowded holds GTC-03's train on 75
 
 Simplified from loop guard N. GTC-04 tells GTC-03, over the link between track

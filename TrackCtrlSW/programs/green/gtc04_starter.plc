@@ -1,0 +1,74 @@
+// GTC-04  Green Line  blocks 76..100
+// OCC_n and CLOSED_n report block n. AUTH_n passes the CTC Office's speed and
+// authority for block n to the train in it (1), or sends speed 0, authority 0 (0).
+
+VAR_IN   OCC_76..100
+VAR_IN   CLOSED_76..100
+VAR_IN   MAINT
+VAR_IN   SWREV_76 SWREV_85
+VAR_IN   CTCSW_76 CTCREV_76 CTCSW_85 CTCREV_85
+VAR_IN   REQSW_76 REQREV_76 REQSW_85 REQREV_85
+VAR_OUT  AUTH_76..100
+VAR_OUT  SW_76 SW_85
+VAR_OUT  SIG_76_R SIG_76_Y SIG_76_G SIG_76_SG
+VAR_OUT  SIG_85_R SIG_85_Y SIG_85_G SIG_85_SG
+
+// Switch 76: points at 77, normal to 76, reverse to 101.
+// Stands normal until a train is seen coming for the other position;
+// held while 77 is occupied or trains come for both; normal in maintenance.
+WANT_N_76 := OCC_76
+WANT_R_76 := 0
+HOLD_76 := OCC_77 OR (WANT_N_76 AND WANT_R_76)
+SW_76 := (CTCSW_76 AND CTCREV_76) OR (NOT CTCSW_76 AND ((REQSW_76 AND REQREV_76) OR (NOT ((REQSW_76 AND REQREV_76) OR (REQSW_76 AND NOT REQREV_76 AND NOT CLOSED_76)) AND ((HOLD_76 AND SWREV_76) OR (NOT HOLD_76 AND NOT MAINT AND WANT_R_76)))))
+
+// Switch 85: points at 85, normal to 86, reverse to 100.
+// Stands normal until a train is seen coming for the other position;
+// held while 85 is occupied or trains come for both; normal in maintenance.
+WANT_N_85 := 0
+WANT_R_85 := OCC_100
+HOLD_85 := OCC_85 OR (WANT_N_85 AND WANT_R_85)
+SW_85 := (CTCSW_85 AND CTCREV_85) OR (NOT CTCSW_85 AND ((REQSW_85 AND REQREV_85 AND NOT CLOSED_100) OR (NOT ((REQSW_85 AND REQREV_85 AND NOT CLOSED_100) OR (REQSW_85 AND NOT REQREV_85 AND NOT CLOSED_86)) AND ((HOLD_85 AND SWREV_85) OR (NOT HOLD_85 AND NOT MAINT AND WANT_R_85)))))
+
+// Signal 76: red on a bad block or switch, else yellow if the route ahead is
+// busy, else green. Exactly one aspect is lit for every input.
+AHEAD_76 := OCC_77 OR OCC_78
+SIG_76_R := OCC_76 OR CLOSED_76
+SIG_76_Y := NOT SIG_76_R AND AHEAD_76
+SIG_76_G := NOT SIG_76_R AND NOT AHEAD_76
+SIG_76_SG := 0
+
+// Signal 85: red on a bad block or switch, else yellow if the route ahead is
+// busy, else green. Exactly one aspect is lit for every input.
+AHEAD_85 := OCC_83 OR OCC_84 OR OCC_86 OR OCC_87 OR OCC_99 OR OCC_100
+SIG_85_R := OCC_85 OR CLOSED_85
+SIG_85_Y := NOT SIG_85_R AND AHEAD_85
+SIG_85_G := NOT SIG_85_R AND NOT AHEAD_85
+SIG_85_SG := 0
+
+// Separation: hold a train whose next block is occupied. A block with no train
+// in it passes its suggestion: it is the next block of the train behind it.
+AUTH_76 := NOT (OCC_76 AND OCC_77)
+AUTH_77 := NOT (OCC_77 AND OCC_78)
+AUTH_78 := NOT (OCC_78 AND (OCC_77 OR OCC_79))
+AUTH_79 := NOT (OCC_79 AND (OCC_78 OR OCC_80))
+AUTH_80 := NOT (OCC_80 AND (OCC_79 OR OCC_81))
+AUTH_81 := NOT (OCC_81 AND (OCC_80 OR OCC_82))
+AUTH_82 := NOT (OCC_82 AND (OCC_81 OR OCC_83))
+AUTH_83 := NOT (OCC_83 AND (OCC_82 OR OCC_84))
+AUTH_84 := NOT (OCC_84 AND (OCC_83 OR OCC_85))
+AUTH_85 := NOT (OCC_85 AND (OCC_84 OR OCC_86))
+AUTH_86 := NOT (OCC_86 AND OCC_87)
+AUTH_87 := NOT (OCC_87 AND OCC_88)
+AUTH_88 := NOT (OCC_88 AND OCC_89)
+AUTH_89 := NOT (OCC_89 AND OCC_90)
+AUTH_90 := NOT (OCC_90 AND OCC_91)
+AUTH_91 := NOT (OCC_91 AND OCC_92)
+AUTH_92 := NOT (OCC_92 AND OCC_93)
+AUTH_93 := NOT (OCC_93 AND OCC_94)
+AUTH_94 := NOT (OCC_94 AND OCC_95)
+AUTH_95 := NOT (OCC_95 AND OCC_96)
+AUTH_96 := NOT (OCC_96 AND OCC_97)
+AUTH_97 := NOT (OCC_97 AND OCC_98)
+AUTH_98 := NOT (OCC_98 AND OCC_99)
+AUTH_99 := NOT (OCC_99 AND OCC_100)
+AUTH_100 := NOT (OCC_100 AND OCC_85)
