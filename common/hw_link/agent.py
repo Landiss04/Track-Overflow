@@ -72,6 +72,9 @@ class PiLinkServer:
         self._durable_key: list[Any] | None = None
         self._syncer: threading.Thread | None = None
         self._closing = False
+        # Unbuffered append handle, so each record is one write() with no
+        # open/close per tick. Closed before any replace of the file.
+        self._stream: Any = None
         self.log = log or (lambda text: None)
         self.boot = uuid.uuid4().hex
         self.session: str | None = None
@@ -171,6 +174,7 @@ class PiLinkServer:
         }
         # Windows cannot replace a file the fsync worker has open.
         self.wait_durable()
+        self._close_stream()
         _write_durably(self.journal, (json.dumps(header) + "\n").encode())
         self._all_durable()
         if self._checkpoint_seq and self._checkpoint_seq != seq:
@@ -193,8 +197,9 @@ class PiLinkServer:
         if self.journal is not None:
             # Both are already compact JSON lines; splice, do not re-encode.
             line = b'{"request":' + request[:-1] + b',"reply":' + reply[:-1]
-            with self.journal.open("ab") as stream:
-                stream.write(line + b"}\n")
+            if self._stream is None:
+                self._stream = self.journal.open("ab", buffering=0)
+            self._stream.write(line + b"}\n")
         with self._sync:
             self._written += 1
             self._written_key = key
@@ -239,6 +244,11 @@ class PiLinkServer:
                     self._synced, self._durable_key = count, key
                 self._sync.notify_all()
 
+    def _close_stream(self) -> None:
+        if self._stream is not None:
+            self._stream.close()
+            self._stream = None
+
     def wait_durable(self) -> None:
         """Block until every record written so far is on disk."""
         with self._sync:
@@ -252,6 +262,7 @@ class PiLinkServer:
             self._sync.notify_all()
         if self._syncer is not None:
             self._syncer.join()
+        self._close_stream()
 
     def _remember(
         self, request: dict[str, Any], request_bytes: bytes, reply: Any
