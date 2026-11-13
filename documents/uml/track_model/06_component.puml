@@ -1,0 +1,38 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam componentStyle rectangle
+skinparam nodesep 30
+rectangle "Track Model window (PySide6, Qt Quick)" #E8F1FB {
+  [ui/Main.qml, MainView.qml] as QML
+  [TrackModelState\n(display units: ft, mph, F)] as ST
+}
+rectangle "Module core (no Qt)" #FFFBE6 {
+  [TrackModel (model.py)\nstep(dt, inputs)] as TM
+  [Layout (layout.py)\nblocks, switches, track graph] as LY
+  [Boundary types and TrackModel\nProtocol (interface.py)] as IF
+}
+rectangle "Test scaffolding (removed at integration)" #F3E8F7 {
+  [LinkServer / codec\n(test_link)] as LS
+  [TrackModelTestHarness + QML\n(test_ui, own process)] as TU
+}
+rectangle "Integration (common/harness)" #EAF6EA {
+  [track_model_edges.py\none pure function per edge] as ED
+  [Central harness] as HA
+}
+database "Layout files\ngreen_line.json, red_line.json" as FILES
+QML --> ST
+ST --> TM : snapshot(), set_block_failure(),\nset_ambient_temp(), load_layout_file()
+TM --> LY
+LY --> FILES
+TM ..> IF
+LS --> TM : step(), edit_block(), reset()
+TU --> LS : local socket, JSON lines
+HA --> ED
+HA --> TM : step(dt, inputs)
+@enduml

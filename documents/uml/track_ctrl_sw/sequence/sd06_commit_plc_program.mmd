@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    participant W as TrackController (wayside)
+    participant C as plc
+    participant M as SwTrackController
+    P->>UI: click Commit iteration
+    UI->>S: commit()
+    alt canCommit is false: no clean run of this exact buffer
+        S->>S: commit internal: _log(commit refused, and why)
+        S-->>UI: emit terminalChanged
+    else verified
+        S->>W: commit(buffer, file_name)
+        W->>C: compile_program(source)
+        C-->>W: return Program
+        W->>W: commit internal: blocks_commit(diagnose(program)) refuses any diagnostic
+        W->>W: commit internal: replace(program, number, file_name, committed_at), history keeps the last 5
+        W-->>S: return the numbered Program
+        S->>W: scan()
+        W->>W: scan internal: _run(the committed program)
+        S-->>UI: emit bufferChanged, controllerChanged: COMMITTED
+        opt every wayside on the line now has a program
+            UI->>S: ready, notReadyReason
+            S->>M: ready, not_ready_reasons()
+            M-->>S: return true, no reasons
+            UI-->>P: NOT READY cleared
+            Note right of M: From the next step the line's waysides run and report ready (UC-09, UC-17).
+        end
+    end

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<template id="__bundler_thumbnail" data-bg-color="#e6e5e2">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#e6e5e2"/>
+    <rect x="120" y="140" width="440" height="520" fill="#ffffff" stroke="#c2c2c2" stroke-width="4"/>
+    <rect x="640" y="140" width="440" height="520" fill="#ffffff" stroke="#c2c2c2" stroke-width="4"/>
+    <rect x="120" y="140" width="440" height="60" fill="#f0f0f0"/>
+    <rect x="640" y="140" width="440" height="60" fill="#f0f0f0"/>
+    <rect x="160" y="240" width="220" height="26" fill="#4a4a4a"/>
+    <rect x="160" y="290" width="220" height="26" fill="#ececec"/>
+    <rect x="160" y="340" width="220" height="26" fill="#ececec"/>
+    <rect x="680" y="240" width="220" height="26" fill="#ececec"/>
+    <rect x="680" y="290" width="220" height="26" fill="#ececec"/>
+  </svg>
+</template>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e6e5e2;font-family:'IBM Plex Sans',system-ui,sans-serif}
+a{color:#2e2e2e}a:hover{color:#000}
+select.plcsel{font:500 11px 'IBM Plex Mono';color:#2e2e2e;background:#fbfbfb;border:1px solid #a8a8a8;padding:2px 4px}
+</style></helmet>
+<div style="max-width:1120px;margin:0 auto;padding:32px 24px;color:#2e2e2e;font:400 12px/1.3 'IBM Plex Sans',sans-serif">
+ <div style="margin-bottom:16px">
+  <div style="font:600 16px/1 'IBM Plex Sans';letter-spacing:.04em;text-transform:uppercase">TRACK CONTROLLER TEST UI</div>
+  <div style="font:400 11px/1.5 'IBM Plex Sans';color:#7c7c7c;margin-top:4px">Simulate a single controller's PLC inputs in isolation and watch computed outputs update live.</div>
+ </div>
+ <div style="background:#fff;border:1px solid #c2c2c2;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:16px">
+  <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.08em;text-transform:uppercase;color:#5a5a5a">Track Controller</span>
+  <select class="plcsel" value="{{ selectedTC }}" onChange="{{ setTC }}">
+   <option value="TC01">TC-01</option>
+   <option value="TC02">TC-02</option>
+   <option value="TC03">TC-03</option>
+   <option value="TC04">TC-04</option>
+   <option value="TC05">TC-05</option>
+   <option value="TC06">TC-06</option>
+  </select>
+ </div>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+  <div style="background:#fff;border:1px solid #c2c2c2;display:flex;flex-direction:column">
+   <div style="height:32px;flex:none;background:#f0f0f0;border-bottom:1px solid #d4d4d4;display:flex;align-items:center;justify-content:space-between;padding:0 12px"><span style="font:600 11px/1 'IBM Plex Sans';letter-spacing:.08em;text-transform:uppercase;color:#3a3a3a">INPUTS</span><span style="font:400 10px 'IBM Plex Mono';color:#7c7c7c">{{ selectedTC }}</span></div>
+
+   <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-top:1px solid #ececec">
+    <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">MAINT_HOLD</span>
+    <div onClick="{{ toggleMaint }}" style="width:52px;height:24px;border:1px solid #a8a8a8;background:{{ maintBg }};display:flex;align-items:center;padding:2px;cursor:pointer;justify-content:{{ maintJustify }}">
+     <div style="width:18px;height:18px;background:#fff;border:1px solid #8a8a8a"></div>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Block Occupancy</span>
+     <select class="plcsel" value="{{ occIdx }}" onChange="{{ setOccIdx }}">
+      <option value="1">OCC_1</option><option value="2">OCC_2</option><option value="3">OCC_3</option><option value="4">OCC_4</option><option value="5">OCC_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ occName }}</span>
+     <div onClick="{{ toggleOcc }}" style="width:52px;height:24px;border:1px solid #a8a8a8;background:{{ occBg }};display:flex;align-items:center;padding:2px;cursor:pointer;justify-content:{{ occJustify }}">
+      <div style="width:18px;height:18px;background:#fff;border:1px solid #8a8a8a"></div>
+     </div>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Track Heaters' Status</span>
+     <select class="plcsel" value="{{ heaterIdx }}" onChange="{{ setHeaterIdx }}">
+      <option value="1">HTR_1</option><option value="2">HTR_2</option><option value="3">HTR_3</option><option value="4">HTR_4</option><option value="5">HTR_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ heaterName }}</span>
+     <div onClick="{{ toggleHeater }}" style="width:52px;height:24px;border:1px solid #a8a8a8;background:{{ heaterBg }};display:flex;align-items:center;padding:2px;cursor:pointer;justify-content:{{ heaterJustify }}">
+      <div style="width:18px;height:18px;background:#fff;border:1px solid #8a8a8a"></div>
+     </div>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Switch Status</span>
+     <select class="plcsel" value="{{ swIdx }}" onChange="{{ setSwIdx }}">
+      <option value="1">SW_1</option><option value="2">SW_2</option><option value="3">SW_3</option><option value="4">SW_4</option><option value="5">SW_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ swFaultName }}</span>
+     <div onClick="{{ toggleSwFault }}" style="width:52px;height:24px;border:1px solid #a8a8a8;background:{{ swFaultBg }};display:flex;align-items:center;padding:2px;cursor:pointer;justify-content:{{ swFaultJustify }}">
+      <div style="width:18px;height:18px;background:#fff;border:1px solid #8a8a8a"></div>
+     </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ swMovingName }}</span>
+     <div onClick="{{ toggleSwMoving }}" style="width:52px;height:24px;border:1px solid #a8a8a8;background:{{ swMovingBg }};display:flex;align-items:center;padding:2px;cursor:pointer;justify-content:{{ swMovingJustify }}">
+      <div style="width:18px;height:18px;background:#fff;border:1px solid #8a8a8a"></div>
+     </div>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Suggested Speed</span>
+     <select class="plcsel" value="{{ speedIdx }}" onChange="{{ setSpeedIdx }}">
+      <option value="1">SEG_1</option><option value="2">SEG_2</option><option value="3">SEG_3</option><option value="4">SEG_4</option><option value="5">SEG_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ speedName }}</span>
+     <div style="display:flex;align-items:center;gap:4px">
+      <input type="number" value="{{ speedValue }}" onChange="{{ setSpeedValue }}" style="width:56px;height:22px;border:1px solid #a8a8a8;background:#fbfbfb;font:500 11px 'IBM Plex Mono';text-align:right;padding:0 4px" />
+      <span style="font:400 9px 'IBM Plex Mono';color:#8a8a8a">MPH</span>
+     </div>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;align-items:center;justify-content:space-between">
+    <div>
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a;display:block">Speed Limit</span>
+     <span style="font:400 9px 'IBM Plex Mono';color:#8a8a8a">static &middot; initial config</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+     <input type="number" value="{{ speedLimitValue }}" onChange="{{ setSpeedLimitValue }}" style="width:56px;height:22px;border:1px solid #a8a8a8;background:#fbfbfb;font:500 11px 'IBM Plex Mono';text-align:right;padding:0 4px" />
+     <span style="font:400 9px 'IBM Plex Mono';color:#8a8a8a">MPH</span>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Suggested Authority</span>
+     <select class="plcsel" value="{{ authIdx }}" onChange="{{ setAuthIdx }}">
+      <option value="1">SEG_1</option><option value="2">SEG_2</option><option value="3">SEG_3</option><option value="4">SEG_4</option><option value="5">SEG_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ authName }}</span>
+     <div style="display:flex;align-items:center;gap:4px">
+      <input type="number" value="{{ authValue }}" onChange="{{ setAuthValue }}" style="width:56px;height:22px;border:1px solid #a8a8a8;background:#fbfbfb;font:500 11px 'IBM Plex Mono';text-align:right;padding:0 4px" />
+      <span style="font:400 9px 'IBM Plex Mono';color:#8a8a8a">FT</span>
+     </div>
+    </div>
+   </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #c2c2c2;display:flex;flex-direction:column">
+   <div style="height:32px;flex:none;background:#f0f0f0;border-bottom:1px solid #d4d4d4;display:flex;align-items:center;justify-content:space-between;padding:0 12px"><span style="font:600 11px/1 'IBM Plex Sans';letter-spacing:.08em;text-transform:uppercase;color:#3a3a3a">OUTPUTS</span><span style="font:400 10px 'IBM Plex Mono';color:#7c7c7c">{{ selectedTC }}</span></div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Switch Command</span>
+     <select class="plcsel" value="{{ swIdx }}" onChange="{{ setSwIdx }}">
+      <option value="1">SW_1</option><option value="2">SW_2</option><option value="3">SW_3</option><option value="4">SW_4</option><option value="5">SW_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ swCmdName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ swCmdValue }}</span>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Light State</span>
+     <select class="plcsel" value="{{ ltIdx }}" onChange="{{ setLtIdx }}">
+      <option value="1">LT_1</option><option value="2">LT_2</option><option value="3">LT_3</option><option value="4">LT_4</option><option value="5">LT_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ ltGreenName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ ltGreenValue }}</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ ltRedName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ ltRedValue }}</span>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Crossing State</span>
+     <select class="plcsel" value="{{ xingIdx }}" onChange="{{ setXingIdx }}">
+      <option value="1">XING_1</option><option value="2">XING_2</option><option value="3">XING_3</option><option value="4">XING_4</option><option value="5">XING_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ xingName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ xingValue }}</span>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Track Heaters' Command</span>
+     <select class="plcsel" value="{{ heaterIdx }}" onChange="{{ setHeaterIdx }}">
+      <option value="1">HTR_1</option><option value="2">HTR_2</option><option value="3">HTR_3</option><option value="4">HTR_4</option><option value="5">HTR_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ heaterCmdName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ heaterCmdValue }}</span>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Train Presence on Blocks</span>
+     <select class="plcsel" value="{{ occIdx }}" onChange="{{ setOccIdx }}">
+      <option value="1">OCC_1</option><option value="2">OCC_2</option><option value="3">OCC_3</option><option value="4">OCC_4</option><option value="5">OCC_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ presenceName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ presenceValue }}</span>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Commanded Speed</span>
+     <select class="plcsel" value="{{ speedIdx }}" onChange="{{ setSpeedIdx }}">
+      <option value="1">SEG_1</option><option value="2">SEG_2</option><option value="3">SEG_3</option><option value="4">SEG_4</option><option value="5">SEG_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ cmdSpeedName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ cmdSpeedValue }}</span>
+    </div>
+   </div>
+
+   <div style="padding:9px 12px 10px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:600 10px 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase;color:#5a5a5a">Commanded Authority</span>
+     <select class="plcsel" value="{{ authIdx }}" onChange="{{ setAuthIdx }}">
+      <option value="1">SEG_1</option><option value="2">SEG_2</option><option value="3">SEG_3</option><option value="4">SEG_4</option><option value="5">SEG_5</option>
+     </select>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+     <span style="font:500 12px 'IBM Plex Mono';color:#2e2e2e">{{ cmdAuthName }}</span>
+     <span style="text-align:right;font:600 11px 'IBM Plex Mono';color:#2e2e2e">{{ cmdAuthValue }}</span>
+    </div>
+   </div>
+
+   <div style="flex:1"></div>
+   <div style="padding:10px 12px;border-top:1px solid #ececec;font:400 10px/1.5 'IBM Plex Sans';color:#8a8a8a">Outputs recompute on every input change &mdash; no scan delay in this simulator. Each track controller (TC-01&hellip;TC-06) carries its own set of up to 5 switches, lights, crossings, and speed/authority segments.</div>
+  </div>
+ </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TCS = ['TC01','TC02','TC03','TC04','TC05','TC06'];
+const N = 5;
+
+function buildInit() {
+  const s = {};
+  for (const tc of TCS) {
+    s[`${tc}_MAINT_HOLD`] = false;
+    for (let i = 1; i <= N; i++) {
+      s[`${tc}_OCC_${i}`] = (i === 3);
+      s[`${tc}_SW_FAULT_${i}`] = false;
+      s[`${tc}_SW_MOVING_${i}`] = false;
+      s[`${tc}_SUG_SPEED_${i}`] = 35;
+      s[`${tc}_SUG_AUTH_${i}`] = 1200;
+      s[`${tc}_HTR_${i}`] = false;
+    }
+    s[`${tc}_SPEED_LIMIT`] = 55;
+  }
+  return s;
+}
+
+class Component extends DCLogic {
+  state = {
+    in: buildInit(),
+    selectedTC: 'TC01',
+    occIdx: 1, swIdx: 1, ltIdx: 1, xingIdx: 1, speedIdx: 1, authIdx: 1, heaterIdx: 1
+  };
+
+  k(suffix) { return `${this.state.selectedTC}_${suffix}`; }
+
+  toggle(key) { this.setState(s => ({ in: { ...s.in, [key]: !s.in[key] } })); }
+  setFloat(key, raw) {
+    const n = parseFloat(raw);
+    this.setState(s => ({ in: { ...s.in, [key]: isNaN(n) ? 0 : n } }));
+  }
+
+  renderVals() {
+    const v = this.state.in;
+    const tc = this.state.selectedTC;
+    const occ = (i) => !!v[`${tc}_OCC_${i}`];
+    const nxt = (i) => (i % N) + 1;
+
+    const occIdx = this.state.occIdx, swIdx = this.state.swIdx, ltIdx = this.state.ltIdx,
+      xingIdx = this.state.xingIdx, speedIdx = this.state.speedIdx, authIdx = this.state.authIdx;
+
+    const maintKey = this.k('MAINT_HOLD');
+    const maintOn = !!v[maintKey];
+
+    const occKey = `${tc}_OCC_${occIdx}`;
+    const occOn = !!v[occKey];
+
+    const swFaultKey = `${tc}_SW_FAULT_${swIdx}`;
+    const swMovingKey = `${tc}_SW_MOVING_${swIdx}`;
+    const swFaultOn = !!v[swFaultKey];
+    const swMovingOn = !!v[swMovingKey];
+
+    const speedKey = `${tc}_SUG_SPEED_${speedIdx}`;
+    const authKey = `${tc}_SUG_AUTH_${authIdx}`;
+    const speedLimitKey = `${tc}_SPEED_LIMIT`;
+
+    const heaterIdx = this.state.heaterIdx;
+    const heaterKey = `${tc}_HTR_${heaterIdx}`;
+    const heaterOn = !!v[heaterKey];
+    const heaterCmd = heaterOn && !occ(heaterIdx);
+    const presenceOn = occ(occIdx);
+
+    const swCmd = occ(nxt(swIdx)) && !occ(swIdx) && !maintOn;
+    const ltG = !occ(ltIdx) && !occ(nxt(ltIdx)) && !v[`${tc}_SW_FAULT_${ltIdx}`];
+    const ltR = !ltG;
+    const xing = occ(xingIdx) || occ(nxt(xingIdx));
+    const speedOk = !v[`${tc}_SW_MOVING_${speedIdx}`];
+    const cmdSpeed = speedOk ? v[speedKey] : 0;
+    const authOk = !(occ(authIdx) && occ(nxt(authIdx)));
+    const cmdAuth = authOk ? v[authKey] : 0;
+
+    const bg = (on) => on ? '#4a4a4a' : '#ededed';
+    const justify = (on) => on ? 'flex-end' : 'flex-start';
+
+    return {
+      selectedTC: tc,
+      setTC: (e) => this.setState({ selectedTC: e.target.value }),
+
+      maintBg: bg(maintOn), maintJustify: justify(maintOn),
+      toggleMaint: () => this.toggle(maintKey),
+
+      occIdx, setOccIdx: (e) => this.setState({ occIdx: parseInt(e.target.value) }),
+      occName: `OCC_${occIdx}`, occBg: bg(occOn), occJustify: justify(occOn),
+      toggleOcc: () => this.toggle(occKey),
+
+      swIdx, setSwIdx: (e) => this.setState({ swIdx: parseInt(e.target.value) }),
+      swFaultName: `SW_${swIdx}_FAULT`, swFaultBg: bg(swFaultOn), swFaultJustify: justify(swFaultOn),
+      toggleSwFault: () => this.toggle(swFaultKey),
+      swMovingName: `SW_${swIdx}_MOVING`, swMovingBg: bg(swMovingOn), swMovingJustify: justify(swMovingOn),
+      toggleSwMoving: () => this.toggle(swMovingKey),
+
+      speedIdx, setSpeedIdx: (e) => this.setState({ speedIdx: parseInt(e.target.value) }),
+      speedName: `SUG_SPEED_${speedIdx}`, speedValue: v[speedKey],
+      setSpeedValue: (e) => this.setFloat(speedKey, e.target.value),
+
+      authIdx, setAuthIdx: (e) => this.setState({ authIdx: parseInt(e.target.value) }),
+      authName: `SUG_AUTH_${authIdx}`, authValue: v[authKey],
+      setAuthValue: (e) => this.setFloat(authKey, e.target.value),
+
+      speedLimitValue: v[speedLimitKey],
+      setSpeedLimitValue: (e) => this.setFloat(speedLimitKey, e.target.value),
+
+      heaterIdx, setHeaterIdx: (e) => this.setState({ heaterIdx: parseInt(e.target.value) }),
+      heaterName: `HTR_${heaterIdx}`, heaterBg: bg(heaterOn), heaterJustify: justify(heaterOn),
+      toggleHeater: () => this.toggle(heaterKey),
+      heaterCmdName: `HTR_${heaterIdx}_CMD`, heaterCmdValue: heaterCmd ? '1' : '0',
+      presenceName: `PRESENCE_${occIdx}`, presenceValue: presenceOn ? '1' : '0',
+
+      ltIdx, setLtIdx: (e) => this.setState({ ltIdx: parseInt(e.target.value) }),
+      xingIdx, setXingIdx: (e) => this.setState({ xingIdx: parseInt(e.target.value) }),
+
+      swCmdName: `SW_${swIdx}_CMD`, swCmdValue: swCmd ? '1' : '0',
+      ltGreenName: `LT_${ltIdx}_G`, ltGreenValue: ltG ? '1' : '0',
+      ltRedName: `LT_${ltIdx}_R`, ltRedValue: ltR ? '1' : '0',
+      xingName: `XING_${xingIdx}`, xingValue: xing ? '1' : '0',
+      cmdSpeedName: `CMD_SPEED_${speedIdx}`, cmdSpeedValue: cmdSpeed + ' MPH',
+      cmdAuthName: `CMD_AUTH_${authIdx}`, cmdAuthValue: cmdAuth + ' FT'
+    };
+  }
+}
+
+</script>
+</body>
+</html>

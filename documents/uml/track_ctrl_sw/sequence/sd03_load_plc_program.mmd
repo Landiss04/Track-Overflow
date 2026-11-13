@@ -1,0 +1,20 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    Note over P,UI: Requires UC-02: a wayside is selected.
+    P->>UI: click Load .plc file, choose program.plc
+    UI->>S: loadProgramFromUrl(url)
+    S->>S: loadProgramFromPath(url.toLocalFile())
+    S->>S: loadProgramFromPath internal: path.open().read()
+    alt the file cannot be read (OSError)
+        S->>S: loadProgramFromPath internal: _log(could not read program.plc)
+        S-->>UI: emit terminalChanged
+    else read
+        S->>S: loadProgramFile(name, source)
+        S->>S: loadProgramFile internal: buffer := source, clear the last RUN and its diagnostics
+        S-->>UI: emit bufferChanged, terminalChanged
+        UI-->>P: program in the editor, NOT COMMITTED
+    end
+    Note right of S: Nothing reaches the wayside: the program still has to be run (run) and committed (commit).

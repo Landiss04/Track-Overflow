@@ -1,0 +1,148 @@
+@startuml class_boundary
+!include ../style.iuml
+title CTC Office — Boundary types (ctc.interface, all frozen dataclasses)
+hide empty members
+
+package "Inputs, every step" {
+  class CtcInputs {
+    track_controller: TrackControllerInputs
+    track_model: TrackModelInputs
+  }
+  class TrackControllerInputs {
+    occupancy: tuple[BlockOccupancy, ...]
+    switches: tuple[SwitchReport, ...]
+    crossings: tuple[CrossingReport, ...]
+    waysides: tuple[WaysideStatus, ...]
+  }
+  class BlockOccupancy {
+    line: str
+    block_id: str
+    occupied: bool
+  }
+  class SwitchReport {
+    line: str
+    switch_id: str
+    position: "normal" | "reverse"
+  }
+  class CrossingReport {
+    line: str
+    crossing_id: str
+    state: "inactive" | "active"
+  }
+  class WaysideStatus {
+    wayside_id: str
+    line: str
+    ready: bool
+    reason: str
+  }
+  class TrackModelInputs {
+    ticket_sales: Mapping[str, int]
+  }
+}
+
+package "Outputs, every step" {
+  class CtcOutputs {
+    track_controller: TrackControllerOutputs
+    clock_speedup: bool = False
+    clock_paused: bool = True
+    new_trains: tuple[NewTrain, ...]
+    retired_trains: tuple[RetiredTrain, ...]
+  }
+  class TrackControllerOutputs {
+    suggestions: tuple[TrainSuggestion, ...]
+    closed_blocks: tuple[BlockRef, ...]
+    switch_commands: tuple[SwitchCommand, ...]
+  }
+  class TrainSuggestion {
+    train_id: str
+    line: str
+    block_id: str
+    suggested_speed_mps: int
+    authority_blocks: int
+  }
+  class BlockRef {
+    line: str
+    block_id: str
+  }
+  class SwitchCommand {
+    line: str
+    switch_id: str
+    position: "normal" | "reverse"
+  }
+  class NewTrain {
+    train_id: str
+    line: str
+  }
+  class RetiredTrain {
+    train_id: str
+  }
+}
+
+package "Snapshot, for the CTC window" {
+  class CtcSnapshot {
+    outputs: CtcOutputs
+    inputs: CtcInputs | None
+    elapsed_s: float
+    tickets_sold: Mapping[str, int]
+    scheduled_runs: tuple[ScheduledRun, ...]
+    orders: tuple[DispatchOrder, ...]
+    pending_closures, closed_blocks: tuple[BlockRef, ...]
+    switch_commands: tuple[SwitchCommand, ...]
+    cancelled_orders: tuple[CancelledOrder, ...]
+    authorities: tuple[TrainAuthority, ...]
+    inputs_staged: bool
+    trains: tuple[TrackedTrain, ...]
+    lost_trains: tuple[str, ...]
+    maintenance_mode, automatic_mode, dispatch_paused: bool
+  }
+  class DispatchOrder {
+    train_id, line: str
+    destination_block_id: str
+    arrival_s: float | None
+  }
+  class TrainAuthority {
+    train_id, line: str
+    blocks: int
+    end_block_id, reason, at: str
+    route: tuple[str, ...]
+    held_by, reverse_at: str
+  }
+  class TrackedTrain {
+    train_id, line: str
+    blocks: tuple[str, ...]
+  }
+  class ScheduledRun {
+    line, run_id, train_id: str
+    departure_s: float
+    status: str
+    stop_block_id, stop_station: str
+    stop_due_s: float | None
+    stops_done, stops_total: int
+  }
+  class CancelledOrder {
+    train_id, line: str
+    destination_block_id: str
+    reason: str
+  }
+}
+
+CtcInputs *-- TrackControllerInputs
+CtcInputs *-- TrackModelInputs
+TrackControllerInputs *-- "*" BlockOccupancy
+TrackControllerInputs *-- "*" SwitchReport
+TrackControllerInputs *-- "*" CrossingReport
+TrackControllerInputs *-- "*" WaysideStatus
+CtcOutputs *-- TrackControllerOutputs
+CtcOutputs *-- "*" NewTrain
+CtcOutputs *-- "*" RetiredTrain
+TrackControllerOutputs *-- "0..2 per train" TrainSuggestion
+TrackControllerOutputs *-- "*" BlockRef
+TrackControllerOutputs *-- "*" SwitchCommand
+CtcSnapshot *-- CtcOutputs
+CtcSnapshot o-- "0..1" CtcInputs
+CtcSnapshot *-- "*" DispatchOrder
+CtcSnapshot *-- "*" TrainAuthority
+CtcSnapshot *-- "*" TrackedTrain
+CtcSnapshot *-- "*" ScheduledRun
+CtcSnapshot *-- "*" CancelledOrder
+@enduml

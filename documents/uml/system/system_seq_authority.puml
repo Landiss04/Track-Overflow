@@ -1,0 +1,44 @@
+@startuml system_seq_authority
+!include ../style.iuml
+autonumber
+
+participant "Central Harness\n(shared clock)" as H
+participant "CTC Office" as CTC
+participant "Track Controller\n(SW Green / HW Red)" as TC
+participant "Track Model" as TM
+participant "Train Model" as TrM
+participant "Train Controller\n(SW Green / HW Red)" as TrC
+
+note over H
+  Every tick the harness sends dt and the simulation time to every
+  module at once; each module steps on the outputs of the tick before,
+  mapped by the harness (D005, D017). One tick is 0.1 s.
+end note
+
+== tick k ==
+H -> CTC : STEP: occupancy, switch states, ready per line
+CTC -> CTC : route the train; authority = blocks it\nmay still enter (D013), never into an occupied,\nclosed or failed block; speed it can stop from
+CTC --> H : suggestion for the train's block\nand the next block on its route
+
+== tick k+1 ==
+H -> H : map per train to per block;\ndrop the train ID
+H -> TC : STEP: suggestions, closures, occupancy
+TC -> TC : PLC scan on two channels:\nAUTH_n passes or withholds authority;\nspeed capped at the block's limit
+TC --> H : track circuit per block,\nswitch, signal, crossing commands
+
+== tick k+2 ==
+H -> TM : STEP: track circuits and commands
+TM -> TM : set switches, signals, crossings;\nplace the command on the train's block
+TM --> H : track signal for the train in the block;\nclear the block's values to zero
+
+== tick k+3 ==
+H -> TrM : STEP: track signal, terrain, beacons
+TrM -> TrM : physics step; pass the commanded\nspeed and authority through
+TrM --> H : position, block change,\ncommanded speed and authority
+
+== tick k+4 ==
+H -> TrC : STEP: commanded speed, authority,\nsignal aspect ahead
+TrC -> TrC : regulate to the commanded speed;\nbrake to stop within the authority
+TrC --> H : power command, brakes
+H -> TrM : (tick k+5) power and brake commands
+@enduml

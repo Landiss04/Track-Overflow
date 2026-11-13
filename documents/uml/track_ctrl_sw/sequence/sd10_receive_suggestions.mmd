@@ -1,0 +1,20 @@
+sequenceDiagram
+    autonumber
+    participant CTC as CTC Office
+    participant H as Central Harness
+    participant M as SwTrackController
+    participant W as TrackController (wayside)
+    CTC-->>H: return TrainSuggestion(train_id, line, block_id, suggested_speed_mps, authority_blocks) (its STEP reply)
+    H->>H: ctc_to_track_controller internal: key by (line, block), drop the train id, the lower speed and authority of two
+    H->>M: step(dt, inputs.ctc.suggestions)
+    Note over H,M: step reaches SwTrackController through TrackControllerProcess.step and TrackControllerState.step (SD-09).
+    M->>M: _validate internal: whole m/s and whole blocks, 0 or more, else InvalidInputError
+    loop each block of each wayside (_apply)
+        alt a suggestion for the block
+            M->>W: set_suggestion(block, speed, authority)
+            W->>W: set_suggestion internal: suggestions[block] := (speed, authority)
+        else none
+            M->>W: clear_suggestion(block): no track circuit
+        end
+    end
+    Note right of W: The numbers never enter the PLC. encode_outputs uses them, and the program decides only AUTH_n (UC-16).

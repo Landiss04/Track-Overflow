@@ -1,0 +1,86 @@
+@startuml system_classes_harness
+!include ../style.iuml
+hide empty members
+left to right direction
+
+package "Central harness (common/harness)" {
+  class Harness <<QObject>> {
+    +clock: SystemClock
+    +outputs: dict[module, outputs]
+    +ready_modules / late_modules / down_modules
+    +hold_reason: str
+    +log_path: Path
+  }
+  class ModuleSupervisor <<QObject>> {
+    +server_name: str
+    +start(): None
+    +send(module, message): None
+    +all_ready(): bool
+    +stop(): None
+  }
+  class TickPacer <<QObject>> {
+    +start(): None
+    +stop(): None
+    +tick_finished(): None
+    +owed_ticks / dropped_ticks
+  }
+  interface Edges <<Protocol>> {
+    +inputs_for(module, outputs): dict
+    +tick_completed(outputs): None
+  }
+  class SystemEdges {
+    +roster: Roster
+    +block_names: BlockNames
+  }
+  class Roster {
+    +apply(new_trains, retired_trains)
+  }
+  class TrackDevices
+  class TicketSales
+  class HarnessWindow
+}
+
+package "utils" {
+  class SystemClock {
+    +tick_s: 0.1
+    +speed: 1 | 10
+    +is_paused: bool
+    +sim_time_s: float
+  }
+  class ModuleLink <<QObject>> {
+    +connect_to_harness()
+    +announce_ready()
+    +reply_outputs(id, tick, outputs)
+    +reply_rejected(id, tick, reason)
+    +push_state(state)
+  }
+}
+
+package "Module processes (one per module)" {
+  class CtcOfficeProcess
+  class "TrackControllerProcess\n(SW, Green)" as TCSWP
+  class "hw_link host\n(Track Ctrl HW, Red)" as TCHWP
+  class TrackModelProcess
+  class TrainModelProcess
+  class "TrainControllerProcess\n(SW, Green)" as TRSWP
+  class "hw_link host\n(Train Ctrl HW, Red)" as TRHWP
+}
+
+Harness *-- "1" SystemClock
+Harness *-- "1" ModuleSupervisor
+Harness *-- "1" TickPacer
+Harness o-- "1" Edges
+Edges <|.. SystemEdges
+SystemEdges *-- Roster
+SystemEdges *-- TrackDevices
+SystemEdges *-- TicketSales
+Harness <.. HarnessWindow : shows
+ModuleSupervisor "1" -- "7" ModuleLink : QLocalSocket,\nnewline JSON\n(READY, STEP,\nOUTPUTS, QUIT)
+CtcOfficeProcess *-- ModuleLink
+TCSWP *-- ModuleLink
+TCHWP *-- ModuleLink
+TrackModelProcess *-- ModuleLink
+TrainModelProcess *-- ModuleLink
+TRSWP *-- ModuleLink
+TRHWP *-- ModuleLink
+@enduml

@@ -1,0 +1,21 @@
+@startuml sd15_report
+!include ../style.iuml
+autonumber
+
+participant "Central\nHarness" as H
+participant "HwTrackController\n(on the Pi)" as Ctrl
+participant "Wayside ×N" as W
+
+H -> Ctrl : STEP → step(dt, inputs) (path as SD-07)
+loop for wayside in self._waysides.values()
+  Ctrl -> W : scan(dt, time_s, ctc, track_model, stall)
+  W -> W : reason = self.not_ready_reason
+  W -> W : report = CtcReport(wayside_id, line,\nsent_at_s=time_s, ready=not reason, reason,\nblocks={key: BlockReport(occupied, switch_position,\ncrossing_active, signal_aspect)})
+  W -> W : self._report = report
+  W --> Ctrl : WaysideScan(..., report)
+  Ctrl -> Ctrl : reports.append(result.report)
+end
+Ctrl --> H : TrackControllerOutputs(ctc_reports=tuple(reports))\n→ OUTPUTS (tick k)
+H -> H : track_controller_to_ctc(outputs):\nwaysides [{wayside_id, line, ready, reason}],\noccupancy, switches, crossings, signals
+H -> H : line_ready(waysides, "Red"):\nall(w["ready"] for w on the line)
+@enduml

@@ -1,0 +1,25 @@
+sequenceDiagram
+    actor User
+    participant Telephone as :Telephone
+    participant Connection as :Connection
+    participant MailSystem as :MailSystem
+    participant Mailbox as :Mailbox
+    participant MessageQueue as :MessageQueue
+    User->>Telephone: dials the extension
+    Telephone->>Connection: dial(key)
+    Connection->>MailSystem: findMailbox(extension)
+    MailSystem-->>Connection: mailbox
+    Connection->>Mailbox: getGreeting()
+    Mailbox-->>Connection: greeting
+    Connection->>Telephone: speak(greeting)
+    Note over Telephone: Reach an Extension is complete
+    User->>Telephone: speaks the message
+    Telephone->>Connection: record(text)
+    Connection->>Connection: append to currentRecording
+    User->>Telephone: hangs up
+    Telephone->>Connection: hangup()
+    create participant Message as :Message
+    Connection->>Message: new Message(currentRecording)
+    Connection->>Mailbox: addMessage(message)
+    Mailbox->>MessageQueue: addMessage(message)
+    Connection->>Connection: resetConnection()

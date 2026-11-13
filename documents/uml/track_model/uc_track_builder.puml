@@ -1,0 +1,20 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 13
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+left to right direction
+skinparam usecaseBackgroundColor #FFF8DC
+skinparam usecaseBorderColor #555555
+actor "Track Builder" as A
+rectangle "Track Model" {
+  usecase "UC-1 Load Track Layout" as UC1
+  usecase "UC-2 Display Track Properties" as UC2
+}
+A -- UC1
+A -- UC2
+UC1 ..> UC2 : <<include>>
+@enduml

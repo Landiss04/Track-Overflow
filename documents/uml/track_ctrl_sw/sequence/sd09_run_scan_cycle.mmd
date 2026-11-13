@@ -1,0 +1,40 @@
+sequenceDiagram
+    autonumber
+    participant H as Central Harness
+    participant PR as TrackControllerProcess
+    participant S as TrackControllerState
+    participant M as SwTrackController
+    participant W as TrackController (wayside)
+    participant V as Program (vital code)
+    participant CTC as CTC Office
+    participant TM as Track Model
+    loop every tick of the shared clock (fixed dt)
+        H->>H: _on_tick internal: inputs_for(): ctc_to_track_controller(...), track_model_to_track_controller(...)
+        H->>PR: step(tick, dt, sim_time_s, inputs) (STEP over ModuleLink)
+        PR->>PR: step internal: inputs_from_wire(inputs)
+        PR->>S: step(dt, inputs)
+        S->>M: step(dt, inputs)
+        M->>M: step internal: _validate(dt, inputs): the whole tick, or reject it unchanged
+        M->>M: step internal: maintenance := a CTC command on a governed switch, _waiting_lines()
+        loop each wayside
+            M->>W: set_occupancy, set_closed, set_suggestion, set_ctc_switch_command, set_switch_position (from _apply)
+            alt its line is not ready
+                M->>W: idle(reason): transmit nothing (UC-18)
+            else ready
+                M->>W: scan()
+                W->>W: _run internal: build_scan_inputs(), user Program.scan(image)
+                W->>V: scan(image + the program's outputs)
+                V-->>W: return the final OUT_ bits
+                W->>W: _run internal: encode_outputs(final)
+            end
+        end
+        M->>M: step internal: _outputs(time_s): commands (UC-13 to UC-16), _report() per wayside (UC-17)
+        M-->>S: return TrackControllerOutputs
+        S->>S: step internal: mark the views dirty
+        S-->>PR: return the outputs
+        PR->>PR: step internal: outputs_to_wire(outputs)
+        PR-->>H: return the outputs (STEP reply)
+        H->>H: _finish_tick internal: keep the outputs. Next tick, inputs_for() maps them: track_controller_to_track_model(...), track_controller_to_ctc(...)
+        H->>TM: STEP, next tick: switches, signals, crossings, track circuits
+        H->>CTC: STEP, next tick: occupancy, read-back, ready per wayside
+    end

@@ -1,0 +1,21 @@
+sequenceDiagram
+    autonumber
+    participant W as TrackController (wayside)
+    participant U as Program (user)
+    participant V as Program (vital code)
+    participant M as SwTrackController
+    participant H as Central Harness
+    participant TM as Track Model
+    Note over W,V: Inside TrackController.scan (UC-09).
+    W->>U: scan(image)
+    U-->>W: return XING_c
+    W->>V: scan(image + XING_c)
+    V->>V: scan internal: OUT_XING_c := XING_c OR OCC of crossing_approach(c)
+    V-->>W: return OUT_XING_c
+    W->>W: encode_outputs internal: crossing_commands[c] := OUT_XING_c
+    W-->>M: read crossing_commands
+    M->>M: _outputs internal: keyed by BlockKey
+    M-->>H: return TrackModelOutputs.crossing_commands
+    H->>H: _finish_tick internal: next tick, inputs_for(): track_controller_to_track_model(...)
+    H->>TM: STEP: lights and gates
+    TM-->>H: return the crossing state, read back next tick (UC-12)

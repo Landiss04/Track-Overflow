@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    participant M as SwTrackController
+    participant W as TrackController (wayside)
+    Note over P,UI: Only after UC-01: with no track loaded the selectors are empty.
+    P->>UI: choose a line, then a wayside
+    UI->>S: selectLine(name), then selectController(id)
+    alt unknown wayside
+        S-->>UI: raise KeyError, selection unchanged
+    else a wayside of a loaded line
+        S->>M: line(name), controllers
+        M-->>S: return the LineLayout and the TrackControllers
+        S->>S: _load_buffer_from_controller()
+        S->>W: program, file_name, iteration
+        W-->>S: return the committed Program, or None
+        S->>S: _load_buffer_from_controller internal: buffer := program.source, or empty. Uncommitted edits are dropped.
+        S-->>UI: emit selectionChanged, bufferChanged, controllerChanged
+        UI-->>P: editor, file list, block grid and header for this wayside
+    end

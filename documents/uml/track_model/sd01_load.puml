@@ -1,0 +1,38 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam sequenceMessageAlign left
+skinparam ParticipantPadding 20
+autonumber
+actor "Track Builder" as TB
+participant "Track Model window" as W
+participant ":TrackModelState" as S
+participant ":TrackModel" as TM
+participant "layout.py" as L
+TB -> W : Load track... (choose a .json file)
+W -> S : loadLayout(url)
+S -> TM : load_layout_file(path)
+TM -> L : line_of_file(path)
+TM -> L : load_layout(all line paths)
+activate L
+L -> L : read blocks, convert grade and speed units
+L -> L : read switches, signals, beacons, next_blocks
+L -> L : check directions against switches
+L --> TM : Layout
+deactivate L
+alt file is valid
+  TM -> TM : _adopt(layout), _restart()
+  TM --> S : line name
+  S -> W : linesChanged, changed
+  W -> TB : line shown, trains cleared
+else bad file (LayoutError)
+  TM --> S : error, nothing changed
+  S -> W : loadMessage
+  W -> TB : error shown, old track kept
+end
+@enduml

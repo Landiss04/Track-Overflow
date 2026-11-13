@@ -1,0 +1,61 @@
+' Shared PlantUML style for Track Overflow design documents.
+' Include it with:  !include ../style.iuml   (path relative to the .puml file)
+' Render:           java -jar plantuml.jar -tpng <file>.puml
+' Elements designed but not built yet carry the <<planned>> stereotype.
+!pragma layout smetana
+skinparam dpi 150
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam BackgroundColor white
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 11
+skinparam TitleFontSize 16
+skinparam TitleFontColor #1F3A5F
+skinparam NoteBackgroundColor #FFF8E1
+skinparam NoteBorderColor #C9A227
+skinparam NoteFontSize 11
+
+skinparam ClassBackgroundColor #F7F9FC
+skinparam ClassBorderColor #1F3A5F
+skinparam ClassHeaderBackgroundColor #D9E2EC
+skinparam ClassAttributeIconSize 0
+skinparam ClassFontStyle bold
+skinparam PackageBorderColor #1F3A5F
+skinparam PackageBackgroundColor #FFFFFF
+skinparam stereotypeCBackgroundColor #D9E2EC
+skinparam stereotypeIBackgroundColor #D9E2EC
+
+skinparam UsecaseBackgroundColor #F7F9FC
+skinparam UsecaseBorderColor #1F3A5F
+skinparam ActorBorderColor #1F3A5F
+skinparam ActorBackgroundColor #D9E2EC
+skinparam RectangleBorderColor #1F3A5F
+skinparam RectangleBackgroundColor #FFFFFF
+
+skinparam NodeBorderColor #1F3A5F
+skinparam NodeBackgroundColor #F7F9FC
+skinparam ComponentBorderColor #1F3A5F
+skinparam ComponentBackgroundColor #FFFFFF
+skinparam ArtifactBorderColor #1F3A5F
+skinparam ArtifactBackgroundColor #FFFFFF
+skinparam DatabaseBorderColor #1F3A5F
+
+skinparam SequenceParticipantBackgroundColor #D9E2EC
+skinparam SequenceParticipantBorderColor #1F3A5F
+skinparam SequenceActorBackgroundColor #D9E2EC
+skinparam SequenceActorBorderColor #1F3A5F
+skinparam SequenceLifeLineBorderColor #7A8794
+skinparam SequenceGroupBorderColor #1F3A5F
+skinparam SequenceGroupBackgroundColor #EEF2F7
+skinparam SequenceBoxBorderColor #1F3A5F
+skinparam SequenceDividerBackgroundColor #EEF2F7
+skinparam SequenceMessageAlign left
+
+skinparam ClassBackgroundColor<<planned>> #FFF3E0
+skinparam ClassBorderColor<<planned>> #C26A00
+skinparam ComponentBackgroundColor<<planned>> #FFF3E0
+skinparam ComponentBorderColor<<planned>> #C26A00
+skinparam ParticipantBackgroundColor<<planned>> #FFF3E0
+skinparam ParticipantBorderColor<<planned>> #C26A00

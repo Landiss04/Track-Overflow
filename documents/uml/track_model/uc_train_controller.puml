@@ -1,0 +1,17 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 13
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+left to right direction
+skinparam usecaseBackgroundColor #FFF8DC
+skinparam usecaseBorderColor #555555
+actor "Train Controller" as A
+rectangle "Track Model" {
+  usecase "UC-9 Send Signal Light\nto Train Controller" as UC9
+}
+A -- UC9
+@enduml

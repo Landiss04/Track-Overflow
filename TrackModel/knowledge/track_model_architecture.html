@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Track Model — Module Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:#e6e5e2;font-family:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+.page{max-width:1660px;margin:0 auto;padding:32px 32px 64px;color:#2e2e2e}
+.scroll{overflow-x:auto}
+.scroll svg{min-width:1000px}
+h1{font:600 18px/1.2 'IBM Plex Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;margin:0}
+.sub{font:400 12px/1.6 'IBM Plex Sans',sans-serif;color:#6a6a6a;margin-top:6px;max-width:820px}
+.legend{background:#fff;border:1px solid #c2c2c2;padding:12px 16px;margin:20px 0;display:flex;gap:28px;flex-wrap:wrap;font:400 10.5px/1.3 'IBM Plex Sans',sans-serif;color:#5a5a5a}
+.legend div{display:flex;align-items:center;gap:6px}
+.legend span.sw{width:22px;height:14px;background:#fff;display:inline-block}
+.panel{background:#fff;border:1px solid #c2c2c2;padding:18px 20px 20px}
+.notes{margin-top:14px;border-top:1px solid #ececec;padding-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 32px;font:400 11px/1.55 'IBM Plex Sans',sans-serif;color:#4a4a4a}
+@media (max-width:700px){.page{padding:20px 14px 40px}.notes{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="page">
+ <div>
+  <h1>Track Model &mdash; Module Architecture</h1>
+  <div class="sub">Physical I/O boundary and internal simulation program, with every module input and output labeled by name and data type.</div>
+ </div>
+
+ <div class="legend">
+  <div><span class="sw" style="border:1.5px solid #8a8a8a"></span>physical hardware boundary</div>
+  <div><span class="sw" style="border:1.5px dashed #8a8a8a"></span>software boundary</div>
+  <div><span class="sw" style="border:1.5px dashed #8a8a8a;border-radius:8px"></span>OS / runtime interface</div>
+  <div><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#7c7c7c">Float</span>data type of signal</div>
+ </div>
+
+ <div class="panel">
+ <div class="scroll">
+  <svg viewBox="0 0 1600 1120" style="width:100%;height:auto;display:block" font-family="'IBM Plex Sans',sans-serif">
+   <defs>
+    <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a4a4a"></path></marker>
+   </defs>
+
+   <!-- LEFT ACTORS (inputs) -->
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <rect x="20" y="96" width="170" height="468"></rect>
+    <rect x="20" y="584" width="170" height="60"></rect>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="5 4">
+    <rect x="20" y="664" width="170" height="52" rx="10"></rect>
+    <rect x="20" y="736" width="170" height="164" rx="10"></rect>
+   </g>
+   <g font-size="12" fill="#2e2e2e" text-anchor="middle" letter-spacing="0.5">
+    <text x="105" y="334">TRACK CONTROLLER</text>
+    <text x="105" y="618">TRAIN MODEL</text>
+   </g>
+   <g text-anchor="middle">
+    <text x="105" y="686" font-size="10" fill="#2e2e2e" letter-spacing="0.4">TRACK CONFIG</text>
+    <text x="105" y="701" font-size="9" fill="#7c7c7c">static input</text>
+    <text x="105" y="812" font-size="10" fill="#2e2e2e" letter-spacing="0.4">ENVIRONMENT</text>
+    <text x="105" y="828" font-size="9" fill="#7c7c7c">external / stochastic feed</text>
+   </g>
+
+   <!-- RIGHT ACTORS (outputs) -->
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5">
+    <rect x="1420" y="96" width="160" height="468"></rect>
+    <rect x="1420" y="584" width="160" height="244"></rect>
+    <rect x="1420" y="862" width="160" height="60"></rect>
+    <rect x="1420" y="942" width="160" height="60"></rect>
+   </g>
+   <g font-size="12" fill="#2e2e2e" text-anchor="middle" letter-spacing="0.5">
+    <text x="1500" y="334">TRACK CONTROLLER</text>
+    <text x="1500" y="710">TRAIN MODEL</text>
+    <text x="1500" y="896">CTC OFFICE</text>
+    <text x="1500" y="976">TRAIN CONTROLLER</text>
+   </g>
+
+   <!-- PHYSICAL CHASSIS -->
+   <g fill="none" stroke="#8a8a8a" stroke-width="1.5"><rect x="440" y="60" width="720" height="1010"></rect></g>
+   <g font-size="10" fill="#8a8a8a" letter-spacing="0.4"><text x="456" y="82">TRACK MODEL &mdash; PHYSICAL CHASSIS</text></g>
+
+   <!-- cards -->
+   <g fill="#eef0f2" stroke="#8a8a8a" stroke-width="1.5">
+    <rect x="456" y="96" width="56" height="934"></rect>
+    <rect x="1088" y="96" width="56" height="934"></rect>
+   </g>
+   <g font-size="11" fill="#2e2e2e" text-anchor="middle" letter-spacing="0.5">
+    <text x="0" y="0" transform="translate(488,563) rotate(-90)">INPUT CARD</text>
+    <text x="0" y="0" transform="translate(1116,563) rotate(-90)">OUTPUT CARD</text>
+   </g>
+
+   <!-- decode / encode -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M512,450 H680" marker-end="url(#am)"></path>
+    <path d="M920,450 H1088" marker-end="url(#am)"></path>
+   </g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="5 4">
+    <rect x="550" y="428" width="92" height="44" rx="10"></rect>
+    <rect x="958" y="428" width="92" height="44" rx="10"></rect>
+   </g>
+   <g font-size="9.5" fill="#2e2e2e" text-anchor="middle">
+    <text x="596" y="446">decoded</text><text x="596" y="458">by OS</text>
+    <text x="1004" y="446">encoded</text><text x="1004" y="458">by OS</text>
+   </g>
+
+   <!-- PROGRAM -->
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="6 4"><rect x="680" y="340" width="240" height="220"></rect></g>
+   <g font-size="13" fill="#2e2e2e" text-anchor="middle" font-weight="600" letter-spacing="0.5"><text x="800" y="372">TRACK MODEL PROGRAM</text></g>
+   <g font-size="9.5" fill="#8a8a8a" text-anchor="middle"><text x="800" y="388">block state &middot; signal encoding &middot; ticketing</text></g>
+   <g fill="#fff" stroke="#8a8a8a" stroke-width="1.5"><rect x="700" y="490" width="200" height="50"></rect></g>
+   <g font-size="11" fill="#2e2e2e" text-anchor="middle">
+    <text x="800" y="512">PARSE TRACK CONFIG<tspan x="800" dy="14" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">.json</tspan></text>
+   </g>
+
+   <!-- INPUT WIRES -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M190,130 H456" marker-end="url(#am)"></path>
+    <path d="M190,210 H456" marker-end="url(#am)"></path>
+    <path d="M190,290 H456" marker-end="url(#am)"></path>
+    <path d="M190,370 H456" marker-end="url(#am)"></path>
+    <path d="M190,450 H456" marker-end="url(#am)"></path>
+    <path d="M190,530 H456" marker-end="url(#am)"></path>
+    <path d="M190,614 H456" marker-end="url(#am)"></path>
+    <path d="M190,690 H456" marker-end="url(#am)"></path>
+    <path d="M190,780 H456" marker-end="url(#am)"></path>
+    <path d="M190,860 H456" marker-end="url(#am)"></path>
+   </g>
+   <g text-anchor="start">
+    <text x="212" y="106" font-size="11" fill="#2e2e2e">Commanded Speed</text>
+    <text x="212" y="120" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Int (m/s) &middot; per block</text>
+    <text x="212" y="186" font-size="11" fill="#2e2e2e">Commanded Authority</text>
+    <text x="212" y="200" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Int (block ID) &middot; per train</text>
+    <text x="212" y="266" font-size="11" fill="#2e2e2e">Switch Position Commands</text>
+    <text x="212" y="280" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Enum]</text>
+    <text x="212" y="346" font-size="11" fill="#2e2e2e">Crossing States</text>
+    <text x="212" y="360" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Bool] (gate closed)</text>
+    <text x="212" y="426" font-size="11" fill="#2e2e2e">Signal Light Commands</text>
+    <text x="212" y="440" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Enum]</text>
+    <text x="212" y="506" font-size="11" fill="#2e2e2e">Track Heater Command</text>
+    <text x="212" y="520" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Bool] &middot; per heater zone</text>
+    <text x="212" y="590" font-size="11" fill="#2e2e2e">Actual Train Speed</text>
+    <text x="212" y="604" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Float (m/s)</text>
+    <text x="212" y="666" font-size="11" fill="#2e2e2e">Track Configuration</text>
+    <text x="212" y="680" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">JSON</text>
+    <text x="212" y="756" font-size="11" fill="#2e2e2e">Ambient Weather Feed</text>
+    <text x="212" y="770" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Float (&deg;C) &middot; outdoor baseline sample</text>
+    <text x="212" y="836" font-size="11" fill="#2e2e2e">Random Ticket Sale</text>
+    <text x="212" y="850" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Float (0&ndash;1) &middot; per-station chance roll</text>
+   </g>
+
+   <!-- OUTPUT WIRES -->
+   <g fill="none" stroke="#4a4a4a" stroke-width="1.5">
+    <path d="M1144,130 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,210 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,290 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,370 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,450 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,530 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,628 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,708 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,892 H1420" marker-end="url(#am)"></path>
+    <path d="M1144,972 H1420" marker-end="url(#am)"></path>
+   </g>
+   <g text-anchor="start">
+    <text x="1180" y="106" font-size="11" fill="#2e2e2e">Block Occupancy</text>
+    <text x="1180" y="120" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Bool] &middot; per block</text>
+    <text x="1180" y="186" font-size="11" fill="#2e2e2e">Switch States</text>
+    <text x="1180" y="200" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Enum]</text>
+    <text x="1180" y="266" font-size="11" fill="#2e2e2e">Crossing States</text>
+    <text x="1180" y="280" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Bool]</text>
+    <text x="1180" y="346" font-size="11" fill="#2e2e2e">Signal Colors</text>
+    <text x="1180" y="360" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Enum]</text>
+    <text x="1180" y="426" font-size="11" fill="#2e2e2e">Track Failure Status</text>
+    <text x="1180" y="440" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Enum</text>
+    <text x="1180" y="506" font-size="11" fill="#2e2e2e">Track Heater State</text>
+    <text x="1180" y="520" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">List[Bool] &middot; per heater zone</text>
+
+    <text x="1180" y="604" font-size="11" fill="#2e2e2e">Passengers Boarding</text>
+    <text x="1180" y="618" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Int &middot; per station</text>
+
+    <text x="1180" y="670" font-size="11" fill="#2e2e2e">Track Signal</text>
+    <text x="1180" y="684" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">struct &middot; encoded on track</text>
+    <g font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">
+     <text x="1180" y="730">Commanded Speed : Float (m/s)</text>
+     <text x="1180" y="744">Authority : Int[2] (block ID)</text>
+     <text x="1180" y="758">Beacon : { station name : String,</text>
+     <text x="1180" y="772">           platform side : L | R,</text>
+     <text x="1180" y="786">           underground : Bool }</text>
+     <text x="1180" y="800">Block Info : { grade : Float (deg),</text>
+     <text x="1180" y="814">   elevation : Float (m),</text>
+     <text x="1180" y="828">   speed limit : Float (km/h),</text>
+     <text x="1180" y="842">   block length : Float (m) }</text>
+    </g>
+    <text x="1180" y="868" font-size="11" fill="#2e2e2e">Ticket Sales</text>
+    <text x="1180" y="882" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Int &middot; per station</text>
+    <text x="1180" y="948" font-size="11" fill="#2e2e2e">Signal State</text>
+    <text x="1180" y="962" font-size="9.5" font-family="'IBM Plex Mono',monospace" fill="#7c7c7c">Enum &middot; aspect ahead</text>
+   </g>
+  </svg>
+ </div>
+
+  <div class="notes">
+   <div>The Input and Output Cards are the physical I/O boundary of the chassis &mdash; every signal crossing into or out of the module passes through one of them.</div>
+   <div>Raw I/O is decoded and encoded by the OS layer before the program ever sees it; the program itself only reads and writes typed values.</div>
+   <div>Track Controller and Train Model are bidirectional peers. The controller sends commands (speed, authority, switches, crossings, lights) and receives block occupancy, switch, crossing and signal states, and track failure status.</div>
+   <div>Train Model reports actual train speed, and receives the Track Signal struct. The track layout is loaded once from the JSON configuration.</div>
+   <div>Track Controller is the source of Track Heater Command (it owns the same wayside PLC logic that drives switches and crossings) and, in return, reads back Track Heater State &mdash; the same bidirectional pattern as its other commands and states.</div>
+   <div>Environmental Temperature is not an external command: Track Model computes the live per-block temperature itself, seeded by an Ambient Weather Feed read once as a baseline. Everything downstream (heater engagement, speed restrictions) reacts to Track Model's own number, not a raw pass-through.</div>
+   <div>Random Ticket Sale works the same way &mdash; each station rolls this per-tick chance and Track Model decides whether a new waiting passenger appears, so ticket sales are generated inside the module rather than commanded from outside. When a train is present, Track Model moves waiting passengers onto it and reports that count to Train Model as Passengers Boarding, so Train Model's own onboard count stays in sync; Ticket Sales (the revenue side of the same event) goes to CTC Office.</div>
+   <div>Signal State is sent directly to the Train Controller (onboard), separate from the Track Signal struct sent to Train Model &mdash; the Train Controller only needs the current aspect ahead for cab-signaling and speed regulation, not the full commanded-speed/authority/beacon/block-info payload.</div>
+  </div>
+ </div>
+</div>
+</body>
+</html>
