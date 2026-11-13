@@ -151,3 +151,9 @@ One line per promoted or denied proposal, appended at promotion time. See
 | 2026-10-19 | claude/quirky-fermi-sickg4 | 20261020-0039-files-and-paths-executable-modes.md | conventions/files-and-paths.md | denied — superseded by 20261020-0255-files-and-paths-logger-kept.md |
 | 2026-10-19 | claude/quirky-fermi-sickg4 | 20261020-0039-track-controller-ready-loaded-by-hand.md | signals/track-controller-ready.md | denied — superseded by 20261020-0234-track-controller-ready-roster.md |
 | 2026-10-19 | claude/quirky-fermi-sickg4 | 20261020-0234-D005-hw-test-ui-kept.md | decisions/D005-central-harness.md | denied — superseded by 20261020-0255-D005-harness-writes-event-log.md |
+| 2026-11-12 | integrate/harness-into-development | 20261112-1551-two-way-zone-passing-sidings.md | arbitration/two-way-zone-direction-reservation.md | promoted |
+| 2026-11-12 | integrate/harness-into-development | 20261112-1754-suggested-speed-reaction-margin.md | arbitration/suggested-speed-stops-within-authority.md | promoted |
+| 2026-11-12 | integrate/harness-into-development | 20261112-1045-two-way-zone-yard-pass.md | arbitration/two-way-zone-direction-reservation.md | denied — superseded by 20261112-1551-two-way-zone-passing-sidings.md |
+| 2026-11-12 | integrate/harness-into-development | 20261112-1334-two-way-zone-pass-and-loop-limit.md | arbitration/two-way-zone-direction-reservation.md | denied — superseded by 20261112-1551-two-way-zone-passing-sidings.md |
+| 2026-11-12 | integrate/harness-into-development | 20261112-1433-two-way-zone-pass-can-stop.md | arbitration/two-way-zone-direction-reservation.md | denied — superseded by 20261112-1551-two-way-zone-passing-sidings.md |
+| 2026-11-12 | integrate/harness-into-development | 20261109-1135-suggested-speed-full-train-grade.md | arbitration/suggested-speed-stops-within-authority.md | denied — superseded by 20261112-1754-suggested-speed-reaction-margin.md |
