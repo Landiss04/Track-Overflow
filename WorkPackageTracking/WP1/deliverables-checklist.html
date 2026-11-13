@@ -1,0 +1,844 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deliverables Checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --paper: #e8eaee;
+    --card: #ffffff;
+    --ink: #15212e;
+    --muted: #5d6b7d;
+    --rule: #d8dce2;
+    --group: #0f766e;
+    --indiv: #5b45d6;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 18px 80px;
+  }
+
+  /* ---------- masthead ---------- */
+  header.top {
+    padding: 34px 0 18px;
+  }
+  h1 {
+    font-family: "Barlow Condensed", Inter, sans-serif;
+    font-weight: 700;
+    font-size: clamp(30px, 8vw, 44px);
+    letter-spacing: 0.01em;
+    line-height: 1;
+    margin: 0 0 6px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 13.5px;
+    max-width: 58ch;
+    margin: 0;
+  }
+
+  /* ---------- sticky tally ---------- */
+  .tally {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper);
+    padding: 10px 0 12px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 26px;
+  }
+  .tally-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 22px;
+  }
+  .tally-cell { min-width: 0; }
+  .tally-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: "Barlow Condensed", Inter, sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .tally-head b { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .tally-note {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    margin-top: 3px;
+  }
+  .rail {
+    height: 5px;
+    border-radius: 3px;
+    background: #d2d7de;
+    overflow: hidden;
+    margin-top: 5px;
+  }
+  .rail > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 3px;
+    transition: width 220ms ease;
+  }
+  .g .rail > i { background: var(--group); }
+  .i .rail > i { background: var(--indiv); }
+  .g .tally-head { color: var(--group); }
+  .i .tally-head { color: var(--indiv); }
+
+  /* ---------- section band ---------- */
+  .band {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 30px 0 14px;
+  }
+  .band h2 {
+    font-family: "Barlow Condensed", Inter, sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .band span {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .band .line { flex: 1; height: 2px; background: var(--rule); }
+  #group-work .band h2 { color: var(--group); }
+  #individual-work .band h2 { color: var(--indiv); }
+
+  /* ---------- deliverable card ---------- */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-left: 4px solid #c9ced6;
+    border-radius: 3px;
+    margin-bottom: 12px;
+  }
+  .card.done { border-left-color: currentColor; }
+  #group-work .card { color: var(--group); }
+  #individual-work .card { color: var(--indiv); }
+
+  .card > .body { color: var(--ink); }
+
+  .cardhead {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: none;
+    border: 0;
+    text-align: left;
+    padding: 13px 15px;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+  .cardhead:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+  .cardhead h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-family: "Barlow Condensed", Inter, sans-serif;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+    line-height: 1.12;
+  }
+  .weight {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .score {
+    font-family: "Barlow Condensed", Inter, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .chev {
+    width: 9px; height: 9px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg);
+    margin: -4px 2px 0 0;
+    transition: transform 160ms ease;
+    flex: none;
+  }
+  .card.shut .chev { transform: rotate(-45deg); }
+  .card.shut .body { display: none; }
+
+  .cardrail {
+    height: 3px;
+    background: #e4e7eb;
+    overflow: hidden;
+  }
+  .cardrail > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: currentColor;
+    transition: width 200ms ease;
+  }
+
+  /* ---------- items ---------- */
+  ul.items {
+    list-style: none;
+    margin: 0;
+    padding: 6px 15px 14px 15px;
+  }
+  li.head {
+    font-family: "Barlow Condensed", Inter, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 14px 0 4px;
+    padding-left: 26px;
+  }
+  li.head:first-child { margin-top: 4px; }
+
+  li.item { margin: 0; }
+  li.item > label {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 0 7px 26px;
+    cursor: pointer;
+  }
+  /* the vertical line of stops */
+  li.item > label::before {
+    content: "";
+    position: absolute;
+    left: 6px; top: 0; bottom: 0;
+    width: 2px;
+    background: #e4e7eb;
+  }
+  li.item:last-child > label::before { bottom: 50%; }
+  li.item > label > input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .stop {
+    position: absolute;
+    left: 0; top: 12px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 2px solid #b9c0ca;
+    transition: background 140ms ease, border-color 140ms ease;
+  }
+  li.item > label:hover .stop { border-color: currentColor; }
+  input:checked ~ .stop { background: currentColor; border-color: currentColor; }
+  input:focus-visible ~ .stop { box-shadow: 0 0 0 3px rgba(21,33,46,.25); }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-size: 12.5px;
+    color: var(--muted);
+    min-width: 26px;
+    padding-top: 1px;
+  }
+  .txt { flex: 1; min-width: 0; color: var(--ink); }
+  .txt em {
+    display: block;
+    font-style: normal;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .pts {
+    font-variant-numeric: tabular-nums;
+    font-size: 12.5px;
+    color: var(--muted);
+    padding-top: 1px;
+    white-space: nowrap;
+  }
+  input:checked ~ .txt { color: var(--muted); }
+  input:checked ~ .txt em { color: #96a0ad; }
+
+  /* ---------- footer ---------- */
+  footer {
+    margin-top: 34px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  button.plain {
+    font: inherit;
+    font-size: 12.5px;
+    background: none;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 6px 11px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button.plain:hover { border-color: var(--muted); }
+  #status { flex: 1; min-width: 120px; }
+
+  @media (max-width: 560px) {
+    .tally-grid { grid-template-columns: 1fr; gap: 12px; }
+    .weight { display: none; }
+  }
+
+  /* ---------- transfer panel ---------- */
+  #panel {
+    display: none;
+    margin-top: 14px;
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--muted);
+    border-radius: 3px;
+    padding: 14px 15px;
+  }
+  #panel.open { display: block; }
+  #panel h4 {
+    font-family: "Barlow Condensed", Inter, sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--ink);
+  }
+  #panel p { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); }
+  #panel textarea {
+    width: 100%;
+    height: 104px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--ink);
+    background: #f6f7f9;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 8px;
+    resize: vertical;
+  }
+  .panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .panel-actions .msg { font-size: 12px; color: var(--muted); }
+  label.filepick {
+    font-size: 12.5px;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 6px 11px;
+    cursor: pointer;
+    color: var(--ink);
+  }
+  label.filepick:hover { border-color: var(--muted); }
+  label.filepick input { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .tally { position: static; }
+    footer, .chev { display: none; }
+    .card { break-inside: avoid; page-break-inside: avoid; }
+    .card.shut .body { display: block; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Deliverables checklist</h1>
+    <p class="sub">Every rubric line from the four grading sheets. Tick a stop when that item is actually in the document — the point counts and the course weight update as you go.</p>
+  </header>
+
+  <div class="tally">
+    <div class="tally-grid">
+      <div class="tally-cell g">
+        <div class="tally-head"><span>Group work</span><b id="g-pct">0%</b></div>
+        <div class="rail"><i id="g-bar"></i></div>
+        <div class="tally-note" id="g-note">0 / 500 pts · 0.00 of 5.0% of grade</div>
+      </div>
+      <div class="tally-cell i">
+        <div class="tally-head"><span>Individual work</span><b id="i-pct">0%</b></div>
+        <div class="rail"><i id="i-bar"></i></div>
+        <div class="tally-note" id="i-note">0 / 400 pts · 0.00 of 5.0% of grade</div>
+      </div>
+    </div>
+  </div>
+
+  <section id="group-work">
+    <div class="band">
+      <h2>Group</h2>
+      <span>5 deliverables · 5.0% of grade</span>
+      <div class="line"></div>
+    </div>
+    <div id="group-cards"></div>
+  </section>
+
+  <section id="individual-work">
+    <div class="band">
+      <h2>Individual</h2>
+      <span>4 deliverables · 5.0% of grade</span>
+      <div class="line"></div>
+    </div>
+    <div id="individual-cards"></div>
+  </section>
+
+  <footer>
+    <span id="status">Loading your saved ticks…</span>
+    <button class="plain" id="export">Export progress</button>
+    <button class="plain" id="import">Import</button>
+    <button class="plain" id="expand">Expand all</button>
+    <button class="plain" id="print">Print</button>
+    <button class="plain" id="reset">Clear all ticks</button>
+  </footer>
+
+  <div id="panel">
+    <h4 id="panel-title"></h4>
+    <p id="panel-help"></p>
+    <textarea id="panel-text" spellcheck="false"></textarea>
+    <div class="panel-actions" id="panel-actions"></div>
+  </div>
+</div>
+
+<script>
+const DATA = {
+  group: [
+    { id: "srs", title: "Software Requirements Specification (SRS)", weight: 2.5, blocks: [
+      { items: [
+        ["0", "Cover page", 1],
+        ["0.1", "Change log", 1],
+        ["0.2", "Table of contents", 1],
+        ["0.3", "Headers & footers", 1]
+      ]},
+      { head: "1 · Introduction", items: [
+        ["1.1", "Purpose", 2],
+        ["1.2", "Scope", 2],
+        ["1.3", "Definitions, acronyms, and abbreviations", 2],
+        ["1.4", "References", 1],
+        ["1.5", "Overview", 2]
+      ]},
+      { head: "2 · Overall description", items: [
+        ["2.1", "Product perspective", 2],
+        ["2.2", "Product functions", 2],
+        ["2.3", "User characteristics", 15],
+        ["2.4", "Constraints", 0],
+        ["2.5", "Assumptions and dependencies", 5],
+        ["2.6", "Apportioning of requirements", 1]
+      ]},
+      { head: "3 · Specific requirements", items: [
+        ["3.1", "Functional requirements", 36, "Numbered, and each one uses “shall”"],
+        ["3.2", "Non-functional requirements", 15, "Numbered, and each one uses “shall”"],
+        ["3.3", "Design constraints", 10],
+        ["3.4", "Other requirements", 1]
+      ]},
+      { head: "4 · Grader's discretion", items: [
+        ["4", "Nothing sloppy, inconsistent, or unexplained left in", 0]
+      ]}
+    ]},
+    { id: "schedule", title: "Project schedule", weight: 0.5, blocks: [
+      { items: [
+        ["1.1", "Group name identified clearly", 1],
+        ["1.2", "Major milestones shown", 9],
+        ["1.3", "Major tasks shown with dependencies", 45],
+        ["1.4", "All team member resources allocated", 45]
+      ]}
+    ]},
+    { id: "coding", title: "Coding standards", weight: 0.5, blocks: [
+      { head: "1 · Naming conventions", items: [
+        ["1.1", "Classes", 13],
+        ["1.2", "Properties or attributes", 13],
+        ["1.3", "Methods", 13],
+        ["1.4", "Variables", 13],
+        ["1.5", "Constants", 13],
+        ["1.6", "Comments and comment style", 12]
+      ]},
+      { head: "2 · Programming conventions", items: [
+        ["2.1", "Indentation & brackets", 11],
+        ["2.2", "Exception handling", 12]
+      ]}
+    ]},
+    { id: "defects", title: "Defect tracking policy", weight: 0.5, blocks: [
+      { head: "1 · Policies", items: [
+        ["1.1", "Numbering policy", 10],
+        ["1.2", "Tracking policy", 55],
+        ["1.3", "Resolution policy", 25],
+        ["1.4", "Tool used", 10]
+      ]}
+    ]},
+    { id: "personas", title: "Personas", weight: 1.0, blocks: [
+      { items: [
+        ["1.1", "All 7 users represented", 10, "Dispatcher · Transit programmer · Track builder · Passenger · Murphy · Driver · Planner"],
+        ["1.2", "Each persona is comprehensive", 50, "Name · picture · biography · education · occupation · salary range · residence · technology comfort · hobbies · goals"],
+        ["1.3", "Accurately describes the user", 40]
+      ]}
+    ]}
+  ],
+  individual: [
+    { id: "sysarch", title: "System architecture", weight: 1.5, blocks: [
+      { items: [
+        ["1.1", "Diagram complete", 34],
+        ["1.2", "All inputs in the dictionary", 33, "Each missing key input costs 5 points"],
+        ["1.3", "All outputs in the dictionary", 33, "Each missing key output costs 5 points"]
+      ]}
+    ]},
+    { id: "ux", title: "UX architecture (Garrett diagrams)", weight: 1.0, blocks: [
+      { items: [
+        ["1.1", "Taxonomy correct", 25],
+        ["1.2", "Completeness of diagram", 25],
+        ["1.3", "Information architecture organized well", 50]
+      ]}
+    ]},
+    { id: "ui", title: "User interface design", weight: 2.0, blocks: [
+      { items: [
+        ["1.1", "User interface layout", 50],
+        ["1.2", "User interface completeness", 50]
+      ]}
+    ]},
+    { id: "risk", title: "Risk assessment", weight: 0.5, blocks: [
+      { items: [
+        ["1.1", "Technical risks", 30],
+        ["1.2", "Schedule & group interaction risks", 30],
+        ["1.3", "Risk likelihood & severity", 20],
+        ["1.4", "Risk mitigation", 20]
+      ]}
+    ]}
+  ]
+};
+
+const KEY = "deliverables-checklist-v1";
+let state = {};
+let saveTimer = null;
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function build(list, mountId) {
+  const mount = document.getElementById(mountId);
+  list.forEach(d => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.id = d.id;
+
+    let rows = "";
+    d.blocks.forEach((b, bi) => {
+      if (b.head) rows += `<li class="head">${esc(b.head)}</li>`;
+      b.items.forEach((it, ii) => {
+        const [num, text, pts, note] = it;
+        const key = `${d.id}|${bi}|${ii}`;
+        rows += `<li class="item">
+          <label>
+            <input type="checkbox" data-key="${key}" data-card="${d.id}" data-pts="${pts}">
+            <span class="stop"></span>
+            <span class="num">${esc(num)}</span>
+            <span class="txt">${esc(text)}${note ? `<em>${esc(note)}</em>` : ""}</span>
+            <span class="pts">${pts} pt${pts === 1 ? "" : "s"}</span>
+          </label>
+        </li>`;
+      });
+    });
+
+    card.innerHTML = `
+      <button class="cardhead" aria-expanded="true">
+        <h3>${esc(d.title)}</h3>
+        <span class="weight">${d.weight.toFixed(1)}% of grade</span>
+        <span class="score">0<span style="color:var(--muted)">/100</span></span>
+        <span class="chev"></span>
+      </button>
+      <div class="cardrail"><i></i></div>
+      <div class="body"><ul class="items">${rows}</ul></div>`;
+
+    card.querySelector(".cardhead").addEventListener("click", () => {
+      const shut = card.classList.toggle("shut");
+      card.querySelector(".cardhead").setAttribute("aria-expanded", String(!shut));
+    });
+    mount.appendChild(card);
+  });
+}
+
+function refresh() {
+  let totals = { group: [0, 0], individual: [0, 0] };
+  let weighted = { group: 0, individual: 0 };
+
+  ["group", "individual"].forEach(side => {
+    DATA[side].forEach(d => {
+      const card = document.querySelector(`.card[data-id="${d.id}"]`);
+      let got = 0;
+      card.querySelectorAll("input[type=checkbox]").forEach(cb => {
+        if (cb.checked) got += Number(cb.dataset.pts);
+      });
+      card.querySelector(".score").innerHTML = `${got}<span style="color:var(--muted)">/100</span>`;
+      card.querySelector(".cardrail > i").style.width = got + "%";
+      const allTicked = [...card.querySelectorAll("input[type=checkbox]")].every(cb => cb.checked);
+      card.classList.toggle("done", allTicked);
+      totals[side][0] += got;
+      totals[side][1] += 100;
+      weighted[side] += (got / 100) * d.weight;
+    });
+  });
+
+  const put = (side, tag) => {
+    const [got, max] = totals[side];
+    const pct = Math.round((got / max) * 100);
+    document.getElementById(tag + "-pct").textContent = pct + "%";
+    document.getElementById(tag + "-bar").style.width = pct + "%";
+    const cap = side === "group" ? 5.0 : 5.0;
+    document.getElementById(tag + "-note").textContent =
+      `${got} / ${max} pts · ${weighted[side].toFixed(2)} of ${cap.toFixed(1)}% of grade`;
+  };
+  put("group", "g");
+  put("individual", "i");
+}
+
+function queueSave() {
+  const el = document.getElementById("status");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    if (typeof window.storage === "undefined") {
+      el.textContent = "Ticks are kept for this session only.";
+      return;
+    }
+    try {
+      await window.storage.set(KEY, JSON.stringify(state), false);
+      el.textContent = "Saved · " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    } catch (err) {
+      el.textContent = "Could not save — your ticks are still here until you close this.";
+    }
+  }, 350);
+}
+
+function wire() {
+  document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (cb.checked) state[cb.dataset.key] = 1;
+      else delete state[cb.dataset.key];
+      refresh();
+      queueSave();
+    });
+  });
+}
+
+async function load() {
+  const el = document.getElementById("status");
+  if (typeof window.storage === "undefined") {
+    el.textContent = "Ticks are kept for this session only.";
+    return;
+  }
+  try {
+    const res = await window.storage.get(KEY, false);
+    state = res && res.value ? JSON.parse(res.value) : {};
+    let restored = 0;
+    Object.keys(state).forEach(k => {
+      const cb = document.querySelector(`input[data-key="${k}"]`);
+      if (cb) { cb.checked = true; restored++; }
+    });
+    refresh();
+    el.textContent = restored ? `${restored} item${restored === 1 ? "" : "s"} restored.` : "Nothing ticked yet.";
+  } catch (err) {
+    state = {};
+    el.textContent = "Nothing ticked yet.";
+  }
+}
+
+build(DATA.group, "group-cards");
+build(DATA.individual, "individual-cards");
+wire();
+refresh();
+load();
+
+document.getElementById("expand").addEventListener("click", e => {
+  const anyShut = document.querySelector(".card.shut");
+  document.querySelectorAll(".card").forEach(c => {
+    c.classList.toggle("shut", !anyShut);
+    c.querySelector(".cardhead").setAttribute("aria-expanded", String(!!anyShut));
+  });
+  e.target.textContent = anyShut ? "Collapse all" : "Expand all";
+});
+
+document.getElementById("print").addEventListener("click", () => window.print());
+
+/* ---------- export / import ---------- */
+const panel = document.getElementById("panel");
+const pTitle = document.getElementById("panel-title");
+const pHelp = document.getElementById("panel-help");
+const pText = document.getElementById("panel-text");
+const pActions = document.getElementById("panel-actions");
+
+function tickedDetail() {
+  const out = { group: {}, individual: {} };
+  ["group", "individual"].forEach(side => {
+    DATA[side].forEach(d => {
+      let got = 0, done = [];
+      d.blocks.forEach((b, bi) => b.items.forEach((it, ii) => {
+        if (state[`${d.id}|${bi}|${ii}`]) { got += it[2]; done.push(it[0] + " " + it[1]); }
+      }));
+      out[side][d.title] = { points: got, of: 100, items: done };
+    });
+  });
+  return out;
+}
+
+function payload() {
+  return {
+    format: "deliverables-checklist",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    ticked: Object.keys(state).sort(),
+    detail: tickedDetail()
+  };
+}
+
+function closePanel() { panel.classList.remove("open"); }
+
+function actionBtn(text, fn) {
+  const b = document.createElement("button");
+  b.className = "plain";
+  b.textContent = text;
+  b.addEventListener("click", fn);
+  return b;
+}
+
+function setMsg(text) {
+  let m = pActions.querySelector(".msg");
+  if (!m) { m = document.createElement("span"); m.className = "msg"; pActions.appendChild(m); }
+  m.textContent = text;
+}
+
+document.getElementById("export").addEventListener("click", () => {
+  const json = JSON.stringify(payload(), null, 2);
+  const n = Object.keys(state).length;
+  pTitle.textContent = "Export progress";
+  pHelp.textContent = `${n} ticked item${n === 1 ? "" : "s"}. Download the file or copy the text below, then send it to whoever needs it — they can load it with Import.`;
+  pText.value = json;
+  pText.readOnly = true;
+  pActions.innerHTML = "";
+
+  pActions.appendChild(actionBtn("Download .json", () => {
+    try {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `checklist-progress-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setMsg("Download started. If nothing arrived, copy the text instead.");
+    } catch (err) {
+      setMsg("Download blocked here — copy the text instead.");
+    }
+  }));
+
+  pActions.appendChild(actionBtn("Copy text", async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      setMsg("Copied.");
+    } catch (err) {
+      pText.select();
+      setMsg("Press Ctrl/Cmd+C to copy the selected text.");
+    }
+  }));
+
+  pActions.appendChild(actionBtn("Close", closePanel));
+  panel.classList.add("open");
+  panel.scrollIntoView({ block: "nearest" });
+});
+
+function applyImport(raw) {
+  let data;
+  try { data = JSON.parse(raw); } catch (err) { setMsg("That isn't valid JSON."); return; }
+  let keys = Array.isArray(data) ? data
+    : Array.isArray(data && data.ticked) ? data.ticked
+    : (data && typeof data === "object") ? Object.keys(data) : null;
+  if (!keys) { setMsg("No ticked items found in that file."); return; }
+
+  const valid = keys.filter(k => document.querySelector(`input[data-key="${k}"]`));
+  if (!valid.length) { setMsg("Nothing in that file matches this checklist."); return; }
+  if (Object.keys(state).length && !confirm("Replace your current ticks with the imported ones?")) return;
+
+  state = {};
+  document.querySelectorAll("input[type=checkbox]").forEach(cb => { cb.checked = false; });
+  valid.forEach(k => {
+    state[k] = 1;
+    document.querySelector(`input[data-key="${k}"]`).checked = true;
+  });
+  refresh();
+  queueSave();
+  const skipped = keys.length - valid.length;
+  setMsg(`Loaded ${valid.length} item${valid.length === 1 ? "" : "s"}${skipped ? `, skipped ${skipped} unknown` : ""}.`);
+}
+
+document.getElementById("import").addEventListener("click", () => {
+  pTitle.textContent = "Import progress";
+  pHelp.textContent = "Choose an exported .json file, or paste its text below. This replaces your current ticks, so export yours first if you want to keep them.";
+  pText.value = "";
+  pText.readOnly = false;
+  pText.placeholder = "Paste exported JSON here…";
+  pActions.innerHTML = "";
+
+  const pick = document.createElement("label");
+  pick.className = "filepick";
+  pick.textContent = "Choose file…";
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,application/json,text/plain";
+  input.addEventListener("change", () => {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { pText.value = r.result; applyImport(r.result); };
+    r.onerror = () => setMsg("Couldn't read that file.");
+    r.readAsText(f);
+  });
+  pick.appendChild(input);
+  pActions.appendChild(pick);
+
+  pActions.appendChild(actionBtn("Load pasted text", () => applyImport(pText.value.trim())));
+  pActions.appendChild(actionBtn("Close", closePanel));
+  panel.classList.add("open");
+  panel.scrollIntoView({ block: "nearest" });
+});
+
+document.getElementById("reset").addEventListener("click", async () => {
+  if (!confirm("Clear every tick on both lists?")) return;
+  state = {};
+  document.querySelectorAll("input[type=checkbox]").forEach(cb => { cb.checked = false; });
+  refresh();
+  if (typeof window.storage !== "undefined") {
+    try { await window.storage.delete(KEY, false); } catch (err) {}
+  }
+  document.getElementById("status").textContent = "Cleared.";
+});
+</script>
