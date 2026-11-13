@@ -51,3 +51,10 @@ Item 4 is verified here only by `systemd-analyze verify` on the rendered unit an
 run of the install logic. `CPUAffinity=2 3` assumes the Pi 5's four cores and that the USB interrupt sits on
 core 0 or 1: check `/proc/interrupts` on the Pi before trusting it. `install.sh` records whether the agent was
 active and starts it at the end; a literal `try-restart` would do nothing, because the script stops the agent first.
+
+## TrackCore profile (before any change; sandbox, three Red territories and PLC programs loaded)
+
+`cProfile`, 1500 STEPs: `TrackCore.step` 14.4 s under the profiler, of which `wayside.scan` 13.6 s
+(`_run_program` 12.2 s; `scan_a` + `scan_b` + `_run_postfix` + the per-token lambdas in `plc.py`).
+That is 95% of the step in the PLC interpreter. `view()` is 1.3 ms mean (2.5 max), encoding its VIEW
+0.34 ms, 41 KB. Not changed: `plc.py` has an owner and its two scans are redundant channels.
