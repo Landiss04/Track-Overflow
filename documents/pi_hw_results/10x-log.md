@@ -45,11 +45,11 @@ PLC programs is 457 KB and 7-15 ms on the sandbox (`pickle.dumps` alone), so Tra
 about 3x a normal step. The sandbox's fsync is about 2 ms (overlay filesystem), so the Pi's SD-card fsyncs,
 which this change moves off the reply path, are not visible here.
 
-| 4 | `CPUAffinity=2 3`, `Nice=-10`, `PYTHONOPTIMIZE=1`; `install.sh` starts the agent again if it was running | both | pending | pending | pending | Pi only | not measurable on the sandbox |
+| 4 | `Nice=-10`, `PYTHONOPTIMIZE=1`, `performance` governor at agent start (no CPU pinning); `install.sh` starts the agent again if it was running | both | pending | pending | pending | Pi only | not measurable on the sandbox |
 
 Item 4 is verified here only by `systemd-analyze verify` on the rendered unit and by `sh -n` plus a stubbed-`systemctl`
-run of the install logic. `CPUAffinity=2 3` assumes the Pi 5's four cores and that the USB interrupt sits on
-core 0 or 1: check `/proc/interrupts` on the Pi before trusting it. `install.sh` records whether the agent was
+run of the install logic. The unit sets the `performance` governor with `ExecStartPre=-+` (root, tolerates no cpufreq) and does not
+pin cores. `install.sh` records whether the agent was
 active and starts it at the end; a literal `try-restart` would do nothing, because the script stops the agent first.
 
 ## TrackCore profile (before any change; sandbox, three Red territories and PLC programs loaded)
@@ -58,3 +58,20 @@ active and starts it at the end; a literal `try-restart` would do nothing, becau
 (`_run_program` 12.2 s; `scan_a` + `scan_b` + `_run_postfix` + the per-token lambdas in `plc.py`).
 That is 95% of the step in the PLC interpreter. `view()` is 1.3 ms mean (2.5 max), encoding its VIEW
 0.34 ms, 41 KB. Not changed: `plc.py` has an owner and its two scans are redundant channels.
+
+## Pi A/B test: core pinning (not run; needs the Pi)
+
+Run on each Pi with the same bundle, 10x, the same workload, 600 s each, record the table columns above
+from `measure --system` and `core_step_s` from the Pi. Without a rebuild, using a systemd drop-in:
+
+    # B: pinned
+    sudo mkdir -p /etc/systemd/system/track-overflow-agent.service.d
+    printf '[Service]\nCPUAffinity=2 3\n' | sudo tee /etc/systemd/system/track-overflow-agent.service.d/pin.conf
+    sudo systemctl daemon-reload && sudo systemctl restart track-overflow-agent.service
+    # A: unpinned (default)
+    sudo rm /etc/systemd/system/track-overflow-agent.service.d/pin.conf
+    sudo systemctl daemon-reload && sudo systemctl restart track-overflow-agent.service
+
+Before B, `grep -i -E 'dwc2|usb|xhci' /proc/interrupts` shows which core takes the USB interrupts; pin away from it.
+Also record `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor` (expect `performance`) and `vcgencmd get_throttled`.
+Decide on p99 and max RTT and slipped ticks, not the mean. Run `sync` before any unplug.

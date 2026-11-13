@@ -1,7 +1,7 @@
 # Phase 2 proposal: pipelined STEPs and delta VIEWs (not implemented)
 
 Changes the host-Pi wire protocol (D027) and, for pipelining, the tick rule in D017.
-Waiting for approval; nothing here is built.
+**Decision (the Pi-link owner, 2026-11-13): A3, no pipelining. Delta VIEWs deferred.** Nothing here is built.
 
 ## What the measurements say (sandbox, x86; Pi numbers pending)
 

@@ -1,17 +1,19 @@
-"""The agent unit pins, prioritises and optimises; install.sh restarts a running agent."""
+"""The agent unit sets the governor, prioritises and optimises; install.sh restarts a running agent."""
 
 import subprocess
 
 from common.hw_link import provision
 
 
-def test_agent_unit_pins_prioritises_and_optimises():
+def test_agent_unit_sets_governor_prioritises_and_optimises():
     unit = provision.AGENT_UNIT
-    assert "\nCPUAffinity=2 3\n" in unit
+    assert "\nCPUAffinity=" not in unit
+    assert "\nExecStartPre=-+/bin/sh -c " in unit
+    assert "echo performance > " in unit and "scaling_governor" in unit
     assert "\nNice=-10\n" in unit
     assert "\nEnvironment=PYTHONOPTIMIZE=1\n" in unit
-    assert unit.index("CPUAffinity") > unit.index("[Service]")
-    assert unit.index("CPUAffinity") < unit.index("[Install]")
+    assert unit.index("ExecStartPre") > unit.index("[Service]")
+    assert unit.index("ExecStartPre") < unit.index("ExecStart=")
 
 
 def test_install_script_parses_and_restarts_only_a_running_agent():

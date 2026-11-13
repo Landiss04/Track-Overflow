@@ -93,10 +93,11 @@ StateDirectory=track-overflow
 Environment=PYTHONDONTWRITEBYTECODE=1
 # Only strips the agent's type-guard asserts; nothing else on the Pi uses them.
 Environment=PYTHONOPTIMIZE=1
-# Pi 5 has cores 0-3. Leave 0-1 to the USB interrupt and the rest of the OS;
-# a 10 ms tick cannot afford a wait behind them.
-CPUAffinity=2 3
 Nice=-10
+# No frequency ramp-up between ticks. "-" tolerates a Pi without cpufreq;
+# "+" runs it as root, since the agent does not. No CPUAffinity: pinning is
+# an A/B test on the Pi (10x-log.md), not a default.
+ExecStartPre=-+/bin/sh -c 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > "$$f"; done'
 ExecStart=/usr/bin/python3 -m common.hw_link.agent \\
  --module @MODULE@ --device /dev/ttyGS0 \\
  --journal /var/lib/track-overflow/session.json \\
