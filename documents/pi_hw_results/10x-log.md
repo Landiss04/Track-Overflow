@@ -30,3 +30,17 @@ Rows below continue the table above (same command and columns).
 
 Item 2 moves the mean by about 0.03 ms on the sandbox, inside run-to-run noise; its real saving is an
 open/close per tick on the Pi's SD-card filesystem, which only a Pi run can show.
+
+Item 3 adds a column: RTT of the ten checkpoint steps (every 600th step) per 60 s run, ms.
+
+| # | Change | Board | RTT mean / p95 / p99 / max ms | core mean / p95 / p99 / max ms | Slipped | Checkpoint-step RTT ms (range) | Where |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | before item 3 (journal handle open) | train | 0.649 / 0.815 / 1.499 / 20.58 | n/a | 2 | 2.65 - 10.84 | sandbox |
+| 2 | before item 3 (journal handle open) | track | 4.015 / 5.491 / 6.522 / 44.39 | n/a | 17 | 20.26 - 34.47 | sandbox |
+| 3 | checkpoint fsync, rename and journal swap on a worker | train | 0.652 / 0.881 / 1.220 / 5.32 | 0.083 / 0.106 / 0.146 / 2.54 | 0 | 0.92 - 1.32 | sandbox |
+| 3 | same | track | 4.140 / 5.700 / 7.220 / 18.85 | 2.954 / 4.221 / 4.699 / 10.33 | 18 | 12.20 - 18.85 | sandbox |
+
+Item 3 leaves the pickle on the step's thread. Pickling the Track core with the three Red territories and
+PLC programs is 457 KB and 7-15 ms on the sandbox (`pickle.dumps` alone), so Track's checkpoint step is still
+about 3x a normal step. The sandbox's fsync is about 2 ms (overlay filesystem), so the Pi's SD-card fsyncs,
+which this change moves off the reply path, are not visible here.

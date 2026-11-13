@@ -8,8 +8,11 @@ reconstruction, never a new harness tick.
 
 Every ``CHECKPOINT_TICKS`` steps the agent pickles its core and reply cache and
 starts a new journal on top of that checkpoint, so a restart replays at most
-that many steps and the journal never grows past them. The checkpoint is only
-ever read back from the agent's own disk; nothing pickled crosses the link.
+that many steps and the journal never grows far past them. The pickle is taken
+on the step's own thread, where the core cannot change under it; writing it,
+its fsyncs and the journal swap run on a worker, beside the next steps. The
+checkpoint is only ever read back from the agent's own disk; nothing pickled
+crosses the link.
 """
 
 from __future__ import annotations
@@ -75,6 +78,15 @@ class PiLinkServer:
         # Unbuffered append handle, so each record is one write() with no
         # open/close per tick. Closed before any replace of the file.
         self._stream: Any = None
+        # Held to append a record or to swap the journal file, never across
+        # an fsync. While a checkpoint is in flight, ``_since`` keeps the
+        # records written after its snapshot so the new journal can start
+        # with them.
+        self._io = threading.Lock()
+        self._since: list[tuple[bytes, int, list[Any]]] = []
+        self._collecting = False
+        self._epoch = 0
+        self._checkpointer: threading.Thread | None = None
         self.log = log or (lambda text: None)
         self.boot = uuid.uuid4().hex
         self.session: str | None = None
@@ -143,6 +155,7 @@ class PiLinkServer:
         return self.journal.with_name(f"{self.journal.name}.ckpt{seq}")
 
     def _start(self, session: str) -> None:
+        self.settle()
         self.session = session
         self.core = make_core(self.module)
         self.cache.clear()
@@ -182,27 +195,109 @@ class PiLinkServer:
         self._checkpoint_seq = seq
         self._steps_since_checkpoint = 0
 
-    def _checkpoint(self) -> None:
+    def _begin_checkpoint(self) -> None:
+        if self._checkpointer is not None and self._checkpointer.is_alive():
+            return  # The previous one is still being written; try next step.
         seq = self._checkpoint_seq + 1
-        _write_durably(
-            self._checkpoint_path(seq),
-            pickle.dumps(
-                (self.core, self.cache), protocol=pickle.HIGHEST_PROTOCOL
-            ),
+        data = pickle.dumps(
+            (self.core, self.cache), protocol=pickle.HIGHEST_PROTOCOL
         )
-        self._new_journal(seq)
-        self.log(f"CHECKPOINT {seq}")
+        with self._io:
+            self._since = []
+            self._collecting = True
+            base = (self._written, self._written_key)
+        self._steps_since_checkpoint = 0
+        self._checkpointer = threading.Thread(
+            target=self._finish_checkpoint,
+            args=(seq, data, base),
+            name="checkpoint",
+            daemon=True,
+        )
+        self._checkpointer.start()
+
+    def _finish_checkpoint(
+        self, seq: int, data: bytes, base: tuple[int, list[Any] | None]
+    ) -> None:
+        # Same order as ever: checkpoint durable, then the journal moved
+        # onto it, then the old checkpoint dropped. A crash between any two
+        # leaves a journal and checkpoint that agree.
+        assert self.journal is not None
+        try:
+            _write_durably(self._checkpoint_path(seq), data)
+            with self._io:
+                carried = list(self._since)
+            header = {
+                "module": self.module,
+                "session": self.session,
+                "agent_hash": AGENT_HASH,
+                "checkpoint": seq,
+            }
+            temporary = self.journal.with_name(self.journal.name + ".tmp")
+            with temporary.open("wb") as stream:
+                stream.write((json.dumps(header) + "\n").encode())
+                stream.writelines(line for line, _, _ in carried)
+                stream.flush()
+                os.fsync(stream.fileno())
+            with self._io:
+                # Records written while the fsync above ran.
+                with temporary.open("ab") as stream:
+                    stream.writelines(
+                        line for line, _, _ in self._since[len(carried) :]
+                    )
+                self._close_stream()
+                os.replace(temporary, self.journal)
+                self._since = []
+                self._collecting = False
+                with self._sync:
+                    # Only the carried records are known to be on disk in
+                    # the new file; the syncer covers the rest, and a
+                    # sync of the old file already under way does not count.
+                    self._epoch += 1
+                    count, key = (
+                        (carried[-1][1], carried[-1][2]) if carried else base
+                    )
+                    if not self.durable:
+                        self._synced = self._written
+                        self._durable_key = self._written_key
+                    elif self._synced > count:
+                        self._synced, self._durable_key = count, key
+                    self._sync.notify_all()
+            _sync_directory(self.journal.parent)
+            old = self._checkpoint_seq
+            self._checkpoint_seq = seq
+            if old and old != seq:
+                self._checkpoint_path(old).unlink(missing_ok=True)
+            self.log(f"CHECKPOINT {seq}")
+        except OSError as error:
+            with self._io:
+                self._since = []
+                self._collecting = False
+            self.log(f"CHECKPOINT_FAILED {error}")
+
+    def settle(self) -> None:
+        """Wait for a checkpoint in flight to finish."""
+        if self._checkpointer is not None:
+            self._checkpointer.join()
 
     def _record(self, request: bytes, reply: bytes, key: list[Any]) -> None:
         if self.journal is not None:
             # Both are already compact JSON lines; splice, do not re-encode.
             line = b'{"request":' + request[:-1] + b',"reply":' + reply[:-1]
-            if self._stream is None:
-                self._stream = self.journal.open("ab", buffering=0)
-            self._stream.write(line + b"}\n")
-        with self._sync:
-            self._written += 1
-            self._written_key = key
+            with self._io:
+                if self._stream is None:
+                    self._stream = self.journal.open("ab", buffering=0)
+                self._stream.write(line + b"}\n")
+                with self._sync:
+                    self._written += 1
+                    self._written_key = key
+                if self._collecting:
+                    self._since.append(
+                        (line + b"}\n", self._written, key)
+                    )
+        else:
+            with self._sync:
+                self._written += 1
+                self._written_key = key
         if self.journal is None or not self.durable:
             self._all_durable()
             return
@@ -227,6 +322,7 @@ class PiLinkServer:
                 if self._closing:
                     return
                 count, key = self._written, self._written_key
+                epoch = self._epoch
             try:
                 # fsync flushes the file, whichever descriptor names it.
                 descriptor = os.open(self.journal, os.O_RDWR)
@@ -239,8 +335,9 @@ class PiLinkServer:
                 time.sleep(0.1)
                 continue
             with self._sync:
-                # A checkpoint may already have covered more than this.
-                if count > self._synced:
+                # A checkpoint may already have covered more than this, and
+                # one that swapped the file meanwhile made this sync moot.
+                if epoch == self._epoch and count > self._synced:
                     self._synced, self._durable_key = count, key
                 self._sync.notify_all()
 
@@ -257,6 +354,7 @@ class PiLinkServer:
 
     def close(self) -> None:
         """Stop the fsync worker; unsynced records stay in the OS cache."""
+        self.settle()
         with self._sync:
             self._closing = True
             self._sync.notify_all()
@@ -404,7 +502,7 @@ class PiLinkServer:
                 self.journal is not None
                 and self._steps_since_checkpoint >= CHECKPOINT_TICKS
             ):
-                self._checkpoint()
+                self._begin_checkpoint()
         # Journalled, cached and checkpointed: the reply may go out now.
         yield reply
         now = time.monotonic()
@@ -564,13 +662,17 @@ def _write_durably(path: Path, data: bytes) -> None:
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, path)
+    _sync_directory(path.parent)
+
+
+def _sync_directory(folder: Path) -> None:
+    # A rename is durable only once its directory is.
     if hasattr(os, "O_DIRECTORY"):
-        # The rename is durable only once its directory is.
-        folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        descriptor = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
         try:
-            os.fsync(folder)
+            os.fsync(descriptor)
         finally:
-            os.close(folder)
+            os.close(descriptor)
 
 
 if __name__ == "__main__":

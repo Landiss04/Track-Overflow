@@ -43,7 +43,7 @@ def test_many_records_open_the_journal_once(tmp_path, opens):
     for tick in range(1, 31):
         server.handle(step(tick))
     server.close()
-    assert len(opens) == 1
+    assert opens == ["j.jsonl"]
     lines = (tmp_path / "j.jsonl").read_bytes().splitlines()
     assert [json.loads(l)["request"]["tick"] for l in lines[1:]] == list(
         range(1, 31)
@@ -59,6 +59,7 @@ def test_a_checkpoint_replaces_the_file_and_appends_resume(
     server.handle(hello())
     for tick in range(1, 13):
         server.handle(step(tick))
+        server.settle()
     server.close()
     ticks = [json.loads(l).get("request", {}).get("tick")
              for l in journal.read_bytes().splitlines()[1:]]
@@ -66,4 +67,5 @@ def test_a_checkpoint_replaces_the_file_and_appends_resume(
     restored = PiLinkServer(MODULE, journal, durable=False)
     assert restored._applied == ["STEP", 22, 12]
     restored.close()
-    assert len(opens) == 3  # initial, after ticks 5 and 10 checkpoints
+    # Initial, then once after each of the checkpoints at ticks 5 and 10.
+    assert opens.count("j.jsonl") == 3

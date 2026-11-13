@@ -269,6 +269,7 @@ def run_with_actions(journal, ticks):
     replies = [server.handle(action)[0] for action in actions]
     for tick in range(2, ticks + 1):
         server.handle(request(tick))
+        server.settle()  # A checkpoint finishes beside the next step.
     return server, actions, replies
 
 
@@ -283,6 +284,7 @@ def test_checkpoint_bounds_journal_cache_and_restart(
     journal = tmp_path / "journal"
     server, actions, replies = run_with_actions(journal, ticks)
     last = server.handle(request(ticks))
+    server.settle()
     # Disk and memory stay flat however long the run.
     assert len(journal.read_text().splitlines()) <= 1 + 5
     assert len(list(tmp_path.glob("journal.ckpt*"))) == 1
@@ -353,5 +355,6 @@ def test_crash_mid_checkpoint_keeps_previous_checkpoint(tmp_path, monkeypatch):
     rebooted.handle(hello())
     for tick in range(9, 14):
         rebooted.handle(request(tick))
+    rebooted.settle()
     assert rebooted._checkpoint_seq == seq + 1
     assert rebooted.core.fleet.get("R1").state.kp == 120000
