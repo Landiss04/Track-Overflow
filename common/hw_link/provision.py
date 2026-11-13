@@ -91,6 +91,12 @@ SupplementaryGroups=dialout
 WorkingDirectory=/opt/track-overflow
 StateDirectory=track-overflow
 Environment=PYTHONDONTWRITEBYTECODE=1
+# Only strips the agent's type-guard asserts; nothing else on the Pi uses them.
+Environment=PYTHONOPTIMIZE=1
+# Pi 5 has cores 0-3. Leave 0-1 to the USB interrupt and the rest of the OS;
+# a 10 ms tick cannot afford a wait behind them.
+CPUAffinity=2 3
+Nice=-10
 ExecStart=/usr/bin/python3 -m common.hw_link.agent \\
  --module @MODULE@ --device /dev/ttyGS0 \\
  --journal /var/lib/track-overflow/session.json \\
@@ -109,7 +115,10 @@ sha256sum -c SHA256SUMS
 /usr/bin/python3 -c 'import sys; assert sys.version_info >= (3,10)'
 id trackoverflow >/dev/null 2>&1 || \\
     useradd --system --create-home --groups dialout trackoverflow
-# Stop before replacing source; keep the durable journal.
+# Stop before replacing source; keep the durable journal. A running agent
+# is started again at the end (try-restart would do nothing once stopped).
+running=
+if systemctl is-active --quiet track-overflow-agent.service; then running=1; fi
 systemctl stop track-overflow-agent.service 2>/dev/null || true
 install -d /opt/track-overflow
 cp -R source/. /opt/track-overflow/
@@ -122,6 +131,7 @@ systemctl disable --now serial-getty@ttyGS0.service 2>/dev/null || true
 systemctl mask serial-getty@ttyGS0.service
 systemctl daemon-reload
 systemctl enable track-overflow-gadget.service track-overflow-agent.service
+[ -z "$running" ] || systemctl start track-overflow-agent.service
 printf '%s\\n' 'Enable dtoverlay=dwc2,dr_mode=peripheral under [all].'
 printf '%s\\n' 'Use the active config.txt; reboot.'
 printf '%s\\n' 'Inspect both track-overflow services and host HELLO.'

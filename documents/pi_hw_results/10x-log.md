@@ -44,3 +44,10 @@ Item 3 leaves the pickle on the step's thread. Pickling the Track core with the 
 PLC programs is 457 KB and 7-15 ms on the sandbox (`pickle.dumps` alone), so Track's checkpoint step is still
 about 3x a normal step. The sandbox's fsync is about 2 ms (overlay filesystem), so the Pi's SD-card fsyncs,
 which this change moves off the reply path, are not visible here.
+
+| 4 | `CPUAffinity=2 3`, `Nice=-10`, `PYTHONOPTIMIZE=1`; `install.sh` starts the agent again if it was running | both | pending | pending | pending | Pi only | not measurable on the sandbox |
+
+Item 4 is verified here only by `systemd-analyze verify` on the rendered unit and by `sh -n` plus a stubbed-`systemctl`
+run of the install logic. `CPUAffinity=2 3` assumes the Pi 5's four cores and that the USB interrupt sits on
+core 0 or 1: check `/proc/interrupts` on the Pi before trusting it. `install.sh` records whether the agent was
+active and starts it at the end; a literal `try-restart` would do nothing, because the script stops the agent first.
