@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import dataclasses
 import sys
 from pathlib import Path
@@ -99,23 +98,31 @@ class TrainCore:
             raise ValueError(
                 "inputs must hold a trains object, with inputs per train"
             )
-        # Roster updates must roll back too when any input is invalid.
-        candidate = copy.deepcopy(self.fleet)
-        for train_id in candidate.ids():
+        # step_all reads every train's inputs before any train steps, so an
+        # input it refuses leaves each core untouched. Only the roster
+        # change made first needs undoing, which copying the fleet every
+        # tick (the old approach) did at a cost proportional to its size.
+        fleet = self.fleet
+        order = fleet.ids()
+        kept = dict(fleet._cores)
+        for train_id in order:
             if train_id not in trains:
-                candidate.remove(train_id)
-        for train_id, entry in trains.items():
-            if train_id not in candidate:
-                core = candidate.add(train_id, str(entry.get("line", "")))
-                if self.engineer_gains is not None:
-                    core.state.kp, core.state.ki = self.engineer_gains
-                    core.armed = True
-        commands = candidate.step_all(
-            request["dt"],
-            {key: entry["inputs"] for key, entry in trains.items()},
-            request["sim_time_s"],
-        )
-        self.fleet = candidate
+                fleet.remove(train_id)
+        try:
+            for train_id, entry in trains.items():
+                if train_id not in fleet:
+                    core = fleet.add(train_id, str(entry.get("line", "")))
+                    if self.engineer_gains is not None:
+                        core.state.kp, core.state.ki = self.engineer_gains
+                        core.armed = True
+            commands = fleet.step_all(
+                request["dt"],
+                {key: entry["inputs"] for key, entry in trains.items()},
+                request["sim_time_s"],
+            )
+        except Exception:
+            fleet._cores = kept
+            raise
         return {
             "trains": {
                 key: dataclasses.asdict(value)
