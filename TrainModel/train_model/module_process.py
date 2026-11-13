@@ -29,6 +29,7 @@ from __future__ import annotations
 __all__ = ["TrainModelProcess", "main"]
 
 import argparse
+import os
 import signal
 import sys
 from collections.abc import Mapping, Sequence
@@ -43,13 +44,26 @@ from train_model.model import TrainModelError
 from train_model.wire import decode_inputs, encode_outputs
 from utils.module_link import ModuleLink, TickRejectedError
 from utils.module_window import keep_windows_open
+from utils.render_check import LOW_FRAME_RATE_ENV
 
 #: This module's name, as the harness knows it.
 MODULE_NAME = "train-model"
 
 #: Real seconds between window redraws while steps arrive: 20 a second,
 #: where at 10x a moving train changes 100 times a second.
-VIEW_INTERVAL_S = 0.05
+FULL_VIEW_INTERVAL_S = 0.05
+#: The same when the harness found software rendering: 4 a second. A
+#: placeholder, to be tuned on the target; the 2026-11-04 software run at
+#: 20 a second saturated every core.
+LOW_VIEW_INTERVAL_S = 0.25
+
+
+def view_interval_s() -> float:
+    """Seconds between redraws; longer when the harness found CPU rendering."""
+    if os.environ.get(LOW_FRAME_RATE_ENV):
+        return LOW_VIEW_INTERVAL_S
+    return FULL_VIEW_INTERVAL_S
+
 
 EXIT_QUIT = 0
 EXIT_HARNESS_LOST = 2
@@ -180,7 +194,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not isinstance(app, QGuiApplication):
             raise RuntimeError("the Train Model needs a QGuiApplication")
         keep_windows_open(app)
-        fleet = TrainModelFleet(view_interval_s=VIEW_INTERVAL_S)
+        fleet = TrainModelFleet(view_interval_s=view_interval_s())
         process = TrainModelProcess(fleet, options.harness, parent=fleet)
         process.finished.connect(app.exit)
         process.start()
