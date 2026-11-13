@@ -63,7 +63,7 @@ Lines:
 - the link to the Raspberry Pis that run the hardware variants (D021, D027).
 
 Testing covers four levels: unit, component (one module), integration (modules through
-the harness) and system (the whole executable on the lab machine). The out-of-scope
+the harness) and system (the whole executable on the test machine). The out-of-scope
 items are in section 5.
 
 Every test is derived from a requirement in the SRS or a recorded design decision, not
@@ -82,6 +82,8 @@ from the code.
 | PLC | Programmable Logic Controller; the Track Controller's Boolean program |
 | Regression test | A re-run of the existing tests to show a change broke nothing |
 | Safety case | A test whose failure could let a train into an unsafe state; marked **S** |
+| Stakeholder machine | The final machine on which the final presentation and demo run; it is not available for testing beforehand |
+| Test machine | The team's own Windows 11 machine, on which the code is written and the tests are run |
 | Tick | One step of the shared simulation clock; 0.1 s of simulated time by default (D017) |
 | UAT | User acceptance testing |
 
@@ -124,8 +126,8 @@ Every member runs the system tests.
 | Train Model owner | Module test plan, unit and component tests | Kevin Schillinger |
 | Harness and integration | Edge-mapping, clock and end-to-end tests; CI workflow | Kevin Schillinger |
 | HW/SW equivalence | Shows the two variants of a module expose the same interface (REQ-INTF-009, REQ-INTF-010) | Both variant owners of that module |
-| System tester | Runs section 6 on the lab machine and records results | Every team member |
-| Reviewer | Reviews the plan and its results | Team |
+| System tester | Runs section 6 on the test machine and records results | Every team member |
+| Reviewer | Reviews the plan and its results | Course instructor and team |
 
 ### 2.2. Schedules
 | Milestone | Date | Testing deliverable |
@@ -195,18 +197,20 @@ Small defects an owner finds and fixes in the same sitting need no issue.
   (REQ-INTF-012).
 
 ### 2.5. Risks and Assumptions
+
 | Risk | Effect | Mitigation |
 |------|--------|------------|
 | A Raspberry Pi is unavailable or its link fails | The Red Line and the HW variants cannot be tested | Test the HW variants' logic on the host first; keep a spare Pi and cable |
 | Two modules disagree on a value or unit | Wrong behaviour that each module's own tests miss | Each producer-to-consumer edge is mapped and tested in one place, the harness (D005) |
-| The system behaves differently on Windows 11 than on developer machines | A demo fails on the lab machine | Run section 6 on Windows 11 before each demo |
-| The lab machine cannot sustain 10x | Simulated time runs slower than requested | Performance tests on the lab machine (section 3.3) |
+| The system behaves differently on Windows 11 than on developer machines | A demo fails on the stakeholder machine | Run section 6 on Windows 11 on the test machine before each demo |
+| The stakeholder machine cannot sustain 10x | Simulated time runs slower than requested | Run performance tests (section 3.3) on the test machine, record its specification and the highest speed-up it sustains, and compare with the stakeholder machine's specification when known |
 | Tests are written from the code, not the requirements | Tests pass while a requirement is unmet | Every test names its requirement or decision; the QA lead reviews the trace |
 | Little time remains before 2026-12-10 | Not every case is run | Safety cases and the demo use case run first |
 
 **Assumptions:**
+
 - The course track layout files are correct.
-- The lab machines run Windows 11.
+- The stakeholder machine runs Windows 11, as the test machine does.
 - The customer accepts the recorded deviations, such as the 0.1 s tick (D017).
 
 ---
@@ -246,8 +250,9 @@ Small defects an owner finds and fixes in the same sitting need no issue.
 - **What:** the system's speed and its behaviour under load and bad input.
 - **Who:** the harness owner, with each module owner for their module.
 - **How:**
-  - Run the full system at 1x and at 10x on a Windows 11 lab machine. Check that no tick
-    is dropped (REQ-NFR-001.2) and that results at 10x match those at 1x
+  - Run the full system at 1x and at 10x on the test machine, and record its
+    specification, since the stakeholder machine is not available for testing. Check
+    that no tick is dropped (REQ-NFR-001.2) and that results at 10x match those at 1x
     (REQ-NFR-002).
   - Measure the time from launch to ready (REQ-NFR-007, 20 s or less).
   - Stall a module, and check that the harness pauses the clock and names it (D017).
@@ -266,7 +271,7 @@ Small defects an owner finds and fixes in the same sitting need no issue.
 - Each owner runs their module's tests before every push.
 
 ### 3.5. Beta Testing
-- Team members who do not own a module run the integrated system on the lab machine and
+- Team members who do not own a module run the integrated system on the test machine and
   use that module's window as its intended user would.
 - Each problem they find is filed as a GitHub Issue (section 2.3.1).
 - Beta testing runs from Iteration 3 (2026-11-12) to the final demo.
@@ -283,8 +288,11 @@ Small defects an owner finds and fixes in the same sitting need no issue.
 ## 4. Environment Requirements
 
 ### 4.1. Hardware Requirements
-- A Windows 11 lab machine, with mouse, keyboard and a monitor of at least 720 × 450
-  (REQ-INTF-008, REQ-INTF-011).
+- A Windows 11 test machine (the team's own machine, used for writing code and running
+  tests), with mouse, keyboard and a monitor of at least 720 × 450 (REQ-INTF-008,
+  REQ-INTF-011).
+- The stakeholder machine, which runs the final presentation and demo. It is not
+  available for testing beforehand.
 - Two Raspberry Pis, one for the Track Controller HW and one for the Train Controller HW,
   each connected to the host over USB (D021, D027).
 - Developer machines on Windows, Linux or macOS, for unit and component tests.
@@ -326,7 +334,7 @@ Small defects an owner finds and fixes in the same sitting need no issue.
 ## 6. Test Procedure
 
 Each module's detailed cases live in its own plan (section 1.4). The cases below test
-the whole system, are run on the lab machine with the built executable, and are
+the whole system, are run on the test machine with the built executable, and are
 recorded here and in `test-case-template.xlsx`.
 
 **Before each run:**
@@ -342,7 +350,7 @@ recorded here and in `test-case-template.xlsx`.
 | ID | Test | Req | Inputs | Expected outcome | Pass/Fail | Failure description | Tester | Date tested |
 |----|------|-----|--------|------------------|-----------|---------------------|--------|-------------|
 | ST-01 | Startup | REQ-NFR-007, REQ-INTF-012 | Launch the executable; start a stopwatch | Every module window opens and reports ready within 20 s; Green and Red Lines are loaded; simulated time reads 05:00:00 | | | | |
-| ST-02 | Dispatch on the Green Line | REQ-FUNC-004, REQ-FUNC-009, REQ-FUNC-005 | CTC Office, manual mode, clock at 05:00: dispatch train G1 on the Green Line to Glenbury (block 65) with arrival 05:10; set the train's Kp and Ki in its Train Controller | The train waits in the yard until block 63 and its neighbours are clear, then is released into block 63; it does not move until its gains are set (D024); occupancy shows in the CTC Office and the Track Model; the train stops in block 65 (Glenbury), opens its doors on the platform side only and dwells 45 s (D007, D022). It may arrive before 05:10: release is not held back to the arrival time | | | | |
+| ST-02 | Dispatch on the Green Line | REQ-FUNC-004, REQ-FUNC-009, REQ-FUNC-005 | CTC Office, manual mode: dispatch a train to Glenbury with an arrival time 10 min ahead; set the train's Kp and Ki in its Train Controller | The train is released into block 63; occupancy shows in the CTC Office and the Track Model; the train stops in block 65 (Glenbury), opens its doors and dwells 45 s (D007, D022) | | | | |
 | ST-03 | Dispatch on the Red Line (HW variants) | REQ-INTF-006, REQ-INTF-007, D021 | CTC Office: dispatch a Red Line train to Herron Ave; set its gains | The train is released into block 9, driven by the Train Controller HW and protected by the Track Controller HW; it runs 9 → 10 → … → 15, never back toward 8; the block 16 switch is set to the 15 leg; it stops in block 16 (Herron Ave), then continues to 17 | | | | |
 | ST-04 | Manual speed change | REQ-FUNC-025, REQ-FUNC-031 | During ST-02, switch the Train Controller to manual mode and set 20 mph, below the block's limit | The train's speed settles at 20 mph; it never exceeds the suggested speed or the block limit | | | | |
 | ST-05 | PLC moves a switch | REQ-FUNC-050, REQ-FUNC-052, REQ-FUNC-053 | Load the Track Engineer's PLC program into the Green wayside that holds a switch; route a train across it | The switch moves as the program commands; the light colours follow the program; the CTC Office and the Track Model show the new position | | | | |
@@ -353,7 +361,7 @@ recorded here and in `test-case-template.xlsx`.
 | ST-10 **S** | Train failure | REQ-FUNC-048, REQ-FUNC-038 | Train Model: set an engine failure on a moving train | The Train Controller window shows the failure, and the Train Controller applies the emergency brake; the train stops | | | | |
 | ST-11 | Pause and resume | REQ-FUNC-003, D017 | CTC Office: pause for 30 s, then resume | Simulated time and every train stop while paused, and continue from the same values after resuming | | | | |
 | ST-12 *Performance* | 10x speed | REQ-FUNC-002, REQ-NFR-002, REQ-NFR-001.2 | Repeat ST-02 at 10x | Simulated time runs about 10 times faster; the train stops in the same block as at 1x; no tick is dropped | | | | |
-| ST-13 | Automatic mode | REQ-FUNC-007, REQ-FUNC-010, D020 | CTC Office: switch to automatic mode and load `utils/schedule_v4.json` (10 Green and 10 Red runs); run for at least 45 min of simulated time | Trains are dispatched on both lines from the schedule and stop only at their scheduled stations; a train held at an unscheduled station block keeps its doors closed. The first Green stop, Pioneer, comes about 30 min in, after nearly a full lap; that is not a failure | | | | |
+| ST-13 | Automatic mode | REQ-FUNC-007, REQ-FUNC-010, D020 | CTC Office: switch to automatic mode and load the Green Line schedule | Trains are dispatched from the schedule and stop only at their scheduled stations | | | | |
 | ST-14 | Invalid input | REQ-NFR-003, REQ-NFR-004, REQ-INTF-004 | Enter -5 as Kp, `abc` as a temperature setpoint, and an empty destination | Each is rejected with an error message in the common format; nothing in the simulation changes | | | | |
 | ST-15 *Performance* | A module stalls | D017, REQ-NFR-006 | Suspend one module process during a run | Within about 1 s the harness pauses the clock and names the late module; no other module crashes | | | | |
 | ST-16 | Event log | REQ-NFR-008, REQ-INTF-015 | After ST-02, open the event log | One CSV file holds the dispatch, the release and the station stop, each with its simulated time | | | | |
