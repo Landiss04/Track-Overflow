@@ -4,6 +4,133 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-12 — The train in front claims its zone pass first
+
+From Landis's report of zero suggested speeds on both lines. An
+investigation of the full-system run found three causes:
+
+- Red: the overrun (previous entry).
+- Green, 145–150: the Track Controller SW's loop guard. That is the
+  wayside's.
+- Green, at 75: this one, from `LOOP_LIMITS` (`a520ee3`).
+
+- **What happened.** G6 stood 618 s at 75 with authority 0 and nothing
+  ahead. G9 and G10, behind it, had been sent on their pass into
+  section N while G6 was still dwelling at Dormont (73), and took two
+  of the loop's four places. They could not pass G6, and G6 waited
+  until two trains left the loop. G2, G3, G4, G7 and G8 waited 5 to 9
+  minutes at 75 the same way.
+- **The fix.** `ctc/scheduler.py` new `_behind_one_to_go()`, read by
+  `_blocked()`: a run claims a zone pass only once no train ahead of
+  it, between it and the zone, still has that pass to make the same
+  way.
+- **Hardening.** `planned_route()` now looks for the train's block only
+  as far as the run has been sent, as `_locate()` does. A leg can run
+  the same blocks twice, and the later pass is not where the train is.
+- **Tests.** `tests/test_ctc_green_76.py` `ClaimOrderTest`: G9 behind
+  G6 at Dormont does not claim before G6. It fails without the fix.
+
+## 2026-11-12 — The suggested speed leaves room to stop
+
+From Landis, after Red locked up in the full-system run with sidings
+on.
+
+- **What happened.** R7 was told to stop at the end of 58 behind R1,
+  dwelling at 60. It came into 58 at 13 m/s, the speed from which a
+  full train just stops in 58's 75 m, braked for 10 s and rolled onto
+  59. The Red wayside holds a train with an occupied neighbour, so it
+  held both for good. R1 and R2 overran Herron Ave (16) the same way.
+- **The cause.** Both train controllers keep the commanded speed and
+  brake only once their authority is 0. A speed with no room left any
+  delay before the brake took hold to carry the train a block too
+  far: onto a switch it then locked, or next to the train ahead.
+- **The fix.** `ctc/model.py` `_suggested_speed_mps()`: the speed v
+  from which a full train stops within the blocks ahead after running
+  on `STOP_REACTION_S` (3 s, new) at v first. That is,
+  v·3 + v²/(2b) = distance, with b the length-weighted service-brake
+  rate over those blocks. Flat 100 m: 11 m/s, not 14. This reverses
+  the 2026-11-09 decision to add no margin (finding C4).
+- **Measured** on the new realistic railway (below), under the train
+  controllers' own rule, at reaction delays of 0.5, 1 and 2 s.
+  - No margin: Red stuck at every delay.
+  - Smaller margins (1–2 s, or 70–90 % of the distance) stuck at 2 s.
+  - With 3 s, Red finished every time (about 06:37) with no overruns.
+  - Green was unchanged.
+  - Keeping two empty blocks between trains deadlocked Red even with
+    ideal braking: the sidings could not clear.
+- **New tests.**
+  - `tests/realistic_railway.py`: trains brake after a reaction delay
+    and can run past their authority, occupancy is one block per train
+    as the Track Model reports it, and the real Red (Track Controller
+    HW) and Green (Track Controller SW starter) programs run the
+    waysides.
+  - `tests/test_ctc_realistic.py`: both lines' whole schedules under
+    both controller rules. Every run finishes with its stops in order.
+    No train is frozen beside another, collides, runs through a switch,
+    or passes the end of the CTC's authority.
+  - Green still has runs past a wayside's cut: the Track Controller
+    SW's loop guard for 1–12 drops the authority of trains moving on
+    145–150 and throws switch 28 ahead of them. That is the wayside's,
+    and is listed in the test's summary only.
+- Speeds in `test_ctc_authority.py`, `test_ctc_next_block.py` and
+  `test_ctc_tracking.py` are updated for the margin.
+- Truth proposal `20261112-1754-suggested-speed-reaction-margin.md`.
+  It replaces the unpromoted
+  `20261109-1135-suggested-speed-full-train-grade.md`.
+
+## 2026-11-12 — Red passing sidings on
+
+From Landis: "lets turn on the passings". In the 2026-11-12 full-system
+run, every Red train waited 7 to 16 minutes at Shadyside (7) while
+another train used the one two-way stretch, 16 to 52.
+
+- **On.** `ctc/scheduler.py` `PASSING_SIDINGS = True`. The Red Track
+  Controller sets switches 27, 32, 38 and 43 for the CTC's route
+  requests (PR #58).
+- **Each stretch one way, for every run.** New `WRONG_WAY` and
+  `goes_wrong_way()`, used by `leg_route()` in place of `REUSE_COST`.
+  - The rule: out toward the loop on the main line (28–32, 39–43),
+    back on the sidings (72–76, 67–71), and round the loop 53–66 in at
+    53 and out from 66.
+  - Why fixed: avoiding only track a run had already run did not split
+    16–52. A run's first leg can go out and back (Red 1 runs round the
+    loop to Shadyside), and the runs went round the loop both ways. Red
+    now has three short two-way stretches: 9–27 (16–27 with the track-
+    order test schedule), 33–38 and 44–52.
+- **Room on the one-way track beyond.** New `_stretch_after()` and
+  `_stretch_full()`, read by `_blocked()`. A train is sent through a
+  two-way stretch only if the one-way track it comes out onto has room
+  for it: as many trains as it holds a block apart, counting those on
+  it and those in the stretch heading onto it. This is the loop rule,
+  for any one-way track between two stretches. Without it, on the
+  tests' railway all ten Red runs were out at 06:00. The sidings and
+  the main line beside them were full both ways, and no train moved
+  again.
+- **The model keeps a run to its plan.** `ctc/model.py`: a train
+  standing on the planned way (at a stop) no longer sends a run the
+  wrong way round. Red 2 and 3 went into the loop at 66 toward Red 1
+  dwelling at 60. A closed or failed block on the plan still lets it
+  take another way.
+- **On the tests' railway**, all ten Red runs make their stops in the
+  file's order and are done at 06:42. Before, they were done at 10:27.
+  The longest waits are now about 17 minutes, on the 72–76 siding.
+- **Tests.** `test_ctc_scheduler.py`:
+  - new `EndToEndTest.test_all_red_runs_pass_at_the_sidings` and
+    `ZoneTest.test_no_pass_onto_one_way_track_with_no_room`; both fail
+    without the room rule;
+  - updated `test_the_zones`, and the loop tests for the new loop
+    direction: a train waits at 65, not 54.
+  - A train waiting at the loop's end holds back only its own stretch:
+    R3 now leaves and passes it at a siding.
+
+  `test_ctc_train_events.py` `RetireTest`: the run is placed at its
+  plan's last 56. Its plan passes 56 and 57 before, and with sidings on
+  the model follows the plan.
+- Truth proposal `20261112-1551-two-way-zone-passing-sidings.md`. It
+  replaces the unpromoted `20261112-1433-two-way-zone-pass-can-stop.md`.
+  Which way each stretch runs, and the room rule, are proposed and
+  await Landis's confirmation.
+
 ## 2026-11-12 — A train gives up a pass only if it can stop short
 
 From Landis: the confirmation run of `a520ee3` deadlocked at 76.

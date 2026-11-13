@@ -93,6 +93,7 @@ from ctc.scheduler import (
     AutoDispatcher,
     Cancel,
     World,
+    goes_wrong_way,
     plan_run,
     train_id_for,
 )
@@ -134,6 +135,16 @@ MAX_DETOUR_FACTOR = 2
 #: is, in m/s (asserted by Landis 2026-10-06; it will be adjusted on the
 #: fly once several trains share the track).
 SUGGESTED_SPEED_MARGIN_MPS = 1
+
+#: Seconds a train runs on at the suggested speed before its brake takes
+#: hold, which the suggested speed leaves room for: a train told to stop
+#: at the end of its authority stops inside its last block. With no
+#: room (until 2026-11-12) trains ran one block past their authority,
+#: onto a switch they then locked or next to a train ahead, and the
+#: waysides, which hold two trains in neighbouring blocks, held both for
+#: good. 3 s covers a 2 s reaction and a step's lag (Landis 2026-11-12,
+#: measured on tests/realistic_railway.py).
+STOP_REACTION_S = 3.0
 
 _KMH_PER_MPS = 3.6
 
@@ -1208,7 +1219,9 @@ class StubCtcOffice:
         limit in whole m/s, rounded down, less
         ``SUGGESTED_SPEED_MARGIN_MPS``), and the speed a full train can
         stop from within the blocks ``ahead``, on their grades, under
-        the service brake (0 with none). The distance left in the block
+        the service brake, after running on ``STOP_REACTION_S`` at
+        that speed before braking (0 with none). The distance left in
+        the block
         itself is not counted: which way it heads through it is not
         known. For the
         next block on a train's route, ``ahead`` is one block shorter
@@ -1216,9 +1229,19 @@ class StubCtcOffice:
         limit_kmh = self._layout.speed_limits_kmh[(line, block_id)]
         under_limit = max(0, int(limit_kmh / _KMH_PER_MPS)
                           - SUGGESTED_SPEED_MARGIN_MPS)
-        can_stop = int(math.sqrt(sum(
-            2 * self._full_train_braking_mps2(line, block)
-            * self._layout.lengths_m[(line, block)] for block in ahead)))
+        # The speed v a full train stops from within the blocks ahead,
+        # less what it covers at v in STOP_REACTION_S before the brake
+        # takes hold: v*T + v^2/(2b) = D, with b the length-weighted
+        # braking over those blocks.
+        distance = sum(self._layout.lengths_m[(line, block)]
+                       for block in ahead)
+        if distance <= 0:
+            return 0
+        braking = sum(self._full_train_braking_mps2(line, block)
+                      * self._layout.lengths_m[(line, block)]
+                      for block in ahead) / distance
+        lag = braking * STOP_REACTION_S
+        can_stop = int(-lag + math.sqrt(lag * lag + 2 * braking * distance))
         return min(under_limit, can_stop)
 
     def _full_train_braking_mps2(self, line: str, block_id: str) -> float:
@@ -1382,12 +1405,17 @@ class StubCtcOffice:
                                    self._tracker.trains[train_id].came_from)
                 if line == order.line else (None, ""))
             # A run keeps to its plan's way (over a passing siding) while
-            # nothing that would hold it up for good is on it.
+            # nothing that would hold it up for good is on it. A train
+            # standing on it (at a stop) does not send it the wrong way
+            # round a stretch every run takes one way (``WRONG_WAY``):
+            # it would meet the trains coming the right way. It waits.
             planned = (self._auto.planned_route(train_id, block_id)
                        if self._auto is not None else None)
             if (planned is not None and route is not None
                     and planned[-1] == order.destination_block_id
-                    and not set(planned[1:]) & (unusable | stuck[line])):
+                    and not set(planned[1:]) & unusable
+                    and (not set(planned[1:]) & stuck[line]
+                         or goes_wrong_way(line, route))):
                 route, reverse_at = planned, ""
             if route is None:
                 found[train_id] = TrainAuthority(

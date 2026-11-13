@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -401,6 +402,39 @@ class GiveWayTest(unittest.TestCase):
         self.assertIsNone(ctc._auto.hold_at("G3"))
         self.assertGreater(_limit(ctc, "G3").blocks, 0)
         self.assertEqual(_status(ctc, "G4"), HELD)
+
+
+class ClaimOrderTest(unittest.TestCase):
+    """A train behind another on the way to N does not claim a place in
+    the loop first: it cannot pass it, and the train in front would wait
+    for trains that wait for it (G6 held 618 s at 75, full-system run
+    2026-11-12)."""
+
+    def test_the_train_in_front_claims_first(self) -> None:
+        ctc = _loaded()
+        step_at(ctc)
+        auto = ctc._auto
+        plans = _plans(ctc)
+        # G6 dwells at Dormont (73) for a while yet; G9, behind it at
+        # 70, waits short of N with its pass still to claim.
+        leg = GREEN_ORDER.index("73")
+        auto.progress["G6"] = Progress(
+            DWELLING, leg, at=plans["G6"].stop_indexes[leg],
+            dwell_until_s=ctc._now_s() + 10 * DWELL_S)
+        ctc.dispatch("G6", "Green", "73")
+        at70 = plans["G9"].path.index("70")
+        auto.progress["G9"] = Progress(
+            HELD, GREEN_ORDER.index("77"), at=at70, wait=at70)
+        ctc.dispatch("G9", "Green", "77")
+        step_at(ctc, at("G6", "73"), at("G9", "70"))
+        self.assertEqual(_status(ctc, "G9"), HELD)
+        self.assertFalse(auto._in_loop(plans["G9"], "77"))
+        # G6's dwell is over: it claims its pass, then G9 may.
+        auto.progress["G6"] = replace(auto.progress["G6"], dwell_until_s=0)
+        for _ in range(2):
+            step_at(ctc, at("G6", "73"), at("G9", "70"))
+        self.assertTrue(auto._in_loop(plans["G6"], "77"))
+        self.assertTrue(auto._in_loop(plans["G9"], "77"))
 
 
 class LoopCapTest(unittest.TestCase):

@@ -218,9 +218,16 @@ class ZoneTest(unittest.TestCase):
         self.assertEqual(sorted(green.values(), key=min), [
             {str(n) for n in range(13, 29)},
             {str(n) for n in range(77, 86)}])
-        # Red: out from 16 to 52 and back; the loop 53 to 66 is one way.
-        self.assertEqual(set(zones["Red"]),
-                         {str(n) for n in range(16, 53)})
+        # Red: out from 16 to 52 and back, but out on the main line and
+        # back on the sidings beside 28 to 32 and 39 to 43, which are one
+        # way each; so is the loop 53 to 66.
+        red: dict[str, set[str]] = {}
+        for block, zone in zones["Red"].items():
+            red.setdefault(zone, set()).add(block)
+        self.assertEqual(sorted(red.values(), key=lambda z: int(min(z))), [
+            {str(n) for n in range(16, 28)},
+            {str(n) for n in range(33, 39)},
+            {str(n) for n in range(44, 53)}])
         # The yards are outside them.
         self.assertNotIn("63", zones["Green"])
         self.assertNotIn("9", zones["Red"])
@@ -325,7 +332,8 @@ class ZoneTest(unittest.TestCase):
 
     def _r1_turned(self) -> StubCtcOffice:
         """R1 done at South Hills Junction (60), round the loop, with R2
-        following it out (at 30) and R3 due in the yard."""
+        following it out (at 46, in 44..52 on its way to Station Square)
+        and R3 due in the yard."""
         ctc = _loaded()
         step_at(ctc)
         plans = {p.train_id: p for p in ctc._auto.plans}
@@ -334,57 +342,90 @@ class ZoneTest(unittest.TestCase):
             "dwelling", leg, at=plans["R1"].stop_indexes[leg])
         ctc.dispatch("R1", "Red", "60")
         ctc._auto.progress["R2"] = Progress(
-            EN_ROUTE, RED_ORDER.index("35"),
-            at=plans["R2"].path.index("30"))
-        ctc.dispatch("R2", "Red", "35")
+            EN_ROUTE, RED_ORDER.index("48"),
+            at=plans["R2"].path.index("46"))
+        ctc.dispatch("R2", "Red", "48")
         ctc._auto.progress["R3"] = Progress(QUEUED)
         return ctc
 
+    def test_no_pass_onto_one_way_track_with_no_room(self) -> None:
+        # R4 and R5 are up on the main line beside the 67-71 siding (39 to
+        # 43), which holds two a block apart. R6, coming up to Steel
+        # Plaza (35) in 33..38, would stand in 33..38 with nowhere to go
+        # on to: it waits short of it, at 31. Once R5 is on into 44..52,
+        # it goes.
+        ctc = _loaded()
+        step_at(ctc)
+        plans = {p.train_id: p for p in ctc._auto.plans}
+        for train_id, block in (("R4", "42"), ("R5", "40")):
+            ctc._auto.progress[train_id] = Progress(
+                EN_ROUTE, RED_ORDER.index("45"),
+                at=plans[train_id].path.index(block))
+            ctc.dispatch(train_id, "Red", "45")
+        ctc._auto.progress["R6"] = Progress(
+            EN_ROUTE, RED_ORDER.index("35"),
+            at=plans["R6"].path.index("30"), wait=plans["R6"].path.index("31"))
+        ctc.dispatch("R6", "Red", "35")
+        trains = [at("R4", "42", "Red"), at("R5", "40", "Red"),
+                  at("R6", "30", "Red")]
+        step_at(ctc, *trains)
+        self.assertEqual(_run(ctc, "R6").status, HELD)
+        self.assertEqual(ctc._auto.hold_at("R6"), "31")
+        ctc._auto.progress["R5"] = replace(
+            ctc._auto.progress["R5"], at=plans["R5"].path.index("44"))
+        step_at(ctc, at("R4", "42", "Red"), at("R5", "44", "Red"),
+                at("R6", "30", "Red"))
+        self.assertEqual(_run(ctc, "R6").status, EN_ROUTE)
+        self.assertIsNone(ctc._auto.hold_at("R6"))
+
     def test_a_train_that_has_turned_waits_round_the_loop(self) -> None:
-        # R1 would come back down past R2: it is given its order on to
-        # Shadyside (7), but its authority stops at 54, round the loop a
-        # block short of 53 (by switch 52), where it waits. It is held
-        # only once it waits there.
+        # R1 would come back down 44..52 past R2: it is given its order on
+        # to Shadyside (7), but its authority stops at 65, round the loop
+        # (in at 53, out from 66) a block short of 66 (by switch 52),
+        # where it waits. It is held only once it waits there.
         ctc = self._r1_turned()
-        step_at(ctc, at("R1", "60", "Red"), at("R2", "30", "Red"),
+        step_at(ctc, at("R1", "60", "Red"), at("R2", "46", "Red"),
                 dt=DWELL_S)
         self.assertEqual((_run(ctc, "R1").status, _order(ctc, "R1")),
                          ("en route", "7"))
-        self.assertEqual(ctc._auto.hold_at("R1"), "54")
-        # Placed at 60, it came round the loop from 61.
+        self.assertEqual(ctc._auto.hold_at("R1"), "65")
+        # Placed at 60, it came round the loop from 59.
         ctc._tracker.trains["R1"] = replace(ctc._tracker.trains["R1"],
-                                            came_from="61")
-        step_at(ctc, at("R1", "60", "Red"), at("R2", "30", "Red"))
+                                            came_from="59")
+        step_at(ctc, at("R1", "60", "Red"), at("R2", "46", "Red"))
         (limit,) = [a for a in ctc.snapshot().authorities
                     if a.train_id == "R1"]
         self.assertEqual((limit.end_block_id, limit.reason),
-                         ("54", "held"))
-        self.assertEqual(limit.route[-2:], ("55", "54"))
-        self.assertEqual(_order(ctc, "R2"), "35")
+                         ("65", "held"))
+        self.assertEqual(limit.route[-2:], ("64", "65"))
+        self.assertEqual(_order(ctc, "R2"), "48")
         # R2 is round the loop too: R1 comes back, and R2 after it.
         plans = {p.train_id: p for p in ctc._auto.plans}
         ctc._auto.progress["R2"] = Progress(
-            HELD, len(RED_ORDER) - 1, at=plans["R2"].path.index("55"),
-            wait=plans["R2"].path.index("54"))
-        step_at(ctc, at("R1", "54", "Red"), at("R2", "55", "Red"))
+            HELD, len(RED_ORDER) - 1, at=plans["R2"].path.index("64"),
+            wait=plans["R2"].path.index("65"))
+        step_at(ctc, at("R1", "65", "Red"), at("R2", "64", "Red"))
         self.assertEqual((_run(ctc, "R1").status, _order(ctc, "R1")),
                          ("en route", "7"))
-        self.assertIsNone(ctc._auto.hold_at("R1"))
+        # It has 44..52 and claims only that: it goes on as far as the
+        # siding beside 39..43, a block short of 33..38 (70).
+        self.assertEqual(ctc._auto.hold_at("R1"), "70")
 
-    def test_no_train_goes_out_while_one_waits_to_come_back(self) -> None:
-        # R3 is due, but R1 waits at 54 to come back: R3 stays in the
-        # yard. (On its way round to 54, R1 would not stop R3 going.)
+    def test_a_train_waiting_holds_out_only_its_own_stretch(self) -> None:
+        # R1 waits at 65 to come back down 44..52, which R2 holds going
+        # up. R3 is due; its way out starts with 16..27, not the stretch
+        # R1 waits for, so it leaves: R1 and R3 pass at a siding.
         ctc = self._r1_turned()
         plans = {p.train_id: p for p in ctc._auto.plans}
-        wait = plans["R1"].path.index("54")
+        wait = plans["R1"].path.index("65")
         ctc._auto.progress["R1"] = Progress(
             HELD, len(RED_ORDER) - 1, at=wait, wait=wait)
         ctc.dispatch("R1", "Red", "7")
-        step_at(ctc, at("R1", "54", "Red"), at("R2", "30", "Red"),
+        step_at(ctc, at("R1", "65", "Red"), at("R2", "46", "Red"),
                 dt=plans["R3"].departure_s - SIMULATION_START_S)
-        self.assertEqual(ctc._auto.hold_at("R1"), "54")
-        self.assertEqual(_run(ctc, "R3").status, "held")
-        self.assertIsNone(_order(ctc, "R3"))
+        self.assertEqual(ctc._auto.hold_at("R1"), "65")
+        self.assertEqual(_run(ctc, "R3").status, "in yard")
+        self.assertIsNotNone(_order(ctc, "R3"))
 
 
 class DispatchTest(unittest.TestCase):
@@ -685,6 +726,7 @@ class EndToEndTest(unittest.TestCase):
         runs = tuple(t for t in SCHEDULE.trains
                      if t.line == line and t.train_id in run_ids)
         ctc = _loaded(schedule=Schedule("some runs", runs))
+        self.ctc = ctc
         railway = _Railway(ctc, line)
         auto = ctc._auto
         plans = {p.train_id: p for p in auto.plans}
@@ -746,6 +788,16 @@ class EndToEndTest(unittest.TestCase):
 
     def test_red(self) -> None:
         self._run_line("Red", ("1", "2", "3"))
+
+    def test_all_red_runs_pass_at_the_sidings(self) -> None:
+        # All ten, three minutes apart: out on the main line, back on the
+        # sidings beside 28 to 32 and 39 to 43, passing there. With one
+        # zone from 16 to 52 they went one at a time, the last done at
+        # 10:27; nor may the sidings and the main line beside them fill
+        # up both ways at once (all ten stood still at 06:00).
+        self._run_line("Red", tuple(str(n) for n in range(1, 11)))
+        snap = self.ctc.snapshot()
+        self.assertLess(snap.elapsed_s, 2 * 3600)
 
 
 if __name__ == "__main__":

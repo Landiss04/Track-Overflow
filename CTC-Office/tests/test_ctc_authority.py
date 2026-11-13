@@ -596,9 +596,10 @@ class SafeSpeedTest(unittest.TestCase):
         ctc.dispatch("T1", "Green", "70")
         # Green 63 is limited to 70 km/h (18 m/s suggested), but with
         # only block 64 (100 m, flat) ahead, a train in 66: a full
-        # train brakes at 1.06 m/s^2, sqrt(2 * 1.06 * 100) = 14.
+        # train brakes at 1.06 m/s^2 after running on 3 s
+        # (STOP_REACTION_S): v*3 + v^2/(2 * 1.06) = 100, v = 11.
         out = step_at(ctc, _train("T1", "63"), _train("T2", "66"))
-        self.assertEqual(self._speed(out), 14)
+        self.assertEqual(self._speed(out), 11)
         out = step_at(ctc, _train("T1", "63"), _train("T2", "80"))
         self.assertEqual(self._speed(out), 18)
 
@@ -606,9 +607,9 @@ class SafeSpeedTest(unittest.TestCase):
         # 100 m flat (Green 64) against 100 m at -4.5 % (Green 10).
         ctc = ready_office()
         self.assertEqual(
-            ctc._suggested_speed_mps("Green", "63", ("64",)), 14)
+            ctc._suggested_speed_mps("Green", "63", ("64",)), 11)
         self.assertEqual(
-            ctc._suggested_speed_mps("Green", "63", ("10",)), 11)
+            ctc._suggested_speed_mps("Green", "63", ("10",)), 9)
 
     def test_zero_with_no_authority(self) -> None:
         ctc = ready_office()

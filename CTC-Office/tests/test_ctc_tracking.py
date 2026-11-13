@@ -212,10 +212,10 @@ class MovingTest(unittest.TestCase):
 
     def test_a_faster_past_counts(self) -> None:
         # T1 runs 2 s at 18 m/s; then a train standing on 66 cuts its
-        # authority to 64 and its suggested speed to 14 m/s. 64 becomes
-        # occupied a second later: 3 s in, too soon at 14 m/s (it would
-        # need 3.6 s for half of 63's 100 m), but T1 may well have gone
-        # 54 m by then. That is T1, not a failure.
+        # authority to 64 and its suggested speed to 11 m/s. 64 becomes
+        # occupied a second later: 3 s in, too soon at 11 m/s (it would
+        # need 4.5 s for half of 63's 100 m), but T1 may well have gone
+        # 47 m by then. That is T1, not a failure.
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "80")
         ctc.place_train("T1", "Green", "63")
@@ -225,7 +225,7 @@ class MovingTest(unittest.TestCase):
         ctc.place_train("T2", "Green", "66")
         _occupied(ctc, "63", "66", dt=2.0)
         self.assertEqual(own_block(ctc.snapshot().outputs.track_controller
-                                   .suggestions).suggested_speed_mps, 14)
+                                   .suggestions).suggested_speed_mps, 11)
         _occupied(ctc, "63", "64", "66", dt=1.0)
         self.assertEqual(_where(ctc)["T1"], ("63", "64"))
 

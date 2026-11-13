@@ -27,6 +27,7 @@ from ctc.model import (  # noqa: E402
     FULL_TRAIN_MASS_KG,
     GRAVITY_MPS2,
     SERVICE_BRAKE_FORCE_N,
+    STOP_REACTION_S,
     SUGGESTED_SPEED_MARGIN_MPS,
 )
 from ctc.track_layout import load_layout  # noqa: E402
@@ -45,12 +46,18 @@ def _limit_mps(line: str, block_id: str) -> int:
 def _expected_speed(line: str, block_id: str,
                     ahead: tuple[str, ...]) -> int:
     """The suggested speed for a block: a little under its limit, and
-    no faster than a train can stop from over the blocks ``ahead``."""
-    can_stop = int(math.sqrt(sum(
-        2 * _BLOCKS[(line, b)].length_m
+    no faster than a train can stop from over the blocks ``ahead``,
+    running on ``STOP_REACTION_S`` before it brakes."""
+    distance = sum(_BLOCKS[(line, b)].length_m for b in ahead)
+    if not distance:
+        return 0
+    braking = sum(
+        _BLOCKS[(line, b)].length_m
         * (SERVICE_BRAKE_FORCE_N / FULL_TRAIN_MASS_KG + GRAVITY_MPS2
            * math.sin(math.atan(_BLOCKS[(line, b)].grade_percent / 100)))
-        for b in ahead)))
+        for b in ahead) / distance
+    lag = braking * STOP_REACTION_S
+    can_stop = int(-lag + math.sqrt(lag * lag + 2 * braking * distance))
     return min(max(0, _limit_mps(line, block_id)
                    - SUGGESTED_SPEED_MARGIN_MPS), can_stop)
 

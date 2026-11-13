@@ -253,8 +253,12 @@ class RetireTest(unittest.TestCase):
         ctc.set_automatic_mode(True)
         # The clock runs: the schedule starts, and is timed from now.
         ctc.set_clock_paused(False)
-        stops = len(ctc._auto.plans[0].stops)
-        ctc._auto.progress["G1"] = Progress(TO_YARD, stops)
+        plan = ctc._auto.plans[0]
+        # At its plan's last 56: it runs through 56 and 57 before.
+        self.assertEqual(plan.path[plan.yard_index - 1:plan.yard_index + 1],
+                         ("56", "57"))
+        ctc._auto.progress["G1"] = Progress(
+            TO_YARD, len(plan.stops), at=plan.yard_index - 1)
         ctc.dispatch("G1", "Green", "57")
         ctc.place_train("G1", "Green", "56")
         return ctc
