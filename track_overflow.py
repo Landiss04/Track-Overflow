@@ -76,6 +76,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     # harness, for each frame, and a long resize slips the clock.
     os.environ.setdefault("QSG_NO_VSYNC", "1")
     if known.module is None:
+        from utils.process_cores import pin_system
+
+        # Children inherit this, and the Pi links then take the rest.
+        pin_system()
         # Imported here, so a module process loads only its own code.
         from common.harness import app
 
@@ -144,12 +148,18 @@ def _run_train_controller_sw(args: list[str]) -> int:
 
 def _run_track_controller_hw(args: list[str]) -> int:
     from common.hw_link import host
+    from utils.process_cores import pin_links
+
+    pin_links()
 
     return host.main(["--as", "track-controller-hw", *args])
 
 
 def _run_train_controller_hw(args: list[str]) -> int:
     from common.hw_link import host
+    from utils.process_cores import pin_links
+
+    pin_links()
 
     return host.main(["--as", "train-controller-hw", *args])
 
