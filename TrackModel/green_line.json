@@ -9,8 +9,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": 0.5,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 8,
-      "next_blocks": [13]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 2,
@@ -24,8 +23,7 @@
         "station": "PIONEER"
       },
       "station_side": "Left",
-      "seconds_to_traverse": 8,
-      "next_blocks": [1]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 3,
@@ -35,8 +33,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": 1.5,
       "cumulative_elevation_m": 3,
-      "seconds_to_traverse": 8,
-      "next_blocks": [2]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 4,
@@ -46,8 +43,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": 2,
       "cumulative_elevation_m": 5,
-      "seconds_to_traverse": 8,
-      "next_blocks": [3]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 5,
@@ -57,8 +53,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": 3,
       "cumulative_elevation_m": 8,
-      "seconds_to_traverse": 8,
-      "next_blocks": [4]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 6,
@@ -68,8 +63,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": 4,
       "cumulative_elevation_m": 12,
-      "seconds_to_traverse": 8,
-      "next_blocks": [5]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 7,
@@ -79,8 +73,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": 5,
       "cumulative_elevation_m": 17,
-      "seconds_to_traverse": 8,
-      "next_blocks": [6]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 8,
@@ -90,8 +83,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": 0,
       "cumulative_elevation_m": 17,
-      "seconds_to_traverse": 8,
-      "next_blocks": [7]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 9,
@@ -105,8 +97,7 @@
         "station": "EDGEBROOK"
       },
       "station_side": "Left",
-      "seconds_to_traverse": 8,
-      "next_blocks": [8]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 10,
@@ -116,8 +107,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": -4.5,
       "cumulative_elevation_m": 7.5,
-      "seconds_to_traverse": 8,
-      "next_blocks": [9]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 11,
@@ -127,8 +117,7 @@
       "speed_limit_kmh": 45,
       "elevation_m": -4,
       "cumulative_elevation_m": 3.5,
-      "seconds_to_traverse": 8,
-      "next_blocks": [10]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 12,
@@ -141,8 +130,7 @@
       "infrastructure": {
         "switch": "12-13; 1-13"
       },
-      "seconds_to_traverse": 8,
-      "next_blocks": [11]
+      "seconds_to_traverse": 8
     },
     {
       "block_number": 13,
@@ -152,8 +140,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 7.7143,
-      "next_blocks": [12, 14]
+      "seconds_to_traverse": 7.7143
     },
     {
       "block_number": 14,
@@ -163,8 +150,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 7.7143,
-      "next_blocks": [13, 15]
+      "seconds_to_traverse": 7.7143
     },
     {
       "block_number": 15,
@@ -174,8 +160,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 7.7143,
-      "next_blocks": [14, 16]
+      "seconds_to_traverse": 7.7143
     },
     {
       "block_number": 16,
@@ -189,8 +174,7 @@
         "station": null
       },
       "station_side": "Left/Right",
-      "seconds_to_traverse": 7.7143,
-      "next_blocks": [15, 17]
+      "seconds_to_traverse": 7.7143
     },
     {
       "block_number": 17,
@@ -200,8 +184,7 @@
       "speed_limit_kmh": 60,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [16, 18]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 18,
@@ -211,8 +194,7 @@
       "speed_limit_kmh": 60,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [17, 19]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 19,
@@ -225,8 +207,7 @@
       "infrastructure": {
         "railway_crossing": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [18, 20]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 20,
@@ -236,8 +217,7 @@
       "speed_limit_kmh": 60,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [19, 21]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 21,
@@ -247,8 +227,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [20, 22]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 22,
@@ -262,8 +241,7 @@
         "station": "WHITED"
       },
       "station_side": "Left/Right",
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [21, 23]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 23,
@@ -273,8 +251,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [22, 24]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 24,
@@ -284,8 +261,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [23, 25]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 25,
@@ -295,8 +271,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.2857,
-      "next_blocks": [24, 26]
+      "seconds_to_traverse": 10.2857
     },
     {
       "block_number": 26,
@@ -306,8 +281,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 5.1429,
-      "next_blocks": [25, 27]
+      "seconds_to_traverse": 5.1429
     },
     {
       "block_number": 27,
@@ -317,8 +291,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [26, 28]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 28,
@@ -331,8 +304,7 @@
       "infrastructure": {
         "switch": "28-29; 150-28"
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [27, 29]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 29,
@@ -342,8 +314,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [30]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 30,
@@ -353,8 +324,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [31]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 31,
@@ -368,8 +338,7 @@
         "station": "SOUTH BANK"
       },
       "station_side": "Left",
-      "seconds_to_traverse": 6,
-      "next_blocks": [32]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 32,
@@ -379,8 +348,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [33]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 33,
@@ -390,8 +358,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [34]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 34,
@@ -401,8 +368,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [35]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 35,
@@ -412,8 +378,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [36]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 36,
@@ -426,8 +391,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [37]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 37,
@@ -440,8 +404,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [38]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 38,
@@ -454,8 +417,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [39]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 39,
@@ -470,8 +432,7 @@
         "underground": true
       },
       "station_side": "Right",
-      "seconds_to_traverse": 6,
-      "next_blocks": [40]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 40,
@@ -484,8 +445,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [41]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 41,
@@ -498,8 +458,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [42]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 42,
@@ -512,8 +471,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [43]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 43,
@@ -526,8 +484,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [44]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 44,
@@ -540,8 +497,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [45]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 45,
@@ -554,8 +510,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [46]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 46,
@@ -568,8 +523,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [47]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 47,
@@ -582,8 +536,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [48]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 48,
@@ -598,8 +551,7 @@
         "underground": true
       },
       "station_side": "Right",
-      "seconds_to_traverse": 6,
-      "next_blocks": [49]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 49,
@@ -612,8 +564,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [50]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 50,
@@ -626,8 +577,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [51]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 51,
@@ -640,8 +590,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [52]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 52,
@@ -654,8 +603,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [53]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 53,
@@ -668,8 +616,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [54]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 54,
@@ -682,8 +629,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [55]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 55,
@@ -696,8 +642,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [56]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 56,
@@ -710,8 +655,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [57]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 57,
@@ -726,8 +670,7 @@
         "underground": true
       },
       "station_side": "Right",
-      "seconds_to_traverse": 6,
-      "next_blocks": [58, "yard"]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 58,
@@ -740,8 +683,7 @@
       "infrastructure": {
         "switch": "57-yard"
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [59]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 59,
@@ -751,8 +693,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [60]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 60,
@@ -762,8 +703,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [61]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 61,
@@ -773,8 +713,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6,
-      "next_blocks": [62]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 62,
@@ -787,8 +726,7 @@
       "infrastructure": {
         "switch": "Yard-63"
       },
-      "seconds_to_traverse": 6,
-      "next_blocks": [63]
+      "seconds_to_traverse": 6
     },
     {
       "block_number": 63,
@@ -798,8 +736,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 5.1429,
-      "next_blocks": [64]
+      "seconds_to_traverse": 5.1429
     },
     {
       "block_number": 64,
@@ -809,8 +746,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 5.1429,
-      "next_blocks": [65]
+      "seconds_to_traverse": 5.1429
     },
     {
       "block_number": 65,
@@ -824,8 +760,7 @@
         "station": "GLENBURY"
       },
       "station_side": "Right",
-      "seconds_to_traverse": 10.2857,
-      "next_blocks": [66]
+      "seconds_to_traverse": 10.2857
     },
     {
       "block_number": 66,
@@ -835,8 +770,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.2857,
-      "next_blocks": [67]
+      "seconds_to_traverse": 10.2857
     },
     {
       "block_number": 67,
@@ -846,8 +780,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [68]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 68,
@@ -857,8 +790,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [69]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 69,
@@ -868,8 +800,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [70]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 70,
@@ -879,8 +810,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [71]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 71,
@@ -890,8 +820,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [72]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 72,
@@ -901,8 +830,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [73]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 73,
@@ -916,8 +844,7 @@
         "station": "DORMONT"
       },
       "station_side": "Right",
-      "seconds_to_traverse": 9,
-      "next_blocks": [74]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 74,
@@ -927,8 +854,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [75]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 75,
@@ -938,8 +864,7 @@
       "speed_limit_kmh": 40,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [76]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 76,
@@ -952,8 +877,7 @@
       "infrastructure": {
         "switch": "76-77;77-101"
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [77]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 77,
@@ -967,8 +891,7 @@
         "station": "MT LEBANON"
       },
       "station_side": "Left/Right",
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [78, 101]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 78,
@@ -978,8 +901,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [77, 79]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 79,
@@ -989,8 +911,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [78, 80]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 80,
@@ -1000,8 +921,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [79, 81]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 81,
@@ -1011,8 +931,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [80, 82]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 82,
@@ -1022,8 +941,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [81, 83]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 83,
@@ -1033,8 +951,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [82, 84]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 84,
@@ -1044,8 +961,7 @@
       "speed_limit_kmh": 70,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [83, 85]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 85,
@@ -1058,8 +974,7 @@
       "infrastructure": {
         "switch": "85-86; 100-85"
       },
-      "seconds_to_traverse": 15.4286,
-      "next_blocks": [84, 86]
+      "seconds_to_traverse": 15.4286
     },
     {
       "block_number": 86,
@@ -1069,8 +984,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 14.4,
-      "next_blocks": [87]
+      "seconds_to_traverse": 14.4
     },
     {
       "block_number": 87,
@@ -1080,8 +994,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12.4704,
-      "next_blocks": [88]
+      "seconds_to_traverse": 12.4704
     },
     {
       "block_number": 88,
@@ -1095,8 +1008,7 @@
         "station": "POPLAR"
       },
       "station_side": "Left",
-      "seconds_to_traverse": 14.4,
-      "next_blocks": [89]
+      "seconds_to_traverse": 14.4
     },
     {
       "block_number": 89,
@@ -1106,8 +1018,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": -0.375,
       "cumulative_elevation_m": 0.125,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [90]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 90,
@@ -1117,8 +1028,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": -0.75,
       "cumulative_elevation_m": -0.625,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [91]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 91,
@@ -1128,8 +1038,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": -1.5,
       "cumulative_elevation_m": -2.125,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [92]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 92,
@@ -1139,8 +1048,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": -2.125,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [93]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 93,
@@ -1150,8 +1058,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 1.5,
       "cumulative_elevation_m": -0.625,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [94]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 94,
@@ -1161,8 +1068,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0.75,
       "cumulative_elevation_m": 0.125,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [95]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 95,
@@ -1172,8 +1078,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0.375,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [96]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 96,
@@ -1187,8 +1092,7 @@
         "station": "CASTLE SHANNON"
       },
       "station_side": "Left",
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [97]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 97,
@@ -1198,8 +1102,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [98]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 98,
@@ -1209,8 +1112,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [99]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 99,
@@ -1220,8 +1122,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [100]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 100,
@@ -1231,8 +1132,7 @@
       "speed_limit_kmh": 25,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.8,
-      "next_blocks": [85]
+      "seconds_to_traverse": 10.8
     },
     {
       "block_number": 101,
@@ -1242,8 +1142,7 @@
       "speed_limit_kmh": 26,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 4.8462,
-      "next_blocks": [102]
+      "seconds_to_traverse": 4.8462
     },
     {
       "block_number": 102,
@@ -1253,8 +1152,7 @@
       "speed_limit_kmh": 28,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12.8571,
-      "next_blocks": [103]
+      "seconds_to_traverse": 12.8571
     },
     {
       "block_number": 103,
@@ -1264,8 +1162,7 @@
       "speed_limit_kmh": 28,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12.8571,
-      "next_blocks": [104]
+      "seconds_to_traverse": 12.8571
     },
     {
       "block_number": 104,
@@ -1275,8 +1172,7 @@
       "speed_limit_kmh": 28,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 10.2857,
-      "next_blocks": [105]
+      "seconds_to_traverse": 10.2857
     },
     {
       "block_number": 105,
@@ -1290,8 +1186,7 @@
         "station": "DORMONT"
       },
       "station_side": "Right",
-      "seconds_to_traverse": 12.8571,
-      "next_blocks": [106]
+      "seconds_to_traverse": 12.8571
     },
     {
       "block_number": 106,
@@ -1301,8 +1196,7 @@
       "speed_limit_kmh": 28,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12.8571,
-      "next_blocks": [107]
+      "seconds_to_traverse": 12.8571
     },
     {
       "block_number": 107,
@@ -1312,8 +1206,7 @@
       "speed_limit_kmh": 28,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 11.5714,
-      "next_blocks": [108]
+      "seconds_to_traverse": 11.5714
     },
     {
       "block_number": 108,
@@ -1326,8 +1219,7 @@
       "infrastructure": {
         "railway_crossing": true
       },
-      "seconds_to_traverse": 12.8571,
-      "next_blocks": [109]
+      "seconds_to_traverse": 12.8571
     },
     {
       "block_number": 109,
@@ -1337,8 +1229,7 @@
       "speed_limit_kmh": 28,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12.8571,
-      "next_blocks": [110]
+      "seconds_to_traverse": 12.8571
     },
     {
       "block_number": 110,
@@ -1348,8 +1239,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [111]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 111,
@@ -1359,8 +1249,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [112]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 112,
@@ -1370,8 +1259,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [113]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 113,
@@ -1381,8 +1269,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [114]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 114,
@@ -1396,8 +1283,7 @@
         "station": "GLENBURY"
       },
       "station_side": "Right",
-      "seconds_to_traverse": 19.44,
-      "next_blocks": [115]
+      "seconds_to_traverse": 19.44
     },
     {
       "block_number": 115,
@@ -1407,8 +1293,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [116]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 116,
@@ -1418,8 +1303,7 @@
       "speed_limit_kmh": 30,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [117]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 117,
@@ -1429,8 +1313,7 @@
       "speed_limit_kmh": 15,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [118]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 118,
@@ -1440,8 +1323,7 @@
       "speed_limit_kmh": 15,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [119]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 119,
@@ -1451,8 +1333,7 @@
       "speed_limit_kmh": 15,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9.6,
-      "next_blocks": [120]
+      "seconds_to_traverse": 9.6
     },
     {
       "block_number": 120,
@@ -1462,8 +1343,7 @@
       "speed_limit_kmh": 15,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [121]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 121,
@@ -1473,8 +1353,7 @@
       "speed_limit_kmh": 15,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 12,
-      "next_blocks": [122]
+      "seconds_to_traverse": 12
     },
     {
       "block_number": 122,
@@ -1487,8 +1366,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [123]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 123,
@@ -1503,8 +1381,7 @@
         "underground": true
       },
       "station_side": "Right",
-      "seconds_to_traverse": 9,
-      "next_blocks": [124]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 124,
@@ -1517,8 +1394,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [125]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 125,
@@ -1531,8 +1407,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [126]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 126,
@@ -1545,8 +1420,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [127]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 127,
@@ -1559,8 +1433,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [128]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 128,
@@ -1573,8 +1446,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [129]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 129,
@@ -1587,8 +1459,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [130]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 130,
@@ -1601,8 +1472,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [131]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 131,
@@ -1615,8 +1485,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [132]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 132,
@@ -1631,8 +1500,7 @@
         "underground": true
       },
       "station_side": "Left",
-      "seconds_to_traverse": 9,
-      "next_blocks": [133]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 133,
@@ -1645,8 +1513,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [134]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 134,
@@ -1659,8 +1526,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [135]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 135,
@@ -1673,8 +1539,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [136]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 136,
@@ -1687,8 +1552,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [137]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 137,
@@ -1701,8 +1565,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [138]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 138,
@@ -1715,8 +1578,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [139]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 139,
@@ -1729,8 +1591,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [140]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 140,
@@ -1743,8 +1604,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [141]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 141,
@@ -1759,8 +1619,7 @@
         "underground": true
       },
       "station_side": "Right",
-      "seconds_to_traverse": 9,
-      "next_blocks": [142]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 142,
@@ -1773,8 +1632,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [143]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 143,
@@ -1787,8 +1645,7 @@
       "infrastructure": {
         "underground": true
       },
-      "seconds_to_traverse": 9,
-      "next_blocks": [144]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 144,
@@ -1798,8 +1655,7 @@
       "speed_limit_kmh": 20,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [145]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 145,
@@ -1809,8 +1665,7 @@
       "speed_limit_kmh": 20,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [146]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 146,
@@ -1820,8 +1675,7 @@
       "speed_limit_kmh": 20,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [147]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 147,
@@ -1831,8 +1685,7 @@
       "speed_limit_kmh": 20,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 9,
-      "next_blocks": [148]
+      "seconds_to_traverse": 9
     },
     {
       "block_number": 148,
@@ -1842,8 +1695,7 @@
       "speed_limit_kmh": 20,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 33.12,
-      "next_blocks": [149]
+      "seconds_to_traverse": 33.12
     },
     {
       "block_number": 149,
@@ -1853,8 +1705,7 @@
       "speed_limit_kmh": 20,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 7.2,
-      "next_blocks": [150]
+      "seconds_to_traverse": 7.2
     },
     {
       "block_number": 150,
@@ -1864,8 +1715,7 @@
       "speed_limit_kmh": 20,
       "elevation_m": 0,
       "cumulative_elevation_m": 0.5,
-      "seconds_to_traverse": 6.3,
-      "next_blocks": [28]
+      "seconds_to_traverse": 6.3
     }
   ]
 }
