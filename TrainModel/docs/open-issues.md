@@ -1,60 +1,72 @@
 # Train Model open issues
 
-The Train Model simulates physics. Control logic belongs to the Train
-Controller, as clarified by Kevin Schillinger on 2026-09-30.
+Reviewed against current code on October 20, 2026. Accepted design comes from
+[SDD v0.2](../../documents/Railway_Sim_SDD_Train_Model.md) and Kevin Schillinger’s
+review. New truth proposals await human promotion; this file records status.
+
+## Implementation reconciliation
+
+The following concurrent edits are present in the inspected working tree. Their
+presence is source-inspection evidence, not a claim that local checks passed.
+
+| Area | Accepted design | Inspected implementation |
+|---|---|---|
+| Simultaneous brakes | Independent engagement; sum both engaged configured forces. Service failure blocks service only. | `model.py` now reports independent states and sums forces. |
+| Beacon bound | Complete ASCII JSON array `[station_name, platform_side, underground]`, at most 128 characters; reject without truncation. | `utils/beacon_codec.py` enforces the complete payload in model validation and local producers/edges. Keep typed/named envelopes. See [encoding](module-interface.md#beacon-payload-encoding). |
+| Integrated clock | Display harness time; independently check every 15 harness ticks, including rejected trains. | `module_process.py` holds fixed creation epochs; `fleet.py` fans out time; `state.py` compares at `1e-6 s` tolerance; `Main.qml` displays selected-train diagnostics. See [clock contract](integration.md#integrated-time-reconciliation-and-drift). |
+| Arrival row | Remove arrival; retain next station/platform and fleet identity/line. | Current `MainView.qml` omits arrival; `fleet.py` and `state.py` supply ID and line. |
+
+## Remaining integration dependencies
+
+- Phase 2 wires the Track Model process with direct harness edges
+  (`common/harness/track_edges.py`), which pass each beacon on unchanged for the
+  Train Model to check and reject per train; the fixed feed is gone. Since Phase 3
+  the Track Controller SW commands the Green Line's speed and authority per block.
+  Its suggestions come from a scripted CTC Office in the harness until the CTC Office
+  joins in Phase 4. `track_model_edges.py` retains legacy catalog conversions, off
+  the running path.
+- Production boarding events must respect Track Model station ownership, and all
+  beacon producers must apply the complete canonical payload bound.
+- Backend/UI work has local verification sources, including `test_beacon_codec.py`
+  and `test_integrated_clock.py`. This documentation task did not run product tests
+  or establish their results. Exercise those paths as part of their implementation
+  review, including rejected/late-created trains and midnight display wrapping.
+- Truth proposals require human review/promotion, and existing diagram artifacts
+  require author corrections. Neither is performed by this documentation task.
 
 ## Configured speed is not enforced here
 
-`TrainConfig.v_max_mps` records 70 km/h (19.444... m/s), but does not limit
-the simulated velocity. Commanded speed and track speed limits are passed
-to the Train Controller; they do not govern motion in this module.
-Sustained power can therefore accelerate the model beyond the configured
-speed. Speed regulation and enforcement belong to the Train Controller.
-Verify that behavior during controller integration rather than adding a
-velocity clamp to the physics. The course instructor confirmed on 2026-10-02
-that the Train Model does not enforce the maximum speed.
+`TrainConfig.v_max_mps` records 70 km/h (19.444… m/s). The Train Controller owns
+speed regulation and enforcement (D009); do not add a physics velocity clamp.
 
-## Vehicle calibration
+## Resolved scope and ownership
 
-The force and resistance parameters still need calibration against the
-Blackpool FLEXITY 2 datasheet. Its 0.5 m/s² figure is an average acceleration
-from 0 to 70 km/h at two-thirds load; using it to derive a maximum traction
-force does not establish that the simulated acceleration curve matches the
-vehicle. All three forces derive from a 51,433 kg reference mass, 2/3 of the
-datasheet load between 40.9 t empty and 56.7 t loaded: 25,717 N traction,
-61,720 N service and 140,413 N emergency, matching the instructor's values. Rolling resistance is assumed, aerodynamic drag is absent, and
-reference mass excludes crew while operating mass includes crew. Validate
-acceleration, braking and grade performance across loads before treating
-the model as a calibrated representation of the vehicle.
+- Keep the existing segmented numerical algorithm: exact constant-force segments,
+  midpoint power-limited integration, event boundaries and fixed external dt.
+- Maximum power is confirmed at 480 kW. Rolling resistance with existing
+  `c_rr = 0.002` is the only passive resistance term in scope. Grade is gravitational
+  force and brakes are commanded forces. Aerodynamic drag, wheel slip and brake
+  build-up are outside scope; no real-world calibration study is claimed.
+- Train Controller owns the door interlock. Train Model follows commands; there
+  ownership is settled by Kevin’s review.
+- Track Model sends boarding events only at stations. Train Model checks rest,
+  open doors, valid counts and capacity without a station gate.
+- Pickup failure outputs null commanded speed and authority (2026-10-28; was
+  0 m/s and 0 blocks), leaving terrain unaffected. Offset references the front of the train.
+- A passenger pull clears when the controller's emergency brake goes from true
+  to false (2026-10-28); the one-shot release is withdrawn. The window has no
+  release.
+- Train identity and line come from the fleet/harness roster. Arrival sourcing
+  is no longer requested.
 
-## Door interlock ownership
+## Development and diagram follow-up
 
-The door interlock (a door opens only at 0 mph and closes once the train
-moves) is commented out of `train_model/model.py`, not deleted. Whether the
-Train Model enforces it is with the course instructor; Kevin believes it does
-not (2026-10-06). Until that is answered the doors follow Door Command at any
-speed and nothing in the Train Model keeps a door shut while moving: a known
-gap. Passengers still board only at rest, and the disembark draw happens on
-the first tick at rest with a door open. The interlock's tests are skipped,
-not deleted (`INTERLOCK_OFF` in `tests/test_physics_extended.py`). If the
-instructor puts the interlock back in the Train Model, uncomment it and drop
-the skips; otherwise it belongs with the Train Controller.
+The standalone test UI is a developer utility. Its older 30-tick drift check is
+separate from the integrated check. Existing tests are local developer
+verification utilities; no enforcement policy is introduced.
 
-## Train ID, line and arrival time have no source
-
-The Train Model window's header and Position card show a dash for the train
-ID, the line and the next arrival time. No defined interface supplies them:
-the Train Model's inputs (`train_model/interface.py`) carry none of them, and
-no `truth/signals/` entry names a producer. Decide which module sends each one
-(the CTC Office dispatches trains and knows their IDs, lines and schedules)
-and add it to the interface before the window can show them.
-
-## Passenger emergency brake release
-
-A passenger pull latches, and only the test-only override clears it.
-Truth says the Train Controller releases it
-(`arbitration/passenger-emergency-brake.md`, D011) but does not settle the
-signal or mechanism, and the Train Model window offers no release:
-`TrainModelState.releaseEmergencyBrake()` does nothing. Removing the test UI
-leaves no way to release a pull, so settle this before integration; see
-[integration.md](integration.md#passenger-brake-release).
+The author must correct existing product use case diagrams to remove the testing
+role and utility operations, add controller latch release, and align labels with
+the reviewed integration and physics design. The [UML brief](uml-diagram-brief.md)
+and [draw.io brief](uml-drawio-prompt.md) describe the corrections. Existing diagram
+artifacts are unchanged.

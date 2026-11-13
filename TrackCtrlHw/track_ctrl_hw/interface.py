@@ -93,6 +93,8 @@ class Block:
     key: BlockKey
     length_m: float
     speed_limit_mps: float
+    # Declared adjacent blocks, including read-only occupancy across waysides.
+    next_blocks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +158,11 @@ class CtcInputs:
     # while the dispatcher is in maintenance mode, and withdrawn when it
     # ends. They go to the PLC program, which decides whether to obey.
     switch_commands: Mapping[BlockRef, SwitchPosition] = field(
+        default_factory=dict
+    )
+    # The position each switch should take for the train routed over
+    # it. A request, not a command: the PLC program decides.
+    route_requests: Mapping[BlockRef, SwitchPosition] = field(
         default_factory=dict
     )
     # A block not listed has nothing to send down its track circuit.
@@ -294,6 +301,16 @@ class ProgramInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class VitalInfo:
+    """The read-only vital block scanned after the program, generated
+    from the wayside's territory (``track_ctrl_hw.vital``)."""
+
+    checksum: str
+    boolean_count: int
+    statement_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ScanInfo:
     """Health of a wayside's scan cycle since its program was loaded."""
 
@@ -348,6 +365,9 @@ class WaysideSnapshot:
     # program drives them.
     holding: str
     report: CtcReport | None
+    vital: VitalInfo | None = None
+    # Outputs the vital block changed on the last scan, ``NAME 1->0``.
+    overrides: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

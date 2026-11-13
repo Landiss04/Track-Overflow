@@ -28,7 +28,6 @@ from track_ctrl.display import (  # noqa: E402
 from track_ctrl.layout import (  # noqa: E402
     LayoutError,
     build_default_system,
-    build_line,
     default_layout_dir,
     load_layout_file,
     parse_layout,
@@ -60,16 +59,16 @@ class RealLayoutTests(unittest.TestCase):
         self.assertEqual(green.key, "Green")
         self.assertEqual(len(green.blocks), 150)
         self.assertEqual(
-            [s.switch_id for s in green.switches],
+            list(green.switches),
             ["12", "28", "58", "62", "76", "85"],
         )
-        self.assertEqual(green.crossing_blocks, ("19", "108"))
+        self.assertEqual(green.crossings, ("19", "108"))
 
     def test_red_has_its_own_switches(self) -> None:
         red = load_layout_file(RED)
         self.assertEqual(len(red.blocks), 76)
         self.assertEqual(len(red.switches), 7)
-        self.assertEqual(red.crossing_blocks, ("11", "47"))
+        self.assertEqual(red.crossings, ("11", "47"))
 
     def test_blocks_are_in_block_number_order_with_real_limits(self) -> None:
         blocks = load_layout_file(GREEN).blocks
@@ -79,14 +78,24 @@ class RealLayoutTests(unittest.TestCase):
         self.assertEqual(blocks[0].label, "A1")
 
     def test_switch_strings_are_read_normal_first_then_reverse(self) -> None:
-        green = {s.switch_id: s for s in load_layout_file(GREEN).switches}
-        loop = green["12"]            # "12-13; 1-13"
-        self.assertEqual((loop.point, loop.normal_end, loop.reverse_end),
-                         ("13", "12", "1"))
+        # Each is (point, normal end, reverse end).
+        green = load_layout_file(GREEN).switches
+        self.assertEqual(green["12"], ("13", "12", "1"))   # "12-13; 1-13"
         # "57-yard" lists only the diverging route, to the yard.
-        yard = green["58"]
-        self.assertEqual((yard.point, yard.normal_end, yard.reverse_end),
-                         ("57", "58", "yard"))
+        self.assertEqual(green["58"], ("57", "58", "yard"))
+
+    def test_the_direction_of_travel_is_read_and_shared_by_the_line(
+        self,
+    ) -> None:
+        blocks = {b.block_id: b for b in load_layout_file(GREEN).blocks}
+        self.assertEqual(blocks["77"].next_blocks, ("78", "101"))
+        self.assertEqual(blocks["57"].next_blocks, ("58", "yard"))
+        green = build_default_system()[0]
+        # Every wayside carries the whole line's, for its starter.
+        first = green.controllers[0]
+        self.assertFalse(first.owns("150"))
+        self.assertEqual(first.next_blocks("150"), ("28",))
+        self.assertEqual(first.next_blocks("999"), ())
 
     def test_the_default_system_is_green_and_red_divided_into_waysides(self) -> None:
         green, red = build_default_system()
@@ -106,12 +115,12 @@ class PartitionTests(unittest.TestCase):
     def test_every_block_belongs_to_exactly_one_controller(self) -> None:
         parsed = load_layout_file(GREEN)
         for count in (2, 3, 6, 7, 150):
-            line = build_line(parsed, count)
+            line = parsed.divide(count)
             owned = [b for c in line.controllers for b in c.block_ids]
             self.assertEqual(owned, [b.block_id for b in parsed.blocks], count)
 
     def test_territories_are_contiguous_and_nearly_equal(self) -> None:
-        line = build_line(load_layout_file(GREEN), 7)
+        line = load_layout_file(GREEN).divide(7)
         sizes = [len(c.block_ids) for c in line.controllers]
         self.assertLessEqual(max(sizes) - min(sizes), 1)
         for config in line.controllers:
@@ -119,45 +128,49 @@ class PartitionTests(unittest.TestCase):
             self.assertEqual(numbers, list(range(numbers[0], numbers[-1] + 1)))
 
     def test_a_switch_belongs_to_the_wayside_that_owns_its_block(self) -> None:
-        line = build_line(load_layout_file(GREEN), 6)
+        line = load_layout_file(GREEN).divide(6)
         for config in line.controllers:
-            for switch in config.switches:
-                self.assertIn(switch.block_id, config.block_ids)
+            for switch_id in config.switches:
+                self.assertIn(switch_id, config.block_ids)
         # Block 76's switch leads to 101, which another wayside owns.
         owner = next(c for c in line.controllers
-                     if any(s.switch_id == "76" for s in c.switches))
+                     if "76" in c.switches)
         self.assertNotIn("101", owner.block_ids)
 
     def test_a_signal_stands_at_every_switch_and_nowhere_else(self) -> None:
         for config in build_default_system()[0].controllers:
-            self.assertEqual(
-                [s.signal_id for s in config.signals],
-                [s.switch_id for s in config.switches],
-            )
+            self.assertEqual(config.signals, tuple(config.switches))
 
     def test_a_crossing_is_armed_by_its_own_block_and_its_neighbours(self) -> None:
-        line = build_line(load_layout_file(GREEN), 6)
-        crossing = next(x for c in line.controllers for x in c.crossings
-                        if x.crossing_id == "19")
-        self.assertEqual(crossing.approach_block_ids, ("18", "19", "20"))
+        line = load_layout_file(GREEN).divide(6)
+        owner = next(c for c in line.controllers if "19" in c.crossings)
+        self.assertEqual(owner.crossing_approach("19"), ("18", "19", "20"))
+
+    def test_neighbours_follow_the_layout_not_the_block_numbers(self) -> None:
+        line = load_layout_file(GREEN).divide(2)
+        config = next(c for c in line.controllers if c.owns("77"))
+        self.assertEqual(config.neighbours("77"), ("76", "78", "101"))
+        self.assertIn("77", config.neighbours("101"))
+        self.assertNotIn("100", config.neighbours("101"))
+        self.assertNotIn("102", config.neighbours("77"))
 
     def test_the_wayside_count_is_limited_to_what_the_line_allows(self) -> None:
         parsed = load_layout_file(GREEN)
         for bad in (0, 1, 151, -3):
             with self.assertRaises(LayoutError):
-                build_line(parsed, bad)
+                parsed.divide(bad)
         with self.assertRaises(LayoutError):
-            build_line(parsed, True)        # a flag is not a count
+            parsed.divide(True)        # a flag is not a count
         with self.assertRaises(LayoutError):
-            build_line(parsed, 2.5)         # type: ignore[arg-type]
+            parsed.divide(2.5)         # type: ignore[arg-type]
 
     def test_plc_names_use_block_numbers(self) -> None:
         config = build_default_system()[0].controllers[0]
         switch, signal, crossing = (
-            config.switches[0], config.signals[0], config.crossings[0])
-        self.assertEqual(switch.output_signal, "SW_12")
-        self.assertEqual(signal.aspect_signals[0], "SIG_12_R")
-        self.assertEqual(crossing.output_signal, "XING_19")
+            tuple(config.switches)[0], config.signals[0], config.crossings[0])
+        self.assertEqual(config.switch_output(switch), "SW_12")
+        self.assertEqual(config.aspect_outputs(signal)[0], "SIG_12_R")
+        self.assertEqual(config.crossing_output(crossing), "XING_19")
 
 
 class RefusalTests(unittest.TestCase):
@@ -195,6 +208,8 @@ class RefusalTests(unittest.TestCase):
         self.refused(with_block(length_m=-5), "above zero")
         self.refused(with_block(section=""), "section")
         self.refused(with_block(infrastructure="oops"), "infrastructure")
+        self.refused(with_block(next_blocks=2), "next_blocks")
+        self.refused(with_block(next_blocks=["two"]), "next_blocks")
 
     def test_a_duplicate_block_is_refused(self) -> None:
         layout = copy.deepcopy(tiny())

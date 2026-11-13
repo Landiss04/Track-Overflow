@@ -89,7 +89,7 @@ ModalDialog {
         bodyPadding: theme.space_4
 
         headerItems: Text {
-            text: qsTr("Nothing above the program")
+            text: qsTr("Program, then vital block")
             textFormat: Text.PlainText
             color: theme.text_muted
             font.family: theme.ui_family
@@ -112,21 +112,62 @@ ModalDialog {
             Layout.fillWidth: true
             label: qsTr("Held fail-safe")
             value: root.program.holding !== undefined ? root.program.holding : "\u2014"
+        }
+
+        Shared.KeyValueRow {
+            Layout.fillWidth: true
+            label: qsTr("Vital block checksum (CRC-32)")
+            value: root.program.vitalChecksum !== undefined ? root.program.vitalChecksum : "\u2014"
+        }
+
+        Shared.KeyValueRow {
+            Layout.fillWidth: true
+            label: qsTr("Vital block statements")
+            value: root.program.vitalStatements !== undefined ? root.program.vitalStatements : "\u2014"
+        }
+
+        Shared.KeyValueRow {
+            Layout.fillWidth: true
+            label: qsTr("Overridden last scan")
+            value: root.program.overrides !== undefined && root.program.overrides.length > 0
+                ? root.program.overrides.join(", ") : qsTr("None")
             rule: false
         }
 
         Shared.HelperText {
             Layout.fillWidth: true
-            text: qsTr("The wayside runs the program and decides nothing "
-                + "itself: separation, closures, switch locking and "
-                + "correspondence, crossings and speed limits are all the "
-                + "program's. Speed goes in and out as five bits a block "
-                + "(SPD_n, CMD_n). "
-                + "A signal shows red if R is lit or none is, otherwise "
-                + "the first lit of Y, G and SG. Every output is held "
-                + "fail-safe only while no program runs: none loaded, a "
-                + "new one not yet scanned, or channels A and B "
-                + "disagreeing, which lasts until a new program is loaded.")
+            text: qsTr("After the program, the wayside scans a read-only "
+                + "vital block generated from its database, on both "
+                + "channels. It can only restrict: no authority in a "
+                + "closed block, beside an occupied block a train could "
+                + "move into, or over a moving switch; no speed above the "
+                + "block's limit; the CTC Office's switch commands obeyed "
+                + "and switches locked under a train; a signal red unless "
+                + "exactly one aspect is lit and its point is clear; a "
+                + "crossing active for a train on or beside it. Every "
+                + "output is held fail-safe only while no program runs: "
+                + "none loaded, a new one not yet scanned, or channels A "
+                + "and B disagreeing, which lasts until a new program is "
+                + "loaded.")
+        }
+    }
+
+    Shared.Panel {
+        Layout.fillWidth: true
+        title: qsTr("Vital block source")
+        bodyPadding: theme.space_4
+
+        Flickable {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 180
+            clip: true
+            contentWidth: vitalText.implicitWidth
+            contentHeight: vitalText.implicitHeight
+
+            Shared.MonoText {
+                id: vitalText
+                text: root.program.vitalSource !== undefined ? root.program.vitalSource : ""
+            }
         }
     }
 }

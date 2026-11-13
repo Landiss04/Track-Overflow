@@ -650,7 +650,7 @@ Item {
                     && card.block.station !== undefined
                 text: card.block && card.block.station
                     ? qsTr("Station: %1").arg(card.block.station)
-                    : qsTr("Station")
+                    : qsTr("Station (no name in the track layout)")
                 color: theme.text_secondary
                 font.family: theme.ui_family
                 font.pixelSize: theme.size_small

@@ -15,6 +15,7 @@ from track_ctrl_hw.errors import (
     TerritoryError,
 )
 from track_ctrl_hw.interface import (
+    BlockRef,
     CtcInputs,
     Suggestion,
     TrackCircuitCommand,
@@ -23,7 +24,7 @@ from track_ctrl_hw.interface import (
 )
 from track_ctrl_hw.plc import Program
 from track_ctrl_hw.territory import parse_territory
-from track_ctrl_hw.wayside import speed_limit_whole_mps
+from track_ctrl_hw.wayside import input_names, speed_limit_whole_mps
 
 from tests.support import inputs, keys, loaded, program_source, territory
 
@@ -66,6 +67,10 @@ class Contract(unittest.TestCase):
                 suggestions={k["3"].ref: Suggestion(32, 2)})),
             replace(inputs(controller), ctc=CtcInputs(
                 switch_commands={k["12"].ref: "sideways"})),  # type: ignore
+            replace(inputs(controller), ctc=CtcInputs(
+                route_requests={k["12"].ref: "sideways"})),  # type: ignore
+            replace(inputs(controller), ctc=CtcInputs(
+                route_requests={k["12"]: "reverse"})),  # type: ignore
             # The CTC Office names blocks by BlockRef, not BlockKey.
             replace(inputs(controller), ctc=CtcInputs(
                 closed_blocks=frozenset({k["3"]}))),  # type: ignore
@@ -184,10 +189,10 @@ class FailSafe(unittest.TestCase):
         self.assertEqual(by_number["3"], TrackCircuitCommand(10, 4))
 
 
-class NothingAboveTheProgram(unittest.TestCase):
-    """The wayside drives the program's outputs as they are."""
+class VitalBlockOverAProgram(unittest.TestCase):
+    """The vital block restricts whatever the program drives."""
 
-    def test_a_closed_block_is_the_programs_to_honour(self) -> None:
+    def test_a_closed_block_gets_no_authority(self) -> None:
         controller = loaded(1, programs=False)
         controller.load_program(
             "1", "VAR_OUT AUTH_3\nAUTH_3 := 1\n", "x.plc"
@@ -195,45 +200,60 @@ class NothingAboveTheProgram(unittest.TestCase):
         _, by_number = circuits(
             controller, closed=["3"], suggestions={"3": (10, 4)},
         )
-        # Authority passes; no CMD_3 output, so speed 0.
-        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 4))
+        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
 
-    def test_the_speed_limit_is_the_programs_to_honour(self) -> None:
+    def test_the_speed_limit_caps_the_program(self) -> None:
+        controller = loaded(1, programs=False)
+        source = "VAR_IN SPD_3_0..4\nVAR_OUT AUTH_3 CMD_3_0..4\n"
+        source += "AUTH_3 := 1\n" + "".join(
+            f"CMD_3_{bit} := SPD_3_{bit}\n" for bit in range(5)
+        )
+        controller.load_program("1", source, "x.plc")
+        # 30 m/s on a 12 m/s block goes out as 12.
+        _, by_number = circuits(controller, suggestions={"3": (30, 4)})
+        self.assertEqual(by_number["3"], TrackCircuitCommand(12, 4))
+
+    def test_no_speed_without_authority(self) -> None:
         controller = loaded(1, programs=False)
         source = "VAR_IN SPD_3_0..4\nVAR_OUT CMD_3_0..4\n" + "".join(
             f"CMD_3_{bit} := SPD_3_{bit}\n" for bit in range(5)
         )
         controller.load_program("1", source, "x.plc")
-        # 30 m/s on a 12 m/s block goes out as sent; AUTH_3 is 0.
-        _, by_number = circuits(controller, suggestions={"3": (30, 4)})
-        self.assertEqual(by_number["3"], TrackCircuitCommand(30, 0))
+        _, by_number = circuits(controller, suggestions={"3": (10, 4)})
+        self.assertEqual(by_number["3"], TrackCircuitCommand(0, 0))
 
-    def test_a_switch_moves_under_a_train_if_the_program_says(self) -> None:
+    def test_a_switch_stays_under_a_train(self) -> None:
         controller = loaded(1, programs=False)
         controller.load_program(
             "1", "VAR_OUT SW_12\nSW_12 := 1\n", "x.plc"
         )
         k = keys(controller)
         out, _ = circuits(controller, occupied=["12", "13"])
-        self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
 
-    def test_a_crossing_follows_the_program(self) -> None:
+    def test_a_crossing_is_active_for_a_train_whatever_the_program(
+        self,
+    ) -> None:
         controller = loaded(1, programs=False)
         controller.load_program("1", "VAR_OUT XING_19\nXING_19 := 0\n",
                                 "x.plc")
         k = keys(controller)
         out, _ = circuits(controller, occupied=["19"])
-        self.assertFalse(out.track_model.crossing_commands[k["19"]])
+        self.assertTrue(out.track_model.crossing_commands[k["19"]])
 
-    def test_signal_outputs_decode_in_a_fixed_order(self) -> None:
+    def test_a_signal_shows_red_unless_exactly_one_aspect_is_lit(
+        self,
+    ) -> None:
         controller = loaded(1, programs=False)
         k = keys(controller)
         for lit, expected in (
             ((), "red"),
-            (("G", "SG"), "green"),
+            (("G", "SG"), "red"),
             (("R", "SG"), "red"),
-            (("Y", "G"), "yellow"),
+            (("Y", "G"), "red"),
             (("SG",), "super_green"),
+            (("G",), "green"),
+            (("Y",), "yellow"),
         ):
             source = "VAR_OUT SIG_12_R SIG_12_Y SIG_12_G SIG_12_SG\n"
             source += "".join(f"SIG_12_{suffix} := 1\n" for suffix in lit)
@@ -247,7 +267,7 @@ class NothingAboveTheProgram(unittest.TestCase):
 
 
 class SamplePrograms(unittest.TestCase):
-    """The protections the wayside no longer applies, in the samples."""
+    """The protections the sample programs apply themselves."""
 
     def test_separation(self) -> None:
         controller = loaded(1)
@@ -355,15 +375,15 @@ class Maintenance(unittest.TestCase):
         wayside = controller.snapshot().waysides[0]
         self.assertEqual(wayside.switch_requests, {k["12"]: "reverse"})
 
-    def test_commands_reach_the_program_as_inputs(self) -> None:
+    def test_ctc_commands_win_over_the_program(self) -> None:
         controller = loaded(1, programs=False)
-        # A program that ignores the CTC Office is not overridden.
+        # A program that ignores the CTC Office is overridden.
         controller.load_program(
             "1", "VAR_IN CTCSW_12\nVAR_OUT SW_12\nSW_12 := 0\n", "x.plc"
         )
         k = keys(controller)
         out, _ = circuits(controller, switch_commands={"12": "reverse"})
-        self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "reverse")
 
     def test_ctc_command_still_locked_under_a_train(self) -> None:
         controller = loaded(1)
@@ -377,6 +397,38 @@ class Maintenance(unittest.TestCase):
         k = keys(controller)
         circuits(controller, switch_commands={"12": "reverse"})
         out, _ = circuits(controller)
+        self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
+
+
+class RouteRequests(unittest.TestCase):
+    FOLLOW = ("VAR_IN REQSW_12 REQREV_12\nVAR_OUT SW_12\n"
+              "SW_12 := REQSW_12 AND REQREV_12\n")
+
+    def test_every_switch_gets_request_inputs(self) -> None:
+        names = input_names(territory(1))
+        self.assertIn("REQSW_12", names)
+        self.assertIn("REQREV_12", names)
+
+    def test_a_program_reads_the_request(self) -> None:
+        controller = loaded(1, programs=False)
+        controller.load_program("1", self.FOLLOW, "follow.plc")
+        k = keys(controller)
+        for requests, expected in (({"12": "reverse"}, "reverse"),
+                                   ({"12": "normal"}, "normal"),
+                                   ({}, "normal")):
+            with self.subTest(requests=requests):
+                out, _ = circuits(controller, route_requests=requests)
+                self.assertEqual(
+                    out.track_model.switch_commands[k["12"]], expected)
+
+    def test_a_request_for_another_line_is_ignored(self) -> None:
+        controller = loaded(1, programs=False)
+        controller.load_program("1", self.FOLLOW, "follow.plc")
+        k = keys(controller)
+        sent = inputs(controller)
+        sent = replace(sent, ctc=replace(
+            sent.ctc, route_requests={BlockRef("Red", "27"): "reverse"}))
+        out = controller.step(0.1, sent)
         self.assertEqual(out.track_model.switch_commands[k["12"]], "normal")
 
     def test_closures_are_named_by_line_and_block(self) -> None:

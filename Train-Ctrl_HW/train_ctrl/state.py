@@ -25,6 +25,9 @@ class State:
     actual_mps: float = 0.0
     commanded_mps: float = 0.0
     target_mps: float = 0.0
+    # The driver's dial setting in Manual. The target is this, capped
+    # at the commanded speed each tick (REQUIREMENTS.md M1).
+    setpoint_mps: float = 0.0
 
     # System time as last received: seconds since midnight of the
     # first simulated day, as utils/system_clock.py counts it, from
@@ -39,6 +42,9 @@ class State:
     # changes only when a new count arrives (REQUIREMENTS.md M16).
     authority_blocks: int = 4
     authority_target: str = "GREEN K"
+    # Whether the Track Signal arrived null on the last update: the
+    # Train Model could not read it (a signal pickup failure).
+    signal_lost: bool = False
 
     power_w: float = 0.0
     service_brake: bool = False

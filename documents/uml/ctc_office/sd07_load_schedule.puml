@@ -6,41 +6,60 @@ autonumber
 actor Dispatcher as D
 box "CTC Office process" #F7F9FC
 participant "AutoDispatchPanel\n(Automatic view)" as UI
+participant "AutomaticView /\nMain.qml" as Main
 participant "CtcHost" as Host
 participant "schedule" as Sch
 participant "StubCtcOffice" as Model
+participant "scheduler" as Plan
 participant "TrackGraph" as G
 participant "AutoDispatcher" as AD
 end box
 
-D -> UI : Load schedule
-UI -> D : file dialog (Schedule files (*.json))
-D -> UI : schedule_v4.json
-UI -> Host : loadSchedule(url)
+D -> UI : "Load schedule".clicked()
+UI -> UI : scheduleDialog.open()
+note right of UI : FileDialog, nameFilters\n"Schedule files (*.json)"
+D -> UI : scheduleDialog.accepted()
+UI -> Main : scheduleFileSelected(selectedFile)
+Main -> Host : loadSchedule(fileUrl)
 Host -> Sch : load_schedule(path)
 alt unreadable or malformed
   Sch --> Host : ScheduleError
-  Host --> UI : "Schedule not loaded: ..."
-  UI -> D : the error; the current schedule is kept
+  Host -> Host : _schedule_error = str(error)
 else parsed
-  Sch --> Host : Schedule(runs, each with line,\nrun number and timed stops)
+  Sch --> Host : Schedule(trains: line, train_id,\ndeparture_s, stops)
   Host -> Model : load_schedule(schedule)
-  Model -> Model : every stop a block of the layout; no run listed\ntwice; train IDs G1.., R1.. unique and valid
+  Model -> Model : _layout.block(line, stop.block_id, ...)
+  Model -> Model : _require_train_id(train_id_for(line, train_id))
+  note right of Model
+    Every run has stops; no run listed twice;
+    every stop a block of the layout; train IDs
+    G1.., R1.. unique and valid.
+  end note
   alt invalid
     Model --> Host : InvalidInputError
-    Host --> UI : "Schedule not loaded: ..."
+    Host -> Host : _schedule_error = str(error)
   else valid
     loop each run
-      Model -> Model : plan_run(run, ...)
-      Model -> G : route from the yard exit (Green 63, Red 9)\nto the nearest scheduled station not yet\nvisited, carrying on the way it goes
-      G --> Model : route
-      Model -> Model : due = 05:00 + departure + run time\n(+ 45 s dwell per stop before)
-      Model -> G : route from the last stop to the yard entry\n(Green 57, Red 9)
+      Model -> Plan : plan_run(run, graph, run_time_s, station_blocks)
+      loop each scheduled station not yet visited
+        Plan -> G : route(here, block_id, came_from=came_from)
+        G --> Plan : route
+      end
+      note right of Plan
+        Starts at YARD_EXITS (Green 63, Red 9); takes the
+        nearest station each time. due += run_time_s(route),
+        then DWELL_S (45 s) per stop.
+      end note
+      Plan -> G : route(here, entry, came_from=came_from)
+      note right of Plan : entry in YARD_ENTRIES (Green 57, Red 9)
+      Plan --> Model : RunPlan
     end
-    Model -> AD : AutoDispatcher(plans):\ntwo-way zones per line
+    Model -> AD : AutoDispatcher(plans)
+    AD -> Plan : two_way_zones(paths), zone_spans(path, zones)
     Model --> Host : ok
-    Host --> UI : scheduleFile, departures
-    UI -> D : DEPARTURES: every run, due time, "Queued"
+    Host -> Host : _schedule_file = path.name;\n_refresh()
   end
 end
+Host -> UI : scheduleChanged()
+UI -> D : SCHEDULE FILE and DEPARTURES (every run,\ndue time, "Queued"), or "Schedule not loaded: ...";\non failure the current schedule is kept
 @enduml

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict
 from typing import Any
 
@@ -29,6 +31,20 @@ def _clock_text(time_s: float) -> str:
             f"{seconds % 60:02d}")
 
 
+def parse_time_of_day(text: str) -> int | None:
+    """Read HH:MM or HH:MM:SS as seconds since midnight, or None."""
+    parts = str(text).strip().split(":")
+    try:
+        numbers = [int(part) for part in parts]
+    except ValueError:
+        return None
+    if (len(numbers) not in (2, 3) or not 0 <= numbers[0] < 24
+            or not all(0 <= n < 60 for n in numbers[1:])):
+        return None
+    hours, minutes, seconds = (numbers + [0])[:3]
+    return hours * 3600 + minutes * 60 + seconds
+
+
 def normalize_block_letter(text: str) -> str:
     """Return the letter of a block typed by the operator.
 
@@ -38,6 +54,15 @@ def normalize_block_letter(text: str) -> str:
     """
     letters = [c for c in str(text) if c.isalpha()]
     return letters[0].upper() if letters else "A"
+
+
+def same_line(a: str, b: str) -> bool:
+    """Whether two names are the same line.
+
+    The bench names a line "GREEN LINE", the harness "Green", so only
+    the first word is compared, in any case.
+    """
+    return a.upper().split()[:1] == b.upper().split()[:1]
 
 
 class ConsoleBackend(QObject):
@@ -63,8 +88,15 @@ class ConsoleBackend(QObject):
     ENGINEER_INDEX = ROLES.index("engineer")
 
     def __init__(self, parent: QObject | None = None, *,
-                 fleet: TrainControllerFleet | None = None) -> None:
+                 fleet: TrainControllerFleet | None = None,
+                 variant: str = "HW", line: str = "",
+                 bench_driven: bool = False) -> None:
         super().__init__(parent)
+        # Which Train Controller this window is, and, under a harness,
+        # the one line whose trains it lists and lets the operator
+        # pick (REQUIREMENTS.md M13). Standalone, every line.
+        self.variant = variant
+        self.line = line
         # Standalone, the console owns its fleet and steps every train
         # with the toy plant. Given the central harness's fleet, the
         # harness adds, removes and steps the trains; the console only
@@ -72,7 +104,8 @@ class ConsoleBackend(QObject):
         self._owns_fleet = fleet is None
         self.fleet = fleet if fleet is not None else TrainControllerFleet()
         self._roster: tuple[str, ...] = tuple(self.fleet.ids())
-        self.selected = self._roster[0] if self._roster else ""
+        shown = [i for i in self._roster if self._on_line(i)]
+        self.selected = shown[0] if shown else ""
         self.notes: dict[str, str] = {}
         self.sim_rate = 1
         self.paused = False
@@ -92,6 +125,7 @@ class ConsoleBackend(QObject):
 
         self.operator: str = ""         # "" | "driver" | "engineer"
         self.gains_note = ""
+        self.gains_pending = False
 
         # Nothing runs until somebody spawns it. This one is never
         # stepped and never shown: it exists so that the snapshot and
@@ -99,7 +133,10 @@ class ConsoleBackend(QObject):
         # rather than every binding needing a null check.
         self.idle = ControllerCore()
 
-        if self._owns_fleet:
+        # Opened by the bench (BenchBackend), the console owns its
+        # fleet but the bench steps it, so both lines share one clock.
+        self._bench_driven = bench_driven
+        if self._owns_fleet and not bench_driven:
             # Precise, because at 10x a tick is every 10 ms.
             self._control = QTimer(self)
             self._control.setTimerType(Qt.TimerType.PreciseTimer)
@@ -169,7 +206,8 @@ class ConsoleBackend(QObject):
             return
         self._roster = ids
         if self.selected not in self.fleet:
-            self.selected = ids[0] if ids else ""
+            shown = [i for i in ids if self._on_line(i)]
+            self.selected = shown[0] if shown else ""
         self.roster_changed.emit()
 
     def _step_all(self) -> None:
@@ -183,15 +221,34 @@ class ConsoleBackend(QObject):
             self._clock_started = any(core.armed for core in self.fleet)
         if self._clock_started:
             self.time_s += TICK_S
+        self.step_fleet(self.time_s)
+
+    def step_fleet(self, time_s: float) -> None:
+        """Step every train once on its simulation, at ``time_s``."""
+        self.time_s = time_s
         inputs = {train_id: sim.outputs()
                   for train_id, sim in self.sims.items()}
-        all_commands = self.fleet.step_all(TICK_S, inputs, self.time_s)
+        all_commands = self.fleet.step_all(TICK_S, inputs, time_s)
         for train_id, commands in all_commands.items():
             self.sims[train_id].step(commands)
             if self._last_commands.get(train_id) != commands:
                 self._last_commands[train_id] = commands
                 self.commands_changed.emit(
                     {"train_id": train_id, **asdict(commands)})
+
+    @contextmanager
+    def viewing(self, train_id: str) -> Iterator[None]:
+        """Point at another train for the length of a with block.
+
+        For the bench, which edits and reads any train while each
+        console stays on the one its operator picked.
+        """
+        kept = self.selected
+        self.selected = train_id
+        try:
+            yield
+        finally:
+            self.selected = kept
 
     @property
     def has_train(self) -> bool:
@@ -252,14 +309,27 @@ class ConsoleBackend(QObject):
         return [{"id": core.state.train_id,
                  "line": core.state.line,
                  "label": f"{core.state.train_id} · {core.state.line}"}
-                for core in self.fleet]
+                for core in self.fleet
+                if self._on_line(core.state.train_id)]
+
+    def _on_line(self, train_id: str) -> bool:
+        # Whether this window may show the train: any, standalone.
+        return not self.line or same_line(
+            self.fleet.get(train_id).state.line, self.line)
 
     @Property("QVariantMap", notify=snapshot_changed)
     def snapshot(self) -> dict[str, Any]:
         """Every value the views read, rebuilt once per UI tick."""
         s = self.core.state
         sim = self.sim
+        module_name = f"{self.variant} Train Controller"
+        line_name = self.line.title()
         return {
+            # The variant and its line, named together (M13).
+            "module_name": module_name,
+            "line_name": line_name,
+            "window_title": (f"{module_name} — {line_name}" if line_name
+                             else module_name),
             "train_id": s.train_id,
             "has_train": self.has_train,
             "train_index": (
@@ -285,9 +355,16 @@ class ConsoleBackend(QObject):
             # Gains are commissioned once per train, so both of these
             # follow that train's controller rather than the console.
             "gains_locked": self.core.armed,
-            "gains_note": self.gains_note,
-            # The system time the controller last received.
-            "clock": _clock_text(s.time_s),
+            "gains_pending": self.gains_pending,
+            # Read from the train itself once armed, so the window
+            # confirms what the controller holds, even when the Pi's
+            # acknowledgement arrived after the press gave up on it.
+            "gains_note": (
+                f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. Fixed for this run."
+                if self.core.armed else self.gains_note
+            ),
+            # The system time the fleet last received, train or not.
+            "clock": _clock_text(self.fleet.time_s),
 
             # Converted here and nowhere else. Keys carry the unit the
             # operator sees, so a reader can tell which side of the
@@ -323,6 +400,8 @@ class ConsoleBackend(QObject):
             "power_vote": self._power_vote(),
             "service_brake": s.service_brake,
             "service_request": s.service_request,
+            # Stopped and held there: a target of 0 at a stand.
+            "holding": s.target_mps <= 0.0 and self.core.at_stand,
             "emergency_brake": s.emergency_brake,
             "brake_note": self.brake_note,
             # Detected and latched by this controller.
@@ -486,7 +565,7 @@ class ConsoleBackend(QObject):
         A train whose gains are not set yet signs the driver out: its
         console stays hidden until the engineer commissions it.
         """
-        if train_id in self.fleet:
+        if train_id in self.fleet and self._on_line(train_id):
             self.selected = train_id
             if self.operator == "driver" and not self.core.armed:
                 self.operator = ""
@@ -519,7 +598,7 @@ class ConsoleBackend(QObject):
         if not 0 <= index < len(SIM_RATES):
             return
         self.sim_rate = SIM_RATES[index]
-        if self._owns_fleet:
+        if self._owns_fleet and not self._bench_driven:
             self._control.setInterval(self._tick_ms())
         self._publish()
 
@@ -551,36 +630,31 @@ class ConsoleBackend(QObject):
 
         Engagement is immediate and unconfirmed, the one exception the
         style guide grants (section 7). Release is refused unless the
-        train is stopped, during a vitality breach, and, with a
-        failure latched, unless it is in Manual. The driver only.
+        train is stopped, and during a vitality breach. The driver
+        only.
         """
         if not self.can_ebrake:
             return
         s = self.core.state
         if not s.emergency_brake:
             self.core.engage_emergency()
-            self.brake_note = (
-                "Emergency brake engaged. "
-                "Release it from the same control."
-            )
+            self.brake_note = "Emergency brake engaged."
         elif self.core.release_emergency():
             self.brake_note = ""
         elif not self.core.at_stand:
             self.brake_note = "Cannot release: the train is still moving."
-        elif s.vital_breach:
+        else:
             self.brake_note = (
                 "Cannot release: waiting for a safe power command.")
-        else:
-            names = ", ".join(FAILURE_TEXT[n] for n in self.core.failed)
-            self.brake_note = f"Release it in Manual: {names} is still active."
         self._publish()
 
     @Slot()
     def toggle_service_brake(self) -> None:
         """Apply or release the driver's service brake request.
 
-        Also under a brake failure, so the driver can try the brake
-        (REQUIREMENTS.md M4).
+        Also under a brake failure, and under the emergency brake, so
+        the driver can try the brake; a press the brake does not answer
+        is dropped (REQUIREMENTS.md M4).
         """
         if not self.can_drive:
             return
@@ -664,19 +738,13 @@ class ConsoleBackend(QObject):
         """
         if not self._owns_fleet:
             return
-        parts = str(text).strip().split(":")
-        try:
-            numbers = [int(part) for part in parts]
-        except ValueError:
-            numbers = []
-        if (len(numbers) not in (2, 3) or not 0 <= numbers[0] < 24
-                or not all(0 <= n < 60 for n in numbers[1:])):
+        seconds = parse_time_of_day(text)
+        if seconds is None:
             self.bench_error = f"time must be HH:MM or HH:MM:SS, not {text!r}"
             self._publish()
             return
-        hours, minutes, seconds = (numbers + [0])[:3]
         day = int(self.time_s // 86400)
-        self.time_s = day * 86400 + hours * 3600 + minutes * 60 + seconds
+        self.time_s = day * 86400 + seconds
         self.bench_error = ""
         self._publish()
 
@@ -765,14 +833,6 @@ class ConsoleBackend(QObject):
         sim.apply(read_inputs(si))
         sim.injected.update(injected)
         sim.at_station = at_station
-        # A brake failure the controller resolves itself, once the
-        # service brake answers again (REQUIREMENTS.md §4). Engine and
-        # signal pickup failures it cannot yet see resolved, so clearing
-        # one on the bench clears it in the controller too
-        # (REQUIREMENTS.md M3, OPEN_ISSUES.md #23).
-        for name, on in injected.items():
-            if not on and name != "brake":
-                self.core.clear_failure(name)
 
     @Slot(float, float)
     def commission_gains(self, kp: float, ki: float) -> None:
@@ -782,22 +842,43 @@ class ConsoleBackend(QObject):
         back to the driver a moment later, so the confirmation can be
         read.
         """
-        if not self.has_train:
+        if not self.has_train or self.gains_pending:
             return
         if self.core.armed or self.operator != "engineer":
             return
+        # Refused, never corrected: the values committed are exactly
+        # the ones the engineer pressed Set gains on.
         if not (math.isfinite(kp) and math.isfinite(ki)):
             self.gains_note = "Kp and Ki must be numbers."
             self._publish()
             return
+        if kp < 0 or ki < 0:
+            self.gains_note = "Kp and Ki cannot be negative."
+            self._publish()
+            return
+        # On the HW train each write below is a round trip to the Pi,
+        # and the window still takes presses while it waits. Pending
+        # greys the button and refuses a second press, which would
+        # otherwise write the gains again.
+        self.gains_pending = True
+        self._publish()
         s = self.core.state
-        s.kp = max(0.0, kp)
-        s.ki = max(0.0, ki)
-        self.core.integral = 0.0
-        self.core.armed = True
-        self.gains_note = (
-            f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. Fixed for this run."
-        )
+        try:
+            s.kp = kp
+            s.ki = ki
+            self.core.integral = 0.0
+            self.core.armed = True
+        except (ConnectionError, ValueError):
+            # The Pi did not acknowledge, or refused. Arming is the
+            # last write, so the gains are set only if it landed.
+            if not self.core.armed:
+                self.gains_note = ("The train did not confirm the gains. "
+                                   "Press Set gains again.")
+                return
+        finally:
+            self.gains_pending = False
+            self._publish()
+        self.gains_note = ""
         train_id = self.selected
         QTimer.singleShot(GAINS_HANDOVER_MS,
                           lambda: self._retire_engineer(train_id))
@@ -817,10 +898,9 @@ class ConsoleBackend(QObject):
     def _tick(self) -> None:
         self._sync_roster()
         if self.core.state.emergency_brake and not self.brake_note:
-            self.brake_note = (
-                "Emergency brake engaged. "
-                "Release it from the same control."
-            )
+            reason = self.core.stop_reason
+            self.brake_note = (f"Emergency brake engaged: {reason} detected."
+                               if reason else "Emergency brake engaged.")
         self._publish()
 
     def _publish(self) -> None:

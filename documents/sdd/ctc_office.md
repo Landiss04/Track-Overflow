@@ -21,6 +21,7 @@ only what is specific to the CTC Office.
 | Name | Date | Reason for changes | Version |
 |---|---|---|---|
 | Landis | 2026-10-22 | First CTC Office contribution, following the Track Controller (HW) contribution's layout. | 0.1 |
+| Landis | 2026-10-25 | Sequence diagrams name the signals and method calls; Cancel order removed from Selected train (UC-02, UC-05, UC-06, SD-05, SD-13). | 0.2 |
 
 ## References
 
@@ -158,7 +159,7 @@ stories cover every use case.
 | **Description** | Chooses Automatic, Manual or Maintenance mode. |
 | **Data** | One mode at a time. |
 | **Stimulus** | OPERATING MODE toggle in the header. |
-| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train, and reroute, cancel or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
+| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train, and reroute or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
 | **Requirements** | Rubric 2.2; REQ-FUNC-006, 007, 008 |
 | **Sequence** | SD-02 |
 
@@ -168,7 +169,7 @@ stories cover every use case.
 |---|---|
 | **Actors** | Dispatcher |
 | **Description** | Orders a train to a station of its line, with an optional arrival time. |
-| **Data** | Line; train: one already on the line, or **New train (T*n*)** with the next free ID; destination station (the line's station blocks); arrival `HH:MM`, optional. |
+| **Data** | Line; train: one already on the line, or **New train (G*n* or R*n*)** with the line's initial and the next free number, skipping the loaded schedule's runs; destination station (the line's station blocks); arrival `HH:MM`, optional. |
 | **Stimulus** | **Dispatch train** (Manual view). It reads **Reroute train** when the train already has an order. |
 | **Response** | The order is recorded, replacing any earlier one. A new train waits in the yard until the CTC Office releases it (UC-20). From then on the train gets authority toward the station every step (UC-21). The panel shows the suggested speed and authority sent for it. The arrival time ranks the train for contested blocks: the train most behind schedule goes first. |
 | **Alternatives** | Refused with a message, and nothing changes: the line's waysides are not all ready (the message names the wayside and why); the destination is closed or closing; the train is on the other line; the train ID is empty, unprintable or longer than 32 characters; the arrival is not a time of day. A destination the CTC Office takes for a failure is accepted: the train waits short of it until it clears. |
@@ -188,16 +189,16 @@ stories cover every use case.
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-04 |
 
-### UC-05 Reroute or cancel a train's order
+### UC-05 Reroute a train
 
 | | |
 |---|---|
 | **Actors** | Dispatcher |
-| **Description** | Changes where the selected train is going, or withdraws its order. |
-| **Data** | Train; new destination. |
-| **Stimulus** | **Reroute** or **Cancel order** in Selected train (Manual mode). |
-| **Response** | A reroute replaces the order; the route is worked out again from where the train is, carrying on the way it is going. A cancel drops the order, so the train's authority is 0 from the next step and it stops. |
-| **Alternatives** | A reroute is refused as UC-03 refuses. |
+| **Description** | Changes where the selected train is going. The dispatcher cannot withdraw a train's order. |
+| **Data** | Train; new destination; arrival time (optional). |
+| **Stimulus** | A new destination, then **Reroute** in Selected train (Manual mode). |
+| **Response** | The new order replaces the old one; the route is worked out again from where the train is, carrying on the way it is going. |
+| **Alternatives** | Refused as UC-03 refuses. |
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-05 |
 
@@ -209,8 +210,8 @@ stories cover every use case.
 | **Description** | Sends a manual train on the track back to the yard, where it is retired (D022). |
 | **Data** | Train. |
 | **Stimulus** | **Return to yard** in Selected train (Manual mode). |
-| **Response** | An order to the line's yard entry block (Green 57, Red 9). Once the train has stopped there with authority 0 it is retired (UC-20). A later order or a cancel withdraws it. |
-| **Alternatives** | Refused for a train not on the track (cancel its order instead), for a run of the loaded schedule (the schedule returns it), and as UC-03 refuses. |
+| **Response** | An order to the line's yard entry block (Green 57, Red 9). Once the train has stopped there with authority 0 it is retired (UC-20). A later order withdraws it. |
+| **Alternatives** | Refused for a train not on the track, for a run of the loaded schedule (the schedule returns it), and as UC-03 refuses. |
 | **Requirements** | D022 |
 | **Sequence** | SD-06 |
 
@@ -385,7 +386,7 @@ stories cover every use case.
 | **Description** | Lets trains out of the yard and takes them back (D022). |
 | **Data** | `new_trains`: train ID and line; `retired_trains`: train ID. Each appears in exactly one step's outputs. |
 | **Stimulus** | Every step. |
-| **Response** | Release: per line, one train at a time, the waiting train most behind schedule first, and only when every wayside on the line is ready, the yard exit block is clear and not closed or closing, no train is authorized into it, and the scheduler is not holding the run. The harness adds the train to the Train Model and the line's Train Controller at the yard exit block. Retire: a train sent to the yard that has stopped at the yard entry block (Green 57, Red 9) with authority 0 at its destination. The harness removes it; its block clears; its run is done and its order dropped. |
+| **Response** | Release: per line, one train at a time, the waiting train most behind schedule first, and only when every wayside on the line is ready, the yard exit block is clear and not closed or closing, no train is authorized into it, the blocks next to it are clear with no train authorized into them (a wayside may hold a train next to another), and the scheduler is not holding the run. The harness adds the train to the Train Model and the line's Train Controller at the yard exit block. Retire: a train sent to the yard that has stopped at the yard entry block (Green 57, Red 9) with authority 0 at its destination. The harness removes it; its block clears; its run is done and its order dropped. |
 | **Requirements** | Rubric 2.0; REQ-FUNC-004; D022 |
 | **Sequence** | SD-20 |
 
@@ -480,9 +481,9 @@ Design choices:
 |---|---|
 | Route | Shortest route a train can run, on a graph built from each block's `next_blocks` and each switch's two legs. It never turns a train back: each route carries on from the block the train came from. It goes round closed, closing and failed blocks and trains that are not moving, preferring a way round both, then round unusable blocks only, then the shortest route, on which the train waits. No detour more than twice the shortest is taken. When only reversing would get round, the train waits and the dispatcher is alerted. |
 | Switches | Outside maintenance mode the CTC Office never commands a switch. Authority stops at the block before a switch not reported set for the route, and grows once the wayside sets it. |
-| Authority | Blocks ahead of the train's head block along its route, to the destination, ending before the first block that is occupied, closed, closing, failed or within another train's authority, or before a switch not set. |
+| Authority | Blocks ahead of the train's head block along its route, to the destination, ending before the first block that is closed, closing or within another train's authority, two blocks before the first that is occupied or failed (one empty block between trains), or before a switch not set. |
 | Contested blocks | A block no train holds yet goes to the train most behind schedule: the least slack between its requested arrival and the time it needs at each block's limit. A train with no arrival comes after; ties go to the lower ID. |
-| Suggested speed | The block's limit in m/s, rounded down, less 1 m/s; never more than √(2 × 1.2 m/s² × d), d being the length within authority; 0 at authority 0. The next block's value is worked out for that block, with one block less. |
+| Suggested speed | The block's limit in m/s, rounded down, less 1 m/s; never more than the speed a full train can stop from within its authority, √(Σ 2 × a × d) over the blocks within it, d being a block's length and a the service brake's 1.06 m/s² on a full train, less g × sin(slope) downhill and more uphill; 0 at authority 0. The next block's value is worked out for that block, with one block less. |
 | Tracking | UC-18. |
 | Automatic dispatch | UC-19. Track order is a first approach and may change. |
 | Yard | UC-20. |
@@ -593,7 +594,7 @@ whole step, refers to the diagrams of the use cases it includes.
 | SD-02 | UC-02 Change operating mode |
 | SD-03 | UC-03 Dispatch a train to a station |
 | SD-04 | UC-04 Dispatch a train to a block |
-| SD-05 | UC-05 Reroute or cancel a train's order |
+| SD-05 | UC-05 Reroute a train |
 | SD-06 | UC-06 Return a train to the yard |
 | SD-07 | UC-07 Load a schedule |
 | SD-08 | UC-08 Monitor and pause automatic dispatch |
@@ -630,7 +631,7 @@ whole step, refers to the diagrams of the use cases it includes.
 
 ![SD-04](../uml/ctc_office/sd04_dispatch_block.png)
 
-### SD-05 Reroute or cancel a train's order
+### SD-05 Reroute a train
 
 ![SD-05](../uml/ctc_office/sd05_reroute_cancel.png)
 

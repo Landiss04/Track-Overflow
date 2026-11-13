@@ -197,6 +197,7 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
         "ctc": {
             "closed_blocks": _set_to_wire(ctc.closed_blocks),
             "switch_commands": _map_to_wire(ctc.switch_commands, str),
+            "route_requests": _map_to_wire(ctc.route_requests, str),
             "suggestions": _map_to_wire(
                 ctc.suggestions, _suggestion_to_wire
             ),
@@ -213,10 +214,12 @@ def inputs_to_wire(inputs: TrackControllerInputs) -> dict[str, Any]:
 def inputs_from_wire(value: Any) -> TrackControllerInputs:
     """Read one tick of inputs, rejecting anything not exactly right."""
     top = _object(value, "inputs", {"time_s", "ctc", "track_model"})
-    ctc = _object(
-        top["ctc"], "inputs.ctc",
-        {"closed_blocks", "switch_commands", "suggestions"},
-    )
+    # ``route_requests`` is accepted when sent and defaults to none when a
+    # sender that predates it leaves it out; every other key is exact.
+    ctc_keys = {"closed_blocks", "switch_commands", "suggestions"}
+    if isinstance(top["ctc"], dict) and "route_requests" in top["ctc"]:
+        ctc_keys.add("route_requests")
+    ctc = _object(top["ctc"], "inputs.ctc", ctc_keys)
     model = _object(
         top["track_model"], "inputs.track_model",
         {"occupied_blocks", "switch_positions", "crossings_active",
@@ -230,6 +233,10 @@ def inputs_from_wire(value: Any) -> TrackControllerInputs:
             ),
             switch_commands=_map_from_wire(
                 ctc["switch_commands"], "inputs.ctc.switch_commands",
+                _position,
+            ),
+            route_requests=_map_from_wire(
+                ctc.get("route_requests", []), "inputs.ctc.route_requests",
                 _position,
             ),
             suggestions=_map_from_wire(

@@ -14,9 +14,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from ctc.interface import CtcInputs, TrackedTrain  # noqa: E402
+from ctc.interface import (  # noqa: E402
+    CtcInputs,
+    SwitchReport,
+    TrackedTrain,
+)
 from ctc.model import StubCtcOffice  # noqa: E402
-from tests.occupancy import ready_office, reports  # noqa: E402
+from tests.occupancy import own_block, ready_office, reports  # noqa: E402
 
 
 def _occupied(ctc: StubCtcOffice, *blocks: str, line: str = "Green",
@@ -37,8 +41,10 @@ def _authority(ctc: StubCtcOffice, train_id: str = "T1"):
 
 
 class YardTest(unittest.TestCase):
-    """A train leaves the yard when the yard exit block becomes
-    occupied: Green 63, Red 9."""
+    """A train the CTC has released leaves the yard when the yard exit
+    block becomes occupied: Green 63, Red 9. The CTC releases a waiting
+    train on a step when its exit block is clear (D022), so it is found
+    there on a later step."""
 
     def test_leaves_into_the_exit_block(self) -> None:
         for line, exit_block, destination in (("Green", "63", "70"),
@@ -58,6 +64,7 @@ class YardTest(unittest.TestCase):
         ctc.dispatch("T2", "Green", "70", arrival_s=9 * 3600)
         ctc.dispatch("T3", "Green", "70", arrival_s=8 * 3600)
         ctc.dispatch("T4", "Red", "7", arrival_s=5 * 3600)
+        _occupied(ctc)                      # T3 is released
         _occupied(ctc, "63")
         self.assertEqual(_where(ctc), {"T3": ("63",)})
 
@@ -65,6 +72,7 @@ class YardTest(unittest.TestCase):
         ctc = ready_office()
         ctc.dispatch("T2", "Green", "70")
         ctc.dispatch("T1", "Green", "70")
+        _occupied(ctc)                      # T1 is released
         _occupied(ctc, "63")
         self.assertEqual(_where(ctc), {"T1": ("63",)})
 
@@ -103,6 +111,7 @@ class MovingTest(unittest.TestCase):
         # Green 63 to 70: 63 is 100 m long, limited to 70 km/h.
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "70")
+        _occupied(ctc)                      # T1 is released
         _occupied(ctc, "63")
         return ctc
 
@@ -114,7 +123,8 @@ class MovingTest(unittest.TestCase):
         # Authority is counted from its head, and the Track Controller
         # is told to send it down the head's block.
         self.assertEqual(_authority(ctc).route[0], "64")
-        (suggestion,) = ctc.snapshot().outputs.track_controller.suggestions
+        suggestion = own_block(
+            ctc.snapshot().outputs.track_controller.suggestions)
         self.assertEqual((suggestion.line, suggestion.block_id),
                          ("Green", "64"))
         _occupied(ctc, "64")
@@ -146,32 +156,122 @@ class MovingTest(unittest.TestCase):
         _occupied(ctc, "63", "64")
         self.assertEqual(_where(ctc), {"T1": ("63",)})
 
+    def _running_into_a_closure(self) -> StubCtcOffice:
+        # T1 running 30 to 37; 31 closes when it is too late to stop.
+        ctc = ready_office()
+        ctc.place_train("T1", "Green", "30")
+        ctc.dispatch("T1", "Green", "37")
+        _occupied(ctc, "30", steps=20)
+        ctc.set_maintenance_mode(True)
+        ctc.set_block_closed("Green", "31", True)
+        _occupied(ctc, "30")
+        self.assertEqual(_authority(ctc).blocks, 0)
+        return ctc
+
+    def test_a_train_too_late_to_stop_is_followed_on(self) -> None:
+        ctc = self._running_into_a_closure()
+        # Nothing says it is T1 until T1's own block clears.
+        _occupied(ctc, "30", "31")
+        self.assertEqual(_where(ctc), {"T1": ("30",)})
+        _occupied(ctc, "31")
+        self.assertEqual(_where(ctc), {"T1": ("31",)})
+        self.assertEqual(ctc.snapshot().lost_trains, ())
+        # Reopened, it carries on under its own name.
+        ctc.set_block_closed("Green", "31", False)
+        _occupied(ctc, "31")
+        self.assertGreater(_authority(ctc).blocks, 0)
+
+    def test_a_failure_ahead_of_a_standing_train_stays_a_failure(
+            self) -> None:
+        # T1 stays in 30, so what is in 31 is not T1.
+        ctc = self._running_into_a_closure()
+        _occupied(ctc, "30", "31", steps=60)
+        self.assertEqual(_where(ctc), {"T1": ("30",)})
+        self.assertEqual(ctc.snapshot().lost_trains, ())
+
+    def test_a_train_past_its_destination_is_followed_on(self) -> None:
+        # T1 stops at 31, but does not manage it and runs on into 32.
+        ctc = ready_office()
+        ctc.place_train("T1", "Green", "30")
+        ctc.dispatch("T1", "Green", "31")
+        _occupied(ctc, "30", steps=20)
+        _occupied(ctc, "30", "31")
+        _occupied(ctc, "31", steps=2)
+        _occupied(ctc, "31", "32")
+        _occupied(ctc, "32")
+        self.assertEqual(_where(ctc), {"T1": ("32",)})
+        self.assertEqual(ctc.snapshot().lost_trains, ())
+
     def test_unexplained_occupancy_is_a_failure(self) -> None:
         ctc = self._out_of_the_yard()
         _occupied(ctc, "63", "67")
         self.assertEqual(_where(ctc), {"T1": ("63",)})
         limit = _authority(ctc)
         self.assertEqual((limit.blocks, limit.reason, limit.at),
-                         (3, "occupied", "67"))
+                         (2, "occupied", "67"))
 
     def test_a_faster_past_counts(self) -> None:
-        # T1 runs 2 s at 18 m/s; then a train standing on 65 cuts its
-        # authority to 64 and its suggested speed to 15 m/s. 64 becomes
-        # occupied a second later: 3 s in, too soon at 15 m/s (it would
-        # need 3.3 s for half of 63's 100 m), but T1 may well have gone
-        # 54 m by then. That is T1, not a failure.
+        # T1 runs 2 s at 18 m/s; then a train standing on 66 cuts its
+        # authority to 64 and its suggested speed to 11 m/s. 64 becomes
+        # occupied a second later: 3 s in, too soon at 11 m/s (it would
+        # need 4.5 s for half of 63's 100 m), but T1 may well have gone
+        # 47 m by then. That is T1, not a failure.
         ctc = ready_office()
         ctc.dispatch("T1", "Green", "80")
         ctc.place_train("T1", "Green", "63")
         _occupied(ctc, "63", dt=0.1)
-        self.assertEqual(ctc.snapshot().outputs.track_controller
-                         .suggestions[0].suggested_speed_mps, 18)
-        ctc.place_train("T2", "Green", "65")
-        _occupied(ctc, "63", "65", dt=2.0)
-        self.assertEqual(ctc.snapshot().outputs.track_controller
-                         .suggestions[0].suggested_speed_mps, 15)
-        _occupied(ctc, "63", "64", "65", dt=1.0)
+        self.assertEqual(own_block(ctc.snapshot().outputs.track_controller
+                                   .suggestions).suggested_speed_mps, 18)
+        ctc.place_train("T2", "Green", "66")
+        _occupied(ctc, "63", "66", dt=2.0)
+        self.assertEqual(own_block(ctc.snapshot().outputs.track_controller
+                                   .suggestions).suggested_speed_mps, 11)
+        _occupied(ctc, "63", "64", "66", dt=1.0)
         self.assertEqual(_where(ctc)["T1"], ("63", "64"))
+
+
+class OverrunAtASwitchTest(unittest.TestCase):
+    """A train that runs past its stop onto a switch's points block,
+    and on past it, is followed the way the track leads it."""
+
+    @staticmethod
+    def _red(ctc: StubCtcOffice, *blocks: str, steps: int = 1,
+             position: str = "normal") -> None:
+        for _ in range(steps):
+            ctc.step(1.0, reports(
+                occupied=[("Red", b) for b in blocks],
+                switches=[SwitchReport("Red", "15", position)]))
+
+    def test_trailing_through_the_points(self) -> None:
+        # R3 of 2026-11-09: in by 15 to its stop at 16, and on into 17.
+        # Block 1 joins 16 at the end the train came in by.
+        ctc = ready_office()
+        ctc.place_train("T1", "Red", "15")
+        ctc.dispatch("T1", "Red", "16")
+        self._red(ctc, "15", steps=20)
+        self._red(ctc, "15", "16")
+        self._red(ctc, "16", steps=2)
+        self._red(ctc, "16", "17")
+        self._red(ctc, "17")
+        self.assertEqual(_where(ctc), {"T1": ("17",)})
+        self.assertEqual(ctc.snapshot().lost_trains, ())
+
+    def test_facing_the_points_it_goes_where_the_switch_is_set(
+            self) -> None:
+        # In by 17 to 16, facing switch 15: on to 15 when it reports
+        # normal, to 1 when it reports reverse.
+        for position, onward in (("normal", "15"), ("reverse", "1")):
+            with self.subTest(position=position):
+                ctc = ready_office()
+                ctc.place_train("T1", "Red", "17")
+                ctc.dispatch("T1", "Red", "16")
+                self._red(ctc, "17", steps=20, position=position)
+                self._red(ctc, "17", "16", position=position)
+                self._red(ctc, "16", steps=2, position=position)
+                self._red(ctc, "16", onward, position=position)
+                self._red(ctc, onward, position=position)
+                self.assertEqual(_where(ctc), {"T1": (onward,)})
+                self.assertEqual(ctc.snapshot().lost_trains, ())
 
 
 class LostTest(unittest.TestCase):

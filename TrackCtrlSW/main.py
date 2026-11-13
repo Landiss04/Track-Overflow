@@ -17,12 +17,13 @@ from track_ctrl.qtenv import add_qt_dll_directory
 add_qt_dll_directory()
 
 from PySide6.QtCore import QUrl  # noqa: E402  must follow the DLL fix
-from PySide6.QtGui import QFont, QGuiApplication  # noqa: E402
+from PySide6.QtGui import QFont, QGuiApplication, QWindow  # noqa: E402
 from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
 
 from track_ctrl.link import StimulusServer  # noqa: E402
 from track_ctrl.state import TrackControllerState  # noqa: E402
 from track_ctrl.theme import build_theme  # noqa: E402
+from ui.aspect_lock import install_window_scaling  # noqa: E402
 
 _MAIN_QML = Path(__file__).resolve().parent / "ui" / "Main.qml"
 
@@ -75,9 +76,12 @@ def main() -> int:
     context.setContextProperty("wayside", state)
 
     engine.load(QUrl.fromLocalFile(str(_MAIN_QML)))
-    if not engine.rootObjects():
+    roots = engine.rootObjects()
+    if not roots or not isinstance(roots[0], QWindow):
         print("Failed to load QML views.", file=sys.stderr)
         return 1
+    # Holds the window at 16:10 while it is dragged; keep it alive.
+    window_scaling = install_window_scaling(roots[0])  # noqa: F841
 
     exit_code = app.exec()
     if link is not None:

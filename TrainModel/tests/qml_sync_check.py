@@ -128,7 +128,7 @@ def main():
     QTest.qWait(10)
     assert editor.property("text") == "0"
     assert not power_row.property("pending")
-    assert state.snapshot["clock"] == harness.elapsed == "00:00:00"
+    assert state.snapshot["clock"] == harness.elapsed == "05:00:00"
     # Reset returns to the starting values on the first block of the
     # Blue Line: 50 km/h, flat, commanded at the speed limit.
     for name, unit, value in [

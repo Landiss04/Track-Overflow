@@ -19,7 +19,9 @@ ScaledWindow {
 
     readonly property var s: controller.snapshot
 
-    title: qsTr("HW Train Controller")
+    // "SW Train Controller — Green Line" or "HW Train Controller — Red
+    // Line" under a harness; standalone, the variant alone (M13).
+    title: window.s.window_title
 
     ColumnLayout {
         anchors.fill: parent
@@ -32,7 +34,8 @@ ScaledWindow {
         // the persistent fault badge an active emergency brake requires.
         ConsoleHeader {
             Layout.fillWidth: true
-            moduleName: qsTr("HW Train Controller")
+            moduleName: window.s.module_name
+            line: window.s.line_name
             instance: window.s.has_train ? window.s.train_id : ""
             mode: window.s.has_train ? window.s.mode_label : ""
             clock: window.s.clock
@@ -64,14 +67,22 @@ ScaledWindow {
             SignInView {}
             ConsoleView {}
 
-            // Nothing runs until a train is spawned, and spawning is
-            // the test bench's job, so the console says so and waits.
+            // Nothing runs until a train exists: the test bench spawns
+            // it standalone, the CTC Office dispatches it under a
+            // harness, onto this window's line.
             Item {
                 EmptyState {
                     anchors.centerIn: parent
-                    heading: qsTr("No train selected")
-                    body: qsTr("Spawn one on the test bench, then pick it "
+                    heading: window.s.line_name === ""
+                        ? qsTr("No train selected")
+                        : qsTr("Waiting for a %1 train")
+                            .arg(window.s.line_name)
+                    body: window.s.line_name === ""
+                        ? qsTr("Spawn one on the test bench, then pick it "
                                + "from Current selected train above.")
+                        : qsTr("Dispatch one from the CTC Office, then "
+                               + "pick it from Current selected train "
+                               + "above.")
                 }
             }
         }

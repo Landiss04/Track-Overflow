@@ -1,7 +1,7 @@
 # PAAC North Shore Extension — Module Requirements Matrix
 
 Source: `Final Project vF.pdf` (course slide deck, 81 slides).
-**Scope note:** The Moving Block Overlay (MBO) module — both the MBO Controller and the MBO Scheduler — is **out of scope** for this implementation. Every requirement that originally depended on the MBO is called out below in [Section 4](#4-scope-gaps-created-by-dropping-mbo), since dropping it removes some requirements outright and silently transfers others onto remaining modules.
+**Scope note:** The Moving Block Overlay (MBO) module — both the MBO Controller and the MBO Scheduler — is **out of scope** for this implementation. Every requirement that originally depended on the MBO is called out below in [Section 4](#4-points-of-tension--conflicts), since dropping it removes some requirements outright and silently transfers others onto remaining modules.
 
 Legend: 🔴 **VITAL** = safety-critical per the deck's definition ("in the railroad and transit industry 'vital' means 'safety critical'"). 🟡 = tension/conflict flagged in Section 3.
 
@@ -28,15 +28,36 @@ This is pulled out as its own section, ahead of the general requirements, becaus
 | **Primary role** | Simulated physical model of the track layout | Simulated physical model of a train's dynamics | 🔴 Vital wayside controller that governs a section of track | 🔴 Vital onboard controller that governs a train | Dispatcher-facing central control point for the whole system |
 | **Vital?** | No (physical sim, not a controller) | No (physical sim, not a controller) | 🔴 **Yes** — explicitly stated | 🔴 **Yes** — explicitly stated | Not stated vital, but issues authority that vital controllers rely on |
 | **Configuration / data model** | See §1 | See §1 | See §1 | See §1 | See §1 |
-| **Inputs it receives** | Switch position commands, signal/light commands from Track Controller | Authority (distance) from Wayside Controller; setpoint speed; brake command; speed/accel/decel limits; route info; temp control; door open/close; transponder input; track circuit input; tunnel light control; passenger e-brake | Authority & speed limits from CTC Office | Track signal (decoded for speed limit + authority); setpoint command from Transit Operator/driver | Dispatcher inputs (schedule, routing, section open/close, authority) |
+| **Inputs it receives** | Switch position commands, signal/light commands from Track Controller | Track Model terrain, commanded speed and authority (integer blocks); beacon and boarding events; Train Controller power, separate brake commands, release, lights, doors, temperature and announcement; passenger brake action | Authority & speed limits from CTC Office | Track signal (decoded for speed limit + authority); setpoint command from Transit Operator/driver | Dispatcher inputs (schedule, routing, section open/close, authority) |
 | **Outputs it produces** | Track circuit signal (occupancy), signal/switch state, presence detection to Track Controller | Physical train state (position, velocity) consumed by Track Model | Commanded speed, authority, switch positions, lights → Track Model; switching of track; crossing lights/cross-bar; state of track/crossing/signals/trains reported back to CTC | Regulated speed to train; door/light control; station announcements; fault handling | Suggested speed & authority to controllers; throughput metrics; system-wide state display |
-| **Failure modes to model** | Broken rail, track circuit failure, power failure | Train engine failure, signal pickup failure, brake failure (wheel slippage/power consumption optional) | Must **detect** broken rails and report track/crossing/train/signal state | Must **monitor for faults and act safely** | (not specified) |
+| **Failure modes to model** | Broken rail, track circuit failure, power failure | Engine failure; pickup failure (commanded speed/authority zero, terrain unaffected); service brake failure only. Wheel slip is outside selected scope | Must **detect** broken rails and report track/crossing/train/signal state | Must **monitor for faults and act safely** | (not specified) |
 | **Detection responsibilities** | Track circuits for **presence detection** (physical shorting of the circuit) | — | **Detects presence of trains**, detects broken rails (consumes Track Model's physical signal) | Decodes track signal for speed limit/authority | Monitors trains system-wide |
 | **Diverse/redundant implementation** | Not required | Not required | 🟡 **Required** — "implementation must be diverse" for the PLC program vs. controller | Not explicitly required, but same vital bar applies | Not required |
-| **Extra domain features** | Railway crossings; stations for loading/unloading; power limitations; track heater | Terrain-aware Newtonian point-mass dynamics; light controller for tunnels | Controls railway crossing gates + lights | Announces stations, opens/closes doors, on/off lights on schedule | Schedule trains, route trains, open/close sections for maintenance |
+| **Extra domain features** | Railway crossings; stations for loading/unloading; power limitations; track heater | Terrain-aware Newtonian dynamics; applies lighting/door commands, with control and interlocks owned by Train Controller | Controls railway crossing gates + lights | Announces stations, opens/closes doors, on/off lights on schedule | Schedule trains, route trains, open/close sections for maintenance |
 | **UI (NFR, all modules)** | Required | Required | Required (separately for HW and SW instances — see §4.3) | Required (separately for HW and SW instances — see §4.3) | Required — must display current state of entire system |
 
 ---
+
+### Train Model interpretation and traceability (October 20, 2026)
+
+The [reviewed SDD v0.2](Railway_Sim_SDD_Train_Model.md) defines accepted design;
+[implementation follow-up](../TrainModel/docs/open-issues.md) records inspected
+working-tree behavior. New truth proposals await human promotion.
+
+| Requirement / rubric | Reviewed interpretation |
+|---|---|
+| REQ-FUNC-039 | Fixed external dt; retain exact constant-force segments, midpoint power-limited integration, stopping/regime boundaries and commanded-work accounting. 480 kW confirmed; existing rolling resistance is the only passive term. |
+| REQ-FUNC-040, REQ-FUNC-041.1/041.2 | Display physical properties/occupants per selected train. Fleet supplies ID/line; keep station/platform; omit arrival. Offset references the front. Track Model owns station-only boarding events; Train Model checks rest/doors/count/capacity. |
+| REQ-FUNC-042 | Track circuit carries downstream commanded speed and integer block authority (D013), rather than CTC suggested speed or distance authority. Pickup failure outputs zero for both. |
+| REQ-FUNC-043/044/045 | Temperature, lights and doors follow controller commands. Train Controller owns door interlock. |
+| REQ-FUNC-046 | Current-tick typed beacon, None between ticks; controller retains prior data. Complete canonical compact ASCII JSON array, maximum 128 characters including syntax/escapes, no truncation. |
+| REQ-FUNC-047; rubric §5.9; REQ-FUNC-029/039 | Passenger latch is released only through controller one-shot release, without canceling a held controller emergency command. Independent service/emergency engagement sums configured forces; service failure blocks service only. No window release action. |
+| REQ-FUNC-048.1/048.2/048.3 | Independent engine, pickup and service-brake failures, with effects defined above; explicit failure-status output is withdrawn. |
+| REQ-INTF-013/014; REQ-NFR-002; REQ-DSN-004/005 | One harness-owned clock, separate processes, direct mappings between module-owned types (D005/D008), same dt at 1x/10x. Display harness time; independent train epoch plus accepted elapsed time checked every 15 harness ticks including rejected trains at 1e-6 s tolerance. |
+
+Existing tests are local developer verification utilities. Product actor/use case
+inventories exclude the developer test utility. No new requirement IDs are invented
+for rubric §5.9’s service-brake item.
 
 ## 3. Cross-Cutting / Non-Functional Requirements (apply to every module)
 
@@ -71,9 +92,9 @@ The Track Controller requirement explicitly demands the PLC program be "specifia
 - **Recommendation:** Explicitly scope how much diversity is required (e.g., diverse PLC logic implementations behind a common interface vs. full diverse hardware/software stacks with voting), and decide if the Train Controller needs the same treatment — the deck only states diversity for the Track Controller, but both are marked vital.
 
 ### 4.4 🟡 10× real-time speed requirement vs. control-law timing assumptions
-The Train Controller's control law is derived as a discrete-time PI controller with an explicit sample period `T` (trapezoidal integration, `u_k = u_k-1 + T/2(e_k + e_k-1)`), and the Track Model has time-based elements (crossing gate timing, track heater, PLC scan timing). Running the whole system at ≥10× wall-clock speed changes the effective `T` seen by every timed component. If Train Model/Controller, Track Controller PLC logic, and CTC scheduling don't all scale `T` consistently under fast-forward, you risk instability in the control loop or desynchronized crossing/signal timing that wasn't caught until integration — precisely the failure mode called out in the retrospective slides ("integration takes MUCH longer than expected").
+The Train Controller's control law is derived as a discrete-time PI controller with an explicit sample period `T` (trapezoidal integration, `u_k = u_k-1 + T/2(e_k + e_k-1)`), and the Track Model has time-based elements (crossing gate timing, track heater, PLC scan timing). The shared simulation dt remains fixed at 1x/10x; fast-forward changes wall-clock tick frequency, not the physical sample duration (D006/D017). If Train Model/Controller, Track Controller PLC logic, and CTC scheduling do not all consume the fixed simulation dt consistently, you risk instability in the control loop or desynchronized crossing/signal timing that wasn't caught until integration — precisely the failure mode called out in the retrospective slides ("integration takes MUCH longer than expected").
 - **Affected modules:** Train Model, Train Controller, Track Model, Track Controller.
-- **Recommendation:** Define one shared simulation clock/tick contract up front (owned by whichever module drives time), and derive each module's control constants from it rather than hardcoding assumptions about wall-clock `T`.
+- **Resolved:** D005/D017 assign the one shared clock to the harness; modules consume its fixed dt and unwrapped simulation time through their process boundary. Do not scale dt with wall-clock speed.
 
 ### 4.5 🟡 Producer/consumer failure-mode pairs need a defined fault-injection contract
 Track Model owns simulating failures (broken rail, track circuit failure, power failure) that Track Controller must *detect*; Train Model owns simulating failures (engine, signal pickup, brake) that Train Controller must *monitor and act on*. The architecture diagram's "Murphy" actor injecting faults directly into Track Model/Train Model reinforces this split, but no interface is specified for how a simulated fault becomes an observable signal to the corresponding controller.

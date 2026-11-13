@@ -106,8 +106,7 @@ Rectangle {
 
         MonoText {
             text: root.snapshot.clock
-            font.pixelSize: theme.size_h2
-            font.weight: theme.weight_bold
+            color: theme.text_muted
         }
     }
 }

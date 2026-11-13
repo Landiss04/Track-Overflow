@@ -79,8 +79,10 @@ other:
   its inputs again.
 - **Outputs** update live from the module, in display units (mph): what
   the CTC sends the Track Controller (per train, the block its head is
-  in with its suggested speed and authority; closed blocks; switch
-  commands) and the central harness (clock speedup and clock pause), so
+  in with its suggested speed and authority, and while it has authority
+  the next block on its route with one block less, in the `next_...`
+  rows; closed blocks; switch commands) and the central harness (clock
+  speedup and clock pause), so
   the effect of
   each action taken in the CTC window shows here.
 - Errors (an unknown block, a switch outside maintenance mode) show in
@@ -126,14 +128,16 @@ yet) through `ctc_ui/ctc_host.py`:
   `snapshot()` as well as from `step()`.
 - The **Operating mode** toggle switches the right-hand column between the
   Automatic, Manual, and Maintenance views. Maintenance lets the
-  dispatcher close blocks and set switches; leaving it releases every
-  switch command. The mode itself is not sent to the Track Controller:
-  it gets `closed_blocks`, every block closed (or closing) in
+  dispatcher close blocks and set switches. Both outlast it: the
+  dispatcher moves freely between Maintenance, Automatic and Manual, and
+  a closure or switch command stays until reopened or released, back in
+  Maintenance (`maintenance-closure-lock`). The mode itself is not sent to the Track Controller:
+  it gets `closed_blocks`, every block closed in
   maintenance mode, and may not override a listed block until the
   dispatcher reopens it.
 - **Notices** under the header tell the dispatcher about a Track
   Controller update staged while the clock is paused, and about orders
-  the CTC cancelled itself (a block closed or closing).
+  the CTC cancelled itself (a block closed).
   **Dismiss** clears the cancellations.
 - The **Track view** colors each line (`--line-green`, `--line-red`) and
   draws each train the CTC is following as a small `--info` car in the
@@ -151,36 +155,50 @@ yet) through `ctc_ui/ctc_host.py`:
   requested arrival and status (En route, In yard, Not located, No
   order). Filter by line, status or train ID;
   click a row and **Select train** to load it into Selected train.
-  "Keep open at bottom" or the minimize button docks it over the track
-  view. Escape, the close button, or clicking the scrim closes it.
+  "Keep open at bottom" or the minimize button docks it in the track
+  view's bottom row, beside the hint, clear of the map and its legend. Escape, the close button, or clicking the scrim closes it.
 - **Dispatch train** (Manual): pick a line, a train (or a new one) and a
   destination station, with an optional arrival time (`HH:MM`). Picking a
   train that already has an order reroutes it. **Set authority** sends
   the train straight to a block instead; the CTC turns it into a count
   of blocks. The readouts show the suggested speed and authority the CTC
-  sends to the Track Controller.
+  sends to the Track Controller: as soon as line, train and destination
+  are picked, what a dispatch would send (from the yard exit block for a
+  train in the yard), then the train's live values once it runs to that
+  destination. An error (such as an invalid arrival time) clears as soon
+  as any field changes. Block fields take a typed block number, or a
+  pick from the list.
 - **Selected train** shows the train's live readouts, including why its
   authority ends where it does; in Manual mode it also reroutes the
-  train. The dispatcher cannot cancel a train's order.
+  train, and **Return to yard** sends a train on the track back to the
+  yard, where it is retired. The dispatcher cannot cancel a train's order.
 - **Close block** and **Active closures** (Maintenance only) close a
   block (with a confirmation step, style guide 7) and reopen it. A block
-  with a train in it is listed as "Closing — train in block" and closes
-  by itself once the train has left; **Cancel closing** withdraws it.
+  closes at once, even with a train in it (`block-closure`).
+- **Set switch position** lists each switch by its two connections,
+  normal then reverse ("12  (12-13; 1-13)"); a yard switch the layout
+  file lists by its yard leg alone gets its main-line leg too ("9
+  (8-9; yard-9)").
+- **Throughput metrics** shows tickets per hour on each line as whole
+  numbers; trains per hour is in the per-line table.
 - Dropdowns show only what the dispatcher picked: choosing a line never
   pre-selects a block, station or switch, so no action is enabled with a
   value nobody chose.
 - **Safety rules** the CTC enforces (refused with a message): no
-  authority into a closed, closing or failed block; no train sent to a
+  authority into a closed or failed block; no train sent to a
   block on another line than the one it is on; no switch moved while its
-  block is occupied. Orders into a block that closes or starts closing
-  are cancelled, with a notice. An order into a block the CTC takes for
+  block is occupied. Orders into a block that closes are cancelled, with
+  a notice. An order into a block the CTC takes for
   a failure is kept, since it never shows one: the train waits short of
   it until it clears.
 - **Authority** is the number of blocks ahead of the train's current
   block it may still enter (0: stop before leaving it), recomputed every
   step. It runs toward the destination and stops before the first
-  occupied (failed ones included), closed or closing block, and before
-  any switch the Track Controller has not reported set for the route.
+  closed block and before any switch the Track Controller has
+  not reported set for the route. It never ends next to a block another
+  train occupies (failed ones included) or holds in its authority, on
+  the route or off it: one empty block always stays between trains, as
+  the waysides hold any two trains side by side.
   Routes go round failed and closed blocks where the detour is short
   enough.
 - **Set switch position** (Maintenance) shows each switch's two
@@ -203,14 +221,18 @@ yet) through `ctc_ui/ctc_host.py`:
 - **Automatic dispatch** (`ctc/scheduler.py`) carries the schedule out
   while the window is in Automatic mode. Each run is a train named for
   its line and run number (Green run 1 is `G1`). It is due out of the
-  yard at 05:00, when the simulation starts, plus its departure in the
-  file. It stops only at the stations the file lists for it, and runs
+  yard at the schedule's T = 0 plus its departure in the file. T = 0 is
+  the moment the clock runs with the schedule loaded: **Run**, or at
+  once if it is loaded while the clock runs, whatever the time is then.
+  So runs keep the file's headway however late it is loaded. The Auto
+  dispatch panel shows it ("T = 0 at 05:12:30"). It stops only at the stations the file lists for it, and runs
   through every other station on its way. It visits them in the order
-  the track reaches them from the yard (the file lists them by block
-  number, which a train cannot always run), stops 45 s at each (D007),
-  then returns to the yard. The CTC does the stopping: it sends the train to
+  the file lists them, whatever that costs: Green 1 runs from the yard
+  through Glenbury and on round to Pioneer (2), its first station, and
+  round again for Edgebrook (9), which the one-way track reaches before
+  Pioneer. It stops 45 s at each (D007), then returns to the yard. The CTC does the stopping: it sends the train to
   its next station, holds it there for the dwell, then sends it on. A
-  station that is closed or closing is skipped. **Departures** shows
+  station that is closed is skipped. **Departures** shows
   every run's due time and where it has got to; **Pause dispatch**
   holds them all, and so does leaving Automatic mode: no run leaves the
   yard or a station until dispatch resumes.
@@ -218,12 +240,20 @@ yet) through `ctc_ui/ctc_host.py`:
   which block it came from), so the CTC never routes a train back the
   way it came.
 - Runs are never sent to meet head-on. Where their paths cross the same
-  track in both directions (Green 77 to 100 and 1 to 28, each run out
-  and back; Red from 16 out through the loop and back), that stretch is
-  a two-way zone that holds one scheduled train at a time. A train due
-  to enter a busy zone waits at its last stop, or in the yard, as
-  **Held**. On Red the zone is most of the line, so Red runs go about
-  one at a time. A head-on meet that happens anyway (a manual train, say)
+  track in both directions (Green 77 to 85 and 13 to 28; Red 16 to 52),
+  that stretch is a two-way zone, reserved by direction: any number of
+  scheduled trains may go through it the same way, never two opposite
+  ways. A train due to enter a zone in use the other way is **Held**:
+  in the yard if it is the first zone on its way out, so the line does
+  not fill up with trains queuing for it; otherwise on the one-way track
+  a block short of the zone, or at its last stop. A train claims a zone
+  only when it is the next one ahead of it. A train that has turned
+  round a loop (Green 86 to 100 and 1 to 12, Red 53 to 66) waits a
+  block short of the loop's end ("Held at … by the schedule") until the
+  trains following it are through, and no new train goes out while it
+  waits there. No more trains go into a zone toward a loop than the loop
+  holds, a block apart. A
+  head-on meet that happens anyway (a manual train, say)
   is for the wayside controllers to handle.
 - Trains per hour and the per-line trains and dwell columns stay empty:
   nothing reports that data yet.
@@ -247,6 +277,7 @@ yet) through `ctc_ui/ctc_host.py`:
 __main__.py             CTC Office entry point: builds theme, loads QML
 test_ui.py              test UI entry point (separate process)
 sim_clock.py            SimulationClockBridge: the shared clock for QML
+harness_clock.py        HarnessClockBridge: the harness's clock, under it
 clock_link.py           clock link between the CTC and the test UI
 ui/Main.qml             window, fixed 1440×900 canvas, mode + window state
 ui/views/*.qml          Automatic / Manual / Maintenance right-hand columns
@@ -320,10 +351,16 @@ the context-property pattern shared with the Train Model UI.
   authority counted in blocks
   (above) and a suggested speed 1 m/s under its head block's speed limit
   (whole m/s, rounded down), lower if it needs to stop within its
-  authority. Each suggestion carries the block the train's head is in:
-  the Track Controller sees only occupancy, so that block says which
-  track circuit the speed and authority go down. A train still in the yard (a black box) gets neither until
-  it leaves.
+  authority. Each suggestion carries the block it is for: the block the
+  train's head is in and, while its authority is at least 1, the next
+  block on its route with one block less (R49). The Track Controller
+  sees only occupancy, so that block says which track circuit the speed
+  and authority go down. A train still in the yard (a black box) gets
+  neither until it leaves. The CTC releases a waiting train from the
+  yard itself, one per line at a time, and reports it once in
+  `new_trains`; it reports a scheduled run that has come back and
+  stopped at the yard entry block once in `retired_trains` (D022). The
+  central harness applies both to its roster.
 - `ctc/tracking.py` follows the trains from block occupancy, and infers
   which occupied blocks have failed (above).
 - `ctc/scheduler.py` plans each run of the loaded schedule and, in
@@ -346,6 +383,21 @@ the context-property pattern shared with the Train Model UI.
   test UI connects with `SocketLink`, or uses `ctc/link.py`'s `LocalLink`
   with `--standalone`. At integration the central harness calls the
   module directly and the links are not used.
+
+## Under the central harness
+
+`ctc/module_process.py` is the process the central harness starts
+(`track_overflow.py --module ctc-office`). It hosts the one module in
+the CTC window, with no test link and no clock of its own: the harness
+owns the clock (D005, D017) and steps the module once per tick, with
+inputs in the JSON form of `ctc/wire.py`. `harness_clock.py`
+(`HarnessClockBridge`) stands in for `simClock`: the header shows the
+harness's time, and Run, Pause and 1× / 10× set `clock_paused` and
+`clock_speedup`, which also go to the harness at once, since nothing
+steps while the clock is paused. The window redraws at most every
+200 ms, after each reply. `--run-on-ready`, `--speedup-at-tick`,
+`--dispatch` and `--schedule` stand in for the dispatcher in tests and
+demonstrations only. Tests: `tests/test_module_process.py`.
 
 ## Clock link
 

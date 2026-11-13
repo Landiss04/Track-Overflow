@@ -8,9 +8,11 @@ which occupied blocks are failures, by comparing each occupancy update
 with the last, its trains' routes and the speeds it suggested
 (``train-tracking-from-occupancy``, proposed on ``ctc-deployment``):
 
-- Leaving the yard: when a line's yard exit block becomes occupied while
-  trains dispatched on that line wait in the yard, the most urgent of
-  them has left the yard into it.
+- Leaving the yard: the model releases a waiting train onto its line's
+  yard exit block (D022) and passes it in as waiting. When that block
+  then becomes occupied, the released train has left the yard into it.
+  Only a released train is found this way; any other new occupancy of
+  the exit block is a failure.
 - Moving: a train moves into the next block of its route, if its
   authority lets it in, when that block becomes occupied, and leaves a
   block when it clears; while crossing a boundary it holds both blocks.
@@ -19,6 +21,11 @@ with the last, its trains' routes and the speeds it suggested
   failure, not the train. How far it could have gone assumes it went as
   fast as the CTC ever suggested and slowed no faster than braking
   allows, since it may carry speed from an earlier, faster block.
+- Running on: a train can go on into the block it was heading for
+  when the CTC did not expect it, too late to stop for a block that
+  just closed, say, or sooner than it seemed able to. That block first
+  counts as a failure; when the train's own blocks then all clear, the
+  occupied block is the train.
 - Unexplained occupancy is a failure. A failure ends when its block
   clears.
 - A train whose blocks all clear is dropped quietly ("lost"), unless it
@@ -37,6 +44,15 @@ from typing import Mapping, Sequence
 #: The block a train leaves the yard into, per line (Green's layout file
 #: lists ``Yard-63``; Red's yard joins block 9).
 YARD_EXITS: dict[str, str] = {"Green": "63", "Red": "9"}
+
+#: Which way a train leaves the yard, as the block it is taken to have
+#: entered its yard exit block from. The yard joins its exit block
+#: through a switch leg, and a train out of the yard trails through the
+#: points out of the fixed side, as the Track Model runs it: Green 63
+#: (legs 62 and the yard) on to 64, Red 9 (legs 8 and the yard) on to
+#: 10, never back to 8 (the Track Model's layout is the master, Landis
+#: 2026-10-25).
+YARD_EXIT_FROM: dict[str, str] = {"Green": "62", "Red": "8"}
 
 #: Blocks a train can run from into the yard, per line (Green's 57 lists
 #: ``yard`` among its next blocks; Red's yard joins block 9).
@@ -64,8 +80,8 @@ class Tracked:
     # The fastest it could be going now, in m/s.
     speed_mps: float = 0.0
     # The block its head entered its head block from: which way it is
-    # going. None until it has moved a block (placed, or just out of
-    # the yard).
+    # going. None until a placed train has moved a block; for a train
+    # just out of the yard, ``YARD_EXIT_FROM``.
     came_from: str | None = None
 
     @property
@@ -84,6 +100,9 @@ class Plan:
     head_length_m: float
     # The speed suggested to it, in m/s.
     speed_mps: float
+    # The block it was heading for, which it may run on into even when
+    # it has no ``next_block``.
+    onward_block: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,7 +187,8 @@ class TrainTracker:
                         and candidate.train_id not in self.trains
                         and candidate.train_id not in self.lost):
                     self.trains[candidate.train_id] = Tracked(
-                        line, (exit_block,))
+                        line, (exit_block,),
+                        came_from=YARD_EXIT_FROM.get(line))
                     claimed.add((line, exit_block))
                     break
 
@@ -180,6 +200,17 @@ class TrainTracker:
                 continue
             if left:
                 self.trains[train_id] = replace(train, blocks=left)
+                continue
+            plan = plans.get(train_id)
+            onward = (train.line, plan.onward_block) if plan else None
+            if (onward in occupied and onward not in
+                    {(t.line, b) for t in self.trains.values()
+                     for b in t.blocks}):
+                self.failures.discard(onward)
+                claimed.add(onward)
+                self.trains[train_id] = replace(
+                    train, blocks=(plan.onward_block,),
+                    reach_m=0.0, came_from=train.head)
                 continue
             del self.trains[train_id]
             if train.head not in YARD_ENTRIES.get(train.line, ()):

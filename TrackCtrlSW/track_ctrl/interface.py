@@ -95,6 +95,16 @@ class CtcInputs:
     switch_commands: Mapping[BlockKey, SwitchPosition] = field(
         default_factory=dict
     )
+    # The position each routed train needs a switch in, by the switch's
+    # block. Not a command and not maintenance: it is sent in any mode,
+    # does not set maintenance mode, and reaches only the PLC program
+    # (``REQSW_s``, ``REQREV_s``). For a switch the first rule that applies
+    # wins: a train on the points locks it; then a maintenance command;
+    # then this request; then the program's own rule. A listed switch
+    # with no request has none.
+    route_requests: Mapping[BlockKey, SwitchPosition] = field(
+        default_factory=dict
+    )
     # A block not listed has nothing to send down its track circuit.
     suggestions: Mapping[BlockKey, Suggestion] = field(default_factory=dict)
 
@@ -178,11 +188,10 @@ class CtcReport:
     wayside_id: str
     line: str
     sent_at_s: float
-    # This wayside has been started up: it has a PLC program on its
-    # territory. The CTC Office reads it for every wayside of every line,
-    # so it can see exactly which are not ready. A wayside that is ready
-    # may still be held: while any wayside is not ready the whole module
-    # stalls, because the track is only safe with every wayside running.
+    # This wayside is ready: its track layout is present and a PLC program
+    # is committed on its territory. The CTC Office reads it for every
+    # wayside of every line, so it can see exactly which are not ready. A
+    # ready wayside runs and transmits whatever the others are doing.
     ready: bool
     blocks: Mapping[BlockKey, BlockReport] = field(default_factory=dict)
     # Why it is not ready, or "" when it is.
