@@ -1,7 +1,7 @@
 **Target:** truth/decisions/D017-shared-simulation-clock.md
 **Action:** replace
 **Proposed by:** Claude on integrate/harness-into-development
-**Provenance:** asserted by Kevin Schillinger 2026-11-12 (the harness gets a reset button that restarts the simulation fresh, with the flags used at launch retained) and 2026-11-13 (reset is done by restarting every module process from the saved launch options, inside the running harness)
+**Provenance:** asserted by Kevin Schillinger 2026-11-12 (the harness gets a reset button that restarts the simulation fresh, with the flags used at launch retained) and 2026-11-13 (reset is done by restarting every module process from the saved launch options, inside the running harness); rewind by restoring every module to a checkpoint kept every 10 s of simulation time, 20 minutes back, chosen by Kevin Schillinger 2026-11-13
 
 ---
 
@@ -9,7 +9,7 @@
 
 **Status:** current
 **Owner:** Landis
-**Provenance:** asserted by Landis 2026-10-01 (generic-clock-config proposal `20261001-1658-shared-simulation-clock.md`), including the 05:00:00 start time and 24-hour display; adoption by every module once integrated asserted by Kevin Schillinger 2026-10-02; speed command per `signals/clock-speedup.md`; direct fan-out of dt and simulation time to every module, and inputs seen only on the rising clock edge, asserted by Kevin Schillinger 2026-10-16; unwrapped simulation time, waiting for every module's reply with a timeout, and the 0.1 s tick as a recorded deviation, proposed in the design doc's per-module questions and accepted by Kevin Schillinger 2026-10-20; reset from the harness window by restarting every module with the launch options kept, asserted by Kevin Schillinger 2026-11-12 and 2026-11-13
+**Provenance:** asserted by Landis 2026-10-01 (generic-clock-config proposal `20261001-1658-shared-simulation-clock.md`), including the 05:00:00 start time and 24-hour display; adoption by every module once integrated asserted by Kevin Schillinger 2026-10-02; speed command per `signals/clock-speedup.md`; direct fan-out of dt and simulation time to every module, and inputs seen only on the rising clock edge, asserted by Kevin Schillinger 2026-10-16; unwrapped simulation time, waiting for every module's reply with a timeout, and the 0.1 s tick as a recorded deviation, proposed in the design doc's per-module questions and accepted by Kevin Schillinger 2026-10-20; reset from the harness window by restarting every module with the launch options kept, asserted by Kevin Schillinger 2026-11-12 and 2026-11-13; rewind from the harness window to a checkpoint kept every 10 s of simulation time, 20 minutes back, with the clock left paused, chosen by Kevin Schillinger 2026-11-13
 **Aliases:** system clock, simulation clock, shared clock, SystemClock, sim time, D009-shared-simulation-clock, D012-shared-simulation-clock
 **Last updated:** 2026-11-13
 
@@ -43,10 +43,15 @@ who controls it.
 - The harness waits for every module's reply to a tick before it sends the next one.
   If a reply takes longer than a set limit, about 1 s, the harness pauses the clock and
   names the late module.
-- The clock is never set back while module processes are running. The harness window
-  has a reset: it ends every module process and starts each again with the options
-  the system was launched with, and the clock starts again at 05:00:00. The harness
-  process keeps running.
+- The clock goes back in two ways only, both from the harness window.
+  - Reset: the harness ends every module process and starts each again with the
+    options the system was launched with, and the clock starts again at 05:00:00. The
+    harness process keeps running.
+  - Rewind: every module and the harness return to a checkpoint, and the clock is set
+    to that checkpoint's time and left paused. Checkpoints are kept every 10 s of
+    simulation time, for the last 20 minutes.
+- A module never moves the clock back, and nothing moves it back between ticks of a
+  running clock.
 - The CTC Office sets the speed and pauses or resumes the clock, through the harness.
 
 ## Consequences
@@ -62,9 +67,13 @@ who controls it.
   in 1 ms ticks. This is a recorded deviation.
 - The CTC Office's speed command reaches the clock as the clock-speedup signal
   (`signals/clock-speedup.md`).
-- A module never sees simulation time go backwards within its own process.
+- Simulation time goes backwards within a module's process only when the harness
+  rewinds it, and the module's whole state goes back with it.
 - Options given at launch apply again after a reset. Anything a person loaded in a
   module's window is lost by it.
+- Everything done after a checkpoint, in any module's window, is discarded by a rewind
+  to it.
+- A rewind lands on a 10 s boundary, not on an arbitrary tick.
 
 ## Supersedes
 
@@ -72,3 +81,6 @@ who controls it.
   restarting the whole system; now the harness window can reset by restarting every
   module process with the launch options kept, the harness itself staying up (Kevin
   Schillinger 2026-11-13).
+- Rewind: previously the clock never went back during a run; now the harness window
+  can rewind to a 10 s checkpoint from the last 20 minutes (Kevin Schillinger
+  2026-11-13).
