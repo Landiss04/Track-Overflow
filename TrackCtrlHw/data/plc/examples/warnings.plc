@@ -1,0 +1,12 @@
+// Compile warnings: load into wayside 1 and it loads, with every
+// warning listed under the i button (PLC program details).
+
+VAR_IN  OCC_1 OCC_2 OCC_3 MAINT
+VAR_IN  OCC_2                       // declared twice
+VAR_OUT AUTH_1 AUTH_2 AUTH_3        // AUTH_3 is never assigned: stays 0
+
+AUTH_1 := NOT HOLD                  // HOLD is read before it is set: it
+HOLD := OCC_2                       //   reads 0, so AUTH_1 is always 1
+AUTH_2 := NOT (OCC_1 OR OCC_3)
+AUTH_2 := 1                         // assigned again: the last one wins
+SW_12 := OCC_1                      // not declared VAR_OUT: never sent

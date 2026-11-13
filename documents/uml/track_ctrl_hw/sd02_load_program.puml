@@ -1,0 +1,51 @@
+@startuml sd02_load_program
+!include ../style.iuml
+autonumber
+
+actor Programmer as P
+participant "Main window\n(QML)" as QML
+participant "TrackControllerState" as State
+participant "RemoteTrackController" as Remote
+participant "HardwareRelay" as Relay
+box "Raspberry Pi 5" #F2F5F9
+participant "PiLinkServer\n+ TrackCore" as Pi
+participant "HwTrackController" as Ctrl
+participant "Wayside" as W
+participant "plc" as PLC
+end box
+
+P -> QML : **New PLC**, pick a file
+QML -> State : loadProgram(location)
+alt path.stat().st_size > _MAX_PROGRAM_BYTES,\nor OSError / UnicodeDecodeError
+  State --> QML : problem.emit("PLC program not loaded",\nstr(error), [])
+else readable
+  State -> State : source = open(path, encoding="utf-8").read()
+  State -> Remote : load_program(self._selected,\nsource, path.name)
+  Remote -> Relay : call_action("load_program",\n{wayside_id, source, file_name})
+  Relay -> Pi : ACTION {id, action, args} (USB)
+  Pi -> Ctrl : core.action(): load_program(\nwayside_id, source, file_name)
+  Ctrl -> W : load_program(source, file_name, self._time_s)
+  W -> PLC : compile_program(source)
+  PLC --> W : program: Program\n(tree + postfix code per statement)
+  W -> W : errors, warnings =\ncheck_program(program, self._territory)
+  alt errors
+    W --> Ctrl : raise PlcError(msg, tuple(errors))
+    Ctrl --> Pi : PlcError
+    Pi --> Relay : REJECTED {id, reason, error,\ndiagnostics}
+    Relay --> Remote : raise RemoteActionError\n(error.diagnostics)
+    Remote --> State : raise PlcError(str(error), diagnostics)
+    State --> QML : problem.emit("PLC program not loaded",\nstr(error), list(error.diagnostics))
+  else no errors
+    W -> W : self._program = program;\nself._program_info = ProgramInfo(...)
+    W -> W : self._scan_info = ScanInfo();\n_hold_restrictive("A new program\nruns from the next scan.")
+    W --> Ctrl : ProgramInfo
+    Ctrl --> Pi : ProgramInfo
+    Pi --> Relay : ACK {id, result=pack(info),\nview={"snapshot": pack(snapshot())}}
+    Relay -> Remote : viewChanged.emit(view)
+    Relay --> Remote : reply["result"]
+    Remote --> State : unpack(result): ProgramInfo
+    State -> State : refresh()
+    State --> QML : changed.emit()
+  end
+end
+@enduml

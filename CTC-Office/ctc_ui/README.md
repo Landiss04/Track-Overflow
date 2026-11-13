@@ -1,0 +1,439 @@
+# CTC Office UI (skeleton)
+
+PySide6 + QML front-end for the CTC Office dispatcher console. This is a
+**blank UI with no backend**: every panel shows its empty state, and
+actions emit QML signals that nothing handles yet.
+
+QML owns all visuals; Python owns startup and the design tokens. The
+structure follows the Train Model UI on the `Train-Model-UI-experimental`
+branch so the modules share one component vocabulary.
+
+## Run
+
+From the `CTC-Office` directory:
+
+```bash
+pip install -r ../requirements.txt
+python -m ctc_ui
+```
+
+### Test UI
+
+The test harness is a separate process with its own window. It stands
+in for the Track Controller: its only inputs are what the Track
+Controller sends the CTC (each wayside's startup, occupied blocks,
+switch states, crossing states). Everything the CTC itself decides (dispatching, closing blocks,
+setting switches, the operating mode and the clock speed) is done in the
+CTC window, as a dispatcher would. Ticket sales come from the Track
+Model, so the test UI does not force them either. Start the CTC Office
+first, then from a second terminal, also in `CTC-Office`:
+
+```bash
+python ctc_ui/test_ui.py        # or: python -m ctc_ui.test_ui
+```
+
+It connects to the running CTC Office over a local socket, so both
+windows act on the one live CTC module; the badge reads **Connected**
+(the status says "Connecting…" until then, and "not running" if no CTC
+Office answers). Only one CTC Office runs at a time: a second one prints
+"A CTC Office is already running" and exits. The two windows drive each
+other:
+
+- **Send** replaces the Track Controller inputs. The CTC
+  window's simulation clock steps the module with them on every tick
+  while it runs (Run / Pause, 1× / 10×). While the clock is paused they
+  are staged: nothing changes until it runs, the CTC window keeps showing
+  the last applied reports with a "staged" notice, but the safety checks
+  already use them. Once applied the CTC window shows them: occupied
+  blocks, closed blocks and active crossings on the track map, trains in
+  the occupancy window, reported switch positions in Maintenance.
+- The Track Controller reports only which blocks are occupied: no train
+  IDs or speeds, and a failed block looks like any other occupied block.
+  The CTC follows its own trains from that (`ctc/tracking.py`). A train
+  dispatched on a line leaves the yard when the line's yard exit block
+  (Green 63, Red 9) becomes occupied, the one most behind schedule
+  first. It moves on when the next block of its route becomes occupied,
+  if its authority lets it in and it could have got there at the speeds
+  suggested to it, and holds both blocks until the one behind clears. A
+  block occupied too soon, or that no train explains, is taken for a
+  failure: trains are kept out of it, but it is shown only as occupied.
+  A train whose blocks all clear, outside the yard, is dropped quietly
+  ("Not located"); its order stays. So to move a train, run the CTC
+  window's clock, add its next block and Send, then remove the block
+  behind it and Send. Standalone, each Send is only 0.1 s, too soon for
+  any train to move.
+- **waysides** has each wayside's startup as it reports it: its ID,
+  line, whether it is ready (a PLC program on its territory) and, if
+  not, why. It starts empty, as at startup. A line is ready once a
+  wayside on it has reported and every wayside on it is ready. The
+  waysides are vital, so until then the CTC sends nothing for the line
+  (no speed or authority, closed blocks or switch commands) and refuses
+  to dispatch a train on it; automatic dispatch waits too. Closures and
+  switch commands made in the CTC window are kept and go out once the
+  line is ready; the CTC window names each wayside that is not ready
+  and why.
+- Send is all or nothing: if the inputs are rejected (an unknown block,
+  a switch reported in two positions), none of them is applied and the
+  status line says why.
+- If the CTC window restarts, the test UI reconnects by itself and sends
+  its inputs again.
+- **Outputs** update live from the module, in display units (mph): what
+  the CTC sends the Track Controller (per train, the block its head is
+  in with its suggested speed and authority, and while it has authority
+  the next block on its route with one block less, in the `next_...`
+  rows; closed blocks; switch commands) and the central harness (clock
+  speedup and clock pause), so
+  the effect of
+  each action taken in the CTC window shows here.
+- Errors (an unknown block, a switch outside maintenance mode) show in
+  the status line of the window where the action was taken.
+
+List rows (occupied blocks, switch states, crossing states) are small
+tables: **+ Add** an entry, edit it in place, × to remove it. Each entry
+picks its line first, then a block, switch or crossing on that line from
+the track layout, so there are no IDs to type; block numbers repeat
+across lines, and a switch or crossing is named by the block the layout
+file lists it on. Positions and states are dropdowns too: nothing is
+typed.
+
+To check the CTC module's input handling without the window, run the
+test UI with its own in-process module instead (with no window there is
+no dispatcher, so no train is ever dispatched):
+
+```bash
+python ctc_ui/test_ui.py --standalone
+```
+
+The **simulation clock** also belongs to the running CTC Office window,
+over its own link, and the test UI's title bar has the same clock
+controls as the CTC header. Run / Pause and 1× / 10× in either window
+control the one clock, and both windows show it; see [Clock link](#clock-link). With no CTC Office running, the test UI
+shows `--:--:--`, greys out its clock controls, and keeps retrying.
+
+## What is interactive
+
+The panels read and act on the live CTC module (a stub with no routing
+yet) through `ctc_ui/ctc_host.py`:
+
+- The **Simulation clock** in the header is live. It starts paused at
+  05:00:00 (24-hour). **Run** / **Pause** start and hold it, and the
+  **1× / 10×** toggle sets its speed: at 1× one simulated second lasts one
+  real second. The CTC owns the one shared clock until the central harness
+  takes it over. The speed is also the CTC's `clock_speedup` output (true
+  at 10×), the command the central harness will relay to every module so
+  they all run at one speed, and Run / Pause is its `clock_paused` output
+  (true while paused; the simulation starts paused), the command the
+  harness pauses and resumes the shared clock on. No step happens while
+  the clock is paused, so the harness reads `clock_paused` from
+  `snapshot()` as well as from `step()`.
+- The **Operating mode** toggle switches the right-hand column between the
+  Automatic, Manual, and Maintenance views. Maintenance lets the
+  dispatcher close blocks and set switches. Both outlast it: the
+  dispatcher moves freely between Maintenance, Automatic and Manual, and
+  a closure or switch command stays until reopened or released, back in
+  Maintenance (`maintenance-closure-lock`). The mode itself is not sent to the Track Controller:
+  it gets `closed_blocks`, every block closed in
+  maintenance mode, and may not override a listed block until the
+  dispatcher reopens it.
+- **Notices** under the header tell the dispatcher about a Track
+  Controller update staged while the clock is paused, and about orders
+  the CTC cancelled itself (a block closed).
+  **Dismiss** clears the cancellations.
+- The **Track view** colors each line (`--line-green`, `--line-red`) and
+  draws each train the CTC is following as a small `--info` car in the
+  middle of its head block (where in the block is not known), turned to
+  follow the track and tagged with its ID; any other occupied block (an
+  inferred failure among them) gets an untagged car. Closed
+  (`--warning`) blocks are drawn heavy, with a halo (style guide 4.6,
+  6.4). An active crossing fills `--warning`.
+  **+** and **−** zoom in steps of 1.25× (up to 4×); zoomed in, drag the
+  map to pan. **Fit** shows the whole map again.
+- **Train occupancy** lists every train the CTC is following or the
+  dispatcher has ordered, with block (both, while it crosses into the
+  next), suggested speed (mph; its actual speed is never known),
+  authority (blocks ahead, and the block it ends at), destination,
+  requested arrival and status (En route, In yard, Not located, No
+  order). Filter by line, status or train ID;
+  click a row and **Select train** to load it into Selected train.
+  "Keep open at bottom" or the minimize button docks it in the track
+  view's bottom row, beside the hint, clear of the map and its legend. Escape, the close button, or clicking the scrim closes it.
+- **Dispatch train** (Manual): pick a line, a train (or a new one) and a
+  destination station, with an optional arrival time (`HH:MM`). Picking a
+  train that already has an order reroutes it. **Set authority** sends
+  the train straight to a block instead; the CTC turns it into a count
+  of blocks. The readouts show the suggested speed and authority the CTC
+  sends to the Track Controller: as soon as line, train and destination
+  are picked, what a dispatch would send (from the yard exit block for a
+  train in the yard), then the train's live values once it runs to that
+  destination. An error (such as an invalid arrival time) clears as soon
+  as any field changes. Block fields take a typed block number, or a
+  pick from the list.
+- **Selected train** shows the train's live readouts, including why its
+  authority ends where it does; in Manual mode it also reroutes the
+  train, and **Return to yard** sends a train on the track back to the
+  yard, where it is retired. The dispatcher cannot cancel a train's order.
+- **Close block** and **Active closures** (Maintenance only) close a
+  block (with a confirmation step, style guide 7) and reopen it. A block
+  closes at once, even with a train in it (`block-closure`).
+- **Set switch position** lists each switch by its two connections,
+  normal then reverse ("12  (12-13; 1-13)"); a yard switch the layout
+  file lists by its yard leg alone gets its main-line leg too ("9
+  (8-9; yard-9)").
+- **Throughput metrics** shows tickets per hour on each line as whole
+  numbers; trains per hour is in the per-line table.
+- Dropdowns show only what the dispatcher picked: choosing a line never
+  pre-selects a block, station or switch, so no action is enabled with a
+  value nobody chose.
+- **Safety rules** the CTC enforces (refused with a message): no
+  authority into a closed or failed block; no train sent to a
+  block on another line than the one it is on; no switch moved while its
+  block is occupied. Orders into a block that closes are cancelled, with
+  a notice. An order into a block the CTC takes for
+  a failure is kept, since it never shows one: the train waits short of
+  it until it clears.
+- **Authority** is the number of blocks ahead of the train's current
+  block it may still enter (0: stop before leaving it), recomputed every
+  step. It runs toward the destination and stops before the first
+  closed block and before any switch the Track Controller has
+  not reported set for the route. It never ends next to a block another
+  train occupies (failed ones included) or holds in its authority, on
+  the route or off it: one empty block always stays between trains, as
+  the waysides hold any two trains side by side.
+  Routes go round failed and closed blocks where the detour is short
+  enough.
+- **Set switch position** (Maintenance) shows each switch's two
+  connections (normal is the first listed in the layout file), the
+  position the Track Controller reports and the one the CTC commands, and
+  sends or releases a command.
+- **Throughput metrics** show tickets per hour on each line (Red line,
+  Green line) since the simulation started, from Track Model ticket
+  sales, in the tiles and the per-line table. **Throughput, last 12
+  hours** charts the tickets sold on each line in each simulated clock
+  hour, one small chart per line on a shared scale; hover a bar for its
+  value. The window starts at the simulation's start hour and follows
+  the current hour once 12 hours have passed. The charts use `--accent`,
+  not the line colors: the style guide keeps those to track strokes, and
+  red and green bars are not distinguishable with deuteranopia.
+- **Load schedule** (Automatic view) loads a schedule JSON in the
+  `utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). A
+  malformed file, or one naming a block or line that is not on the track
+  layout, shows an error and keeps the current schedule.
+- **Automatic dispatch** (`ctc/scheduler.py`) carries the schedule out
+  while the window is in Automatic mode. Each run is a train named for
+  its line and run number (Green run 1 is `G1`). It is due out of the
+  yard at the schedule's T = 0 plus its departure in the file. T = 0 is
+  the moment the clock runs with the schedule loaded: **Run**, or at
+  once if it is loaded while the clock runs, whatever the time is then.
+  So runs keep the file's headway however late it is loaded. The Auto
+  dispatch panel shows it ("T = 0 at 05:12:30"). It stops only at the stations the file lists for it, and runs
+  through every other station on its way. It visits them in the order
+  the file lists them, whatever that costs: Green 1 runs from the yard
+  through Glenbury and on round to Pioneer (2), its first station, and
+  round again for Edgebrook (9), which the one-way track reaches before
+  Pioneer. It stops 45 s at each (D007), then returns to the yard. The CTC does the stopping: it sends the train to
+  its next station, holds it there for the dwell, then sends it on. A
+  station that is closed is skipped. **Departures** shows
+  every run's due time and where it has got to; **Pause dispatch**
+  holds them all, and so does leaving Automatic mode: no run leaves the
+  yard or a station until dispatch resumes.
+- Routes carry on the way each train is going (`ctc/tracking.py` knows
+  which block it came from), so the CTC never routes a train back the
+  way it came.
+- Runs are never sent to meet head-on. Where their paths cross the same
+  track in both directions (Green 77 to 85 and 13 to 28; Red 16 to 52),
+  that stretch is a two-way zone, reserved by direction: any number of
+  scheduled trains may go through it the same way, never two opposite
+  ways. A train due to enter a zone in use the other way is **Held**:
+  in the yard if it is the first zone on its way out, so the line does
+  not fill up with trains queuing for it; otherwise on the one-way track
+  a block short of the zone, or at its last stop. A train claims a zone
+  only when it is the next one ahead of it. A train that has turned
+  round a loop (Green 86 to 100 and 1 to 12, Red 53 to 66) waits a
+  block short of the loop's end ("Held at … by the schedule") until the
+  trains following it are through, and no new train goes out while it
+  waits there. No more trains go into a zone toward a loop than the loop
+  holds, a block apart. A
+  head-on meet that happens anyway (a manual train, say)
+  is for the wayside controllers to handle.
+- Trains per hour and the per-line trains and dwell columns stay empty:
+  nothing reports that data yet.
+
+## Where things go
+
+| Area | Hook |
+| --- | --- |
+| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `setAuthority`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
+| Track map | `panels/TrackViewPanel.qml` → `mapCanvas`; `blockStates` and `crossingStates` style the blocks. Set `mapAvailable` to enable zoom and fit. |
+| Selected train | `SelectedTrainPanel.trainId` and `host`; `canReroute` adds the reroute controls. |
+| Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` → `ctc.loadSchedule`; `scheduleFile`, `scheduleError`, `departures`, `dispatchRunning` and `dispatchPaused` come back from `ctc`; Pause / Resume call `ctc.setDispatchPaused`. The header's mode calls `ctc.setAutomaticMode`. |
+| Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |
+| Test harness | `ui/test/TestHarnessView.qml` in the test UI process. `inputs` / `outputs`: arrays of `{ name, kind, value, unit }`, where `kind` is `bool`, `int`, `float`, or `string`. Handle `inputEdited`, `sendInputsRequested`, and `resetInputsRequested`, and set `connected` once linked to a running CTC. |
+| Header | `CtcHeader.clock`, `.paused` and `.speed` are bound to `simClock` (see below); `.operatorName`. |
+| Simulation clock | `simClock` context property, a `SimulationClockBridge` (`sim_clock.py`) that owns the shared `utils.system_clock.SystemClock` and drives it in real time. Read `timeText`, `paused`, `speed`; call `pause()`, `resume()`, `setSpeed(1 or 10)`. Use `simClock.clock` from Python to add tick listeners. |
+
+## Layout
+
+```
+__main__.py             CTC Office entry point: builds theme, loads QML
+test_ui.py              test UI entry point (separate process)
+sim_clock.py            SimulationClockBridge: the shared clock for QML
+harness_clock.py        HarnessClockBridge: the harness's clock, under it
+clock_link.py           clock link between the CTC and the test UI
+ui/Main.qml             window, fixed 1440×900 canvas, mode + window state
+ui/views/*.qml          Automatic / Manual / Maintenance right-hand columns
+ui/panels/*.qml         track view, dispatch, schedule, throughput,
+                        closures, switch, close block, occupancy window/dock
+ui/components/*.qml     CTC-only building blocks (see below)
+ui/test/TestMain.qml    test UI window
+ui/test/TestHarnessView.qml  inputs / outputs tables and run controls
+```
+
+### Shared components
+
+Buttons, fields, badges, readouts, tables and the theme tokens come from
+the repository-level [`ui/`](../../ui/README.md) folder shared by every
+module. `__main__.py` puts the repository root on `sys.path` to import
+`ui.theme`. QML files import the folder relatively: `import
+"../../../../ui"` from `ui/panels/`, `ui/views/` and `ui/components/`.
+Do not copy shared components into this module; change them in `ui/`.
+
+`ui/components/` holds only what the shared library does not provide:
+
+| Component | Why it is CTC-only |
+| --- | --- |
+| `CtcHeader` | Window buttons, mode toggle and clock; shared `ModuleHeader` has navigation tabs instead |
+| `ClockControls` | Simulation clock readout, Run / Pause and 1× / 10×; shared by `CtcHeader` and the test UI |
+
+#### Moved to the shared library
+
+These started here and were promoted to `ui/` on 2026-09-30 so other
+modules can use them. They are catalogued in the shared
+[`ui/README.md`](../../ui/README.md) and shown in `ui/gallery/`.
+
+| Component | Was | Now |
+| --- | --- | --- |
+| `Panel` | `ctc_ui/ui/components/Panel.qml` | `ui/Panel.qml` |
+| `EmptyState` | `ctc_ui/ui/components/EmptyState.qml` | `ui/EmptyState.qml` |
+| `FormField` | `ctc_ui/ui/components/FormField.qml` | `ui/FormField.qml` |
+| `LabeledDivider` | `ctc_ui/ui/components/LabeledDivider.qml` | `ui/LabeledDivider.qml` |
+| `ModeCallout` | `ctc_ui/ui/components/ModeCallout.qml` | merged into `ui/Callout.qml` (file name kept); use `Callout { variant: "warning" }` |
+
+## Checks
+
+```bash
+python -m flake8 --max-line-length=79 --max-doc-length=72 ctc_ui
+python -m mypy --disallow-untyped-defs ctc_ui
+pyside6-qmllint -I ctc_ui/ui -I ctc_ui/ui/components -I ctc_ui/ui/panels \
+    -I ctc_ui/ui/test -I ../ui $(find ctc_ui/ui -name '*.qml')
+```
+
+flake8 and mypy are clean. qmllint's only remaining warnings are
+`[unqualified]` access to the `theme` context property. That is inherent to
+the context-property pattern shared with the Train Model UI.
+
+## CTC module and link
+
+- `ctc/interface.py` is the CTC's boundary (decision D005): inputs from
+  the Track Controller and Track Model, outputs to the Track Controller
+  (suggested speed and authority, closed blocks, switch commands,
+  maintenance mode) and to the central harness (clock speedup and clock
+  pause), and the
+  `CtcOffice` contract (`step(dt, inputs) -> outputs`, `validate_inputs`,
+  dispatcher actions and `load_schedule`). Every block, switch and
+  crossing reference carries its line.
+- `ctc/model.py` is a stub implementation with no scheduling logic yet.
+  It checks every reference and value against the track layout files
+  and the boundary types, enforces the safety rules above, accepts
+  switch commands and block closures only in maintenance mode, and gives
+  each dispatched train it is following (once its line's Track
+  Controller reports ready; until then it sends nothing for the line,
+  and dispatches no train on it) an
+  authority counted in blocks
+  (above) and a suggested speed 1 m/s under its head block's speed limit
+  (whole m/s, rounded down), lower if it needs to stop within its
+  authority. Each suggestion carries the block it is for: the block the
+  train's head is in and, while its authority is at least 1, the next
+  block on its route with one block less (R49). The Track Controller
+  sees only occupancy, so that block says which track circuit the speed
+  and authority go down. A train still in the yard (a black box) gets
+  neither until it leaves. The CTC releases a waiting train from the
+  yard itself, one per line at a time, and reports it once in
+  `new_trains`; it reports a scheduled run that has come back and
+  stopped at the yard entry block once in `retired_trains` (D022). The
+  central harness applies both to its roster.
+- `ctc/tracking.py` follows the trains from block occupancy, and infers
+  which occupied blocks have failed (above).
+- `ctc/scheduler.py` plans each run of the loaded schedule and, in
+  automatic mode, gives the orders that carry it out (above).
+- `ctc/routing.py` reads how blocks connect from the layout files
+  (neighbouring blocks, and each switch's normal and reverse
+  connections; the yard is left out) and counts authority along the
+  shortest route a train can run: never turning back, and moving on only
+  to the blocks each block's `next_blocks` lists (its direction of
+  travel; a line whose file has none, Red for now, runs both ways).
+  Routes go round unusable blocks and trains that are not moving where a
+  reasonable detour exists; when only reversing would get round, the
+  train waits and the dispatcher gets a reversal alert.
+- `ctc/actions.py` runs dispatcher actions sent by name over a link,
+  with strict argument types, and can apply inputs and actions as one
+  batch, all or nothing (tried on a copy of the module first).
+- The CTC window hosts the module (`ctc_ui/ctc_host.py`) and serves it
+  over `ctc/socket_link.py`: a Qt local socket (a named pipe on Windows,
+  never a network connection) carrying one JSON message per line. The
+  test UI connects with `SocketLink`, or uses `ctc/link.py`'s `LocalLink`
+  with `--standalone`. At integration the central harness calls the
+  module directly and the links are not used.
+
+## Under the central harness
+
+`ctc/module_process.py` is the process the central harness starts
+(`track_overflow.py --module ctc-office`). It hosts the one module in
+the CTC window, with no test link and no clock of its own: the harness
+owns the clock (D005, D017) and steps the module once per tick, with
+inputs in the JSON form of `ctc/wire.py`. `harness_clock.py`
+(`HarnessClockBridge`) stands in for `simClock`: the header shows the
+harness's time, and Run, Pause and 1× / 10× set `clock_paused` and
+`clock_speedup`, which also go to the harness at once, since nothing
+steps while the clock is paused. The window redraws at most every
+200 ms, after each reply. `--run-on-ready`, `--speedup-at-tick`,
+`--dispatch` and `--schedule` stand in for the dispatcher in tests and
+demonstrations only. Tests: `tests/test_module_process.py`.
+
+## Clock link
+
+`clock_link.py` lets the test UI, in its own process, control the CTC
+Office's simulation clock. The CTC process listens with a `QLocalServer`
+(`ClockLinkServer`) and the test UI connects with a `QLocalSocket`
+(`ClockLinkClient`). That is a named pipe on Windows and a Unix socket
+elsewhere, never a network connection. Messages are JSON, one per line:
+
+| Direction | Message |
+| --- | --- |
+| CTC → test UI | `{"type": "clock", "time": "05:00:03", "paused": false, "speed": 1}`, on connect and whenever the shown time, pause state or speed changes |
+| Test UI → CTC | `{"type": "pause"}`, `{"type": "resume"}`, `{"type": "set_speed", "speed": 10}` |
+
+Anything malformed, of an unknown type, or with a speed other than 1 or 10
+is ignored. The CTC Office runs normally whether or not a test UI is
+connected, and if the link cannot start (for example, a second CTC Office
+is already running) it prints a warning and carries on.
+
+The module's inputs and outputs use the same approach on a separate
+socket; see [CTC module and link](#ctc-module-and-link).
+
+## Design notes
+
+1. **No shadows.** QML has no cheap box-shadow, so `--shadow-1` is carried
+   by `--border`, as in the Train Model UI.
+2. **No dashed borders.** Empty states use a solid `--border-strong` frame.
+3. **Scrim colour.** The style guide has no scrim token, so `Main.qml`
+   derives it from `theme.text_primary` at 40 % alpha.
+4. **The occupancy window is not a `Popup`.** A Popup reparents to the
+   window overlay and would escape the canvas scale transform.
+5. **No placeholders on text fields.** The shared `ValueField` does not
+   expose `placeholderText` or `inputMask`, so the search hint and the
+   `HH:MM` arrival-time mask were dropped when migrating to it.
+6. **Window sizing is shared.** `ui/Main.qml` is a `ScaledWindow` and
+   `__main__.py` installs `ui.aspect_lock.install_window_scaling`. The CTC
+   used to correct the window size from a QML timer after each resize,
+   which fought the window manager and snapped the window back to its large
+   size; that code is gone. See `documents/SCALING_GUIDE.md`.

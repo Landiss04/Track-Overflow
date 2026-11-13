@@ -18,9 +18,6 @@ Architecture signal flow (from Final Project vF.pdf, p. 8-9):
       |-- Power Cmd, Brake Cmd, Doors,
       |   Lights, Temp Setpoint -----------> Train Model
       |<- Current Speed, Failures --------- Train Model
-  MBO Overlay
-      |-- Safe Authority ------------------> CTC Office
-      |<- Train Position ------------------- Train Model
 """
 
 from abc import ABC, abstractmethod
@@ -62,7 +59,7 @@ class Beacon:
 class TrackSignal:
     """Encoded track-circuit signal the Train Controller reads off the rail."""
     commanded_speed_mps: float
-    authority_m: float
+    authority_blocks: int       # blocks the train may travel before it must stop
     beacon: Optional[Beacon] = None
 
 
@@ -124,7 +121,7 @@ class ITrackModel(ABC):
         self,
         block_id: str,
         speed_mps: float,
-        authority_m: float,
+        authority_block_id: str,
     ) -> None:
         """Store the commanded speed and authority for a specific block."""
 
@@ -177,8 +174,8 @@ class ITrackModel(ABC):
     # -- Environment --
 
     @abstractmethod
-    def set_temperature_f(self, temp_f: float) -> None:
-        """Set ambient temperature (°F) for track-heater logic."""
+    def set_temperature_c(self, temp_c: float) -> None:
+        """Set ambient temperature (°C) for track-heater logic."""
 
 
 class ITrainModel(ABC):
@@ -186,7 +183,7 @@ class ITrainModel(ABC):
     Physical train simulator (Newton's-law point-mass model).
 
     Inputs  – commands from SW Train Controller, track signal from Track Model.
-    Outputs – TrainState (speed, position, etc.) to SW Train Controller, MBO,
+    Outputs – TrainState (speed, position, etc.) to SW Train Controller,
               and position to Track Model.
     """
 
@@ -217,8 +214,8 @@ class ITrainModel(ABC):
         """Control cabin and headlight state."""
 
     @abstractmethod
-    def set_temperature_setpoint_f(self, temp_f: float) -> None:
-        """Set the cabin temperature setpoint in °F."""
+    def set_temperature_setpoint_c(self, temp_c: float) -> None:
+        """Set the cabin temperature setpoint in °C."""
 
     # -- Input from Track Model --
 
@@ -305,7 +302,7 @@ class ISwTrackController(ABC):
         self,
         block_id: str,
         suggested_speed_mps: float,
-        authority_m: float,
+        authority_block_id: str,
     ) -> None:
         """Accept a speed/authority suggestion from the CTC for a block."""
 
@@ -322,8 +319,8 @@ class ISwTrackController(ABC):
     # -- Outputs to Track Model --
 
     @abstractmethod
-    def get_commanded_signal(self, block_id: str) -> tuple[float, float]:
-        """Return (commanded_speed_mps, authority_m) for a block."""
+    def get_commanded_signal(self, block_id: str) -> tuple[float, str]:
+        """Return (commanded_speed_mps, authority_block_id) for a block."""
 
     @abstractmethod
     def get_switch_commands(self) -> list[SwitchState]:
@@ -338,7 +335,7 @@ class ICtcOffice(ABC):
     """
     Centralized Traffic Control office.
 
-    Inputs  – block/switch states from SW Track Controller, authority from MBO.
+    Inputs  – block/switch states from SW Track Controller.
     Outputs – suggested speed and authority per block to SW Track Controller.
     """
 
@@ -355,12 +352,6 @@ class ICtcOffice(ABC):
     @abstractmethod
     def receive_switch_states(self, states: list[SwitchState]) -> None:
         """Accept switch positions from the wayside."""
-
-    # -- From MBO --
-
-    @abstractmethod
-    def receive_mbo_authority(self, train_id: str, authority_m: float) -> None:
-        """Accept a safe moving-block authority from the MBO overlay."""
 
     # -- Dispatcher actions --
 
@@ -379,32 +370,90 @@ class ICtcOffice(ABC):
     # -- Outputs to SW Track Controller --
 
     @abstractmethod
-    def get_suggestion(self, block_id: str) -> tuple[float, float]:
-        """Return (suggested_speed_mps, authority_m) for a block."""
+    def get_suggestion(self, block_id: str) -> tuple[float, str]:
+        """Return (suggested_speed_mps, authority_block_id) for a block."""
 
 
-class IMboOverlay(ABC):
-    """
-    Moving Block Overlay — computes safe stopping distance per train.
+# ---------------------------------------------------------------------------
+# Track Model edge types
+#
+# Catalog types for the Track Model's edges, mapped by
+# common/harness/track_model_edges.py (D005, D008). Backend units; IDs are
+# strings. Per-block maps are keyed by block ID, per-train maps by train ID.
+# ---------------------------------------------------------------------------
 
-    Inputs  – real-time position from each Train Model.
-    Outputs – safe authority per train to CTC Office.
-    """
+class SignalAspect(Enum):
+    RED = auto()
+    YELLOW = auto()
+    GREEN = auto()
+    SUPER_GREEN = auto()
 
-    @abstractmethod
-    def update(self, dt: float) -> None:
-        """Recalculate safe authorities for all tracked trains."""
 
-    # -- From Train Model --
+@dataclass
+class TrackInfo:
+    """Terrain of the block a train occupies (signals/track-info)."""
+    block_id: str
+    grade_deg: float            # positive uphill
+    elevation_m: float
+    speed_limit_mps: float
+    polarity: bool              # reverses at every block change
+    station_name: Optional[str] = None  # station in this block, if any
 
-    @abstractmethod
-    def report_train_position(
-        self, train_id: str, position: TrainPosition, speed_mps: float
-    ) -> None:
-        """Receive a vital position/speed report from a train."""
 
-    # -- Outputs to CTC --
+@dataclass
+class TrainTrackReport:
+    """Train Model -> Track Model, per train, every tick.
 
-    @abstractmethod
-    def get_safe_authority(self, train_id: str) -> float:
-        """Return the safe stopping distance in metres for the given train."""
+    The offset restarts at 0 when the Train Model sees a new block;
+    block_id "" means the train has no block yet."""
+    position: TrainPosition     # block and offset since entering it
+    actual_speed_mps: float     # signed; negative on rollback
+    block_changed: bool
+    passenger_capacity: int
+    doors_open: bool            # left or right open; boarding needs one
+
+
+@dataclass
+class WaysideCommands:
+    """Track Controller -> Track Model, every tick. Speed and authority
+    are per block: the track circuit signal covers the whole block. They
+    last one tick: a block not commanded on a tick reads zero."""
+    commanded_speed_mps: dict[str, float] = field(default_factory=dict)
+    authority_blocks: dict[str, int] = field(default_factory=dict)
+    switch_positions: dict[str, SwitchPosition] = field(default_factory=dict)
+    crossing_gates_closed: dict[str, bool] = field(default_factory=dict)
+    signal_aspects: dict[str, SignalAspect] = field(default_factory=dict)
+    heaters_on: dict[str, bool] = field(default_factory=dict)  # by section
+
+
+@dataclass
+class TrackReadback:
+    """Track Model -> Track Controller, every tick. The CTC Office reads
+    occupancy and device state through the Track Controller. Ticket sales
+    do not pass through it: see ``TicketSales``."""
+    block_occupancy: dict[str, bool]
+    switch_positions: dict[str, SwitchPosition]
+    crossing_gates_closed: dict[str, bool]
+    signal_aspects: dict[str, SignalAspect]
+    failures: dict[str, FailureMode]
+    heaters_on: dict[str, bool]     # by section, actually running
+    track_temp_c: dict[str, float] = field(default_factory=dict)  # section
+
+
+@dataclass
+class TicketSales:
+    """Track Model -> CTC Office, every tick, direct (truth
+    ``signals/ticket-sales``). Pairs of (count, station), for example
+    ``(3, "SHADYSIDE")``. ``sold_now`` is this tick. The Track Model keeps no
+    running total and sends none."""
+    sold_now: list[tuple[int, str]]
+
+
+@dataclass
+class TrainTrackFeed:
+    """Track Model -> Train Model, per train, every tick."""
+    track_info: TrackInfo
+    commanded_speed_mps: float      # m/s, of the occupied block
+    authority_blocks: int           # of the occupied block; 0 = stop
+    beacon: Optional[Beacon]        # platform_side "L", "R" or "LR"
+    passengers_boarded: int

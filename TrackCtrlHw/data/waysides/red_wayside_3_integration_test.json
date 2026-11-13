@@ -1,0 +1,299 @@
+{
+  "line": "Red",
+  "wayside": "Red-3",
+  "integration_test_only": true,
+  "provenance": "Integration test copy; not Braden's program/database. Replace or approve before demonstration. K2/K4, Kevin 2026-10-21.",
+  "blocks": [
+    {
+      "block_number": 46,
+      "section": "I",
+      "length_m": 75,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "infrastructure": {
+        "underground": true
+      },
+      "next_blocks": [
+        45,
+        47
+      ]
+    },
+    {
+      "block_number": 47,
+      "section": "I",
+      "length_m": 75,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "infrastructure": {
+        "railway_crossing": true
+      },
+      "next_blocks": [
+        46,
+        48
+      ]
+    },
+    {
+      "block_number": 48,
+      "section": "I",
+      "length_m": 75,
+      "grade_percent": 0,
+      "speed_limit_kmh": 70,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "infrastructure": {
+        "station": "STATION SQUARE"
+      },
+      "station_side": "Left/Right",
+      "next_blocks": [
+        47,
+        49
+      ]
+    },
+    {
+      "block_number": 49,
+      "section": "J",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 60,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        48,
+        50
+      ]
+    },
+    {
+      "block_number": 50,
+      "section": "J",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 60,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        49,
+        51
+      ]
+    },
+    {
+      "block_number": 51,
+      "section": "J",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        50,
+        52
+      ]
+    },
+    {
+      "block_number": 52,
+      "section": "J",
+      "length_m": 43.2,
+      "grade_percent": 0,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "infrastructure": {
+        "switch": "52-53; 52-66"
+      },
+      "next_blocks": [
+        51,
+        53,
+        66
+      ]
+    },
+    {
+      "block_number": 53,
+      "section": "J",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        52,
+        54
+      ]
+    },
+    {
+      "block_number": 54,
+      "section": "J",
+      "length_m": 50,
+      "grade_percent": 0,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        53,
+        55
+      ]
+    },
+    {
+      "block_number": 55,
+      "section": "K",
+      "length_m": 75,
+      "grade_percent": 0.5,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0.375,
+      "cumulative_elevation_m": -0.866,
+      "next_blocks": [
+        54,
+        56
+      ]
+    },
+    {
+      "block_number": 56,
+      "section": "K",
+      "length_m": 75,
+      "grade_percent": 0.5,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0.375,
+      "cumulative_elevation_m": -0.491,
+      "next_blocks": [
+        55,
+        57
+      ]
+    },
+    {
+      "block_number": 57,
+      "section": "K",
+      "length_m": 75,
+      "grade_percent": 0.5,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0.375,
+      "cumulative_elevation_m": -0.116,
+      "next_blocks": [
+        56,
+        58
+      ]
+    },
+    {
+      "block_number": 58,
+      "section": "L",
+      "length_m": 75,
+      "grade_percent": 1,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0.75,
+      "cumulative_elevation_m": 0.634,
+      "next_blocks": [
+        57,
+        59
+      ]
+    },
+    {
+      "block_number": 59,
+      "section": "L",
+      "length_m": 75,
+      "grade_percent": 0.5,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0.375,
+      "cumulative_elevation_m": 1.009,
+      "next_blocks": [
+        58,
+        60
+      ]
+    },
+    {
+      "block_number": 60,
+      "section": "L",
+      "length_m": 75,
+      "grade_percent": 0,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0,
+      "cumulative_elevation_m": 1.009,
+      "infrastructure": {
+        "station": "SOUTH HILLS JUNCTION"
+      },
+      "station_side": "Left/Right",
+      "next_blocks": [
+        59,
+        61
+      ]
+    },
+    {
+      "block_number": 61,
+      "section": "M",
+      "length_m": 75,
+      "grade_percent": -0.5,
+      "speed_limit_kmh": 55,
+      "elevation_m": -0.375,
+      "cumulative_elevation_m": 0.634,
+      "next_blocks": [
+        60,
+        62
+      ]
+    },
+    {
+      "block_number": 62,
+      "section": "M",
+      "length_m": 75,
+      "grade_percent": -1,
+      "speed_limit_kmh": 55,
+      "elevation_m": -0.75,
+      "cumulative_elevation_m": -0.116,
+      "next_blocks": [
+        61,
+        63
+      ]
+    },
+    {
+      "block_number": 63,
+      "section": "M",
+      "length_m": 75,
+      "grade_percent": -1,
+      "speed_limit_kmh": 55,
+      "elevation_m": -0.75,
+      "cumulative_elevation_m": -0.866,
+      "next_blocks": [
+        62,
+        64
+      ]
+    },
+    {
+      "block_number": 64,
+      "section": "N",
+      "length_m": 75,
+      "grade_percent": -0.5,
+      "speed_limit_kmh": 55,
+      "elevation_m": -0.375,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        63,
+        65
+      ]
+    },
+    {
+      "block_number": 65,
+      "section": "N",
+      "length_m": 75,
+      "grade_percent": 0,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        64,
+        66
+      ]
+    },
+    {
+      "block_number": 66,
+      "section": "N",
+      "length_m": 75,
+      "grade_percent": 0,
+      "speed_limit_kmh": 55,
+      "elevation_m": 0,
+      "cumulative_elevation_m": -1.241,
+      "next_blocks": [
+        52,
+        65
+      ]
+    }
+  ]
+}

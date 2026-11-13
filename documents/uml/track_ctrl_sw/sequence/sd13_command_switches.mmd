@@ -1,0 +1,23 @@
+sequenceDiagram
+    autonumber
+    participant W as TrackController (wayside)
+    participant U as Program (user)
+    participant V as Program (vital code)
+    participant M as SwTrackController
+    participant H as Central Harness
+    participant TM as Track Model
+    Note over W,V: Inside TrackController.scan (UC-09).
+    W->>U: scan(image)
+    U-->>W: return SW_s
+    W->>V: scan(image + SW_s, HAND_s, CTCCMD_s)
+    V->>V: scan internal: V_REQ_s := CTC command, else hand-set, else program
+    V->>V: scan internal: OUT_SW_s := the actual position under a train, else V_REQ_s
+    V->>V: scan internal: V_MOV_s := OUT_SW_s XOR SWREV_s, so OUT_AUTH_b := 0
+    V-->>W: return OUT_SW_s
+    W->>W: encode_outputs internal: switch_commands[s] := OUT_SW_s (1 reverse)
+    W-->>M: read switch_commands
+    M->>M: _outputs internal: keyed by BlockKey, _position(): normal or reverse
+    M-->>H: return TrackModelOutputs.switch_commands
+    H->>H: _finish_tick internal: next tick, inputs_for(): track_controller_to_track_model(...)
+    H->>TM: STEP: switch command
+    TM-->>H: return the actual position, read back next tick (UC-12)

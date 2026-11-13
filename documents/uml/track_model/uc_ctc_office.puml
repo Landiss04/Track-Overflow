@@ -1,0 +1,19 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 13
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+left to right direction
+skinparam usecaseBackgroundColor #FFF8DC
+skinparam usecaseBorderColor #555555
+actor "CTC Office" as A
+rectangle "Track Model" {
+  usecase "UC-11 Report Ticket Sales" as UC11
+  usecase "UC-10 Sell Tickets and\nBoard Passengers" as UC10
+}
+A -- UC11
+UC10 ..> UC11 : <<include>>
+@enduml

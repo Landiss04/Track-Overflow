@@ -1,0 +1,64 @@
+@startuml architecture
+!include ../style.iuml
+skinparam componentStyle rectangle
+
+package "Host PC — Track Ctrl HW process (common/hw_link/host.py)" {
+  package "Presentation" {
+    [Track Controller window\nQML views and dialogs] as QML
+    [TrackControllerState\nQML bridge, refresh on view or tick] as State
+    [views / display / schematic\nsnapshot to rows, imperial units,\nterritory diagram layout] as Views
+    [territory parser\nwayside database JSON] as TerrHost
+  }
+  package "Communication (host side)" {
+    [ModuleLink\nnewline JSON to the harness] as Link
+    [RemoteTrackController\nTrackController proxy, cached snapshot] as Remote
+    [HardwareRelay\nordered relay, reconnect, held replies] as Relay
+    [SerialTransport\nQSerialPort, USB CDC-ACM] as Serial
+  }
+}
+
+package "Raspberry Pi 5 — Track Ctrl HW core (Python, no Qt)" {
+  package "Communication (Pi side)" {
+    [PiLinkServer\nnewline JSON, request journal] as PiLink
+    [TrackCore\nstep, allowlisted actions, views] as Core
+  }
+  package "Control" {
+    [HwTrackController\nevery wayside of the Red Line] as Ctrl
+    [Wayside ×N\nI/O image, scan, drive, report] as W
+  }
+  package "PLC engine" {
+    [compile_program\ntwo compilations per statement] as Compile
+    [Channel A\ntree walk] as ChA
+    [Channel B\nstack machine] as ChB
+    [Vital block\nread-only, per territory] as Vital <<planned>>
+  }
+}
+
+package "Shared by both sides" {
+  [interface.py\nTrackController Protocol\nand boundary types] as Contract
+  [wire.py / codec.py\nJSON forms and snapshot packing] as Wire
+  [errors.py\nTrackControllerError family] as Errors
+}
+
+[Central Harness] as Harness
+Harness -down-> Link : STEP: tick, dt, sim time, inputs
+Link --> Relay : submit_step
+QML --> State : slots, bindings
+State --> Views
+State --> TerrHost
+State --> Remote : load, snapshot
+Remote --> Relay : call_action
+Relay --> Serial
+Serial -right-> PiLink : USB serial
+PiLink --> Core
+Core --> Ctrl
+Ctrl --> W
+W --> Compile
+W --> ChA
+W --> ChB
+W --> Vital
+Remote ..> Contract : implements
+Ctrl ..> Contract : implements
+Core ..> Wire
+Remote ..> Wire
+@enduml

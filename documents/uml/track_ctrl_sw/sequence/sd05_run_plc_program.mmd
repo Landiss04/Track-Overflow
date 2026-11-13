@@ -1,0 +1,39 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    participant C as plc
+    participant W as TrackController (wayside)
+    participant U as Program (user)
+    participant V as Program (vital code)
+    P->>UI: click Run
+    UI->>S: run()
+    alt no track loaded
+        S->>S: run internal: _log(load a track first)
+        S-->>UI: emit terminalChanged
+    else a wayside is selected
+        S->>C: compile_program(buffer)
+        C-->>S: return Program, with its diagnostics
+        S->>W: diagnose(program)
+        W->>W: diagnose internal: program.diagnostics + check_program(program)
+        Note right of W: check_program: every name is this wayside's I/O and every output is driven.
+        W-->>S: return the diagnostics
+        alt has_errors(diagnostics)
+            S-->>UI: emit bufferChanged: parser pane, compile failed
+        else compiles
+            S->>W: trial(program)
+            W->>W: trial internal: copy.copy(self) with its own input card
+            W->>W: _run internal: build_scan_inputs() on the copy (OS decode)
+            W->>U: scan(image)
+            U-->>W: return (values, warnings)
+            W->>V: scan(image + the program's outputs)
+            V-->>W: return the final OUT_ bits
+            W->>W: _run internal: encode_outputs(final), report_overrides(...), _format_log()
+            W-->>S: return the trial copy: track_circuits, overrides, warnings, log
+            S->>S: run internal: verified := buffer only if there is no diagnostic
+            S-->>UI: emit bufferChanged, terminalChanged
+            UI-->>P: sandbox outputs, log, overrides. Commit enabled only after a clean run.
+        end
+    end
+    Note over S,V: trial scans a copy of the wayside. The live outputs, the committed program and the track are untouched.

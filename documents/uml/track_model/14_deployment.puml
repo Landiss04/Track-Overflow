@@ -1,0 +1,36 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam nodesep 30
+skinparam ranksep 50
+node "Windows 11 PC" as PC {
+  node "One executable (PyInstaller)" as EXE {
+    artifact "Central harness process\n(SystemClock, edge functions, event log CSV)" as A0
+    artifact "track_model process\n+ Track Model window" as A1 #FFF1B8
+    artifact "ctc_office process" as A2
+    artifact "track_controller (SW) process" as A3
+    artifact "train_model process" as A4
+    artifact "train_controller (SW) process" as A5
+    artifact "HW variant UI processes\n(relay to the Pis)" as A6
+  }
+  database "green_line.json\nred_line.json" as F
+  artifact "Track Model test UI\n(standalone only)" as TU
+}
+node "Raspberry Pi\n(Track Controller HW)" as P1
+node "Raspberry Pi\n(Train Controller HW)" as P2
+A0 -- A1 : newline-delimited JSON\n(request ID, tick number)
+A0 -- A2
+A0 -- A3
+A0 -- A4
+A0 -- A5
+A0 -- A6
+A1 .. F : reads at load
+TU .. A1 : local socket (named pipe),\nJSON lines
+A6 -- P1 : USB serial (CDC-ACM)
+A6 -- P2 : USB serial (CDC-ACM)
+@enduml

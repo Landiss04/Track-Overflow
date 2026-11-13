@@ -1,0 +1,71 @@
+@startuml deployment
+!include ../style.iuml
+title System deployment — Track Controller (SW) in context
+
+node "Host PC\nWindows 11, one machine, no network" as PC {
+  artifact "TrackOverflow.exe\n(PyInstaller bundle)" as Exe
+  node "Central harness process" as HP {
+    component "Central Harness\nshared clock (D017), fixed dt (D006),\nedge mappings (ctc_edges), event log (CSV)" as Harness
+  }
+  node "Track Ctrl SW host process\n(main.py, Green Line, D021)" as TP {
+    component "HarnessEndpoint\nnewline JSON: step, ready,\nrequest ID + tick" as EP <<planned>>
+    component "Track Controller window\n(PySide6 / QML)\n+ TrackControllerState" as Win
+    component "SwTrackController\nTrackController × 6 waysides (Green Line)\nOS: decode inputs, encode outputs\nPLC engine: user program + attached vital code" as Core
+    component "StimulusServer\nnamed pipe, test link only" as Stim
+  }
+  node "Other module processes" as Others {
+    component "CTC Office" as CTC
+    component "Track Model" as TM
+    component "Train Model" as TrM
+    component "Train Ctrl SW / HW host" as TrC
+    component "Track Ctrl HW host (Red Line)" as TCHW
+  }
+  folder "Track data (host disk)" as Data {
+    file "green_line.json\ntrack layout (TrackModel/)" as Layout
+    file "*.plc\nPLC programs, one per wayside" as PLC
+  }
+}
+
+node "Raspberry Pi\n(Train Ctrl HW)" as Pi2
+node "Raspberry Pi 5\n(Track Ctrl HW)" as Pi1
+
+node "Track Ctrl SW test UI process" as TUI {
+  component "test_main.py: TestClientState,\nStandInWorld, ClockDriver" as Client
+}
+
+Exe ..> HP : (1) starts
+HP --> TP : (2) spawns
+HP --> Others : (2) spawns
+Harness <--> EP : (3) newline JSON\nrequest ID + tick (D005)
+Harness <--> Others : newline JSON (D005)
+EP --> Core : (5) step(dt, inputs)
+Win --> Core : (4) load_track, load_program
+Stim --> Core
+Win ..> Layout : Load track…
+Win ..> PLC : Load .plc file
+Client <..> Stim : named pipe\nnewline JSON
+TrC <--> Pi2 : USB serial
+TCHW <--> Pi1 : USB serial (D027)
+
+note right of PC
+  Startup
+  1. The user runs TrackOverflow.exe, which starts
+     the central harness process.
+  2. The harness spawns one process per module,
+     Track Ctrl SW among them.
+  3. Each module reports when it is ready; the
+     harness then runs the shared clock.
+  4. In the Track Ctrl SW window the programmer loads
+     the Green Line and commits a PLC program to all
+     6 waysides. Until then the line reports NOT READY
+     and transmits nothing.
+  5. Every tick the harness sends step(dt, inputs)
+     and waits for the outputs.
+end note
+note right of TUI
+  The test UI is a debug tool only: not packaged and
+  never started by the harness. Run alone, it plays
+  the clock, the CTC Office and the Track Model.
+  Exactly one driver steps the module at a time.
+end note
+@enduml

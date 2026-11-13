@@ -1,0 +1,20 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    participant W as TrackController (wayside)
+    P->>UI: open the View tab
+    UI->>S: setActiveTab(1)
+    loop every UI_REFRESH_MS (200 ms), on the refresh QTimer
+        S->>S: _flush internal: a step has marked the state dirty
+        S-->>UI: emit controllerChanged
+        UI->>S: controller, blockModel, blockCounts, outputs, suggestionRows, overrides
+        S->>W: read occupancy, closed, suggestions, track_circuits, switch_commands, aspects, overrides
+        W-->>S: return the last scan's inputs and outputs
+        S->>S: outputs internal: output_rows(controller), speeds via format_mph
+        S->>S: _sync_blocks internal: BlockListModel.update(rows)
+        S-->>UI: return the rows
+        UI-->>P: block grid, outputs, CTC suggestions, overrides, mode
+    end
+    Note over UI,W: Read only. The values are what the last step brought (UC-10, UC-11, UC-12).

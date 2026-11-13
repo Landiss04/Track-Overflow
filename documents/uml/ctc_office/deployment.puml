@@ -1,0 +1,44 @@
+@startuml deployment
+!include ../style.iuml
+title CTC Office — Deployment
+
+node "Host PC\nWindows 11, one machine, no network" as PC {
+  artifact "TrackOverflow.exe\n(PyInstaller bundle)" as Exe
+  node "Central harness process" as HP {
+    component "Central Harness\nshared clock, edge mappings,\nroster, event log (CSV)" as Harness
+  }
+  node "CTC Office process\n(executable in module mode: ctc-office)" as CP {
+    component "CTC Office window\n(PySide6 / QML)" as Win
+    component "CtcHost + StubCtcOffice\n(Green and Red Lines)" as Core
+    component "CtcOfficeProcess\n+ ModuleLink" as Proc
+  }
+  node "Other module processes" as Others {
+    component "Track Ctrl SW (Green)" as TCSW
+    component "Track Ctrl HW host (Red)" as TCHW
+    component "Track Model" as TM
+    component "Train Model" as TrM
+    component "Train Ctrl SW / HW host" as TrC
+  }
+  folder "Data (bundled)" as Data {
+    file "TrackModel/green_line.json\nTrackModel/red_line.json\ntrack layout" as Layout
+    file "utils/schedule_v4.json\nschedule (any file in that format)" as Sched
+  }
+}
+
+Exe ..> HP : starts
+HP --> CP : spawns
+HP --> Others : spawns
+Harness <--> Proc : local socket (named pipe)\nnewline JSON: READY, STEP,\nSTATE, QUIT (D005)
+Harness <--> Others : newline JSON
+Proc --> Core
+Win --> Core
+Core ..> Layout : read at start
+Win ..> Sched : Load schedule
+
+note bottom of PC
+  The CTC Office runs on the host only: no hardware variant.
+  Closing its window hides it; only the harness ends the process.
+  The CTC test UI (ctc_ui/test_ui.py) is a debugging tool: it is
+  not packaged and the harness never starts it (D005, D025).
+end note
+@enduml

@@ -1,0 +1,24 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam stateBackgroundColor #FFFBE6
+skinparam stateBorderColor #555555
+[*] --> Unoccupied : layout loaded
+state "Unoccupied" as Unoccupied
+state "Occupied" as Occupied
+state "Failed (reads occupied, track circuit dead)" as Failed {
+  state "Broken rail or track circuit failure" as BR
+  state "Power failure\n(also: switch held, light RED,\ngates down, section heaters off)" as PF
+}
+Unoccupied --> Occupied : train moves into block
+Occupied --> Unoccupied : train leaves block
+Unoccupied --> Failed : Murphy injects failure
+Occupied --> Failed : Murphy injects failure
+Failed --> Unoccupied : failure cleared, no train
+Failed --> Occupied : failure cleared, train present
+@enduml

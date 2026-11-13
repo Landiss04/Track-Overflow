@@ -1,0 +1,26 @@
+@startuml sd08_suggestions
+!include ../style.iuml
+autonumber
+
+participant "Central\nHarness" as H
+participant "HwTrackController\n(on the Pi)" as Ctrl
+participant "Wayside" as W
+
+H -> H : ctc_to_track_controller(ctc_outputs, "Red")\n→ suggestions: [{line, block_id,\nspeed_mps, authority_blocks}]
+H -> Ctrl : STEP → step(dt, inputs) (path as SD-07)
+Ctrl -> Ctrl : _validate(inputs): speed_mps whole, 0..MAX_SPEED_MPS;\nauthority_blocks ≥ 0; keys are BlockRef
+alt invalid
+  Ctrl --> H : raise InvalidInputError(reason) → REJECTED
+else valid
+  Ctrl -> W : scan(dt, time_s, ctc, track_model, stall)
+  W -> W : suggestions = {key: ctc.suggestions[key.ref]\nfor key in territory.keys\nif key.ref in ctc.suggestions}
+  W -> W : _run_program(...): speed = suggestion.speed_mps\n(0 with no suggestion)
+  W -> W : for bit in range(SPEED_BITS):\n  image[f"SPD_{n}_{bit}"] = bool(speed >> bit & 1)
+  W -> W : self._suggestions = suggestions
+  W --> Ctrl : WaysideScan
+end
+note right of W
+  authority_blocks stays in self._suggestions;
+  _drive sends it only if AUTH_n = 1 (SD-14).
+end note
+@enduml

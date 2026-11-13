@@ -1,0 +1,26 @@
+@startuml
+skinparam shadowing false
+skinparam dpi 170
+skinparam defaultFontName DejaVu Sans
+skinparam defaultFontSize 12
+skinparam roundCorner 6
+skinparam ArrowColor #333333
+skinparam BackgroundColor white
+skinparam sequenceMessageAlign left
+skinparam ParticipantPadding 20
+autonumber
+participant "Central harness" as H
+participant ":TrackModel" as TM
+participant "Track Controller" as TC
+H -> TM : step(dt, inputs)
+loop each section
+  TM -> TM : heater state of the section (D026, no command from the Track Controller)
+  alt a block of the section has a power failure
+    TM -> TM : heater off
+  end
+  TM -> TM : target = ambient, or ambient + 10 deg C while the heater runs
+  TM -> TM : track temperature moves toward the target
+end
+TM --> H : heater_states, track_temp_c
+H -> TC : read-back through track_model_to_track_controller()
+@enduml

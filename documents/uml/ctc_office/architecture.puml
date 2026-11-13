@@ -1,0 +1,66 @@
+@startuml architecture
+!include ../style.iuml
+title CTC Office — Software architecture
+skinparam componentStyle rectangle
+
+package "CTC Office process (PySide6), started by the harness" {
+  package "Presentation" {
+    [CTC Office window\nQML: header, track view,\nAutomatic / Manual / Maintenance views,\noccupancy window, alerts] as QML
+    [CtcHost\nQML bridge: rows, options,\ndispatcher slots] as Host
+    [TrackMapModel\nmap geometry from the layout] as Map
+    [display\nmph, HH:MM] as Display
+    [HarnessClockBridge\nshows harness time;\nRun / Pause, 1x / 10x] as HClock
+  }
+  package "Process and communication" {
+    [CtcOfficeProcess\nREADY, STEP, STATE, QUIT] as Proc
+    [ModuleLink\nnewline JSON over a local socket] as Link
+    [wire\nJSON form of every boundary type] as Wire
+  }
+  package "Control (no Qt)" {
+    [StubCtcOffice\nvalidation, safety rules, orders,\nclosures, switch commands,\nauthority, suggestions, yard] as Model
+  }
+  package "Domain services (no Qt)" {
+    [TrainTracker\ntrains and failures\nfrom occupancy] as Tracker
+    [AutoDispatcher + plan_run\nschedule runs, stops,\ntwo-way zones] as Sched
+    [TrackGraph + authority\nroutes, block-count authority] as Routing
+  }
+  package "Data (no Qt)" {
+    [track_layout\ngreen_line.json, red_line.json] as Layout
+    [schedule\nschedule JSON] as Schedule
+  }
+}
+
+package "Contract (no Qt)" {
+  [interface.py\nCtcOffice Protocol\nand boundary types] as Contract
+  [CtcError family\nInvalidInputError, UnsafeActionError, ...] as Errors
+}
+
+package "Standalone only (not started by the harness)" {
+  [SimulationClockBridge\n+ ClockLinkServer] as SClock
+  [CtcLinkServer / SocketLink\nCTC test UI link] as TestLink
+  [CTC test UI\nstands in for the Track Controller (D025)] as TestUI
+}
+
+[Central Harness] as Harness
+Harness -down-> Link : STEP: tick, dt,\nsim_time_s, inputs
+Link --> Proc
+Proc --> Wire
+Proc --> Host : step_at()
+Proc --> HClock
+HClock ..> Link : STATE:\nclock_paused, clock_speedup
+QML --> Host : slots, bindings
+QML --> Map
+Host --> Display
+Host --> Model : CtcOffice calls
+Model --> Tracker
+Model --> Sched
+Model --> Routing
+Model --> Layout
+Host --> Schedule : Load schedule
+Sched --> Routing
+Model ..> Contract : implements
+Model ..> Errors
+TestUI --> TestLink
+TestLink --> Model
+SClock --> Host
+@enduml

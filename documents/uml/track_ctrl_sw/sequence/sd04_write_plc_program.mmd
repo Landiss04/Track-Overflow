@@ -1,0 +1,19 @@
+sequenceDiagram
+    autonumber
+    actor P as Programmer
+    participant UI as Track Controller UI (QML)
+    participant S as TrackControllerState
+    Note over P,UI: Requires UC-02: a wayside is selected.
+    opt start from an empty file
+        P->>UI: click New
+        UI->>S: newFile()
+        S->>S: newFile internal: buffer := empty, file := gtc01_new.plc, clear the last RUN
+        S-->>UI: emit bufferChanged, terminalChanged
+    end
+    loop each edit
+        P->>UI: type in the editor
+        UI->>S: setBuffer(text)
+        S->>S: setBuffer internal: buffer := text, so the last RUN no longer matches
+        S-->>UI: emit bufferChanged (canCommit false)
+    end
+    Note right of S: Nothing reaches the wayside until the buffer is run and committed.
