@@ -1,24 +1,38 @@
-# Plan (rev 2): signal aspects to the CTC, and HW/SW on either line
+# Plan (rev 3): signal aspects to the CTC, and HW/SW on either line
 
-Revised 2026-11-12 after four Sonnet prototypes in scratch copies. Nothing in the repo
-has changed. Prototype patches (reference, not for applying blind):
+Revised 2026-11-12 after four Sonnet prototypes in scratch copies. No code in the repo
+has changed.
+
+**Rev 3, 2026-11-13 (Kevin):** a whole-line swap is not enough. The per-train mix
+(Phase 4) is required in full, and the Track Controllers must likewise run both
+variants on both lines (new Phase 5). How Track Controller territory is assigned is an
+open question for the owners. Changes are marked **(rev 3)**.
+
+Prototype patches (reference, not for applying blind):
 
 | Prototype | Patch | Size | Result |
 | --- | --- | --- | --- |
-| Aspects to CTC | `scratchpad/p1-aspects.patch` | 763 lines, 21 files | works; CTC suite 350 → 353 OK |
-| Whole-line swap | `scratchpad/p2-swap.patch` | 622 lines, 10 files | works; default and swapped headless runs clean |
-| Green HW data | `scratchpad/p3-green-data.patch` | 4053 lines (≈3400 generated), 8 files | works in-process; 13 new tests OK |
-| Per-train mix | `scratchpad/p4-mix.patch` (on top of p2) | 722 lines, 17 files | works; one SW + one HW Green train ran end to end |
+| Aspects to CTC | `prototypes-2026-11-13/p1-aspects.patch` | 763 lines, 21 files | works; CTC suite 350 → 353 OK |
+| Whole-line swap | `prototypes-2026-11-13/p2-swap.patch` | 622 lines, 10 files | works; default and swapped headless runs clean |
+| Green HW data | `prototypes-2026-11-13/p3-green-data.patch` | 4053 lines (≈3400 generated), 8 files | works in-process; 13 new tests OK |
+| Per-train mix | `prototypes-2026-11-13/p4-mix.patch` (on top of p2) | 722 lines, 17 files | works; one SW + one HW Green train ran end to end |
 
-`scratchpad` = `/tmp/claude-1000/-home-kevin-Documents-Trains-Track-Overflow/29bb3311-c381-4b2e-b754-1aa48e1f2de6/scratchpad` (on Kevin's machine; the patches are not in the repo)
+The patches are in `documents/prototypes-2026-11-13/`, as `diff -ruN` output against a
+copy of the tree at commit `7b1fb8b` (apply with `patch -p1`); `p4-mix` applies on top
+of `p2-swap`. No prototype covers Phase 5.
 
 ## Context
 
 - **R1.** The CTC Office receives the wayside signal aspects (RED / YELLOW / GREEN /
   SUPER_GREEN) and shows them as markers on the track map.
 - **R2.** The HW and SW variants of the Track Controller and the Train Controller can
-  run on either line. D021 fixes HW→Red, SW→Green today. Whole-line swap is planned as
-  the core; per-train mix is planned as an optional add-on.
+  run on either line. D021 fixes HW→Red, SW→Green today. **(rev 3)** Swapping whole
+  lines is not enough:
+  - Train Controllers: each train is assigned a variant, so both variants can serve the
+    same line at once (Phase 4, required).
+  - Track Controllers: both variants function on both lines at once, in the same spirit
+    (Phase 5, required). How territory is assigned to a variant is open for the owners.
+  - The whole-line setting (Phase 2) stays only as the default assignment.
 
 ## What the prototypes changed in this plan
 
@@ -55,8 +69,10 @@ has changed. Prototype patches (reference, not for applying blind):
 To `truth/_inbox/integrate/harness-into-development/`, one file each, committed and
 pushed in the same session. Provenance "asserted by Kevin Schillinger 2026-11-12".
 
-1. `decisions/D021-…` — replacement: variant per line selected at launch, default
-   HW→Red; `## Supersedes` names the fixed assignment.
+1. `decisions/D021-…` — replacement: Train Controller variant per train, default
+   HW→Red; `## Supersedes` names the fixed assignment. **(rev 3)** The Track Controller
+   half cannot be written in final form until the owners answer the Phase 5 assignment
+   question; propose it then, as its own entry or a further replacement.
 2. `decisions/D027-…` — replacement dropping "runs every Red Line train".
 3. `signals/signal-aspect-report.md` — new: `{line, signal_id, aspect}`, signal ID = its
    switch ID, Track Controller → CTC; value is the lamp the Track Model reports lit; a
@@ -99,10 +115,12 @@ copying crossings. **(rev)** validation uses `_no_conflict`, not "no duplicates"
 - **(rev)** update the input lists in `ctc_ui/README.md:265`, `ctc/interface.py:12`,
   `ctc/module_process.py:17`.
 
-## Phase 2 — whole-line swap (R2)
+## Phase 2 — default line assignment (R2)
 
-One harness flag `--hw-line {Red,Green}`, default `Red`. Confirmed sufficient; nothing
-pushed toward per-pair flags.
+One harness flag `--hw-line {Red,Green}`, default `Red`. **(rev 3)** This no longer
+meets R2 on its own. It is kept because Phases 4 and 5 need a default for every train
+and every piece of territory nobody assigned, and because it carries the `--line`
+plumbing they build on.
 
 - `common/harness/edges.py`: tables built in `SystemEdges.__init__(hw_line=…)`.
   **(rev)** nothing outside the file imports the old constants — remove them rather than
@@ -142,7 +160,7 @@ pushed toward per-pair flags.
   4. Inherited from Red: a train facing a moving switch keeps authority.
   5. Signal look-ahead for 62, 76 and 85.
 
-## Phase 4 — per-train mix (optional; build only on Kevin's go) (rev)
+## Phase 4 — per-train mix (required, rev 3)
 
 Train controllers only. Additive to Phase 2; forces no rework of it.
 
@@ -159,7 +177,36 @@ Train controllers only. Additive to Phase 2; forces no rework of it.
 - Test: two Green trains, one per variant; stale reports from the wrong controller are
   ignored; ID reuse on the other variant.
 
+## Phase 5 — Track Controllers on both lines (required, rev 3; design open)
+
+Both Track Controller variants run on both lines at the same time, as Phase 4 does for
+the Train Controllers. Nothing here is prototyped or analysed in detail.
+
+**Open question for the owners (Track Controller SW: Harry Tye; Track Controller HW
+owner):** what is assigned to a variant, and how is it chosen? This plan does not
+decide either. Until they answer, Phase 5 has no design and no estimate.
+
+What is known to constrain any answer:
+
+- **Each variant must hold both lines.** The SW state already takes a tuple of lines
+  (`TrackControllerState(lines=(green_line(),))`). The HW host loads one line's starter
+  set and refuses a mixed-line set by design; that refusal has to go.
+- **The harness assumes one Track Controller per line.** `TRACK_CONTROLLER_FOR_LINE`
+  and the routing built on it become per-territory. `merge_ctc_inputs` takes one report
+  per line; with two controllers on a line it must merge per block, and a block claimed
+  by both must be an error, not a last-writer-wins.
+- **The two variants cut the lines differently** (Green: HW 3 waysides, SW 6; Red
+  likewise differs). A mix needs boundaries both sides agree on, and a definition of
+  what crosses a HW/SW boundary — today no boundary has a different variant on each
+  side.
+- **Phase 3 is still needed** (HW cannot hold any Green territory without Green data),
+  and so are the Red guards for SW. Phase 5 raises their priority.
+- Phases 1–4 do not wait on Phase 5.
+
 ## Open items (not decided here)
+
+- **(rev 3) Track Controller assignment** — the Phase 5 question above. Blocks Phase 5
+  and the Track Controller half of the D021 replacement.
 
 - **Red guards under SW** — `TrackCtrlSW/track_ctrl/layout.py` has loop/count guards for
   Green only. Red runs (5 waysides, single train to block 45) but multiple trains and
@@ -186,10 +233,10 @@ Train controllers only. Additive to Phase 2; forces no rework of it.
 | **(rev)** Letter-only markers (R/Y/G/SG on a coloured disc) | Prototyped; unreadable at the default zoom, leaving colour as the only cue. |
 | **(rev)** Hiding signals that have not reported | A missing marker reads as "no signal here"; hollow "?" shows the gap. |
 | **(rev)** "No duplicates" validation for signals | The CTC's existing rule accepts identical repeats; two waysides can legitimately report the same block. |
-| Separate `--track-hw-line` / `--train-hw-line` | Prototype confirmed one flag suffices; the pairs stay independent in code, so splitting later is cheap. |
+| **(rev 3)** Whole-line swap as the whole of R2 | Kevin, 2026-11-13: not enough. Kept only as the default under Phases 4 and 5. |
+| Separate `--track-hw-line` / `--train-hw-line` | One flag suffices for the default; finer assignment is Phases 4 and 5, not more line flags. |
 | Line assignment in `config/pi-testing.json` | Strict schema for Pi test modes; different concern. |
 | Swap which executable runs under each module name | Breaks the codec split and the fixed Pi identity per module. |
-| Both lines in each track controller, filtered in the harness | Two reports per line at the CTC merge. |
 | **(rev)** Keeping the old tables exported as module constants | No importer exists; a stale default table invites wrong use. |
 | **(rev)** Globbing starters as `{line}_*.json` | Picks up the partial Green fixtures alongside the full set. |
 | Reuse HW's Red wayside files for SW on Red | Different cut and format; SW generates Red from the layout. |
@@ -202,19 +249,22 @@ Train controllers only. Additive to Phase 2; forces no rework of it.
 | **(rev)** Naming the controller in `TRAIN_ADDED` only when non-default | Ambiguous once `--hw-line` can change the default. |
 | Port `TrainController/` to Red | Unused by the harness; both variants share one code base. |
 | Runtime reassignment of a running train | Needs controller-state handover. |
-| Mixed lines inside one Track Controller HW | Refused by design; not required. |
 | Fixing the `Track_layout/` duplication here | Unrelated; listed as an open item. |
+
+**(rev 3)** Two ideas left this table because Phase 5 now needs them in some form: both
+lines in each Track Controller, and mixed lines inside one Track Controller HW. Their
+costs (two reports per line at the CTC merge; the HW host's refusal) are listed under
+Phase 5.
 
 ## Verification
 
 - All suites under pytest once it is installed, compared with the Phase 0a baseline.
 - New tests: aspect pass-through (SW and HW), CTC `signals` validation and host property,
   swapped-assignment class, integration-set coverage for both lines, generator
-  reproduces Red, mixed-controller class (if Phase 4).
+  reproduces Red, mixed-controller class. Phase 5 tests follow its design.
 - Headless with simulated Pis: `track_overflow.py --headless --speedup --test-pi process
   --load-starters --engineer-gains 400000 8000 --dispatch … --run-seconds 60` — gains
-  are required or trains do not move **(rev)**. Run default, `--hw-line Green`, and (if
-  Phase 4) `--hw-trains`.
+  are required or trains do not move **(rev)**. Run default, `--hw-line Green`, and `--hw-trains`.
 - Windowed: CTC map at "Fit" zoom shows aspects readable without colour; CTC test UI
   `signal_states` row changes a marker; train controller console titles.
 - Still not covered by any prototype: a physical Pi, pty mode, the windowed UIs, the CTC
