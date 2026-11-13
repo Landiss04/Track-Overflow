@@ -37,6 +37,7 @@ from __future__ import annotations
 __all__ = ["APPLICATION_NAME", "main"]
 
 import argparse
+import os
 import signal
 import sys
 from collections.abc import Sequence
@@ -120,6 +121,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             except RuntimeError as error:
                 print(str(error), file=sys.stderr)
                 return EXIT_FAILED
+            _check_rendering()
         print(f"Event log: {log.path}", flush=True)
         try:
             harness.start()
@@ -202,6 +204,25 @@ def _specs(
             module_options[name] += ["--test-pi", mode]
     specs = system_specs(module_options, wired=wired)
     return specs, SystemEdges(wired=wired)
+
+
+def _check_rendering() -> None:
+    """Warn about CPU rendering, and tell every module to draw less.
+
+    The modules start after this, so they inherit the flag.
+    """
+    from utils.render_check import LOW_FRAME_RATE_ENV, detect
+
+    reason, summary = detect()
+    print(f"Rendering: {summary}", flush=True)
+    if reason is not None:
+        os.environ[LOW_FRAME_RATE_ENV] = "1"
+        print(
+            f"WARNING: software rendering ({reason}). It cannot hold 10x:"
+            " the Train Model's redraw rate is lowered. Use a GPU.",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 class _StatusLine:
