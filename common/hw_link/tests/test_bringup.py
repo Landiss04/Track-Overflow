@@ -321,3 +321,112 @@ def test_count_over_counts_only_round_trips_above_the_limit():
 
     assert count_over([1.0, 10.0, 10.1, 250.0]) == 2
     assert count_over([]) == 0
+
+
+# Host-side line damage for the probe tests. The agent is untouched; only what
+# this process reads is changed, as a dropped USB packet would change it.
+_DAMAGE = """
+import sys
+from common.hw_link import bringup, protocol as p
+from utils.harness_protocol import LineBuffer, ProtocolError
+
+mode, kind, nth = sys.argv[1], sys.argv[2], int(sys.argv[3])
+seen = {"n": 0}
+
+
+def is_kind(line):
+    view = isinstance(line, bytes) and line[9:21] == b'{"op":"VIEW"'
+    return view == (kind == "view")
+
+
+def hit(line):
+    if not is_kind(line):
+        return False
+    seen["n"] += 1
+    return seen["n"] == nth
+
+
+if mode == "damage":
+    original = p.unframe
+
+    def unframe(line):
+        if hit(line):
+            raise ProtocolError("line checksum does not match")
+        return original(line)
+
+    p.unframe = unframe
+else:  # "drop": the line never arrives
+
+    class Dropping(LineBuffer):
+        def feed(self, data):
+            return [line for line in super().feed(data) if not hit(line)]
+
+    bringup.LineBuffer = Dropping
+raise SystemExit(bringup.main(sys.argv[4:]))
+"""
+
+
+def _probe(tmp_path, mode, kind, nth, *extra):
+    (tmp_path / "recording").write_text(
+        "\n".join(json.dumps({"request": step(tick)}) for tick in range(1, 31))
+    )
+    child = subprocess.run(
+        [
+            sys.executable, "-c", _DAMAGE, mode, kind, str(nth),
+            "--module", "train-controller-hw", "--transport", "process",
+            "--recording", str(tmp_path / "recording"), "--hz", "100",
+            "--progress-s", "0", *extra,
+        ],
+        capture_output=True, text=True, timeout=60,
+        env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+    )
+    return json.loads(child.stdout), child.stderr
+
+
+def test_a_clean_probe_run_reports_no_lost_lines(tmp_path):
+    result, stderr = _probe(tmp_path, "damage", "step", 10_000)
+    assert result["error"] is None and result["samples"] == 30
+    assert (
+        result["lines_lost"], result["views_lost"],
+        result["resends"], result["duplicate_replies"],
+    ) == (0, 0, 0, 0)
+    assert result["strict"] is False
+    assert "PI_" not in stderr
+
+
+def test_a_damaged_view_is_skipped_counted_and_not_resent(tmp_path):
+    result, stderr = _probe(tmp_path, "damage", "view", 1)
+    assert result["error"] is None and result["samples"] == 30
+    assert result["lines_lost"] == 1 and result["views_lost"] == 1
+    assert result["resends"] == 0
+    assert "PI_SKIPPED_LINE line checksum does not match" in stderr
+    assert "PI_RESENT" not in stderr
+
+
+def test_a_damaged_reply_is_sent_again_and_counted(tmp_path):
+    result, stderr = _probe(tmp_path, "damage", "step", 5)
+    assert result["error"] is None and result["samples"] == 30
+    assert result["lines_lost"] == 1 and result["views_lost"] == 0
+    assert result["resends"] == 1 and result["duplicate_replies"] == 0
+    assert stderr.count("PI_RESENT") == 1
+
+
+def test_a_reply_that_never_arrives_is_sent_again_after_the_wait(tmp_path):
+    result, stderr = _probe(
+        tmp_path, "drop", "step", 5, "--resend-ms", "100"
+    )
+    assert result["error"] is None and result["samples"] == 30
+    assert result["lines_lost"] == 0 and result["resends"] == 1
+    # The round trip that lost its reply is timed from the first send: about
+    # the wait, not the few ms a timing from the second send would show. Qt's
+    # coarse timers can fire a few percent early, so allow half the wait.
+    assert result["rtt_ms"]["maximum"] >= 50
+    assert result["rtt_over_10ms"] >= 1
+
+
+def test_strict_stops_on_the_first_damaged_line(tmp_path):
+    result, stderr = _probe(tmp_path, "damage", "step", 5, "--strict")
+    assert result["error"] == "line checksum does not match"
+    assert result["strict"] is True
+    assert result["samples"] < 30
+    assert result["resends"] == 0 and "PI_RESENT" not in stderr

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import math
 import statistics
@@ -28,6 +29,11 @@ from .transport import (
 
 
 SLOW_RTT_MS = 10.0
+# The host relay waits this long for a reply before it sends the request again.
+RESEND_MS = 1000.0
+# A damaged line that still starts like a VIEW is display data, so the relay
+# lets the next one replace it instead of resending anything.
+VIEW_PREFIX = b'{"op":"VIEW"'
 
 
 def count_over(values: list[float], limit: float = SLOW_RTT_MS) -> int:
@@ -127,10 +133,24 @@ def main(argv: list[str] | None = None) -> int:
         default=60,
         help="seconds between progress lines on stderr; 0 for none",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="stop on the first damaged line, as link tests need; "
+        "otherwise act as the host relay does",
+    )
+    parser.add_argument(
+        "--resend-ms",
+        type=float,
+        default=RESEND_MS,
+        help="wait for a reply this long before sending the request again",
+    )
     parser.add_argument("--output", type=Path)
     opts = parser.parse_args(argv)
     if opts.count < 1 or opts.hz <= 0 or opts.timeout <= 0:
         parser.error("count, hz and timeout must be positive")
+    if opts.resend_ms <= 0:
+        parser.error("resend-ms must be positive")
     if opts.echo_bytes and opts.recording:
         parser.error("choose echo or recorded core workload")
     if opts.list:
@@ -183,6 +203,14 @@ def main(argv: list[str] | None = None) -> int:
         core: list[float] = []
         request_bytes = reply_bytes = missed = 0
         hello_s: float | None = None
+        # Damaged lines are counted, never hidden: lost is every line whose
+        # checksum or shape failed, views_lost the part of those that were
+        # VIEWs (not resent), resends the requests sent again.
+        lines_lost = views_lost = resends = duplicates = 0
+        inflight: dict[str, Any] | None = None
+        answered: collections.deque[tuple[int, int]] = collections.deque(
+            maxlen=64
+        )
 
         def finish(error: str | None = None) -> None:
             nonlocal done, failed
@@ -205,6 +233,11 @@ def main(argv: list[str] | None = None) -> int:
                 core_step_ms=summary(core),
                 request_bytes=request_bytes,
                 reply_bytes=reply_bytes,
+                lines_lost=lines_lost,
+                views_lost=views_lost,
+                resends=resends,
+                duplicate_replies=duplicates,
+                strict=opts.strict,
                 error=error,
                 hardware_test=opts.transport == "serial",
             )
@@ -217,11 +250,37 @@ def main(argv: list[str] | None = None) -> int:
             app.quit()
 
         def write(frame: dict[str, Any]) -> None:
-            nonlocal sent, request_bytes
+            nonlocal sent, request_bytes, inflight
             data = p.frame(p.encode(frame))
             request_bytes += len(data)
             sent = time.monotonic()
+            inflight = frame
+            if not opts.strict:
+                reply_timer.start()
             transport.write(data)
+
+        def resend() -> None:
+            # `sent` stays at the first attempt, so the round trip that
+            # lost a line is measured whole, not from the second try.
+            nonlocal request_bytes, resends
+            if done or inflight is None:
+                return
+            resends += 1
+            data = p.frame(p.encode(inflight))
+            request_bytes += len(data)
+            print(
+                f"PI_RESENT {inflight['op']} id={inflight['id']}"
+                f" tick={inflight['tick']}",
+                file=sys.stderr,
+            )
+            reply_timer.start()
+            transport.write(data)
+
+        def answered_by(reply: dict[str, Any]) -> None:
+            nonlocal inflight
+            inflight = None
+            reply_timer.stop()
+            answered.append((reply["id"], reply["tick"]))
 
         def next_frame() -> None:
             nonlocal index, due, missed
@@ -238,18 +297,30 @@ def main(argv: list[str] | None = None) -> int:
             write(frames[index])
 
         def receive(data: bytes) -> None:
-            nonlocal hello_s, reply_bytes
+            nonlocal hello_s, reply_bytes, lines_lost, views_lost, duplicates
             for line in buffer.feed(data):
-                if isinstance(line, ProtocolError):
-                    finish(str(line))
-                    return
                 if done:
                     return
                 try:
+                    if isinstance(line, ProtocolError):
+                        raise line
                     reply = p.decode(p.unframe(line))
                 except ProtocolError as error:
-                    finish(str(error))
-                    return
+                    if opts.strict:
+                        finish(str(error))
+                        return
+                    # As the relay does: a damaged VIEW is skipped, and
+                    # anything else may have been the awaited reply.
+                    lines_lost += 1
+                    is_view = (
+                        isinstance(line, bytes)
+                        and line[9:21] == VIEW_PREFIX
+                    )
+                    views_lost += is_view
+                    print(f"PI_SKIPPED_LINE {error}", file=sys.stderr)
+                    if not is_view:
+                        resend()
+                    continue
                 reply_bytes += len(line) + 1
                 if index == -1:
                     if not p.matches_hello(
@@ -264,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
                             "bundle hash mismatch"
                         )
                         return
+                    answered_by(reply)
                     hello_s = time.monotonic() - started
                     if opts.transport == "serial":
                         _announce(opts.module, transport, hello_s)
@@ -272,6 +344,10 @@ def main(argv: list[str] | None = None) -> int:
                     next_frame()
                 elif reply["op"] != p.VIEW:
                     request = frames[index]
+                    if (reply["id"], reply["tick"]) in answered:
+                        # A resend whose first answer was only late.
+                        duplicates += 1
+                        continue
                     if (reply["id"], reply["tick"]) != (
                         request["id"],
                         request["tick"],
@@ -290,6 +366,7 @@ def main(argv: list[str] | None = None) -> int:
                             "start agent with --echo-test"
                         )
                         return
+                    answered_by(reply)
                     rtts.append((time.monotonic() - sent) * 1000)
                     if "core_step_s" in reply.get("metrics", {}):
                         core.append(reply["metrics"]["core_step_s"] * 1000)
@@ -332,6 +409,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         watchdog.start()
+        reply_timer = QTimer()
+        reply_timer.setSingleShot(True)
+        reply_timer.setInterval(int(opts.resend_ms))
+        reply_timer.timeout.connect(resend)
         # Qt's default coarse timers can fire several ms late on Windows,
         # which lowers the achieved rate independently of the link.
         pacer = QTimer()
@@ -343,6 +424,7 @@ def main(argv: list[str] | None = None) -> int:
         watchdog.stop()
         pacer.stop()
         progress.stop()
+        reply_timer.stop()
         transport.close()
         return int(failed)
 

@@ -273,3 +273,42 @@ The Train agent has no Track core, so the lean checkpoint itself is not exercise
 ### Harness suite on this branch
 `common/harness/tests`: 7 failed, 277 passed, 10 skipped. The same 7 fail on `main` (`git archive main` run of the three files): `test_green_follower_waits_on_75_then_runs`,
 `test_the_ctc_office_takes_the_track_models_sales`, and five `test_red_owner_diagnostics` cases. Not caused by this branch; not investigated.
+
+## Track Pi on hardware: first runs (Raspberry Pi 5 "ivz11" as the Track board, `df4c491`, agent hash 0a7cf856)
+
+The Track Pi had not run before. The board had been the Train Pi; its Train journal was moved aside (`session.train.json`, `agent.train.log`) because the Track agent refuses a journal from another module (`journal module mismatch`).
+`/boot/firmware/config.txt` had `dtoverlay=dwc2,dr_mode=peripheralZ` under `[all]` (a stray `Z`); changed to `peripheral` and the Pi rebooted once, with the user's go-ahead. The gadget came up high-speed, `throttled=0x0`, no under-voltage lines in `dmesg`.
+
+### What the first Track replays did
+`bringup --recording track-red-180s.jsonl --hz 100` (plain probe, the probe stopped on the first damaged line): aborted with `line checksum does not match` at samples 19, 76 and 97. Not timing results; no rows logged.
+The same abort came from the 20 KiB link echo (Windows host, one agent): after 35, 274, 9 and 80 samples. 1 KiB and 10 KiB passed 1000/1000.
+
+**Two of the echo runs were invalid**: the service agent and the foreground echo agent were both running on `/dev/ttyGS0`, so each read part of the stream. Always `pgrep -af "common.hw_link.agent"` before a link test: it must list exactly one agent. Everything below uses single-agent runs.
+
+### Where the loss is
+- The Pi logged no damaged request in the valid runs (`SKIPPED_LINE` count 0 after the agent's start); the damaged lines are replies, Pi to host.
+- The Pi's `os.write` loop handles partial writes, and is unchanged from `e3077ae`. `protocol.py` and `transport.py` have no diff against `e3077ae`. `LineBuffer` passed a fuzz of 300 random chunkings (9,000 lines).
+- Bare checks that skip Qt (`linkcheck.py`, raw Win32 `ReadFile`) and the bare `QSerialPort` (`qtcheck.py`, events and blocking), 20 KiB, 1000 samples: all passed, with and without `SetupComm`. The plain probe's 20 KiB echo then passed 1000/1000 twice. The earlier failures did not reproduce on a rerun; the cause of that period is not found.
+- `bringup_trace.py` (the probe with the checksum call wrapped, nothing else changed) on the replay: failed after 1,885 completed samples (20.3 s, the 1,986th reply line), and the damaged line was a **VIEW** of 38,715 bytes.
+- Raw 40 KiB echo: one failure at sample 91 and **the damaged line was exactly 512 bytes short** (40,759 against 41,271; `x` run 40,448 of 40,960), which is one whole high-speed USB bulk packet. The next 3,000 lines (40, 40 and 30 KiB runs) passed. About one lost packet in about 3,100 lines of 30-40 KiB (about 110 MB), measured only in that one stretch.
+
+### What a VIEW is, and its size
+Every 0.2 s (`VIEW_INTERVAL_S`) the agent sends the host a snapshot of the Track controller's display state (all waysides). Sizes by op in a local replay of the Red recording (1,500 steps, framed lines):
+
+| Reply | Lines | Median | Max |
+| --- | --- | --- | --- |
+| `OUTPUTS` (step reply) | 1,494 | 12,546 B | 12,560 B |
+| `ACK` | 6 | 18,004 B | 24,453 B |
+| `VIEW` | 26 | 41,069 B | 41,089 B |
+
+About 200 KB/s of VIEWs against about 1.15 MB/s of step replies at 92 Hz. Every damaged line seen with a trace was a VIEW; the failures at 19, 76 and 97 samples fit the VIEW timing but those lines were not captured.
+The host relay (`relay.py`) already skips a damaged VIEW and resends anything else; the probe did neither.
+
+### Change: the probe acts as the relay does (host side only; the Pi bundles' agent hash is unchanged)
+`bringup` now, by default, (1) skips a damaged line that starts like a VIEW, (2) resends the in-flight request on any other damaged line, (3) resends after `--resend-ms` (default 1000, the relay's wait) with no reply, (4) ignores a late duplicate of an answered request, and (5) times a round trip from the first send, so a lost line is not hidden by the resend. `--strict` keeps the old stop-on-first-damaged-line, which link tests need.
+The result JSON gains `lines_lost`, `views_lost`, `resends`, `duplicate_replies`, `strict`; `PI_SKIPPED_LINE` and `PI_RESENT` go to stderr.
+Tests (`test_bringup.py`, 5 new): a clean run reports zeros; a damaged VIEW is skipped and not resent; a damaged reply is resent once; a reply that never arrives is resent after the wait and its round trip is at least half the wait (Qt's coarse timers fire a little early); `--strict` stops. They fail on the previous `bringup.py`. `common/hw_link`: 234 passed, plus the 2 known `test_bundle_is_offline_stdlib_and_shell_parses` cases that need physical Pis.
+
+### Not done
+- The 180 s and 600 s Track replays have not completed on hardware with this change; no Track timing row yet.
+- No fix for the packet loss itself. Options not taken, each a wire change that needs a decision: raise `VIEW_INTERVAL_S`, send VIEWs only while a UI is open, send changes only.
