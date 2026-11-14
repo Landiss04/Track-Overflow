@@ -1,5 +1,6 @@
 """Owner tooling stays on the same agent, codecs and transport paths."""
 
+import csv
 import json
 import os
 import subprocess
@@ -430,3 +431,47 @@ def test_strict_stops_on_the_first_damaged_line(tmp_path):
     assert result["strict"] is True
     assert result["samples"] < 30
     assert result["resends"] == 0 and "PI_RESENT" not in stderr
+
+
+def _trace(tmp_path, mode, kind, nth, *extra):
+    path = tmp_path / "trace.csv"
+    result, stderr = _probe(
+        tmp_path, mode, kind, nth, "--trace-csv", str(path), *extra
+    )
+    with path.open(newline="") as stream:
+        return result, list(csv.DictReader(stream))
+
+
+def test_trace_csv_has_one_row_per_answered_request(tmp_path):
+    from common.hw_link.bringup import TRACE_COLUMNS
+
+    result, rows = _trace(tmp_path, "damage", "step", 10_000)
+    assert result["error"] is None and result["samples"] == 30
+    assert tuple(rows[0]) == TRACE_COLUMNS
+    assert [int(row["sample"]) for row in rows] == list(range(1, 31))
+    assert all(float(row["rtt_ms"]) > 0 for row in rows)
+    assert all(float(row["send_late_ms"]) >= 0 for row in rows)
+    assert all(row["resent"] == "0" for row in rows)
+    # The first step's reply is followed at once by a VIEW, so VIEWs are
+    # seen around the later requests, before or after each was sent.
+    assert sum(
+        int(row["views_before_send"]) + int(row["views_after_send"])
+        for row in rows
+    ) >= 1
+
+
+def test_trace_csv_flags_the_request_that_was_sent_again(tmp_path):
+    result, rows = _trace(
+        tmp_path, "drop", "step", 5, "--resend-ms", "100"
+    )
+    assert result["samples"] == 30 and result["resends"] == 1
+    flagged = [row for row in rows if row["resent"] == "1"]
+    assert len(flagged) == 1
+    # Timed from the first send, not from the second.
+    assert float(flagged[0]["rtt_ms"]) >= 50
+    assert int(flagged[0]["sample"]) == 4
+
+
+def test_nothing_is_written_without_the_trace_option(tmp_path):
+    _probe(tmp_path, "damage", "step", 10_000)
+    assert not (tmp_path / "trace.csv").exists()

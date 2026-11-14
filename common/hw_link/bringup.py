@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import csv
 import json
 import math
 import statistics
@@ -34,6 +35,20 @@ RESEND_MS = 1000.0
 # A damaged line that still starts like a VIEW is display data, so the relay
 # lets the next one replace it instead of resending anything.
 VIEW_PREFIX = b'{"op":"VIEW"'
+# One row per answered request, written by --trace-csv. views_before_send is
+# how many VIEWs came in between the previous reply and sending this request;
+# views_after_send how many came in between sending it and its reply.
+TRACE_COLUMNS = (
+    "sample",
+    "sent_at_s",
+    "op",
+    "rtt_ms",
+    "core_ms",
+    "send_late_ms",
+    "views_before_send",
+    "views_after_send",
+    "resent",
+)
 
 
 def count_over(values: list[float], limit: float = SLOW_RTT_MS) -> int:
@@ -145,6 +160,12 @@ def main(argv: list[str] | None = None) -> int:
         default=RESEND_MS,
         help="wait for a reply this long before sending the request again",
     )
+    parser.add_argument(
+        "--trace-csv",
+        type=Path,
+        help="write one row per answered request: round trip, core time, "
+        "how late it was sent, and whether VIEWs arrived around it",
+    )
     parser.add_argument("--output", type=Path)
     opts = parser.parse_args(argv)
     if opts.count < 1 or opts.hz <= 0 or opts.timeout <= 0:
@@ -211,6 +232,13 @@ def main(argv: list[str] | None = None) -> int:
         answered: collections.deque[tuple[int, int]] = collections.deque(
             maxlen=64
         )
+        # For --trace-csv. VIEWs are counted when they arrive, damaged or
+        # not. A VIEW that arrives after a request was sent means the Pi was
+        # still busy with it when the request reached it.
+        trace: list[tuple[Any, ...]] = []
+        views_total = views_at_send = views_at_reply = 0
+        send_late_s = 0.0
+        resent_this = False
 
         def finish(error: str | None = None) -> None:
             nonlocal done, failed
@@ -247,13 +275,20 @@ def main(argv: list[str] | None = None) -> int:
                 # A failed write must not skip app.quit() and hold the port.
                 opts.output.parent.mkdir(parents=True, exist_ok=True)
                 opts.output.write_text(rendered + "\n")
+            if opts.trace_csv:
+                opts.trace_csv.parent.mkdir(parents=True, exist_ok=True)
+                with opts.trace_csv.open("w", newline="") as stream:
+                    writer = csv.writer(stream)
+                    writer.writerow(TRACE_COLUMNS)
+                    writer.writerows(trace)
             app.quit()
 
         def write(frame: dict[str, Any]) -> None:
-            nonlocal sent, request_bytes, inflight
+            nonlocal sent, request_bytes, inflight, views_at_send
             data = p.frame(p.encode(frame))
             request_bytes += len(data)
             sent = time.monotonic()
+            views_at_send = views_total
             inflight = frame
             if not opts.strict:
                 reply_timer.start()
@@ -262,10 +297,11 @@ def main(argv: list[str] | None = None) -> int:
         def resend() -> None:
             # `sent` stays at the first attempt, so the round trip that
             # lost a line is measured whole, not from the second try.
-            nonlocal request_bytes, resends
+            nonlocal request_bytes, resends, resent_this
             if done or inflight is None:
                 return
             resends += 1
+            resent_this = True
             data = p.frame(p.encode(inflight))
             request_bytes += len(data)
             print(
@@ -283,7 +319,7 @@ def main(argv: list[str] | None = None) -> int:
             answered.append((reply["id"], reply["tick"]))
 
         def next_frame() -> None:
-            nonlocal index, due, missed
+            nonlocal index, due, missed, send_late_s
             if done:
                 return
             index += 1
@@ -291,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
                 finish()
                 return
             now = time.monotonic()
+            send_late_s = max(0.0, now - due) if due else 0.0
             if due and now - due > 0.001:
                 missed += 1
             due = max(due, now) + 1 / opts.hz
@@ -298,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
 
         def receive(data: bytes) -> None:
             nonlocal hello_s, reply_bytes, lines_lost, views_lost, duplicates
+            nonlocal views_total, views_at_reply, resent_this
             for line in buffer.feed(data):
                 if done:
                     return
@@ -317,6 +355,7 @@ def main(argv: list[str] | None = None) -> int:
                         and line[9:21] == VIEW_PREFIX
                     )
                     views_lost += is_view
+                    views_total += is_view
                     print(f"PI_SKIPPED_LINE {error}", file=sys.stderr)
                     if not is_view:
                         resend()
@@ -368,11 +407,30 @@ def main(argv: list[str] | None = None) -> int:
                         return
                     answered_by(reply)
                     rtts.append((time.monotonic() - sent) * 1000)
+                    core_ms = ""
                     if "core_step_s" in reply.get("metrics", {}):
                         core.append(reply["metrics"]["core_step_s"] * 1000)
+                        core_ms = f"{core[-1]:.3f}"
+                    if opts.trace_csv:
+                        trace.append(
+                            (
+                                len(rtts),
+                                f"{sent - started:.4f}",
+                                reply["op"],
+                                f"{rtts[-1]:.3f}",
+                                core_ms,
+                                f"{send_late_s * 1000:.3f}",
+                                views_at_send - views_at_reply,
+                                views_total - views_at_send,
+                                int(resent_this),
+                            )
+                        )
+                    views_at_reply, resent_this = views_total, False
                     pacer.start(
                         max(0, math.ceil((due - time.monotonic()) * 1000))
                     )
+                else:
+                    views_total += 1
 
         transport.connected.connect(lambda: write(hello))
         transport.received.connect(receive)
