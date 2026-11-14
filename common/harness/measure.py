@@ -199,7 +199,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             module_options[CTC_OFFICE] += ["--speedup-at-tick", "0"]
         module_options[TRACK_CONTROLLER_SW] = ["--load-starters"]
         module_options[TRACK_CONTROLLER_HW] = ["--load-starters"]
-        module_options[TRAIN_CONTROLLER_HW] = []
+        # The engineer's gains go to both Train Controllers, as the launcher
+        # does, so a Red train released to the hardware controller runs
+        # instead of waiting for them (D024).
+        module_options[TRAIN_CONTROLLER_HW] = [
+            "--engineer-gains", *ENGINEER_GAINS
+        ]
         for name, extra in _pi_args(options).items():
             module_options[name] += extra
         module_options[TRAIN_CONTROLLER_SW] = [

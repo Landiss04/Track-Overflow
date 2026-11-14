@@ -143,3 +143,21 @@ def test_dispatch_needs_system_mode(capsys):
     with pytest.raises(SystemExit):
         measure._parse_args(["--dispatch", "R1:Red:16"])
     assert "require --system" in capsys.readouterr().err
+
+
+def test_main_gives_the_engineer_gains_to_both_train_controllers(monkeypatch):
+    from common.harness.modules import TRAIN_CONTROLLER_SW
+
+    seen = {}
+
+    def capture(module_options):
+        seen.update(module_options)
+        raise _Stop
+
+    monkeypatch.setattr(measure, "system_specs", capture)
+    with pytest.raises(_Stop):
+        measure.main(["--system", "--test-pi", "process", "--seconds", "1"])
+    gains = ["--engineer-gains", *measure.ENGINEER_GAINS]
+    # The hardware controller needs them too, or a Red train waits (D024).
+    for name in (TRAIN_CONTROLLER_SW, TRAIN_CONTROLLER_HW):
+        assert seen[name][:3] == gains, (name, seen[name])
