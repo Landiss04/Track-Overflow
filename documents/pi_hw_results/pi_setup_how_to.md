@@ -247,16 +247,16 @@ recompiling.
 ## 10. The 10x system run with one physical Pi
 
 One board, so one hardware Pi is real and the other runs as a local process simulator on the host (an explicit test mode, never an automatic
-fallback). The hardware Pis only run Red, so the default single Green train leaves them idle. Use the stress schedule (`--schedule utils\\schedule_stress.json`:
+fallback). The hardware Pis only run Red, so the default single Green train leaves them idle. Use the stress schedule (`--schedule utils\schedule_stress.json`:
 14 Green trains 45 s apart and 4 Red trains 90 s apart, each Red run ending at block 60 and then returning to the yard, D020), or a single Red train with
 `--dispatch R1:Red:60`. `measure` gives the engineer's gains to both Train Controllers, as the launcher does, so a Red train does not wait for them (D024).
 Run from `Track-Overflow`:
 
 ```powershell
 # Run A: the Track Pi is real, the Train Controller is simulated
-python bench\per_module.py --system --track-controller-pi physical --train-controller-pi process --dispatch R1:Red:16 --seconds 60 --per-tick-csv ..\trains_pi\tick-track-physical-60.csv
+python bench\per_module.py --system --track-controller-pi physical --train-controller-pi process --schedule utils\schedule_stress.json --seconds 60 --per-tick-csv ..\trains_pi\tick-track-physical-60.csv
 # Run B: the Train Pi is real, the Track Controller is simulated
-python bench\per_module.py --system --track-controller-pi process --train-controller-pi physical --dispatch R1:Red:16 --seconds 60 --per-tick-csv ..\trains_pi\tick-train-physical-60.csv
+python bench\per_module.py --system --track-controller-pi process --train-controller-pi physical --schedule utils\schedule_stress.json --seconds 60 --per-tick-csv ..\trains_pi\tick-train-physical-60.csv
 ```
 
 Each prints the usual report (round trip, slipped ticks, late replies) and then each module's reply time and how often it was last to reply.
