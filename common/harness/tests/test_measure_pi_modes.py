@@ -221,3 +221,23 @@ def test_the_stress_schedule_loads_with_the_ctc_loader():
     from ctc.schedule import load_schedule
 
     assert load_schedule(root / "utils/schedule_stress.json")
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        ([], "one train (G1:Green:73)"),
+        (["--dispatch", "R1:Red:60"], "one train (R1:Red:60)"),
+        (["--dispatch", "G1:Green:65", "--dispatch", "R1:Red:60"],
+         "2 trains (G1:Green:65, R1:Red:60)"),
+    ],
+)
+def test_the_report_names_the_workload(argv, expected):
+    assert measure._workload(measure._parse_args(["--system", *argv])) == expected
+
+
+def test_the_report_names_the_schedule(tmp_path):
+    schedule = tmp_path / "busy.json"
+    schedule.write_text("{}", encoding="utf-8")
+    options = measure._parse_args(["--system", "--schedule", str(schedule)])
+    assert measure._workload(options) == "schedule busy.json"

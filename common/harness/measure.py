@@ -278,13 +278,22 @@ def _report(
         - (meter.ready_s or meter.launched_s)
     ) * MILLISECONDS_PER_SECOND
     what = (
-        "The system as wired, one train," if options.system
+        f"The system as wired, {_workload(options)}," if options.system
         else "Seven stub modules"
+    )
+    pis = (
+        [
+            "  hardware Pis:    "
+            + ", ".join(f"{n} {m}" for n, m in options.pi_modes.items())
+        ]
+        if options.system
+        else []
     )
     lines = [
         f"{what} at {options.speed}x, "
         f"{options.payload_bytes} bytes of filler per stub reply",
         f"  front end:       {'window' if options.window else 'headless'}",
+        *pis,
         f"  startup:         {startup_s:.2f} s until every module was ready",
         f"  measured:        {meter.wall_s:.2f} s real time",
         f"  ready to step:   {first_step_ms:.2f} ms until first STEP",
@@ -407,6 +416,17 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         options.train_controller_pi,
     )
     return options
+
+
+def _workload(options: argparse.Namespace) -> str:
+    # What the CTC Office was told to run, for the report's first line.
+    if options.schedule:
+        return f"schedule {options.schedule.name}"
+    trains = options.dispatch or [DISPATCH]
+    return (
+        f"one train ({trains[0]})" if len(trains) == 1
+        else f"{len(trains)} trains ({', '.join(trains)})"
+    )
 
 
 def _pi_args(options: argparse.Namespace) -> dict[str, list[str]]:

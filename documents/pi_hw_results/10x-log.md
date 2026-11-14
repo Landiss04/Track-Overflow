@@ -464,3 +464,30 @@ quieter workload than a real run. **Do not use these as the Track Pi's loaded nu
 
 `measure --schedule FILE` runs a schedule in automatic mode (D020). Speed 9.52x, round trip mean 9.32 / p95 24.84 / p99 44.82 / max 93.9 ms, 100 ticks slipped in 1 slip. Track HW reply mean 7.60 ms (last to reply in 70% of ticks);
 **ctc-office** reply mean 6.52, p99 43.5 ms (last in 21%). With 18 trains the CTC Office, a software module, becomes a second limiter. Sandbox only; no hardware row yet.
+
+### Stress schedule, 60 s, 10x, headless, Windows host (`77d5bf7`; gains on both Train Controllers; `--schedule utils/schedule_stress.json`)
+
+14 Green trains 45 s apart and 4 Red trains 90 s apart; each Red run ends at block 60 and returns to the yard (D020). 60 s of real time is 10 simulated minutes, so the Red trains are still on their way out.
+
+| | Track Pi **physical**, Train simulated | Both Pis simulated |
+| --- | --- | --- |
+| Round trip mean / p95 / p99 / max (ms) | 11.49 / 20.18 / 27.55 / 65.6 | 9.29 / 19.63 / 24.89 / 177.8 |
+| Speed / ticks slipped | 7.20x / 1,621 in 1 slip | 9.19x / 457 in 2 slips |
+| Track Controller reply mean / p95 / p99 (ms) | 10.64 / 15.55 / 24.36 | 8.36 / 13.44 / 23.29 |
+| Last to reply | Track HW 93%, ctc-office 6% | Track HW 92%, train-controller-hw 2%, ctc-office 5% |
+| Other modules' reply mean (ms) | ctc-office 5.16, track-controller-sw 4.88, train-model 4.31, train-controller-hw 4.29 | train-controller-hw 4.78, ctc-office 4.78, track-controller-sw 4.64, train-model 4.42 |
+
+- The real Track Pi adds about 2.2-2.3 ms at the mean (tick and Track reply) and almost nothing at the tail (p99 24.4 against 23.3 ms): the middle shifts, the tail is the host's. That is about the difference between the Pi's core step (4.7-5.6 ms) and the simulated agent's on the host (about 3 ms).
+- Pi side after the physical run: only the cold first step (core 13.7 ms) over 10 ms in `agent.log`, no checkpoint step and no `SKIPPED_LINE`; `get_throttled` 0x0.
+- **The baseline run was disturbed**: it printed `qt.qpa.mime: Retrying to obtain clipboard` repeatedly and four modules spiked together (track-model 177 ms, train-controller-sw 120 ms, track-controller-sw 117 ms), which looks like a whole-host stall, probably from something using the clipboard. Repeat it untouched before quoting 9.19x.
+- Both Pis real: **not measured.** The Train Pi's reply (4.3 ms simulated) stays well under the Track's, so I expect about the Track-physical result (about 7x); an expectation until Run B.
+- Heavier than one train: CTC Office reply 2.8 -> 5.2 ms (p99 25 ms), train-model 2.9 -> 4.3 ms. In a sandbox run of this schedule the CTC Office was last to reply in 21% of ticks.
+
+### Host path profile and a negative result (sandbox, both Pis simulated, stress schedule; `py-spy` on the running processes)
+
+CPU per tick: harness 3.6 ms; the Track module's host process 2.8 ms (`TrackControllerState.refresh` 0.43 ms per tick, about 9 ms each time a VIEW arrives, every 20 ticks or so); the simulated Track agent about half a core.
+**Hypothesis not supported:** that the window-state refresh after each VIEW stalls the next STEP and causes the middle and tail of the Track reply. Four alternating 40 s runs, as-is against `state.refresh()` skipped (throwaway copy): Track HW reply mean 6.76 and 7.31 ms as-is, 7.39 and 7.25 ms skipped; the two as-is runs differ by more than any effect. Skipping it does not help here.
+
+### Tooling after this
+
+`measure` now names the workload and the Pi modes in its report (`The system as wired, schedule schedule_stress.json,` / `hardware Pis: track-controller-hw physical, train-controller-hw process`); before, the first line always said "one train" whatever was run.
