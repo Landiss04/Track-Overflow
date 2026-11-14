@@ -6,7 +6,7 @@ Date 2026-11-14. Branch `10x-pi-speed`, local only, nothing pushed, 33 files and
 
 - **Train Pi:** fixed on hardware. Round-trip p99 went from 18 ms to 2.5 ms on a 600 s replay with 0 round trips over 10 ms and 0 slow steps (cause: the journal write blocked behind an SD-card `fsync`).
 - **Track Pi:** first ever hardware runs this session. A 600 s replay completes with round-trip p99 of 9.3 ms against a 10 ms slot (0.43% over), and the core step alone is 4.7-5.6 ms. It is the slowest module in the system, and its margin is thin.
-- **10x with real Pis in the loop has not been measured.** The 100 Hz hardware replays are the 10x rate, but only one Pi at a time and only through `bringup`, never through the harness.
+- **10x with the real Track Pi in the whole system holds about 8.5x, not 10x** (stress schedule, 600 s, tick mean 10.97 ms against a 10 ms slot; see "System runs with one physical Pi" below). Both Pis real together, and the real Train Pi, have **not** been measured.
 - **Three open problems on the Track Pi:** each new session in one agent process runs the core 12-27% slower (cause not found), up to about 3% of VIEW lines in a run are damaged on the USB link (cause not found, display-only), and 0.2-1.2% of round trips go over 10 ms for reasons only partly explained.
 
 ## Hardware results
@@ -64,7 +64,7 @@ Also on the branch: `bench/per_module.py`, a 24-line measuring wrapper committed
 ## Not done
 
 - Run with every window open (600 s, unlocked screen) and the GPU/WARP check, including the `QSG_INFO=1` adapter line. Needs the target machine.
-- `measure --system` against real Pis, one or both.
+- `measure --system` with the Train Pi real, and with both Pis real (the Track Pi alone is measured, below).
 - Original-versus-now on the Pi (the `e3077ae` bundle).
 - A Track-side change to the PLC step: `plc.py` has an owner; a tested proposal is in `plc-channel-a-flat-proposal.md`.
 - Any train on Green or Red on the HW Pi: `common/harness/edges.py` still routes Red only.
@@ -84,6 +84,22 @@ Test state: `common/hw_link` 237 passed, plus two `test_bundle_is_offline_stdlib
 7. **The host's pacing tops out near 92 Hz**, so no run was a true 100 Hz.
 
 Corrections to my own earlier statements, now fixed in the log: the "66 KB checkpoint" was the core alone (the file is 183 KB); the 16.2 ms maximum round trip is the slowest startup ACK (14.3 ms on the Pi plus link), not the cold first step; the heat and throttling idea is withdrawn.
+
+## System runs with one physical Pi (added after the first version of this report)
+
+`measure --system` now takes `--track-controller-pi` and `--train-controller-pi` (physical, process or pty), `--dispatch` and `--schedule`, and gives the engineer's gains to both Train Controllers (it gave them only to the software one before; the first two physical runs, in `10x-log.md`, ran with the Red train waiting for gains and should not be quoted). The workload is `utils/schedule_stress.json`: 14 Green trains 45 s apart and 4 Red trains 90 s apart, each Red run ending at block 60 and returning to the yard. Windows host, 10x, headless, Track Pi real, the Train Controller simulated on the host.
+
+| Run | Speed | Round trip mean / p95 / p99 / max (ms) | Track Controller reply mean / p99 (ms) | Ticks over 10 ms |
+| --- | --- | --- | --- | --- |
+| 60 s | 7.20x | 11.49 / 20.18 / 27.55 / 65.6 | 10.64 / 24.36 | not recorded |
+| **600 s** | **8.45x** | **10.97 / 19.66 / 27.26 / 244.0** | **10.01 / 19.71** | **36.6%** (slowest module of each tick) |
+| 60 s, both Pis simulated (disturbed run, repeat before quoting) | 9.19x | 9.29 / 19.63 / 24.89 / 177.8 | 8.36 / 23.29 | |
+
+- The real Track Pi costs about 1.7-2.3 ms at the mean and almost nothing at the tail; the Track Controller is the slowest module in 93.4% of ticks, the CTC Office in 5.2%, the Track Model in 1.3%. In 6.3% of ticks a different module went over 10 ms.
+- Over the 600 s the Track reply steps down at about 309 s (10.1-10.4 ms to 9.7 ms; ticks over budget from 35-46% to 23-24%), probably when the four Red runs finish (about 3,000 simulated seconds); inferred from the schedule, not observed. The second half is still above the slot (tick mean 10.3-10.5 ms).
+- Pi log for the run: the cold first step and two checkpoint steps (core 6.0 ms plus a pickle of 3.2-3.5 ms) just over 10 ms out of about 84; no `SKIPPED_LINE`; `get_throttled` 0x0. The one 243 ms Track reply (t = 595 s) hit only the Track Controller, with nothing near it in the Pi's log: the link or the Track module's host, once in 50,679 ticks.
+- **Both Pis real: not measured.** The Train Pi's simulated reply (3.6 ms) is far below the Track's, so I expect about the Track-only result; an expectation. The Train Pi swap needs a reboot and has not been done.
+- What would move it: the Pi's core step (about 5 ms against about 3 ms for the simulated agent): a flat channel A (`plc-channel-a-flat-proposal.md`, 0.4-0.9 ms) and restarting the agent before a run (the first replay of a process is the fast one); and the host's own tail, which is there with no hardware (p99 about 25 ms): the CTC Office and the harness. Skipping the Track window's per-VIEW refresh did not help in a sandbox A/B.
 
 ## Left on the Pi and the host (for cleanup)
 

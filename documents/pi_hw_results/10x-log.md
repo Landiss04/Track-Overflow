@@ -491,3 +491,19 @@ CPU per tick: harness 3.6 ms; the Track module's host process 2.8 ms (`TrackCont
 ### Tooling after this
 
 `measure` now names the workload and the Pi modes in its report (`The system as wired, schedule schedule_stress.json,` / `hardware Pis: track-controller-hw physical, train-controller-hw process`); before, the first line always said "one train" whatever was run.
+
+### Stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated (`77d5bf7`, hands off; per-tick CSV analysed with `tickstats.py`)
+
+50,679 of 60,002 ticks, speed **8.45x**, 9,215 ticks slipped in 1 slip, harness CPU 37%. Round trip mean 10.97 / median 9.84 / p95 19.66 / p99 27.26 / max 244.0 ms. From the per-tick CSV, the slowest module of each tick: mean 10.72, p50 9.59, p95 19.36, p99 26.90 ms; over 10 ms in 36.6% of ticks.
+Track Controller reply mean 10.01 / p50 9.49 / p95 13.11 / p99 19.71 / max 243.5 ms; others: ctc-office 5.20 (p99 26.4), track-controller-sw 4.41, train-model 3.93, train-controller-hw 3.64, track-model 3.42, train-controller-sw 3.14.
+
+| Part of the run (tenths) | Track reply mean | p99 | over 10 ms | tick mean |
+| --- | --- | --- | --- | --- |
+| 0, 61, 122, 184, 246 s | 10.44, 10.39, 10.22, 10.11, 10.40 | 23.1, 24.6, 23.4, 19.1, 24.1 | 46.4, 40.2, 35.5, 34.9, 40.4% | 10.92, 10.98, 10.97, 10.98, 11.27 |
+| 309, 367, 425, 483, 541 s | 9.73, 9.67, 9.66, 9.72, 9.78 | 17.3, 16.3, 16.6, 16.7, 17.8 | 25.1, 23.7, 23.3, 24.2, 23.4% | 10.33, 10.40, 10.44, 10.39, 10.49 |
+
+- A step, not a drift, at about 309 s: 0.6 ms lower reply mean, about 7 ms lower p99. Probably the Red runs finishing (about 3,000 simulated seconds, `Red` arrival times 1,620-1,890 s at block 60 plus the return); inferred from the schedule, not observed.
+- Slowest module per tick: track-controller-hw 93.4%, ctc-office 5.2%, track-model 1.3%. Ticks over 10 ms where it was not the Track Controller: 3,194 (6.3%).
+- Spikes over 50 ms: t = 0 s Track 82 ms (startup); t = 230 s ctc-office 52 ms; t = 595 s Track 243 ms alone (no other module slow in that tick, so not a stall of the whole host; the Pi's log has nothing near it).
+- Pi, `agent.log`: the run's cold first step (core 14.0 ms) and two checkpoint steps just over 10 ms (tick 3,000: core 6.0 + pickle 3.2; tick 21,600: core 5.7 + pickle 3.5); no `SKIPPED_LINE`; `get_throttled` 0x0. A checkpoint step costs about 9.5-10 ms on the Pi because the pickle (3.2-3.5 ms, against 1.3 ms in the sandbox) runs on the step's thread.
+- Not measured: the Train Pi real; both real; a clean repeat of the all-simulated baseline; the same run starting from a freshly restarted agent (unknown whether this one did).
