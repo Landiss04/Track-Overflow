@@ -247,3 +247,18 @@ The Track hardware core is last in 91% of ticks. Its mean is the 3 ms PLC step p
 - `_vital` (254 KB) is built from the territory by `vital_source(territory)`, so it can be rebuilt after a restart without being saved.
 - Leaving the compiled programs out cuts the pickle from about 6 ms to about 0.7 ms in the sandbox. Not measured on the Pi.
 - Not checked: whether a restored core can recompile its programs from source and the territory with the same result. That has to be tested before any change.
+
+## Item 10: lean Track checkpoint (agent side only)
+
+- **Change:** `TrackCore.__getstate__`/`__setstate__` in `common/hw_link/cores.py`. A checkpoint keeps each wayside's program *source* and leaves out the
+  compiled `_vital` and `_program`; a restore compiles them again (`compile_program(vital_source(territory))` and `compile_program(source)`).
+  The live core is not touched (shallow copies). Nothing in `track_ctrl_hw` changed. The wire protocol is unchanged. The checkpoint file's content
+  changed, which is also why the agent hash changed: a Pi running the old agent starts fresh from its old journal (`JOURNAL_STALE`), as before.
+- **Measured (sandbox, three Red waysides, 600 steps in):** checkpoint 458,922 -> 66,435 bytes; pickle on the step thread 6.05 -> 0.97 ms.
+  Restore (agent start only) 34-43 ms; the first step after a restore 7.1-7.6 ms (the program caches warm up).
+- **Equivalence:** the rebuilt `Program` objects compare equal to the originals for all three waysides; 1,200 steps after a restore give the same
+  output as the core that was never checkpointed, and the same view except the scan's wall-clock `last_duration_s`.
+- **Tests:** `common/hw_link/tests/test_track_checkpoint_split.py` (6): size and no compiled classes in the pickle (fails on the previous code), live core
+  untouched, restored core steps like the original for 280 steps, no program loaded, an older whole-core checkpoint still restores, and an agent
+  restart from a checkpoint after real load actions. `common/hw_link`: 229 passed.
+- **Not yet measured on the Pi:** the Track Pi has never been run on hardware.

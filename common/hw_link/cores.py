@@ -24,6 +24,44 @@ class TrackCore:
 
         self.controller = HwTrackController()
 
+    def __getstate__(self) -> dict[str, Any]:
+        """A checkpoint holds what changes, not what a load made.
+
+        The compiled PLC programs are 93% of the pickle and never change after
+        a load (the vital one is built from the territory, the other from its
+        source text). Keep the source text, leave the compiled form out, and
+        rebuild it in ``__setstate__``. Shallow copies keep the live core as it
+        is, and nothing in track_ctrl_hw is touched.
+        """
+        import copy
+
+        controller = copy.copy(self.controller)
+        waysides = {}
+        sources = {}
+        for wayside_id, wayside in self.controller._waysides.items():
+            lean = copy.copy(wayside)
+            program = wayside._program
+            sources[wayside_id] = None if program is None else program.source
+            lean._vital = None
+            lean._program = None
+            waysides[wayside_id] = lean
+        controller._waysides = waysides
+        return {"controller": controller, "program_sources": sources}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        # A checkpoint written before this change holds the whole core.
+        self.controller = state["controller"]
+        sources = state.get("program_sources")
+        if sources is None:
+            return
+        from track_ctrl_hw.plc import compile_program
+        from track_ctrl_hw.vital import vital_source
+
+        for wayside_id, wayside in self.controller._waysides.items():
+            wayside._vital = compile_program(vital_source(wayside._territory))
+            source = sources[wayside_id]
+            wayside._program = None if source is None else compile_program(source)
+
     def step(self, request: dict[str, Any]) -> dict[str, Any]:
         from track_ctrl_hw.wire import inputs_from_wire, outputs_to_wire
 
