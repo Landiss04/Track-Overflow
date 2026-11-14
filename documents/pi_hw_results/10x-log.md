@@ -366,3 +366,33 @@ Tests (`test_bringup.py`, 5 new): a clean run reports zeros; a damaged VIEW is s
 One row per answered request: `sample, sent_at_s, op, rtt_ms, core_ms, send_late_ms, views_before_send, views_after_send, resent`. `views_after_send` counts VIEWs (damaged ones too) that arrived between sending the request and its reply, which is the case where the Pi was probably still busy with the previous VIEW. `send_late_ms` is how late the host sent it against its own schedule. `tracestats.py` (scratchpad only, not in the repo) groups the round trips over 10 ms by those columns.
 Tests (3 new): shape and one row per sample; a request sent again is flagged and timed from its first send; no file without the option. `common/hw_link`: 237 passed, plus the 2 known `test_bundle_is_offline_stdlib_and_shell_parses` cases that need physical Pis.
 Known sandbox quirk, present on `e3077ae` as well and not looked into: `bringup --transport process` with the Red Track recording does not finish here, even with `--timeout 8`. The Train module's process and pty tests pass; the serial path used on the hardware does not go through it.
+
+## Track Pi: the core step is slower in each later replay of one agent process (180 s Red replays, `743fc80`, agent hash 0a7cf856, unpinned)
+
+Same recording, same host, same setup each time; the replays run one after another in one agent process, and a fresh process starts at the first row. Core step mean (Pi side, ms), then the p99 and round trips over 10 ms:
+
+| Run set | Replay 1 | Replay 2 | Replay 3 |
+| --- | --- | --- | --- |
+| first set (180 s, then 600 s, then 180 s with trace; after a service start) | 4.96 | 5.29 (600 s run) | 5.59 |
+| `r1`-`r3` (after `systemctl restart`) | 4.68 (p99 5.06, 91 over) | 5.26 (5.76, 195) | 5.54 (6.01, 202) |
+| `d1`-`d3` (after `systemctl restart`; default allocator again) | 4.66 (5.12, 130) | 5.22 (5.85, 176) | 5.59 (6.22, 90) |
+| `m1`-`m3`, `PYTHONMALLOC=malloc` | 5.38 (5.77, 246) | 5.90 (6.39, 520) | 6.06 (6.55, 528) |
+| fresh process, single run (`b`) | 4.65 (4.99, 71) | | |
+
+- Round-trip p99 (ms): 9.05 / 10.17 / 10.19 (`r`), 9.37 / 9.92 / 9.52 (`d`), 10.43 / 11.41 / 11.32 (`m`). The over-10 count is not monotonic (`d`: 130, 176, 90), so it is a noisy measure; the core step is not.
+- Core compute per replay (18,000 step replies times the mean): 83.9, 94.0, 100.6 s for `d1`-`d3`.
+- **Each replay is flat from its first tenth to its last** (core step per tenth of the run, `r1`: 4.65-4.69; `r2`: 5.24-5.27; `r3`: 5.52-5.57). The level is set when a replay starts, and does not creep during it.
+- The step sizes shrink (+0.58 then +0.28; +0.52 then +0.16 with `malloc`), which may mean it levels off; only three replays per process were run, so this is not known.
+
+### Ruled out
+- **Memory growth and threads:** the agent's memory goes 28.1 to 33.4 MB over the first two replays and stays at 33,392 kB through the whole third, which is still the slowest; two threads throughout.
+- **Heat and power:** the Pi peaked at 59.8 C; `get_throttled` read 0x0 after the first set (the high bits record events since boot) and the clock was 2.4 GHz. Not re-read after the later sets.
+- **Python's small-object allocator:** `PYTHONMALLOC=malloc` is 0.5-0.7 ms slower at every replay and climbs by about the same; the setting was removed again (the `d` runs match the default pattern). This does not rule out memory layout in general.
+- **Thread placement:** `ps -L` every 10 s during `d1`-`d3`: the main thread (about 53% of one core) moves among all four cores in every replay, with no pattern; the journal thread is the same thread in every session and used about 7 s of CPU in 9 minutes. The dwc2 USB interrupt (33) is handled only on CPU 0 (2,021,535 interrupts between the two snapshots, about 3,500 per second if they bracket just the three replays); IRQ affinity allows 0-3.
+- **State that accumulates in the agent** (local, in process, same recording, four sessions in one `PiLinkServer`): the pickled core is 66,642 bytes after every session, the reply cache stays at 7, gc objects 123,488 / 123,406 / 124,124 / 124,487, and no type grew by more than 50 in a fifth pass. The PLC code (`plc.py`) is an interpreter with no module state; the only cache in the Track code is `lru_cache(maxsize=16)` on `vital_source`.
+- **Garbage collection** (local): about 0.002 ms per step; one gen2 collection of 42 ms in the fourth pass; none that large seen in the Pi data.
+- The sandbox does not reproduce the climb: core step 2.82, 2.97, 2.96, 2.96 ms over four passes (a +5% step, then flat), so the effect is bigger on the Pi (+12%, +20%).
+
+### Not known, not tried
+The cause. Untested ideas: heap layout after a session has been dropped (not allocator-specific); freeing the previous session's core before the next is built (`_start` builds the new core while the old is still referenced); keeping the agent off CPU 0, where all USB interrupts land (an earlier pinning A/B was on the Train Pi, whose core is much lighter); a function-level profile on the Pi of replay 1 against replay 3.
+Practical effect: restart the agent (`sudo systemctl restart track-overflow-agent.service`) before a run that is to be compared with others. Without that, the second and later replays have a round-trip p99 near the 10 ms budget.
