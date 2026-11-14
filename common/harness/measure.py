@@ -58,6 +58,7 @@ from common.harness.modules import (
     stub_specs,
     system_specs,
 )
+from common.harness.pi_config import PI_MODES, resolve_pi_modes
 from utils.event_log import EventLog
 from utils.system_clock import ALLOWED_SPEEDS, DEFAULT_TICK_S
 
@@ -161,10 +162,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.
     """
     options = _parse_args(argv)
-    if options.system and not options.test_pi:
+    physical = sorted(
+        name for name, mode in options.pi_modes.items() if mode == "physical"
+    )
+    if options.system and physical:
         print(
-            "Waiting for the assigned USB Pis; use --test-pi process "
-            "for explicit local simulation.", flush=True,
+            f"Waiting for the assigned USB Pi(s): {', '.join(physical)}; "
+            "use --test-pi process (or --track-controller-pi / "
+            "--train-controller-pi process) for explicit local simulation.",
+            flush=True,
         )
     if options.window:
         from PySide6.QtGui import QGuiApplication
@@ -194,9 +200,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         module_options[TRACK_CONTROLLER_SW] = ["--load-starters"]
         module_options[TRACK_CONTROLLER_HW] = ["--load-starters"]
         module_options[TRAIN_CONTROLLER_HW] = []
-        if options.test_pi:
-            for name in (TRACK_CONTROLLER_HW, TRAIN_CONTROLLER_HW):
-                module_options[name] += ["--test-pi", options.test_pi]
+        for name, extra in _pi_args(options).items():
+            module_options[name] += extra
         module_options[TRAIN_CONTROLLER_SW] = [
             "--engineer-gains", *ENGINEER_GAINS
         ]
@@ -342,10 +347,45 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         choices=("process", "pty"),
         help="explicit local Pi agents for --system (default: USB Pis)",
     )
+    parser.add_argument(
+        "--track-controller-pi",
+        choices=PI_MODES,
+        help="Track Controller Pi for --system, overriding --test-pi for "
+        "this module (default: physical)",
+    )
+    parser.add_argument(
+        "--train-controller-pi",
+        choices=PI_MODES,
+        help="Train Controller Pi for --system, overriding --test-pi for "
+        "this module (default: physical)",
+    )
     options = parser.parse_args(argv)
-    if options.test_pi and not options.system:
-        parser.error("--test-pi requires --system")
+    if not options.system and (
+        options.test_pi
+        or options.track_controller_pi
+        or options.train_controller_pi
+    ):
+        parser.error(
+            "--test-pi, --track-controller-pi and --train-controller-pi "
+            "require --system"
+        )
+    options.pi_modes = resolve_pi_modes(
+        {},
+        options.test_pi,
+        options.track_controller_pi,
+        options.train_controller_pi,
+    )
     return options
+
+
+def _pi_args(options: argparse.Namespace) -> dict[str, list[str]]:
+    # What each hardware module is started with: nothing for a physical Pi
+    # (it waits for its USB device), --test-pi MODE for a simulated one.
+    return {
+        name: ["--test-pi", mode]
+        for name, mode in options.pi_modes.items()
+        if mode != "physical"
+    }
 
 
 if __name__ == "__main__":
