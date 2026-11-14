@@ -193,8 +193,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             if name not in WIRED_MODULES
         }
         module_options[CTC_OFFICE] = ["--run-on-ready"]
-        for spec in options.dispatch or [DISPATCH]:
+        # A schedule dispatches its own trains in automatic mode (D020), so
+        # the default single train is only for a run without one.
+        for spec in options.dispatch or ([] if options.schedule else [DISPATCH]):
             module_options[CTC_OFFICE] += ["--dispatch", spec]
+        if options.schedule:
+            module_options[CTC_OFFICE] += [
+                "--schedule", str(options.schedule.resolve())
+            ]
         if options.speed != 1:
             module_options[CTC_OFFICE] += ["--speedup-at-tick", "0"]
         module_options[TRACK_CONTROLLER_SW] = ["--load-starters"]
@@ -372,17 +378,28 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         f"--dispatch; repeat for more (default: {DISPATCH}). The hardware "
         "Pis only run Red trains, so use R1:Red:16 to load them",
     )
+    parser.add_argument(
+        "--schedule",
+        type=Path,
+        metavar="FILE",
+        help="a schedule file the CTC Office runs in automatic mode for "
+        "--system, in place of the single default train (see "
+        "utils/schedule_v4.json)",
+    )
     options = parser.parse_args(argv)
     if not options.system and (
         options.test_pi
         or options.track_controller_pi
         or options.train_controller_pi
         or options.dispatch
+        or options.schedule
     ):
         parser.error(
-            "--test-pi, --track-controller-pi, --train-controller-pi and "
-            "--dispatch require --system"
+            "--test-pi, --track-controller-pi, --train-controller-pi, "
+            "--dispatch and --schedule require --system"
         )
+    if options.schedule is not None and not options.schedule.is_file():
+        parser.error(f"--schedule: no such file: {options.schedule}")
     options.pi_modes = resolve_pi_modes(
         {},
         options.test_pi,

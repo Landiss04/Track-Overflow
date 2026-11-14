@@ -161,3 +161,63 @@ def test_main_gives_the_engineer_gains_to_both_train_controllers(monkeypatch):
     # The hardware controller needs them too, or a Red train waits (D024).
     for name in (TRAIN_CONTROLLER_SW, TRAIN_CONTROLLER_HW):
         assert seen[name][:3] == gains, (name, seen[name])
+
+
+def _ctc_options(monkeypatch, *argv):
+    from common.harness.modules import CTC_OFFICE
+
+    seen = {}
+
+    def capture(module_options):
+        seen.update(module_options)
+        raise _Stop
+
+    monkeypatch.setattr(measure, "system_specs", capture)
+    with pytest.raises(_Stop):
+        measure.main(["--system", "--test-pi", "process", "--seconds", "1", *argv])
+    return seen[CTC_OFFICE]
+
+
+def test_a_schedule_replaces_the_default_train_and_is_given_by_full_path(
+    tmp_path, monkeypatch
+):
+    schedule = tmp_path / "schedule.json"
+    schedule.write_text("{}", encoding="utf-8")
+    options = _ctc_options(monkeypatch, "--schedule", str(schedule))
+    assert "--dispatch" not in options
+    assert options[options.index("--schedule") + 1] == str(schedule.resolve())
+
+
+def test_a_schedule_and_a_dispatch_can_be_given_together(tmp_path, monkeypatch):
+    schedule = tmp_path / "schedule.json"
+    schedule.write_text("{}", encoding="utf-8")
+    options = _ctc_options(
+        monkeypatch, "--schedule", str(schedule), "--dispatch", "R1:Red:60"
+    )
+    assert "R1:Red:60" in options and "--schedule" in options
+
+
+def test_a_missing_schedule_is_a_usage_error(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        measure._parse_args(["--system", "--schedule", str(tmp_path / "nope.json")])
+    assert "no such file" in capsys.readouterr().err
+
+
+def test_schedule_needs_system_mode(tmp_path, capsys):
+    schedule = tmp_path / "schedule.json"
+    schedule.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        measure._parse_args(["--schedule", str(schedule)])
+    assert "require --system" in capsys.readouterr().err
+
+
+def test_the_stress_schedule_loads_with_the_ctc_loader():
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    if str(root / "CTC-Office") not in sys.path:
+        sys.path.insert(0, str(root / "CTC-Office"))
+    from ctc.schedule import load_schedule
+
+    assert load_schedule(root / "utils/schedule_stress.json")

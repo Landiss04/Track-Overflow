@@ -247,7 +247,10 @@ recompiling.
 ## 10. The 10x system run with one physical Pi
 
 One board, so one hardware Pi is real and the other runs as a local process simulator on the host (an explicit test mode, never an automatic
-fallback). Use a Red train: the hardware Pis only run Red, and with the default Green train they would sit idle. Run from `Track-Overflow`:
+fallback). The hardware Pis only run Red, so the default single Green train leaves them idle. Use the stress schedule (`--schedule utils\\schedule_stress.json`:
+14 Green trains 45 s apart and 4 Red trains 90 s apart, each Red run ending at block 60 and then returning to the yard, D020), or a single Red train with
+`--dispatch R1:Red:60`. `measure` gives the engineer's gains to both Train Controllers, as the launcher does, so a Red train does not wait for them (D024).
+Run from `Track-Overflow`:
 
 ```powershell
 # Run A: the Track Pi is real, the Train Controller is simulated

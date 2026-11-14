@@ -442,3 +442,25 @@ Tests: 21 in `test_measure_pi_modes.py` and `test_bench_tools.py`; the harness s
 - Switching the board between Track and Train needs a reboot: the gadget script exits with "Existing gadget; reboot before identity change".
 - An earlier attempt at this check used a temporary edit followed by `git checkout` of the file; the harness blocked the command before it ran, and it would have discarded uncommitted work. Nothing was lost.
 - Hardware rows for these runs: not yet measured.
+
+### Correction and first system runs with the Track Pi physical (60 s, 10x, headless, Windows host; Red train `R1:Red:16`, **without** engineer gains on the hardware Train Controller)
+
+`measure --system` gave the engineer's gains only to the software Train Controller (the launcher gives them to both), so in these three runs the Red train most likely waited for gains (D024) and the hardware Pis saw a
+quieter workload than a real run. **Do not use these as the Track Pi's loaded numbers.** Fixed in `5e48446`; in the sandbox (both Pis simulated) the Track HW reply goes from about 6.2 to about 7.5 ms once the train runs.
+
+| Run | Round trip mean / p95 / p99 / max (ms) | Speed | Slipped | Track Controller reply mean / p99 (ms) | Track HW last |
+| --- | --- | --- | --- | --- | --- |
+| Track Pi physical, Train simulated, first run (the user switched windows during it) | 10.60 / 14.97 / 19.03 / 171.4 | 7.98x | 1,165 in 1 slip | 10.30 / 18.61 | 97% |
+| Track Pi physical, Train simulated, second run (hands off) | 10.49 / 15.06 / 21.29 / 80.4 | 8.89x | 650 in 1 slip | 10.13 / 18.35 | 96% |
+| Both Pis simulated, 60 s (hands off not stated) | 8.57 / 13.85 / 19.02 / 57.4 | 9.96x | 0 | 8.22 / 18.60 | 95% |
+
+- With these workloads the physical Track Pi added about 2 ms to the tick mean and the Track reply, and the system held 8-9x. The speed figure moves with when the harness drops a block of ticks (7.98x, then 8.89x for a 1% change in mean), so the mean round trip is the steadier number.
+- The Track Controller's reply from the start of a tick is 8.2 ms with a simulated Pi and no USB, against 7.1 ms for the real Pi in a bare `bringup` replay; the harness-to-module path costs about 3-4 ms with or without hardware.
+- Pi side, `/var/lib/track-overflow/agent.log`: the two runs logged one cold first step each (core 14.5 and 13.9 ms) and nothing else over 10 ms; `get_throttled` 0x0.
+  **I had said these runs added about 67 slow-step lines; that was wrong.** The count (7 before, 74 after) also included the replay experiments run in between: a 180 s replay in which every checkpoint step (every 600 ticks) was just over 10 ms
+  (core about 6.0 ms plus a checkpoint pickle of 3.3-3.7 ms, against 1.3 ms in the sandbox), and the cold first steps (core 12.4-15.6 ms) of nine replays.
+
+### Stress schedule in the sandbox (both Pis simulated, `--schedule utils/schedule_stress.json`, 30 s, 10x)
+
+`measure --schedule FILE` runs a schedule in automatic mode (D020). Speed 9.52x, round trip mean 9.32 / p95 24.84 / p99 44.82 / max 93.9 ms, 100 ticks slipped in 1 slip. Track HW reply mean 7.60 ms (last to reply in 70% of ticks);
+**ctc-office** reply mean 6.52, p99 43.5 ms (last in 21%). With 18 trains the CTC Office, a software module, becomes a second limiter. Sandbox only; no hardware row yet.
