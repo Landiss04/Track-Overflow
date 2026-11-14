@@ -59,7 +59,7 @@ active and starts it at the end; a literal `try-restart` would do nothing, becau
 That is 95% of the step in the PLC interpreter. `view()` is 1.3 ms mean (2.5 max), encoding its VIEW
 0.34 ms, 41 KB. Not changed: `plc.py` has an owner and its two scans are redundant channels.
 
-## Pi A/B test: core pinning (not run; needs the Pi)
+## Pi A/B test: core pinning (procedure; results under A1g and the 600 s A/B/A below)
 
 Run on each Pi with the same bundle, 10x, the same workload, 600 s each, record the table columns above
 from `measure --system` and `core_step_s` from the Pi. Without a rebuild, using a systemd drop-in:
@@ -174,3 +174,24 @@ The one slow step: `SLOW_STEP tick=10230 total_ms=185.2 disk_wait_ms=184.9`, the
 `MAX_UNSYNCED` = 50 records waiting for the SD card (0.55 s at 91 Hz) and the card's fsync was stalled for about 0.7 s, so the reply
 waited. `MAX_UNSYNCED` is now 300 (3 s at 100 steps a second): a stall under that costs no reply any time. The price is a recovery that replays
 up to 300 steps (about 30 ms for the Train core, about 1 s for the Track core at 3 ms a step). Not yet run on the Pi.
+
+### A1g: `MAX_UNSYNCED` = 300 (Train Pi, `b061614`, agent hash a1f4fa6d, 3-minute replay, unpinned)
+
+18,001 steps at 92.8 Hz. RTT mean 0.88 / p95 1.81 / p99 2.89 / max 7.56 ms. Pi core step max 0.39 ms. No `SLOW_STEP` in the Pi log.
+
+### 600 s A/B/A, core pinning (Train Pi, `b061614`, Red workload, 60,001 steps, `--hz 100`)
+
+| Run | Rate | Late sends | RTT mean / p95 / p99 / max (ms) | Pi core step mean / max (ms) | Pi `SLOW_STEP` |
+| --- | --- | --- | --- | --- | --- |
+| A, unpinned | 92.0 Hz | 23,887 | 0.912 / 1.696 / 2.579 / 13.14 | 0.059 / 0.229 | 0 |
+| B, `CPUAffinity=2 3` | 92.4 Hz | 21,864 | 0.869 / 1.695 / 2.566 / 8.99 | 0.057 / 0.398 | 0 |
+| A2, unpinned (drift check) | 92.4 Hz | 22,124 | 0.872 / 1.635 / 2.721 / 12.71 | 0.060 / 0.271 | 0 |
+
+- Command: `python -m common.hw_link.bringup --module train-controller-hw --recording ..\train-red-600s.jsonl --hz 100 --timeout 700 --output <file>`.
+- Pinning makes no difference we can measure: p99 is 2.58 / 2.57 / 2.72 ms. The two unpinned runs differ from each other as much as from B.
+  Decision: no pinning, `performance` governor only.
+- Max round trip was over 10 ms in A (13.1) and A2 (12.7), not in B (9.0). The Pi logged no slow step in any run, so those spikes are on the host or
+  the link, one in about 60,000 steps. The summary holds only the maximum, so the number of steps over 10 ms is not known.
+- The host paced at about 92 Hz, not 100, in all three. Late sends are the host timer, not the Pi.
+- The user reports the PC probably slept between runs 2 and 3. Nothing in the run-3 numbers shows it.
+- Not shown: Track Pi, windows open, `measure --system`.
