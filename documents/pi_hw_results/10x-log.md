@@ -198,3 +198,21 @@ up to 300 steps (about 30 ms for the Train core, about 1 s for the Track core at
 
 `bringup` now also writes `rtt_over_10ms`: the number of round trips over 10 ms, next to the maximum. It is a host-side change only, so the Pi bundle
 and agent hash are unchanged. The 600 s runs above predate it, so their counts are unknown.
+
+## Phase 0 system rows: `measure --system --test-pi process --seconds 15` (Windows host, local agents, no Pi in the loop, `d217df0`)
+
+| Speed | Front end | Ticks | Round trip mean / median / p95 / p99 / max (ms) | Slipped | Late replies | Harness CPU |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1x | headless | 152 of 151 | 10.21 / 8.80 / 12.90 / 13.56 / 143.69 | 0 | 0 | 4% |
+| 10x | headless | 1,501 of 1,501 | 8.09 / 7.47 / 13.16 / 18.05 / 51.55 | 0 | 0 | 36% |
+| 1x | window | 151 of 150 | 9.89 / 8.98 / 13.74 / 15.32 / 25.98 | 0 | 0 | 10% |
+| 10x | window | 1,503 of 1,502 | 8.07 / 7.39 / 13.21 / 18.31 / 61.35 | 0 | 0 | 42% |
+
+- Speed achieved is 1.00x/1.01x and 10.00x. "Slipped" counts only ticks that were dropped after the run fell too far behind (`dropped_ticks`);
+  a single late tick that is caught up is not counted.
+- At 10x the budget is 10 ms and p95 is about 13 ms, so more than 5% of ticks take longer than their slot and are only caught up afterwards.
+  The mean is under budget, which is why the speed still holds.
+- The handover's 10x headless numbers were mean 4.35-4.76, p99 16.9-19.9, max 36-95 on a different machine. Here the mean is higher
+  (8.1) and the p99 is the same.
+- Window and headless are close at 10x. The window costs a few percent of one core, not the round trip.
+- Not measured: a real Pi in the loop (needs the Track Pi), 600 s.
