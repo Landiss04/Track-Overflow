@@ -48,6 +48,25 @@ def servers():
         server.close()
 
 
+def wait_blocked(gate, calls: int) -> None:
+    """Block until the journal thread has written a batch and is held in the
+    shut fsync: ``calls`` is ``len(gate.threads)`` from before the steps.
+
+    That is the point at which a test can cut the power on what is written
+    but not synced.
+    """
+    deadline = time.monotonic() + 5
+    while len(gate.threads) <= calls:
+        assert time.monotonic() < deadline, "journal thread never reached fsync"
+        time.sleep(0.01)
+
+
+def lose_queue(server) -> None:
+    """What the agent still held in memory goes with the power."""
+    with server._sync:
+        server._pending = []
+
+
 def make(servers, journal, **options) -> PiLinkServer:
     server = PiLinkServer(MODULE, journal, **options)
     servers.append(server)
@@ -66,10 +85,11 @@ def test_step_reply_does_not_wait_for_fsync(tmp_path, gate, servers):
     started = time.perf_counter()
     assert server.handle(request(1))[0]["op"] == "OUTPUTS"
     assert time.perf_counter() - started < 2
-    # Already written: an agent crash, unlike a power cut, keeps it.
-    assert len(journal.read_bytes().splitlines()) == 2
+    # Queued, not yet on disk: the reply waited for neither the file nor
+    # the fsync. It is written once the journal thread is let through.
     gate.open.set()
     server.wait_durable()
+    assert len(journal.read_bytes().splitlines()) == 2
     assert gate.threads[-1] != threading.get_ident()
 
 
@@ -122,6 +142,7 @@ def test_host_agent_never_fsyncs_and_reports_durable_at_once(
     server.handle(hello())
     gate.threads.clear()
     server.handle(request(1))
+    server.wait_durable()
     assert server.handle(request(2))[0]["durable"] == key(request(1))
     assert not gate.threads
 
@@ -138,11 +159,14 @@ def test_power_cut_restores_the_synced_prefix(tmp_path, gate, servers, tail):
         server.handle(request(tick))
     server.wait_durable()
     synced = journal.read_bytes()
+    calls = len(gate.threads)
     gate.open.clear()
     for tick in range(4, 6):
         server.handle(request(tick))
+    wait_blocked(gate, calls)
     # Power cut: what was synced survives, plus whatever was half-written.
     journal.write_bytes(synced + tail)
+    lose_queue(server)
     gate.open.set()
     rebooted = make(servers, journal)
     assert rebooted.handle(hello())[0]["applied"] == key(request(3))
@@ -283,17 +307,21 @@ def test_power_cut_loses_no_step_the_host_saw_answered(
             relay.submit_step(request(tick))
         transport.server.wait_durable()
         synced = journal.read_bytes()
+        calls = len(gate.threads)
         gate.open.clear()
         for tick in range(4, 7):
             relay.submit_step(request(tick))
+        wait_blocked(gate, calls)
         transport.disconnected.emit()
         journal.write_bytes(synced)
+        lose_queue(transport.server)
         gate.open.set()
         transport.server = make(servers, journal)
         transport.start()
         assert any("PI_RECOVERED" in event for event in events), events
         relay.submit_step(request(7))
         assert [reply["tick"] for reply in replies] == list(range(1, 8))
+        transport.server.wait_durable()
         steps = [
             entry["request"]["tick"]
             for entry in map(json.loads, journal.read_text().splitlines()[1:])

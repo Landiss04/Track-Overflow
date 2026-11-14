@@ -63,6 +63,7 @@ def test_duplicate_and_durable_reboot(tmp_path):
     server.handle(hello())
     first = server.handle(step())[0]
     assert server.handle(step()) == [first]
+    server.wait_durable()
     rebooted = PiLinkServer("train-controller-hw", journal)
     assert rebooted.handle(hello())[0]["resumed"]
     assert rebooted.handle(step()) == [first]
@@ -108,6 +109,7 @@ def test_partial_journal_tail_is_not_a_committed_tick(tmp_path):
     server = PiLinkServer("train-controller-hw", journal)
     server.handle(hello())
     first = server.handle(step())[0]
+    server.wait_durable()
     with journal.open("ab") as stream:
         stream.write(b'{"request":')
     rebooted = PiLinkServer("train-controller-hw", journal)
@@ -158,6 +160,7 @@ def test_action_cache_restores_actual_train_state(tmp_path):
         args={"train_id": "R1", "field": "target_temp_c", "value": 23},
     )
     first = server.handle(action)[0]
+    server.wait_durable()
     rebooted = PiLinkServer("train-controller-hw", tmp_path / "journal")
     assert rebooted.core.fleet.get("R1").state.target_temp_c == 23
     rebooted.handle(hello())
@@ -192,6 +195,7 @@ def test_replayed_station_dwell_integral_and_latches_match_reference(tmp_path):
         frame["inputs"]["trains"]["R1"]["inputs"]["beacon_station"] = "TEST"
         server.handle(frame)
     before = server.core.fleet.get("R1")
+    server.wait_durable()
     restored = PiLinkServer("train-controller-hw", tmp_path / "journal")
     after = restored.core.fleet.get("R1")
     assert vars(before.state) == vars(after.state)
@@ -242,6 +246,7 @@ def test_restored_session_requires_fresh_successful_hello(tmp_path):
     server = PiLinkServer("train-controller-hw", journal)
     server.handle(hello())
     server.handle(step())
+    server.wait_durable()
     rebooted = PiLinkServer("train-controller-hw", journal)
     assert rebooted.handle(step(2))[0]["reason"] == "HELLO required"
     assert rebooted.handle(hello(version=999))[0]["op"] == "REJECTED"
@@ -270,6 +275,7 @@ def run_with_actions(journal, ticks):
     for tick in range(2, ticks + 1):
         server.handle(request(tick))
         server.settle()  # A checkpoint finishes beside the next step.
+    server.wait_durable()  # The journal thread has written everything.
     return server, actions, replies
 
 
@@ -301,6 +307,7 @@ def test_checkpoint_bounds_journal_cache_and_restart(
             self, request
         ),
     )
+    server.wait_durable()
     rebooted = PiLinkServer("train-controller-hw", journal)
     assert len(executed) <= 5
     before, after = server.core.fleet.get("R1"), rebooted.core.fleet.get("R1")

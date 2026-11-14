@@ -13,7 +13,7 @@ MODULE = "train-controller-hw"
 
 @pytest.fixture
 def disk_stall(monkeypatch):
-    """Once armed, block every fsync but the journal worker's, until released."""
+    """Once armed, block every fsync but the journal thread's, until released."""
     release = threading.Event()
     release.armed = threading.Event()
     real = agent.os.fsync
@@ -21,7 +21,7 @@ def disk_stall(monkeypatch):
     def fsync(fd):
         if (
             release.armed.is_set()
-            and threading.current_thread().name != "journal-fsync"
+            and threading.current_thread().name != "journal"
         ):
             assert release.wait(10), "stall never released"
         real(fd)

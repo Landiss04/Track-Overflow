@@ -128,3 +128,37 @@ new 116.1 / 117.5 / 119.1, previous commit 114.2 / 112.5 / 115.5 (about 3.5 us, 
 - The slow steps recur every 19-21 steps, about the VIEW period (0.2 s = 19 steps at 91 Hz), so they follow the VIEW cycle.
 - Next: `decode_ms`, `journal_ms` (includes the disk wait) and `tty_ms` (the reply's write to the device) are added to the line,
   to separate the agent's own work, the journal write, and the USB write. A 180 s recording is enough to see it.
+
+### A1e and the cause of the tail
+
+A1e (3-minute replay, `5b60b2a`, Train Pi, unpinned): 18,001 samples, 90.5-90.9 Hz each minute, late sends 7,275,
+RTT mean / p95 / p99 / max 1.22 / 1.68 / 18.0 / 45.1 ms, Pi core step max 0.40 ms.
+Pi log: 1,862 slow lines in total; in every line shown `journal_ms` is within 0.2 ms of `total_ms` (for example `total_ms=21.6 journal_ms=21.4`),
+with `decode_ms`, `tty_ms`, `core_ms`, `disk_wait_ms` and `ckpt_pickle_ms` all 0.0-0.1. The delay was the journal `write()`.
+
+Pi test, 3000 appends of 480 B at 100 Hz to a file in the home directory (SD card), alone and beside an fsync thread:
+
+| Case | write p50 | p99 | max | Over 10 ms |
+| --- | --- | --- | --- | --- |
+| no fsync | 0.01 ms | 0.0 ms | 10.1 ms | 1 |
+| fsync back to back (as the agent did) | 0.02 ms | 18.3 ms | 27.3 ms | 68 (2.3%) |
+| fsync with a 50 ms gap | 0.01 ms | 2.4 ms | 35.3 ms | 9 (0.3%) |
+
+A write beside a running fsync of the same file stalls for the fsync's duration. At 10x any write of 10 ms or more is a slipped tick.
+
+## Item 9: journal write off the reply path
+
+A step now puts its record on an in-memory queue and replies; one `journal` thread writes the queue and fsyncs it. The checkpoint swap
+clears the queue (what it held is in the checkpoint or in the carried records of the new journal), so nothing is written twice or dropped.
+
+- **Changed durability:** a record is no longer in the OS cache when its reply goes out. If the agent process dies right after a reply, the
+  records accepted since the journal thread last wrote (those queued during its current write and fsync, about 1-4 at 10 ms, up to
+  `MAX_UNSYNCED` = 50 if the card stalls) are lost, as a power cut loses unsynced records today. The host keeps every request until a reply
+  names it durable and resends it after a recovery, and no reply claims a record that is not fsynced.
+- **Per step, in-process on the sandbox** (`_replies`, mean us over 20,000 steps, three alternating runs): B 97.4 / 101.0 / 95.3,
+  previous commit 115.5 / 116.9 / 115.9.
+- **Sandbox pty run:** `journal_ms=0.0` in every slow line. The sandbox's fsync is about 2 ms, so the stall itself is not reproduced here;
+  the Pi run decides.
+- **Tests:** two new tests fail on the previous agent ("a reply waited for the journal file"); five existing tests changed because their rule
+  changed (a record is on disk only after `wait_durable()`; a power cut also drops what is still queued). 25 repeats of the journal tests
+  and 6 of the whole suite passed.

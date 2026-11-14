@@ -166,6 +166,7 @@ def test_cut_reply_is_resent_from_the_pi_cache_and_runs_once(tmp_path):
         relay.submit_step(request(1))
         relay.submit_step(request(2))
         assert [reply["tick"] for reply in replies] == [1, 2]
+        transport.server.wait_durable()
         steps = [
             entry["request"]["tick"]
             for entry in map(json.loads, journal.read_text().splitlines()[1:])

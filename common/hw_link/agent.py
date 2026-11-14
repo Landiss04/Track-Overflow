@@ -1,10 +1,12 @@
 """PiLinkServer: standard-library newline JSON over stdio or a raw tty.
 
 No clock runs here. A durable request journal reconstructs the core and reply
-cache after a process/Pi restart. It writes accepted and rejected transactions
-before replying and fsyncs them on a worker thread; each reply names the last
-one on disk, so the host can resend what a power cut takes. Replay is internal
-reconstruction, never a new harness tick.
+cache after a process/Pi restart. Accepted and rejected transactions are queued
+before the reply and written and fsynced by a worker thread, so a reply never
+waits on the file: a write beside a running fsync of the same file stalled for
+10-35 ms on the Pi's SD card, often enough to slip a 10 ms tick. Each reply
+names the last record on disk, so the host can resend what a power cut or a
+crash takes. Replay is internal reconstruction, never a new harness tick.
 
 Every ``CHECKPOINT_TICKS`` steps the agent pickles its core and reply cache and
 starts a new journal on top of that checkpoint, so a restart replays at most
@@ -48,8 +50,9 @@ CHECKPOINT_TICKS = 600
 # Nothing is logged for a step under it, so a clean run costs nothing.
 SLOW_STEP_S = 0.010
 
-# Records written but not yet fsynced. Past this a reply waits for the disk,
-# which bounds what the host holds to resend after a power cut.
+# Records accepted but not yet fsynced. Past this a reply waits for the disk,
+# which bounds both the queue and what the host holds to resend after a power
+# cut.
 MAX_UNSYNCED = 50
 
 AGENT_HASH = expected_hash()
@@ -80,13 +83,14 @@ class PiLinkServer:
         self._durable_key: list[Any] | None = None
         self._syncer: threading.Thread | None = None
         self._closing = False
-        # Unbuffered append handle, so each record is one write() with no
+        # Unbuffered append handle, so a batch is one write() with no
         # open/close per tick. Closed before any replace of the file.
         self._stream: Any = None
-        # Held to append a record or to swap the journal file, never across
-        # an fsync. While a checkpoint is in flight, ``_since`` keeps the
-        # records written after its snapshot so the new journal can start
-        # with them.
+        # Records accepted and not yet written; with ``_since``, the records
+        # accepted since a checkpoint's snapshot, and ``_collecting``, they
+        # are guarded by ``_sync``. ``_io`` is held by the two worker
+        # threads across file writes and the journal swap, never by a step.
+        self._pending: list[bytes] = []
         self._io = threading.Lock()
         self._since: list[tuple[bytes, int, list[Any]]] = []
         self._collecting = False
@@ -195,10 +199,13 @@ class PiLinkServer:
             "agent_hash": AGENT_HASH,
             "checkpoint": seq or None,
         }
-        # Windows cannot replace a file the fsync worker has open.
-        self.wait_durable()
-        self._close_stream()
-        _write_durably(self.journal, (json.dumps(header) + "\n").encode())
+        # Windows cannot replace a file the journal thread has open. A new
+        # session starts empty, so what is queued from the old one is dropped.
+        with self._io:
+            with self._sync:
+                self._pending = []
+            self._close_stream()
+            _write_durably(self.journal, (json.dumps(header) + "\n").encode())
         self._all_durable()
         if self._checkpoint_seq and self._checkpoint_seq != seq:
             self._checkpoint_path(self._checkpoint_seq).unlink(missing_ok=True)
@@ -214,7 +221,7 @@ class PiLinkServer:
             (self.core, self.cache), protocol=pickle.HIGHEST_PROTOCOL
         )
         self.checkpoint_s += time.monotonic() - pickling
-        with self._io:
+        with self._sync:
             self._since = []
             self._collecting = True
             base = (self._written, self._written_key)
@@ -236,7 +243,7 @@ class PiLinkServer:
         assert self.journal is not None
         try:
             _write_durably(self._checkpoint_path(seq), data)
-            with self._io:
+            with self._sync:
                 carried = list(self._since)
             header = {
                 "module": self.module,
@@ -251,29 +258,29 @@ class PiLinkServer:
                 stream.flush()
                 os.fsync(stream.fileno())
             with self._io:
-                # Records written while the fsync above ran.
-                with temporary.open("ab") as stream:
-                    stream.writelines(
-                        line for line, _, _ in self._since[len(carried) :]
-                    )
-                self._close_stream()
-                os.replace(temporary, self.journal)
-                self._since = []
-                self._collecting = False
                 with self._sync:
+                    # What was accepted while the fsync above ran. Everything
+                    # queued so far is in the checkpoint or in the new
+                    # journal, so the queue starts again empty; the journal
+                    # thread writes what comes next after this swap.
+                    extra = self._since[len(carried) :]
+                    self._pending = []
+                    self._since = []
+                    self._collecting = False
                     # Only the carried records are known to be on disk in
-                    # the new file; the syncer covers the rest, and a
-                    # sync of the old file already under way does not count.
+                    # the new file; the journal thread covers the rest, and
+                    # a sync of the old file already under way does not count.
                     self._epoch += 1
                     count, key = (
                         (carried[-1][1], carried[-1][2]) if carried else base
                     )
-                    if not self.durable:
-                        self._synced = self._written
-                        self._durable_key = self._written_key
-                    elif self._synced > count:
+                    if self._synced > count:
                         self._synced, self._durable_key = count, key
                     self._sync.notify_all()
+                with temporary.open("ab") as stream:
+                    stream.writelines(line for line, _, _ in extra)
+                self._close_stream()
+                os.replace(temporary, self.journal)
             _sync_directory(self.journal.parent)
             old = self._checkpoint_seq
             self._checkpoint_seq = seq
@@ -281,7 +288,7 @@ class PiLinkServer:
                 self._checkpoint_path(old).unlink(missing_ok=True)
             self.log(f"CHECKPOINT {seq}")
         except OSError as error:
-            with self._io:
+            with self._sync:
                 self._since = []
                 self._collecting = False
             self.log(f"CHECKPOINT_FAILED {error}")
@@ -292,68 +299,84 @@ class PiLinkServer:
             self._checkpointer.join()
 
     def _record(self, request: bytes, reply: bytes, key: list[Any]) -> None:
-        if self.journal is not None:
-            # Both are already compact JSON lines; splice, do not re-encode.
-            line = b'{"request":' + request[:-1] + b',"reply":' + reply[:-1]
-            with self._io:
-                if self._stream is None:
-                    self._stream = self.journal.open("ab", buffering=0)
-                self._stream.write(line + b"}\n")
-                with self._sync:
-                    self._written += 1
-                    self._written_key = key
-                if self._collecting:
-                    self._since.append(
-                        (line + b"}\n", self._written, key)
-                    )
-        else:
+        if self.journal is None:
             with self._sync:
                 self._written += 1
                 self._written_key = key
-        if self.journal is None or not self.durable:
             self._all_durable()
             return
+        # Both are already compact JSON lines; splice, do not re-encode.
+        line = b'{"request":' + request[:-1] + b',"reply":' + reply[:-1] + b"}\n"
         with self._sync:
+            self._written += 1
+            self._written_key = key
+            self._pending.append(line)
+            if self._collecting:
+                self._since.append((line, self._written, key))
             if self._syncer is None:
                 self._syncer = threading.Thread(
-                    target=self._sync_journal, name="journal-fsync", daemon=True
+                    target=self._run_journal, name="journal", daemon=True
                 )
                 self._syncer.start()
             self._sync.notify_all()
+            if not self.durable:
+                return
             waiting = time.monotonic()
             while self._written - self._synced > MAX_UNSYNCED:
                 self._sync.wait()
             self.disk_wait_s += time.monotonic() - waiting
 
-    def _sync_journal(self) -> None:
-        # The SD card's ~10 ms fsync runs here, beside the next step,
-        # instead of before every reply.
+    def _run_journal(self) -> None:
+        # Writes what the steps queued, then fsyncs it: the SD card's ~10 ms
+        # fsync, and a write beside it, run here instead of before a reply.
         assert self.journal is not None
         while True:
             with self._sync:
                 while self._synced == self._written and not self._closing:
                     self._sync.wait()
-                if self._closing:
-                    return
-                count, key = self._written, self._written_key
-                epoch = self._epoch
-            try:
-                # fsync flushes the file, whichever descriptor names it.
-                descriptor = os.open(self.journal, os.O_RDWR)
+                closing = self._closing
+            with self._io:
+                with self._sync:
+                    count, key = self._written, self._written_key
+                    epoch = self._epoch
+                    batch, self._pending = self._pending, []
                 try:
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
-            except OSError as error:
-                self.log(f"JOURNAL_SYNC_RETRY {error}")
-                time.sleep(0.1)
-                continue
+                    self._append(b"".join(batch))
+                except OSError as error:
+                    with self._sync:
+                        self._pending[:0] = batch
+                    self.log(f"JOURNAL_WRITE_RETRY {error}")
+                    time.sleep(0.1)
+                    continue
+            if closing:
+                return  # Written; the OS cache keeps it.
+            if self.durable:
+                try:
+                    # fsync flushes the file, whichever descriptor names it.
+                    descriptor = os.open(self.journal, os.O_RDWR)
+                    try:
+                        os.fsync(descriptor)
+                    finally:
+                        os.close(descriptor)
+                except OSError as error:
+                    self.log(f"JOURNAL_SYNC_RETRY {error}")
+                    time.sleep(0.1)
+                    continue
             with self._sync:
                 # A checkpoint may already have covered more than this, and
                 # one that swapped the file meanwhile made this sync moot.
                 if epoch == self._epoch and count > self._synced:
                     self._synced, self._durable_key = count, key
                 self._sync.notify_all()
+
+    def _append(self, data: bytes) -> None:
+        if not data:
+            return
+        if self._stream is None:
+            self._stream = self.journal.open("ab", buffering=0)
+        view = memoryview(data)
+        while view:
+            view = view[self._stream.write(view) :]
 
     def _close_stream(self) -> None:
         if self._stream is not None:
@@ -367,7 +390,7 @@ class PiLinkServer:
                 self._sync.wait()
 
     def close(self) -> None:
-        """Stop the fsync worker; unsynced records stay in the OS cache."""
+        """Write what is queued and stop; unsynced records stay in the OS cache."""
         self.settle()
         with self._sync:
             self._closing = True
