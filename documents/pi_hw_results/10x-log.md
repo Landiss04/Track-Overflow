@@ -233,3 +233,17 @@ Reply time from tick start, per module (ms); "last" is the share of ticks where 
 
 Round trip in that run: mean 6.66, p95 13.73, p99 19.31, max 67.88 ms. The Windows run on the target had mean 8.09, p95 13.16, p99 18.05, so the sandbox is a fair stand-in for the shape, not the values.
 The Track hardware core is last in 91% of ticks. Its mean is the 3 ms PLC step plus the checkpoint pickle (7-15 ms every checkpoint) plus the link. The ctc-office p99 (18.9 ms) is a separate tail.
+
+### Track checkpoint: static versus dynamic (sandbox, in process, three Red waysides and programs, 1,200 steps; script `bench/ckpt_split.py`, scratchpad only)
+
+| What is pickled | Bytes | Pickle time (median of 30) |
+| --- | --- | --- |
+| Whole core (what a checkpoint holds today) | 458,922 | 6.05 ms |
+| Everything except the compiled PLC programs | 33,443 | 0.66 ms |
+| The compiled programs alone (`_vital` and `_program` of each wayside) | 425,417 | 5.24 ms |
+| The program source text alone | 85,139 | not timed |
+
+- 93% of the checkpoint is the compiled programs. `Program` is a frozen dataclass ("Scanning never changes it"), so it is static after load.
+- `_vital` (254 KB) is built from the territory by `vital_source(territory)`, so it can be rebuilt after a restart without being saved.
+- Leaving the compiled programs out cuts the pickle from about 6 ms to about 0.7 ms in the sandbox. Not measured on the Pi.
+- Not checked: whether a restored core can recompile its programs from source and the territory with the same result. That has to be tested before any change.
