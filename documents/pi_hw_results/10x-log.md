@@ -262,3 +262,14 @@ The Track hardware core is last in 91% of ticks. Its mean is the 3 ms PLC step p
   untouched, restored core steps like the original for 280 steps, no program loaded, an older whole-core checkpoint still restores, and an agent
   restart from a checkpoint after real load actions. `common/hw_link`: 229 passed.
 - **Not yet measured on the Pi:** the Track Pi has never been run on hardware.
+
+### Lean Track checkpoint build on the Train Pi (`563b63f`, agent hash 0a7cf856, 600 s replay, unpinned, `--hz 100`)
+
+60,001 steps in 648.2 s (92.6 Hz), Red workload. RTT mean 0.825 / p95 1.48 / p99 2.55 / **max 5.21 ms**, `rtt_over_10ms` = **0**. Pi core step mean 0.059 / max 0.39 ms.
+Worst round trip per minute 3.4-4.8 ms. No `SLOW_STEP` in the Pi log (last line is still the A1f `tick=10230`).
+This is the first 600 s run with no round trip over 10 ms (A, A2 had maxima of 13.1 and 12.7 ms). One run, so the spikes are not proven gone.
+The Train agent has no Track core, so the lean checkpoint itself is not exercised by this run; it is the rebuilt bundle on the Train Pi. The Track Pi is still untested.
+
+### Harness suite on this branch
+`common/harness/tests`: 7 failed, 277 passed, 10 skipped. The same 7 fail on `main` (`git archive main` run of the three files): `test_green_follower_waits_on_75_then_runs`,
+`test_the_ctc_office_takes_the_track_models_sales`, and five `test_red_owner_diagnostics` cases. Not caused by this branch; not investigated.
