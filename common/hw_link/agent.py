@@ -52,8 +52,11 @@ SLOW_STEP_S = 0.010
 
 # Records accepted but not yet fsynced. Past this a reply waits for the disk,
 # which bounds both the queue and what the host holds to resend after a power
-# cut.
-MAX_UNSYNCED = 50
+# cut. The Pi's SD card has stalled an fsync for about 0.7 s, and at 100 steps
+# a second 50 records is half a second, so one stall cost a reply 185 ms.
+# 300 is 3 s at 10x; the price is a recovery that replays up to 300 steps
+# (about 1 s for the Track core at 3 ms a step).
+MAX_UNSYNCED = 300
 
 AGENT_HASH = expected_hash()
 

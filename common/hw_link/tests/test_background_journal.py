@@ -330,3 +330,24 @@ def test_power_cut_loses_no_step_the_host_saw_answered(
         assert steps == list(range(1, 8))
     finally:
         relay.close()
+
+
+def test_a_disk_stall_of_a_couple_of_seconds_does_not_delay_a_reply(
+    tmp_path, gate, servers
+):
+    server = make(servers, tmp_path / "journal")
+    server.handle(hello())
+    gate.open.clear()
+    done = threading.Event()
+
+    def run():
+        # 250 steps with the disk shut: 2.5 s at 100 steps a second.
+        for tick in range(1, 251):
+            server.handle(request(tick))
+        done.set()
+
+    threading.Thread(target=run, daemon=True).start()
+    assert done.wait(5), "a reply waited for a stalled disk"
+    assert server.disk_wait_s < 0.05
+    gate.open.set()
+    server.wait_durable()

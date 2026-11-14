@@ -162,3 +162,15 @@ clears the queue (what it held is in the checkpoint or in the carried records of
 - **Tests:** two new tests fail on the previous agent ("a reply waited for the journal file"); five existing tests changed because their rule
   changed (a record is on disk only after `wait_durable()`; a power cut also drops what is still queued). 25 repeats of the journal tests
   and 6 of the whole suite passed.
+
+### A1f: journal write off the reply path (Train Pi, `c4d8ac3`, 3-minute replay, unpinned)
+
+| Run | Rate | Late sends | RTT mean / p95 / p99 / max | Pi core step mean / max | Pi steps over 10 ms |
+| --- | --- | --- | --- | --- | --- |
+| A1e before the queue (`5b60b2a`) | 91 Hz | 7,275 | 1.22 / 1.68 / 18.0 / 45.1 | 0.059 / 0.396 | about 330 of 18,001 (1.8%) |
+| A1f with the queue (`c4d8ac3`) | 92 Hz | 7,139 | 0.91 / 1.66 / 2.54 / 187.7 | 0.059 / 0.233 | 1 |
+
+The one slow step: `SLOW_STEP tick=10230 total_ms=185.2 disk_wait_ms=184.9`, the same moment as the host's 187.7 ms maximum. The agent had
+`MAX_UNSYNCED` = 50 records waiting for the SD card (0.55 s at 91 Hz) and the card's fsync was stalled for about 0.7 s, so the reply
+waited. `MAX_UNSYNCED` is now 300 (3 s at 100 steps a second): a stall under that costs no reply any time. The price is a recovery that replays
+up to 300 steps (about 30 ms for the Train core, about 1 s for the Track core at 3 ms a step). Not yet run on the Pi.
