@@ -195,3 +195,6 @@ up to 300 steps (about 30 ms for the Train core, about 1 s for the Track core at
 - The host paced at about 92 Hz, not 100, in all three. Late sends are the host timer, not the Pi.
 - The user reports the PC probably slept between runs 2 and 3. Nothing in the run-3 numbers shows it.
 - Not shown: Track Pi, windows open, `measure --system`.
+
+`bringup` now also writes `rtt_over_10ms`: the number of round trips over 10 ms, next to the maximum. It is a host-side change only, so the Pi bundle
+and agent hash are unchanged. The 600 s runs above predate it, so their counts are unknown.

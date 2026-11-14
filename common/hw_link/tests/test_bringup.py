@@ -97,6 +97,7 @@ def test_cli_echo_and_recording(tmp_path, transport):
         output = json.loads(child.stdout)
         assert output["error"] is None
         assert output["samples"] > 0
+        assert 0 <= output["rtt_over_10ms"] <= output["samples"]
         assert output["hello_s"] < 20
         assert not output["hardware_test"]
         assert not child.stderr
@@ -313,3 +314,10 @@ def test_progress_lines_report_count_rate_and_worst_round_trip(tmp_path):
         assert " Hz and worst round trip " in line
     counts = [int(line.split("] ")[1].split(" ")[0]) for line in lines]
     assert counts == sorted(counts) and counts[-1] <= 200
+
+
+def test_count_over_counts_only_round_trips_above_the_limit():
+    from common.hw_link.bringup import count_over
+
+    assert count_over([1.0, 10.0, 10.1, 250.0]) == 2
+    assert count_over([]) == 0

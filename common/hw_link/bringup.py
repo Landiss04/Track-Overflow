@@ -27,6 +27,14 @@ from .transport import (
 )
 
 
+SLOW_RTT_MS = 10.0
+
+
+def count_over(values: list[float], limit: float = SLOW_RTT_MS) -> int:
+    """Round trips strictly over `limit` ms: the tick budget at 100 Hz."""
+    return sum(1 for value in values if value > limit)
+
+
 def summary(values: list[float]) -> dict[str, float | None]:
     """Nearest-rank p95 and p99; empty samples are unavailable, never zero."""
     if not values:
@@ -193,6 +201,7 @@ def main(argv: list[str] | None = None) -> int:
                 late_sends=missed,
                 elapsed_s=time.monotonic() - started,
                 rtt_ms=summary(rtts),
+                rtt_over_10ms=count_over(rtts),
                 core_step_ms=summary(core),
                 request_bytes=request_bytes,
                 reply_bytes=reply_bytes,
