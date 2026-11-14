@@ -192,9 +192,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             for name, values in stub_options.items()
             if name not in WIRED_MODULES
         }
-        module_options[CTC_OFFICE] = [
-            "--run-on-ready", "--dispatch", DISPATCH,
-        ]
+        module_options[CTC_OFFICE] = ["--run-on-ready"]
+        for spec in options.dispatch or [DISPATCH]:
+            module_options[CTC_OFFICE] += ["--dispatch", spec]
         if options.speed != 1:
             module_options[CTC_OFFICE] += ["--speedup-at-tick", "0"]
         module_options[TRACK_CONTROLLER_SW] = ["--load-starters"]
@@ -359,15 +359,24 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help="Train Controller Pi for --system, overriding --test-pi for "
         "this module (default: physical)",
     )
+    parser.add_argument(
+        "--dispatch",
+        action="append",
+        metavar="TRAIN:LINE:BLOCK",
+        help="train the CTC Office sends for --system, as the launcher's "
+        f"--dispatch; repeat for more (default: {DISPATCH}). The hardware "
+        "Pis only run Red trains, so use R1:Red:16 to load them",
+    )
     options = parser.parse_args(argv)
     if not options.system and (
         options.test_pi
         or options.track_controller_pi
         or options.train_controller_pi
+        or options.dispatch
     ):
         parser.error(
-            "--test-pi, --track-controller-pi and --train-controller-pi "
-            "require --system"
+            "--test-pi, --track-controller-pi, --train-controller-pi and "
+            "--dispatch require --system"
         )
     options.pi_modes = resolve_pi_modes(
         {},

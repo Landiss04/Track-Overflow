@@ -110,3 +110,36 @@ def test_main_hands_test_pi_only_to_the_simulated_modules(
         assert "Waiting for the assigned USB Pi(s): " + ", ".join(expected_waiting) in out
     else:
         assert "Waiting" not in out
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        ([], ["G1:Green:73"]),
+        (["--dispatch", "R1:Red:16"], ["R1:Red:16"]),
+        (["--dispatch", "G1:Green:65", "--dispatch", "R1:Red:16"],
+         ["G1:Green:65", "R1:Red:16"]),
+    ],
+)
+def test_main_sends_the_chosen_trains_to_the_ctc_office(argv, expected, monkeypatch):
+    from common.harness.modules import CTC_OFFICE
+
+    seen = {}
+
+    def capture(module_options):
+        seen.update(module_options)
+        raise _Stop
+
+    monkeypatch.setattr(measure, "system_specs", capture)
+    with pytest.raises(_Stop):
+        measure.main(["--system", "--test-pi", "process", "--seconds", "1", *argv])
+    options = seen[CTC_OFFICE]
+    assert options[0] == "--run-on-ready"
+    sent = [options[i + 1] for i, value in enumerate(options) if value == "--dispatch"]
+    assert sent == expected
+
+
+def test_dispatch_needs_system_mode(capsys):
+    with pytest.raises(SystemExit):
+        measure._parse_args(["--dispatch", "R1:Red:16"])
+    assert "require --system" in capsys.readouterr().err

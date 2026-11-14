@@ -244,6 +244,37 @@ recompiling.
   `session.train.json`): the agent refuses a journal from another module and the service restarts in a loop.
 - **Read `get_throttled` after the run** (`vcgencmd get_throttled`). The high bits are sticky since boot, so 0x0 covers the whole run.
 
+## 10. The 10x system run with one physical Pi
+
+One board, so one hardware Pi is real and the other runs as a local process simulator on the host (an explicit test mode, never an automatic
+fallback). Use a Red train: the hardware Pis only run Red, and with the default Green train they would sit idle. Run from `Track-Overflow`:
+
+```powershell
+# Run A: the Track Pi is real, the Train Controller is simulated
+python bench\per_module.py --system --track-controller-pi physical --train-controller-pi process --dispatch R1:Red:16 --seconds 60 --per-tick-csv ..\trains_pi\tick-track-physical-60.csv
+# Run B: the Train Pi is real, the Track Controller is simulated
+python bench\per_module.py --system --track-controller-pi process --train-controller-pi physical --dispatch R1:Red:16 --seconds 60 --per-tick-csv ..\trains_pi\tick-train-physical-60.csv
+```
+
+Each prints the usual report (round trip, slipped ticks, late replies) and then each module's reply time and how often it was last to reply.
+Run a 60 s check first, then `--seconds 600`. **Before each run** restart the agent and check there is exactly one (`pgrep -af "common.hw_link.agent"`),
+since a Track core runs slower in each later session of one process. **After each run**, on the Pi: `sudo grep -c "SLOW_STEP\|SKIPPED_LINE" /var/lib/track-overflow/agent.log`
+and `vcgencmd get_throttled`.
+
+For a result with both Pis real, combine the two 600 s CSVs (an estimate, not a measurement of both together; it prints two variants):
+
+```powershell
+python bench\estimate_both.py --train-physical ..\trains_pi\tick-train-physical-600.csv --track-physical ..\trains_pi\tick-track-physical-600.csv
+```
+
+**Switching the board between modules needs a reboot.** The gadget script refuses to change a bound USB identity ("Existing gadget; reboot before identity change").
+On the Pi: stop the agent, move the other module's journal and log aside, install the other bundle (steps 1 and 2), `sync`, reboot.
+
+```sh
+sudo systemctl stop track-overflow-agent.service
+sudo mkdir -p /var/lib/track-overflow/old && sudo sh -c 'mv /var/lib/track-overflow/session.json* /var/lib/track-overflow/agent.log /var/lib/track-overflow/old/'
+```
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -261,6 +292,7 @@ recompiling.
 | Agent unit fails, journal says `journal module mismatch` | The Pi last ran the other module and its journal is still there | Move `/var/lib/track-overflow/session.json` and `agent.log` aside, then `systemctl reset-failed` and start the agent |
 | Gadget works but the board is not found after a reboot | `config.txt` overlay line misspelled (`dr_mode=peripheralZ` was found once) | The line under `[all]` must read exactly `dtoverlay=dwc2,dr_mode=peripheral` |
 | The second and later replays are slower than the first | Track core slows with each new session in one process (cause unknown) | Restart the agent before a run you will compare |
+| Board shows the old module after installing the other bundle | The USB gadget is created at boot and not changed while it exists | Reboot after `install.sh` (and after moving the old journal aside) |
 | `bringup --list` shows `missing` | Charge-only cable, or the gadget is not running | Use a data cable; check the gadget service and `ls /sys/class/udc` on the Pi |
 
 To stop a running probe, close the terminal or use the `Stop-Process` command

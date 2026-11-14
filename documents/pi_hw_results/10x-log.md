@@ -427,3 +427,18 @@ A second baseline run gave 4.234 / 4.794 / 5.126 / 5.434 (deterministic). Channe
 **What this says.** The slowdown starts at each new session and then holds for the whole run, appears in a bare process, grows with every new session, and resets in a fresh process. Channel A's closure tree is the biggest part of it (79% of A's growth disappears with the flat form), but channel B has no closures and still grows, so the closures amplify a more general effect. My leading explanation, not proven: each session creates a new set of small objects in a heap that earlier sessions fragmented, and the Pi's small caches make scattered objects expensive. It is not Python's small-object allocator, and not garbage, heat, thread placement or accumulated state.
 
 **Options, none done:** restart the agent before a run; flat channel A for the owner of `plc.py` (vital logic with two deliberately different channels, so a review change, not made here; measured saving about 0.4 ms at session 1 and about 0.9 ms by session 4); start each session in a fresh process (removes the effect, changes how the agent starts a session and needs the host link to survive the restart).
+
+## One physical Pi in the 10x system run (tooling, `4ec0c97` and after; host side only, the Pi bundles and agent hash 0a7cf856 are unchanged)
+
+`measure --system` could only simulate both hardware Pis (`--test-pi`) or wait for both real ones. It now takes `--track-controller-pi` and `--train-controller-pi`
+(`physical`, `process` or `pty`, resolved by the launcher's `resolve_pi_modes`), so one board can be real beside a simulated Pi, and `--dispatch TRAIN:LINE:BLOCK`
+(repeatable, default `G1:Green:73` as before). `bench/per_module.py` (now finds the repo root itself) takes `--per-tick-csv FILE` and writes one row per tick with each
+module's reply time. `bench/estimate_both.py` combines a Train-physical and a Track-physical run into two estimates for both Pis real (the Track column of the Train run
+replaced from the Track run, and the Train column of the Track run replaced from the Train run), with the draw independent of the tick, which ignores any load the two modules share.
+Tests: 21 in `test_measure_pi_modes.py` and `test_bench_tools.py`; the harness suite is 294 passed with the same 7 failures as `main`.
+
+- A Red train matters: with the default Green train the hardware Pis have nothing to run. Sandbox, both Pis simulated, 15 s, 10x, 0 slipped in both: `G1:Green:73` Track HW reply
+  5.98 ms mean (Train HW 2.40); `R1:Red:16` Track HW 6.18 ms (Train HW 2.74).
+- Switching the board between Track and Train needs a reboot: the gadget script exits with "Existing gadget; reboot before identity change".
+- An earlier attempt at this check used a temporary edit followed by `git checkout` of the file; the harness blocked the command before it ran, and it would have discarded uncommitted work. Nothing was lost.
+- Hardware rows for these runs: not yet measured.
