@@ -254,7 +254,7 @@ The Track hardware core is last in 91% of ticks. Its mean is the 3 ms PLC step p
   compiled `_vital` and `_program`; a restore compiles them again (`compile_program(vital_source(territory))` and `compile_program(source)`).
   The live core is not touched (shallow copies). Nothing in `track_ctrl_hw` changed. The wire protocol is unchanged. The checkpoint file's content
   changed, which is also why the agent hash changed: a Pi running the old agent starts fresh from its old journal (`JOURNAL_STALE`), as before.
-- **Measured (sandbox, three Red waysides, 600 steps in):** checkpoint 458,922 -> 66,435 bytes; pickle on the step thread 6.05 -> 0.97 ms.
+- **Measured (sandbox, three Red waysides, 600 steps in):** core pickle 458,922 -> 66,435 bytes (the checkpoint file also holds the reply cache, about 101 KB, so it is about 183 KB; see the 600 s Track run); pickle on the step thread 6.05 -> 0.97 ms.
   Restore (agent start only) 34-43 ms; the first step after a restore 7.1-7.6 ms (the program caches warm up).
 - **Equivalence:** the rebuilt `Program` objects compare equal to the originals for all three waysides; 1,200 steps after a restore give the same
   output as the core that was never checkpointed, and the same view except the scan's wall-clock `last_duration_s`.
@@ -330,6 +330,27 @@ Tests (`test_bringup.py`, 5 new): a clean run reports zeros; a damaged VIEW is s
 - Lost VIEWs per minute: 7, 8, 5, 2 (the last 15 s counted with the fourth). About 975 VIEWs were sent (195 s at one per 0.2 s, derived), so about 2% were lost.
 - Step replies are about 226 MB of the 264 MB. Losses spread by bytes would have damaged about 120 of them; none was. So the loss is not simply proportional to bytes. VIEWs differ from step replies in two ways at once, and this run cannot tell them apart: size (about 41 KB against 12.5 KB), and being written straight after a step reply (about 54 KB back to back). The earlier one-line-at-a-time 40 KiB echo lost about 1 line in 3,100.
 - The core step is about 5 of the 7 ms mean round trip. The Train Pi's 600 s run (core step 0.06 ms) had p99 2.55 ms, max 5.21 ms; the two are not comparable, the work is different.
-- Pi agent log: 6 `SLOW_STEP`/`SKIPPED_LINE` lines in total, 5 before this run. The new line's kind was not checked (most likely the cold-cache `SLOW_STEP tick=1` that each replay logs).
-- One run, one boot. The lean checkpoint is exercised only if a checkpoint was taken during the run (it is taken every `CHECKPOINT_TICKS`); no checkpoint line was inspected, so this run does not yet confirm the checkpoint size on hardware.
+- Pi agent log: 6 `SLOW_STEP`/`SKIPPED_LINE` lines in total, 5 before this run. The new line is the cold-cache `SLOW_STEP tick=1` (14.1 ms total, 13.6 ms core) that each replay logs, which is also this run's core-step maximum (13.63 ms).
+- One run, one boot. The lean checkpoint is exercised only if a checkpoint was taken during the run (it is taken every `CHECKPOINT_TICKS`); no checkpoint line was inspected here; the 600 s run below does.
 - Not done: 600 s run, repeat of the 180 s run, any change to how VIEWs are sent.
+
+### 600 s Track replay on hardware (`5d19539`, agent hash 0a7cf856, 600 s Red recording, `--hz 100`, unpinned, tolerant probe)
+
+60,006 of 60,006 requests in 654.7 s (91.65 Hz, the host pacing limit; 25,058 late sends), `error` null.
+
+| | 600 s | 180 s |
+| --- | --- | --- |
+| RTT mean / p95 / p99 / max | 7.45 / 8.40 / 9.34 / 16.23 ms | 7.09 / 8.02 / 8.80 / 16.24 ms |
+| Round trips over 10 ms | 261 of 60,006 (0.43%) | 44 of 18,006 (0.24%) |
+| Pi core step mean / p95 / p99 / max | 5.29 / 5.55 / 5.77 / 9.55 ms | 4.96 / 5.19 / 5.40 / 13.63 ms |
+| Request / reply bytes | 102,378,062 / 879,380,911 | 30,729,538 / 263,971,732 |
+| `lines_lost` / `views_lost` | 105 / 105 | 22 / 22 |
+| `resends` / `duplicate_replies` | 0 / 0 | 0 / 0 |
+
+- The core step is about 5.3 of the 7.45 ms mean round trip (71%); the PLC step in `plc.py` (not touched) is where the time is. The link and the rest add about 2 ms.
+- p99 is under the 10 ms budget with under 1 ms of margin; 0.4% of round trips are over it.
+- All lost lines are VIEWs, about 3.2% of the roughly 3,270 sent (derived, one per 0.2 s). No step reply was damaged in either run.
+- The two core-step maxima are the cold first step of each replay (`SLOW_STEP tick=1`: 13.7 ms in the 180 s run, 9.6 ms in this one). The 16.2 ms maximum round trip is the same in both runs and appears in the first minute of both; it is **not** the cold first step (this run's first step was only 9.6 ms of core time). Not explained; the Pi log's `SLOW_ACK` lines of 11-23 ms at the start of a replay are a candidate.
+- **The 261 round trips over 10 ms are not explained.** Pi side (`/var/lib/track-overflow/agent.log`, which holds seven replays, about 78,000 steps): 7 `SLOW_STEP` lines (threshold 10 ms), six of them the cold first step of each replay (12.5, 14.1, 13.3, 13.1, 14.1, 10.1 ms) and one at tick 1337 (11.1 ms total, 5.4 ms core, no disk, checkpoint or tty time). So the Pi's own handling of a request is almost never over 10 ms. The Pi's timer starts when it has read a request, so time spent before that read is not in it. A VIEW's decode on the host is about 0.4 ms (sandbox), too small to explain it. Not checked: `SLOW_VIEW`/`SLOW_ACK` lines in the Pi log, host timer jitter, link time.
+- **Lean checkpoint on hardware:** 133 `CHECKPOINT` lines in the log = 30 (180 s run) + 100 (this run) + 3 (the aborted 1,885-sample run). The file `session.json.ckpt100` is **183,072 bytes**, and `session.json` is 182 bytes. No `SLOW_STEP` line carries a checkpoint time (`ckpt_pickle_ms` is 0.0 on all seven). Sandbox, same recording: checkpoint file 182,854 bytes at the first checkpoint (step 600) and 183,064-183,079 bytes at checkpoints 2-20, so it does not grow. The file is `(core, reply cache)`: the core alone pickles to 66.6 KB (the lean figure above), the cache adds 101.0 KB (7 entries), pickle time 1.3 ms. The earlier "459 KB -> 66 KB" is the core only; against the previous code the file would be about 560 KB.
+- Not done: any change to how VIEWs are sent; the 10x and window runs; `measure --system` against real Pis; the original-versus-now comparison.
