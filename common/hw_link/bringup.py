@@ -87,6 +87,18 @@ def inventory(ports: list[Any]) -> dict[str, Any]:
     )
 
 
+def _announce(module: str, transport: Any, hello_s: float) -> None:
+    """Say which board answered and on what port, once HELLO is accepted."""
+    port = getattr(getattr(transport, "port", None), "portName", None)
+    print(
+        f"CONNECTED {module} serial={IDENTITIES[module]['serial']}"
+        f" port={port() if port else 'unknown'}"
+        f" hello={hello_s:.3f} s agent_hash={expected_hash()[:8]}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--module", choices=p.MODULES)
@@ -101,6 +113,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--count", type=int, default=1000)
     parser.add_argument("--hz", type=float, default=100)
     parser.add_argument("--timeout", type=float, default=20)
+    parser.add_argument(
+        "--progress-s",
+        type=float,
+        default=60,
+        help="seconds between progress lines on stderr; 0 for none",
+    )
     parser.add_argument("--output", type=Path)
     opts = parser.parse_args(argv)
     if opts.count < 1 or opts.hz <= 0 or opts.timeout <= 0:
@@ -238,6 +256,10 @@ def main(argv: list[str] | None = None) -> int:
                         )
                         return
                     hello_s = time.monotonic() - started
+                    if opts.transport == "serial":
+                        _announce(opts.module, transport, hello_s)
+                    if opts.progress_s > 0:
+                        progress.start(int(opts.progress_s * 1000))
                     next_frame()
                 elif reply["op"] != p.VIEW:
                     request = frames[index]
@@ -274,6 +296,23 @@ def main(argv: list[str] | None = None) -> int:
         transport.disconnected.connect(
             lambda: finish("transport disconnected")
         )
+        minute = {"count": 0, "mark": 0.0}
+
+        def report_progress() -> None:
+            now = time.monotonic()
+            fresh = rtts[minute["count"] :]
+            span = now - (minute["mark"] or started)
+            print(
+                f"[+{now - started:6.0f} s] {len(rtts):,} of {len(frames):,}"
+                f" requests, {len(fresh) / span:.1f} Hz and worst round trip"
+                f" {max(fresh, default=0.0):.1f} ms in the last {span:.0f} s",
+                file=sys.stderr,
+                flush=True,
+            )
+            minute["count"], minute["mark"] = len(rtts), now
+
+        progress = QTimer()
+        progress.timeout.connect(report_progress)
         watchdog = QTimer()
         watchdog.setInterval(50)
         watchdog.timeout.connect(
@@ -294,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
         app.exec()
         watchdog.stop()
         pacer.stop()
+        progress.stop()
         transport.close()
         return int(failed)
 

@@ -274,3 +274,42 @@ def test_a_measurement_opts_out_of_power_throttling(monkeypatch, tmp_path):
         ["--module", "train-controller-hw", "--output", str(tmp_path / "r.json")]
     )
     assert code == 1 and calls == [1]
+
+
+def test_connected_line_names_the_board_and_its_port(capsys):
+    from common.hw_link import bringup
+
+    class Port:
+        def portName(self):
+            return "COM3"
+
+    class Transport:
+        port = Port()
+
+    bringup._announce("train-controller-hw", Transport(), 0.034)
+    line = capsys.readouterr().err
+    assert line.startswith("CONNECTED train-controller-hw serial=TO-TRAIN-CTRL-HW-01")
+    assert "port=COM3" in line and "hello=0.034 s" in line
+
+
+def test_progress_lines_report_count_rate_and_worst_round_trip(tmp_path):
+    if sys.platform != "linux":
+        pytest.skip("Linux raw tty")
+    child = subprocess.run(
+        [
+            sys.executable, "-m", "common.hw_link.bringup",
+            "--module", "train-controller-hw", "--transport", "pty",
+            "--echo-bytes", "1024", "--count", "200", "--hz", "50",
+            "--progress-s", "1",
+        ],
+        capture_output=True, text=True, timeout=60, check=True,
+        env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+    )
+    assert json.loads(child.stdout)["samples"] == 200
+    lines = child.stderr.splitlines()
+    assert len(lines) >= 2, child.stderr
+    for line in lines:
+        assert " of 200 requests, " in line
+        assert " Hz and worst round trip " in line
+    counts = [int(line.split("] ")[1].split(" ")[0]) for line in lines]
+    assert counts == sorted(counts) and counts[-1] <= 200

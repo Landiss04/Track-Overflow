@@ -97,11 +97,11 @@ Rate = samples / elapsed_s. RTT is host send to reply, in ms. Slipped ticks are 
 | Run | Rate | Late sends | RTT mean / p95 / p99 / max | Pi core step mean / p95 / p99 / max |
 | --- | --- | --- | --- | --- |
 | A1 unpinned | 65.5 Hz | 56,758 (95%) | 1.12 / 2.09 / 3.03 / 146.1 | 0.065 / 0.097 / 0.122 / 0.433 |
-| A1b unpinned, `bringup` with `keep_full_speed` | 83.1 Hz | 26,516 (44%) | 1.45 / 1.63 / 16.6 / 2620.6 | 0.061 / 0.089 / 0.116 / 0.238 |
-| A1c unpinned, same | 64.6 Hz | 57,529 (96%) | 1.37 / 2.10 / 17.7 / 292.9 | 0.063 / 0.094 / 0.120 / 0.442 |
+| A1b unpinned | 83.1 Hz | 26,516 (44%) | 1.45 / 1.63 / 16.6 / 2620.6 | 0.061 / 0.089 / 0.116 / 0.238 |
+| A1c unpinned | 64.6 Hz | 57,529 (96%) | 1.37 / 2.10 / 17.7 / 292.9 | 0.063 / 0.094 / 0.120 / 0.442 |
 | Echo agent, 1 KiB, 60,000 requests (no core, no journal) | 92.5 Hz | 20,996 (35%) | 0.77 / 1.32 / 1.91 / 132.4 | n/a |
 
-- None reached 100 Hz, so none is a 10x run. The host's rate varied from 65 to 92 Hz between runs and `keep_full_speed` did not stabilise it.
+- None reached 100 Hz, so none is a 10x run. The host's rate varied from 65 to 92 Hz between runs. A1, A1b and A1c all ran **without** `keep_full_speed` in `bringup`: the host checkout was still on the older files (a fetch moved the branch pointer but not the working tree), so that fix is untested until A1d.
 - The Pi core never exceeded 0.44 ms. The tail (p99 17 ms in A1b and A1c, not in A1 or the echo) is outside the core.
 - The Pi's SD card, idle, 6000 append+fsync at 100 Hz: p50 9.1, p99 37.0, max 117.6 ms, none over 500 ms (the agent's disk backpressure starts at 50 unsynced records, about 0.5 s). `dmesg` and `agent.log` showed no USB, SD or agent errors during the runs.
 - Not yet run: B (pinned, `CPUAffinity=2 3`), A2. Held until the tail's source is known.
