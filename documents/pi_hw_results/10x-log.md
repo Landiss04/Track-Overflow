@@ -216,3 +216,20 @@ and agent hash are unchanged. The 600 s runs above predate it, so their counts a
   (8.1) and the p99 is the same.
 - Window and headless are close at 10x. The window costs a few percent of one core, not the round trip.
 - Not measured: a real Pi in the loop (needs the Track Pi), 600 s.
+
+### Which module sets the 10x round trip (sandbox, `--test-pi process`, headless, 15 s; script `bench/per_module.py`, scratchpad only)
+
+Reply time from tick start, per module (ms); "last" is the share of ticks where that module's reply completed the tick.
+
+| Module | mean | p50 | p95 | p99 | max | last |
+| --- | --- | --- | --- | --- | --- | --- |
+| track-controller-hw | 6.07 | 5.12 | 9.92 | 14.96 | 67.79 | 91% |
+| track-controller-sw | 3.67 | 3.37 | 5.60 | 6.99 | 13.59 | 2% |
+| ctc-office | 2.67 | 1.86 | 5.20 | 18.85 | 28.17 | 5% |
+| train-controller-hw | 2.46 | 1.80 | 5.35 | 7.09 | 11.59 | 0% |
+| track-model | 2.13 | 1.93 | 3.64 | 5.19 | 15.96 | 1% |
+| train-controller-sw | 1.97 | 1.74 | 3.73 | 5.66 | 8.00 | 0% |
+| train-model | 1.89 | 1.77 | 3.36 | 4.74 | 7.13 | 0% |
+
+Round trip in that run: mean 6.66, p95 13.73, p99 19.31, max 67.88 ms. The Windows run on the target had mean 8.09, p95 13.16, p99 18.05, so the sandbox is a fair stand-in for the shape, not the values.
+The Track hardware core is last in 91% of ticks. Its mean is the 3 ms PLC step plus the checkpoint pickle (7-15 ms every checkpoint) plus the link. The ctc-office p99 (18.9 ms) is a separate tail.
