@@ -74,7 +74,7 @@ def rig(monkeypatch, tmp_path):
     monkeypatch.setattr(p, "encode", encode)
     monkeypatch.setattr(agent, "keep_full_speed", lambda: None)
 
-    def run(*chunks, write_size=5):
+    def run(*chunks, write_size=5, extra=()):
         """Feed ``chunks`` as successive reads; return the bytes written."""
         reads = list(chunks)
         written = bytearray()
@@ -99,7 +99,7 @@ def rig(monkeypatch, tmp_path):
         )
         monkeypatch.setattr(agent, "sys", stdio)
         rig.result = agent.main(
-            ["--module", MODULE, "--journal", str(rig.journal)]
+            ["--module", MODULE, "--journal", str(rig.journal), *extra]
         )
         return bytes(written)
 

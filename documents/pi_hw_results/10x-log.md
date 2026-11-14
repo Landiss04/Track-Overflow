@@ -86,3 +86,31 @@ None of these rows has a before/after number: they need the target (Snapdragon X
 | 5 | `utils/render_check.py`, called in the harness before it starts the modules | Prints `Rendering: ...` always; on software rendering prints a `WARNING` to stderr and sets `TRACK_OVERFLOW_LOW_FRAME_RATE=1` for the modules | Catches `QT_QUICK_BACKEND=software`, `LIBGL_ALWAYS_SOFTWARE`, Qt's Software API and an OpenGL renderer named llvmpipe, softpipe, swrast, SwiftShader, Basic Render or WARP. **Does not catch WARP behind Direct3D 11** (Qt gives no adapter name there); it says so in the `Rendering:` line. Run once on the target with `QSG_INFO=1` and send the adapter line, then the match can be written |
 | 6 | Train Model `view_interval_s` 0.05 s -> 0.25 s when flagged | Redraws 4 a second instead of 20 | 0.25 s is a placeholder, not tuned. It is the only redraw cap that exists; the other windows draw as their data changes and have none |
 | 7 | `utils/process_cores.py`: harness on cores 0..n-3, each of the two Pi link processes on the last two (last one with 4-5 cores, nothing under 4) | On six cores: system 0-3, links 4-5. `TRACK_OVERFLOW_NO_PIN=1` for the A/B run | Windows path (`SetProcessAffinityMask`) is tested only against a stub here; Linux path is tested for real. Children inherit the harness's mask on both |
+
+## Train Pi, real hardware (Raspberry Pi 5 "ivz11", USB CDC-ACM, Windows host)
+
+Recorded Red train workload (`train-red-600s.jsonl`, 60,001 requests, engineer gains 400000/8000), one request
+outstanding, `bringup --recording ... --hz 100`. Bundle from `719b4ec`/`3b94ac1`, agent hash `d322d086...`, `performance`
+governor, `Nice=-10`, `PYTHONOPTIMIZE=1`, no CPU pinning, `get_throttled` 0x0. USB gadget interrupts (`dwc2_hsotg`) all on core 0.
+Rate = samples / elapsed_s. RTT is host send to reply, in ms. Slipped ticks are not recorded by `bringup`: not available.
+
+| Run | Rate | Late sends | RTT mean / p95 / p99 / max | Pi core step mean / p95 / p99 / max |
+| --- | --- | --- | --- | --- |
+| A1 unpinned | 65.5 Hz | 56,758 (95%) | 1.12 / 2.09 / 3.03 / 146.1 | 0.065 / 0.097 / 0.122 / 0.433 |
+| A1b unpinned, `bringup` with `keep_full_speed` | 83.1 Hz | 26,516 (44%) | 1.45 / 1.63 / 16.6 / 2620.6 | 0.061 / 0.089 / 0.116 / 0.238 |
+| A1c unpinned, same | 64.6 Hz | 57,529 (96%) | 1.37 / 2.10 / 17.7 / 292.9 | 0.063 / 0.094 / 0.120 / 0.442 |
+| Echo agent, 1 KiB, 60,000 requests (no core, no journal) | 92.5 Hz | 20,996 (35%) | 0.77 / 1.32 / 1.91 / 132.4 | n/a |
+
+- None reached 100 Hz, so none is a 10x run. The host's rate varied from 65 to 92 Hz between runs and `keep_full_speed` did not stabilise it.
+- The Pi core never exceeded 0.44 ms. The tail (p99 17 ms in A1b and A1c, not in A1 or the echo) is outside the core.
+- The Pi's SD card, idle, 6000 append+fsync at 100 Hz: p50 9.1, p99 37.0, max 117.6 ms, none over 500 ms (the agent's disk backpressure starts at 50 unsynced records, about 0.5 s). `dmesg` and `agent.log` showed no USB, SD or agent errors during the runs.
+- Not yet run: B (pinned, `CPUAffinity=2 3`), A2. Held until the tail's source is known.
+
+## Item 8: slow-step log on the Pi (diagnostic)
+
+`SLOW_STEP tick=N total_ms=.. core_ms=.. disk_wait_ms=.. ckpt_pickle_ms=..` and `SLOW_VIEW` / `SLOW_ACK` are written to
+`/var/lib/track-overflow/agent.log` for a reply that takes over 10 ms from the agent having the request to its last byte
+written. Nothing is logged under 10 ms. If the host sees a fat tail and this log stays empty, the delay is before the agent
+reads (USB, Windows). Cost, in-process on the sandbox, `_replies` per step, mean us over 20,000 steps, three alternating runs:
+new 116.1 / 117.5 / 119.1, previous commit 114.2 / 112.5 / 115.5 (about 3.5 us, medians within 1 us). Sandbox pty run, track, 60 s:
+16 slow lines, for example `SLOW_STEP tick=351 total_ms=13.9 core_ms=6.8 disk_wait_ms=0.0 ckpt_pickle_ms=0.0`.

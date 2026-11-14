@@ -43,6 +43,11 @@ VIEW_INTERVAL_S = 0.2
 # Steps between checkpoints: one minute at 10x, ten at 1x.
 CHECKPOINT_TICKS = 600
 
+# A reply, or the VIEW after it, that takes longer than this from the moment
+# the agent has the request is written to the log, with what it waited on.
+# Nothing is logged for a step under it, so a clean run costs nothing.
+SLOW_STEP_S = 0.010
+
 # Records written but not yet fsynced. Past this a reply waits for the disk,
 # which bounds what the host holds to resend after a power cut.
 MAX_UNSYNCED = 50
@@ -85,6 +90,9 @@ class PiLinkServer:
         self._io = threading.Lock()
         self._since: list[tuple[bytes, int, list[Any]]] = []
         self._collecting = False
+        # What the step being handled waited on, for the slow-step log.
+        self.disk_wait_s = 0.0
+        self.checkpoint_s = 0.0
         self._epoch = 0
         self._checkpointer: threading.Thread | None = None
         self.log = log or (lambda text: None)
@@ -199,9 +207,11 @@ class PiLinkServer:
         if self._checkpointer is not None and self._checkpointer.is_alive():
             return  # The previous one is still being written; try next step.
         seq = self._checkpoint_seq + 1
+        pickling = time.monotonic()
         data = pickle.dumps(
             (self.core, self.cache), protocol=pickle.HIGHEST_PROTOCOL
         )
+        self.checkpoint_s += time.monotonic() - pickling
         with self._io:
             self._since = []
             self._collecting = True
@@ -308,8 +318,10 @@ class PiLinkServer:
                 )
                 self._syncer.start()
             self._sync.notify_all()
+            waiting = time.monotonic()
             while self._written - self._synced > MAX_UNSYNCED:
                 self._sync.wait()
+            self.disk_wait_s += time.monotonic() - waiting
 
     def _sync_journal(self) -> None:
         # The SD card's ~10 ms fsync runs here, beside the next step,
@@ -530,6 +542,7 @@ class PiLinkServer:
                 if isinstance(line, ProtocolError):
                     raise line
                 self._fresh = None
+                self.disk_wait_s = self.checkpoint_s = 0.0
                 for reply in self._handle(p.decode(p.unframe(line))):
                     fresh = self._fresh
                     if fresh is not None and reply is fresh[0]:
@@ -601,6 +614,9 @@ def main(argv: list[str] | None = None) -> int:
                     if not options.device:
                         return 0
                     break
+                # Each reply is timed from here, or from the one before it,
+                # to its last byte written.
+                started = time.monotonic()
                 for decoded, reply in server._replies(data):
                     if decoded["op"] == "OUTPUTS":
                         count += 1
@@ -625,6 +641,10 @@ def main(argv: list[str] | None = None) -> int:
                     while pending:
                         sent = os.write(writer, pending)
                         pending = pending[sent:]
+                    now = time.monotonic()
+                    if now - started > SLOW_STEP_S:
+                        log(_slow_line(decoded, now - started, server))
+                    started = now
         except OSError as error:
             if not options.device:
                 return 0  # The subprocess parent closed its pipe.
@@ -637,6 +657,22 @@ def main(argv: list[str] | None = None) -> int:
         server._hello_seen = False
         log("DEVICE_RECONNECT_WAIT")
         time.sleep(0.3)
+
+
+def _slow_line(
+    reply: dict[str, Any], seconds: float, server: PiLinkServer
+) -> str:
+    """One log line saying where a slow reply's time went, in milliseconds."""
+    name = "STEP" if reply["op"] == "OUTPUTS" else reply["op"]
+    head = f"SLOW_{name} tick={reply['tick']} total_ms={seconds * 1000:.1f}"
+    if reply["op"] != "OUTPUTS":
+        return head
+    core = reply.get("metrics", {}).get("core_step_s", 0.0)
+    return (
+        f"{head} core_ms={core * 1000:.1f}"
+        f" disk_wait_ms={server.disk_wait_s * 1000:.1f}"
+        f" ckpt_pickle_ms={server.checkpoint_s * 1000:.1f}"
+    )
 
 
 def _record_entry(line: bytes) -> dict[str, Any] | None:
