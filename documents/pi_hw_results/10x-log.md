@@ -396,3 +396,34 @@ Same recording, same host, same setup each time; the replays run one after anoth
 ### Not known, not tried
 The cause. Untested ideas: heap layout after a session has been dropped (not allocator-specific); freeing the previous session's core before the next is built (`_start` builds the new core while the old is still referenced); keeping the agent off CPU 0, where all USB interrupts land (an earlier pinning A/B was on the Train Pi, whose core is much lighter); a function-level profile on the Pi of replay 1 against replay 3.
 Practical effect: restart the agent (`sudo systemctl restart track-overflow-agent.service`) before a run that is to be compared with others. Without that, the second and later replays have a round-trip p99 near the 10 ms budget.
+
+### Where the later-replay slowdown is (py-spy on the service, then an in-process benchmark on the Pi)
+
+**Profile of the running agent** (`py-spy record -r 100 --nonblocking`, three replays of the first 4,000 lines of the Red recording, 3,994 steps each, fresh process; core step on the host lines 4.72 / 5.32 / 5.63 ms). Sampled time per step: 5.19 / 5.52 / 6.13 ms (+0.94). About 0.8 ms of the +0.94 is inside `Wayside._run_program` (inclusive 3.83 -> 4.63 ms). Self time, replay 1 -> 3:
+
+| Function | ms per step, 1 -> 3 | Change |
+| --- | --- | --- |
+| `_walker.<locals>.<lambda>` (plc.py, channel A closures) | 0.719 -> 1.139 | +0.421 (+59%) |
+| `Program.scan_a` | 0.533 -> 0.749 | +0.215 |
+| `_run_postfix` (channel B) | 1.292 -> 1.427 | +0.135 (1.470 in replay 2) |
+| `Program.scan_b` | 0.591 -> 0.689 | +0.098 |
+| `JSONEncoder.iterencode` | 0.228 -> 0.303 | +0.075 |
+| `Wayside._run_program` own lines, `Wayside.scan`, `overrides`, `main` | flat or falling | |
+
+**In-process benchmark on the Pi** (`plcbench.py`, scratchpad only: new HELLO session per pass, real `PiLinkServer` and Track core, no USB, no service; Python 3.13.5; `PYTHONOPTIMIZE=1`; the same 4,000 lines; ms per step). The climb reproduces without the service, USB, the journal thread or the tty:
+
+| Session | Core | Channel A | Channel B | Rest |
+| --- | --- | --- | --- | --- |
+| 1 | 4.241 | 1.218 | 1.726 | 1.298 |
+| 2 | 4.791 | 1.501 | 1.973 | 1.316 |
+| 3 | 5.117 | 1.718 | 2.073 | 1.326 |
+| 4 | 5.401 | 1.932 | 2.127 | 1.342 |
+
+A second baseline run gave 4.234 / 4.794 / 5.126 / 5.434 (deterministic). Channels A and B are 1.11 of the 1.16 ms climb; channel A keeps rising (about +0.2 ms per session), channel B levels off near 2.2.
+- `--variant collect` (`gc.collect()` before each session): 4.188 / 4.808 / 5.139 / 5.327. No change; leftover garbage is not the cause.
+- `--variant flat` (channel A as one generated expression per statement, patched in this process only): core 3.839 / 4.155 / 4.431 / 4.481 (level 0.40 ms lower in session 1, 0.92 ms lower in session 4); channel A 0.876 / 0.919 / 1.018 / 1.025 (climb +0.149 against +0.714); channel B still 1.742 -> 2.180 (+0.44); rest +0.055. **Equivalence:** `--verify` compared 23,964 channel A scans on the Pi and 23,964 in the sandbox, and 0 differed in both.
+- Same code in my sandbox (x86, Python 3.13.18): 2.58 / 2.75 / 2.58 ms, no climb. The Pi runs Python 3.13.5; whether the version matters is not tested.
+
+**What this says.** The slowdown starts at each new session and then holds for the whole run, appears in a bare process, grows with every new session, and resets in a fresh process. Channel A's closure tree is the biggest part of it (79% of A's growth disappears with the flat form), but channel B has no closures and still grows, so the closures amplify a more general effect. My leading explanation, not proven: each session creates a new set of small objects in a heap that earlier sessions fragmented, and the Pi's small caches make scattered objects expensive. It is not Python's small-object allocator, and not garbage, heat, thread placement or accumulated state.
+
+**Options, none done:** restart the agent before a run; flat channel A for the owner of `plc.py` (vital logic with two deliberately different channels, so a review change, not made here; measured saving about 0.4 ms at session 1 and about 0.9 ms by session 4); start each session in a fresh process (removes the effect, changes how the agent starts a session and needs the host link to survive the restart).
