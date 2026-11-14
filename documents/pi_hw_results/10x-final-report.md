@@ -102,7 +102,7 @@ Corrections to my own earlier statements, now fixed in the log: the "66 KB check
 - Pi log for the run: the cold first step and two checkpoint steps (core 6.0 ms plus a pickle of 3.2-3.5 ms) just over 10 ms out of about 84; no `SKIPPED_LINE`; `get_throttled` 0x0. The one 243 ms Track reply (t = 595 s) hit only the Track Controller, with nothing near it in the Pi's log: the link or the Track module's host, once in 50,679 ticks.
 - **Train Pi real (600 s):** its reply is 5.84 ms mean (p95 10.4, p99 14.2 ms), against 3.64 ms simulated; it is the slowest module in 3.4% of ticks, so it does not limit the system. The run's tail is the CTC Office: 291 spikes over 50 ms (up to 186 ms) and 11.9% of ticks over 10 ms with a module other than the Track Controller slowest. The run began with six Qt clipboard errors and a 186 ms CTC stall at t=0.
 - **Both Pis real: an estimate, not a measurement.** `bench/estimate_both.py` on the two 600 s runs: slowest module per tick mean 11.87 / p50 9.72 / p95 27.07 / p99 47.82 ms, 41.6% over 10 ms (Train run with the Track column from the Track run) and 10.88 / 9.69 / 19.57 / 26.92 ms, 40.3% (the other way round). The middle agrees; the tails differ with the host's state in each run. Expected speed about 7 to 8.5x, from the two runs' own 7.60x and 8.45x.
-- What would move it: the Pi's core step (about 5 ms against about 3 ms for the simulated agent): a flat channel A (`plc-channel-a-flat-proposal.md`, 0.4-0.9 ms) and restarting the agent before a run (the first replay of a process is the fast one); and the host's own tail, which is there with no hardware (p99 about 25 ms): the CTC Office and the harness. Skipping the Track window's per-VIEW refresh did not help in a sandbox A/B.
+- What would move it: the Pi's core step (about 5 ms against about 3 ms for the simulated agent): a flat channel A (`plc-channel-a-flat-proposal.md`, 0.4-0.9 ms) and restarting the agent before a run (the first replay of a process is the fast one); and the host's own tail, which is there with no hardware (p99 about 25 ms): mostly the CTC Office, whose window refresh (about 27 ms, five times a second) causes its stalls; with the refresh off a sandbox run reaches 10.00x (`ctc-office-tail.md`). It belongs to a CTC Office owner, which the truth index lists as unassigned. Skipping the Track window's per-VIEW refresh did not help in a sandbox A/B.
 
 ## Left on the Pi and the host (for cleanup)
 
@@ -116,4 +116,5 @@ Corrections to my own earlier statements, now fixed in the log: the "66 KB check
 1. Adopt the restart-before-comparing rule (written into the Pi how-to, section 9) and, if wanted, a fresh process per session in the agent (not designed or built).
 2. Send `plc-channel-a-flat-proposal.md` to the owner of `plc.py`.
 3. Whether to change how VIEWs are sent, now that losses are known to be display-only.
-4. Drop `bench/per_module.py` from the branch?
+4. Drop `bench/per_module.py` from the branch? (It is now used, with `bench/estimate_both.py`, for the system runs; I would keep it.)
+5. Who takes the CTC Office tail (`ctc-office-tail.md`)? It limits p95 and p99 of the whole system regardless of the Pis.

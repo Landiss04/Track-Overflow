@@ -536,3 +536,9 @@ Track Controller reply mean 10.01 / p50 9.49 / p95 13.11 / p99 19.71 / max 243.5
 
 Both estimates put the typical tick at 9.7 ms with 40-42% of ticks over the slot; the tails follow whichever run's host was noisier. The columns are swapped independently of the tick, which ignores load the two modules share, and the two runs were taken hours apart.
 Expected speed with both Pis real on this host and workload: about 7 to 8.5x (between the two runs' own 7.60x and 8.45x). An estimate, not a measurement.
+
+### CTC Office tail (sandbox, stress schedule): profile and experiments
+
+Full write-up in `ctc-office-tail.md`. In short: the CTC Office process is busy 54% of the time; 55% of that is the per-step authority computation (route search 40%) and 25% the window refresh (`CtcHost._refresh`, about 27 ms each, five a second). 170 of 1,540 busy stretches exceeded 30 ms: 95 the refresh, 75 the step.
+Refresh off (two A/B pairs): CTC reply p99 40.5 -> 11.2 ms, system p99 42 -> 26-28 ms, speed 9.72x -> 10.00x; one signal per event-loop turn: CTC p99 about 40 -> 25-30 ms, p95 doubled. `snapshot()` is not the cost (0.21 ms, twice a tick).
+The Windows host shows the same tail (CTC p99 25-48 ms, 291 spikes over 50 ms in the Train-Pi 600 s run).
