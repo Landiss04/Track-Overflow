@@ -228,6 +228,22 @@ recompiling.
 - **Recorded Red workload / Full system:** results, or "Not run yet".
 - **Notes and open issues:** anything found during the run.
 
+## 9. Before a measured run
+
+- **Exactly one agent on the Pi.** `pgrep -af "common.hw_link.agent"` must list one agent: the service (journal under
+  `/var/lib/track-overflow`, no `--echo-test`) for a replay, or the foreground echo agent for a link test. Two agents on
+  `/dev/ttyGS0` split the bytes between them and every result is invalid. `sudo systemctl stop track-overflow-agent.service`
+  before starting an echo agent.
+- **Restart the Track agent before a run you will compare.** Each new session in one agent process runs the Track core slower than the
+  last (core step mean 4.7, 5.2, 5.6 ms in three 180 s replays; not seen on the Train core). A restart resets it:
+  `sudo systemctl restart track-overflow-agent.service`. Cause not found; see `10x-log.md`.
+- **Link tests use `--strict`, replays do not.** By default `bringup` acts as the host relay does: a damaged VIEW is skipped and counted
+  (`views_lost`), any other damaged line or a missing reply is sent again (`resends`). `--strict` stops at the first damaged line, which a
+  link test needs. Report `lines_lost` and `resends` next to every round-trip number.
+- **After moving a Pi between modules**, move `/var/lib/track-overflow/session.json` and `agent.log` aside first (for example to
+  `session.train.json`): the agent refuses a journal from another module and the service restarts in a loop.
+- **Read `get_throttled` after the run** (`vcgencmd get_throttled`). The high bits are sticky since boot, so 0x0 covers the whole run.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -240,6 +256,11 @@ recompiling.
 | Files in the install folder are 0 bytes | The archive or extraction was cut off by an unplug or a partial upload | Check `sha256sum`, upload again, re-extract |
 | Windows says "USB device not recognized" | Usually the gadget never started (see `masked` above) | Check `systemctl status track-overflow-gadget.service` on the Pi |
 | `install.sh` prints nothing | `install.sh` is empty | Re-extract from a verified archive |
+| Replay stops with `line checksum does not match` | A damaged line on the link (seen on VIEWs, about 41 KB) | Current `bringup` skips a damaged VIEW and resends anything else; use `--strict` only for link tests |
+| Echo test fails at a random sample, or HELLO answers and the next line gets no reply | Two agents are reading `/dev/ttyGS0` | `pgrep -af "common.hw_link.agent"`; stop the service before starting an echo agent |
+| Agent unit fails, journal says `journal module mismatch` | The Pi last ran the other module and its journal is still there | Move `/var/lib/track-overflow/session.json` and `agent.log` aside, then `systemctl reset-failed` and start the agent |
+| Gadget works but the board is not found after a reboot | `config.txt` overlay line misspelled (`dr_mode=peripheralZ` was found once) | The line under `[all]` must read exactly `dtoverlay=dwc2,dr_mode=peripheral` |
+| The second and later replays are slower than the first | Track core slows with each new session in one process (cause unknown) | Restart the agent before a run you will compare |
 | `bringup --list` shows `missing` | Charge-only cable, or the gadget is not running | Use a data cable; check the gadget service and `ls /sys/class/udc` on the Pi |
 
 To stop a running probe, close the terminal or use the `Stop-Process` command
