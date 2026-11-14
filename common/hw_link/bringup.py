@@ -16,6 +16,7 @@ from typing import Any
 from PySide6.QtCore import QCoreApplication, QTimer, Qt
 from PySide6.QtSerialPort import QSerialPortInfo
 from utils.harness_protocol import LineBuffer, ProtocolError
+from utils.process_speed import keep_full_speed
 from . import protocol as p
 from .manifest import AGENT_VERSION, expected_hash
 from .transport import (
@@ -113,6 +114,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if opts.module is None:
         parser.error("--module is required unless --list is used")
+    # As the harness and the agent do: Windows may otherwise throttle this
+    # process, which lowers the rate it can hold below the one asked for.
+    keep_full_speed()
     app = QCoreApplication.instance() or QCoreApplication([])
     session = uuid.uuid4().hex
     bundle_hash = expected_hash()

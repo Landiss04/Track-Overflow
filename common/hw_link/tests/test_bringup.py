@@ -245,3 +245,32 @@ def test_summary_reports_nearest_rank_p99():
     values = [float(n) for n in range(1, 101)]
     assert summary(values) == dict(mean=50.5, p95=95.0, p99=99.0, maximum=100.0)
     assert summary([]) == dict(mean=None, p95=None, p99=None, maximum=None)
+
+
+def test_a_measurement_opts_out_of_power_throttling(monkeypatch, tmp_path):
+    from PySide6.QtCore import QObject, QTimer, Signal
+    from common.hw_link import bringup
+
+    class Gone(QObject):
+        connected = Signal()
+        received = Signal(bytes)
+        diagnostic = Signal(str)
+        disconnected = Signal()
+
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+
+        def start(self):
+            # After app.exec() has begun, or quit() has nothing to stop.
+            QTimer.singleShot(0, self.disconnected.emit)
+
+        def close(self):
+            pass
+
+    calls = []
+    monkeypatch.setattr(bringup, "keep_full_speed", lambda: calls.append(1))
+    monkeypatch.setattr(bringup, "SerialTransport", Gone)
+    code = bringup.main(
+        ["--module", "train-controller-hw", "--output", str(tmp_path / "r.json")]
+    )
+    assert code == 1 and calls == [1]
