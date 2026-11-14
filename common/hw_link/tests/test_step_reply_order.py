@@ -55,7 +55,11 @@ class Delegate:
 def rig(monkeypatch, tmp_path):
     trace, clock = [], [10.0]
     rig = types.SimpleNamespace(
-        trace=trace, clock=clock, journal=tmp_path / "journal", fail_view=False
+        trace=trace,
+        clock=clock,
+        journal=tmp_path / "journal",
+        fail_view=False,
+        write_cost=0.0,
     )
     monkeypatch.setattr(
         agent,
@@ -87,6 +91,7 @@ def rig(monkeypatch, tmp_path):
             assert fd == 101
             # A short positive write, so starting a line is not finishing it.
             piece = bytes(data[:write_size])
+            clock[0] += rig.write_cost
             written.extend(piece)
             journal = rig.journal.read_bytes() if rig.journal.exists() else b""
             trace.append(("write", bytes(written), journal))

@@ -2,6 +2,7 @@
 
 import threading
 import time
+import types
 
 import common.hw_link.agent as agent
 from common.hw_link import protocol as p
@@ -85,3 +86,41 @@ def test_the_checkpoint_pickle_time_is_reported(tmp_path, monkeypatch):
     server.settle()
     server.close()
     assert server.checkpoint_s > 0.0
+
+
+def test_a_slow_device_write_is_reported_as_tty_time(rig):
+    rig.write_cost = 0.02
+    log = rig.journal.parent / "agent.log"
+    rig.run(wire(hello()) + wire(step(1)), write_size=65536,
+            extra=("--log", str(log)))
+    line = next(l for l in log.read_text().splitlines() if "SLOW_STEP" in l)
+    assert "tty_ms=20.0" in line
+    # The step's own 125 ms is the rest: the core, none of it the device.
+    assert "total_ms=145.0" in line
+
+
+def test_decode_and_journal_time_are_reported(tmp_path, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(
+        agent, "time", types.SimpleNamespace(
+            monotonic=lambda: clock[0], perf_counter=time.perf_counter,
+            sleep=time.sleep,
+        ),
+    )
+    real_decode, real_record = p.decode, PiLinkServer._record
+
+    def decode(line):
+        clock[0] += 0.007
+        return real_decode(line)
+
+    def record(self, *args):
+        clock[0] += 0.03
+        return real_record(self, *args)
+
+    monkeypatch.setattr(p, "decode", decode)
+    monkeypatch.setattr(PiLinkServer, "_record", record)
+    server = PiLinkServer("train-controller-hw", tmp_path / "j", durable=False)
+    server.feed(wire(hello()) + wire(step(1)))
+    assert abs(server.decode_s - 0.007) < 1e-9
+    assert abs(server.journal_s - 0.03) < 1e-9
+    server.close()

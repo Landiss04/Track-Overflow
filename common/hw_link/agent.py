@@ -93,6 +93,8 @@ class PiLinkServer:
         # What the step being handled waited on, for the slow-step log.
         self.disk_wait_s = 0.0
         self.checkpoint_s = 0.0
+        self.decode_s = 0.0
+        self.journal_s = 0.0
         self._epoch = 0
         self._checkpointer: threading.Thread | None = None
         self.log = log or (lambda text: None)
@@ -505,7 +507,9 @@ class PiLinkServer:
             return
         reply, reply_bytes = self._execute(request)
         self._applied = list(key)
+        recording = time.monotonic()
         self._record(request_bytes, reply_bytes, self._applied)
+        self.journal_s = time.monotonic() - recording
         self._remember(request, request_bytes, reply)
         self._fresh = (reply, reply_bytes)
         if op == "STEP":
@@ -542,8 +546,11 @@ class PiLinkServer:
                 if isinstance(line, ProtocolError):
                     raise line
                 self._fresh = None
-                self.disk_wait_s = self.checkpoint_s = 0.0
-                for reply in self._handle(p.decode(p.unframe(line))):
+                self.disk_wait_s = self.checkpoint_s = self.journal_s = 0.0
+                decoding = time.monotonic()
+                request = p.decode(p.unframe(line))
+                self.decode_s = time.monotonic() - decoding
+                for reply in self._handle(request):
                     fresh = self._fresh
                     if fresh is not None and reply is fresh[0]:
                         yield reply, p.frame(fresh[1])
@@ -638,12 +645,17 @@ def main(argv: list[str] | None = None) -> int:
                         if delay:
                             time.sleep(delay / 1000)
                     pending = memoryview(reply)
+                    writing = time.monotonic()
                     while pending:
                         sent = os.write(writer, pending)
                         pending = pending[sent:]
                     now = time.monotonic()
                     if now - started > SLOW_STEP_S:
-                        log(_slow_line(decoded, now - started, server))
+                        log(
+                            _slow_line(
+                                decoded, now - started, now - writing, server
+                            )
+                        )
                     started = now
         except OSError as error:
             if not options.device:
@@ -660,18 +672,28 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _slow_line(
-    reply: dict[str, Any], seconds: float, server: PiLinkServer
+    reply: dict[str, Any],
+    seconds: float,
+    tty_seconds: float,
+    server: PiLinkServer,
 ) -> str:
-    """One log line saying where a slow reply's time went, in milliseconds."""
+    """One log line saying where a slow reply's time went, in milliseconds.
+
+    ``journal_ms`` includes ``disk_wait_ms``; ``tty_ms`` is the write of the
+    reply to the device. What is left of ``total_ms`` is the agent's own work.
+    """
     name = "STEP" if reply["op"] == "OUTPUTS" else reply["op"]
     head = f"SLOW_{name} tick={reply['tick']} total_ms={seconds * 1000:.1f}"
+    tty = f"tty_ms={tty_seconds * 1000:.1f}"
     if reply["op"] != "OUTPUTS":
-        return head
+        return f"{head} {tty}"
     core = reply.get("metrics", {}).get("core_step_s", 0.0)
     return (
         f"{head} core_ms={core * 1000:.1f}"
         f" disk_wait_ms={server.disk_wait_s * 1000:.1f}"
         f" ckpt_pickle_ms={server.checkpoint_s * 1000:.1f}"
+        f" decode_ms={server.decode_s * 1000:.1f}"
+        f" journal_ms={server.journal_s * 1000:.1f} {tty}"
     )
 
 

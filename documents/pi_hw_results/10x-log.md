@@ -114,3 +114,17 @@ written. Nothing is logged under 10 ms. If the host sees a fat tail and this log
 reads (USB, Windows). Cost, in-process on the sandbox, `_replies` per step, mean us over 20,000 steps, three alternating runs:
 new 116.1 / 117.5 / 119.1, previous commit 114.2 / 112.5 / 115.5 (about 3.5 us, medians within 1 us). Sandbox pty run, track, 60 s:
 16 slow lines, for example `SLOW_STEP tick=351 total_ms=13.9 core_ms=6.8 disk_wait_ms=0.0 ckpt_pickle_ms=0.0`.
+
+### A1d: first run with `keep_full_speed` on the host and the slow-step log on the Pi (Train Pi, unpinned)
+
+| Run | Rate | Late sends | RTT mean / p95 / p99 / max | Pi core step mean / p95 / p99 / max |
+| --- | --- | --- | --- | --- |
+| A1d | 91.7 Hz (90.6-92.8 every minute) | 18,451 (31%) | 1.21 / 2.01 / 17.8 / 298.3 | 0.059 / 0.083 / 0.112 / 0.271 |
+
+- `keep_full_speed` stabilised the host's rate at about 91 Hz (A1, A1b, A1c had 65, 83, 65). It does not reach 100 Hz.
+- The tail did not go away: p99 17.8 ms; every minute's worst reply was 36-298 ms.
+- Pi log: 1,529 `SLOW_STEP` lines for 60,001 steps (2.5%), 10-29 ms each, three of 120-152 ms near the end. In every line shown,
+  `core_ms` 0.1, `disk_wait_ms` 0.0, `ckpt_pickle_ms` 0.0: not the core, not disk backpressure, not the checkpoint pickle.
+- The slow steps recur every 19-21 steps, about the VIEW period (0.2 s = 19 steps at 91 Hz), so they follow the VIEW cycle.
+- Next: `decode_ms`, `journal_ms` (includes the disk wait) and `tty_ms` (the reply's write to the device) are added to the line,
+  to separate the agent's own work, the journal write, and the USB write. A 180 s recording is enough to see it.
