@@ -6,7 +6,7 @@ Date 2026-11-14. Branch `10x-pi-speed`, local only, nothing pushed, 33 files and
 
 - **Train Pi:** fixed on hardware. Round-trip p99 went from 18 ms to 2.5 ms on a 600 s replay with 0 round trips over 10 ms and 0 slow steps (cause: the journal write blocked behind an SD-card `fsync`).
 - **Track Pi:** first ever hardware runs this session. A 600 s replay completes with round-trip p99 of 9.3 ms against a 10 ms slot (0.43% over), and the core step alone is 4.7-5.6 ms. It is the slowest module in the system, and its margin is thin.
-- **10x with the real Track Pi in the whole system holds about 8.5x, not 10x** (stress schedule, 600 s, tick mean 10.97 ms against a 10 ms slot; see "System runs with one physical Pi" below). Both Pis real together, and the real Train Pi, have **not** been measured.
+- **10x with the real Track Pi in the whole system holds about 8.5x, not 10x** (stress schedule, 600 s, tick mean 10.97 ms against a 10 ms slot; see "System runs with one physical Pi" below). The real Train Pi alone runs at about 7.6x on the same host (a noisier run), and both Pis real together is an estimate of about 7 to 8.5x, not a measurement.
 - **Three open problems on the Track Pi:** each new session in one agent process runs the core 12-27% slower (cause not found), up to about 3% of VIEW lines in a run are damaged on the USB link (cause not found, display-only), and 0.2-1.2% of round trips go over 10 ms for reasons only partly explained.
 
 ## Hardware results
@@ -64,7 +64,7 @@ Also on the branch: `bench/per_module.py`, a 24-line measuring wrapper committed
 ## Not done
 
 - Run with every window open (600 s, unlocked screen) and the GPU/WARP check, including the `QSG_INFO=1` adapter line. Needs the target machine.
-- `measure --system` with the Train Pi real, and with both Pis real (the Track Pi alone is measured, below).
+- `measure --system` with both Pis real at once (each is measured alone; the combination is an estimate), a clean repeat of the all-simulated baseline, and the harness event log to confirm what changes in the workload about 2,600-2,900 simulated seconds in.
 - Original-versus-now on the Pi (the `e3077ae` bundle).
 - A Track-side change to the PLC step: `plc.py` has an owner; a tested proposal is in `plc-channel-a-flat-proposal.md`.
 - Any train on Green or Red on the HW Pi: `common/harness/edges.py` still routes Red only.
@@ -94,18 +94,21 @@ Corrections to my own earlier statements, now fixed in the log: the "66 KB check
 | 60 s | 7.20x | 11.49 / 20.18 / 27.55 / 65.6 | 10.64 / 24.36 | not recorded |
 | **600 s** | **8.45x** | **10.97 / 19.66 / 27.26 / 244.0** | **10.01 / 19.71** | **36.6%** (slowest module of each tick) |
 | 60 s, both Pis simulated (disturbed run, repeat before quoting) | 9.19x | 9.29 / 19.63 / 24.89 / 177.8 | 8.36 / 23.29 | |
+| Train Pi real, Track simulated, 60 s | 7.92x | 11.31 / 24.35 / 42.65 / 67.5 | 9.59 / 24.82 (simulated) | |
+| **Train Pi real, Track simulated, 600 s** | **7.60x** | **11.48 / 28.10 / 48.23 / 198.1** | **9.30 / 22.47 (simulated)** | **25.8%** (slowest module of each tick) |
 
 - The real Track Pi costs about 1.7-2.3 ms at the mean and almost nothing at the tail; the Track Controller is the slowest module in 93.4% of ticks, the CTC Office in 5.2%, the Track Model in 1.3%. In 6.3% of ticks a different module went over 10 ms.
 - Over the 600 s the Track reply steps down at about 309 s (10.1-10.4 ms to 9.7 ms; ticks over budget from 35-46% to 23-24%), probably when the four Red runs finish (about 3,000 simulated seconds); inferred from the schedule, not observed. The second half is still above the slot (tick mean 10.3-10.5 ms).
 - Pi log for the run: the cold first step and two checkpoint steps (core 6.0 ms plus a pickle of 3.2-3.5 ms) just over 10 ms out of about 84; no `SKIPPED_LINE`; `get_throttled` 0x0. The one 243 ms Track reply (t = 595 s) hit only the Track Controller, with nothing near it in the Pi's log: the link or the Track module's host, once in 50,679 ticks.
-- **Both Pis real: not measured.** The Train Pi's simulated reply (3.6 ms) is far below the Track's, so I expect about the Track-only result; an expectation. The Train Pi swap needs a reboot and has not been done.
+- **Train Pi real (600 s):** its reply is 5.84 ms mean (p95 10.4, p99 14.2 ms), against 3.64 ms simulated; it is the slowest module in 3.4% of ticks, so it does not limit the system. The run's tail is the CTC Office: 291 spikes over 50 ms (up to 186 ms) and 11.9% of ticks over 10 ms with a module other than the Track Controller slowest. The run began with six Qt clipboard errors and a 186 ms CTC stall at t=0.
+- **Both Pis real: an estimate, not a measurement.** `bench/estimate_both.py` on the two 600 s runs: slowest module per tick mean 11.87 / p50 9.72 / p95 27.07 / p99 47.82 ms, 41.6% over 10 ms (Train run with the Track column from the Track run) and 10.88 / 9.69 / 19.57 / 26.92 ms, 40.3% (the other way round). The middle agrees; the tails differ with the host's state in each run. Expected speed about 7 to 8.5x, from the two runs' own 7.60x and 8.45x.
 - What would move it: the Pi's core step (about 5 ms against about 3 ms for the simulated agent): a flat channel A (`plc-channel-a-flat-proposal.md`, 0.4-0.9 ms) and restarting the agent before a run (the first replay of a process is the fast one); and the host's own tail, which is there with no hardware (p99 about 25 ms): the CTC Office and the harness. Skipping the Track window's per-VIEW refresh did not help in a sandbox A/B.
 
 ## Left on the Pi and the host (for cleanup)
 
 - Pi, to check: `/etc/systemd/system/track-overflow-agent.service.d/malloc.conf` was removed (the later runs match the default behavior), but I did not see `ls` of that folder on the Pi.
 - Pi: `~/.local/bin/py-spy` (installed with `--break-system-packages`), `~/Downloads/plcbench.py`, `track-red-4k.jsonl`, `~/spytop.py`, and `/tmp/spy-r*.txt`, `/tmp/agentwatch.txt`, `/tmp/threads.txt`, `/tmp/track-echo.*`.
-- Pi: this board now runs the **Track** agent (journal and log of the Train agent kept as `session.train.json` and `agent.train.log`). Install the Train bundle and move those back to use it as the Train Pi again.
+- Pi: this board runs the **Train** agent again (installed from the bundle built at `5d19539`, sha256 558c57b2...). The Track journal and log are in `/var/lib/track-overflow/old/`; the older Train journal and log are `session.train.json` and `agent.train.log`. To use it as the Track Pi, install the Track bundle, move the Train journal and log aside, reboot.
 - Host, `..\trains_pi\`: recordings, `linkcheck.py`, `qtcheck.py`, `bringup_trace.py`, `tracestats.py`, and result files for each run.
 
 ## Decisions for you

@@ -507,3 +507,32 @@ Track Controller reply mean 10.01 / p50 9.49 / p95 13.11 / p99 19.71 / max 243.5
 - Spikes over 50 ms: t = 0 s Track 82 ms (startup); t = 230 s ctc-office 52 ms; t = 595 s Track 243 ms alone (no other module slow in that tick, so not a stall of the whole host; the Pi's log has nothing near it).
 - Pi, `agent.log`: the run's cold first step (core 14.0 ms) and two checkpoint steps just over 10 ms (tick 3,000: core 6.0 + pickle 3.2; tick 21,600: core 5.7 + pickle 3.5); no `SKIPPED_LINE`; `get_throttled` 0x0. A checkpoint step costs about 9.5-10 ms on the Pi because the pickle (3.2-3.5 ms, against 1.3 ms in the sandbox) runs on the step's thread.
 - Not measured: the Train Pi real; both real; a clean repeat of the all-simulated baseline; the same run starting from a freshly restarted agent (unknown whether this one did).
+
+### Stress schedule, Train Pi physical, Track simulated (`77d5bf7`; board swapped to the Train bundle `5d19539` with a reboot; fresh agent, then a second session for the 600 s run)
+
+| | 60 s | 600 s |
+| --- | --- | --- |
+| Ticks / due, speed, slipped | 4,757 of 6,006, 7.92x, 1,214 | 45,598 of 60,019, **7.60x**, 14,274 |
+| Round trip mean / median / p95 / p99 / max (ms) | 11.31 / 9.22 / 24.35 / 42.65 / 67.5 | 11.48 / 9.02 / 28.10 / 48.23 / 198.1 |
+| Train Controller (real) reply mean / p50 / p95 / p99 / max | 6.24 / 5.67 / 11.18 / 15.13 / 26.8 | 5.84 / 5.23 / 10.38 / 14.23 / 197.7 |
+| Track Controller (simulated) reply mean / p99 | 9.59 / 24.82 | 9.30 / 22.47 |
+| Slowest module | Track 87%, ctc-office 7%, train-controller-hw 4% | Track 85.5%, ctc-office 7.4%, train-controller-hw 3.4%, track-model 2.5% |
+| Harness CPU | 41% | 38% |
+
+- The real Train Pi adds about 2 ms to its own reply (3.6 to 5.8 ms) and is the slowest module in 3.4% of ticks.
+- `tickstats.py` on the 600 s file: slowest module per tick mean 11.15 / p50 8.70 / p95 27.72 / p99 47.88 / max 197.7 ms, 25.8% over 10 ms; 5,416 ticks (11.9%) over 10 ms with a module other than the Track Controller slowest; 291 spikes over 50 ms, mostly `ctc-office` (t = 0 s 186 ms, then 50-94 ms through the run, clustered around t = 123-136 s).
+- The Track reply (simulated) is flat at 9.1-9.8 ms until about 373 s and about 8.9 ms after, the same kind of step as in the Track-physical run at 309 s. Converted with ticks done x 0.1 s, both are at about 2,600-2,900 simulated seconds, which supports a workload change (the Red runs finishing) over a machine effect. Still not observed in the event log.
+- Both hosts' noise: the run began with six `qt.qpa.mime: Unable to obtain clipboard` lines and a 186 ms CTC Office stall at t = 0; the earlier all-simulated 60 s baseline had the same clipboard lines and several modules spiking together. The two Track-physical runs had neither.
+- Pi side: `get_throttled` 0x0; the Pi's `SLOW_STEP` lines for this run were not sent.
+
+### Both Pis real, estimated (`bench/estimate_both.py`, the two 600 s runs)
+
+| | Slowest module per tick: mean / p50 / p95 / p99 / max (ms) | Over 10 ms | Slowest |
+| --- | --- | --- | --- |
+| Run, Train Pi real, Track simulated | 11.15 / 8.70 / 27.72 / 47.87 / 197.7 | 25.8% | Track 86%, ctc-office 7%, train-controller-hw 3% |
+| Run, Track Pi real, Train simulated | 10.72 / 9.59 / 19.35 / 26.90 / 243.5 | 36.6% | Track 93%, ctc-office 5%, track-model 1% |
+| Estimate A: Train run, Track column from the Track run | 11.87 / 9.72 / 27.07 / 47.82 / 197.7 | 41.6% | Track 84%, ctc-office 6%, train-controller-hw 5% |
+| Estimate B: Track run, Train column from the Train run | 10.88 / 9.69 / 19.57 / 26.92 / 243.5 | 40.3% | Track 87%, train-controller-hw 6%, ctc-office 5% |
+
+Both estimates put the typical tick at 9.7 ms with 40-42% of ticks over the slot; the tails follow whichever run's host was noisier. The columns are swapped independently of the tick, which ignores load the two modules share, and the two runs were taken hours apart.
+Expected speed with both Pis real on this host and workload: about 7 to 8.5x (between the two runs' own 7.60x and 8.45x). An estimate, not a measurement.
