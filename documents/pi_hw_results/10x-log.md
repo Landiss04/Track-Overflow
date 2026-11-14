@@ -312,3 +312,24 @@ Tests (`test_bringup.py`, 5 new): a clean run reports zeros; a damaged VIEW is s
 ### Not done
 - The 180 s and 600 s Track replays have not completed on hardware with this change; no Track timing row yet.
 - No fix for the packet loss itself. Options not taken, each a wire change that needs a decision: raise `VIEW_INTERVAL_S`, send VIEWs only while a UI is open, send changes only.
+
+### First complete Track replay on hardware (`5d19539`, agent hash 0a7cf856, 180 s Red recording, `--hz 100`, unpinned, tolerant probe)
+
+18,006 of 18,006 requests in 195.1 s (92.3 Hz, the host pacing limit; 6,645 late sends), `error` null.
+
+| | Value |
+| --- | --- |
+| RTT mean / p95 / p99 / max | 7.09 / 8.02 / 8.80 / 16.24 ms |
+| Round trips over 10 ms | 44 of 18,006 (0.24%) |
+| Pi core step mean / p95 / p99 / max | 4.96 / 5.19 / 5.40 / 13.63 ms |
+| Request / reply bytes | 30,729,538 / 263,971,732 |
+| `lines_lost` / `views_lost` | 22 / 22 |
+| `resends` / `duplicate_replies` | 0 / 0 |
+
+- Every lost line was a VIEW (display-only; the next one follows 0.2 s later). No step reply was damaged, so nothing was resent.
+- Lost VIEWs per minute: 7, 8, 5, 2 (the last 15 s counted with the fourth). About 975 VIEWs were sent (195 s at one per 0.2 s, derived), so about 2% were lost.
+- Step replies are about 226 MB of the 264 MB. Losses spread by bytes would have damaged about 120 of them; none was. So the loss is not simply proportional to bytes. VIEWs differ from step replies in two ways at once, and this run cannot tell them apart: size (about 41 KB against 12.5 KB), and being written straight after a step reply (about 54 KB back to back). The earlier one-line-at-a-time 40 KiB echo lost about 1 line in 3,100.
+- The core step is about 5 of the 7 ms mean round trip. The Train Pi's 600 s run (core step 0.06 ms) had p99 2.55 ms, max 5.21 ms; the two are not comparable, the work is different.
+- Pi agent log: 6 `SLOW_STEP`/`SKIPPED_LINE` lines in total, 5 before this run. The new line's kind was not checked (most likely the cold-cache `SLOW_STEP tick=1` that each replay logs).
+- One run, one boot. The lean checkpoint is exercised only if a checkpoint was taken during the run (it is taken every `CHECKPOINT_TICKS`); no checkpoint line was inspected, so this run does not yet confirm the checkpoint size on hardware.
+- Not done: 600 s run, repeat of the 180 s run, any change to how VIEWs are sent.
