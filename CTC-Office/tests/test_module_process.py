@@ -31,6 +31,7 @@ from PySide6.QtCore import QCoreApplication  # noqa: E402
 
 from ctc.module_process import (  # noqa: E402
     WINDOW_REFRESH_MS,
+    WINDOW_REFRESH_MS_AT_SPEEDUP,
     CtcOfficeProcess,
     Dispatch,
     _parse_args,
@@ -212,6 +213,17 @@ class ProcessTest(_ProcessCase):
         self.assertTrue(wait_for(
             lambda: bool(redraws), timeout_s=10 * WINDOW_REFRESH_MS / 1000
         ))
+
+    def test_the_redraw_interval_stretches_at_10x(self) -> None:
+        # EXPERIMENT (10x-pi-speed): a slower redraw while the clock is at 10x.
+        self.step()
+        self.assertEqual(self.process._redraw.interval(), WINDOW_REFRESH_MS)
+        self.process._redraw.stop()
+        with mock.patch.object(type(self.process.clock), "speed", 10):
+            self.step()
+        self.assertEqual(
+            self.process._redraw.interval(), WINDOW_REFRESH_MS_AT_SPEEDUP
+        )
 
 
 class TestOptionsTest(_ProcessCase):

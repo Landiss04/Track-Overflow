@@ -60,6 +60,7 @@ from __future__ import annotations
 __all__ = [
     "MODULE_NAME",
     "WINDOW_REFRESH_MS",
+    "WINDOW_REFRESH_MS_AT_SPEEDUP",
     "CtcOfficeProcess",
     "Dispatch",
     "layout_files",
@@ -94,6 +95,12 @@ MODULE_NAME = "ctc-office"
 
 #: Real milliseconds between window redraws while steps arrive.
 WINDOW_REFRESH_MS = 200
+
+#: EXPERIMENT (10x-pi-speed): redraw interval while the clock runs at 10x.
+#: The refresh costs about 27 ms of event-loop time and caused the
+#: round-trip tail at 10x (documents/pi_hw_results/ctc-office-tail.md).
+#: Set equal to ``WINDOW_REFRESH_MS`` to turn the experiment off.
+WINDOW_REFRESH_MS_AT_SPEEDUP = 1000
 
 #: The inputs a step may carry (``ctc.wire.inputs_from_wire``).
 INPUT_KEYS = frozenset({"track_controller", "track_model"})
@@ -241,7 +248,11 @@ class CtcOfficeProcess(QObject):
             # would: a STATE sent now would arrive before the reply.
             QTimer.singleShot(0, self._press_speedup)
         if not self._redraw.isActive():
-            self._redraw.start()
+            self._redraw.start(
+                WINDOW_REFRESH_MS_AT_SPEEDUP
+                if self._clock.speed == SPEEDUP_FACTOR
+                else WINDOW_REFRESH_MS
+            )
         wire: dict[str, Any] = to_wire(outputs)
         return wire
 
