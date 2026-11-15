@@ -11,7 +11,8 @@ from typing import Any
 from PySide6.QtCore import Property, QObject, Qt, QTimer, Signal, Slot
 
 from .constants import (ASPECTS, ASPECT_TEXT,
-                        CABIN_MAX_F, CABIN_MIN_F, CLOCK_START_S, FAILURES,
+                        CABIN_MAX_F, CABIN_MIN_F, CLOCK_START_S,
+                        DEFAULT_KI, DEFAULT_KP, FAILURES,
                         FAILURE_TEXT, GAINS_HANDOVER_MS, LINES, MAX_POWER_W,
                         MAX_SPEED_MPS,
                         SIM_RATES, TICK_S, UI_HZ)
@@ -90,8 +91,12 @@ class ConsoleBackend(QObject):
     def __init__(self, parent: QObject | None = None, *,
                  fleet: TrainControllerFleet | None = None,
                  variant: str = "HW", line: str = "",
-                 bench_driven: bool = False) -> None:
+                 bench_driven: bool = False,
+                 auto_gain: bool = False) -> None:
         super().__init__(parent)
+        # main.py --auto-gain: every train this console spawns starts
+        # in Automatic with the default gains set.
+        self.auto_gain = auto_gain
         # Which Train Controller this window is, and, under a harness,
         # the one line whose trains it lists and lets the operator
         # pick (REQUIREMENTS.md M13). Standalone, every line.
@@ -162,6 +167,9 @@ class ConsoleBackend(QObject):
 
         core = self.fleet.add(train_id, line)
         core.state.authority_target = normalize_block_letter(target)
+        if self.auto_gain:
+            core.state.manual = False
+            self._arm(core, DEFAULT_KP, DEFAULT_KI)
         if self._owns_fleet:
             self.sims[train_id] = SimTrain()
         self.notes[train_id] = ""
@@ -347,7 +355,13 @@ class ConsoleBackend(QObject):
             ),
             "signed_in": self.signed_in,
             "manual": s.manual,
-            "mode_label": "Manual" if s.manual else "Automatic",
+            # No mode until one is picked: picking it commissions the
+            # train (Automatic) or opens the gains pop-up (Manual).
+            "mode_index": (int(s.manual) if self._mode_chosen else -1),
+            "mode_label": (("Manual" if s.manual else "Automatic")
+                           if self._mode_chosen else ""),
+            "mode_live": self.signed_in or (
+                self.has_train and not self.core.armed),
             "can_drive": self.can_drive,
             "can_ebrake": self.can_ebrake,
             "armed": self.core.armed,
@@ -455,6 +469,12 @@ class ConsoleBackend(QObject):
             "ki": s.ki,
         }
 
+    @property
+    def _mode_chosen(self) -> bool:
+        # An armed train always has its mode; an unarmed one has one
+        # only while the engineer is setting its gains, which is Manual.
+        return self.core.armed or self.operator == "engineer"
+
     def _failure_note(self) -> str:
         failed = self.core.failed
         if not failed:
@@ -533,6 +553,10 @@ class ConsoleBackend(QObject):
         in_range = 0 <= index < len(self.ROLES)
         self.operator = self.ROLES[index] if in_range else ""
         if self.operator == "engineer":
+            # The engineer's gains are the Manual path; Automatic
+            # takes the defaults without one (REQUIREMENTS.md M9).
+            if self.has_train:
+                self.core.state.manual = True
             self.gains_note = ""
         self._publish()
 
@@ -544,8 +568,24 @@ class ConsoleBackend(QObject):
         try the train, the service brake say, and see whether a failure
         has been resolved. The failure still holds the target at 0 and
         the emergency brake on in whichever mode the train is.
+
+        On a train not yet commissioned, signed in or not, picking the
+        mode is what commissions it (REQUIREMENTS.md M9): Automatic
+        sets the default gains and hands the console to the driver;
+        Manual signs the engineer in to set them.
         """
-        if not self.has_train or not self.signed_in:
+        if not self.has_train:
+            return
+        if not self.core.armed:
+            if manual:
+                self.select_operator(self.ENGINEER_INDEX)
+                return
+            self.core.state.manual = False
+            self._arm(self.core, DEFAULT_KP, DEFAULT_KI)
+            self.operator = "driver"
+            self._publish()
+            return
+        if not self.signed_in:
             return
         self.core.state.manual = manual
         self._publish()
@@ -848,18 +888,21 @@ class ConsoleBackend(QObject):
             self.gains_note = "Kp and Ki cannot be negative."
             self._publish()
             return
-        s = self.core.state
-        s.kp = kp
-        s.ki = ki
-        self.core.integral = 0.0
-        self.core.armed = True
-        self.gains_note = (
-            f"Set to Kp {s.kp:.0f}, Ki {s.ki:.0f}. Fixed for this run."
-        )
+        self._arm(self.core, kp, ki)
         train_id = self.selected
         QTimer.singleShot(GAINS_HANDOVER_MS,
                           lambda: self._retire_engineer(train_id))
         self._publish()
+
+    def _arm(self, core: ControllerCore, kp: float, ki: float) -> None:
+        # Commission one train: the gains are fixed from here on.
+        core.state.kp = kp
+        core.state.ki = ki
+        core.integral = 0.0
+        core.armed = True
+        self.gains_note = (
+            f"Set to Kp {kp:.0f}, Ki {ki:.0f}. Fixed for this run."
+        )
 
     def _retire_engineer(self, train_id: str) -> None:
         # Close the gains dialog and hand the console to the driver,

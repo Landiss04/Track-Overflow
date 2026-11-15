@@ -16,8 +16,8 @@ Item {
             ? qsTr("%1 is waiting for its gains").arg(root.s.train_id)
             : qsTr("Select an operator to unlock the console")
         body: root.needsGains
-            ? qsTr("Sign in as Engineer to set Kp and Ki. The driver's "
-                   + "console opens once they are set.")
+            ? qsTr("Pick Automatic to use the default gains, or Manual "
+                   + "to have the engineer set Kp and Ki.")
             : qsTr("The driver drives the train. The engineer sets the "
                    + "control gains once, before the run starts.")
     }

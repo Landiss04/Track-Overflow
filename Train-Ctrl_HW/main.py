@@ -7,6 +7,9 @@ Run, with the project virtual environment's interpreter
     python main.py --test                  the test bench
     python main.py --check [--shots DIR]   offscreen self-test
 
+Add --auto-gain to the console or the bench to start every train in
+Automatic with the default gains set, with no engineer.
+
 The bench opens only when asked for. It stands in for the central
 harness: spawning a train on the Red Line opens the HW Train
 Controller's console, on the Green Line the SW one, each with its own
@@ -41,6 +44,9 @@ def _parse_args() -> argparse.Namespace:
                         help="run offscreen, exercise the console, report")
     parser.add_argument("--shots", metavar="DIR",
                         help="with --check, save screenshots to DIR")
+    parser.add_argument("--auto-gain", action="store_true",
+                        help="start every train in Automatic with the "
+                             "default gains set")
     return parser.parse_args()
 
 
@@ -48,12 +54,13 @@ def main() -> int:
     """Open the console, or the bench and the consoles it spawns."""
     args = _parse_args()
     if args.test and not args.check:
-        return run_bench()
+        return run_bench(auto_gain=args.auto_gain)
     return run(
         console=True,
         bench=args.check,
         check=args.check,
         shots=Path(args.shots) if args.shots else None,
+        auto_gain=args.auto_gain,
     )
 
 

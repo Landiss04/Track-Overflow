@@ -34,13 +34,18 @@ class BenchBackend(QObject):
     roster_changed = Signal()
 
     def __init__(self, open_console: Callable[[ConsoleBackend], None],
-                 parent: QObject | None = None) -> None:
-        """``open_console`` opens a backend's console, or shows it again."""
+                 parent: QObject | None = None, *,
+                 auto_gain: bool = False) -> None:
+        """``open_console`` opens a backend's console, or shows it again.
+
+        With ``auto_gain`` every train spawned starts in Automatic with
+        the default gains set (main.py --auto-gain).
+        """
         super().__init__(parent)
         self._open_console = open_console
         self.backends = {
             variant: ConsoleBackend(self, variant=variant, line=line,
-                                    bench_driven=True)
+                                    bench_driven=True, auto_gain=auto_gain)
             for variant, line in VARIANT_LINES.items()}
         self.editing = ""
         # Every running train, in the order spawned, across both lines.

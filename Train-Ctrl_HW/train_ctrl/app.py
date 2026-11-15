@@ -50,13 +50,14 @@ def _start_app() -> tuple[QGuiApplication, dict[str, Any]]:
     return app, theme
 
 
-def run_bench() -> int:
+def run_bench(auto_gain: bool = False) -> int:
     """Open the bench alone; spawning a train opens its line's console.
 
     Red Line trains open the HW Train Controller, Green Line trains the
     SW one, each on its own backend and titled as under the harness
     (REQUIREMENTS.md M13, OPEN_ISSUES.md #45). Closing a console hides
-    it; the next spawn on its line shows it again.
+    it; the next spawn on its line shows it again. With ``auto_gain``
+    every train spawned starts in Automatic with the default gains.
     """
     app, theme = _start_app()
     if not check_shared_library():
@@ -84,7 +85,7 @@ def run_bench() -> int:
         window.show()
         window.raise_()
 
-    bench = BenchBackend(open_console)
+    bench = BenchBackend(open_console, auto_gain=auto_gain)
     root.setContextProperty("controller", bench)
     engine.load(QUrl.fromLocalFile(str(_TEST_QML)))
     windows = engine.rootObjects()
@@ -106,7 +107,7 @@ def run_bench() -> int:
 def run(console: bool, bench: bool, check: bool = False,
         shots: Path | None = None,
         fleet: TrainControllerFleet | None = None,
-        variant: str = "HW") -> int:
+        variant: str = "HW", auto_gain: bool = False) -> int:
     """Open the requested windows and run until they close.
 
     ``fleet`` is a central harness's TrainControllerFleet; without
@@ -114,7 +115,8 @@ def run(console: bool, bench: bool, check: bool = False,
     console is titled for it and, under a harness, lists only its
     line's trains (SW Green, HW Red). With ``check`` it runs offscreen
     instead, drives a session through both windows, and returns
-    non-zero on any problem.
+    non-zero on any problem. With ``auto_gain`` every train the
+    console spawns starts in Automatic with the default gains.
     """
     if check:
         # Must be set before QGuiApplication is constructed.
@@ -137,7 +139,8 @@ def run(console: bool, bench: bool, check: bool = False,
     # QML holds only a C++ pointer to it.
     backend = ConsoleBackend(
         fleet=fleet, variant=variant,
-        line=VARIANT_LINES[variant] if fleet is not None else "")
+        line=VARIANT_LINES[variant] if fleet is not None else "",
+        auto_gain=auto_gain)
 
     if not check_shared_library():
         return 1

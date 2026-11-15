@@ -54,13 +54,15 @@ Rectangle {
             Layout.alignment: Qt.AlignTop
             Layout.preferredWidth: 240
             label: qsTr("Operating mode")
-            enabled: root.s.signed_in
+            // Also live signed out on a train with no gains: picking
+            // the mode is what commissions it (REQUIREMENTS.md M9).
+            enabled: root.s.mode_live
 
             SegmentedToggle {
                 Layout.fillWidth: true
-                enabled: root.s.signed_in
+                enabled: root.s.mode_live
                 options: [qsTr("Automatic"), qsTr("Manual")]
-                currentIndex: root.s.manual ? 1 : 0
+                currentIndex: root.s.mode_index
                 onActivated: function (index) {
                     controller.set_manual(index === 1);
                 }

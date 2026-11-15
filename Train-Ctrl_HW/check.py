@@ -206,6 +206,10 @@ def run_check(
     expect(backend.snapshot["train_id"] == "G-114",
            "the spawned train did not take the number asked for")
     expect(not backend.core.armed, "controller armed before commissioning")
+    # No mode until one is picked (REQUIREMENTS.md M9).
+    expect(backend.snapshot["mode_index"] == -1
+           and backend.snapshot["mode_label"] == "",
+           "a new train came up with a mode picked")
     expect(backend.snapshot["clock"] == "05:00:00",
            "the clock does not start at D017's 05:00:00")
     # Authority holds until a block change or a new count arrives
@@ -274,7 +278,11 @@ def run_check(
     expect(backend.core.state.kp == 400000,
            "gains changed after being locked")
 
+    # The engineer's gains are the Manual path (REQUIREMENTS.md M9).
+    expect(backend.snapshot["mode_label"] == "Manual",
+           "the engineer's gains did not leave the train in Manual")
     # Automatic locks the console; Manual hands it to the driver.
+    backend.set_manual(False)
     expect(not backend.can_drive, "driver could act in Automatic")
     backend.set_manual(True)
     expect(backend.can_drive, "Manual did not unlock the console")
@@ -630,6 +638,42 @@ def run_check(
                f"during the hand-over")
         console.deleteLater()
 
+    # Picking the mode commissions a new train (REQUIREMENTS.md M9):
+    # Automatic, signed out too, sets the default gains and hands the
+    # console to the driver; Manual signs the engineer in to set them.
+    defaults = (mod.DEFAULT_KP, mod.DEFAULT_KI)
+    console = type(backend)()
+    console.spawn_train(1, "GREEN LINE", "GREEN K")
+    console.spawn_train(2, "GREEN LINE", "GREEN K")
+    console.set_manual(False)
+    expect(console.core.armed
+           and (console.core.state.kp, console.core.state.ki) == defaults
+           and console.operator == "driver"
+           and console.snapshot["mode_label"] == "Automatic",
+           "Automatic did not commission a new train with the default "
+           "gains")
+    console.select_train(console.fleet.ids()[1])
+    console.set_manual(True)
+    expect(not console.core.armed and console.operator == "engineer"
+           and console.snapshot["mode_index"] == 1,
+           "Manual did not hand a new train to the engineer")
+    console.commission_gains(300000, 6000)
+    _settle(app, mod.GAINS_HANDOVER_MS + 400)
+    expect(console.operator == "driver" and console.core.state.manual
+           and console.core.state.kp == 300000,
+           "the engineer's gains did not give the driver the train in "
+           "Manual")
+    console.deleteLater()
+    # main.py --auto-gain: every train starts commissioned, Automatic.
+    console = type(backend)(auto_gain=True)
+    console.spawn_train(3, "RED LINE", "RED F")
+    expect(console.core.armed and not console.core.state.manual
+           and (console.core.state.kp, console.core.state.ki) == defaults
+           and console.snapshot["mode_label"] == "Automatic",
+           "--auto-gain did not start a train in Automatic with the "
+           "default gains")
+    console.deleteLater()
+
     # Another train, running its own plant, with its own gains.
     # Spawning it leaves the console on the train it shows.
     first = backend.selected
@@ -669,11 +713,16 @@ def run_check(
     scan("08-needs-gains")
     if shots:
         window.grabWindow().save(str(shots / "08-needs-gains.png"))
-    backend.select_operator(1)
-    backend.commission_gains(400000, 8000)
-    _settle(app, mod.GAINS_HANDOVER_MS + 400)
+    # Picked signed out, Automatic commissions it on the window, and
+    # nothing in the operator bar moves.
+    bar_before = bar_geometry()
+    backend.set_manual(False)
+    _settle(app, 200)
     expect(backend.snapshot["operator"] == "driver",
            "the driver did not get the train once its gains were set")
+    expect(bar_geometry() == bar_before,
+           f"the operator bar moved when the mode was picked: "
+           f"{bar_before} -> {bar_geometry()}")
     # A new train is stopped, so this engages and releases cleanly,
     # and the train beside it is not touched either way.
     backend.toggle_emergency_brake()

@@ -196,15 +196,17 @@ How it behaves with a harness fleet:
 
 Every train starts uncommissioned and commands 0 W until an engineer sets its gains. The brakes and the safety path run from the first tick regardless, so an uncommissioned train can still be stopped and still reports its brakes.
 
-Decided (M9): the engineer commissions every train, harness-dispatched or not, once, at the very start. Defaults are offered but never applied on their own. Until then the train has no driver: with it selected, the console stays behind the sign-in view and the Driver role is refused. Gains are set from the console:
+Decided (M9): every train, harness-dispatched or not, is commissioned once, at the very start, by picking its operating mode in the console. A new train has no mode selected. Until it is commissioned the train has no driver: with it selected, the console stays behind the sign-in view and the Driver role is refused. From the console:
 
 1. Select the train in the console.
-2. Sign in as Engineer, and set Kp and Ki.
-3. The gains are fixed for that train's run, and the console hands back to the driver after 1.5 s, if the engineer is still signed in on that train.
+2. Pick **Automatic** to apply the default gains (Kp 400,000, Ki 8,000); the console goes to the driver at once. Or pick **Manual** (or sign in as Engineer) to set Kp and Ki in the engineer's pop-up.
+3. The gains are fixed for that train's run. After the pop-up, the console hands back to the driver, in Manual, after 1.5 s, if the engineer is still signed in on that train.
 
 Each train is commissioned once, separately. The Engineer role is refused on a train that is already commissioned.
 
-So there is no harness-side way to commission a train, by design. Setting `core.armed = True` directly skips the engineer and locks the role out, so the harness must not do it.
+So there is no harness-side way to commission a train yet. Setting `core.armed = True` directly skips the console and locks the role out, so the harness must not do it.
+
+**`--auto-gain`, to add later.** `main.py --auto-gain` starts every train the standalone console or the bench spawns in Automatic with the default gains (`ConsoleBackend(auto_gain=True)`, applied in `add_train`). Harness-dispatched trains join through `TrainControllerProcess._follow_roster`, not `add_train`, so the flag does not reach them. To add it there: an `--auto-gain` option on `module_process.main()`, passed to `TrainControllerProcess` beside `engineer_gains`; on each train as it joins, set `core.state.manual = False` and commission it with `DEFAULT_KP` and `DEFAULT_KI` as `_play_engineer` does. The harness's launcher (`track_overflow.py`) would have to pass the option through.
 
 ## Errors
 
