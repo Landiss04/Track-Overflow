@@ -1,8 +1,8 @@
 # Handoff: 10x Pi speed work (read this first)
 
-Branch `10x-pi-speed`, local only, nothing pushed. `Co-Authored-By` trailer for Claude. Latest report: `10x-final-report.md`; every number is in `10x-log.md`.
+Published on GitHub as branch `hw_pi_test` (off `main` at `e3077ae`); worked on locally as `10x-pi-speed`. `Co-Authored-By` trailer for Claude. Step-by-step guides: `guide-track-controller-pi.md`, `guide-train-controller-pi.md`; test menu `bench\pi_test_menu.cmd`; what changed and the owner sections: `what-was-changed.md`. Latest report: `10x-final-report.md`; every number is in `10x-log.md`.
 Scratch clone (container only, may disappear): `/tmp/claude-0/-home-user-Track-Overflow/47598598-f0c8-590b-bfc0-e5e8b4ac2081/scratchpad/work`; its bundles are in `../out/new/` next to it.
-**The durable copy is the bundle on the host** (`..\trains_pi\10x-pi-speed.bundle`, then `git fetch <bundle> 10x-pi-speed` and `git merge --ff-only FETCH_HEAD`). The host was last merged at `77d5bf7`; later commits are docs and a report-header change in `measure.py`.
+**The durable copy is `origin/hw_pi_test` on GitHub** (on the host: `git fetch origin hw_pi_test`). The scratch clone above can disappear.
 
 ## State (2026-11-15)
 - Agent hash `0a7cf856` in every Pi bundle since `563b63f`; nothing on a Pi needs reinstalling for host-side changes.
