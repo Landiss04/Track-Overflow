@@ -87,7 +87,7 @@ None of these rows has a before/after number: they need the target (Snapdragon X
 | 6 | Train Model `view_interval_s` 0.05 s -> 0.25 s when flagged | Redraws 4 a second instead of 20 | 0.25 s is a placeholder, not tuned. It is the only redraw cap that exists; the other windows draw as their data changes and have none |
 | 7 | `utils/process_cores.py`: harness on cores 0..n-3, each of the two Pi link processes on the last two (last one with 4-5 cores, nothing under 4) | On six cores: system 0-3, links 4-5. `TRACK_OVERFLOW_NO_PIN=1` for the A/B run | Windows path (`SetProcessAffinityMask`) is tested only against a stub here; Linux path is tested for real. Children inherit the harness's mask on both |
 
-## Train Pi, real hardware (Raspberry Pi 5 "ivz11", USB CDC-ACM, Windows host)
+## Train Pi, real hardware (Raspberry Pi 5, USB CDC-ACM, Windows host)
 
 Recorded Red train workload (`train-red-600s.jsonl`, 60,001 requests, engineer gains 400000/8000), one request
 outstanding, `bringup --recording ... --hz 100`. Bundle from `719b4ec`/`3b94ac1`, agent hash `d322d086...`, `performance`
@@ -274,7 +274,7 @@ The Train agent has no Track core, so the lean checkpoint itself is not exercise
 `common/harness/tests`: 7 failed, 277 passed, 10 skipped. The same 7 fail on `main` (`git archive main` run of the three files): `test_green_follower_waits_on_75_then_runs`,
 `test_the_ctc_office_takes_the_track_models_sales`, and five `test_red_owner_diagnostics` cases. Not caused by this branch; not investigated.
 
-## Track Pi on hardware: first runs (Raspberry Pi 5 "ivz11" as the Track board, `df4c491`, agent hash 0a7cf856)
+## Track Pi on hardware: first runs (Raspberry Pi 5 as the Track board, `df4c491`, agent hash 0a7cf856)
 
 The Track Pi had not run before. The board had been the Train Pi; its Train journal was moved aside (`session.train.json`, `agent.train.log`) because the Track agent refuses a journal from another module (`journal module mismatch`).
 `/boot/firmware/config.txt` had `dtoverlay=dwc2,dr_mode=peripheralZ` under `[all]` (a stray `Z`); changed to `peripheral` and the Pi rebooted once, with the user's go-ahead. The gadget came up high-speed, `throttled=0x0`, no under-voltage lines in `dmesg`.

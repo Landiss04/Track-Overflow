@@ -1,5 +1,7 @@
 # How to produce `results.md` for a Pi board
 
+> Shorter step-by-step guides for installing and testing each board: `guide-track-controller-pi.md` and `guide-train-controller-pi.md`. `bench\pi_test_menu.cmd` runs the standard tests from a numbered menu. What this branch changed: `what-was-changed.md`.
+
 A step-by-step runbook for building, installing and measuring one hardware Pi
 (Train Controller HW or Track Controller HW) from a Windows host, then compiling
 the measurements into `pi-results/results.md`.
@@ -33,7 +35,7 @@ already runs with). Work from a committed revision: the results record it, and
 the host and both bundles must come from the same source files.
 
 **Pi:** Raspberry Pi 5 with Raspberry Pi OS, reachable over SSH (for example
-`ssh paperbird@<tailscale-ip>`), connected to the laptop's USB-C port with a
+`ssh <user>@<pi-address>`), connected to the laptop's USB-C port with a
 **data** cable. The laptop port powers the board.
 
 **Two rules that prevent most problems:**

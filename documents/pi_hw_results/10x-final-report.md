@@ -11,7 +11,7 @@ Date 2026-11-14. Branch `10x-pi-speed`, local only, nothing pushed, 33 files and
 
 ## Hardware results
 
-Raspberry Pi 5 "ivz11", USB CDC-ACM, Windows host. Replays at `--hz 100` (the 10x rate); the host paces at about 92 Hz, so none ran at a true 100 Hz.
+Raspberry Pi 5, USB CDC-ACM, Windows host. Replays at `--hz 100` (the 10x rate); the host paces at about 92 Hz, so none ran at a true 100 Hz.
 
 **Train Pi** (recorded Red workload). Round trip in ms.
 
