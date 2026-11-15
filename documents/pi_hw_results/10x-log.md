@@ -591,3 +591,22 @@ Same command and workload as the `77d5bf7` Track-physical 600 s run; the only so
 | Ticks over 10 ms | 8.4%, 7.7% | 37.3% |
 
 The real Pi adds about 2.3-3.0 ms to the middle of the Track Controller's reply (mean and p50) and little to its tail (p99 +1 to +2 ms). The speed shortfall (10.00x to 8.45x) is the middle of the distribution sitting above the 10 ms slot for 37% of ticks, not the spikes. To reach 10.00x with the Track Pi, its reply would need to be about 2 ms faster in the typical tick, which is the same 2-3 ms the link and the Pi's core add over the simulated module.
+
+### Flat channel A (`97bdb75`, experiment): stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated, before/after
+
+Track bundle sha256 `df1bea35...d70c`, agent hash `8d1c457a` (was `0a7cf856`; the hash covers the core code). Fresh journal, agent freshly started, hands off, run from a terminal on the host. One run.
+
+| | `0b0ca2a` (nested channel A) | `97bdb75` (flat channel A) |
+| --- | --- | --- |
+| Ticks of due, speed | 50,673 of 60,002, 8.45x | 59,653 of 60,006, **9.94x** |
+| Ticks slipped | 9,223 in 1 slip | 351 in 1 slip |
+| Round trip mean / median / p95 / p99 / max (ms) | 10.63 / 9.91 / 15.25 / 25.54 / 71.8 | 9.17 / 8.50 / 13.88 / 24.41 / 100.3 |
+| Track Controller reply mean / p50 / p95 / p99 / max | 10.17 / 9.64 / 13.74 / 18.87 / 71.7 | 8.77 / 8.29 / 12.08 / 18.77 / 71.8 |
+| Slowest module of a tick: over 10 ms | 37.3% | 9.9% |
+| Slowest module | Track 97.4%, track-model 1.3%, ctc-office 1.3% | Track 96.8%, track-model 2.1%, ctc-office 1.0% |
+| Pi `SLOW_STEP` lines / `get_throttled` | 4 / 0x0 | 1 / 0x0 |
+
+- The Track Controller's reply mean is 1.4 ms lower and p50 1.35 ms lower, more than the 0.4-0.9 ms the in-process bench gave, and about twice the 0.7 ms run-to-run spread seen in the two all-simulated baselines. The all-simulated baselines (10.00x, Track reply mean 7.2-7.85 ms) are now 0.9-1.6 ms away from the real Pi, down from 2.3-3.0 ms. The tail (p99 18.8) is unchanged: this moved the middle, which is where the speed was lost.
+- The speed shortfall now is 351 ticks in the first minutes: the slow ticks cluster in the first 240 s (over 10 ms in 6.9-13.5% of ticks), after which the Track reply falls to 8.45-8.5 ms with 6% over budget (the same workload step as in every earlier run, with no Pi too).
+- One run: repeat from a freshly restarted agent before treating 9.94x as the figure. The per-session slowdown is not removed by this change (the bench said channel A's growth dropped from +0.714 to +0.149 ms over four sessions, channel B's did not).
+- Equivalence evidence (see `plc-channel-a-flat-proposal.md`): 256,000 tree evaluations, 18,000 scans of the real Red programs, 23,964 replayed scans, plus a new unit test over 500 random trees. It has not been run against the Green programs, nor reviewed by the owner (`commits-for-owner-review.md`).
