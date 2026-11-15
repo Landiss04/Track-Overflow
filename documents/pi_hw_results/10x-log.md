@@ -563,3 +563,31 @@ Same command and workload as the `77d5bf7` Track-physical 600 s run; the only so
 - The Track reply steps down again over the run (10.8 ms mean in the first 65 s to 9.5 ms at the end; over-budget 57% -> 16-18%), with the step at about 321 s; the earlier run had it at 309 s. Same candidate explanation (workload change, Red runs finishing), still not confirmed in the event log.
 - This run started from a freshly restarted agent and the Track reply is not higher at the start than before; no sign of the per-session slowdown here.
 - Whether the CTC window painted on the host: it did (the window was on screen in a screenshot, with 10x running).
+
+### Clean all-simulated baseline, 600 s, twice (`542fd0e`, stress schedule, 10x, headless, `--test-pi process`, Windows host, hands off, run from a terminal on the host)
+
+| | Run 1 | Run 2 |
+| --- | --- | --- |
+| Ticks of due, speed, slipped, late | 60,001 of 60,002, **10.00x**, 0, 0 | 60,001 of 60,001, **10.00x**, 0, 0 |
+| Round trip mean / median / p95 / p99 / max (ms) | 8.34 / 7.57 / 14.39 / 23.48 / 51.3 | 7.63 / 6.88 / 13.32 / 22.84 / 51.6 |
+| Slowest module of a tick: mean / p50 / p95 / p99; over 10 ms | 8.10 / 7.34 / 14.09 / 23.16; 8.4% | 7.46 / 6.73 / 13.10 / 22.56; 7.7% |
+| Track Controller (simulated) reply mean / p50 / p95 / p99 | 7.85 / 7.30 / 11.66 / 18.04 | 7.20 / 6.70 / 11.13 / 16.52 |
+| ctc-office reply mean / p95 / p99 / max | 4.38 / 5.73 / 8.87 / 47.8 | 4.15 / 5.28 / 9.03 / 50.5 |
+| Slowest module | Track 95.1%, track-model 2.7%, ctc-office 1.2% | Track 94.6%, track-model 2.6%, ctc-office 1.5% |
+| Spikes over 50 ms | 1 (startup) | 2 (startup, ctc 50) |
+| Harness CPU | 41% | 33% |
+
+- The two runs differ by about 0.7 ms in the mean (7.85 vs 7.20 for the Track Controller): that is the run-to-run host spread to keep in mind when comparing anything below it.
+- **The Track Controller reply steps down at about 240-300 s in both runs** (run 1: 8.13 -> 7.6 ms; run 2: 7.49 -> 6.98 ms; over-budget 6.5% -> 5.2%). With no Pi in the loop, so this is the workload (the Red runs finishing), not the hardware: the earlier Pi runs' step at 309-373 s is the same one.
+- The CTC tail is small with the 1000 ms redraw (p99 about 9 ms, two spikes of about 50 ms in 1,200 s).
+
+**Pi cost (Track Pi physical, `0b0ca2a` run, against the two baselines):**
+
+| | All simulated (two runs) | Track Pi physical |
+| --- | --- | --- |
+| Speed | 10.00x, 10.00x | 8.45x |
+| Track Controller reply mean / p50 / p95 / p99 | 7.85, 7.20 / 7.30, 6.70 / 11.7, 11.1 / 18.0, 16.5 | 10.17 / 9.64 / 13.74 / 18.87 |
+| Round trip mean / p95 / p99 | 8.34, 7.63 / 14.4, 13.3 / 23.5, 22.8 | 10.63 / 15.25 / 25.54 |
+| Ticks over 10 ms | 8.4%, 7.7% | 37.3% |
+
+The real Pi adds about 2.3-3.0 ms to the middle of the Track Controller's reply (mean and p50) and little to its tail (p99 +1 to +2 ms). The speed shortfall (10.00x to 8.45x) is the middle of the distribution sitting above the 10 ms slot for 37% of ticks, not the spikes. To reach 10.00x with the Track Pi, its reply would need to be about 2 ms faster in the typical tick, which is the same 2-3 ms the link and the Pi's core add over the simulated module.
