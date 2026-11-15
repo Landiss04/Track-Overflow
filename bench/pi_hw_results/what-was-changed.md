@@ -40,7 +40,7 @@ The wire protocol is unchanged. The agent hash (it covers the core files) is `0a
 
 ### Documentation (`bench/pi_hw_results/`)
 
-`guide-track-controller-pi.md`, `guide-train-controller-pi.md` (step by step), `pi_setup_how_to.md` (the longer runbook), `10x-log.md` (every run), `10x-final-report.md`, `HANDOFF.md`, `commits-for-owner-review.md`, `plc-channel-a-flat-proposal.md`, `ctc-office-tail.md`, and this file.
+`guide-track-controller-pi.md`, `guide-train-controller-pi.md` (step by step), `pi_setup_how_to.md` (the longer runbook), `10x-log.md` (every run), `10x-final-report.md`, `HANDOFF.md`, `commits-for-owner-review.md`, `owner-issues.md` (drafts of the GitHub issues for the owners), `plc-channel-a-flat-proposal.md`, `ctc-office-tail.md`, and this file.
 
 ### Unresolved, and what it means
 
