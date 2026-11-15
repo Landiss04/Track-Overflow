@@ -627,3 +627,18 @@ Started with about 20 `qt.qpa.mime: Retrying/Unable to obtain clipboard` lines (
 - **The Track Controller's reply reproduced** (mean 8.77 vs 8.88 ms, p50 8.29 vs 8.26, p99 18.8 vs 18.4; both against 10.17 / 9.64 / 18.9 before the change), well inside the 0.7 ms run-to-run spread. The 1.4 ms gain from the flat channel A is real.
 - **The speed difference (9.94x vs 9.49x) comes from the host, not the Pi.** Run 2 has several ticks where unrelated modules stalled together: t = 20.7 s train-controller-sw 194 ms and track-model 136 ms; t = 33.6 s track-model 103 ms; t = 229.9 s track-controller-sw 129 ms, ctc-office 60, track-model 57. A stall of that kind slips the harness behind (3,047 ticks in 2 slips) and costs about 0.45x. The Track Pi's own steps stayed at 10-17 ms in those ticks. This matches every earlier run that began with clipboard errors; the quiet ones had none.
 - So with a quiet host the system reaches about 9.9x with the Track Pi real; with this much host noise 9.5x. Both are an improvement on 8.45x. Not yet seen: 10.00x with the Track Pi real, and the Train Pi with the flat channel A (the Train Pi was not rebuilt with it, and its code does not use the PLC).
+
+### Flat channel A, run 3 (`97bdb75` code, Track bundle `df1bea35...d70c`, fresh journal and agent; clipboard history off, nothing copied, no clipboard lines): the clean figure
+
+| | Run 1 | Run 2 (disturbed) | Run 3 (clean) |
+| --- | --- | --- | --- |
+| Ticks of due, speed | 59,653 of 60,006, 9.94x | 56,934, 9.49x | 59,954 of 60,006, **9.99x** |
+| Ticks slipped | 351 in 1 slip | 3,047 in 2 slips | 51 in 1 slip |
+| Round trip mean / median / p95 / p99 / max (ms) | 9.17 / 8.50 / 13.88 / 24.41 / 100.3 | 9.32 / 8.50 / 14.53 / 24.80 / 194.5 | 8.95 / 8.32 / 13.48 / 24.00 / 72.3 |
+| Track Controller reply mean / p50 / p95 / p99 | 8.77 / 8.29 / 12.08 / 18.77 | 8.88 / 8.26 / 13.30 / 18.36 | 8.56 / 8.11 / 11.35 / 17.96 |
+| Over 10 ms (slowest module of a tick) | 9.9% | 13.2% | 8.0% |
+| Pi `SLOW_STEP` / `get_throttled` | 1 / 0x0 | 1 / 0x0 | 1 / 0x0 |
+
+- With a quiet host the Track Pi real reaches **9.99x** (`harness CPU` 33%), against 8.45x before the flat channel A; all-simulated reached 10.00x. The remaining 51 slipped ticks are the startup (59 and 72 ms Track Controller steps in the first 0.1 s).
+- The Track Controller reply (mean 8.56, p50 8.11) is now 0.7-1.4 ms above the simulated module, within the host's own spread (0.7 ms between the two all-simulated runs). It is still the slowest module in 97% of ticks, but at its current speed it fits the 10 ms slot.
+- Condition that mattered: clipboard history off and nothing copied; run 2 without it lost 0.45x to host stalls.

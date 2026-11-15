@@ -6,7 +6,7 @@ Date 2026-11-14. Branch `10x-pi-speed`, local only, nothing pushed, 33 files and
 
 - **Train Pi:** fixed on hardware. Round-trip p99 went from 18 ms to 2.5 ms on a 600 s replay with 0 round trips over 10 ms and 0 slow steps (cause: the journal write blocked behind an SD-card `fsync`).
 - **Track Pi:** first ever hardware runs this session. A 600 s replay completes with round-trip p99 of 9.3 ms against a 10 ms slot (0.43% over), and the core step alone is 4.7-5.6 ms. It is the slowest module in the system, and its margin is thin.
-- **10x with the real Track Pi in the whole system holds about 8.5x, not 10x** (stress schedule, 600 s, tick mean 10.97 ms against a 10 ms slot; see "System runs with one physical Pi" below). The real Train Pi alone runs at about 7.6x on the same host (a noisier run), and both Pis real together is an estimate of about 7 to 8.5x, not a measurement.
+- **10x with the real Track Pi in the whole system: 8.45x before, 9.99x after the flat channel A experiment** (stress schedule, 600 s; three runs 9.94x, 9.49x with host clipboard stalls, 9.99x clean; see "Flat channel A" below). The experiment changes `plc.py` and is not reviewed by its owner. The real Train Pi alone runs at about 7.6x on the same host (a noisier run), and both Pis real together is an estimate of about 7 to 8.5x, not a measurement.
 - **Three open problems on the Track Pi:** each new session in one agent process runs the core 12-27% slower (cause not found), up to about 3% of VIEW lines in a run are damaged on the USB link (cause not found, display-only), and 0.2-1.2% of round trips go over 10 ms for reasons only partly explained.
 
 ## Hardware results
@@ -103,6 +103,16 @@ Corrections to my own earlier statements, now fixed in the log: the "66 KB check
 - **Train Pi real (600 s):** its reply is 5.84 ms mean (p95 10.4, p99 14.2 ms), against 3.64 ms simulated; it is the slowest module in 3.4% of ticks, so it does not limit the system. The run's tail is the CTC Office: 291 spikes over 50 ms (up to 186 ms) and 11.9% of ticks over 10 ms with a module other than the Track Controller slowest. The run began with six Qt clipboard errors and a 186 ms CTC stall at t=0.
 - **Both Pis real: an estimate, not a measurement.** `bench/estimate_both.py` on the two 600 s runs: slowest module per tick mean 11.87 / p50 9.72 / p95 27.07 / p99 47.82 ms, 41.6% over 10 ms (Train run with the Track column from the Track run) and 10.88 / 9.69 / 19.57 / 26.92 ms, 40.3% (the other way round). The middle agrees; the tails differ with the host's state in each run. Expected speed about 7 to 8.5x, from the two runs' own 7.60x and 8.45x.
 - What would move it: the Pi's core step (about 5 ms against about 3 ms for the simulated agent): a flat channel A (`plc-channel-a-flat-proposal.md`, 0.4-0.9 ms) and restarting the agent before a run (the first replay of a process is the fast one); and the host's own tail, which is there with no hardware (p99 about 25 ms): mostly the CTC Office, whose window refresh (about 27 ms, five times a second) causes its stalls; with the refresh off a sandbox run reaches 10.00x (`ctc-office-tail.md`). It belongs to a CTC Office owner, which the truth index lists as unassigned. Skipping the Track window's per-VIEW refresh did not help in a sandbox A/B.
+
+## Flat channel A (experiment, commit `97bdb75`; added last)
+
+`TrackCtrlHw/track_ctrl_hw/plc.py`: channel A runs each statement as one generated Python expression (`eval`) instead of nested closures; same logic, same results on 256,000 random-tree evaluations, 18,000 real Red scans and 23,964 replayed scans. Track Pi real, stress schedule, 600 s, 10x: **8.45x to 9.94x / 9.49x / 9.99x** in three runs (the 9.49x run began with clipboard stalls on the host). Track Controller reply mean 10.17 to 8.56-8.88 ms, p50 9.64 to 8.1-8.3, p99 unchanged (about 18-19). Needs the owner's decision: `eval` in vital code, and whether channels A and B stay diverse enough. Revert with `git revert 97bdb75` and reinstall the Track bundle (agent hash 0a7cf856 before, 8d1c457a after). Listed with the other commits that touch other modules in `commits-for-owner-review.md`.
+
+The CTC Office redraw (commit `d660690`, 1000 ms at 10x) is kept as an experiment too: it removes the CTC tail (all-simulated 9.8x to 10.00x) but did not change the Track-Pi speed by itself.
+
+## Host noise that moves the result
+
+Runs that start with `qt.qpa.mime: Retrying to obtain clipboard` lines stall several modules together (up to 194 ms) and lose about 0.45x. The code does not use the clipboard; Qt on Windows does, and a copy just before the run or clipboard history triggers it. Turn clipboard history off and copy nothing for a minute before and during a run.
 
 ## Left on the Pi and the host (for cleanup)
 
