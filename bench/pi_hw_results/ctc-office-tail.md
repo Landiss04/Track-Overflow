@@ -43,9 +43,9 @@ Turning the refresh off removes the CTC tail (p99 11 ms) and about half the syst
 
 Sandbox, Qt offscreen, so the refresh here is model work only; on the Windows host the CTC window may paint as well. Windows host numbers (CTC p99 25-48 ms) are consistent with the sandbox's (about 40 ms). One profile of one run; the A/B has two runs per row and the means differ run to run by about 0.4 ms.
 
-## Experiment applied: redraw every 1000 ms at 10x (commit `d660690`)
+## Experiment applied: redraw every 1000 ms at 10x (commit `b066cde`)
 
-`CTC-Office/ctc/module_process.py`: new constant `WINDOW_REFRESH_MS_AT_SPEEDUP = 1000`, used instead of `WINDOW_REFRESH_MS` (200) while the clock is at 10x. One commit, one test; `git revert d660690` removes it, or set the constant to 200 to turn it off.
+`CTC-Office/ctc/module_process.py`: new constant `WINDOW_REFRESH_MS_AT_SPEEDUP = 1000`, used instead of `WINDOW_REFRESH_MS` (200) while the clock is at 10x. One commit, one test; `git revert b066cde` removes it, or set the constant to 200 to turn it off.
 
 Sandbox, stress schedule, 40 s, both Pis simulated, alternated, two runs each:
 

@@ -17,11 +17,11 @@ Raspberry Pi 5, USB CDC-ACM, Windows host. Replays at `--hz 100` (the 10x rate);
 
 | Build and run | mean / p95 / p99 / max | Over 10 ms | Pi slow steps |
 | --- | --- | --- | --- |
-| `5b60b2a`, before the journal queue, 3 min (A1e) | 1.22 / 1.68 / 18.0 / 45.1 | about 330 of 18,001 steps (1.8%, Pi side) | about 330 |
-| `c4d8ac3`, journal write off the reply path, 3 min (A1f) | 0.91 / 1.66 / 2.54 / 187.7 | 1 step (an SD-card stall of 0.7 s) | 1 |
-| `b061614`, `MAX_UNSYNCED` 300, 3 min (A1g) | 0.88 / 1.81 / 2.89 / 7.56 | none | 0 |
-| `b061614`, 600 s, unpinned / pinned / unpinned | p99 2.58 / 2.57 / 2.72; max 13.1 / 9.0 / 12.7 | not counted then | 0 |
-| `563b63f`, lean build, 600 s | 0.83 / 1.48 / 2.55 / 5.21 | 0 of 60,001 | 0 |
+| `20c894b`, before the journal queue, 3 min (A1e) | 1.22 / 1.68 / 18.0 / 45.1 | about 330 of 18,001 steps (1.8%, Pi side) | about 330 |
+| `60d87e0`, journal write off the reply path, 3 min (A1f) | 0.91 / 1.66 / 2.54 / 187.7 | 1 step (an SD-card stall of 0.7 s) | 1 |
+| `6d49406`, `MAX_UNSYNCED` 300, 3 min (A1g) | 0.88 / 1.81 / 2.89 / 7.56 | none | 0 |
+| `6d49406`, 600 s, unpinned / pinned / unpinned | p99 2.58 / 2.57 / 2.72; max 13.1 / 9.0 / 12.7 | not counted then | 0 |
+| `2604414`, lean build, 600 s | 0.83 / 1.48 / 2.55 / 5.21 | 0 of 60,001 | 0 |
 
 The original release `e3077ae` was never run on the Pi, so there is no true before and after for the whole branch; the earliest hardware row already carried items 1-8.
 
@@ -96,6 +96,7 @@ Corrections to my own earlier statements, now fixed in the log: the "66 KB check
 | 60 s, both Pis simulated (disturbed run, repeat before quoting) | 9.19x | 9.29 / 19.63 / 24.89 / 177.8 | 8.36 / 23.29 | |
 | Train Pi real, Track simulated, 60 s | 7.92x | 11.31 / 24.35 / 42.65 / 67.5 | 9.59 / 24.82 (simulated) | |
 | **Train Pi real, Track simulated, 600 s** | **7.60x** | **11.48 / 28.10 / 48.23 / 198.1** | **9.30 / 22.47 (simulated)** | **25.8%** (slowest module of each tick) |
+| **Train Pi real, Track simulated, 600 s, current code** | **10.00x** | 8.12 / 14.03 / 23.50 / 58.9 | 7.58 / 17.64 (simulated) | 9.0% (slowest module of each tick) |
 
 - The real Track Pi costs about 1.7-2.3 ms at the mean and almost nothing at the tail; the Track Controller is the slowest module in 93.4% of ticks, the CTC Office in 5.2%, the Track Model in 1.3%. In 6.3% of ticks a different module went over 10 ms.
 - Over the 600 s the Track reply steps down at about 309 s (10.1-10.4 ms to 9.7 ms; ticks over budget from 35-46% to 23-24%), probably when the four Red runs finish (about 3,000 simulated seconds); inferred from the schedule, not observed. The second half is still above the slot (tick mean 10.3-10.5 ms).
@@ -104,11 +105,11 @@ Corrections to my own earlier statements, now fixed in the log: the "66 KB check
 - **Both Pis real: an estimate, not a measurement.** `bench/estimate_both.py` on the two 600 s runs: slowest module per tick mean 11.87 / p50 9.72 / p95 27.07 / p99 47.82 ms, 41.6% over 10 ms (Train run with the Track column from the Track run) and 10.88 / 9.69 / 19.57 / 26.92 ms, 40.3% (the other way round). The middle agrees; the tails differ with the host's state in each run. Expected speed about 7 to 8.5x, from the two runs' own 7.60x and 8.45x.
 - What would move it: the Pi's core step (about 5 ms against about 3 ms for the simulated agent): a flat channel A (`plc-channel-a-flat-proposal.md`, 0.4-0.9 ms) and restarting the agent before a run (the first replay of a process is the fast one); and the host's own tail, which is there with no hardware (p99 about 25 ms): mostly the CTC Office, whose window refresh (about 27 ms, five times a second) causes its stalls; with the refresh off a sandbox run reaches 10.00x (`ctc-office-tail.md`). It belongs to a CTC Office owner, which the truth index lists as unassigned. Skipping the Track window's per-VIEW refresh did not help in a sandbox A/B.
 
-## Flat channel A (experiment, commit `97bdb75`; added last)
+## Flat channel A (experiment, commit `1861469`; added last)
 
-`TrackCtrlHw/track_ctrl_hw/plc.py`: channel A runs each statement as one generated Python expression (`eval`) instead of nested closures; same logic, same results on 256,000 random-tree evaluations, 18,000 real Red scans and 23,964 replayed scans. Track Pi real, stress schedule, 600 s, 10x: **8.45x to 9.94x / 9.49x / 9.99x** in three runs (the 9.49x run began with clipboard stalls on the host). Track Controller reply mean 10.17 to 8.56-8.88 ms, p50 9.64 to 8.1-8.3, p99 unchanged (about 18-19). Needs the owner's decision: `eval` in vital code, and whether channels A and B stay diverse enough. Revert with `git revert 97bdb75` and reinstall the Track bundle (agent hash 0a7cf856 before, 8d1c457a after). Listed with the other commits that touch other modules in `commits-for-owner-review.md`.
+`TrackCtrlHw/track_ctrl_hw/plc.py`: channel A runs each statement as one generated Python expression (`eval`) instead of nested closures; same logic, same results on 256,000 random-tree evaluations, 18,000 real Red scans and 23,964 replayed scans. Track Pi real, stress schedule, 600 s, 10x: **8.45x to 9.94x / 9.49x / 9.99x** in three runs (the 9.49x run began with clipboard stalls on the host). Track Controller reply mean 10.17 to 8.56-8.88 ms, p50 9.64 to 8.1-8.3, p99 unchanged (about 18-19). Needs the owner's decision: `eval` in vital code, and whether channels A and B stay diverse enough. Revert with `git revert 1861469` and reinstall the Track bundle (agent hash 0a7cf856 before, 8d1c457a after). Listed with the other commits that touch other modules in `commits-for-owner-review.md`.
 
-The CTC Office redraw (commit `d660690`, 1000 ms at 10x) is kept as an experiment too: it removes the CTC tail (all-simulated 9.8x to 10.00x) but did not change the Track-Pi speed by itself.
+The CTC Office redraw (commit `b066cde`, 1000 ms at 10x) is kept as an experiment too: it removes the CTC tail (all-simulated 9.8x to 10.00x) but did not change the Track-Pi speed by itself.
 
 ## Host noise that moves the result
 
@@ -118,7 +119,7 @@ Runs that start with `qt.qpa.mime: Retrying to obtain clipboard` lines stall sev
 
 - Pi, to check: `/etc/systemd/system/track-overflow-agent.service.d/malloc.conf` was removed (the later runs match the default behavior), but I did not see `ls` of that folder on the Pi.
 - Pi: `~/.local/bin/py-spy` (installed with `--break-system-packages`), `~/Downloads/plcbench.py`, `track-red-4k.jsonl`, `~/spytop.py`, and `/tmp/spy-r*.txt`, `/tmp/agentwatch.txt`, `/tmp/threads.txt`, `/tmp/track-echo.*`.
-- Pi: this board runs the **Train** agent again (installed from the bundle built at `5d19539`, sha256 558c57b2...). The Track journal and log are in `/var/lib/track-overflow/old/`; the older Train journal and log are `session.train.json` and `agent.train.log`. To use it as the Track Pi, install the Track bundle, move the Train journal and log aside, reboot.
+- Pi: this board runs the **Train** agent again (installed from the bundle built at `8c333a4`, sha256 558c57b2...). The Track journal and log are in `/var/lib/track-overflow/old/`; the older Train journal and log are `session.train.json` and `agent.train.log`. To use it as the Track Pi, install the Track bundle, move the Train journal and log aside, reboot.
 - Host, `..\trains_pi\`: recordings, `linkcheck.py`, `qtcheck.py`, `bringup_trace.py`, `tracestats.py`, and result files for each run.
 
 ## Decisions for you

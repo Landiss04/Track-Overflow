@@ -90,7 +90,7 @@ None of these rows has a before/after number: they need the target (Snapdragon X
 ## Train Pi, real hardware (Raspberry Pi 5, USB CDC-ACM, Windows host)
 
 Recorded Red train workload (`train-red-600s.jsonl`, 60,001 requests, engineer gains 400000/8000), one request
-outstanding, `bringup --recording ... --hz 100`. Bundle from `719b4ec`/`3b94ac1`, agent hash `d322d086...`, `performance`
+outstanding, `bringup --recording ... --hz 100`. Bundle from `a381a76`/`97bcb52`, agent hash `d322d086...`, `performance`
 governor, `Nice=-10`, `PYTHONOPTIMIZE=1`, no CPU pinning, `get_throttled` 0x0. USB gadget interrupts (`dwc2_hsotg`) all on core 0.
 Rate = samples / elapsed_s. RTT is host send to reply, in ms. Slipped ticks are not recorded by `bringup`: not available.
 
@@ -131,7 +131,7 @@ new 116.1 / 117.5 / 119.1, previous commit 114.2 / 112.5 / 115.5 (about 3.5 us, 
 
 ### A1e and the cause of the tail
 
-A1e (3-minute replay, `5b60b2a`, Train Pi, unpinned): 18,001 samples, 90.5-90.9 Hz each minute, late sends 7,275,
+A1e (3-minute replay, `20c894b`, Train Pi, unpinned): 18,001 samples, 90.5-90.9 Hz each minute, late sends 7,275,
 RTT mean / p95 / p99 / max 1.22 / 1.68 / 18.0 / 45.1 ms, Pi core step max 0.40 ms.
 Pi log: 1,862 slow lines in total; in every line shown `journal_ms` is within 0.2 ms of `total_ms` (for example `total_ms=21.6 journal_ms=21.4`),
 with `decode_ms`, `tty_ms`, `core_ms`, `disk_wait_ms` and `ckpt_pickle_ms` all 0.0-0.1. The delay was the journal `write()`.
@@ -163,23 +163,23 @@ clears the queue (what it held is in the checkpoint or in the carried records of
   changed (a record is on disk only after `wait_durable()`; a power cut also drops what is still queued). 25 repeats of the journal tests
   and 6 of the whole suite passed.
 
-### A1f: journal write off the reply path (Train Pi, `c4d8ac3`, 3-minute replay, unpinned)
+### A1f: journal write off the reply path (Train Pi, `60d87e0`, 3-minute replay, unpinned)
 
 | Run | Rate | Late sends | RTT mean / p95 / p99 / max | Pi core step mean / max | Pi steps over 10 ms |
 | --- | --- | --- | --- | --- | --- |
-| A1e before the queue (`5b60b2a`) | 91 Hz | 7,275 | 1.22 / 1.68 / 18.0 / 45.1 | 0.059 / 0.396 | about 330 of 18,001 (1.8%) |
-| A1f with the queue (`c4d8ac3`) | 92 Hz | 7,139 | 0.91 / 1.66 / 2.54 / 187.7 | 0.059 / 0.233 | 1 |
+| A1e before the queue (`20c894b`) | 91 Hz | 7,275 | 1.22 / 1.68 / 18.0 / 45.1 | 0.059 / 0.396 | about 330 of 18,001 (1.8%) |
+| A1f with the queue (`60d87e0`) | 92 Hz | 7,139 | 0.91 / 1.66 / 2.54 / 187.7 | 0.059 / 0.233 | 1 |
 
 The one slow step: `SLOW_STEP tick=10230 total_ms=185.2 disk_wait_ms=184.9`, the same moment as the host's 187.7 ms maximum. The agent had
 `MAX_UNSYNCED` = 50 records waiting for the SD card (0.55 s at 91 Hz) and the card's fsync was stalled for about 0.7 s, so the reply
 waited. `MAX_UNSYNCED` is now 300 (3 s at 100 steps a second): a stall under that costs no reply any time. The price is a recovery that replays
 up to 300 steps (about 30 ms for the Train core, about 1 s for the Track core at 3 ms a step). Not yet run on the Pi.
 
-### A1g: `MAX_UNSYNCED` = 300 (Train Pi, `b061614`, agent hash a1f4fa6d, 3-minute replay, unpinned)
+### A1g: `MAX_UNSYNCED` = 300 (Train Pi, `6d49406`, agent hash a1f4fa6d, 3-minute replay, unpinned)
 
 18,001 steps at 92.8 Hz. RTT mean 0.88 / p95 1.81 / p99 2.89 / max 7.56 ms. Pi core step max 0.39 ms. No `SLOW_STEP` in the Pi log.
 
-### 600 s A/B/A, core pinning (Train Pi, `b061614`, Red workload, 60,001 steps, `--hz 100`)
+### 600 s A/B/A, core pinning (Train Pi, `6d49406`, Red workload, 60,001 steps, `--hz 100`)
 
 | Run | Rate | Late sends | RTT mean / p95 / p99 / max (ms) | Pi core step mean / max (ms) | Pi `SLOW_STEP` |
 | --- | --- | --- | --- | --- | --- |
@@ -199,7 +199,7 @@ up to 300 steps (about 30 ms for the Train core, about 1 s for the Track core at
 `bringup` now also writes `rtt_over_10ms`: the number of round trips over 10 ms, next to the maximum. It is a host-side change only, so the Pi bundle
 and agent hash are unchanged. The 600 s runs above predate it, so their counts are unknown.
 
-## Phase 0 system rows: `measure --system --test-pi process --seconds 15` (Windows host, local agents, no Pi in the loop, `d217df0`)
+## Phase 0 system rows: `measure --system --test-pi process --seconds 15` (Windows host, local agents, no Pi in the loop, `dd2d27a`)
 
 | Speed | Front end | Ticks | Round trip mean / median / p95 / p99 / max (ms) | Slipped | Late replies | Harness CPU |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -263,7 +263,7 @@ The Track hardware core is last in 91% of ticks. Its mean is the 3 ms PLC step p
   restart from a checkpoint after real load actions. `common/hw_link`: 229 passed.
 - **Not yet measured on the Pi:** the Track Pi has never been run on hardware.
 
-### Lean Track checkpoint build on the Train Pi (`563b63f`, agent hash 0a7cf856, 600 s replay, unpinned, `--hz 100`)
+### Lean Track checkpoint build on the Train Pi (`2604414`, agent hash 0a7cf856, 600 s replay, unpinned, `--hz 100`)
 
 60,001 steps in 648.2 s (92.6 Hz), Red workload. RTT mean 0.825 / p95 1.48 / p99 2.55 / **max 5.21 ms**, `rtt_over_10ms` = **0**. Pi core step mean 0.059 / max 0.39 ms.
 Worst round trip per minute 3.4-4.8 ms. No `SLOW_STEP` in the Pi log (last line is still the A1f `tick=10230`).
@@ -274,7 +274,7 @@ The Train agent has no Track core, so the lean checkpoint itself is not exercise
 `common/harness/tests`: 7 failed, 277 passed, 10 skipped. The same 7 fail on `main` (`git archive main` run of the three files): `test_green_follower_waits_on_75_then_runs`,
 `test_the_ctc_office_takes_the_track_models_sales`, and five `test_red_owner_diagnostics` cases. Not caused by this branch; not investigated.
 
-## Track Pi on hardware: first runs (Raspberry Pi 5 as the Track board, `df4c491`, agent hash 0a7cf856)
+## Track Pi on hardware: first runs (Raspberry Pi 5 as the Track board, `ff2deac`, agent hash 0a7cf856)
 
 The Track Pi had not run before. The board had been the Train Pi; its Train journal was moved aside (`session.train.json`, `agent.train.log`) because the Track agent refuses a journal from another module (`journal module mismatch`).
 `/boot/firmware/config.txt` had `dtoverlay=dwc2,dr_mode=peripheralZ` under `[all]` (a stray `Z`); changed to `peripheral` and the Pi rebooted once, with the user's go-ahead. The gadget came up high-speed, `throttled=0x0`, no under-voltage lines in `dmesg`.
@@ -313,7 +313,7 @@ Tests (`test_bringup.py`, 5 new): a clean run reports zeros; a damaged VIEW is s
 - The 180 s and 600 s Track replays have not completed on hardware with this change; no Track timing row yet.
 - No fix for the packet loss itself. Options not taken, each a wire change that needs a decision: raise `VIEW_INTERVAL_S`, send VIEWs only while a UI is open, send changes only.
 
-### First complete Track replay on hardware (`5d19539`, agent hash 0a7cf856, 180 s Red recording, `--hz 100`, unpinned, tolerant probe)
+### First complete Track replay on hardware (`8c333a4`, agent hash 0a7cf856, 180 s Red recording, `--hz 100`, unpinned, tolerant probe)
 
 18,006 of 18,006 requests in 195.1 s (92.3 Hz, the host pacing limit; 6,645 late sends), `error` null.
 
@@ -334,7 +334,7 @@ Tests (`test_bringup.py`, 5 new): a clean run reports zeros; a damaged VIEW is s
 - One run, one boot. The lean checkpoint is exercised only if a checkpoint was taken during the run (it is taken every `CHECKPOINT_TICKS`); no checkpoint line was inspected here; the 600 s run below does.
 - Not done: 600 s run, repeat of the 180 s run, any change to how VIEWs are sent.
 
-### 600 s Track replay on hardware (`5d19539`, agent hash 0a7cf856, 600 s Red recording, `--hz 100`, unpinned, tolerant probe)
+### 600 s Track replay on hardware (`8c333a4`, agent hash 0a7cf856, 600 s Red recording, `--hz 100`, unpinned, tolerant probe)
 
 60,006 of 60,006 requests in 654.7 s (91.65 Hz, the host pacing limit; 25,058 late sends), `error` null.
 
@@ -367,7 +367,7 @@ One row per answered request: `sample, sent_at_s, op, rtt_ms, core_ms, send_late
 Tests (3 new): shape and one row per sample; a request sent again is flagged and timed from its first send; no file without the option. `common/hw_link`: 237 passed, plus the 2 known `test_bundle_is_offline_stdlib_and_shell_parses` cases that need physical Pis.
 Known sandbox quirk, present on `e3077ae` as well and not looked into: `bringup --transport process` with the Red Track recording does not finish here, even with `--timeout 8`. The Train module's process and pty tests pass; the serial path used on the hardware does not go through it.
 
-## Track Pi: the core step is slower in each later replay of one agent process (180 s Red replays, `743fc80`, agent hash 0a7cf856, unpinned)
+## Track Pi: the core step is slower in each later replay of one agent process (180 s Red replays, `9072a93`, agent hash 0a7cf856, unpinned)
 
 Same recording, same host, same setup each time; the replays run one after another in one agent process, and a fresh process starts at the first row. Core step mean (Pi side, ms), then the p99 and round trips over 10 ms:
 
@@ -428,7 +428,7 @@ A second baseline run gave 4.234 / 4.794 / 5.126 / 5.434 (deterministic). Channe
 
 **Options, none done:** restart the agent before a run; flat channel A for the owner of `plc.py` (vital logic with two deliberately different channels, so a review change, not made here; measured saving about 0.4 ms at session 1 and about 0.9 ms by session 4); start each session in a fresh process (removes the effect, changes how the agent starts a session and needs the host link to survive the restart).
 
-## One physical Pi in the 10x system run (tooling, `4ec0c97` and after; host side only, the Pi bundles and agent hash 0a7cf856 are unchanged)
+## One physical Pi in the 10x system run (tooling, `da156cc` and after; host side only, the Pi bundles and agent hash 0a7cf856 are unchanged)
 
 `measure --system` could only simulate both hardware Pis (`--test-pi`) or wait for both real ones. It now takes `--track-controller-pi` and `--train-controller-pi`
 (`physical`, `process` or `pty`, resolved by the launcher's `resolve_pi_modes`), so one board can be real beside a simulated Pi, and `--dispatch TRAIN:LINE:BLOCK`
@@ -446,7 +446,7 @@ Tests: 21 in `test_measure_pi_modes.py` and `test_bench_tools.py`; the harness s
 ### Correction and first system runs with the Track Pi physical (60 s, 10x, headless, Windows host; Red train `R1:Red:16`, **without** engineer gains on the hardware Train Controller)
 
 `measure --system` gave the engineer's gains only to the software Train Controller (the launcher gives them to both), so in these three runs the Red train most likely waited for gains (D024) and the hardware Pis saw a
-quieter workload than a real run. **Do not use these as the Track Pi's loaded numbers.** Fixed in `5e48446`; in the sandbox (both Pis simulated) the Track HW reply goes from about 6.2 to about 7.5 ms once the train runs.
+quieter workload than a real run. **Do not use these as the Track Pi's loaded numbers.** Fixed in `b8a5242`; in the sandbox (both Pis simulated) the Track HW reply goes from about 6.2 to about 7.5 ms once the train runs.
 
 | Run | Round trip mean / p95 / p99 / max (ms) | Speed | Slipped | Track Controller reply mean / p99 (ms) | Track HW last |
 | --- | --- | --- | --- | --- | --- |
@@ -465,7 +465,7 @@ quieter workload than a real run. **Do not use these as the Track Pi's loaded nu
 `measure --schedule FILE` runs a schedule in automatic mode (D020). Speed 9.52x, round trip mean 9.32 / p95 24.84 / p99 44.82 / max 93.9 ms, 100 ticks slipped in 1 slip. Track HW reply mean 7.60 ms (last to reply in 70% of ticks);
 **ctc-office** reply mean 6.52, p99 43.5 ms (last in 21%). With 18 trains the CTC Office, a software module, becomes a second limiter. Sandbox only; no hardware row yet.
 
-### Stress schedule, 60 s, 10x, headless, Windows host (`77d5bf7`; gains on both Train Controllers; `--schedule utils/schedule_stress.json`)
+### Stress schedule, 60 s, 10x, headless, Windows host (`3b9bb6e`; gains on both Train Controllers; `--schedule utils/schedule_stress.json`)
 
 14 Green trains 45 s apart and 4 Red trains 90 s apart; each Red run ends at block 60 and returns to the yard (D020). 60 s of real time is 10 simulated minutes, so the Red trains are still on their way out.
 
@@ -492,7 +492,7 @@ CPU per tick: harness 3.6 ms; the Track module's host process 2.8 ms (`TrackCont
 
 `measure` now names the workload and the Pi modes in its report (`The system as wired, schedule schedule_stress.json,` / `hardware Pis: track-controller-hw physical, train-controller-hw process`); before, the first line always said "one train" whatever was run.
 
-### Stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated (`77d5bf7`, hands off; per-tick CSV analysed with `tickstats.py`)
+### Stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated (`3b9bb6e`, hands off; per-tick CSV analysed with `tickstats.py`)
 
 50,679 of 60,002 ticks, speed **8.45x**, 9,215 ticks slipped in 1 slip, harness CPU 37%. Round trip mean 10.97 / median 9.84 / p95 19.66 / p99 27.26 / max 244.0 ms. From the per-tick CSV, the slowest module of each tick: mean 10.72, p50 9.59, p95 19.36, p99 26.90 ms; over 10 ms in 36.6% of ticks.
 Track Controller reply mean 10.01 / p50 9.49 / p95 13.11 / p99 19.71 / max 243.5 ms; others: ctc-office 5.20 (p99 26.4), track-controller-sw 4.41, train-model 3.93, train-controller-hw 3.64, track-model 3.42, train-controller-sw 3.14.
@@ -508,7 +508,7 @@ Track Controller reply mean 10.01 / p50 9.49 / p95 13.11 / p99 19.71 / max 243.5
 - Pi, `agent.log`: the run's cold first step (core 14.0 ms) and two checkpoint steps just over 10 ms (tick 3,000: core 6.0 + pickle 3.2; tick 21,600: core 5.7 + pickle 3.5); no `SKIPPED_LINE`; `get_throttled` 0x0. A checkpoint step costs about 9.5-10 ms on the Pi because the pickle (3.2-3.5 ms, against 1.3 ms in the sandbox) runs on the step's thread.
 - Not measured: the Train Pi real; both real; a clean repeat of the all-simulated baseline; the same run starting from a freshly restarted agent (unknown whether this one did).
 
-### Stress schedule, Train Pi physical, Track simulated (`77d5bf7`; board swapped to the Train bundle `5d19539` with a reboot; fresh agent, then a second session for the 600 s run)
+### Stress schedule, Train Pi physical, Track simulated (`3b9bb6e`; board swapped to the Train bundle `8c333a4` with a reboot; fresh agent, then a second session for the 600 s run)
 
 | | 60 s | 600 s |
 | --- | --- | --- |
@@ -543,12 +543,12 @@ Full write-up in `ctc-office-tail.md`. In short: the CTC Office process is busy 
 Refresh off (two A/B pairs): CTC reply p99 40.5 -> 11.2 ms, system p99 42 -> 26-28 ms, speed 9.72x -> 10.00x; one signal per event-loop turn: CTC p99 about 40 -> 25-30 ms, p95 doubled. `snapshot()` is not the cost (0.21 ms, twice a tick).
 The Windows host shows the same tail (CTC p99 25-48 ms, 291 spikes over 50 ms in the Train-Pi 600 s run).
 
-### CTC redraw at 1000 ms (`0b0ca2a`): stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated; before/after
+### CTC redraw at 1000 ms (`c0b202e`): stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated; before/after
 
-Same command and workload as the `77d5bf7` Track-physical 600 s run; the only source change is `WINDOW_REFRESH_MS_AT_SPEEDUP = 1000` (CTC Office redraws once a second at 10x). Board freshly rebooted with the Track bundle (sha256 `ceaad550...359d2`), fresh agent journal. Hands off.
+Same command and workload as the `3b9bb6e` Track-physical 600 s run; the only source change is `WINDOW_REFRESH_MS_AT_SPEEDUP = 1000` (CTC Office redraws once a second at 10x). Board freshly rebooted with the Track bundle (sha256 `ceaad550...359d2`), fresh agent journal. Hands off.
 (An earlier attempt stalled at 05:00:00 because my command omitted `--train-controller-pi process`, so the harness waited for a Train Pi that was not connected. Not a result; discarded.)
 
-| | `77d5bf7` (200 ms) | `0b0ca2a` (1000 ms at 10x) |
+| | `3b9bb6e` (200 ms) | `c0b202e` (1000 ms at 10x) |
 | --- | --- | --- |
 | Ticks of 60,002 due, speed | 50,679, **8.45x** | 50,673, **8.45x** |
 | Round trip mean / median / p95 / p99 / max (ms) | 10.97 / 9.84 / 19.66 / 27.26 / 244.0 | 10.63 / 9.91 / 15.25 / 25.54 / 71.8 |
@@ -564,7 +564,7 @@ Same command and workload as the `77d5bf7` Track-physical 600 s run; the only so
 - This run started from a freshly restarted agent and the Track reply is not higher at the start than before; no sign of the per-session slowdown here.
 - Whether the CTC window painted on the host: it did (the window was on screen in a screenshot, with 10x running).
 
-### Clean all-simulated baseline, 600 s, twice (`542fd0e`, stress schedule, 10x, headless, `--test-pi process`, Windows host, hands off, run from a terminal on the host)
+### Clean all-simulated baseline, 600 s, twice (`93352fc`, stress schedule, 10x, headless, `--test-pi process`, Windows host, hands off, run from a terminal on the host)
 
 | | Run 1 | Run 2 |
 | --- | --- | --- |
@@ -581,7 +581,7 @@ Same command and workload as the `77d5bf7` Track-physical 600 s run; the only so
 - **The Track Controller reply steps down at about 240-300 s in both runs** (run 1: 8.13 -> 7.6 ms; run 2: 7.49 -> 6.98 ms; over-budget 6.5% -> 5.2%). With no Pi in the loop, so this is the workload (the Red runs finishing), not the hardware: the earlier Pi runs' step at 309-373 s is the same one.
 - The CTC tail is small with the 1000 ms redraw (p99 about 9 ms, two spikes of about 50 ms in 1,200 s).
 
-**Pi cost (Track Pi physical, `0b0ca2a` run, against the two baselines):**
+**Pi cost (Track Pi physical, `c0b202e` run, against the two baselines):**
 
 | | All simulated (two runs) | Track Pi physical |
 | --- | --- | --- |
@@ -592,11 +592,11 @@ Same command and workload as the `77d5bf7` Track-physical 600 s run; the only so
 
 The real Pi adds about 2.3-3.0 ms to the middle of the Track Controller's reply (mean and p50) and little to its tail (p99 +1 to +2 ms). The speed shortfall (10.00x to 8.45x) is the middle of the distribution sitting above the 10 ms slot for 37% of ticks, not the spikes. To reach 10.00x with the Track Pi, its reply would need to be about 2 ms faster in the typical tick, which is the same 2-3 ms the link and the Pi's core add over the simulated module.
 
-### Flat channel A (`97bdb75`, experiment): stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated, before/after
+### Flat channel A (`1861469`, experiment): stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated, before/after
 
 Track bundle sha256 `df1bea35...d70c`, agent hash `8d1c457a` (was `0a7cf856`; the hash covers the core code). Fresh journal, agent freshly started, hands off, run from a terminal on the host. One run.
 
-| | `0b0ca2a` (nested channel A) | `97bdb75` (flat channel A) |
+| | `c0b202e` (nested channel A) | `1861469` (flat channel A) |
 | --- | --- | --- |
 | Ticks of due, speed | 50,673 of 60,002, 8.45x | 59,653 of 60,006, **9.94x** |
 | Ticks slipped | 9,223 in 1 slip | 351 in 1 slip |
@@ -611,7 +611,7 @@ Track bundle sha256 `df1bea35...d70c`, agent hash `8d1c457a` (was `0a7cf856`; th
 - One run: repeat from a freshly restarted agent before treating 9.94x as the figure. The per-session slowdown is not removed by this change (the bench said channel A's growth dropped from +0.714 to +0.149 ms over four sessions, channel B's did not).
 - Equivalence evidence (see `plc-channel-a-flat-proposal.md`): 256,000 tree evaluations, 18,000 scans of the real Red programs, 23,964 replayed scans, plus a new unit test over 500 random trees. It has not been run against the Green programs, nor reviewed by the owner (`commits-for-owner-review.md`).
 
-### Flat channel A, repeat (run 2, `97bdb75` code, same Track bundle `df1bea35...d70c`, fresh journal and agent): disturbed by the host
+### Flat channel A, repeat (run 2, `1861469` code, same Track bundle `df1bea35...d70c`, fresh journal and agent): disturbed by the host
 
 Started with about 20 `qt.qpa.mime: Retrying/Unable to obtain clipboard` lines (the user had copied the command just before). Terminal on the host, not otherwise hands-off-verified.
 
@@ -628,7 +628,7 @@ Started with about 20 `qt.qpa.mime: Retrying/Unable to obtain clipboard` lines (
 - **The speed difference (9.94x vs 9.49x) comes from the host, not the Pi.** Run 2 has several ticks where unrelated modules stalled together: t = 20.7 s train-controller-sw 194 ms and track-model 136 ms; t = 33.6 s track-model 103 ms; t = 229.9 s track-controller-sw 129 ms, ctc-office 60, track-model 57. A stall of that kind slips the harness behind (3,047 ticks in 2 slips) and costs about 0.45x. The Track Pi's own steps stayed at 10-17 ms in those ticks. This matches every earlier run that began with clipboard errors; the quiet ones had none.
 - So with a quiet host the system reaches about 9.9x with the Track Pi real; with this much host noise 9.5x. Both are an improvement on 8.45x. Not yet seen: 10.00x with the Track Pi real, and the Train Pi with the flat channel A (the Train Pi was not rebuilt with it, and its code does not use the PLC).
 
-### Flat channel A, run 3 (`97bdb75` code, Track bundle `df1bea35...d70c`, fresh journal and agent; clipboard history off, nothing copied, no clipboard lines): the clean figure
+### Flat channel A, run 3 (`1861469` code, Track bundle `df1bea35...d70c`, fresh journal and agent; clipboard history off, nothing copied, no clipboard lines): the clean figure
 
 | | Run 1 | Run 2 (disturbed) | Run 3 (clean) |
 | --- | --- | --- | --- |
@@ -642,3 +642,23 @@ Started with about 20 `qt.qpa.mime: Retrying/Unable to obtain clipboard` lines (
 - With a quiet host the Track Pi real reaches **9.99x** (`harness CPU` 33%), against 8.45x before the flat channel A; all-simulated reached 10.00x. The remaining 51 slipped ticks are the startup (59 and 72 ms Track Controller steps in the first 0.1 s).
 - The Track Controller reply (mean 8.56, p50 8.11) is now 0.7-1.4 ms above the simulated module, within the host's own spread (0.7 ms between the two all-simulated runs). It is still the slowest module in 97% of ticks, but at its current speed it fits the 10 ms slot.
 - Condition that mattered: clipboard history off and nothing copied; run 2 without it lost 0.45x to host stalls.
+
+### Train Pi physical with the current code (hw_pi_test 33160a8 content, Train bundle sha256 `50e45cca...c22d`, agent hash 8d1c457a): stress schedule, 600 s, 10x, headless, Track simulated, before/after
+
+Board swapped back to the Train bundle (stopped the Track agent, journal moved aside, install, reboot). Fresh agent, one agent, hands off.
+
+| | Train Pi physical, earlier code (`f21c14b` run) | Train Pi physical, current code |
+| --- | --- | --- |
+| Ticks of due, speed | 45,598 of 60,019, 7.60x | 60,005 of 60,005, **10.00x** |
+| Ticks slipped | 14,274 | 0 in 0 slips |
+| Round trip mean / median / p95 / p99 / max (ms) | 11.48 / 9.02 / 28.10 / 48.23 / 198.1 | 8.12 / 7.32 / 14.03 / 23.50 / 58.9 |
+| Train Controller (real) reply mean / p50 / p95 / p99 / max | 5.84 / 5.23 / 10.38 / 14.23 / 197.7 | 4.53 / 4.23 / 7.54 / 11.04 / 29.9 |
+| Track Controller (simulated) reply mean / p99 | 9.30 / 22.47 | 7.58 / 17.64 |
+| Slowest module of a tick: over 10 ms | 25.8% | 9.0% |
+| Slowest module | Track 85.5%, ctc-office 7.4%, train-controller-hw 3.4% | Track 93.1%, track-model 2.7%, train-controller-hw 2.7%, ctc-office 1.3% |
+| Pi `SLOW_STEP` / `get_throttled` | not sent / 0x0 | 0 / 0x0 |
+
+- The speed went from 7.60x to 10.00x, but **most of that is the host side, not the Train Pi**: the simulated Track Controller is 1.7 ms faster (9.30 to 7.58 ms mean, the flat channel A runs in the simulator too), the CTC tail is gone (redraw at 1000 ms), and the run was clean (no clipboard stalls). The real Train Pi's own reply also fell (5.84 to 4.53 ms mean, p99 14.2 to 11.0 ms), but the earlier run's host was noisier, so the two are not a controlled comparison.
+- The real Train Pi is the slowest module in 2.7% of ticks and its reply mean is 0.9 ms above the simulated Train Controller in the all-simulated runs (3.07-3.68 ms): the Train Pi does not limit the system. Zero slow steps on the Pi in 600 s.
+- The Track reply steps down at about 240 s here too (7.78 to 7.28 ms), the same workload step.
+- Both Pis real together is still not measured. The two 600 s runs with the current code (Track Pi real 9.99x, this 10.00x) can be combined with `bench/estimate_both.py`.

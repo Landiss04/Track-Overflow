@@ -8,7 +8,7 @@ first.
 
 ## 2026-11-13 — The redraw rate drops to 4 a second when the harness finds software rendering
 
-`f9344d1`. The window only: every step's outputs are unchanged. Not yet
+`7474cc4`. The window only: every step's outputs are unchanged. Not yet
 reviewed by the Train Model owner; the new interval is a placeholder to
 be tuned on the target machine.
 
@@ -20,7 +20,7 @@ be tuned on the target machine.
   is set, and `FULL_VIEW_INTERVAL_S` otherwise. `main` passes
   `view_interval_s()` to `TrainModelFleet`.
 - The harness sets that variable at startup when it finds Qt Quick
-  rendering in software (`common/harness/app.py`, `1598fb9`), because
+  rendering in software (`common/harness/app.py`, `bf21405`), because
   the 2026-11-04 software run at 20 a second saturated every core. With
   hardware rendering nothing changes.
 - `tests/test_view_interval.py`: the full rate by default, the lower

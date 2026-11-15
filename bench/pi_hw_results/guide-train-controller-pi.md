@@ -1,6 +1,6 @@
 # Train Controller Pi: install and run, step by step
 
-**Status:** a runbook written from the commands that worked on this branch. The Train bundle was run on the real board at an earlier commit; **the Train bundle built at the current head was not run on hardware** (the Pi agent's code changed only through `plc.py`, which the Train Controller does not use, but its agent hash changed, so the host and the Pi must both be at this commit). If a result differs from what a step says to expect, stop there and see "If something goes wrong" at the end.
+**Status:** a runbook written from the commands that worked on this branch. The Train bundle was run on the real board at an earlier commit; the Train bundle built at the head `33160a8` was also run on the board (10.00x, see Test C); the agent hash changed with the PLC change, so the host and the Pi must both be at the same commit. If a result differs from what a step says to expect, stop there and see "If something goes wrong" at the end.
 
 The same board runs either the Train Controller or the Track Controller, one at a time. For the Track Controller use `guide-track-controller-pi.md`. The menu `bench\pi_test_menu.cmd` runs the tests below from a numbered list once the Pi is installed.
 
@@ -160,7 +160,7 @@ Summarise it:
 ```powershell
 python bench\tickstats.py ..\trains_pi\tick-train-physical-600s.csv
 ```
-`speed achieved` is 10.00x when every tick fits its 10 ms slot. The real Train Pi adds about 2 ms to its own reply (3.6 to 5.8 ms) and is rarely the slowest module, so it does not limit the system. The last Train-Pi system run on this branch was 7.60x, measured before the CTC and PLC changes and on a noisier host, with the Track Controller simulated; the result is mostly set by the simulated Track Controller and the host's noise, not the Train Pi (`10x-log.md`).
+`speed achieved` is 10.00x when every tick fits its 10 ms slot. The real Train Pi adds about 2 ms to its own reply (3.6 to 5.8 ms) and is rarely the slowest module, so it does not limit the system. The last Train-Pi system run on this branch (current code, clean host, Track Controller simulated) was **10.00x** with no slipped ticks, a Train Pi reply mean of 4.5 ms (p99 11 ms) and no slow steps on the Pi; an earlier run of older code on a noisier host was 7.60x. The result is mostly set by the simulated Track Controller and the host's noise, not the Train Pi (`10x-log.md`).
 
 ### Test D. Both Pis real, estimated
 
