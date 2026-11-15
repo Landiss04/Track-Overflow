@@ -115,8 +115,12 @@ goto :eof
 
 :replay
 rem :replay module tag recording timeout_s
+if not exist "%~3" if exist "bench\recordings\%~nx3.gz" (
+    echo Unpacking bench\recordings\%~nx3.gz to %~3 ...
+    python -c "import gzip,shutil,sys; shutil.copyfileobj(gzip.open(sys.argv[1]), open(sys.argv[2],'wb'))" "bench\recordings\%~nx3.gz" "%~3"
+)
 if not exist "%~3" (
-    echo The recording %~3 is not there. Put it in %PI_TEST_OUT% or edit the names at the top of this file.
+    echo The recording %~3 is not there and bench\recordings has no packed copy of it.
     goto :eof
 )
 call :need_pi %~1 || goto :eof

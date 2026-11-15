@@ -9,7 +9,7 @@ The same board runs either the Track Controller or the Train Controller, one at 
 - A Raspberry Pi 5 with Raspberry Pi OS, reachable over SSH, connected to the Windows host's USB-C port with a **data** cable (the host port also powers it).
 - The Windows host with the Python that has PySide6 installed, and this repository checked out at the commit you are testing. Open PowerShell in the repository root (`Track-Overflow`).
 - A folder next to the repository for results, `..\trains_pi` (the menu and the commands below write there). Create it once: `mkdir ..\trains_pi`.
-- The recordings used by the replay tests, in `..\trains_pi`: `track-red-180s.jsonl` (the Track Controller's recorded Red workload). They are not in the repository.
+- The recording used by the replay test: `bench\recordings\track-red-180s.jsonl.gz` is in the repository (see `bench\recordings\README.md`). `bringup` reads only unpacked files, so unpack it into `..\trains_pi` first; the menu does this for you the first time, or use the command in that README.
 
 **Three rules that prevent most trouble**
 
