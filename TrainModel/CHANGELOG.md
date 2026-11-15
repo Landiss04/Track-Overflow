@@ -6,6 +6,28 @@ first.
 
 ---
 
+## 2026-11-13 — The redraw rate drops to 4 a second when the harness finds software rendering
+
+`f9344d1`. The window only: every step's outputs are unchanged. Not yet
+reviewed by the Train Model owner; the new interval is a placeholder to
+be tuned on the target machine.
+
+- `train_model/module_process.py`: `VIEW_INTERVAL_S` is renamed
+  `FULL_VIEW_INTERVAL_S` (still 0.05 s, 20 redraws a second). New
+  `LOW_VIEW_INTERVAL_S` = 0.25 s, 4 redraws a second, and a function
+  `view_interval_s()` that returns it when the environment variable
+  `TRACK_OVERFLOW_LOW_FRAME_RATE` (`utils.render_check.LOW_FRAME_RATE_ENV`)
+  is set, and `FULL_VIEW_INTERVAL_S` otherwise. `main` passes
+  `view_interval_s()` to `TrainModelFleet`.
+- The harness sets that variable at startup when it finds Qt Quick
+  rendering in software (`common/harness/app.py`, `1598fb9`), because
+  the 2026-11-04 software run at 20 a second saturated every core. With
+  hardware rendering nothing changes.
+- `tests/test_view_interval.py`: the full rate by default, the lower
+  rate when the variable is set.
+
+---
+
 ## 2026-11-04 — The window redraws at most 20 times a second
 
 `0345b24` (10x headroom). The window only: every step's outputs are
@@ -18,7 +40,7 @@ unchanged.
 - `train_model/module_process.py`: the harness-driven fleet uses
   `VIEW_INTERVAL_S` = 0.05 s, 20 redraws a second, where at 10x a
   moving train changes 100 times a second (`TrainModelFleet`'s
-  `view_interval_s`).
+  `view_interval_s`). Renamed `FULL_VIEW_INTERVAL_S` on 2026-11-13.
 
 ---
 
