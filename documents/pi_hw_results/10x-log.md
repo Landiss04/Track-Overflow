@@ -542,3 +542,24 @@ Expected speed with both Pis real on this host and workload: about 7 to 8.5x (be
 Full write-up in `ctc-office-tail.md`. In short: the CTC Office process is busy 54% of the time; 55% of that is the per-step authority computation (route search 40%) and 25% the window refresh (`CtcHost._refresh`, about 27 ms each, five a second). 170 of 1,540 busy stretches exceeded 30 ms: 95 the refresh, 75 the step.
 Refresh off (two A/B pairs): CTC reply p99 40.5 -> 11.2 ms, system p99 42 -> 26-28 ms, speed 9.72x -> 10.00x; one signal per event-loop turn: CTC p99 about 40 -> 25-30 ms, p95 doubled. `snapshot()` is not the cost (0.21 ms, twice a tick).
 The Windows host shows the same tail (CTC p99 25-48 ms, 291 spikes over 50 ms in the Train-Pi 600 s run).
+
+### CTC redraw at 1000 ms (`0b0ca2a`): stress schedule, 600 s, 10x, headless, Track Pi physical, Train simulated; before/after
+
+Same command and workload as the `77d5bf7` Track-physical 600 s run; the only source change is `WINDOW_REFRESH_MS_AT_SPEEDUP = 1000` (CTC Office redraws once a second at 10x). Board freshly rebooted with the Track bundle (sha256 `ceaad550...359d2`), fresh agent journal. Hands off.
+(An earlier attempt stalled at 05:00:00 because my command omitted `--train-controller-pi process`, so the harness waited for a Train Pi that was not connected. Not a result; discarded.)
+
+| | `77d5bf7` (200 ms) | `0b0ca2a` (1000 ms at 10x) |
+| --- | --- | --- |
+| Ticks of 60,002 due, speed | 50,679, **8.45x** | 50,673, **8.45x** |
+| Round trip mean / median / p95 / p99 / max (ms) | 10.97 / 9.84 / 19.66 / 27.26 / 244.0 | 10.63 / 9.91 / 15.25 / 25.54 / 71.8 |
+| ctc-office reply mean / p95 / p99 / max | 5.20 / - / 26.4 / - | 4.41 / 5.72 / 22.18 / 56.6 |
+| Track Controller reply mean / p95 / p99 | 10.01 / 13.11 / 19.71 | 10.17 / 13.74 / 18.87 |
+| Slowest module of a tick | Track 93.4%, ctc-office 5.2%, track-model 1.3% | Track 97.4%, track-model 1.3%, ctc-office 1.3% |
+| Ticks over 10 ms where Track was not the slowest | 3,194 (6.3%) | 1,187 (2.3%) |
+| Spikes over 50 ms | 3 (startup, ctc 52, Track 243) | 3 (startup 72, ctc 57, ctc 51) |
+| Pi `SLOW_STEP` lines / `get_throttled` | 2 checkpoint steps + cold step / 0x0 | 4 / 0x0 |
+
+- **Speed is unchanged (8.45x).** The CTC tail is smaller (round trip p95 19.7 -> 15.3, p99 27.3 -> 25.5, max 244 -> 72; CTC no longer the slowest module in 5% of ticks), but the Track Controller sets the pace in 97% of ticks and its reply mean (10.2 ms) is above the 10 ms slot by itself. So on the Track-Pi-physical run the CTC redraw was not what limits the speed; it only trims the tail.
+- The Track reply steps down again over the run (10.8 ms mean in the first 65 s to 9.5 ms at the end; over-budget 57% -> 16-18%), with the step at about 321 s; the earlier run had it at 309 s. Same candidate explanation (workload change, Red runs finishing), still not confirmed in the event log.
+- This run started from a freshly restarted agent and the Track reply is not higher at the start than before; no sign of the per-session slowdown here.
+- Whether the CTC window painted on the host: it did (the window was on screen in a screenshot, with 10x running).
