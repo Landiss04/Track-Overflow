@@ -2,7 +2,7 @@
 rem Numbered menu for the hardware Pi tests. Double-click it, or run it from any folder.
 rem It works from the repository root, writes results to ..\trains_pi (override: set PI_TEST_OUT=folder)
 rem and keeps every run's text output beside its CSV. It changes no repository file.
-rem Step-by-step install guides: documents\pi_hw_results\guide-track-controller-pi.md and guide-train-controller-pi.md
+rem Step-by-step install guides: bench\pi_hw_results\guide-track-controller-pi.md and guide-train-controller-pi.md
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0.." || (echo Cannot find the repository root. & pause & exit /b 1)
 if not defined PI_TEST_OUT set "PI_TEST_OUT=..\trains_pi"
@@ -210,5 +210,5 @@ echo.
 echo TO STOP A STUCK RUN (stops every Python on this PC)
 echo     Get-Process python ^| Stop-Process -Force
 echo.
-echo Guides: documents\pi_hw_results\guide-track-controller-pi.md and guide-train-controller-pi.md
+echo Guides: bench\pi_hw_results\guide-track-controller-pi.md and guide-train-controller-pi.md
 goto :eof

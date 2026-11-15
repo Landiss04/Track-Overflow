@@ -38,7 +38,7 @@ The wire protocol is unchanged. The agent hash (it covers the core files) is `0a
 - `measure --system` (and `bench/per_module.py`): choose each hardware Pi's mode (`--track-controller-pi`, `--train-controller-pi`: `physical` or `process`), `--dispatch`, `--schedule`, per-tick CSV, and the report names the workload and Pi modes. The engineer's gains go to both Train Controllers. `bench/estimate_both.py` combines two one-Pi runs; `bench/tickstats.py` summarises one run; `bench/pi_test_menu.cmd` runs the standard tests from a numbered menu.
 - Launcher and harness: `cf55060` pins the harness off the last cores and each Pi link process onto them (`TRACK_OVERFLOW_NO_PIN=1` turns it off); `1598fb9` warns at startup when Qt Quick renders in software (and sets `TRACK_OVERFLOW_LOW_FRAME_RATE` for the modules it starts).
 
-### Documentation (`documents/pi_hw_results/`)
+### Documentation (`bench/pi_hw_results/`)
 
 `guide-track-controller-pi.md`, `guide-train-controller-pi.md` (step by step), `pi_setup_how_to.md` (the longer runbook), `10x-log.md` (every run), `10x-final-report.md`, `HANDOFF.md`, `commits-for-owner-review.md`, `plc-channel-a-flat-proposal.md`, `ctc-office-tail.md`, and this file.
 

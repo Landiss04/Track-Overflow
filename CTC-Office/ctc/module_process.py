@@ -98,7 +98,7 @@ WINDOW_REFRESH_MS = 200
 
 #: EXPERIMENT (10x-pi-speed): redraw interval while the clock runs at 10x.
 #: The refresh costs about 27 ms of event-loop time and caused the
-#: round-trip tail at 10x (documents/pi_hw_results/ctc-office-tail.md).
+#: round-trip tail at 10x (bench/pi_hw_results/ctc-office-tail.md).
 #: Set equal to ``WINDOW_REFRESH_MS`` to turn the experiment off.
 WINDOW_REFRESH_MS_AT_SPEEDUP = 1000
 

@@ -21,7 +21,7 @@
 
 ## Pi-link tooling (this branch's own work; listed so the scope is clear)
 
-`common/hw_link/` (agent, bringup, provision, tests), `common/harness/measure.py` and its tests, `bench/`, `documents/pi_hw_results/`. The agent's wire protocol is unchanged (agent hash 0a7cf856 until `97bdb75`, 8d1c457a from it on: the hash covers the core code, so the Track Pi bundle must be reinstalled).
+`common/hw_link/` (agent, bringup, provision, tests), `common/harness/measure.py` and its tests, `bench/`, `bench/pi_hw_results/`. The agent's wire protocol is unchanged (agent hash 0a7cf856 until `97bdb75`, 8d1c457a from it on: the hash covers the core code, so the Track Pi bundle must be reinstalled).
 
 ## Not done
 
