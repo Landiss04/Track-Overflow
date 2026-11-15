@@ -662,3 +662,16 @@ Board swapped back to the Train bundle (stopped the Track agent, journal moved a
 - The real Train Pi is the slowest module in 2.7% of ticks and its reply mean is 0.9 ms above the simulated Train Controller in the all-simulated runs (3.07-3.68 ms): the Train Pi does not limit the system. Zero slow steps on the Pi in 600 s.
 - The Track reply steps down at about 240 s here too (7.78 to 7.28 ms), the same workload step.
 - Both Pis real together is still not measured. The two 600 s runs with the current code (Track Pi real 9.99x, this 10.00x) can be combined with `bench/estimate_both.py`.
+
+### Both Pis real, estimated from the two clean 600 s runs with the current code (`bench/estimate_both.py`)
+
+Inputs: Train Pi physical, Track simulated (10.00x, `tick-train-physical-600s-new.csv`) and Track Pi physical, Train simulated (9.99x, `tick-track-physical-600s-flat-run3.csv`). Slowest module of a tick, ms:
+
+| | Ticks | Mean | p50 | p95 | p99 | max | Over 10 ms | Slowest module |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Run, Train Pi physical | 60,005 | 7.88 | 7.10 | 13.72 | 23.17 | 58.6 | 9.0% | Track 93%, track-model 3%, train-controller-hw 3% |
+| Run, Track Pi physical | 59,954 | 8.76 | 8.14 | 13.24 | 23.71 | 72.3 | 8.0% | Track 97%, track-model 2%, ctc-office 1% |
+| Estimate A (Train run, Track column from the Track run) | 60,005 | 8.86 | 8.19 | 13.44 | 23.89 | 58.7 | 9.8% | Track 93%, train-controller-hw 4%, track-model 2% |
+| Estimate B (Track run, Train column from the Train run) | 59,954 | 8.84 | 8.18 | 13.42 | 23.73 | 72.3 | 9.7% | Track 93%, train-controller-hw 4%, track-model 2% |
+
+The two estimates agree (mean 8.84-8.86 ms, p99 23.7-23.9, 9.7-9.8% of ticks over the slot). Every real run with 8 to 9% of ticks over 10 ms reached 9.99x or 10.00x, and the estimate is 9.7-9.8%, so **both Pis real is expected at about 9.9 to 10.0x**. That last step is an inference from those runs, not a measurement: the columns are swapped independently of the tick (shared host load is ignored) and the two runs were taken hours apart with different Pi bundles installed. A run with both Pis connected needs a second board.
