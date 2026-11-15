@@ -610,3 +610,20 @@ Track bundle sha256 `df1bea35...d70c`, agent hash `8d1c457a` (was `0a7cf856`; th
 - The speed shortfall now is 351 ticks in the first minutes: the slow ticks cluster in the first 240 s (over 10 ms in 6.9-13.5% of ticks), after which the Track reply falls to 8.45-8.5 ms with 6% over budget (the same workload step as in every earlier run, with no Pi too).
 - One run: repeat from a freshly restarted agent before treating 9.94x as the figure. The per-session slowdown is not removed by this change (the bench said channel A's growth dropped from +0.714 to +0.149 ms over four sessions, channel B's did not).
 - Equivalence evidence (see `plc-channel-a-flat-proposal.md`): 256,000 tree evaluations, 18,000 scans of the real Red programs, 23,964 replayed scans, plus a new unit test over 500 random trees. It has not been run against the Green programs, nor reviewed by the owner (`commits-for-owner-review.md`).
+
+### Flat channel A, repeat (run 2, `97bdb75` code, same Track bundle `df1bea35...d70c`, fresh journal and agent): disturbed by the host
+
+Started with about 20 `qt.qpa.mime: Retrying/Unable to obtain clipboard` lines (the user had copied the command just before). Terminal on the host, not otherwise hands-off-verified.
+
+| | Run 1 | Run 2 |
+| --- | --- | --- |
+| Ticks of due, speed | 59,653 of 60,006, **9.94x** | 56,934 of 60,006, **9.49x** |
+| Ticks slipped | 351 in 1 slip | 3,047 in 2 slips |
+| Round trip mean / median / p95 / p99 / max (ms) | 9.17 / 8.50 / 13.88 / 24.41 / 100.3 | 9.32 / 8.50 / 14.53 / 24.80 / 194.5 |
+| Track Controller reply mean / p50 / p95 / p99 | 8.77 / 8.29 / 12.08 / 18.77 | 8.88 / 8.26 / 13.30 / 18.36 |
+| Slowest module of a tick: over 10 ms | 9.9% | 13.2% |
+| Pi `SLOW_STEP` / `get_throttled` | 1 / 0x0 | 1 / 0x0 |
+
+- **The Track Controller's reply reproduced** (mean 8.77 vs 8.88 ms, p50 8.29 vs 8.26, p99 18.8 vs 18.4; both against 10.17 / 9.64 / 18.9 before the change), well inside the 0.7 ms run-to-run spread. The 1.4 ms gain from the flat channel A is real.
+- **The speed difference (9.94x vs 9.49x) comes from the host, not the Pi.** Run 2 has several ticks where unrelated modules stalled together: t = 20.7 s train-controller-sw 194 ms and track-model 136 ms; t = 33.6 s track-model 103 ms; t = 229.9 s track-controller-sw 129 ms, ctc-office 60, track-model 57. A stall of that kind slips the harness behind (3,047 ticks in 2 slips) and costs about 0.45x. The Track Pi's own steps stayed at 10-17 ms in those ticks. This matches every earlier run that began with clipboard errors; the quiet ones had none.
+- So with a quiet host the system reaches about 9.9x with the Track Pi real; with this much host noise 9.5x. Both are an improvement on 8.45x. Not yet seen: 10.00x with the Track Pi real, and the Train Pi with the flat channel A (the Train Pi was not rebuilt with it, and its code does not use the PLC).
