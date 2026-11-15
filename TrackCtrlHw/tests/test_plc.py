@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import random
 import unittest
+import unittest.mock
 from typing import Any
 
+from track_ctrl_hw import plc
 from track_ctrl_hw.plc import ERROR, WARNING, compile_program
 
 NAMES = ("A", "B", "C", "D")
@@ -187,6 +189,39 @@ class Channels(unittest.TestCase):
                 with self.subTest(case=case, text=text, values=values):
                     self.assertEqual(program.scan_a(values)["X"], expected)
                     self.assertEqual(program.scan_b(values)["X"], expected)
+
+
+class FlatWalker(unittest.TestCase):
+    """EXPERIMENT (10x-pi-speed): the one-expression form of channel A."""
+
+    NAMES = ("A", "B", "C", "D")
+
+    def tree(self, rng: random.Random, depth: int) -> plc.Node:
+        if depth == 0 or rng.random() < 0.2:
+            if rng.random() < 0.15:
+                return plc.Constant(rng.random() < 0.5)
+            return plc.Read(rng.choice(self.NAMES + ("UNDEFINED",)))
+        if rng.random() < 0.2:
+            return plc.Negate(self.tree(rng, depth - 1))
+        return plc.Combine(rng.choice(("AND", "OR", "XOR")),
+                           self.tree(rng, depth - 1), self.tree(rng, depth - 1))
+
+    def test_flat_and_nested_walkers_agree(self) -> None:
+        rng = random.Random(7)
+        for _ in range(500):
+            node = self.tree(rng, 6)
+            flat, nested = plc._flat_walker(node), plc._walker(node)
+            for bits in range(16):
+                values = {n: bool(bits >> i & 1) for i, n in enumerate(self.NAMES)}
+                self.assertEqual(flat(values), nested(values), node)
+
+    def test_a_tree_too_deep_to_compile_still_evaluates(self) -> None:
+        node: plc.Node = plc.Read("A")
+        for _ in range(5000):
+            node = plc.Negate(node)
+        with unittest.mock.patch.object(plc, "_expression", side_effect=RecursionError):
+            walker = plc._flat_walker(plc.Negate(plc.Read("A")))
+        self.assertIs(walker({"A": True}), False)
 
 
 if __name__ == "__main__":

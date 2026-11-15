@@ -241,6 +241,35 @@ def _walker(node: Node) -> Walker:
     return lambda values: left(values) != right(values)
 
 
+def _expression(node: Node) -> str:
+    # EXPERIMENT (10x-pi-speed, revert with its commit): the same logic as
+    # _walker, written out as the text of one Python expression over the
+    # scan's values `v`: AND and OR still stop early, XOR is still `!=`,
+    # an undefined read is still 0.
+    if isinstance(node, Constant):
+        return repr(node.value)
+    if isinstance(node, Read):
+        return f"v.get({node.name!r}, False)"
+    if isinstance(node, Negate):
+        return f"(not {_expression(node.operand)})"
+    left = _expression(node.left)
+    right = _expression(node.right)
+    if node.operator == "AND":
+        return f"({left} and {right})"
+    if node.operator == "OR":
+        return f"({left} or {right})"
+    return f"({left} != {right})"
+
+
+def _flat_walker(node: Node) -> Walker:
+    # One function per statement instead of one per tree node. A tree too
+    # deep to compile keeps the nested functions of _walker.
+    try:
+        return eval("lambda v: " + _expression(node), {})
+    except (SyntaxError, RecursionError, MemoryError):
+        return _walker(node)
+
+
 def _tree_reads(node: Node) -> list[str]:
     if isinstance(node, Read):
         return [node.name]
@@ -401,7 +430,7 @@ class Program:
     def _walkers(self) -> tuple[tuple[str, Walker], ...]:
         # Channel A's trees as functions, made on the first scan.
         return tuple(
-            (statement.target, _walker(statement.tree))
+            (statement.target, _flat_walker(statement.tree))
             for statement in self.statements
         )
 
