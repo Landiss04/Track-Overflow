@@ -1015,9 +1015,9 @@ stories cover every use case.
 |---|---|
 | **Actors** | Dispatcher |
 | **Description** | Shows passenger throughput per line, from ticket sales. |
-| **Data** | Tickets per hour on each line since 05:00; tickets sold on each line in each clock hour, last 12 hours. |
-| **Stimulus** | Any step; hover a bar for its value. |
-| **Response** | The tiles, table and charts update. |
+| **Data** | Tickets per hour on each line since 05:00. |
+| **Stimulus** | Any step. |
+| **Response** | The Red line and Green line tiles update. |
 | **Requirements** | Rubric 2.8; REQ-FUNC-014 |
 | **Sequence** | SD-14 |
 
@@ -1472,11 +1472,11 @@ whole step, refers to the diagrams of the use cases it includes.
 
 | # | Item | Owner |
 |---|---|---|
-| 1 | REQ-INTF-002.3 and 002.4: the map shows blocks, trains and crossings. Switch positions appear in Set switch position and in why a train's authority ends, not on the map. Signal aspects never reach the CTC Office: the waysides report them, but the harness mapping drops them. | Landis |
+| 1 | REQ-INTF-002.3: switch positions appear in Set switch position and in why a train's authority ends, not on the map. (REQ-INTF-002.4, signal aspects, is met since 2026-11-15: each light is drawn at its block on the map and listed in the Signals panel.) | Landis |
 | 2 | Ticket sales: the agreed signal definition is per line, as (count, line) pairs. The CTC Office and the harness use tickets per station. The definition should be updated to match. | Landis |
 | 3 | The naming convention makes enumerated values all caps (`NORMAL`, `REVERSE`), but the CTC Office and the switch command definition use lower case for switch positions and crossing states. The harness mapping or the module must convert, and the two should agree. | Landis, Kevin |
 | 4 | D020 says the CTC Office holds a train at its station for the dwell; D007 says the Train Controller holds the dwell. Both hold: the CTC Office keeps the authority at the station for 45 s and the Train Controller holds the doors for 45 s. D020's wording should say so. | Landis |
-| 5 | Throughput: trains per hour and dwell per line stay empty; nothing reports that data. | Landis |
+| 5 | Throughput shows tickets per hour per line only; the 12-hour chart and the per-line table (trains per hour, dwell) were removed 2026-11-15 (Landis). | Landis |
 | 6 | The CTC Office's integration changes are on `claude/quirky-fermi-sickg4`, not yet on `development`. | Kevin, Landis |
 
 ### 5.2 Track Controller (SW)
