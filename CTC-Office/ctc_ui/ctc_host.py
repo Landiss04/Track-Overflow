@@ -188,12 +188,24 @@ class CtcHost(QObject):
     #: Anything the panels show changed: re-read the bound properties.
     stateChanged = Signal()
     #: Simulated time moved on (once per simulated second), or the
-    #: module changed: throughput needs re-reading.
+    #: module changed: what moves with time alone needs re-reading.
     clockChanged = Signal()
     maintenanceModeChanged = Signal()
     clockSpeedupChanged = Signal()
     scheduleChanged = Signal()
     noticesChanged = Signal()
+    # One per panel model, sent by a redraw only when the model's value
+    # is not the one last sent (``_VIEWS``): QML rebuilds a model's
+    # delegates on every notification, changed or not.
+    trainsChanged = Signal()
+    blockStatesChanged = Signal()
+    mapTrainsChanged = Signal()
+    crossingStatesChanged = Signal()
+    closuresChanged = Signal()
+    switchCommandCountChanged = Signal()
+    departuresChanged = Signal()
+    throughputChanged = Signal()
+    throughputHistoryChanged = Signal()
 
     def __init__(self, module: CtcOffice | None = None,
                  layout: Mapping[str, Line] | None = None,
@@ -223,6 +235,14 @@ class CtcHost(QObject):
         self._last_state: object = None
         self._revision = 0
         self._last_second = -1
+        # Each panel model's value as last sent (``_VIEWS``), and, while
+        # a redraw notifies the panels, the values it worked out, so
+        # every panel reading a model gets them without recomputing.
+        self._shown: dict[str, Any] = {}
+        self._serving: dict[str, Any] | None = None
+        # Counts redraws, so that a redraw a panel's action starts while
+        # another is notifying is noticed by the outer one.
+        self._redraws = 0
         # Tickets sold per (simulated clock hour, line), for the history
         # chart. Hours count from midnight of the first simulated day.
         self._hourly_sales: dict[tuple[int, str], int] = {}
@@ -269,7 +289,7 @@ class CtcHost(QObject):
         apply_paused()
         self._first_hour = self._current_hour = _hour(clock.clock.sim_time_s)
         self._clock = clock
-        clock.pausedChanged.connect(self.noticesChanged)
+        clock.pausedChanged.connect(self._notify_notices)
         clock.clock.add_tick_listener(self._on_tick)
 
     def _on_tick(self, sim_time_s: float, tick_s: float) -> None:
@@ -338,34 +358,95 @@ class CtcHost(QObject):
         self._module.stage_inputs(inputs)
         self._inputs = inputs
 
-    def _applied(self) -> CtcInputs:
+    def _applied(self, snap: CtcSnapshot | None = None) -> CtcInputs:
         """The reports the module last stepped with: what to show."""
-        applied = self._module.snapshot().inputs
+        if snap is None:
+            snap = self._module.snapshot()
+        applied = snap.inputs
         return applied if applied is not None else CtcInputs()
 
+    #: The panel models a redraw sends only when changed: the name (its
+    #: value comes from ``_view_<name>``), the signal that notifies it,
+    #: and whether time alone moves it.
+    _VIEWS: tuple[tuple[str, str, bool], ...] = (
+        ("notices", "noticesChanged", False),
+        ("trains", "trainsChanged", False),
+        ("blockStates", "blockStatesChanged", False),
+        ("mapTrains", "mapTrainsChanged", False),
+        ("crossingStates", "crossingStatesChanged", False),
+        ("closures", "closuresChanged", False),
+        ("switchCommandCount", "switchCommandCountChanged", False),
+        ("departures", "departuresChanged", False),
+        ("throughput", "throughputChanged", True),
+        ("throughputHistory", "throughputHistoryChanged", True),
+    )
+
+    def _view(self, name: str) -> Any:
+        """A panel model's value: the one the redraw now notifying the
+        panels worked out, or else worked out now."""
+        serving = self._serving
+        if serving is not None and name in serving:
+            return serving[name]
+        return getattr(self, f"_view_{name}")(self._module.snapshot())
+
     def _refresh(self) -> None:
-        """Tell the panels and the test UI about any change."""
+        """Tell the panels and the test UI about any change.
+
+        Each panel model is worked out once, from one snapshot, and its
+        signal sent only if it differs from what was last sent. QML
+        rebuilds a list's delegates on every notification, so sending
+        an unchanged one costs the window most of a redraw.
+        ``stateChanged`` (``revision``) still goes out on any change,
+        for what QML reads through a slot.
+        """
         snap = self._module.snapshot()
         state = (dataclasses.replace(snap, elapsed_s=0.0), self._inputs)
         second = int(snap.elapsed_s)
         changed = state != self._last_state
         new_second = second != self._last_second
+        if not (changed or new_second):
+            return
         if changed:
             self._last_state = state
             self._reversals_seen &= self._reversal_keys(snap)
             self._revision += 1
-            self.stateChanged.emit()
-            self.noticesChanged.emit()
-            self.maintenanceModeChanged.emit()
-            self.clockSpeedupChanged.emit()
-            self.scheduleChanged.emit()
         if new_second:
             self._last_second = second
-        if changed or new_second:
-            # Throughput moves with time and with every sale.
+        self._redraws += 1
+        redraw = self._redraws
+        # A change can move every model; time alone, only throughput,
+        # which moves with time and with every sale.
+        views = [(name, signal) for name, signal, timed in self._VIEWS
+                 if changed or timed]
+        self._serving = {name: getattr(self, f"_view_{name}")(snap)
+                         for name, _ in views}
+        try:
+            if changed:
+                self.stateChanged.emit()
+                self.maintenanceModeChanged.emit()
+                self.clockSpeedupChanged.emit()
+                self.scheduleChanged.emit()
             self.clockChanged.emit()
-        if (changed or new_second) and self._server is not None:
+            for name, signal in views:
+                if self._redraws != redraw:
+                    # A panel's action redrew meanwhile, from a newer
+                    # state, and sent every model that changed.
+                    break
+                value = self._serving[name]
+                if name in self._shown and self._shown[name] == value:
+                    continue
+                self._shown[name] = value
+                getattr(self, signal).emit()
+        finally:
+            if self._redraws == redraw:
+                self._serving = None
+        if self._server is not None:
             self._server.push()
+
+    def _notify_notices(self) -> None:
+        """Make the panels re-read the notices, whatever was last sent."""
+        self._shown.pop("notices", None)
+        self.noticesChanged.emit()
 
     def _act(self, action: Any, *args: Any) -> str:
         """Run a dispatcher action; return its error text, or ""."""
@@ -480,10 +561,12 @@ class CtcHost(QObject):
             "tracked": tracked is not None,
         }
 
-    @Property(list, notify=stateChanged)
+    @Property(list, notify=trainsChanged)
     def trains(self) -> list[dict[str, Any]]:
         """Rows for the Train occupancy window."""
-        snap = self._module.snapshot()
+        return self._view("trains")
+
+    def _view_trains(self, snap: CtcSnapshot) -> list[dict[str, Any]]:
         return [self._train_row(train_id, line, snap)
                 for train_id, line in self._train_lines(snap).items()]
 
@@ -633,18 +716,21 @@ class CtcHost(QObject):
 
     # -- Track state ----------------------------------------------------
 
-    @Property(dict, notify=stateChanged)
+    @Property(dict, notify=blockStatesChanged)
     def blockStates(self) -> dict[str, str]:  # noqa: N802
         """``Line:block`` -> closed, for the map.
 
         Occupancy is drawn as trains instead; see ``mapTrains``. A
         block the module infers has failed is drawn only as occupied.
         """
-        snap = self._module.snapshot()
+        return self._view("blockStates")
+
+    def _view_blockStates(  # noqa: N802
+            self, snap: CtcSnapshot) -> dict[str, str]:
         return {block_key(block.line, block.block_id): "closed"
                 for block in snap.closed_blocks}
 
-    @Property(list, notify=stateChanged)
+    @Property(list, notify=mapTrainsChanged)
     def mapTrains(self) -> list[dict[str, Any]]:  # noqa: N802
         """Trains to draw on the map: ``{train, line, block, fraction}``.
 
@@ -654,10 +740,14 @@ class CtcHost(QObject):
         block (a train not followed, or an inferred failure) gets an
         unnamed train at its middle, so occupancy always shows.
         """
-        track = self._applied().track_controller
+        return self._view("mapTrains")
+
+    def _view_mapTrains(  # noqa: N802
+            self, snap: CtcSnapshot) -> list[dict[str, Any]]:
+        track = self._applied(snap).track_controller
         trains = []
         placed: set[tuple[str, str]] = set()
-        for train in self._module.snapshot().trains:
+        for train in snap.trains:
             trains.append({"train": train.train_id, "line": train.line,
                            "block": train.blocks[-1], "fraction": 0.5})
             placed.update((train.line, b) for b in train.blocks)
@@ -670,19 +760,26 @@ class CtcHost(QObject):
                 placed.add(key)
         return trains
 
-    @Property(dict, notify=stateChanged)
+    @Property(dict, notify=crossingStatesChanged)
     def crossingStates(self) -> dict[str, str]:  # noqa: N802
         """``Line:crossing`` -> inactive | active, as last reported."""
-        return {block_key(c.line, c.crossing_id): c.state
-                for c in self._applied().track_controller.crossings}
+        return self._view("crossingStates")
 
-    @Property(list, notify=stateChanged)
+    def _view_crossingStates(  # noqa: N802
+            self, snap: CtcSnapshot) -> dict[str, str]:
+        return {block_key(c.line, c.crossing_id): c.state
+                for c in self._applied(snap).track_controller.crossings}
+
+    @Property(list, notify=closuresChanged)
     def closures(self) -> list[dict[str, Any]]:
         """Closed blocks, for Active closures."""
+        return self._view("closures")
+
+    def _view_closures(self, snap: CtcSnapshot) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = [
             {"block": f"{block.line} {block.block_id}", "state": "Closed",
              "line": block.line, "blockId": block.block_id}
-            for block in self._module.snapshot().closed_blocks]
+            for block in snap.closed_blocks]
         rows.sort(key=lambda r: (r["line"], _block_number(r["blockId"])))
         return rows
 
@@ -707,16 +804,19 @@ class CtcHost(QObject):
             "commanded": commanded.get((line, switch_id), NO_VALUE),
         }
 
-    @Property(int, notify=stateChanged)
+    @Property(int, notify=switchCommandCountChanged)
     def switchCommandCount(self) -> int:  # noqa: N802
-        return len(self._module.snapshot().switch_commands)
+        return self._view("switchCommandCount")
+
+    def _view_switchCommandCount(  # noqa: N802
+            self, snap: CtcSnapshot) -> int:
+        return len(snap.switch_commands)
 
     # -- Throughput ---------------------------------------------------
 
-    def _tickets_per_hour(self) -> dict[str, str]:
+    def _view_throughput(self, snap: CtcSnapshot) -> dict[str, str]:
         """Tickets per hour on each line since the simulation started,
         keyed by line name; a dash until a simulated minute has passed."""
-        snap = self._module.snapshot()
         hours = snap.elapsed_s / 3600
         sold = {line: 0 for line in sorted(self._layout)}
         for station, tickets in snap.tickets_sold.items():
@@ -725,18 +825,18 @@ class CtcHost(QObject):
                        if snap.elapsed_s >= 60 else NO_VALUE)
                 for line, tickets in sold.items()}
 
-    @Property(dict, notify=clockChanged)
+    @Property(dict, notify=throughputChanged)
     def throughput(self) -> dict[str, str]:
-        return self._tickets_per_hour()
+        return self._view("throughput")
 
-    @Property(list, notify=clockChanged)
+    @Property(list, notify=throughputChanged)
     def throughputRows(self) -> list[dict[str, str]]:  # noqa: N802
         """One row per line for the throughput table."""
         return [{"line": line, "tickets": per_hour, "trains": NO_VALUE,
                  "dwell": NO_VALUE}
-                for line, per_hour in self._tickets_per_hour().items()]
+                for line, per_hour in self._view("throughput").items()]
 
-    @Property(dict, notify=clockChanged)
+    @Property(dict, notify=throughputHistoryChanged)
     def throughputHistory(self) -> dict[str, Any]:  # noqa: N802
         """Tickets sold per line in each of 12 simulated clock hours.
 
@@ -746,6 +846,10 @@ class CtcHost(QObject):
         ``peak`` is the largest count, the shared scale; ``current`` is
         the index of the hour in progress.
         """
+        return self._view("throughputHistory")
+
+    def _view_throughputHistory(  # noqa: N802
+            self, _snap: CtcSnapshot) -> dict[str, Any]:
         last = max(self._current_hour,
                    self._first_hour + HISTORY_HOURS - 1)
         hours = range(last - HISTORY_HOURS + 1, last + 1)
@@ -766,9 +870,17 @@ class CtcHost(QObject):
     @Property(list, notify=noticesChanged)
     def notices(self) -> list[str]:
         """Messages for the dispatcher, newest last."""
-        snap = self._module.snapshot()
+        return list(self._view("notices")["notices"])
+
+    def _view_notices(self, snap: CtcSnapshot) -> dict[str, list[Any]]:
+        """The notices and the reversal alerts, which ``noticesChanged``
+        notifies together."""
+        return {"notices": self._notices(snap),
+                "reversalAlerts": self._reversal_alerts(snap)}
+
+    def _notices(self, snap: CtcSnapshot) -> list[str]:
         found = []
-        waysides = self._applied().track_controller.waysides
+        waysides = self._applied(snap).track_controller.waysides
         ready = ready_lines(waysides)
         waiting = []
         for line in self._layout:
@@ -800,11 +912,12 @@ class CtcHost(QObject):
         return {(a.train_id, a.line, a.reverse_at)
                 for a in snap.authorities if a.reverse_at}
 
-    def _blocked_by(self, limit: TrainAuthority) -> str:
+    @staticmethod
+    def _blocked_by(limit: TrainAuthority, snap: CtcSnapshot) -> str:
         """What stops a held train, as a clause: "T5 is standing in
         block 28", "block 29 is closed"."""
         if limit.reason == "occupied":
-            standing = [t.train_id for t in self._module.snapshot().trains
+            standing = [t.train_id for t in snap.trains
                         if t.line == limit.line and limit.at in t.blocks]
             if standing:
                 return (f"{standing[0]} is standing in block {limit.at} "
@@ -824,7 +937,9 @@ class CtcHost(QObject):
         round what blocks them: ``{train, line, reverseAt, destination,
         blockedBy}``. The CTC never reverses a train; the dispatcher
         decides."""
-        snap = self._module.snapshot()
+        return list(self._view("notices")["reversalAlerts"])
+
+    def _reversal_alerts(self, snap: CtcSnapshot) -> list[dict[str, str]]:
         orders = self._orders(snap)
         alerts = []
         for limit in snap.authorities:
@@ -838,7 +953,7 @@ class CtcHost(QObject):
                 "reverseAt": limit.reverse_at,
                 "destination": (order.destination_block_id
                                 if order else ""),
-                "blockedBy": self._blocked_by(limit),
+                "blockedBy": self._blocked_by(limit, snap),
             })
         return alerts
 
@@ -848,14 +963,14 @@ class CtcHost(QObject):
         snap = self._module.snapshot()
         self._reversals_seen |= {key for key in self._reversal_keys(snap)
                                  if key[0] == train_id}
-        self.noticesChanged.emit()
+        self._notify_notices()
 
     @Slot()
     def dismissNotices(self) -> None:  # noqa: N802
         """Clear the cancelled-order notices (a staged update stays
         until it applies)."""
         self._cancelled_seen = len(self._module.snapshot().cancelled_orders)
-        self.noticesChanged.emit()
+        self._notify_notices()
 
     # -- Dispatcher actions -------------------------------------------
 
@@ -985,16 +1100,19 @@ class CtcHost(QObject):
             return "T = 0 when you press Run"
         return f"T = 0 at {format_time_of_day(snap.schedule_start_s)}"
 
-    @Property(list, notify=scheduleChanged)
+    @Property(list, notify=departuresChanged)
     def departures(self) -> list[dict[str, Any]]:
         """Every run of the schedule as a row for the Departures table:
         when it is due out of the yard, its train, and how far it has
         got."""
+        return self._view("departures")
+
+    def _view_departures(self, snap: CtcSnapshot) -> list[dict[str, Any]]:
         return [
             {"time": format_time_of_day(run.departure_s),
              "train": run.train_id,
              "status": _run_status(run)}
-            for run in self._module.snapshot().scheduled_runs
+            for run in snap.scheduled_runs
         ]
 
     @Property(bool, notify=scheduleChanged)

@@ -543,5 +543,134 @@ class PanelDataTest(unittest.TestCase):
         self.assertTrue(host.maintenanceMode)
 
 
+class RedrawTest(unittest.TestCase):
+    """A redraw notifies a panel model only when its value changed, and
+    works each one out once (issue #66: QML rebuilds a list's delegates
+    on every notification)."""
+
+    _MODELS = ("trains", "blockStates", "mapTrains", "crossingStates",
+               "closures", "switchCommandCount", "departures",
+               "throughput", "throughputHistory", "notices")
+
+    def _count(self, host: CtcHost) -> dict[str, list[int]]:
+        # Each model's notifications, and stateChanged's.
+        seen: dict[str, list[int]] = {}
+        for name in (*self._MODELS, "state", "clock"):
+            seen[name] = []
+            getattr(host, f"{name}Changed").connect(
+                lambda name=name: seen[name].append(1))
+        return seen
+
+    def test_only_what_changed_is_notified(self) -> None:
+        host, module, clock = _host()
+        _report(host, module, at("T1", "3"))
+        clock.clock.tick()
+        seen = self._count(host)
+        # T1 moves on: its row and the map change; nothing is closed,
+        # crossed or commanded, so those are not sent again.
+        _report(host, module, at("T1", "2"))
+        clock.clock.tick()
+        self.assertEqual(len(seen["state"]), 1)
+        self.assertEqual(len(seen["trains"]), 1)
+        self.assertEqual(len(seen["mapTrains"]), 1)
+        for name in ("blockStates", "crossingStates", "closures",
+                     "switchCommandCount", "departures", "notices"):
+            self.assertEqual(seen[name], [], name)
+        self.assertEqual(
+            [t["block"] for t in host.mapTrains], ["2"])
+
+    def test_a_redraw_with_nothing_new_sends_nothing(self) -> None:
+        host, module, clock = _host()
+        _report(host, module, at("T1", "3"))
+        clock.clock.tick()
+        seen = self._count(host)
+        host.refresh()
+        host.refresh()
+        self.assertEqual(sum(map(len, seen.values())), 0)
+
+    def test_throughput_is_sent_when_it_changes(self) -> None:
+        host, _, clock = _host()
+        seen = self._count(host)
+        # Under a simulated minute it is a dash: each new second sends
+        # the clock, not the unchanged throughput.
+        for _ in range(100):                 # 10 s
+            clock.clock.tick()
+        self.assertEqual(len(seen["clock"]), 10)
+        self.assertEqual(seen["throughput"], [1])
+        self.assertEqual(seen["throughputHistory"], [1])
+        host._receive_inputs(CtcInputs(track_model=_green(30)))
+        for _ in range(600):                 # past the first minute
+            clock.clock.tick()
+        self.assertEqual(host.throughput["Green"], "1543")
+        self.assertEqual(seen["throughputHistory"], [1, 1])
+        self.assertGreater(len(seen["throughput"]), 1)
+
+    def test_a_panel_reads_the_redraws_values(self) -> None:
+        # Every panel reading a model during the redraw gets the values
+        # the redraw worked out, not a fresh copy of each.
+        host, module, clock = _host()
+        _report(host, module, at("T1", "3"))
+        snapshots: list[int] = []
+        original = module.snapshot
+
+        def counted() -> CtcSnapshot:
+            snapshots.append(1)
+            return original()
+
+        module.snapshot = counted  # type: ignore[method-assign]
+        read: list[object] = []
+        host.trainsChanged.connect(
+            lambda: read.extend([host.trains, host.trains]))
+        clock.clock.tick()
+        self.assertEqual(len(read), 2)
+        self.assertEqual(read[0], read[1])
+        # The step's own and the redraw's one; none per read.
+        before = len(snapshots)
+        self.assertEqual(host.trains, read[0])
+        self.assertEqual(len(snapshots), before + 1)
+
+    def test_outside_a_redraw_the_models_are_live(self) -> None:
+        host, module, clock = _host()
+        clock.clock.tick()
+        module.set_maintenance_mode(True)
+        module.set_block_closed("Green", "5", True)
+        # No redraw yet: read straight from the module.
+        self.assertEqual(host.blockStates, {"Green:5": "closed"})
+
+    def test_an_action_during_a_redraw_is_shown(self) -> None:
+        # A panel acting while a redraw notifies it starts a redraw of
+        # its own; the outer one stops there, and what the panels hold
+        # is what the module now says.
+        host, module, clock = _host()
+        host.setMaintenanceMode(True)
+        _report(host, module, at("T1", "3"))
+        acted: list[str] = []
+
+        def close_once() -> None:
+            if not acted:
+                acted.append(host.closeBlock("Green", "9"))
+
+        host.trainsChanged.connect(close_once)
+        seen = self._count(host)
+        clock.clock.tick()
+        self.assertEqual(acted, [""])
+        self.assertEqual(seen["blockStates"], [1])
+        self.assertEqual(host._shown["blockStates"], {"Green:9": "closed"})
+        self.assertEqual(host._shown["closures"], host.closures)
+        self.assertIsNone(host._serving)
+
+    def test_dismissing_resends_the_notices(self) -> None:
+        host, module, clock = _host()
+        clock.clock.tick()
+        seen = self._count(host)
+        host.dismissNotices()
+        self.assertEqual(seen["notices"], [1])
+        # And the next change sends them again, though unchanged since
+        # the last redraw: the dismissal may have changed what shows.
+        _report(host, module, at("T1", "3"))
+        clock.clock.tick()
+        self.assertEqual(seen["notices"], [1, 1])
+
+
 if __name__ == "__main__":
     unittest.main()

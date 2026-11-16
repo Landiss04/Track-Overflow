@@ -6,6 +6,11 @@
 // strokes and section letters, and red and green bars cannot be told
 // apart with deuteranopia. Hovering a bar shows its value in the header
 // line (a popup tooltip would escape the window's scale transform).
+//
+// The Repeaters count rows and hours, and each delegate reads its value
+// by index: a new history (every sale, every redraw at 10x) then updates
+// the bars in place. With the arrays as models, every new history
+// destroyed and rebuilt every bar, most of the window's redraw time.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -58,12 +63,14 @@ ColumnLayout {
     }
 
     Repeater {
-        model: root.series
+        model: root.series.length
 
         delegate: RowLayout {
             id: chartRow
 
-            required property var modelData
+            required property int index
+            readonly property var modelData:
+                root.series[index] || ({ line: "", counts: [] })
 
             Layout.fillWidth: true
             spacing: theme.space_2
@@ -97,21 +104,24 @@ ColumnLayout {
                 }
 
                 Repeater {
-                    model: chartRow.modelData.counts
+                    model: root.hours.length
 
                     delegate: Item {
                         id: slot
 
                         required property int index
-                        required property int modelData
+                        readonly property int modelData:
+                            chartRow.modelData.counts[index] || 0
                         readonly property string key:
                             chartRow.modelData.line + "|" + index
 
+                        objectName: "bar-" + key
                         x: index * (plot.slotWidth + root.barGap)
                         width: plot.slotWidth
                         height: plot.height
 
                         Rectangle {
+                            objectName: "fill"
                             // Any sale shows at least a sliver.
                             readonly property real barHeight: root.peak > 0
                                 && slot.modelData > 0
@@ -163,11 +173,11 @@ ColumnLayout {
         }
 
         Repeater {
-            model: root.hours
+            model: root.hours.length
 
             delegate: MonoText {
                 required property int index
-                required property string modelData
+                readonly property string modelData: root.hours[index] || ""
                 readonly property real slotWidth: (parent.width
                     - root.barGap * (root.hours.length - 1))
                     / Math.max(1, root.hours.length)

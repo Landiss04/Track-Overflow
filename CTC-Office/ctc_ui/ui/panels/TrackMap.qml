@@ -546,14 +546,18 @@ Item {
                 }
             }
 
-            // Trains, on top of everything else.
+            // Trains, on top of everything else. Counted, each read by
+            // index: a redraw that moves trains moves the cars in place
+            // instead of destroying and rebuilding every one of them.
             Repeater {
-                model: root.trains
+                model: root.trains.length
 
                 delegate: Item {
                     id: placed
 
-                    required property var modelData
+                    required property int index
+                    readonly property var modelData: root.trains[index]
+                        || ({ train: "", line: "", x: 0, y: 0, angle: 0 })
 
                     visible: root.lineShown(modelData.line)
                     x: modelData.x
