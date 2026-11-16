@@ -146,6 +146,7 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         queued_stops=tuple(DispatchOrder(**o)
                            for o in data.get("queued_stops", ())),
         returning_trains=tuple(data.get("returning_trains", ())),
+        yard_queued=tuple(data.get("yard_queued", ())),
         closed_blocks=tuple(BlockRef(**b) for b in
                             data.get("closed_blocks", ())),
         switch_commands=tuple(SwitchCommand(**c) for c in

@@ -4,6 +4,44 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-16 — Return to yard is queued like a station
+
+From Landis: return to yard "cancels all other queued stops and the
+current station that it's dispatching to ... it needs to be such that
+we can queue it like all the other stations".
+
+- **Queued last.** `ctc/model.py` `return_to_yard()`: the yard entry
+  block (Green 57, Red 9) becomes the train's last stop, after the stop
+  it is heading for and the ones queued after it, which it still makes.
+  Before, the yard replaced all of them. A train with no stops goes back
+  at once, as before. Once the yard is the stop it heads for (after its
+  last dwell, `_advance_queues()`, or when the stops before it are
+  removed, `_replace_itinerary()`), it is on its way back
+  (`returning_trains`) and is retired there.
+- **The yard stays last.**
+  - `queue_stop()`: a stop queued after the yard goes just before it.
+    One queued while the train heads for the yard becomes its next
+    stop, with the yard after it. Before, that withdrew the return.
+  - `move_stop()`: moving the yard, or a stop to after it, is refused.
+  - `remove_stop()`: removing the yard's card withdraws the return.
+  - A second return to yard is refused ("already going back").
+- **Window.**
+  - New `CtcSnapshot.yard_queued` (and its wire field): `CtcHost`
+    names the queued yard stop "Yard".
+  - The Dispatch panel's button reads "Queue stop" for a train with
+    stops when the yard is picked, and "Return to yard" for one with
+    none.
+  - The Selected train panel's Return to yard says the train goes back
+    after its stops.
+- **Tests.**
+  - `test_ctc_stop_queue.py`: the yard queued last, kept last, next
+    once the stops before it are gone or made, and removable.
+  - `test_ctc_train_events.py`: the retirement tests remove the stop
+    before the yard first.
+  - `test_ctc_host.py`: the cards, and the button.
+- Truth proposal `20261116-1051-ctc-manual-stop-queue-yard.md`. It
+  replaces the unpromoted `20261116-0122-ctc-manual-stop-queue.md`.
+
 ## 2026-11-15 — The track map shows the signal lights' aspects
 
 From Landis's design review: "the CTC needs to show the current light

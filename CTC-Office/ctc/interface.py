@@ -382,6 +382,10 @@ class CtcSnapshot:
     # Manual trains sent back to the yard ("return to yard"), whose
     # order to the yard entry block still stands.
     returning_trains: tuple[str, ...] = ()
+    # Manual trains whose last queued stop is the yard ("return to
+    # yard" queued after their other stops): that stop is the last of
+    # their ``queued_stops``.
+    yard_queued: tuple[str, ...] = ()
     # The dispatcher's closed blocks and switch
     # commands. The same as in ``outputs`` while the Track Controller is
     # ready; kept here while it is not, when nothing is sent to it.

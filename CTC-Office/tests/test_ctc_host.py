@@ -279,13 +279,18 @@ class PanelDataTest(unittest.TestCase):
                          ("8-9", "yard-9"))
 
     def test_return_to_yard(self) -> None:
-        # Selected train's Return to yard: an order to the yard entry.
+        # Selected train's Return to yard: the yard entry queued as its
+        # last stop, after the one it heads for.
         host, module, _ = _host()
         self.assertIn("not on the track", host.returnToYard("T1"))
         _report(host, module, at("T1", "56"))
         self.assertEqual(host.dispatchTrain("T1", "Green", "65", ""), "")
         self.assertEqual(host.returnToYard("T1"), "")
-        self.assertEqual(host.trainDetail("T1")["destinationBlock"], "57")
+        self.assertEqual(host.trainDetail("T1")["destinationBlock"], "65")
+        self.assertEqual(
+            [(c["block"], c["name"], c["state"])
+             for c in host.stopQueues["T1"]],
+            [("65", "Glenbury", "heading"), ("57", "Yard", "queued")])
 
     def test_trains_merge_tracking_and_orders(self) -> None:
         host, module, clock = _host()
@@ -719,8 +724,8 @@ class StopsTest(unittest.TestCase):
         _report(host, module, at("T1", "64"))
         clock.clock.tick()
         self.assertEqual(host.returnToYard("T1"), "")
-        # On its way back to the yard: a stop given now dispatches it.
-        self.assertEqual(host.stopAction("T1"), "Dispatch train")
+        # The yard queued last: a stop given now goes before it.
+        self.assertEqual(host.stopAction("T1"), "Queue stop")
         self.assertEqual(host.stopAction("T9"), "Dispatch train")
 
     def test_the_list_shows_every_stop_in_order(self) -> None:
@@ -746,6 +751,13 @@ class StopsTest(unittest.TestCase):
         clock.clock.tick()
         self.assertEqual(host.stopQueues["T1"][0]["state"], "at stop")
         host.returnToYard("T1")
+        self.assertEqual(
+            [(c["name"], c["state"]) for c in host.stopQueues["T1"]],
+            [("Glenbury", "at stop"), ("Dormont", "queued"),
+             ("Block 70", "queued"), ("Yard", "queued")])
+        for _ in range(3):
+            host.removeStop("T1", 0, [c["block"]
+                                      for c in host.stopQueues["T1"]])
         self.assertEqual(
             [(c["name"], c["state"]) for c in host.stopQueues["T1"]],
             [("Yard", "returning")])

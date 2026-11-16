@@ -972,7 +972,8 @@ class CtcHost(QObject):
         queued after it. Each ``{index, block, name, station, arrival,
         state}``; ``state`` is ``yard`` (not on the track yet),
         ``heading``, ``at stop``, ``returning`` (to the yard) or
-        ``queued``."""
+        ``queued``. A yard stop, heading there or queued last
+        (``return_to_yard``), is named "Yard"."""
         return self._view("stopQueues")
 
     def _view_stopQueues(  # noqa: N802
@@ -982,6 +983,7 @@ class CtcHost(QObject):
         for stop in snap.queued_stops:
             queued.setdefault(stop.train_id, []).append(stop)
         returning = set(snap.returning_trains)
+        yard_queued = set(snap.yard_queued)
         result = {}
         for order in snap.orders:
             train_id = order.train_id
@@ -994,14 +996,17 @@ class CtcHost(QObject):
                 first = "at stop"
             else:
                 first = "heading"
+            stops = [order, *queued.get(train_id, ())]
             result[train_id] = [
-                self._stop_card(i, stop, first if i == 0 else "queued")
-                for i, stop in enumerate(
-                    [order, *queued.get(train_id, ())])]
+                self._stop_card(i, stop, first if i == 0 else "queued",
+                                yard=(i == 0 and train_id in returning)
+                                or (i == len(stops) - 1 and i > 0
+                                    and train_id in yard_queued))
+                for i, stop in enumerate(stops)]
         return result
 
     def _stop_card(self, index: int, stop: DispatchOrder,
-                   state: str) -> dict[str, Any]:
+                   state: str, yard: bool = False) -> dict[str, Any]:
         layout_line = self._layout.get(stop.line)
         block = (layout_line.block(stop.destination_block_id)
                  if layout_line else None)
@@ -1010,7 +1015,7 @@ class CtcHost(QObject):
             "index": index,
             "line": stop.line,
             "block": stop.destination_block_id,
-            "name": ("Yard" if state == "returning"
+            "name": ("Yard" if yard
                      else block.station.title() if station and block.station
                      else f"Block {stop.destination_block_id}"),
             "station": station,
@@ -1022,12 +1027,12 @@ class CtcHost(QObject):
     @Slot(str, result=str)
     def stopAction(self, train_id: str) -> str:  # noqa: N802
         """The Dispatch panel's button for a train: "Dispatch train"
-        when it has no order (a new train, one with none left, or one
-        on its way back to the yard), else "Queue stop"."""
+        when it has no order (a new train, or one with none left), else
+        "Queue stop" (on its way back to the yard too: the stop goes
+        before the yard)."""
         snap = self._module.snapshot()
-        ordered = (train_id in self._orders(snap)
-                   and train_id not in snap.returning_trains)
-        return "Queue stop" if ordered else "Dispatch train"
+        return ("Queue stop" if train_id in self._orders(snap)
+                else "Dispatch train")
 
     @Slot(str, str, str, str, result=str)
     def addStop(self, train_id: str, line: str,  # noqa: N802
@@ -1064,8 +1069,9 @@ class CtcHost(QObject):
 
     @Slot(str, result=str)
     def returnToYard(self, train_id: str) -> str:  # noqa: N802
-        """Send a manual train back to the yard, where it is retired
-        (R66, D022); return the refusal's text, or ""."""
+        """Queue the yard as a manual train's last stop, after the ones
+        it has, where it is retired (R66, D022); return the refusal's
+        text, or "" (``CtcOffice.return_to_yard``)."""
         return self._act(self._module.return_to_yard, train_id)
 
     @Slot(str, str, result=str)

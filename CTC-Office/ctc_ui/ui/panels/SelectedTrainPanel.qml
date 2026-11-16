@@ -242,8 +242,8 @@ Panel {
                         textRole: "text"
                         valueRole: "value"
                         // The yard first (R66, D022), then the stations.
-                        // Picking it sends the train back to the yard,
-                        // as the Return to yard button does.
+                        // Picking it queues the yard as the train's last
+                        // stop, as the Return to yard button does.
                         model: root.host && root.train.line
                             ? [{ value: root.yardValue,
                                  text: qsTr("Yard · return and retire") }]
@@ -274,8 +274,8 @@ Panel {
                         onClicked: rerouteSelect.value === root.yardValue
                             ? root.report(
                                 root.host.returnToYard(root.trainId),
-                                qsTr("%1 sent back to the yard.")
-                                    .arg(root.trainId))
+                                qsTr("%1 goes back to the yard after "
+                                    + "its stops.").arg(root.trainId))
                             : root.report(
                                 root.host.dispatchTrain(root.trainId,
                                     root.train.line, rerouteSelect.value,
@@ -283,17 +283,18 @@ Panel {
                                 qsTr("%1 rerouted.").arg(root.trainId))
                     }
 
-                    // Return to yard (R66, D022): an order to the yard
-                    // entry block, where the train is retired. Only a
-                    // train on the track can be sent back.
+                    // Return to yard (R66, D022): the yard entry block
+                    // queued as the train's last stop, after the ones it
+                    // has, where it is retired. Only a train on the
+                    // track can be sent back.
                     AppButton {
                         variant: "secondary"
                         text: qsTr("Return to yard")
                         enabled: root.train.tracked === true
                         onClicked: root.report(
                             root.host.returnToYard(root.trainId),
-                            qsTr("%1 sent back to the yard.")
-                                .arg(root.trainId))
+                            qsTr("%1 goes back to the yard after its "
+                                + "stops.").arg(root.trainId))
                     }
                 }
 

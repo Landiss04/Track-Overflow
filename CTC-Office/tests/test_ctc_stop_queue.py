@@ -465,15 +465,71 @@ class OtherActionsTest(unittest.TestCase):
         ctc.dispatch("T1", "Green", "70")
         self.assertEqual(_stops(ctc), ["70", "73", "77"])
 
-    def test_return_to_yard_clears_the_queue(self) -> None:
+    def test_return_to_yard_queues_the_yard_last(self) -> None:
+        # The yard (57) goes after the stops it has, which it still
+        # makes (Landis 2026-11-16).
         ctc = _three_stops()
         ctc.return_to_yard("T1")
+        self.assertEqual(_stops(ctc), ["65", "73", "77", "57"])
+        snap = ctc.snapshot()
+        self.assertEqual((snap.returning_trains, snap.yard_queued),
+                         ((), ("T1",)))
+        with self.assertRaisesRegex(InvalidInputError, "already"):
+            ctc.return_to_yard("T1")
+
+    def test_the_yard_stays_last(self) -> None:
+        ctc = _three_stops()
+        ctc.return_to_yard("T1")
+        # A stop queued now goes before the yard.
+        ctc.queue_stop("T1", "Green", "70")
+        self.assertEqual(_stops(ctc), ["65", "73", "77", "70", "57"])
+        # Neither the yard nor a stop after it.
+        for move in ((4, 1), (3, 4)):
+            with self.subTest(move=move):
+                with self.assertRaisesRegex(InvalidInputError, "last"):
+                    ctc.move_stop("T1", *move)
+                self.assertEqual(_stops(ctc),
+                                 ["65", "73", "77", "70", "57"])
+        # The other stops still move among themselves.
+        ctc.move_stop("T1", 3, 1)
+        self.assertEqual(_stops(ctc), ["65", "70", "73", "77", "57"])
+
+    def test_it_goes_back_once_the_yard_is_next(self) -> None:
+        ctc = _three_stops()
+        ctc.return_to_yard("T1")
+        for _ in range(3):
+            ctc.remove_stop("T1", 0)
+        self.assertEqual(_stops(ctc), ["57"])
+        snap = ctc.snapshot()
+        self.assertEqual((snap.returning_trains, snap.yard_queued),
+                         (("T1",), ()))
+        # A stop given now goes before the yard: it is no longer on its
+        # way back, but still will be.
+        ctc.queue_stop("T1", "Green", "65")
+        self.assertEqual(_stops(ctc), ["65", "57"])
+        snap = ctc.snapshot()
+        self.assertEqual((snap.returning_trains, snap.yard_queued),
+                         ((), ("T1",)))
+
+    def test_removing_the_yard_withdraws_the_return(self) -> None:
+        ctc = _three_stops()
+        ctc.return_to_yard("T1")
+        ctc.remove_stop("T1", 3)
+        self.assertEqual(_stops(ctc), ["65", "73", "77"])
+        self.assertEqual(ctc.snapshot().yard_queued, ())
+        # It can be sent back again.
+        ctc.return_to_yard("T1")
+        self.assertEqual(_stops(ctc), ["65", "73", "77", "57"])
+
+    def test_after_its_last_dwell_it_heads_for_the_yard(self) -> None:
+        ctc = ready_office()
+        step_at(ctc, at("T1", "62"))
+        ctc.queue_stop("T1", "Green", "65")
+        ctc.return_to_yard("T1")
+        self.assertEqual(_stops(ctc), ["65", "57"])
+        _wait(ctc, DWELL_S + 2, at("T1", "65"))
         self.assertEqual(_stops(ctc), ["57"])
         self.assertEqual(ctc.snapshot().returning_trains, ("T1",))
-        # A stop given now is a dispatch: it withdraws the return.
-        ctc.queue_stop("T1", "Green", "65")
-        self.assertEqual(_stops(ctc), ["65"])
-        self.assertEqual(ctc.snapshot().returning_trains, ())
 
     def test_closing_the_stop_it_heads_for_sends_it_on(self) -> None:
         ctc = _three_stops()
@@ -501,7 +557,9 @@ class OtherActionsTest(unittest.TestCase):
     def test_retirement_drops_its_stops(self) -> None:
         ctc = ready_office()
         step_at(ctc, at("T1", "56"))
+        # With no stops, it goes back at once.
         ctc.return_to_yard("T1")
+        self.assertEqual(ctc.snapshot().returning_trains, ("T1",))
         _wait(ctc, 5, at("T1", "57"))
         self.assertEqual(_stops(ctc), [])
         self.assertEqual(ctc.snapshot().queued_stops, ())

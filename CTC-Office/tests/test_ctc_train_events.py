@@ -338,6 +338,8 @@ class ReturnToYardTest(unittest.TestCase):
     def test_ordered_to_the_yard_entry_and_retired_once(self) -> None:
         ctc = self._manual()
         ctc.return_to_yard("T1")
+        # The yard is queued after 65; once 65 goes, it is next.
+        ctc.remove_stop("T1", 0)
         (order,) = ctc.snapshot().orders
         self.assertEqual((order.line, order.destination_block_id,
                           order.arrival_s), ("Green", "57", None))
@@ -362,6 +364,7 @@ class ReturnToYardTest(unittest.TestCase):
     def test_red_goes_back_to_block_9(self) -> None:
         ctc = self._manual("7", "Red", "R7")
         ctc.return_to_yard(" R7 ")
+        ctc.remove_stop("R7", 0)
         self.assertEqual(self._orders(ctc), {"R7": "9"})
         ctc.place_train("R7", "Red", "9")
         events: list[str] = []
@@ -415,10 +418,12 @@ class ReturnToYardTest(unittest.TestCase):
         self.assertEqual(self._orders(ctc), {})
 
     def test_a_new_order_withdraws_the_return(self) -> None:
-        # Sent back, then given an order of its own (here, to 57 too):
-        # it stops there like any manual train, and is not retired.
+        # On its way back, then given an order of its own (here, to 57
+        # too): it stops there like any manual train, and is not
+        # retired.
         ctc = self._manual()
         ctc.return_to_yard("T1")
+        ctc.remove_stop("T1", 0)
         ctc.dispatch("T1", "Green", "57")
         ctc.place_train("T1", "Green", "57")
         for _ in range(30):

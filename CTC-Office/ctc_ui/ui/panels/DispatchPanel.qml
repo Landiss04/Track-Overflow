@@ -90,8 +90,16 @@ Panel {
 
     function submit() {
         if (root.yardPicked) {
-            root.report(root.host.returnToYard(root.trainId),
-                qsTr("%1 sent back to the yard.").arg(root.trainId));
+            // Queued after its other stops, like any station; the yard
+            // stays its last stop (``CtcOffice.return_to_yard``).
+            const queued = root.queueing;
+            const error = root.host.returnToYard(root.trainId);
+            if (error === "")
+                stationSelect.clear();
+            root.report(error, queued
+                ? qsTr("Yard queued for %1, after its other stops.")
+                    .arg(root.trainId)
+                : qsTr("%1 sent back to the yard.").arg(root.trainId));
             return;
         }
         const queued = root.queueing;
@@ -178,8 +186,9 @@ Panel {
             label: qsTr("Station")
             textRole: "text"
             valueRole: "value"
-            // The yard first, then the stations. Picking it sends a
-            // train on the track back to the yard, where it is retired.
+            // The yard first, then the stations. Picking it queues the
+            // yard as a train's last stop, after the ones it has, where
+            // it is retired; a train with no stops goes there at once.
             model: root.host && root.line !== ""
                 ? [{ value: root.yardValue,
                      text: qsTr("Yard · return and retire") }]
@@ -217,7 +226,8 @@ Panel {
             Layout.alignment: Qt.AlignBottom
             Layout.preferredWidth: 150
             variant: "primary"
-            text: root.yardPicked ? qsTr("Return to yard") : root.action
+            text: root.yardPicked && !root.queueing
+                ? qsTr("Return to yard") : root.action
             enabled: root.trainId !== "" && root.destination !== ""
                 && (!root.yardPicked || root.train.tracked === true)
             onClicked: root.submit()
