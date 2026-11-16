@@ -51,6 +51,20 @@ FOCUS_RING = "#1D6FD0"
 LINE_RED = "#B03A3A"
 LINE_GREEN = "#2F7D4F"
 
+# Signal aspects: the lamp a wayside signal light shows. Red and green
+# are the semantic --danger and --success; yellow and super green have
+# no semantic token, and take the Track Controller SW's values
+# (TrackCtrlSW/track_ctrl/theme.py). Colour is never the only cue: each
+# aspect also has its own marker shape (RED square, YELLOW triangle,
+# GREEN circle, SUPER_GREEN diamond) and its name in text. A marker is
+# outlined in --aspect-outline, so the pale yellow and super green keep
+# a 3:1 edge against the surface.
+ASPECT_RED = DANGER
+ASPECT_YELLOW = "#FACC15"
+ASPECT_GREEN = SUCCESS
+ASPECT_SUPER_GREEN = "#3FA85F"
+ASPECT_OUTLINE = TEXT_PRIMARY
+
 # Typography (3). Helvetica and Monaco are not bundled; the fallback
 # stacks resolve to Arial and Consolas on Windows and to Helvetica Neue
 # and Menlo on macOS.
@@ -162,6 +176,11 @@ def build_theme() -> dict[str, Any]:
         "focus_ring": FOCUS_RING,
         "line_red": LINE_RED,
         "line_green": LINE_GREEN,
+        "aspect_red": ASPECT_RED,
+        "aspect_yellow": ASPECT_YELLOW,
+        "aspect_green": ASPECT_GREEN,
+        "aspect_super_green": ASPECT_SUPER_GREEN,
+        "aspect_outline": ASPECT_OUTLINE,
         "ui_families": UI_FAMILIES,
         "mono_families": MONO_FAMILIES,
         "ui_family": resolve_family(UI_FAMILIES),

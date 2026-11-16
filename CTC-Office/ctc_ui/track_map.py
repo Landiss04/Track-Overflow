@@ -196,6 +196,7 @@ def build_map(layout: dict[str, Line]) -> dict[str, list[dict[str, Any]]]:
     labels: list[dict[str, Any]] = []
     stations: list[dict[str, Any]] = []
     crossings: list[dict[str, Any]] = []
+    signals: list[dict[str, Any]] = []
     for line_name, line in layout.items():
         paths = SECTION_PATHS[line_name]
         for letter, section_blocks in line.sections().items():
@@ -216,11 +217,31 @@ def build_map(layout: dict[str, Line]) -> dict[str, list[dict[str, Any]]]:
             x, y = LABEL_POSITIONS[line_name][letter]
             labels.append({"line": line_name, "text": letter,
                            "x": x, "y": y})
+        signals += _signal_entries(line, blocks)
     spurs = [{"line": line_name, "points": _flat(spur)}
              for line_name, line_spurs in YARD_SPURS.items()
              for spur in line_spurs]
     return {"blocks": blocks, "labels": labels, "stations": stations,
-            "crossings": crossings, "spurs": spurs}
+            "crossings": crossings, "signals": signals, "spurs": spurs}
+
+
+def _signal_entries(line: Line, blocks: list[dict[str, Any]]
+                    ) -> list[dict[str, Any]]:
+    """One signal light per switch of ``line``, drawn at the block the
+    light stands on (``Line.light_blocks``: the switch's points), not
+    the block the switch is listed on. ``signalId`` is the switch's ID,
+    as the Track Controller names the light; ``mid`` and ``normal`` are
+    the light block's, so the map places the marker beside it."""
+    drawn = {b["blockId"]: b for b in blocks if b["line"] == line.name}
+    entries = []
+    for switch_id, light in line.light_blocks().items():
+        block = drawn[light]
+        entries.append({"line": line.name, "signalId": switch_id,
+                        "blockId": light, "mid": block["mid"],
+                        "normal": block["normal"]})
+    # In track order along the line, by the light's block number.
+    entries.sort(key=lambda e: int(e["blockId"]))
+    return entries
 
 
 def _block_entry(block: Block, piece: list[Point]) -> dict[str, Any]:
@@ -267,6 +288,9 @@ class TrackMapModel(QObject):
         # QML re-reads the whole list on every element, which is slow.
         self._by_key = {f"{b['line']}:{b['blockId']}": b
                         for b in self._map["blocks"]}
+        # Each signal light by the block it stands on.
+        self._lights = {f"{s['line']}:{s['blockId']}": s
+                        for s in self._map["signals"]}
         # Each block's drawn piece, for placing trains on it.
         self._pieces = {
             (b["line"], b["blockId"]): list(zip(b["points"][::2],
@@ -337,6 +361,18 @@ class TrackMapModel(QObject):
     @Property(list, constant=True)
     def crossings(self) -> list[dict[str, Any]]:
         return self._map["crossings"]
+
+    @Property(list, constant=True)
+    def signals(self) -> list[dict[str, Any]]:
+        """Every signal light: ``{line, signalId, blockId, mid,
+        normal}``, by line, in block order."""
+        return self._map["signals"]
+
+    @Slot(str, result="QVariantMap")
+    def signalAt(self, key: str) -> dict[str, Any]:  # noqa: N802
+        """The signal light standing on a block, by ``Line:block``;
+        empty if there is none."""
+        return self._lights.get(key, {})
 
     @Property(list, constant=True)
     def spurs(self) -> list[dict[str, Any]]:

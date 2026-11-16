@@ -9,13 +9,13 @@ and ``common/interfaces.py`` is never imported (decision D008).
 
 The CTC exchanges data with two modules:
 
-- Track Controller: sends block occupancy, switch states and crossing
-  states in; receives suggested speed and authority per train, the
-  blocks closed in maintenance mode (which it may not override) and
-  switch commands out. Occupancy is all it says about trains: no train
-  IDs, positions or speeds, and a failed block reports occupied
-  (``block-occupancy``, proposed on ``ctc-deployment``). The CTC follows
-  its own trains from it (``ctc.tracking``).
+- Track Controller: sends block occupancy, switch states, crossing
+  states and signal aspects in; receives suggested speed and authority
+  per train, the blocks closed in maintenance mode (which it may not
+  override) and switch commands out. Occupancy is all it says about
+  trains: no train IDs, positions or speeds, and a failed block reports
+  occupied (``block-occupancy``, proposed on ``ctc-deployment``). The
+  CTC follows its own trains from it (``ctc.tracking``).
 - Track Model: sends ticket sales per station in.
 
 It also sends the central harness the clock commands (speedup and
@@ -29,9 +29,10 @@ m/s, distances in m. Every ID is a string
 (``truth/conventions/identifiers.md``). Authority is a count of blocks,
 not an ID (decision D013, proposed on ``ctc-interfacing``). Block
 numbers repeat across
-lines, so every block, switch and crossing reference carries its
-``line`` too. A switch or crossing is identified by the block it is
-listed on in the track layout file.
+lines, so every block, switch, crossing and signal reference carries
+its ``line`` too. A switch or crossing is identified by the block it is
+listed on in the track layout file; a signal light, one per switch, by
+its switch's ID.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
 
 SwitchPosition = Literal["normal", "reverse"]
 CrossingState = Literal["inactive", "active"]
+SignalAspect = Literal["RED", "YELLOW", "GREEN", "SUPER_GREEN"]
 
 
 # ------------------------------------------------------------------ #
@@ -74,6 +76,20 @@ class CrossingReport:
 
 
 @dataclass(frozen=True, slots=True)
+class SignalReport:
+    """The aspect lit at one signal light, as the Track Controller reads
+    it back from the Track Model. There is one light per switch, named
+    by the switch's ID (the block the switch is listed on); it stands
+    at the switch's points (``ctc.track_layout.Line.light_blocks``).
+    Shown on the map only: an aspect never changes an authority or a
+    speed."""
+
+    line: str
+    signal_id: str
+    aspect: SignalAspect
+
+
+@dataclass(frozen=True, slots=True)
 class WaysideStatus:
     """Whether one wayside controller is started up: a PLC program on
     its territory. From the ``ready`` and ``reason`` of the wayside's
@@ -95,6 +111,9 @@ class TrackControllerInputs:
     occupancy: tuple[BlockOccupancy, ...] = ()
     switches: tuple[SwitchReport, ...] = ()
     crossings: tuple[CrossingReport, ...] = ()
+    # The aspect at each signal light; a light the Track Controller has
+    # no read-back for is left out.
+    signals: tuple[SignalReport, ...] = ()
     # Every wayside's startup, as each reports it
     # (``track-controller-ready``, proposed on ``Track-Ctrl-SW``). The
     # waysides are vital: a line is ready only once a wayside on it has

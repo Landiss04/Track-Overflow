@@ -14,8 +14,9 @@ Controller itself. The window shows the time each step brings
 (``ctc_ui.harness_clock``).
 
 Each ``STEP``'s inputs are the module's own, in the JSON form of
-``ctc.wire``: ``track_controller`` (occupancy, switches, crossings and
-every wayside's readiness, from the Track Controllers) and
+``ctc.wire``: ``track_controller`` (occupancy, switches, crossings,
+signal aspects and every wayside's readiness, from the Track
+Controllers) and
 ``track_model`` (ticket sales since the last step, from the Track
 Model), already mapped by the harness
 (``common/harness/wayside_edges.py``, ``track_edges.py``). The reply
@@ -173,7 +174,6 @@ class CtcOfficeProcess(QObject):
         self._speedup_at_tick = speedup_at_tick
         self._dispatches = list(dispatches)
         self._announced = False
-        host.start_at(SIMULATION_START_S)
         self._clock = HarnessClockBridge(
             host, SIMULATION_START_S, self._push_controls, self
         )

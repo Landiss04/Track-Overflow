@@ -2,9 +2,9 @@
 // entry, edited in place, with × to remove an entry and "+ Add" below.
 //
 // Fields come from ctc_ui/test_harness.py (LIST_FIELDS): line, block,
-// switch and crossing pick from the track layout (blocks, switches and
-// crossings of the entry's own line); choice picks from fixed options;
-// text and number are typed.
+// switch, crossing and signal pick from the track layout (blocks,
+// switches, crossings and signal lights of the entry's own line); choice
+// picks from fixed options; text and number are typed.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -19,7 +19,7 @@ ColumnLayout {
     // [{ <key>: value, ... }]
     property var entries: []
     property var lineNames: []
-    // { block|switch|crossing: { <line>: [{ value, text }] } }
+    // { block|switch|crossing|signal: { <line>: [{ value, text }] } }
     property var layoutOptions: ({})
     // What one entry is called on the Add button, e.g. "block".
     property string noun: qsTr("entry")
@@ -36,7 +36,8 @@ ColumnLayout {
                 return { value: name, text: name };
             });
         if (field.kind === "block" || field.kind === "switch"
-                || field.kind === "crossing" || field.kind === "station")
+                || field.kind === "crossing" || field.kind === "signal"
+                || field.kind === "station")
             return (root.layoutOptions[field.kind] || {})[entry.line] || [];
         if (field.kind === "choice")
             return field.options;

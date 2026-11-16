@@ -666,6 +666,30 @@ class WaysideEdgesTest(unittest.TestCase):
         self.assertEqual(mapped["crossings"], [
             {"line": "Green", "crossing_id": "65", "state": "active"},
         ])
+        # The aspect the light shows, upper-cased, named by its switch.
+        self.assertEqual(mapped["signals"], [
+            {"line": "Green", "signal_id": "62", "aspect": "RED"},
+        ])
+
+    def test_every_aspect_reaches_the_ctc_office_and_none_is_left_out(
+        self,
+    ) -> None:
+        for aspect in ("red", "yellow", "green", "super_green"):
+            with self.subTest(aspect=aspect):
+                outputs = wayside_outputs()
+                for entry in outputs["ctc_reports"][0]["blocks"]:
+                    if entry["value"]["signal_aspect"] is not None:
+                        entry["value"]["signal_aspect"] = aspect
+                self.assertEqual(
+                    track_controller_to_ctc(outputs)["signals"],
+                    [{"line": "Green", "signal_id": "62",
+                      "aspect": aspect.upper()}],
+                )
+        # A light with no read-back is not reported.
+        outputs = wayside_outputs()
+        for entry in outputs["ctc_reports"][0]["blocks"]:
+            entry["value"]["signal_aspect"] = None
+        self.assertEqual(track_controller_to_ctc(outputs)["signals"], [])
 
     def test_a_line_is_ready_once_every_wayside_on_it_is(self) -> None:
         def wayside(line: str, ready: bool) -> dict[str, Any]:
@@ -693,17 +717,20 @@ class CtcEdgesTest(unittest.TestCase):
             "switches": [],
             "crossings": [{"line": "Red", "crossing_id": "11",
                            "state": "inactive"}],
+            "signals": [{"line": "Red", "signal_id": "9",
+                         "aspect": "SUPER_GREEN"}],
             "waysides": [{"wayside_id": "RTC-01", "line": "Red",
                           "ready": False, "reason": "no PLC program"}],
         }
         merged = merge_ctc_inputs([green, red])
-        for field in ("occupancy", "switches", "crossings", "waysides"):
+        for field in ("occupancy", "switches", "crossings", "signals",
+                      "waysides"):
             self.assertEqual(merged[field], green[field] + red[field])
         self.assertTrue(line_ready(merged["waysides"], "Green"))
         self.assertFalse(line_ready(merged["waysides"], "Red"))
         self.assertEqual(merge_ctc_inputs([]), {
             "occupancy": [], "switches": [], "crossings": [],
-            "waysides": [],
+            "signals": [], "waysides": [],
         })
 
     def test_ticket_sales_leave_out_stations_that_sold_none(self) -> None:
@@ -941,7 +968,8 @@ class SystemEdgesTest(unittest.TestCase):
     ) -> None:
         self.assertEqual(self.inputs(CTC_OFFICE, {}), {
             "track_controller": {"occupancy": [], "switches": [],
-                                 "crossings": [], "waysides": []},
+                                 "crossings": [], "signals": [],
+                                 "waysides": []},
             "track_model": {"ticket_sales": {}},
         })
         sent = wayside_outputs(occupied=("64",))

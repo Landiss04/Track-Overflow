@@ -1,8 +1,7 @@
-// Throughput metrics: headline readouts (tickets per hour on each line,
-// from Track Model ticket sales, as whole numbers), tickets sold in each
-// of the last 12 simulated hours per line, and an optional per-line
-// breakdown (trains per hour among it). Two readouts fit a value of six
-// digits at the telemetry size; a third would cut one short.
+// Throughput metrics: tickets per hour on each line since the
+// simulation started, from Track Model ticket sales, as whole numbers.
+// Two readouts fit a value of six digits at the telemetry size; a third
+// would cut one short.
 import QtQuick
 import QtQuick.Layouts
 import "../../../../ui"
@@ -10,10 +9,8 @@ import "../../../../ui"
 Panel {
     id: root
 
-    property bool showLineTable: true
     // The CtcHost from __main__.py.
     property var host: null
-    readonly property var lineRows: host ? host.throughputRows : []
 
     function ticketsPerHour(line) {
         return root.host && root.host.throughput[line] !== undefined
@@ -29,7 +26,6 @@ Panel {
         TelemetryReadout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            // Tickets per hour; the per-line table below says so.
             label: qsTr("Red line")
             value: root.ticketsPerHour("Red")
             unit: "/hr"
@@ -43,35 +39,9 @@ Panel {
         }
     }
 
-    FieldLabel { text: qsTr("THROUGHPUT, LAST 12 HOURS") }
-
-    ThroughputHistory {
-        Layout.fillWidth: true
-        history: root.host ? root.host.throughputHistory : null
-    }
-
-    DataTable {
-        Layout.fillWidth: true
-        visible: root.showLineTable
-        columns: [
-            { label: qsTr("Line"), key: "line" },
-            { label: qsTr("Tickets/hr"), key: "tickets", width: 88,
-              numeric: true },
-            { label: qsTr("Trains/hr"), key: "trains", width: 80,
-              numeric: true },
-            { label: qsTr("Dwell (s)"), key: "dwell", width: 80,
-              numeric: true }
-        ]
-        rows: root.lineRows
-    }
-
     HelperText {
         Layout.fillWidth: true
         Layout.topMargin: theme.space_2
-        visible: root.showLineTable && root.lineRows.length === 0
-        horizontalAlignment: Text.AlignHCenter
-        text: qsTr("No line data")
+        text: qsTr("Tickets sold per hour since the simulation started.")
     }
-
-    Item { Layout.fillHeight: true }
 }

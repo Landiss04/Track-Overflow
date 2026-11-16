@@ -163,15 +163,6 @@ ARRIVED = "Arrived"
 
 _KMH_PER_MPS = 3.6
 
-#: Hours of ticket sales the throughput history shows.
-HISTORY_HOURS = 12
-
-
-def _hour(sim_time_s: float) -> int:
-    """The simulated clock hour a time falls in, counted from midnight
-    of the first simulated day."""
-    return int(sim_time_s // 3600)
-
 
 def _mph(speed_mps: float) -> str:
     return f"{speed_mps * MPS_TO_MPH:.1f}"
@@ -201,11 +192,11 @@ class CtcHost(QObject):
     blockStatesChanged = Signal()
     mapTrainsChanged = Signal()
     crossingStatesChanged = Signal()
+    signalStatesChanged = Signal()
     closuresChanged = Signal()
     switchCommandCountChanged = Signal()
     departuresChanged = Signal()
     throughputChanged = Signal()
-    throughputHistoryChanged = Signal()
     stopQueuesChanged = Signal()
 
     def __init__(self, module: CtcOffice | None = None,
@@ -244,11 +235,6 @@ class CtcHost(QObject):
         # Counts redraws, so that a redraw a panel's action starts while
         # another is notifying is noticed by the outer one.
         self._redraws = 0
-        # Tickets sold per (simulated clock hour, line), for the history
-        # chart. Hours count from midnight of the first simulated day.
-        self._hourly_sales: dict[tuple[int, str], int] = {}
-        self._first_hour = 0
-        self._current_hour = 0
         self._clock: SimulationClockBridge | None = None
         # Self-cancelled orders already dismissed from the notices.
         self._cancelled_seen = 0
@@ -288,7 +274,6 @@ class CtcHost(QObject):
         clock.pausedChanged.connect(apply_paused)
         apply_speed()
         apply_paused()
-        self._first_hour = self._current_hour = _hour(clock.clock.sim_time_s)
         self._clock = clock
         clock.pausedChanged.connect(self._notify_notices)
         clock.clock.add_tick_listener(self._on_tick)
@@ -300,7 +285,6 @@ class CtcHost(QObject):
             # Inputs are validated on arrival, so this is a module bug.
             print(f"CTC step failed: {error}", file=sys.stderr)
             return
-        self._count_sales(sim_time_s, self._inputs)
         # Ticket sales count tickets sold since the previous tick, so a
         # sale is stepped with once.
         if self._inputs.track_model.ticket_sales:
@@ -308,35 +292,21 @@ class CtcHost(QObject):
                 self._inputs, track_model=TrackModelInputs())
         self._refresh()
 
-    def _count_sales(self, sim_time_s: float, inputs: CtcInputs) -> None:
-        """Add a step's ticket sales to the hour it falls in."""
-        self._current_hour = _hour(sim_time_s)
-        for station, tickets in inputs.track_model.ticket_sales.items():
-            key = (self._current_hour, self._station_lines[station])
-            self._hourly_sales[key] = self._hourly_sales.get(key, 0) + tickets
-
     # -- Under the central harness ------------------------------------
-
-    def start_at(self, sim_time_s: float) -> None:
-        """Start the throughput history at the harness's time, before
-        the first step: the hour the simulation starts in (D017)."""
-        self._first_hour = self._current_hour = _hour(sim_time_s)
 
     def step_at(self, dt: float, sim_time_s: float,
                 inputs: CtcInputs) -> CtcOutputs:
         """Step the module once for the harness, at its time.
 
         The module takes ``sim_time_s`` as its time (D017), so a tick
-        it refused or never got does not put its schedule behind. Each
-        step's ticket sales are counted once, in the hour of
-        ``sim_time_s``. The window is not redrawn: call ``refresh``.
+        it refused or never got does not put its schedule behind. The
+        window is not redrawn: call ``refresh``.
 
         Raises:
             CtcError: If the module rejects the step; nothing changed.
         """
         outputs = self._module.step(dt, inputs, sim_time_s)
         self._inputs = inputs
-        self._count_sales(sim_time_s, inputs)
         return outputs
 
     def refresh(self) -> None:
@@ -375,11 +345,11 @@ class CtcHost(QObject):
         ("blockStates", "blockStatesChanged", False),
         ("mapTrains", "mapTrainsChanged", False),
         ("crossingStates", "crossingStatesChanged", False),
+        ("signalStates", "signalStatesChanged", False),
         ("closures", "closuresChanged", False),
         ("switchCommandCount", "switchCommandCountChanged", False),
         ("departures", "departuresChanged", False),
         ("throughput", "throughputChanged", True),
-        ("throughputHistory", "throughputHistoryChanged", True),
         ("stopQueues", "stopQueuesChanged", False),
     )
 
@@ -777,6 +747,19 @@ class CtcHost(QObject):
         return {block_key(c.line, c.crossing_id): c.state
                 for c in self._applied(snap).track_controller.crossings}
 
+    @Property(dict, notify=signalStatesChanged)
+    def signalStates(self) -> dict[str, str]:  # noqa: N802
+        """``Line:switch`` -> RED | YELLOW | GREEN | SUPER_GREEN: the
+        aspect each signal light last reported, by its switch's ID. A
+        light with no report is absent. Display only: aspects never feed
+        an authority or a speed."""
+        return self._view("signalStates")
+
+    def _view_signalStates(  # noqa: N802
+            self, snap: CtcSnapshot) -> dict[str, str]:
+        return {block_key(s.line, s.signal_id): s.aspect
+                for s in self._applied(snap).track_controller.signals}
+
     @Property(list, notify=closuresChanged)
     def closures(self) -> list[dict[str, Any]]:
         """Closed blocks, for Active closures."""
@@ -835,42 +818,6 @@ class CtcHost(QObject):
     @Property(dict, notify=throughputChanged)
     def throughput(self) -> dict[str, str]:
         return self._view("throughput")
-
-    @Property(list, notify=throughputChanged)
-    def throughputRows(self) -> list[dict[str, str]]:  # noqa: N802
-        """One row per line for the throughput table."""
-        return [{"line": line, "tickets": per_hour, "trains": NO_VALUE,
-                 "dwell": NO_VALUE}
-                for line, per_hour in self._view("throughput").items()]
-
-    @Property(dict, notify=throughputHistoryChanged)
-    def throughputHistory(self) -> dict[str, Any]:  # noqa: N802
-        """Tickets sold per line in each of 12 simulated clock hours.
-
-        The window starts at the hour the simulation started and, once
-        12 hours have passed, follows the current hour. ``hours`` labels
-        each hour (``HH:00``); each series has one count per hour;
-        ``peak`` is the largest count, the shared scale; ``current`` is
-        the index of the hour in progress.
-        """
-        return self._view("throughputHistory")
-
-    def _view_throughputHistory(  # noqa: N802
-            self, _snap: CtcSnapshot) -> dict[str, Any]:
-        last = max(self._current_hour,
-                   self._first_hour + HISTORY_HOURS - 1)
-        hours = range(last - HISTORY_HOURS + 1, last + 1)
-        counts = {line: [self._hourly_sales.get((hour, line), 0)
-                         for hour in hours]
-                  for line in self._layout}
-        return {
-            "hours": [f"{hour % 24:02d}:00" for hour in hours],
-            "series": [{"line": line, "counts": line_counts}
-                       for line, line_counts in counts.items()],
-            "peak": max((count for line_counts in counts.values()
-                         for count in line_counts), default=0),
-            "current": self._current_hour - hours[0],
-        }
 
     # -- Notices ------------------------------------------------------
 

@@ -3,7 +3,7 @@
 The harness stands in for the Track Controller, so the CTC Office can be
 run on its own. Its inputs are only what the Track Controller sends the
 CTC: each wayside's startup (ready or not, and why), occupied blocks,
-switch states and crossing states. Everything the
+switch states, crossing states and signal aspects. Everything the
 CTC itself decides (dispatch orders, block closures, switch commands,
 the operating mode and the clock speed) is done in the CTC window, as a
 dispatcher would. The harness reaches the module only through its
@@ -14,7 +14,8 @@ steps one fixed tick. The outputs table shows only the module's
 ``CtcOutputs``.
 
 Rows are dicts for the test UI. Scalar rows are ``{name, kind, value,
-unit}`` for ``SignalRow``. A list row (blocks, switches, crossings) has
+unit}`` for ``SignalRow``. A list row (blocks, switches, crossings,
+signals) has
 ``kind`` ``"list"``, a ``fields`` schema and its ``entries``, one dict
 per entry keyed by field. Lines, blocks, switches and crossings are
 picked from the track layout, so every reference names a real place;
@@ -40,6 +41,7 @@ from ctc.interface import (
     CrossingReport,
     CtcInputs,
     CtcOutputs,
+    SignalReport,
     SwitchReport,
     TrackControllerInputs,
     WaysideStatus,
@@ -62,6 +64,7 @@ INPUT_DEFAULTS: dict[str, tuple[str, Any, str]] = {
     "occupied_blocks": ("list", (), ""),
     "switch_states": ("list", (), ""),
     "crossing_states": ("list", (), ""),
+    "signal_states": ("list", (), ""),
 }
 
 #: Rows that also pick one of a few choices, shown as a dropdown in the
@@ -69,16 +72,16 @@ INPUT_DEFAULTS: dict[str, tuple[str, Any, str]] = {
 INPUT_CHOICES: dict[str, tuple[str, ...]] = {}
 
 #: Field types whose options come from the track layout, per line.
-_LAYOUT_TYPES = ("block", "switch", "crossing")
+_LAYOUT_TYPES = ("block", "switch", "crossing", "signal")
 
 
 def _field(key: str, label: str, kind: str, width: int,
            options: tuple[tuple[str, str], ...] = ()) -> dict[str, Any]:
     """One column of a list row.
 
-    ``kind`` is ``line``, ``block``, ``switch``, ``crossing`` (picked
-    from the layout), ``choice`` (picked from ``options``, value and
-    text pairs), ``text`` or ``number``.
+    ``kind`` is ``line``, ``block``, ``switch``, ``crossing``,
+    ``signal`` (picked from the layout), ``choice`` (picked from
+    ``options``, value and text pairs), ``text`` or ``number``.
     """
     return {"key": key, "label": label, "kind": kind, "width": width,
             "options": [{"value": v, "text": t} for v, t in options]}
@@ -104,6 +107,13 @@ LIST_FIELDS: dict[str, tuple[dict[str, Any], ...]] = {
         _LINE, _field("crossing", "Crossing", "crossing", 104),
         _field("state", "State", "choice", 124,
                (("inactive", "Inactive"), ("active", "Active")))),
+    # One light per switch, picked by the block it stands on; its value
+    # is the switch's ID, as the Track Controller names it.
+    "signal_states": (
+        _LINE, _field("signal", "Signal", "signal", 204),
+        _field("aspect", "Aspect", "choice", 148,
+               (("RED", "Red"), ("YELLOW", "Yellow"), ("GREEN", "Green"),
+                ("SUPER_GREEN", "Super green")))),
 }
 
 #: What each row is. Shown in the test UI under the row's name.
@@ -118,6 +128,10 @@ ROW_HINTS: dict[str, str] = {
     "switch_states": "Switch positions the Track Controller reports. "
                      "Normal is the first connection in the layout file.",
     "crossing_states": "Railway crossings and whether they are active.",
+    "signal_states": "The aspect each signal light shows, as the Track "
+                     "Controller reads it back. A light stands at its "
+                     "switch's points and is named by the switch. A "
+                     "light left out shows as not reported.",
 }
 
 
@@ -127,6 +141,7 @@ ROW_NOUNS: dict[str, str] = {
     "occupied_blocks": "block",
     "switch_states": "switch",
     "crossing_states": "crossing",
+    "signal_states": "signal",
 }
 
 
@@ -138,7 +153,8 @@ def layout_options(
     layout: Mapping[str, Line],
 ) -> dict[str, dict[str, list[dict[str, str]]]]:
     """Options per layout field type, per line: blocks (with station
-    names), switches (with their connections) and crossings."""
+    names), switches (with their connections), crossings and signal
+    lights (by the block each stands on, valued by its switch)."""
     options: dict[str, dict[str, list[dict[str, str]]]] = {
         kind: {} for kind in _LAYOUT_TYPES}
     for name, line in layout.items():
@@ -153,6 +169,9 @@ def layout_options(
         options["crossing"][name] = [
             {"value": b.block_id, "text": b.block_id}
             for b in line.blocks if b.railway_crossing]
+        options["signal"][name] = [
+            {"value": switch, "text": f"{light} (switch {switch})"}
+            for switch, light in line.light_blocks().items()]
     return options
 
 
@@ -169,6 +188,8 @@ def build_inputs(lists: Mapping[str, list[Entry]]) -> CtcInputs:
             crossings=tuple(CrossingReport(e["line"], e["crossing"],
                                            e["state"])
                             for e in lists["crossing_states"]),
+            signals=tuple(SignalReport(e["line"], e["signal"], e["aspect"])
+                          for e in lists["signal_states"]),
             waysides=tuple(
                 WaysideStatus(str(e["wayside"]).strip(), e["line"],
                               e["ready"] == "ready",

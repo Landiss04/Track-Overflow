@@ -117,6 +117,7 @@ ScaledWindow {
                 trackMap: window.trackMapModel
                 blockStates: ctc.blockStates
                 crossingStates: ctc.crossingStates
+                signalStates: ctc.signalStates
                 mapTrains: ctc.mapTrains
                 selectedTrainId: window.selectedTrainId
                 routeStates: {

@@ -44,6 +44,47 @@ class TrackLayoutTest(unittest.TestCase):
         self.assertIsInstance(block.block_id, str)   # IDs are strings
 
 
+class SignalLightTest(unittest.TestCase):
+    """Each switch's signal light stands at its points, not on the
+    block the switch is listed on (agreed with the Track Model
+    2026-10-28)."""
+
+    def test_lights_stand_at_the_points(self) -> None:
+        layout = load_layout()
+        self.assertEqual(layout["Green"].light_blocks(), {
+            "12": "13", "28": "28", "58": "57", "62": "63", "76": "77",
+            "85": "85"})
+        self.assertEqual(layout["Red"].light_blocks(), {
+            "9": "9", "15": "16", "27": "27", "32": "33", "38": "38",
+            "43": "44", "52": "52"})
+
+    def test_the_harness_places_every_light_on_the_same_block(self) -> None:
+        # The harness maps the Track Model's lights to the Track
+        # Controller's names through the same places; the map must draw
+        # each where the Track Model has it.
+        from common.harness.track_devices import TrackDevices
+
+        devices = TrackDevices.load()
+        for name, line in load_layout().items():
+            with self.subTest(line=name):
+                self.assertEqual(
+                    line.light_blocks(),
+                    {p.switch_id: p.light for p in devices.places(name)})
+
+    def test_markers_are_drawn_at_the_lights_block(self) -> None:
+        model = TrackMapModel(load_layout())
+        drawn = {(b["line"], b["blockId"]): b for b in model.blocks}
+        for light in model.signals:
+            block = drawn[(light["line"], light["blockId"])]
+            self.assertEqual((light["mid"], light["normal"]),
+                             (block["mid"], block["normal"]))
+            self.assertEqual(
+                model.signalAt(f"{light['line']}:{light['blockId']}"),
+                light)
+        self.assertEqual(model.signalAt("Green:12"), {})
+        self.assertEqual(model.signalAt("Green:13")["signalId"], "12")
+
+
 class TrackMapTest(unittest.TestCase):
 
     @classmethod
@@ -88,6 +129,11 @@ class TrackMapTest(unittest.TestCase):
                         for b in line.blocks)
         self.assertEqual(len(self.map["stations"]), stations)
         self.assertEqual(len(self.map["crossings"]), crossings)
+        # One signal light per switch, named by the switch.
+        self.assertEqual(
+            sorted((s["line"], s["signalId"]) for s in self.map["signals"]),
+            sorted((name, b.block_id) for name, line in self.layout.items()
+                   for b in line.blocks if b.switch))
 
     def test_points_inside_drawing(self) -> None:
         for block in self.map["blocks"]:

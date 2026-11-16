@@ -95,7 +95,9 @@ def test_hw_output_contract_and_combined_ctc_report():
                     sent_at_s=18012.3,
                     ready=True,
                     reason="",
-                    blocks={key: api.BlockReport(occupied=True)},
+                    blocks={key: api.BlockReport(
+                        occupied=True, signal_aspect="super_green"
+                    )},
                 ),
             ),
         )
@@ -110,6 +112,7 @@ def test_hw_output_contract_and_combined_ctc_report():
         "occupancy": [],
         "switches": [],
         "crossings": [],
+        "signals": [],
         "waysides": [
             {
                 "wayside_id": "GTC-01",
@@ -123,4 +126,8 @@ def test_hw_output_contract_and_combined_ctc_report():
     assert [entry["line"] for entry in joined["waysides"]] == ["Green", "Red"]
     assert joined["occupancy"] == [
         {"line": "Red", "block_id": "9", "occupied": True}
+    ]
+    # The HW report's aspect reaches the CTC Office as the SW one's does.
+    assert joined["signals"] == [
+        {"line": "Red", "signal_id": "9", "aspect": "SUPER_GREEN"}
     ]

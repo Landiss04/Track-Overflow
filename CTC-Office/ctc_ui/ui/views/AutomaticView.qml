@@ -1,8 +1,8 @@
 // Automatic mode: trains dispatch themselves from the loaded schedule.
 //
 // The column scrolls: a selected train's details are tall, and the
-// schedule and throughput panels below keep a usable minimum height
-// rather than being squeezed out of view.
+// schedule, throughput and signals panels below keep a usable minimum
+// height rather than being squeezed out of view.
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -28,6 +28,9 @@ ScrollView {
     // Smallest height that still shows the departures table and the
     // throughput readouts.
     readonly property int bottomRowMinimum: 440
+    // The throughput and signals panels, stacked, in full.
+    readonly property int sideMinimum: throughput.implicitHeight
+        + theme.space_3 + signalLights.implicitHeight
 
     contentWidth: availableWidth
     clip: true
@@ -64,9 +67,9 @@ ScrollView {
             // Sized from this, not from the panels' content, so a long
             // departures list scrolls inside its own panel.
             Layout.preferredHeight: Math.max(root.bottomRowMinimum,
-                                             throughput.implicitHeight)
+                                             root.sideMinimum)
             Layout.minimumHeight: Math.max(root.bottomRowMinimum,
-                                           throughput.implicitHeight)
+                                           root.sideMinimum)
             spacing: theme.space_3
 
             AutoDispatchPanel {
@@ -86,12 +89,25 @@ ScrollView {
                 onResumeRequested: root.dispatchPauseRequested(false)
             }
 
-            ThroughputPanel {
-                id: throughput
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.preferredWidth: 405
-                host: root.host
+                spacing: theme.space_3
+
+                ThroughputPanel {
+                    id: throughput
+                    Layout.fillWidth: true
+                    host: root.host
+                }
+
+                SignalsPanel {
+                    id: signalLights
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    lights: trackMap ? trackMap.signals : []
+                    states: root.host ? root.host.signalStates : ({})
+                }
             }
         }
     }

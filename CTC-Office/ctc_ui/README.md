@@ -22,7 +22,7 @@ python -m ctc_ui
 The test harness is a separate process with its own window. It stands
 in for the Track Controller: its only inputs are what the Track
 Controller sends the CTC (each wayside's startup, occupied blocks,
-switch states, crossing states). Everything the CTC itself decides (dispatching, closing blocks,
+switch states, crossing states, signal aspects). Everything the CTC itself decides (dispatching, closing blocks,
 setting switches, the operating mode and the clock speed) is done in the
 CTC window, as a dispatcher would. Ticket sales come from the Track
 Model, so the test UI does not force them either. Start the CTC Office
@@ -45,8 +45,9 @@ other:
   are staged: nothing changes until it runs, the CTC window keeps showing
   the last applied reports with a "staged" notice, but the safety checks
   already use them. Once applied the CTC window shows them: occupied
-  blocks, closed blocks and active crossings on the track map, trains in
-  the occupancy window, reported switch positions in Maintenance.
+  blocks, closed blocks, active crossings and signal aspects on the
+  track map, aspects in the Signals panel, trains in the occupancy
+  window, reported switch positions in Maintenance.
 - The Track Controller reports only which blocks are occupied: no train
   IDs or speeds, and a failed block looks like any other occupied block.
   The CTC follows its own trains from that (`ctc/tracking.py`). A train
@@ -88,12 +89,14 @@ other:
 - Errors (an unknown block, a switch outside maintenance mode) show in
   the status line of the window where the action was taken.
 
-List rows (occupied blocks, switch states, crossing states) are small
-tables: **+ Add** an entry, edit it in place, × to remove it. Each entry
-picks its line first, then a block, switch or crossing on that line from
-the track layout, so there are no IDs to type; block numbers repeat
-across lines, and a switch or crossing is named by the block the layout
-file lists it on. Positions and states are dropdowns too: nothing is
+List rows (occupied blocks, switch states, crossing states, signal
+states) are small tables: **+ Add** an entry, edit it in place, × to
+remove it. Each entry picks its line first, then a block, switch,
+crossing or signal on that line from the track layout, so there are no
+IDs to type; block numbers repeat across lines, and a switch or
+crossing is named by the block the layout file lists it on. A signal is
+picked by the block its light stands on, "13 (switch 12)", and sent
+named by its switch, as the Track Controller names it. Positions and states are dropdowns too: nothing is
 typed.
 
 To check the CTC module's input handling without the window, run the
@@ -145,7 +148,15 @@ yet) through `ctc_ui/ctc_host.py`:
   follow the track and tagged with its ID; any other occupied block (an
   inferred failure among them) gets an untagged car. Closed
   (`--warning`) blocks are drawn heavy, with a halo (style guide 4.6,
-  6.4). An active crossing fills `--warning`.
+  6.4). An active crossing fills `--warning`. Each switch's **signal
+  light** is a marker on a short mast beside the block the light stands
+  on, the switch's points (Green 12's light is on 13; see
+  `Line.light_blocks`), on the side away from block numbers. Its shape
+  gives the aspect without colour, and its fill the aspect's colour
+  (`--aspect-*`): red square, yellow triangle, green circle, super
+  green diamond; a light not reported is a hollow circle with "?". It
+  stays 16 px on screen at any zoom. Point at the block for the
+  aspect in words.
   **+** and **−** zoom in steps of 1.25× (up to 4×); zoomed in, drag the
   map to pan. **Fit** shows the whole map again.
 - **Train occupancy** lists every train the CTC is following or the
@@ -190,7 +201,11 @@ yet) through `ctc_ui/ctc_host.py`:
   file lists by its yard leg alone gets its main-line leg too ("9
   (8-9; yard-9)").
 - **Throughput metrics** shows tickets per hour on each line as whole
-  numbers; trains per hour is in the per-line table.
+  numbers.
+- **Signals**, under it, lists every signal light by line: the block it
+  stands on, its aspect (marker and name) and its switch, and how many
+  of them have been reported. Aspects are shown only: they never change
+  an authority or a speed.
 - Dropdowns show only what the dispatcher picked: choosing a line never
   pre-selects a block, station or switch, so no action is enabled with a
   value nobody chose.
@@ -217,13 +232,7 @@ yet) through `ctc_ui/ctc_host.py`:
   sends or releases a command.
 - **Throughput metrics** show tickets per hour on each line (Red line,
   Green line) since the simulation started, from Track Model ticket
-  sales, in the tiles and the per-line table. **Throughput, last 12
-  hours** charts the tickets sold on each line in each simulated clock
-  hour, one small chart per line on a shared scale; hover a bar for its
-  value. The window starts at the simulation's start hour and follows
-  the current hour once 12 hours have passed. The charts use `--accent`,
-  not the line colors: the style guide keeps those to track strokes, and
-  red and green bars are not distinguishable with deuteranopia.
+  sales.
 - **Load schedule** (Automatic view) loads a schedule JSON in the
   `utils/schedule_v4.json` format (see `tools/schedule_to_json.py`). A
   malformed file, or one naming a block or line that is not on the track
@@ -265,15 +274,13 @@ yet) through `ctc_ui/ctc_host.py`:
   holds, a block apart. A
   head-on meet that happens anyway (a manual train, say)
   is for the wayside controllers to handle.
-- Trains per hour and the per-line trains and dwell columns stay empty:
-  nothing reports that data yet.
 
 ## Where things go
 
 | Area | Hook |
 | --- | --- |
-| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`, `stopQueues`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `addStop`, `removeStop`, `moveStop`, `returnToYard`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
-| Track map | `panels/TrackViewPanel.qml` → `mapCanvas`; `blockStates` and `crossingStates` style the blocks. Set `mapAvailable` to enable zoom and fit. |
+| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `signalStates`, `closures`, `throughput`, `stopQueues`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `addStop`, `removeStop`, `moveStop`, `returnToYard`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
+| Track map | `panels/TrackViewPanel.qml` → `mapCanvas`; `blockStates` and `crossingStates` style the blocks, `signalStates` the signal markers (`panels/SignalMarker.qml`, placed from `TrackMapModel.signals`). Set `mapAvailable` to enable zoom and fit. |
 | Selected train | `SelectedTrainPanel.trainId` and `host`; `canReroute` adds the reroute controls. |
 | Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` → `ctc.loadSchedule`; `scheduleFile`, `scheduleError`, `departures`, `dispatchRunning` and `dispatchPaused` come back from `ctc`; Pause / Resume call `ctc.setDispatchPaused`. The header's mode calls `ctc.setAutomaticMode`. |
 | Tables | `DataTable.rows`: an array of objects keyed by each column's `key`. |

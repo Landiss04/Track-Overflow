@@ -20,6 +20,7 @@ sys.path.insert(0, str(_REPO / "CTC-Office"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.harness.ctc_edges import ctc_to_track_controller  # noqa: E402
+from common.harness.wayside_edges import track_controller_to_ctc  # noqa: E402
 from ctc.interface import (  # noqa: E402
     BlockRef,
     SwitchCommand,
@@ -28,6 +29,7 @@ from ctc.interface import (  # noqa: E402
 )
 from track_ctrl.interface import BlockKey, Suggestion  # noqa: E402
 from track_ctrl.module import SwTrackController  # noqa: E402
+from track_ctrl.wire import outputs_to_wire  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from rig import default_module  # noqa: E402
@@ -105,6 +107,26 @@ class CtcEdge(unittest.TestCase):
         # Only the block the train is in gets a circuit.
         self.assertEqual(list(out.track_model.track_circuits),
                          [BlockKey("Green", "8")])
+
+    def test_the_lit_aspects_reach_the_ctc_office(self) -> None:
+        from ctc.model import StubCtcOffice
+        from ctc.wire import inputs_from_wire
+        from track_ctrl.interface import (
+            TrackControllerInputs, TrackModelInputs)
+
+        module: SwTrackController = default_module()
+        lit = {BlockKey("Green", "12"): "red",
+               BlockKey("Green", "28"): "super_green"}
+        out = module.step(0.1, TrackControllerInputs(
+            time_s=1.0, track_model=TrackModelInputs(signal_aspects=lit)))
+        report = track_controller_to_ctc(outputs_to_wire(out))
+        self.assertEqual(
+            sorted((s["signal_id"], s["aspect"])
+                   for s in report["signals"]),
+            [("12", "RED"), ("28", "SUPER_GREEN")])
+        # The CTC Office takes them as they are.
+        StubCtcOffice().validate_inputs(
+            inputs_from_wire({"track_controller": report}))
 
 
 if __name__ == "__main__":

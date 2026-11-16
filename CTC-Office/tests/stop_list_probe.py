@@ -44,7 +44,6 @@ def main() -> int:
 
     layout = load_layout(layout_files())
     host = CtcHost(ready_office(), layout=layout, serve_test_ui=False)
-    host.start_at(SIMULATION_START_S)
     clock = HarnessClockBridge(host, SIMULATION_START_S, lambda _: None)
     engine = QQmlApplicationEngine()
     context = engine.rootContext()
