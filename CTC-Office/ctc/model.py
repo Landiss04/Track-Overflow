@@ -32,6 +32,18 @@ The stub releases ordered trains from the yard and retires them there
   braking at ``SERVICE_DECEL_MPS2`` since it was told 0 there, is 0.
   Its order is dropped with it.
 
+In Manual mode the dispatcher can queue stops after a train's order
+(``queue_stop``): its itinerary is the stop it is heading for (its
+order) and the queued stops after it, each a block of its line, a
+station or not, with an optional arrival time. Once the train has
+stopped at its stop (``_at_a_stand``) and ``DWELL_S`` (D007) has passed,
+the first queued stop becomes its order. With none queued it stays at
+its last stop, as a single order does. The dispatcher can remove a stop
+(``remove_stop``) or move one (``move_stop``); a new first stop becomes
+the order at once, through the same checks as a dispatch, and the
+authority is recomputed from it like any order's. A train's last stop
+cannot be removed: the dispatcher cannot withdraw an order.
+
 Under the central harness each step brings the simulation time
 (D017), and the stub's time is that time: a tick it refused or never
 got does not put its schedule behind. On its own it counts the time of
@@ -86,6 +98,7 @@ from ctc.routing import (
 )
 from ctc.track_layout import Line, load_layout, station_lines
 from ctc.scheduler import (
+    DWELL_S,
     HELD,
     IN_YARD,
     SIMULATION_START_S,
@@ -150,6 +163,10 @@ _KMH_PER_MPS = 3.6
 
 #: Longest train ID accepted, in characters.
 MAX_TRAIN_ID_LENGTH = 32
+
+#: Most stops one train's itinerary holds: the stop it is heading for
+#: and the ones queued after it (Manual mode).
+MAX_STOPS = 20
 
 #: Most tickets one report may carry: QML integers are 32-bit.
 MAX_TICKETS = 2**31 - 1
@@ -427,6 +444,29 @@ def _not_ready(inputs: CtcInputs, line: str) -> str:
                      for s in waiting)
 
 
+def _require_arrival(arrival_s: float | None) -> None:
+    """Raise unless ``arrival_s`` is None or a time within one day."""
+    if arrival_s is None:
+        return
+    if isinstance(arrival_s, bool):
+        raise InvalidInputError("arrival_s must be a number")
+    _require_finite(arrival_s, "arrival_s")
+    if not 0 <= arrival_s < _DAY_S:
+        raise InvalidInputError(
+            f"arrival_s must be within one day, got {arrival_s}")
+
+
+def _require_index(index: object, count: int, train_id: str) -> int:
+    """``index`` as one of a train's ``count`` stops, or raise."""
+    if isinstance(index, bool) or not isinstance(index, int):
+        raise InvalidInputError(
+            f"stop index must be a whole number, got {_short(index)}")
+    if not 0 <= index < count:
+        raise InvalidInputError(
+            f"{train_id} has no stop {index + 1}; it has {count}.")
+    return index
+
+
 def _trim(train_id: str) -> str:
     _require_train_id(train_id)
     return train_id.strip()
@@ -512,6 +552,12 @@ class StubCtcOffice:
         # Manual trains the dispatcher sent back to the yard ("return to
         # yard", R66) whose order to the yard entry block still stands.
         self._returning: set[str] = set()
+        # Stops queued after each train's order, in the order it is to
+        # make them (``queue_stop``); a train with none has no entry.
+        self._queues: dict[str, list[DispatchOrder]] = {}
+        # When each train with stops queued was first seen stopped at its
+        # order's destination: its dwell there (D007) runs from then.
+        self._dwell_since: dict[str, float] = {}
         # This step's one-time events (D022); empty after a step with
         # none.
         self._new_trains: tuple[NewTrain, ...] = ()
@@ -561,6 +607,8 @@ class StubCtcOffice:
             self._tickets[station] += tickets
         # In automatic mode, the schedule's runs move on.
         self._run_schedule()
+        # Trains that have dwelt at a stop with more queued move on.
+        self._advance_queues()
         # Trains sent back to the yard that have stopped at its entry
         # block are retired, and their orders dropped.
         self._retire()
@@ -607,6 +655,9 @@ class StubCtcOffice:
             tickets_sold=dict(self._tickets),
             scheduled_runs=self._scheduled_runs(),
             orders=tuple(self._orders[t] for t in sorted(self._orders)),
+            queued_stops=tuple(stop for t in sorted(self._queues)
+                               for stop in self._queues[t]),
+            returning_trains=tuple(sorted(self._returning)),
             schedule_start_s=self._schedule_start_s,
             closed_blocks=self._closed_blocks(),
             switch_commands=self._switch_commands(),
@@ -644,18 +695,167 @@ class StubCtcOffice:
         the train waits short of it until it clears.
         """
         train_id = _trim(train_id)
-        if arrival_s is not None:
-            if isinstance(arrival_s, bool):
-                raise InvalidInputError("arrival_s must be a number")
-            _require_finite(arrival_s, "arrival_s")
-            if not 0 <= arrival_s < _DAY_S:
-                raise InvalidInputError(
-                    f"arrival_s must be within one day, got {arrival_s}")
+        _require_arrival(arrival_s)
         self._check_dispatch(train_id, line, destination_block_id)
-        self._orders[train_id] = DispatchOrder(
-            train_id, line, destination_block_id, arrival_s)
+        queued = self._queues.get(train_id, [])
+        if queued and queued[0].line != line:
+            raise UnsafeActionError(
+                f"{train_id}'s queued stops are on the {queued[0].line} "
+                f"line; it cannot be sent to a {line} block.")
+        self._set_order(DispatchOrder(
+            train_id, line, destination_block_id, arrival_s))
         # A new order withdraws a "return to yard".
         self._returning.discard(train_id)
+
+    def queue_stop(self, train_id: str, line: str,
+                   destination_block_id: str,
+                   arrival_s: float | None = None) -> None:
+        """Add a stop at the end of a train's itinerary (Manual mode).
+
+        A train with no order, or one on its way back to the yard, is
+        dispatched to the stop instead (``dispatch``): it becomes its
+        first stop. Any other train makes the stop after the ones before
+        it, once it has dwelt at each (module docstring).
+
+        Refused as ``dispatch`` refuses, and also onto another line than
+        the train's order, for a run of the loaded schedule (the
+        schedule gives its stops), for the block that is already its
+        last stop, and past ``MAX_STOPS`` stops.
+        """
+        train_id = _trim(train_id)
+        order = self._orders.get(train_id)
+        if order is None or train_id in self._returning:
+            self.dispatch(train_id, line, destination_block_id, arrival_s)
+            return
+        _require_arrival(arrival_s)
+        self._check_dispatch(train_id, line, destination_block_id)
+        if self._auto is not None and train_id in self._auto.progress:
+            raise InvalidInputError(
+                f"{train_id} is a run of the loaded schedule; the "
+                "schedule gives its stops.")
+        if line != order.line:
+            raise UnsafeActionError(
+                f"{train_id} is ordered on the {order.line} line; it "
+                f"cannot stop at a {line} block.")
+        stops = self._itinerary(train_id)
+        if stops[-1].destination_block_id == destination_block_id:
+            raise InvalidInputError(
+                f"{line} block {destination_block_id} is already "
+                f"{train_id}'s last stop.")
+        if len(stops) >= MAX_STOPS:
+            raise InvalidInputError(
+                f"{train_id} already has {MAX_STOPS} stops, the most "
+                "one train can have.")
+        self._queues.setdefault(train_id, []).append(DispatchOrder(
+            train_id, line, destination_block_id, arrival_s))
+
+    def remove_stop(self, train_id: str, index: int) -> None:
+        """Remove stop ``index`` of a train's itinerary: 0 is the stop
+        it is heading for, 1 the first queued after it.
+
+        Removing stop 0 sends the train on to the next stop at once,
+        with the checks a dispatch has (refused, and nothing changes, if
+        it would be). Refused for a train's only stop: the dispatcher
+        cannot withdraw an order, only send the train elsewhere or back
+        to the yard.
+        """
+        train_id = _trim(train_id)
+        stops = self._itinerary(train_id)
+        index = _require_index(index, len(stops), train_id)
+        if len(stops) == 1:
+            raise InvalidInputError(
+                f"That is {train_id}'s only stop; give it another stop "
+                "first, or send it back to the yard.")
+        del stops[index]
+        self._replace_itinerary(train_id, stops)
+
+    def move_stop(self, train_id: str, from_index: int,
+                  to_index: int) -> None:
+        """Move stop ``from_index`` of a train's itinerary to
+        ``to_index`` (0 is the stop it is heading for), the others
+        keeping their order. A new stop 0 becomes the train's order at
+        once, with the checks a dispatch has (refused, and nothing
+        changes, if it would be); each stop keeps its arrival time.
+        """
+        train_id = _trim(train_id)
+        stops = self._itinerary(train_id)
+        from_index = _require_index(from_index, len(stops), train_id)
+        to_index = _require_index(to_index, len(stops), train_id)
+        if from_index == to_index:
+            return
+        stops.insert(to_index, stops.pop(from_index))
+        self._replace_itinerary(train_id, stops)
+
+    def _itinerary(self, train_id: str) -> list[DispatchOrder]:
+        """A train's order and its queued stops, in order; refused for
+        a train with no order."""
+        order = self._orders.get(train_id)
+        if order is None:
+            raise InvalidInputError(f"{train_id} has no stops.")
+        return [order, *self._queues.get(train_id, ())]
+
+    def _replace_itinerary(self, train_id: str,
+                           stops: list[DispatchOrder]) -> None:
+        """Make ``stops`` the train's itinerary. A first stop that is
+        not its order now is checked as a dispatch is, before anything
+        changes, and becomes its order."""
+        first = stops[0]
+        if first is not self._orders[train_id]:
+            self._check_dispatch(train_id, first.line,
+                                 first.destination_block_id)
+            self._set_order(first)
+            self._returning.discard(train_id)
+        self._set_queue(train_id, stops[1:])
+
+    def _set_order(self, order: DispatchOrder) -> None:
+        """Make ``order`` its train's order; a dwell toward its last
+        destination no longer counts."""
+        self._orders[order.train_id] = order
+        self._dwell_since.pop(order.train_id, None)
+
+    def _set_queue(self, train_id: str,
+                   stops: list[DispatchOrder]) -> None:
+        if stops:
+            self._queues[train_id] = list(stops)
+        else:
+            self._queues.pop(train_id, None)
+            self._dwell_since.pop(train_id, None)
+
+    def _drop_order(self, train_id: str) -> None:
+        """Drop a train's order and everything queued after it."""
+        self._orders.pop(train_id, None)
+        self._queues.pop(train_id, None)
+        self._dwell_since.pop(train_id, None)
+        self._returning.discard(train_id)
+
+    def _advance_queues(self) -> None:
+        """Send each train that has dwelt at its stop on to its next
+        queued stop. A train dwells ``DWELL_S`` (D007) from when it is
+        first seen stopped at its order's destination
+        (``_at_a_stand``). A train not on the track (in the yard, or
+        lost) does not move on. A next stop a dispatch would refuse now
+        (its line not ready) waits until it would not be."""
+        now_s = self._now_s()
+        for train_id in sorted(self._queues):
+            order = self._orders.get(train_id)
+            train = self._tracker.trains.get(train_id)
+            if order is None:
+                self._set_queue(train_id, [])
+                continue
+            if train is None or not self._at_a_stand(train, order):
+                self._dwell_since.pop(train_id, None)
+                continue
+            since = self._dwell_since.setdefault(train_id, now_s)
+            if now_s - since < DWELL_S:
+                continue
+            queued = self._queues[train_id]
+            try:
+                self._check_dispatch(train_id, queued[0].line,
+                                     queued[0].destination_block_id)
+            except CtcError:
+                continue
+            self._set_order(queued[0])
+            self._set_queue(train_id, queued[1:])
 
     def preview_dispatch(self, train_id: str, line: str,
                          destination_block_id: str) -> TrainSuggestion:
@@ -751,6 +951,8 @@ class StubCtcOffice:
             raise InvalidInputError(
                 f"The {train.line} line has no yard entry block.")
         self.dispatch(train_id, train.line, entries[0])
+        # Its queued stops go: it is going back to the yard.
+        self._set_queue(train_id, [])
         self._returning.add(train_id)
 
     def set_block_closed(self, line: str, block_id: str,
@@ -1114,20 +1316,40 @@ class StubCtcOffice:
                     or not self._at_a_stand(train, order)
                     or not self._sent_to_yard(limit.train_id)):
                 continue
-            del self._orders[limit.train_id]
+            self._drop_order(limit.train_id)
             self._in_service.discard(limit.train_id)
-            self._returning.discard(limit.train_id)
             retired.append(RetiredTrain(limit.train_id))
         self._retired_trains = tuple(retired)
 
     def _cancel_orders_into(self, block: BlockRef, reason: str) -> None:
+        """Cancel every order and queued stop into ``block``, and tell
+        the dispatcher. A train whose order goes moves on to its next
+        queued stop that a dispatch would not refuse, if it has one."""
+        def into(stop: DispatchOrder) -> bool:
+            return (stop.line, stop.destination_block_id) == (
+                block.line, block.block_id)
+
         for train_id, order in sorted(self._orders.items()):
-            if (order.line, order.destination_block_id) == (
-                    block.line, block.block_id):
-                del self._orders[train_id]
-                self._returning.discard(train_id)
-                self._cancelled.append(CancelledOrder(
-                    train_id, block.line, block.block_id, reason))
+            stops = [order, *self._queues.get(train_id, ())]
+            for stop in stops:
+                if into(stop):
+                    self._cancelled.append(CancelledOrder(
+                        train_id, block.line, block.block_id, reason))
+            kept = [stop for stop in stops if not into(stop)]
+            if not into(order):
+                self._set_queue(train_id, kept[1:])
+                continue
+            self._drop_order(train_id)
+            while kept:
+                first = kept.pop(0)
+                try:
+                    self._check_dispatch(train_id, first.line,
+                                         first.destination_block_id)
+                except CtcError:
+                    continue
+                self._set_order(first)
+                self._set_queue(train_id, kept)
+                break
         del self._cancelled[:-_CANCELLED_KEPT]
 
     def _now_s(self) -> float:
@@ -1158,8 +1380,7 @@ class StubCtcOffice:
             action = pending.pop(0)
             if isinstance(action, Cancel):
                 # The run is back in the yard: its order is done.
-                self._orders.pop(action.train_id, None)
-                self._returning.discard(action.train_id)
+                self._drop_order(action.train_id)
                 self._tracker.lost.discard(action.train_id)
                 continue
             try:

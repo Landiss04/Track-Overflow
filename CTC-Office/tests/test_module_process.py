@@ -256,6 +256,19 @@ class TestOptionsTest(_ProcessCase):
         )
         self.assertEqual(self.process.pending_dispatches, ())
 
+    def test_a_train_given_again_queues_its_next_stops(self) -> None:
+        self.process = self.make(dispatches=[
+            Dispatch("G1", "Green", "65"), Dispatch("G1", "Green", "73"),
+            Dispatch("G1", "Green", "77"),
+        ])
+        self.step()
+        snap = self.host.module.snapshot()
+        self.assertEqual([o.destination_block_id for o in snap.orders],
+                         ["65"])
+        self.assertEqual(
+            [s.destination_block_id for s in snap.queued_stops],
+            ["73", "77"])
+
     def test_the_options_parse(self) -> None:
         options = _parse_args([
             "--harness", "server", "--run-on-ready",

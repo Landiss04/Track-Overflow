@@ -354,8 +354,15 @@ class CtcSnapshot:
     # midnight, once it has started (the clock ran with it loaded);
     # None before then, or with no schedule.
     schedule_start_s: float | None = None
-    # Dispatcher orders, by train ID.
+    # Dispatcher orders, by train ID: each train's stop it is heading
+    # for.
     orders: tuple[DispatchOrder, ...] = ()
+    # Stops queued after each train's order (Manual mode), by train ID,
+    # then in the order the train is to make them.
+    queued_stops: tuple[DispatchOrder, ...] = ()
+    # Manual trains sent back to the yard ("return to yard"), whose
+    # order to the yard entry block still stands.
+    returning_trains: tuple[str, ...] = ()
     # The dispatcher's closed blocks and switch
     # commands. The same as in ``outputs`` while the Track Controller is
     # ready; kept here while it is not, when nothing is sent to it.
@@ -432,6 +439,28 @@ class CtcOffice(Protocol):
         replaces the old one. Refused (safety) into a closed or
         failed block, and onto a line other than the train's own.
         """
+        ...
+
+    def queue_stop(self, train_id: str, line: str,
+                   destination_block_id: str,
+                   arrival_s: float | None = None) -> None:
+        """Add a stop after the last of a train's stops (Manual mode).
+        A train with no order, or on its way back to the yard, is
+        dispatched to it instead. Once a train has stopped at a stop and
+        dwelt there (D007) it is sent on to the next; after the last it
+        stays there. Refused as ``dispatch`` is, and for a run of the
+        loaded schedule."""
+        ...
+
+    def remove_stop(self, train_id: str, index: int) -> None:
+        """Remove one of a train's stops (0: the one it is heading
+        for, which sends it on to the next). Refused for its only stop."""
+        ...
+
+    def move_stop(self, train_id: str, from_index: int,
+                  to_index: int) -> None:
+        """Move one of a train's stops to another place in its order.
+        A new first stop is the one it heads for at once."""
         ...
 
     def preview_dispatch(self, train_id: str, line: str,

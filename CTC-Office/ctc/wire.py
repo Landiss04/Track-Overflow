@@ -140,6 +140,9 @@ def snapshot_from_wire(data: Mapping[str, Any]) -> CtcSnapshot:
         schedule_start_s=(None if data.get("schedule_start_s") is None
                           else float(data["schedule_start_s"])),
         orders=tuple(DispatchOrder(**o) for o in data.get("orders", ())),
+        queued_stops=tuple(DispatchOrder(**o)
+                           for o in data.get("queued_stops", ())),
+        returning_trains=tuple(data.get("returning_trains", ())),
         closed_blocks=tuple(BlockRef(**b) for b in
                             data.get("closed_blocks", ())),
         switch_commands=tuple(SwitchCommand(**c) for c in

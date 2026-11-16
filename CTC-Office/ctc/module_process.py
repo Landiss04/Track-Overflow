@@ -50,7 +50,9 @@ dispatcher as ``--engineer-gains`` stands in for the engineer and
   first step with ``0``;
 - ``--dispatch TRAIN:LINE:BLOCK`` dispatches a train from the yard to a
   block, once the line's waysides are ready (``CtcOffice.dispatch``
-  refuses it before);
+  refuses it before); given again for the same train, it queues the
+  block as the train's next stop (``CtcOffice.queue_stop``), as the
+  dispatcher's Queue stop does;
 - ``--schedule FILE`` loads a schedule and runs it in automatic mode
   (D020).
 """
@@ -286,7 +288,9 @@ class CtcOfficeProcess(QObject):
                 waiting.append(order)
                 continue
             try:
-                self._host.module.dispatch(
+                # The first for a train dispatches it; the next
+                # queue its later stops.
+                self._host.module.queue_stop(
                     order.train_id, order.line, order.block_id
                 )
             except CtcError as error:
@@ -409,7 +413,8 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         default=[],
         metavar="TRAIN:LINE:BLOCK",
         help="dispatch a train from the yard to a block once its line "
-        "is ready; may be repeated",
+        "is ready; may be repeated, and repeated for one train queues "
+        "its later stops in order",
     )
     tests.add_argument(
         "--schedule",
