@@ -37,7 +37,7 @@ listed on in the track layout file.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, Mapping, Protocol
+from typing import TYPE_CHECKING, Literal, Mapping, Protocol, Sequence
 
 if TYPE_CHECKING:
     from ctc.schedule import Schedule
@@ -452,15 +452,21 @@ class CtcOffice(Protocol):
         loaded schedule."""
         ...
 
-    def remove_stop(self, train_id: str, index: int) -> None:
+    def remove_stop(self, train_id: str, index: int,
+                    expected: Sequence[str] | None = None) -> None:
         """Remove one of a train's stops (0: the one it is heading
-        for, which sends it on to the next). Refused for its only stop."""
+        for, which sends it on to the next). Refused for its only stop.
+        With ``expected`` (the stops' blocks as the dispatcher saw
+        them), refused unless they are still the train's stops."""
         ...
 
     def move_stop(self, train_id: str, from_index: int,
-                  to_index: int) -> None:
+                  to_index: int,
+                  expected: Sequence[str] | None = None) -> None:
         """Move one of a train's stops to another place in its order.
-        A new first stop is the one it heads for at once."""
+        A new first stop is the one it heads for at once, unless the
+        train could not stop for it (refused). ``expected`` as for
+        ``remove_stop``."""
         ...
 
     def preview_dispatch(self, train_id: str, line: str,

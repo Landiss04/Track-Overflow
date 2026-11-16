@@ -21,6 +21,7 @@ from ctc.interface import DispatchOrder  # noqa: E402
 from ctc.model import (  # noqa: E402
     MAX_STOPS,
     InvalidInputError,
+    InvalidTimeStepError,
     StubCtcOffice,
     UnsafeActionError,
 )
@@ -332,6 +333,130 @@ class MoveStopTest(unittest.TestCase):
         self.assertEqual(_stops(ctc), ["65", "73", "77"])
 
 
+class StaleListTest(unittest.TestCase):
+    """An action on the stops as the dispatcher saw them is refused,
+    and changes nothing, once the train has moved on: an index then
+    names another stop."""
+
+    def test_remove_with_the_stops_shown(self) -> None:
+        ctc = _three_stops()
+        ctc.remove_stop("T1", 1, ["65", "73", "77"])
+        self.assertEqual(_stops(ctc), ["65", "77"])
+
+    def test_remove_after_the_train_moved_on_is_refused(self) -> None:
+        ctc = _three_stops()
+        shown = _stops(ctc)                 # 65, 73, 77
+        _stop(ctc, "T1", "65")
+        _wait(ctc, DWELL_S + 1, at("T1", "65"))
+        self.assertEqual(_stops(ctc), ["73", "77"])
+        # The dispatcher meant 73 (stop 2 as shown); stop 2 is now 77.
+        with self.assertRaisesRegex(InvalidInputError, "changed"):
+            ctc.remove_stop("T1", 1, shown)
+        self.assertEqual(_stops(ctc), ["73", "77"])
+
+    def test_move_after_the_train_moved_on_is_refused(self) -> None:
+        ctc = _three_stops()
+        shown = _stops(ctc)
+        _stop(ctc, "T1", "65")
+        _wait(ctc, DWELL_S + 1, at("T1", "65"))
+        # ▲ on 73 (stop 2 as shown) would now move 77 ahead of 73.
+        with self.assertRaisesRegex(InvalidInputError, "changed"):
+            ctc.move_stop("T1", 1, 0, shown)
+        self.assertEqual(_stops(ctc), ["73", "77"])
+
+    def test_expected_must_be_block_ids(self) -> None:
+        ctc = _three_stops()
+        for expected in ("65", [65, 73, 77]):
+            with self.subTest(expected=expected), \
+                    self.assertRaises(InvalidInputError):
+                ctc.remove_stop("T1", 1, expected)
+        self.assertEqual(_stops(ctc), ["65", "73", "77"])
+
+
+class RejectedStepTest(unittest.TestCase):
+    """A refused step changes nothing: not the stops, nor a dwell."""
+
+    def test_the_stops_and_the_dwell_stand(self) -> None:
+        ctc = _three_stops()
+        _stop(ctc, "T1", "65")
+        _wait(ctc, DWELL_S - 2, at("T1", "65"))
+        before = (dict(ctc._queues), dict(ctc._dwell_since),
+                  ctc.snapshot().orders)
+        for dt in (0.0, float("nan")):
+            with self.assertRaises(InvalidTimeStepError):
+                ctc.step(dt, reports(at("T1", "65")))
+        with self.assertRaises(InvalidInputError):
+            ctc.step(5.0, reports(at("T1", "999")))
+        self.assertEqual((dict(ctc._queues), dict(ctc._dwell_since),
+                          ctc.snapshot().orders), before)
+
+
+class CanStopTest(unittest.TestCase):
+    """A new first stop never takes back authority a moving train can
+    no longer stop within: it would run past it, into blocks then free
+    for other trains."""
+
+    def _moving(self) -> StubCtcOffice:
+        # T1 on its way from 62 through 63 to 64, told to keep going.
+        ctc = _three_stops()
+        for block in ("63", "64"):
+            step_at(ctc, at("T1", block))
+        ctc.queue_stop("T1", "Green", "64")
+        return ctc
+
+    def test_a_stop_further_on_is_taken(self) -> None:
+        ctc = self._moving()
+        ctc.remove_stop("T1", 0)
+        self.assertEqual(_stops(ctc), ["73", "77", "64"])
+
+    def test_the_block_it_is_running_through_is_refused(self) -> None:
+        ctc = self._moving()
+        (limit,) = ctc.snapshot().authorities
+        self.assertGreater(limit.blocks, 0)
+        with self.assertRaisesRegex(UnsafeActionError, "too fast"):
+            ctc.move_stop("T1", 3, 0)
+        self.assertEqual(_stops(ctc), ["65", "73", "77", "64"])
+
+    def test_a_standing_train_can_be_sent_anywhere(self) -> None:
+        ctc = _three_stops()
+        ctc.queue_stop("T1", "Green", "62")
+        # At a stand at Glenbury, before its dwell is up.
+        _stop(ctc, "T1", "65")
+        ctc.move_stop("T1", 3, 0)
+        self.assertEqual(_stops(ctc), ["62", "65", "73", "77"])
+
+
+class ScheduleTest(unittest.TestCase):
+    """A manual train that a loaded schedule then runs (same train ID)
+    makes the schedule's stops, never queued ones."""
+
+    def test_loading_drops_the_queue_of_a_train_the_schedule_runs(
+            self) -> None:
+        ctc = ready_office()
+        step_at(ctc, at("G1", "62"))
+        for block in ("65", "70", "73"):
+            ctc.queue_stop("G1", "Green", block)
+        ctc.queue_stop("G9", "Green", "65")
+        ctc.queue_stop("G9", "Green", "70")
+        ctc.load_schedule(load_schedule(_SCHEDULE))
+        self.assertEqual(_queued(ctc, "G1"), [])
+        self.assertEqual(_stops(ctc, "G1"), ["65"])
+        if "G9" not in ctc._auto.progress:
+            self.assertEqual(_stops(ctc, "G9"), ["65", "70"])
+
+    def test_a_run_is_never_sent_on_by_a_queue(self) -> None:
+        ctc = ready_office()
+        ctc.load_schedule(load_schedule(_SCHEDULE))
+        ctc.set_automatic_mode(True)
+        ctc.step(0.1, reports())
+        run = next(o for o in ctc.snapshot().orders)
+        # A queue that got onto a run some other way.
+        ctc._queues[run.train_id] = [DispatchOrder(
+            run.train_id, run.line, "70")]
+        ctc.step(0.1, reports())
+        self.assertEqual(_queued(ctc, run.train_id), [])
+
+
 class OtherActionsTest(unittest.TestCase):
     """Dispatch, return to yard, closures and retirement."""
 
@@ -447,6 +572,34 @@ class RealisticRailwayTest(unittest.TestCase):
             with self.subTest(block=block):
                 self.assertGreaterEqual(sent_s - stood_s,
                                         DWELL_S - RAILWAY_REACTION_S)
+
+    def test_a_stop_it_cannot_stop_for_is_refused_and_never_overrun(
+            self) -> None:
+        # G1 runs for Mt Lebanon (77) at full speed; halfway through 66
+        # the dispatcher moves block 67, just ahead, to the top. The
+        # train could not stop there: refused, and it runs on to 77
+        # first.
+        ctc = ready_office()
+        railway = RealisticRailway(ctc, "Green")
+        ctc.queue_stop("G1", "Green", "77")
+        ctc.queue_stop("G1", "Green", "67")
+        refused = None
+        while railway.now < 300 and refused is None:
+            railway.tick()
+            train = railway.trains.get("G1")
+            if (train is not None and train.block == "66"
+                    and train.pos_m > 100 and train.speed_mps > 15):
+                with self.assertRaisesRegex(UnsafeActionError,
+                                            "too fast") as caught:
+                    ctc.move_stop("G1", 1, 0)
+                refused = caught
+        self.assertIsNotNone(refused)
+        self.assertEqual(_stops(ctc, "G1"), ["77", "67"])
+        while railway.now < 400:
+            railway.tick()
+        self.assertEqual(railway.result.overruns, [])
+        # It made Mt Lebanon, then went on for 67.
+        self.assertEqual(_stops(ctc, "G1"), ["67"])
 
     def test_red_reordered_on_its_way_takes_the_new_next_stop(
             self) -> None:
