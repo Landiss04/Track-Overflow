@@ -140,6 +140,17 @@ class StopListWindowTest(unittest.TestCase):
                          ["1 Mt Lebanon", "2 Block 70", "3 Dormont"])
         self.assertEqual(step["message"], "G1's stops reordered.")
 
+    def test_a_drag_survives_another_trains_stops_changing(self) -> None:
+        step = self.steps["dragged 3 to 1 while G2 dispatched"]
+        self.assertEqual(step["stops"], ["73", "77", "70"])
+        self.assertFalse(step["dragging"])
+
+    def test_a_drag_dropped_by_its_own_stops_changing_lets_go(
+            self) -> None:
+        step = self.steps["dragged while a stop was queued"]
+        self.assertEqual(step["stops"], ["73", "77", "70", "65"])
+        self.assertFalse(step["dragging"])
+
 
 if __name__ == "__main__":
     unittest.main()

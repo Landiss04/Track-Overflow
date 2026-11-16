@@ -94,7 +94,8 @@ def main() -> int:
                          Qt.KeyboardModifier.NoModifier, centre(find(name)))
         settle()
 
-    def drag(name: str, dy: float) -> None:
+    def drag(name: str, dy: float, midway=None) -> None:
+        # ``midway``, if given, is called halfway through the drag.
         start = centre(find(name))
         buttons = Qt.MouseButton.LeftButton
         QTest.mousePress(window, buttons, Qt.KeyboardModifier.NoModifier,
@@ -103,6 +104,9 @@ def main() -> int:
             QTest.mouseMove(window, start + QPoint(0, round(dy * i / 10)),
                             20)
             settle()
+            if i == 5 and midway is not None:
+                midway()
+                settle()
         QTest.mouseRelease(window, buttons, Qt.KeyboardModifier.NoModifier,
                            start + QPoint(0, round(dy)))
         settle()
@@ -145,6 +149,8 @@ def main() -> int:
             "stops": [c["block"]
                       for c in host.stopQueues.get(TRAIN, [])],
             "message": find("dispatch-message").property("text"),
+            "dragging": bool(find("stop-list").property("dragging"))
+            if cards else False,
         })
 
     def add_station(block: str, arrival: str) -> None:
@@ -196,6 +202,15 @@ def main() -> int:
     record("queued 77")
     drag("stop-handle-2", -2 * pitch)
     record("dragged 3 to 1")
+    # Another train's stops change mid-drag: the drag goes on.
+    drag("stop-handle-2", -2 * pitch,
+         lambda: host.addStop("G2", "Green", "65", ""))
+    record("dragged 3 to 1 while G2 dispatched")
+    # The train's own stops change mid-drag: the drag is dropped, and
+    # the list can scroll again.
+    drag("stop-handle-2", -2 * pitch,
+         lambda: host.addStop(TRAIN, "Green", "65", ""))
+    record("dragged while a stop was queued")
     print(json.dumps({"steps": steps}))
     del engine
     return 0

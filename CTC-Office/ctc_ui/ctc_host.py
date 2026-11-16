@@ -182,6 +182,13 @@ def _block_number(block_id: str) -> tuple[int, str]:
     return (int(block_id) if block_id.isdigit() else -1, block_id)
 
 
+def _blocks(shown: list[Any] | None) -> list[str] | None:
+    """The block IDs a QML list of stops' blocks holds, or None."""
+    if shown is None:
+        return None
+    return [str(block) for block in shown]
+
+
 class CtcHost(QObject):
     """Bindable CTC module for ``Main.qml``, served to the test UI."""
 
@@ -1090,19 +1097,23 @@ class CtcHost(QObject):
         return self._act(self._module.queue_stop, train_id, line,
                          block_id, arrival)
 
-    @Slot(str, int, result=str)
-    def removeStop(self, train_id: str, index: int) -> str:  # noqa: N802
+    @Slot(str, int, list, result=str)
+    def removeStop(self, train_id: str, index: int,  # noqa: N802
+                   shown: list[str] | None = None) -> str:
         """Remove one of a train's stops (0: the one it is heading
-        for); return the refusal's text, or ""."""
-        return self._act(self._module.remove_stop, train_id, index)
+        for); return the refusal's text, or "". ``shown`` is the
+        stops' blocks as the list showed them: if the train has moved
+        on since, nothing is removed (``CtcOffice.remove_stop``)."""
+        return self._act(self._module.remove_stop, train_id, index,
+                         _blocks(shown))
 
-    @Slot(str, int, int, result=str)
+    @Slot(str, int, int, list, result=str)
     def moveStop(self, train_id: str, from_index: int,  # noqa: N802
-                 to_index: int) -> str:
+                 to_index: int, shown: list[str] | None = None) -> str:
         """Move one of a train's stops; return the refusal's text, or
-        ""."""
+        "". ``shown`` as for ``removeStop``."""
         return self._act(self._module.move_stop, train_id, from_index,
-                         to_index)
+                         to_index, _blocks(shown))
 
     @Slot(str, result=str)
     def returnToYard(self, train_id: str) -> str:  # noqa: N802

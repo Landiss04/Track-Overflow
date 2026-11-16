@@ -753,6 +753,18 @@ class StopsTest(unittest.TestCase):
         self.assertEqual([c["block"] for c in host.stopQueues["T1"]],
                          ["65"])
 
+    def test_a_stale_list_changes_nothing(self) -> None:
+        host, _, _ = _host()
+        for block in ("65", "73", "77"):
+            host.addStop("T1", "Green", block, "")
+        shown = [c["block"] for c in host.stopQueues["T1"]]
+        self.assertEqual(host.removeStop("T1", 0, shown), "")
+        # The list the dispatcher acts on next is the one before.
+        self.assertIn("changed", host.removeStop("T1", 1, shown))
+        self.assertIn("changed", host.moveStop("T1", 1, 0, shown))
+        self.assertEqual([c["block"] for c in host.stopQueues["T1"]],
+                         ["73", "77"])
+
     def test_refusals_come_back_as_text(self) -> None:
         host, _, _ = _host()
         self.assertIn("08:61", host.addStop("T1", "Green", "65", "08:61"))
