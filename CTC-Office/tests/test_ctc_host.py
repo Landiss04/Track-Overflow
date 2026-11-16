@@ -637,6 +637,25 @@ class RedrawTest(unittest.TestCase):
         # No redraw yet: read straight from the module.
         self.assertEqual(host.blockStates, {"Green:5": "closed"})
 
+    def test_a_live_read_is_not_left_stale(self) -> None:
+        # Under the harness the module steps between redraws. A panel
+        # reading a model then holds a newer value than the one last
+        # sent; if the model goes back before the next redraw, that
+        # redraw still sends it, so the panel does not keep the newer.
+        host, module, clock = _host()
+        host.setMaintenanceMode(True)
+        _report(host, module, at("T1", "3"))
+        clock.clock.tick()
+        seen = self._count(host)
+        module.set_block_closed("Green", "5", True)
+        held = host.blockStates                  # a panel re-reads
+        self.assertEqual(held, {"Green:5": "closed"})
+        module.set_block_closed("Green", "5", False)
+        _report(host, module, at("T1", "2"))
+        clock.clock.tick()
+        self.assertEqual(seen["blockStates"], [1])
+        self.assertEqual(host.blockStates, {})
+
     def test_an_action_during_a_redraw_is_shown(self) -> None:
         # A panel acting while a redraw notifies it starts a redraw of
         # its own; the outer one stops there, and what the panels hold

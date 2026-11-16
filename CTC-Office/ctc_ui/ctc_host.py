@@ -387,6 +387,11 @@ class CtcHost(QObject):
         serving = self._serving
         if serving is not None and name in serving:
             return serving[name]
+        # Read live, the reader may now hold a value newer than the one
+        # last sent; if the model then goes back to that one before the
+        # next redraw, comparing with it would leave the reader stale.
+        # Forget it, so that the next redraw sends the model.
+        self._shown.pop(name, None)
         return getattr(self, f"_view_{name}")(self._module.snapshot())
 
     def _refresh(self) -> None:
