@@ -550,7 +550,8 @@ class RedrawTest(unittest.TestCase):
 
     _MODELS = ("trains", "blockStates", "mapTrains", "crossingStates",
                "closures", "switchCommandCount", "departures",
-               "throughput", "throughputHistory", "notices")
+               "throughput", "throughputHistory", "notices",
+               "stopQueues")
 
     def _count(self, host: CtcHost) -> dict[str, list[int]]:
         # Each model's notifications, and stateChanged's.
@@ -574,7 +575,8 @@ class RedrawTest(unittest.TestCase):
         self.assertEqual(len(seen["trains"]), 1)
         self.assertEqual(len(seen["mapTrains"]), 1)
         for name in ("blockStates", "crossingStates", "closures",
-                     "switchCommandCount", "departures", "notices"):
+                     "switchCommandCount", "departures", "notices",
+                     "stopQueues"):
             self.assertEqual(seen[name], [], name)
         self.assertEqual(
             [t["block"] for t in host.mapTrains], ["2"])
@@ -689,6 +691,90 @@ class RedrawTest(unittest.TestCase):
         _report(host, module, at("T1", "3"))
         clock.clock.tick()
         self.assertEqual(seen["notices"], [1, 1])
+
+
+class StopsTest(unittest.TestCase):
+    """The Dispatch panel's stops: its button, its list and its
+    actions."""
+
+    def test_the_button_says_dispatch_then_queue(self) -> None:
+        host, module, clock = _host()
+        self.assertEqual(host.stopAction("T1"), "Dispatch train")
+        self.assertEqual(host.addStop("T1", "Green", "65", "05:10"), "")
+        self.assertEqual(host.stopAction("T1"), "Queue stop")
+        _report(host, module, at("T1", "64"))
+        clock.clock.tick()
+        self.assertEqual(host.returnToYard("T1"), "")
+        # On its way back to the yard: a stop given now dispatches it.
+        self.assertEqual(host.stopAction("T1"), "Dispatch train")
+        self.assertEqual(host.stopAction("T9"), "Dispatch train")
+
+    def test_the_list_shows_every_stop_in_order(self) -> None:
+        host, module, clock = _host()
+        host.addStop("T1", "Green", "65", "05:10")
+        host.addStop("T1", "Green", "73", "05:20:30")
+        host.addStop("T1", "Green", "70", "")
+        self.assertEqual(host.stopQueues["T1"], [
+            {"index": 0, "line": "Green", "block": "65",
+             "name": "Glenbury", "station": True, "arrival": "05:10",
+             "state": "yard"},
+            {"index": 1, "line": "Green", "block": "73",
+             "name": "Dormont", "station": True, "arrival": "05:20:30",
+             "state": "queued"},
+            {"index": 2, "line": "Green", "block": "70",
+             "name": "Block 70", "station": False, "arrival": "—",
+             "state": "queued"},
+        ])
+        _report(host, module, at("T1", "64"))
+        clock.clock.tick()
+        self.assertEqual(host.stopQueues["T1"][0]["state"], "heading")
+        _report(host, module, at("T1", "65"))
+        clock.clock.tick()
+        self.assertEqual(host.stopQueues["T1"][0]["state"], "at stop")
+        host.returnToYard("T1")
+        self.assertEqual(
+            [(c["name"], c["state"]) for c in host.stopQueues["T1"]],
+            [("Yard", "returning")])
+
+    def test_remove_and_move(self) -> None:
+        host, _, _ = _host()
+        for block in ("65", "73", "77"):
+            host.addStop("T1", "Green", block, "")
+        self.assertEqual(host.moveStop("T1", 2, 0), "")
+        self.assertEqual([c["block"] for c in host.stopQueues["T1"]],
+                         ["77", "65", "73"])
+        self.assertEqual(host.trainDetail("T1")["destinationBlock"], "77")
+        self.assertEqual(host.removeStop("T1", 0), "")
+        self.assertEqual([c["block"] for c in host.stopQueues["T1"]],
+                         ["65", "73"])
+        self.assertEqual(host.removeStop("T1", 1), "")
+        self.assertIn("only stop", host.removeStop("T1", 0))
+        self.assertIn("no stop", host.moveStop("T1", 0, 4))
+        self.assertEqual([c["block"] for c in host.stopQueues["T1"]],
+                         ["65"])
+
+    def test_refusals_come_back_as_text(self) -> None:
+        host, _, _ = _host()
+        self.assertIn("08:61", host.addStop("T1", "Green", "65", "08:61"))
+        self.assertNotIn("T1", host.stopQueues)
+        host.addStop("T1", "Green", "65", "")
+        self.assertIn("Red", host.addStop("T1", "Red", "16", ""))
+        self.assertIn("last stop", host.addStop("T1", "Green", "65", ""))
+
+    def test_the_list_is_sent_only_when_it_changes(self) -> None:
+        host, module, clock = _host()
+        host.addStop("T1", "Green", "65", "")
+        host.addStop("T1", "Green", "73", "")
+        _report(host, module, at("T1", "63"))
+        clock.clock.tick()
+        seen: list[int] = []
+        host.stopQueuesChanged.connect(lambda: seen.append(1))
+        # Time passes, the train holds its block: the list is the same.
+        for _ in range(20):
+            clock.clock.tick()
+        self.assertEqual(seen, [])
+        host.moveStop("T1", 1, 0)
+        self.assertEqual(seen, [1])
 
 
 if __name__ == "__main__":

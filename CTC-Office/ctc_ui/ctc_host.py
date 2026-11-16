@@ -206,6 +206,7 @@ class CtcHost(QObject):
     departuresChanged = Signal()
     throughputChanged = Signal()
     throughputHistoryChanged = Signal()
+    stopQueuesChanged = Signal()
 
     def __init__(self, module: CtcOffice | None = None,
                  layout: Mapping[str, Line] | None = None,
@@ -379,6 +380,7 @@ class CtcHost(QObject):
         ("departures", "departuresChanged", False),
         ("throughput", "throughputChanged", True),
         ("throughputHistory", "throughputHistoryChanged", True),
+        ("stopQueues", "stopQueuesChanged", False),
     )
 
     def _view(self, name: str) -> Any:
@@ -1007,12 +1009,100 @@ class CtcHost(QObject):
                 "authorityBlocks": str(preview.authority_blocks),
                 "error": ""}
 
-    @Slot(str, str, str, result=str)
-    def setAuthority(self, train_id: str, line: str,  # noqa: N802
-                     block_id: str) -> str:
-        """Send a train directly to a block, with no arrival time."""
-        return self._act(self._module.dispatch, train_id, line, block_id,
-                         None)
+    # -- Stops (Manual mode) --------------------------------------------
+
+    @Property(dict, notify=stopQueuesChanged)
+    def stopQueues(self) -> dict[str, list[dict[str, Any]]]:  # noqa: N802
+        """Each ordered train's stops, by train ID, for the Dispatch
+        panel's list: the stop it is heading for first, then the ones
+        queued after it. Each ``{index, block, name, station, arrival,
+        state}``; ``state`` is ``yard`` (not on the track yet),
+        ``heading``, ``at stop``, ``returning`` (to the yard) or
+        ``queued``."""
+        return self._view("stopQueues")
+
+    def _view_stopQueues(  # noqa: N802
+            self, snap: CtcSnapshot) -> dict[str, list[dict[str, Any]]]:
+        heads = {t.train_id: t.blocks for t in snap.trains}
+        queued: dict[str, list[DispatchOrder]] = {}
+        for stop in snap.queued_stops:
+            queued.setdefault(stop.train_id, []).append(stop)
+        returning = set(snap.returning_trains)
+        result = {}
+        for order in snap.orders:
+            train_id = order.train_id
+            blocks = heads.get(train_id)
+            if train_id in returning:
+                first = "returning"
+            elif blocks is None:
+                first = "yard"
+            elif blocks == (order.destination_block_id,):
+                first = "at stop"
+            else:
+                first = "heading"
+            result[train_id] = [
+                self._stop_card(i, stop, first if i == 0 else "queued")
+                for i, stop in enumerate(
+                    [order, *queued.get(train_id, ())])]
+        return result
+
+    def _stop_card(self, index: int, stop: DispatchOrder,
+                   state: str) -> dict[str, Any]:
+        layout_line = self._layout.get(stop.line)
+        block = (layout_line.block(stop.destination_block_id)
+                 if layout_line else None)
+        station = block is not None and block.station is not None
+        return {
+            "index": index,
+            "line": stop.line,
+            "block": stop.destination_block_id,
+            "name": ("Yard" if state == "returning"
+                     else block.station.title() if station and block.station
+                     else f"Block {stop.destination_block_id}"),
+            "station": station,
+            "arrival": (format_time_of_day(stop.arrival_s)
+                        if stop.arrival_s is not None else NO_VALUE),
+            "state": state,
+        }
+
+    @Slot(str, result=str)
+    def stopAction(self, train_id: str) -> str:  # noqa: N802
+        """The Dispatch panel's button for a train: "Dispatch train"
+        when it has no order (a new train, one with none left, or one
+        on its way back to the yard), else "Queue stop"."""
+        snap = self._module.snapshot()
+        ordered = (train_id in self._orders(snap)
+                   and train_id not in snap.returning_trains)
+        return "Queue stop" if ordered else "Dispatch train"
+
+    @Slot(str, str, str, str, result=str)
+    def addStop(self, train_id: str, line: str,  # noqa: N802
+                block_id: str, arrival_text: str) -> str:
+        """Dispatch a train to a station or block, or queue the stop
+        after its last (``stopAction``); arrival is optional HH:MM.
+        Return the refusal's text, or ""."""
+        arrival: float | None = None
+        if arrival_text.strip():
+            try:
+                arrival = parse_time_of_day(arrival_text)
+            except TimeOfDayError as error:
+                return str(error)
+        return self._act(self._module.queue_stop, train_id, line,
+                         block_id, arrival)
+
+    @Slot(str, int, result=str)
+    def removeStop(self, train_id: str, index: int) -> str:  # noqa: N802
+        """Remove one of a train's stops (0: the one it is heading
+        for); return the refusal's text, or ""."""
+        return self._act(self._module.remove_stop, train_id, index)
+
+    @Slot(str, int, int, result=str)
+    def moveStop(self, train_id: str, from_index: int,  # noqa: N802
+                 to_index: int) -> str:
+        """Move one of a train's stops; return the refusal's text, or
+        ""."""
+        return self._act(self._module.move_stop, train_id, from_index,
+                         to_index)
 
     @Slot(str, result=str)
     def returnToYard(self, train_id: str) -> str:  # noqa: N802

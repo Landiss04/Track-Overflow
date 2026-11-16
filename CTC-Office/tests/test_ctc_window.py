@@ -8,6 +8,10 @@ in its own process (it needs a QGuiApplication) and reports what it
 shows after each of three redraws: T1 moving 3 -> 2, then T2 65 -> 66,
 with 40 tickets sold at Glenbury in each of the last two.
 
+``stop_list_probe.py`` works the Manual view's Dispatch panel with the
+mouse (dispatch, queue, ▲ ▼, ×, drag) and reports the stop cards the
+list shows after each action.
+
 Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 """
 
@@ -21,6 +25,18 @@ from pathlib import Path
 from typing import Any
 
 _PROBE = Path(__file__).resolve().parent / "window_probe.py"
+_STOPS_PROBE = Path(__file__).resolve().parent / "stop_list_probe.py"
+
+
+def _probe(path: Path) -> dict[str, Any]:
+    """Run a probe in its own process; the JSON it prints last."""
+    done = subprocess.run(
+        [sys.executable, str(path)], capture_output=True, text=True,
+        encoding="utf-8", timeout=120, check=False)
+    if done.returncode != 0:
+        raise AssertionError(
+            f"{path.name} failed ({done.returncode}):\n{done.stderr}")
+    return json.loads(done.stdout.strip().splitlines()[-1])
 
 
 class WindowRedrawTest(unittest.TestCase):
@@ -30,14 +46,7 @@ class WindowRedrawTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        done = subprocess.run(
-            [sys.executable, str(_PROBE)], capture_output=True, text=True,
-            timeout=120, check=False)
-        if done.returncode != 0:
-            raise AssertionError(
-                f"window_probe failed ({done.returncode}):\n{done.stderr}")
-        cls.redraws = json.loads(done.stdout.strip().splitlines()[-1])[
-            "redraws"]
+        cls.redraws = _probe(_PROBE)["redraws"]
 
     def test_train_cars_are_drawn_where_the_map_places_them(self) -> None:
         for number, shown in enumerate(self.redraws):
@@ -71,6 +80,65 @@ class WindowRedrawTest(unittest.TestCase):
                              [bar["address"] for bar in first["bars"]])
             self.assertTrue(all(bar["height"] > 0
                                 for bar in shown["bars"]))
+
+
+class StopListWindowTest(unittest.TestCase):
+    """The Dispatch panel's stops in Manual mode, worked with the mouse
+    (``stop_list_probe.py``): G1 dispatched to Glenbury (65), Dormont
+    (73) and block 70 queued, the first moved down, the second removed,
+    the second moved up, Mt Lebanon (77) queued, and the third dragged
+    to the top."""
+
+    steps: dict[str, dict[str, Any]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.steps = {step["action"]: step
+                     for step in _probe(_STOPS_PROBE)["steps"]}
+
+    def _names(self, action: str) -> list[str]:
+        # Each card's ordinal and stop name, as the list shows them.
+        return [" ".join(card[:2]) for card in self.steps[action]["cards"]]
+
+    def test_the_button_says_dispatch_then_queue(self) -> None:
+        self.assertEqual(self.steps["picked"]["button"], "Dispatch train")
+        self.assertEqual(self.steps["picked"]["cards"], [])
+        for action in ("dispatched 65", "queued 73", "dragged 3 to 1"):
+            self.assertEqual(self.steps[action]["button"], "Queue stop")
+
+    def test_adding_stops_lists_a_card_each(self) -> None:
+        self.assertEqual(self._names("dispatched 65"), ["1 Glenbury"])
+        self.assertEqual(self._names("queued 73"),
+                         ["1 Glenbury", "2 Dormont"])
+        self.assertEqual(self._names("queued block 70"),
+                         ["1 Glenbury", "2 Dormont", "3 Block 70"])
+        first = self.steps["dispatched 65"]["cards"][0]
+        self.assertIn("arr 05:10", first)
+        self.assertIn("IN YARD", first)
+        self.assertEqual(self.steps["queued block 70"]["stops"],
+                         ["65", "73", "70"])
+
+    def test_arrows_and_remove_change_the_stops(self) -> None:
+        expected = {
+            "moved 1 down": ["73", "65", "70"],
+            "removed 2": ["73", "70"],
+            "moved 2 up": ["70", "73"],
+            "queued 77": ["70", "73", "77"],
+        }
+        for action, stops in expected.items():
+            with self.subTest(action=action):
+                self.assertEqual(self.steps[action]["stops"], stops)
+                self.assertEqual(len(self.steps[action]["cards"]),
+                                 len(stops))
+        self.assertEqual(self._names("removed 2"),
+                         ["1 Dormont", "2 Block 70"])
+
+    def test_dragging_a_card_moves_its_stop(self) -> None:
+        step = self.steps["dragged 3 to 1"]
+        self.assertEqual(step["stops"], ["77", "70", "73"])
+        self.assertEqual(self._names("dragged 3 to 1"),
+                         ["1 Mt Lebanon", "2 Block 70", "3 Dormont"])
+        self.assertEqual(step["message"], "G1's stops reordered.")
 
 
 if __name__ == "__main__":

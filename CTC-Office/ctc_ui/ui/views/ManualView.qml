@@ -1,4 +1,5 @@
-// Manual mode: the dispatcher issues destination, authority and speed.
+// Manual mode: the dispatcher dispatches trains and queues their stops;
+// the CTC sends their speed and authority.
 //
 // The column scrolls: the bottom row keeps at least the throughput
 // panel's full height (chart, hour labels), so nothing is clipped on a
@@ -30,10 +31,10 @@ ScrollView {
             Layout.fillWidth: true
             variant: "info"
             heading: qsTr("Manual mode")
-            body: qsTr("You issue destination, authority and speed. "
-                + "Schedule auto-dispatch is paused and queued runs are "
-                + "held. To close a block or move a switch, switch to "
-                + "Maintenance.")
+            body: qsTr("You dispatch trains and queue their stops; the "
+                + "CTC sends their speed and authority. Schedule "
+                + "auto-dispatch is paused and queued runs are held. To "
+                + "close a block or move a switch, switch to Maintenance.")
         }
 
         DispatchPanel {
