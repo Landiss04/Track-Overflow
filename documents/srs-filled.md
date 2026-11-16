@@ -260,6 +260,12 @@ REQ-FUNC-008: The system shall allow the CTC dispatcher to switch between manual
 
 REQ-FUNC-009: While in manual dispatch mode, the CTC dispatcher shall be able to manually dispatch a train to a block.
 
+REQ-FUNC-060: While in manual dispatch mode, the system shall allow the CTC dispatcher to queue further stops for a dispatched train, each a station or a block of the train's line with an optional arrival time. The train shall make its stops in order, dwelling at each, and shall stay at its last stop until the dispatcher gives it another command.
+
+REQ-FUNC-061: While in manual dispatch mode, the system shall allow the CTC dispatcher to remove any of a train's stops except its only one, including the stop it is heading for, which sends it on to its next stop.
+
+REQ-FUNC-062: While in manual dispatch mode, the system shall allow the CTC dispatcher to reorder a train's stops. When the stop a train is heading for changes, the system shall recompute its authority toward the new stop within safety limits (REQ-FUNC-005).
+
 REQ-FUNC-010: While in automatic dispatch mode, the system shall support loading and running a train schedule.
 
 REQ-FUNC-011: The system shall allow the CTC dispatcher to close a block for maintenance.
@@ -588,6 +594,9 @@ Not applicable. All logic is deterministic and rule-based. No machine learning i
 | REQ-FUNC-007 | Automatic dispatch mode exists | Demonstration |
 | REQ-FUNC-008 | Switch manual/automatic mode | Demonstration |
 | REQ-FUNC-009 | Manual dispatch to a block | Test + Demonstration |
+| REQ-FUNC-060 | Queue a train's stops (station or block); dwell at each, stay at the last | Test + Demonstration |
+| REQ-FUNC-061 | Remove a train's stop, except its only one | Test + Demonstration |
+| REQ-FUNC-062 | Reorder a train's stops; authority recomputed toward the new stop | Test + Demonstration |
 | REQ-FUNC-010 | Load and run a train schedule | Test + Demonstration |
 | REQ-FUNC-011 | Close a block for maintenance | Demonstration |
 | REQ-FUNC-012 | Manual switch set in maintenance mode | Demonstration |

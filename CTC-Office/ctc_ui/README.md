@@ -158,20 +158,30 @@ yet) through `ctc_ui/ctc_host.py`:
   "Keep open at bottom" or the minimize button docks it in the track
   view's bottom row, beside the hint, clear of the map and its legend. Escape, the close button, or clicking the scrim closes it.
 - **Dispatch train** (Manual): pick a line, a train (or a new one) and a
-  destination station, with an optional arrival time (`HH:MM`). Picking a
-  train that already has an order reroutes it. **Set authority** sends
-  the train straight to a block instead; the CTC turns it into a count
-  of blocks. The readouts show the suggested speed and authority the CTC
-  sends to the Track Controller: as soon as line, train and destination
-  are picked, what a dispatch would send (from the yard exit block for a
-  train in the yard), then the train's live values once it runs to that
-  destination. An error (such as an invalid arrival time) clears as soon
-  as any field changes. Block fields take a typed block number, or a
-  pick from the list.
+  stop, with an optional arrival time (`HH:MM`). **Stop at** chooses a
+  station or any block of the line (REQ-FUNC-009); the CTC turns either
+  into a count of blocks. For a train with no order the button reads
+  **Dispatch train**; for one that has one it reads **Queue stop**, and
+  the stop goes after its last. The train's stops are listed below as
+  cards, the one it is heading for first: it dwells 45 s at each once
+  the CTC sees it stopped there (D007), then heads for the next, and
+  stays at the last. **×** removes a stop (not a train's only one: an
+  order is not withdrawn), **▲ ▼** or dragging a card by its handle
+  reorders them; a new first stop is the one it heads for at once, its
+  authority recomputed from where it is. The list scrolls past four
+  stops. The readouts show the suggested speed and authority the CTC
+  sends to the Track Controller: for a train with no order, what a
+  dispatch to the picked stop would send (from the yard exit block for
+  a train in the yard), and the train's live values once it has one.
+  An error (such as an invalid arrival time) clears as soon as any
+  field changes. Block fields take a typed block number, or a pick from
+  the list.
 - **Selected train** shows the train's live readouts, including why its
   authority ends where it does; in Manual mode it also reroutes the
-  train, and **Return to yard** sends a train on the track back to the
-  yard, where it is retired. The dispatcher cannot cancel a train's order.
+  train (the stop it is heading for; stops queued after it stay), and
+  **Return to yard** sends a train on the track back to the yard, where
+  it is retired, dropping its queued stops. The dispatcher cannot cancel
+  a train's order.
 - **Close block** and **Active closures** (Maintenance only) close a
   block (with a confirmation step, style guide 7) and reopen it. A block
   closes at once, even with a train in it (`block-closure`).
@@ -262,7 +272,7 @@ yet) through `ctc_ui/ctc_host.py`:
 
 | Area | Hook |
 | --- | --- |
-| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `setAuthority`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
+| CTC module | `ctc` context property, a `CtcHost` (`ctc_host.py`). Views and panels take it as `host`. Read `trains`, `blockStates`, `crossingStates`, `closures`, `throughput`, `stopQueues`; call `trainDetail`, `switchDetail` and the `*Options` slots; act with `dispatchTrain`, `addStop`, `removeStop`, `moveStop`, `returnToYard`, `closeBlock`, `reopenBlock`, `setSwitch`, `releaseSwitch`, which return an error message or `""`. Bindings that call a slot read `host.revision` so they refresh when the module changes. |
 | Track map | `panels/TrackViewPanel.qml` → `mapCanvas`; `blockStates` and `crossingStates` style the blocks. Set `mapAvailable` to enable zoom and fit. |
 | Selected train | `SelectedTrainPanel.trainId` and `host`; `canReroute` adds the reroute controls. |
 | Schedule file | `AutoDispatchPanel.scheduleFileSelected(fileUrl)` → `ctc.loadSchedule`; `scheduleFile`, `scheduleError`, `departures`, `dispatchRunning` and `dispatchPaused` come back from `ctc`; Pause / Resume call `ctc.setDispatchPaused`. The header's mode calls `ctc.setAutomaticMode`. |

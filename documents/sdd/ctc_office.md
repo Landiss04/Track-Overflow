@@ -22,6 +22,7 @@ only what is specific to the CTC Office.
 |---|---|---|---|
 | Landis | 2026-10-22 | First CTC Office contribution, following the Track Controller (HW) contribution's layout. | 0.1 |
 | Landis | 2026-10-25 | Sequence diagrams name the signals and method calls; Cancel order removed from Selected train (UC-02, UC-05, UC-06, SD-05, SD-13). | 0.2 |
+| Landis | 2026-11-15 | Queued stops in Manual mode: a dispatch to a station or a block from one form, and a list to remove and reorder stops (UC-02 to UC-06, UC-25; REQ-FUNC-060 to 062). SD-03 and SD-04 not redrawn. | 0.3 |
 
 ## References
 
@@ -75,6 +76,7 @@ covered by at least one use case (section 3).
 | 2.1 | 2 | CTC determines and sends speed limit and authority to the track controller within safety limits | REQ-FUNC-005, 005.1, 005.2 | UC-21, UC-13 |
 | 2.2 | 1 | Switches between manual and automatic mode | REQ-FUNC-006, 007, 008 | UC-02 |
 | 2.3 | 1 | Dispatcher manually dispatches a train to a block | REQ-FUNC-009 | UC-04, UC-05 |
+| — | — | Dispatcher queues, removes and reorders a train's stops | REQ-FUNC-060, 061, 062 | UC-25 |
 | 2.4 | 1 | Close block for maintenance | REQ-FUNC-011 | UC-09, UC-22 |
 | 2.5 | 3 | Monitor train occupancy | REQ-FUNC-013 | UC-11, UC-12, UC-17, UC-18 |
 | 2.6 | 2 | Loading and running a schedule | REQ-FUNC-010 | UC-07, UC-08, UC-19 |
@@ -159,7 +161,7 @@ stories cover every use case.
 | **Description** | Chooses Automatic, Manual or Maintenance mode. |
 | **Data** | One mode at a time. |
 | **Stimulus** | OPERATING MODE toggle in the header. |
-| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train, and reroute or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
+| **Response** | The right-hand column shows that mode's view. Automatic: the loaded schedule's runs dispatch themselves. Manual: Dispatch train and the selected train's stops, and reroute or return to yard for the selected train. Maintenance: Close block, Active closures and Set switch position. Leaving Automatic holds every scheduled run where it is; leaving Maintenance drops every switch command, while closed blocks stay closed. The mode itself is sent to no module: the Track Controller gets the closed blocks instead. |
 | **Requirements** | Rubric 2.2; REQ-FUNC-006, 007, 008 |
 | **Sequence** | SD-02 |
 
@@ -170,8 +172,8 @@ stories cover every use case.
 | **Actors** | Dispatcher |
 | **Description** | Orders a train to a station of its line, with an optional arrival time. |
 | **Data** | Line; train: one already on the line, or **New train (G*n* or R*n*)** with the line's initial and the next free number, skipping the loaded schedule's runs; destination station (the line's station blocks); arrival `HH:MM`, optional. |
-| **Stimulus** | **Dispatch train** (Manual view). It reads **Reroute train** when the train already has an order. |
-| **Response** | The order is recorded, replacing any earlier one. A new train waits in the yard until the CTC Office releases it (UC-20). From then on the train gets authority toward the station every step (UC-21). The panel shows the suggested speed and authority sent for it. The arrival time ranks the train for contested blocks: the train most behind schedule goes first. |
+| **Stimulus** | **Dispatch train** (Manual view), with **Station** under STOP AT. For a train that already has an order the button reads **Queue stop**, and the station is queued after its last stop instead (UC-25). |
+| **Response** | The order is recorded. A new train waits in the yard until the CTC Office releases it (UC-20). From then on the train gets authority toward the station every step (UC-21). The panel shows the suggested speed and authority sent for it. The arrival time ranks the train for contested blocks: the train most behind schedule goes first. |
 | **Alternatives** | Refused with a message, and nothing changes: the line's waysides are not all ready (the message names the wayside and why); the destination is closed or closing; the train is on the other line; the train ID is empty, unprintable or longer than 32 characters; the arrival is not a time of day. A destination the CTC Office takes for a failure is accepted: the train waits short of it until it clears. |
 | **Requirements** | Rubric 2.0; REQ-FUNC-004, 004.1, 004.2, 006; REQ-NFR-003, 004 |
 | **Sequence** | SD-03 |
@@ -182,12 +184,25 @@ stories cover every use case.
 |---|---|
 | **Actors** | Dispatcher |
 | **Description** | Sends a train straight to any block of its line. |
-| **Data** | Line, train, block. |
-| **Stimulus** | **Set authority** ("or dispatch directly to a block"), Manual view. |
-| **Response** | An order to that block with no arrival time. The CTC Office turns it into a count of blocks every step (D013). |
+| **Data** | Line, train, block (typed or picked); arrival `HH:MM`, optional. |
+| **Stimulus** | **Block** under STOP AT, then **Dispatch train** (Manual view); **Queue stop** queues the block instead for a train that already has an order (UC-25). |
+| **Response** | An order to that block, as UC-03 gives one to a station. The CTC Office turns it into a count of blocks every step (D013). |
 | **Alternatives** | As UC-03. |
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-04 |
+
+### UC-25 Queue, remove and reorder a train's stops
+
+| | |
+|---|---|
+| **Actors** | Dispatcher |
+| **Description** | Gives a dispatched train more stops, and changes them. A train's stops are the one it is heading for (its order) and the ones queued after it, each a station or a block of its line. |
+| **Data** | Line, train, a station or a block, arrival `HH:MM` (optional), as UC-03 and UC-04. The Dispatch panel lists the selected train's stops, one card each: the stop, its arrival, and its state (heading, at stop, in yard, to yard, queued). |
+| **Stimulus** | **Queue stop** (Manual view); a card's **×**; its **▲** / **▼**, or dragging it by its handle. |
+| **Response** | A queued stop goes after the last. Once the train has stopped at its stop (as far as occupancy tells, UC-18) and dwelt there 45 s (D007), its next stop becomes its order; after the last it stays there. Removing or moving a stop so that another comes first makes that one its order at once: the route and authority are worked out again from where the train is, every step, as for any order (UC-21), so it is never given authority past what is safe. Each stop keeps its arrival time. A block that closes drops the stops into it, with a notice; a train whose current stop closes heads for its next. |
+| **Alternatives** | Refused with a message, and nothing changes: as UC-03 refuses; a stop on another line than the train's order; a run of the loaded schedule (the schedule gives its stops); the block that is already its last stop; more than 20 stops; removing a train's only stop (an order is not withdrawn: send it elsewhere or back to the yard); a new first stop on a line not ready. A train in the yard or not located does not move on. **Return to yard** (UC-06) drops its queued stops. |
+| **Requirements** | REQ-FUNC-060, 061, 062, 005; D007 |
+| **Sequence** | None yet; SD-03 and SD-04 show a single dispatch, and predate the stop list. |
 
 ### UC-05 Reroute a train
 
@@ -197,7 +212,7 @@ stories cover every use case.
 | **Description** | Changes where the selected train is going. The dispatcher cannot withdraw a train's order. |
 | **Data** | Train; new destination; arrival time (optional). |
 | **Stimulus** | A new destination, then **Reroute** in Selected train (Manual mode). |
-| **Response** | The new order replaces the old one; the route is worked out again from where the train is, carrying on the way it is going. |
+| **Response** | The new order replaces the stop it is heading for; any stops queued after it stay (UC-25). The route is worked out again from where the train is, carrying on the way it is going. |
 | **Alternatives** | Refused as UC-03 refuses. |
 | **Requirements** | Rubric 2.3; REQ-FUNC-009 |
 | **Sequence** | SD-05 |
@@ -210,7 +225,7 @@ stories cover every use case.
 | **Description** | Sends a manual train on the track back to the yard, where it is retired (D022). |
 | **Data** | Train. |
 | **Stimulus** | **Return to yard** in Selected train (Manual mode). |
-| **Response** | An order to the line's yard entry block (Green 57, Red 9). Once the train has stopped there with authority 0 it is retired (UC-20). A later order withdraws it. |
+| **Response** | An order to the line's yard entry block (Green 57, Red 9), in place of its stops. Once the train has stopped there with authority 0 it is retired (UC-20). A later order withdraws it. |
 | **Alternatives** | Refused for a train not on the track, for a run of the loaded schedule (the schedule returns it), and as UC-03 refuses. |
 | **Requirements** | D022 |
 | **Sequence** | SD-06 |

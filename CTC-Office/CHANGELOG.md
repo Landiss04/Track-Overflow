@@ -4,6 +4,52 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-15 — Manual mode: queued stops
+
+From the design review: the dispatcher can dispatch a train and queue
+its later stops, and remove or reorder them (REQ-FUNC-060 to 062, new).
+
+- **The Dispatch panel.** `ctc_ui/ui/panels/DispatchPanel.qml`: one
+  form for a stop, a station or (under **Stop at**) any block of the
+  line, so the separate "or dispatch directly to a block" row and its
+  **Set authority** button are gone; dispatching to a block stays
+  (REQ-FUNC-009, rubric 2.3, UC-04). The button reads **Dispatch
+  train** for a train with no order (or one on its way back to the
+  yard), else **Queue stop**. Below, `components/StopList.qml` lists the
+  train's stops as cards, the one it is heading for first, each with ×,
+  ▲ ▼ and a drag handle. The yard stays in the station list.
+- **The module.** `ctc/model.py`: `queue_stop`, `remove_stop`,
+  `move_stop`; the snapshot carries `queued_stops` and
+  `returning_trains`. A train's itinerary is its order plus its queued
+  stops. Once the train is at a stand at its stop (`_at_a_stand`) it
+  dwells `DWELL_S` (45 s, D007), then its next stop becomes its order;
+  after the last it stays. A new first stop (removal or move) becomes
+  the order at once through `_check_dispatch`, so the authority comes
+  from the usual per-step computation and nothing is refused silently.
+  A train's only stop cannot be removed. A closure drops the stops into
+  the block, with a notice, and a train whose current stop closes heads
+  for its next. **Return to yard** clears the queue; a reroute
+  (`dispatch`) replaces only the current stop. Queueing is refused for
+  a run of the loaded schedule. The queue advances in either mode, as a
+  single manual order does.
+- **The host.** `ctc_ui/ctc_host.py`: `stopQueues` (its own notify
+  signal, sent only when changed, like the other panel models),
+  `stopAction`, `addStop`, `removeStop`, `moveStop`; `setAuthority`
+  removed.
+- **The process.** `ctc/module_process.py`: `--dispatch` given again for
+  the same train queues its later stops.
+- **Tests.** `tests/test_ctc_stop_queue.py` (model, and a Green and a
+  Red train through three stops on the realistic railway, one reordered
+  on its way); `StopsTest` in `test_ctc_host.py`; `StopListWindowTest`
+  in `test_ctc_window.py`, which clicks and drags in the window
+  (`stop_list_probe.py`).
+- **Docs.** `documents/srs-filled.md` REQ-FUNC-060 to 062;
+  `documents/sdd/ctc_office.md` and `Railway_Sim_SDD.md` UC-03, UC-04,
+  new UC-25. SD-03 and SD-04 are not redrawn and still show the old
+  panel.
+
+---
+
 ## 2026-11-15 — The window redraws in place, and routes are remembered (issue #66)
 
 From issue #66, a review of `b066cde` on `hw_pi_test`, which redraws
