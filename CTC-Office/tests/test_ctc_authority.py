@@ -7,10 +7,12 @@ Run from ``CTC-Office`` with ``python -m unittest discover tests``.
 from __future__ import annotations
 
 import json
+import random
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -20,6 +22,7 @@ from ctc.interface import (  # noqa: E402
     SwitchReport,
     TrainAuthority,
 )
+from ctc import routing  # noqa: E402
 from ctc.model import StubCtcOffice, UnsafeActionError  # noqa: E402
 from ctc.routing import (  # noqa: E402
     TrackGraph,
@@ -105,6 +108,82 @@ def _line_from(blocks: list[dict]) -> Line:
              "speed_limit_kmh": 50, **extra}
             for n, extra in blocks]}), encoding="utf-8")
         return load_line("Test", path)
+
+
+class RouteCacheTest(unittest.TestCase):
+    """A graph remembers the routes it found (issue #66): the same
+    question gets the same answer as a search would give, whatever was
+    asked in between, and nothing a caller does afterwards changes it."""
+
+    def _questions(self, graph: TrackGraph, line: str, count: int,
+                   seed: int) -> list[tuple]:
+        # Starts, destinations, blocks to avoid and where the train came
+        # from, drawn at random with a fixed seed; many asked twice.
+        rng = random.Random(seed)
+        blocks = [b.block_id for b in _LAYOUT[line].blocks]
+        asked = []
+        for _ in range(count):
+            start = rng.choice(blocks)
+            came_from = rng.choice([None, *graph.neighbors(start)])
+            avoid = rng.sample(blocks, rng.randrange(0, 8))
+            asked.append((start, rng.choice(blocks), avoid, came_from))
+        return asked + rng.sample(asked, count // 2)
+
+    def test_the_same_answer_as_a_search(self) -> None:
+        for line in ("Green", "Red"):
+            cached = TrackGraph(_LAYOUT[line])
+            fresh = TrackGraph(_LAYOUT[line])
+            for start, end, avoid, came_from in self._questions(
+                    cached, line, 2000, seed=66):
+                with self.subTest(line=line, start=start, end=end,
+                                  avoid=avoid, came_from=came_from):
+                    self.assertEqual(
+                        cached.route(start, end, avoid, came_from),
+                        fresh._search(start, end, frozenset(avoid),
+                                      came_from))
+
+    def test_avoid_changed_after_asking(self) -> None:
+        # The set the caller passed is not what is remembered.
+        graph = TrackGraph(_LAYOUT["Green"])
+        avoid = {"36"}
+        self.assertIsNone(graph.route("30", "37", avoid))
+        avoid.clear()
+        self.assertEqual(graph.route("30", "37", avoid), _GREEN_30_TO_37)
+        avoid.add("36")
+        self.assertIsNone(graph.route("30", "37", avoid))
+
+    def test_every_argument_is_part_of_the_question(self) -> None:
+        # Same start, destination and avoid: came_from alone decides.
+        # Red 31 to 30 having come from 32 is one block on; having come
+        # from 30 it is the long way round the loop.
+        graph = TrackGraph(_LAYOUT["Red"])
+        on = graph.route("31", "30", came_from="32")
+        back = graph.route("31", "30", came_from="30")
+        self.assertEqual(on, ("31", "30"))
+        self.assertGreater(len(back), 2)
+        self.assertEqual(graph.route("31", "30", came_from="32"), on)
+
+    def test_it_forgets_when_full(self) -> None:
+        graph = TrackGraph(_LAYOUT["Green"])
+        fresh = TrackGraph(_LAYOUT["Green"])
+        with mock.patch.object(routing, "ROUTE_CACHE_SIZE", 16):
+            for start, end, avoid, came_from in self._questions(
+                    graph, "Green", 200, seed=7):
+                self.assertEqual(
+                    graph.route(start, end, avoid, came_from),
+                    fresh._search(start, end, frozenset(avoid),
+                                  came_from))
+                self.assertLessEqual(len(graph._routes), 16)
+
+    def test_neighbors_in_file_order(self) -> None:
+        for line in ("Green", "Red"):
+            graph = TrackGraph(_LAYOUT[line])
+            order = [b.block_id for b in _LAYOUT[line].blocks]
+            for block_id in order:
+                self.assertEqual(
+                    graph.neighbors(block_id),
+                    tuple(sorted(graph._neighbors[block_id],
+                                 key=order.index)))
 
 
 class NextBlocksTest(unittest.TestCase):

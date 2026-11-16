@@ -58,6 +58,12 @@ _LOW, _HIGH = "low", "high"
 #: may reverse: a route reverses as few times as it can.
 REVERSAL_COST = 10
 
+#: Routes a graph remembers (``TrackGraph.route``) before it forgets
+#: them all and starts again. The stress schedule (18 trains) asks about
+#: 1,500 different ones in its first 40 simulated minutes, and each
+#: hundreds of times.
+ROUTE_CACHE_SIZE = 4096
+
 
 @dataclass(frozen=True, slots=True)
 class SwitchLeg:
@@ -114,7 +120,14 @@ def _legs(switch: str) -> list[tuple[str, str] | None]:
 
 
 class TrackGraph:
-    """How the blocks of one line connect."""
+    """How the blocks of one line connect.
+
+    A graph never changes once built: everything it answers comes from
+    the layout file alone. So it remembers the routes it has found
+    (``route``), and the same question asked again, as the CTC asks it
+    every step for every train that has not moved on, is answered
+    without a search.
+    """
 
     def __init__(self, line: Line) -> None:
         self.line = line.name
@@ -178,6 +191,15 @@ class TrackGraph:
                 raise ValueError(
                     f"{line.name} block {block_id} lists next block "
                     f"{after!r}, which the layout does not join to it")
+        # Fixed from here on: each block's neighbors in file order, and
+        # the routes found so far, by (start, destination, avoid,
+        # came_from).
+        self._in_order: dict[str, tuple[str, ...]] = {
+            block_id: tuple(sorted(joined, key=index.__getitem__))
+            for block_id, joined in self._neighbors.items()}
+        self._routes: dict[
+            tuple[str, str, frozenset[str], str | None],
+            tuple[str, ...] | None] = {}
 
     def _next_in_file(self, a: str, b: str) -> bool:
         return abs(self._order[a] - self._order[b]) == 1
@@ -214,8 +236,7 @@ class TrackGraph:
 
     def neighbors(self, block_id: str) -> tuple[str, ...]:
         """Blocks joined to this one, in file order."""
-        return tuple(sorted(self._neighbors[block_id],
-                            key=self._order.__getitem__))
+        return self._in_order[block_id]
 
     def leg(self, a: str, b: str) -> SwitchLeg | None:
         """The switch connection joining two blocks, if it is one."""
@@ -253,7 +274,27 @@ class TrackGraph:
         With ``avoid``, the path enters none of those blocks. With
         ``came_from``, the block the train entered ``start`` from, the
         path carries on the way the train is going instead of turning
-        back."""
+        back.
+
+        The answer depends on the arguments and the layout alone, so it
+        is remembered: the same question again gets the same tuple.
+        """
+        key = (start, destination, frozenset(avoid), came_from)
+        try:
+            return self._routes[key]
+        except KeyError:
+            pass
+        found = self._search(start, destination, key[2], came_from)
+        if len(self._routes) >= ROUTE_CACHE_SIZE:
+            self._routes.clear()
+        self._routes[key] = found
+        return found
+
+    def _search(self, start: str, destination: str,
+                avoid: frozenset[str],
+                came_from: str | None) -> tuple[str, ...] | None:
+        """``route``, searched for: breadth first over (previous block,
+        block), so that turning back can be ruled out."""
         if start not in self._neighbors or destination not in self._neighbors:
             return None
         if destination in avoid:
