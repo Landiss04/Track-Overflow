@@ -12,7 +12,7 @@ This file is read at the start of every agent session. Shards are read on demand
 | Conventions: toolchain | [toolchain.md](conventions/toolchain.md) | Minimum tool versions checked at session start | 2026-10-01 |
 | Modules | `truth/modules/` | One owned shard per module; a module with multiple implementations has a contract shard plus one shard per variant — all are placeholders except Train Model | 2026-10-19 |
 | Signals | `truth/signals/` | One file per signal | 2026-10-19 |
-| Arbitration | `truth/arbitration/` | One file per precedence rule | 2026-10-19 |
+| Arbitration | `truth/arbitration/` | One file per precedence rule | 2026-11-12 |
 | Decisions | `truth/decisions/` | One file per decision | 2026-10-19 |
 
 ## Decisions on record
