@@ -102,6 +102,14 @@ ColumnLayout {
             height: root.cardHeight
             z: handle.drag.active ? 2 : 0
 
+            // The cards are rebuilt when the train's stops change, as
+            // when it moves on mid-drag: a card that goes while pressed
+            // never gets its release, so the list scrolls again.
+            Component.onDestruction: {
+                if (list && handle && handle.pressed)
+                    list.dragging = false;
+            }
+
             Rectangle {
                 id: card
                 objectName: "stop-card-" + slot.index

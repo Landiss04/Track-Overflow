@@ -49,6 +49,13 @@ Panel {
     // The selected train's stops, the one it is heading for first.
     readonly property var stops: root.host && root.trainId !== ""
         ? (root.host.stopQueues[root.trainId] || []) : []
+
+    // The stops' blocks as the list shows them: an action on a stop is
+    // refused if the train has moved on since (``CtcHost.removeStop``).
+    function shownBlocks() {
+        return root.stops.map(stop => stop.block);
+    }
+
     // What the readouts show: the train's live values once it has an
     // order, else what dispatching it to the picked stop would send
     // (``error`` says why nothing would).
@@ -266,11 +273,13 @@ Panel {
         trainId: root.trainId
         stops: root.stops
         onRemoveRequested: function (index) {
-            root.report(root.host.removeStop(root.trainId, index),
+            root.report(root.host.removeStop(root.trainId, index,
+                                             root.shownBlocks()),
                 qsTr("Stop removed from %1.").arg(root.trainId));
         }
         onMoveRequested: function (from, to) {
-            root.report(root.host.moveStop(root.trainId, from, to),
+            root.report(root.host.moveStop(root.trainId, from, to,
+                                           root.shownBlocks()),
                 qsTr("%1's stops reordered.").arg(root.trainId));
         }
     }

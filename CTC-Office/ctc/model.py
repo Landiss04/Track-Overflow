@@ -63,7 +63,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Collection, Mapping, get_args
+from typing import (TYPE_CHECKING, Any, Collection, Mapping, Sequence,
+                    get_args)
 
 from ctc.interface import (
     BlockOccupancy,
@@ -750,7 +751,7 @@ class StubCtcOffice:
             return
         _require_arrival(arrival_s)
         self._check_dispatch(train_id, line, destination_block_id)
-        if self._auto is not None and train_id in self._auto.progress:
+        if self._is_run(train_id):
             raise InvalidInputError(
                 f"{train_id} is a run of the loaded schedule; the "
                 "schedule gives its stops.")
@@ -770,7 +771,8 @@ class StubCtcOffice:
         self._queues.setdefault(train_id, []).append(DispatchOrder(
             train_id, line, destination_block_id, arrival_s))
 
-    def remove_stop(self, train_id: str, index: int) -> None:
+    def remove_stop(self, train_id: str, index: int,
+                    expected: Sequence[str] | None = None) -> None:
         """Remove stop ``index`` of a train's itinerary: 0 is the stop
         it is heading for, 1 the first queued after it.
 
@@ -779,9 +781,14 @@ class StubCtcOffice:
         it would be). Refused for a train's only stop: the dispatcher
         cannot withdraw an order, only send the train elsewhere or back
         to the yard.
+
+        ``expected``, if given, is the itinerary's blocks as the
+        dispatcher saw them: refused, and nothing changes, if they are
+        not the train's stops now (it moved on meanwhile, say), so an
+        index never names another stop than the one picked.
         """
         train_id = _trim(train_id)
-        stops = self._itinerary(train_id)
+        stops = self._itinerary(train_id, expected)
         index = _require_index(index, len(stops), train_id)
         if len(stops) == 1:
             raise InvalidInputError(
@@ -791,15 +798,17 @@ class StubCtcOffice:
         self._replace_itinerary(train_id, stops)
 
     def move_stop(self, train_id: str, from_index: int,
-                  to_index: int) -> None:
+                  to_index: int,
+                  expected: Sequence[str] | None = None) -> None:
         """Move stop ``from_index`` of a train's itinerary to
         ``to_index`` (0 is the stop it is heading for), the others
         keeping their order. A new stop 0 becomes the train's order at
         once, with the checks a dispatch has (refused, and nothing
         changes, if it would be); each stop keeps its arrival time.
+        ``expected`` as for ``remove_stop``.
         """
         train_id = _trim(train_id)
-        stops = self._itinerary(train_id)
+        stops = self._itinerary(train_id, expected)
         from_index = _require_index(from_index, len(stops), train_id)
         to_index = _require_index(to_index, len(stops), train_id)
         if from_index == to_index:
@@ -807,13 +816,26 @@ class StubCtcOffice:
         stops.insert(to_index, stops.pop(from_index))
         self._replace_itinerary(train_id, stops)
 
-    def _itinerary(self, train_id: str) -> list[DispatchOrder]:
+    def _itinerary(self, train_id: str,
+                   expected: Sequence[str] | None = None
+                   ) -> list[DispatchOrder]:
         """A train's order and its queued stops, in order; refused for
-        a train with no order."""
+        a train with no order, and for one whose stops' blocks are not
+        ``expected`` (when given)."""
         order = self._orders.get(train_id)
         if order is None:
             raise InvalidInputError(f"{train_id} has no stops.")
-        return [order, *self._queues.get(train_id, ())]
+        stops = [order, *self._queues.get(train_id, ())]
+        if expected is not None:
+            if isinstance(expected, str) or not all(
+                    isinstance(block, str) for block in expected):
+                raise InvalidInputError(
+                    "expected must be a list of block IDs")
+            if [s.destination_block_id for s in stops] != list(expected):
+                raise InvalidInputError(
+                    f"{train_id}'s stops have changed since they were "
+                    "shown; nothing was changed. Try again.")
+        return stops
 
     def _replace_itinerary(self, train_id: str,
                            stops: list[DispatchOrder]) -> None:
@@ -824,9 +846,53 @@ class StubCtcOffice:
         if first is not self._orders[train_id]:
             self._check_dispatch(train_id, first.line,
                                  first.destination_block_id)
+            self._check_can_stop(train_id, first)
             self._set_order(first)
             self._returning.discard(train_id)
         self._set_queue(train_id, stops[1:])
+
+    def _check_can_stop(self, train_id: str,
+                        order: DispatchOrder) -> None:
+        """Raise unless a train, sent toward ``order`` instead, could
+        stop within what its authority would keep.
+
+        Blocks granted to a moving train stay its own until it has
+        passed them (exclusive-authority), and its speed is suggested so
+        it can stop within them. A new destination short of them, or a
+        route leaving them, gives up the rest at once: a train already
+        going too fast to stop within what is left would run on past its
+        authority, into blocks then free for other trains. Counted as
+        ``_can_stop_by`` counts, at the fastest the CTC takes it could
+        be going. A train with no authority, or not on the track, can
+        always be sent elsewhere."""
+        limit = {a.train_id: a for a in self._authorities()}.get(train_id)
+        train = self._tracker.trains.get(train_id)
+        if (limit is None or train is None or limit.blocks == 0
+                or limit.line != order.line):
+            return
+        granted = limit.route[1:limit.blocks + 1]
+        route, _ = self._choose_route(
+            train.line, train.head, order.destination_block_id,
+            self._unusable(train.line),
+            self._stuck_blocks()[train.line] - set(train.blocks),
+            train.came_from)
+        ahead = route[1:] if route else ()
+        kept = 0
+        while (kept < len(granted) and kept < len(ahead)
+               and ahead[kept] == granted[kept]):
+            kept += 1
+        if kept == len(granted):
+            return
+        given = max(train.speed_mps, self._suggested_speed_mps(
+            limit.line, limit.route[0], granted))
+        stopping = self._suggested_speed_mps(
+            limit.line, limit.route[0], granted[:kept])
+        if given > stopping:
+            raise UnsafeActionError(
+                f"{train_id} is going too fast to stop short of "
+                f"{order.line} block {order.destination_block_id}, or to "
+                "turn off its way, now: it would run past its authority. "
+                "Try again once it has slowed or gone on.")
 
     def _set_order(self, order: DispatchOrder) -> None:
         """Make ``order`` its train's order; a dwell toward its last
@@ -841,6 +907,10 @@ class StubCtcOffice:
         else:
             self._queues.pop(train_id, None)
             self._dwell_since.pop(train_id, None)
+
+    def _is_run(self, train_id: str) -> bool:
+        """Whether a train is a run of the loaded schedule."""
+        return self._auto is not None and train_id in self._auto.progress
 
     def _drop_order(self, train_id: str) -> None:
         """Drop a train's order and everything queued after it."""
@@ -860,7 +930,9 @@ class StubCtcOffice:
         for train_id in sorted(self._queues):
             order = self._orders.get(train_id)
             train = self._tracker.trains.get(train_id)
-            if order is None:
+            if order is None or self._is_run(train_id):
+                # A run of the loaded schedule makes the schedule's
+                # stops, never queued ones.
                 self._set_queue(train_id, [])
                 continue
             if train is None or not self._at_a_stand(train, order):
@@ -1078,6 +1150,10 @@ class StubCtcOffice:
         self._schedule = schedule
         self._schedule_start_s = None
         self._plan_schedule(self._now_s())
+        # A train the schedule now runs makes its stops, not queued
+        # ones (``_advance_queues``).
+        for train_id in [t for t in self._queues if self._is_run(t)]:
+            self._set_queue(train_id, [])
         if not self._clock_paused:
             self._start_schedule()
 
