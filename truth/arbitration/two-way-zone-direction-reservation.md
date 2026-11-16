@@ -1,15 +1,3 @@
-**Target:** truth/arbitration/two-way-zone-direction-reservation.md
-**Action:** create
-**Proposed by:** Claude on integrate/harness-into-development
-**Provenance:** Replaces the unpromoted proposal `20261112-1433-two-way-zone-pass-can-stop.md` on this branch (which replaced `-1334-` and `-1045-`). It keeps every rule of 1433 and adds three things:
-- The passing sidings, turned on: Landis asserted 2026-11-03 that a run comes back over the parallel track so those stretches are one way, and 2026-11-12 ("lets turn on the passings").
-- Which way each one-way stretch is run.
-- Room on one-way track between two shared stretches.
-
-The last two are proposed by Claude, awaiting Landis's confirmation. Each one stopped a whole line on the CTC Office tests' railway: without the fixed direction Red kept one shared stretch, 16–52, and without the room rule all ten Red runs stood still at 06:00.
-
----
-
 # two-way-zone-direction-reservation
 
 **Status:** current
