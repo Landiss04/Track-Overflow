@@ -4,6 +4,96 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-15 — The track map shows the signal lights' aspects
+
+From Landis's design review: "the CTC needs to show the current light
+states on the track". Builds on the 2026-11-13 prototype
+(`documents/prototypes-2026-11-13/p1-aspects.patch`) and its review.
+
+- **The input.** The CTC Office's `track_controller` input has a new
+  `signals` list, `{line, signal_id, aspect}`, one entry per signal
+  light the Track Controller has a read-back for. `aspect` is `RED`,
+  `YELLOW`, `GREEN` or `SUPER_GREEN`. `signal_id` is the light's
+  switch ID, the block the switch is listed on, as the Track
+  Controller names it. A light with no read-back is left out.
+  - `ctc/interface.py` `SignalReport`, `SignalAspect`,
+    `TrackControllerInputs.signals`; `ctc/wire.py`.
+  - `ctc/model.py` checks each entry as it checks a crossing: a known
+    line, a switch on it, one of the four aspects. A repeated report is
+    accepted and a contradictory one rejected (`_no_conflict`). Staged
+    reports, while the clock is paused, are checked the same way.
+  - Display only. No aspect feeds an authority or a speed.
+- **The harness edge.** Both Track Controllers already report each
+  switch block's `signal_aspect`, lower case, in their CTC reports (SW
+  `track_ctrl/module.py` `_report`, HW `track_ctrl_hw/wayside.py`).
+  `common/harness/wayside_edges.py` `track_controller_to_ctc` now
+  passes it on, upper-cased, and `merge_ctc_inputs` joins the lists.
+  Until now it stopped there.
+- **Where a light is drawn.** At the block the light stands on, its
+  switch's points, not the block the switch is listed on (agreed with
+  the Track Model 2026-10-28, `common/harness/track_devices.py`).
+  `ctc/track_layout.py` `Line.light_blocks()` works it out from the
+  layout file: Green 12→13, 28, 58→57, 62→63, 76→77, 85; Red 9,
+  15→16, 27, 32→33, 38, 43→44, 52. A test checks it against the
+  harness's `TrackDevices`.
+- **The map.** `ui/panels/SignalMarker.qml` (new): one shape per
+  aspect, so it reads without colour. Red is a square, yellow a
+  triangle, green a circle and super green a diamond. A light not yet
+  reported is a hollow circle with "?". The fill is the aspect colour
+  and the outline is `--aspect-outline`. `TrackMap.qml` draws each
+  light 16 px on screen at any zoom, on a short mast. It sits beside
+  the light's block, on the side away from block numbers. The
+  prototype's 22-unit lettered discs shrank to about 15 px at Fit, with
+  9 px letters. Pointing at the block names the light and its aspect
+  in the hover card. The legend has one entry per shape.
+- **The Signals panel.** `ui/panels/SignalsPanel.qml` (new) sits under
+  Throughput metrics in all three views. It has a column per line,
+  with a row per light: its block, marker, aspect name and switch. The
+  header shows how many are reported.
+- **Throughput metrics** keeps only the two tickets-per-hour readouts.
+  The 12-hour chart and the per-line table are removed (Landis), with
+  `ThroughputHistory.qml` and the host's `throughputRows`,
+  `throughputHistory`, its hourly sales count and `start_at`.
+- **Tokens.** `ui/theme.py`: `aspect_red` (`--danger`),
+  `aspect_yellow` `#FACC15`, `aspect_green` (`--success`),
+  `aspect_super_green` `#3FA85F` (the Track Controller SW's values) and
+  `aspect_outline` (`--text-primary`).
+- **Window.** `ctc_ui/ctc_host.py` `signalStates`, `"Line:switch"` →
+  aspect, from the applied inputs. It has its own `signalStatesChanged`
+  and follows the issue #66 pattern: worked out once per redraw from
+  one snapshot, sent only when changed, read live through `_view`.
+- **Test UI.** New `signal_states` row (D025: the test UI stands in for
+  the Track Controller). The dropdown lists each light by its block and
+  switch, "13 (switch 12)", and sends the switch ID. Input lists in
+  `ctc_ui/README.md`, `ctc/interface.py`, `ctc/module_process.py` and
+  `ctc_ui/test_harness.py` are updated.
+- **Tests.** CTC suite 366 → 379, all pass.
+  - `test_ctc_safety.py`: bad aspect, lower case, a light off a
+    switch, unknown line, contradictory report, every aspect and
+    repeats, staged while paused.
+  - `test_ctc_boundary.py`: a light named by its block, not its
+    switch, is refused; the test UI row.
+  - `test_ctc_host.py`: `signalStates`, notify only on change, and
+    aspects do not change the suggestions.
+  - `test_module_process.py`: over the wire.
+  - `test_track_map.py`: `light_blocks` against `TrackDevices`.
+  - `test_ctc_window.py` / `window_probe.py`: each marker at its
+    light's block, its shape per aspect, hollow until reported,
+    changed in place, at least 12 px. The Signals rows match. The
+    history-bar checks went with the chart.
+  - Harness: `test_harness_edges.py`, `test_hw_wayside_edges.py`;
+    `TrackCtrlSW/tests/test_ctc_edge.py` end to end.
+- **Live run.** `track_overflow.py --test-pi process --load-starters
+  --engineer-gains 400000 8000 --schedule utils/schedule_v4.json
+  --speedup --headless --run-seconds 180`: 17,659 ticks at 10.0x, round
+  trip mean 3.5–3.7 ms, every module exited 0. No `TICK_REJECTED` or
+  `REPLY_LATE`. A probe on the CTC process's `inputs_from_wire` saw all
+  13 lights, 6 Green and 7 Red, from the third step on. They first
+  showed RED, then changed 314 times, through every aspect.
+- **Not covered.** There is no dark theme (style guide: Daylight Ops
+  only), so there is nothing to check there. The Track Controller SW's
+  own `theme.py` still holds its copy of the aspect colours.
+
 ## 2026-11-15 — The window redraws in place, and routes are remembered (issue #66)
 
 From issue #66, a review of `b066cde` on `hw_pi_test`, which redraws

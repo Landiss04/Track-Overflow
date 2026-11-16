@@ -1,8 +1,8 @@
 // Manual mode: the dispatcher issues destination, authority and speed.
 //
-// The column scrolls: the bottom row keeps at least the throughput
-// panel's full height (chart, hour labels), so nothing is clipped on a
-// short window.
+// The column scrolls: the bottom row keeps at least the full height of
+// the throughput and signals panels, so nothing is clipped on a short
+// window.
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -45,7 +45,9 @@ ScrollView {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // The throughput and signals panels, stacked, in full.
             Layout.minimumHeight: throughput.implicitHeight
+                + theme.space_3 + signalLights.implicitHeight
             spacing: theme.space_3
 
             SelectedTrainPanel {
@@ -58,13 +60,25 @@ ScrollView {
                 onClearRequested: root.clearSelectionRequested()
             }
 
-            ThroughputPanel {
-                id: throughput
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.preferredWidth: 405
-                showLineTable: false
-                host: root.host
+                spacing: theme.space_3
+
+                ThroughputPanel {
+                    id: throughput
+                    Layout.fillWidth: true
+                    host: root.host
+                }
+
+                SignalsPanel {
+                    id: signalLights
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    lights: trackMap ? trackMap.signals : []
+                    states: root.host ? root.host.signalStates : ({})
+                }
             }
         }
     }

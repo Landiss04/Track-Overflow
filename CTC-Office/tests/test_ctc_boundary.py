@@ -21,6 +21,7 @@ from ctc.interface import (  # noqa: E402
     CtcSnapshot,
     DispatchOrder,
     NewTrain,
+    SignalReport,
     SwitchCommand,
     SwitchReport,
     TrackModelInputs,
@@ -219,6 +220,9 @@ class StubModuleTest(unittest.TestCase):
                 switches=(SwitchReport("Green", "13", "normal"),)),
             TrackControllerInputs(
                 crossings=(CrossingReport("Red", "19", "active"),)),
+            # Named by its light's block (13), not its switch's (12).
+            TrackControllerInputs(
+                signals=(SignalReport("Green", "13", "RED"),)),
         ):
             bad = CtcInputs(track_controller=bad_track,
                             track_model=_green(5))
@@ -329,7 +333,8 @@ class HarnessEntryTest(unittest.TestCase):
         harness = CtcTestHarness(LocalLink())
         rows = {r["name"]: r for r in harness.inputs}
         self.assertEqual(list(rows), ["waysides", "occupied_blocks",
-                                      "switch_states", "crossing_states"])
+                                      "switch_states", "crossing_states",
+                                      "signal_states"])
         self.assertFalse(hasattr(harness, "dispatcherInputs"))
         # No wayside has reported at first, as at startup.
         self.assertEqual((rows["waysides"]["kind"],
@@ -351,12 +356,20 @@ class HarnessEntryTest(unittest.TestCase):
         _add(harness, "occupied_blocks")
         _add(harness, "switch_states")
         _add(harness, "crossing_states")
+        _add(harness, "signal_states")
         self.assertEqual(_entries(harness, "occupied_blocks"),
                          [{"line": "Green", "block": "1"}])
         self.assertEqual(_entries(harness, "switch_states")[0]["switch"],
                          "12")
         self.assertEqual(_entries(harness, "crossing_states")[0]
                          ["crossing"], "19")
+        # A signal is picked by its light's block and valued by its
+        # switch: Green 12's light stands on 13.
+        self.assertEqual(_entries(harness, "signal_states"),
+                         [{"line": "Green", "signal": "12",
+                           "aspect": "RED"}])
+        self.assertEqual(harness.layoutOptions["signal"]["Green"][0],
+                         {"value": "12", "text": "13 (switch 12)"})
 
     def test_changing_line_repicks_from_that_line(self) -> None:
         harness = CtcTestHarness(LocalLink())
@@ -391,7 +404,7 @@ class HarnessEntryTest(unittest.TestCase):
         _add(harness, "crossing_states")
         harness.resetInputs()
         self.assertEqual([r["entries"] for r in harness.inputs],
-                         [[], [], [], []])
+                         [[], [], [], [], []])
 
 
 class HarnessSendTest(unittest.TestCase):
@@ -421,6 +434,19 @@ class HarnessSendTest(unittest.TestCase):
                           for o in inputs.track_controller.occupancy],
                          [("Red", "7", True), ("Green", "5", True)])
         self.assertEqual(dict(inputs.track_model.ticket_sales), {})
+
+    def test_signal_aspects_are_sent(self) -> None:
+        link = LocalLink()
+        harness = CtcTestHarness(link)
+        _add(harness, "signal_states", line="Red", signal="15",
+             aspect="SUPER_GREEN")
+        _add(harness, "signal_states", aspect="YELLOW")
+        harness.send()
+        self.assertFalse(harness.statusIsError, harness.status)
+        self.assertEqual(
+            link.snapshot().inputs.track_controller.signals,
+            (SignalReport("Red", "15", "SUPER_GREEN"),
+             SignalReport("Green", "12", "YELLOW")))
 
     def test_outputs_show_what_the_window_did(self) -> None:
         # Dispatching, closing blocks, setting switches and the clock

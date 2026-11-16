@@ -8,6 +8,11 @@
 // --warning, failure --danger. Occupancy is shown as trains: a small
 // --info car on the track at the train's position, labeled with its ID.
 //
+// Each switch's signal light is a marker beside the block it stands on
+// (its points; ctc.track_layout.Line.light_blocks), on a short mast from
+// the track, shaped by its aspect (SignalMarker.qml). Markers keep their
+// screen size at any zoom.
+//
 // To tell blocks apart: a tick in the line color marks every block
 // boundary; zoomed in to 2x or more, every block shows its number; and
 // hovering a block highlights it and shows a card with what it is.
@@ -31,6 +36,9 @@ Item {
     property var trains: []
     // "Line:crossing" -> inactive | active, as reported.
     property var crossingStates: ({})
+    // "Line:switch" -> RED | YELLOW | GREEN | SUPER_GREEN, as reported;
+    // absent while a light is not reported (CtcHost.signalStates).
+    property var signalStates: ({})
     // The selected train's route, CtcHost.routeStates: "Line:block" ->
     // authority | beyond. Drawn as an --accent band under the track.
     property var routeStates: ({})
@@ -129,6 +137,14 @@ Item {
         root.zoom = 1;
         view.contentX = 0;
         view.contentY = 0;
+    }
+
+    function aspectName(aspect) {
+        return aspect === "RED" ? qsTr("Red")
+            : aspect === "YELLOW" ? qsTr("Yellow")
+            : aspect === "GREEN" ? qsTr("Green")
+            : aspect === "SUPER_GREEN" ? qsTr("Super green")
+            : qsTr("Not reported");
     }
 
     function lineShown(line) {
@@ -546,6 +562,59 @@ Item {
                 }
             }
 
+            // Signal lights, beside the block each stands on, on the side
+            // away from block numbers and closed badges. Sized in screen
+            // pixels: a 16 px marker on a mast from the track's edge.
+            Repeater {
+                model: root.model ? root.model.signals : []
+
+                delegate: Item {
+                    id: light
+                    required property var modelData
+                    readonly property string aspect: root.signalStates[
+                        modelData.line + ":" + modelData.signalId] || ""
+                    // Map units per screen pixel.
+                    readonly property real px: 1 / root.mapScale
+                    readonly property real size: 16 * px
+                    // Track centre to marker centre: past the route band
+                    // (7 map units), a 5 px mast, then half the marker.
+                    readonly property real reach: 7 + 5 * px + size / 2
+                    readonly property real nx: -modelData.normal[0]
+                    readonly property real ny: -modelData.normal[1]
+
+                    objectName: "signal-" + modelData.line + "-"
+                        + modelData.signalId
+                    visible: root.lineShown(modelData.line)
+                    x: modelData.mid[0]
+                    y: modelData.mid[1]
+
+                    Shape {
+                        preferredRendererType: Shape.CurveRenderer
+
+                        ShapePath {
+                            strokeColor: theme.text_secondary
+                            strokeWidth: 1.5 * light.px
+                            fillColor: "transparent"
+                            startX: light.nx * 3
+                            startY: light.ny * 3
+                            PathLine {
+                                x: light.nx * (light.reach - light.size / 2)
+                                y: light.ny * (light.reach - light.size / 2)
+                            }
+                        }
+                    }
+
+                    SignalMarker {
+                        objectName: "marker"
+                        aspect: light.aspect
+                        size: light.size
+                        outline: 1.5 * light.px
+                        x: light.nx * light.reach - width / 2
+                        y: light.ny * light.reach - height / 2
+                    }
+                }
+            }
+
             // Trains, on top of everything else. Counted, each read by
             // index: a redraw that moves trains moves the cars in place
             // instead of destroying and rebuilding every one of them.
@@ -662,6 +731,23 @@ Item {
             Text {
                 text: root.hoveredKey !== ""
                     ? root.stateText(root.hoveredKey) : ""
+                color: theme.text_primary
+                font.family: theme.ui_family
+                font.pixelSize: theme.size_small
+            }
+            Text {
+                // The signal light on this block, if one stands here.
+                readonly property var light: {
+                    root.signalStates;
+                    return root.model && root.hoveredKey !== ""
+                        ? root.model.signalAt(root.hoveredKey) : ({});
+                }
+                visible: light.signalId !== undefined
+                text: visible
+                    ? qsTr("Signal (switch %1): %2").arg(light.signalId)
+                        .arg(root.aspectName(root.signalStates[
+                            light.line + ":" + light.signalId] || ""))
+                    : ""
                 color: theme.text_primary
                 font.family: theme.ui_family
                 font.pixelSize: theme.size_small

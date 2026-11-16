@@ -66,6 +66,8 @@ from ctc.interface import (
     NewTrain,
     RetiredTrain,
     ScheduledRun,
+    SignalAspect,
+    SignalReport,
     SwitchCommand,
     SwitchPosition,
     SwitchReport,
@@ -227,6 +229,7 @@ _INPUT_LISTS = (
     ("track_controller", "occupancy", BlockOccupancy),
     ("track_controller", "switches", SwitchReport),
     ("track_controller", "crossings", CrossingReport),
+    ("track_controller", "signals", SignalReport),
     ("track_controller", "waysides", WaysideStatus),
 )
 
@@ -306,6 +309,15 @@ class _Layout:
             raise InvalidInputError(
                 f"{what}: {line} has no switch at block {switch_id!r}")
 
+    def signal(self, line: str, signal_id: str, what: str) -> None:
+        """A signal light stands at a switch and is named by its ID."""
+        self._line(line, what)
+        _require_id(signal_id, f"signal of {what}")
+        if signal_id not in self._switches[line]:
+            raise InvalidInputError(
+                f"{what}: {line} has no signal {signal_id!r}: a signal "
+                "is named by its switch, and no switch is listed there")
+
     def crossing(self, line: str, crossing_id: str, what: str) -> None:
         self._line(line, what)
         _require_id(crossing_id, f"crossing of {what}")
@@ -366,6 +378,15 @@ class _Layout:
             _no_conflict(states, (crossing.line, crossing.crossing_id),
                          crossing.state,
                          f"{crossing.line} crossing {crossing.crossing_id}")
+        aspects: dict[tuple[str, str], str] = {}
+        for signal in track_controller.signals:
+            self.signal(signal.line, signal.signal_id, "signal aspect")
+            _require_choice(signal.aspect, SignalAspect,
+                            f"aspect of {signal.line} signal "
+                            f"{signal.signal_id}")
+            _no_conflict(aspects, (signal.line, signal.signal_id),
+                         signal.aspect,
+                         f"{signal.line} signal {signal.signal_id}")
         for station, tickets in inputs.track_model.ticket_sales.items():
             if (not isinstance(station, str)
                     or station not in self.station_lines):

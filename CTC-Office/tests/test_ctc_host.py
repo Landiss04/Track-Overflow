@@ -19,6 +19,7 @@ from ctc.interface import (  # noqa: E402
     CrossingReport,
     CtcInputs,
     CtcSnapshot,
+    SignalReport,
     SwitchReport,
     TrackControllerInputs,
     TrackModelInputs,
@@ -482,40 +483,39 @@ class PanelDataTest(unittest.TestCase):
             clock.clock.tick()
         # Sales count once, on the first tick: 30 in a tenth of an hour.
         self.assertEqual(host.throughput, {"Green": "300", "Red": "60"})
-        self.assertEqual(
-            [(r["line"], r["tickets"]) for r in host.throughputRows],
-            [("Green", "300"), ("Red", "60")])
 
-    def test_history_buckets_sales_by_clock_hour(self) -> None:
-        host, _, clock = _host()           # the clock starts at 05:00
+    def test_signal_states_are_the_last_applied_aspects(self) -> None:
+        host, module, clock = _host()
+        self.assertEqual(host.signalStates, {})
+        _report(host, module,
+                signals=[SignalReport("Green", "12", "RED"),
+                         SignalReport("Red", "9", "SUPER_GREEN")])
+        # Staged only: the window shows what the module last applied,
+        # as for every other report while the clock is paused.
+        self.assertEqual(host.signalStates, {})
+        clock.clock.tick()
+        self.assertEqual(host.signalStates,
+                         {"Green:12": "RED", "Red:9": "SUPER_GREEN"})
+        # A light left out of the next report is no longer shown.
+        _report(host, module,
+                signals=[SignalReport("Green", "12", "YELLOW")])
+        clock.clock.tick()
+        self.assertEqual(host.signalStates, {"Green:12": "YELLOW"})
 
-        def sell(station: str, tickets: int, at_s: float) -> None:
-            clock.clock.reset(at_s)
-            host._receive_inputs(CtcInputs(track_model=TrackModelInputs(
-                {station: tickets})))
+    def test_signal_aspects_never_change_what_is_suggested(self) -> None:
+        # Display only: the same report with any aspects, or none,
+        # gives the Track Controller the same suggestions.
+        sent = []
+        for signals in ((), tuple(SignalReport("Green", s, "RED")
+                                  for s in ("12", "28", "58", "62", "76",
+                                            "85"))):
+            host, module, clock = _host()
+            host.dispatchTrain("T1", "Green", "65", "")
+            _report(host, module, at("T1", "63"), signals=signals)
             clock.clock.tick()
-
-        sell("GLENBURY", 10, 5 * 3600)
-        sell("DORMONT", 5, 5 * 3600 + 1800)
-        sell("SHADYSIDE", 4, 7 * 3600)
-        history = host.throughputHistory
-        # Twelve hours from the start hour, 05:00 to 16:00.
-        self.assertEqual(history["hours"][0], "05:00")
-        self.assertEqual(history["hours"][-1], "16:00")
-        counts = {s["line"]: s["counts"] for s in history["series"]}
-        self.assertEqual(counts["Green"][:3], [15, 0, 0])
-        self.assertEqual(counts["Red"][:3], [0, 0, 4])
-        self.assertEqual((history["peak"], history["current"]), (15, 2))
-
-        # Past 12 hours the window follows the current hour, across
-        # midnight: 05:00 drops out.
-        sell("SHADYSIDE", 1, 24 * 3600 + 900)        # 00:15 the next day
-        history = host.throughputHistory
-        self.assertEqual((history["hours"][0], history["hours"][-1]),
-                         ("13:00", "00:00"))
-        counts = {s["line"]: s["counts"] for s in history["series"]}
-        self.assertEqual(sum(counts["Green"]), 0)
-        self.assertEqual(counts["Red"][-1], 1)
+            sent.append(module.snapshot().outputs.track_controller)
+        self.assertTrue(sent[0].suggestions)
+        self.assertEqual(sent[0], sent[1])
 
     def test_test_ui_changes_reach_the_window(self) -> None:
         # The link server's changed signal makes the panels re-read.
@@ -549,8 +549,8 @@ class RedrawTest(unittest.TestCase):
     on every notification)."""
 
     _MODELS = ("trains", "blockStates", "mapTrains", "crossingStates",
-               "closures", "switchCommandCount", "departures",
-               "throughput", "throughputHistory", "notices")
+               "signalStates", "closures", "switchCommandCount",
+               "departures", "throughput", "notices")
 
     def _count(self, host: CtcHost) -> dict[str, list[int]]:
         # Each model's notifications, and stateChanged's.
@@ -573,8 +573,9 @@ class RedrawTest(unittest.TestCase):
         self.assertEqual(len(seen["state"]), 1)
         self.assertEqual(len(seen["trains"]), 1)
         self.assertEqual(len(seen["mapTrains"]), 1)
-        for name in ("blockStates", "crossingStates", "closures",
-                     "switchCommandCount", "departures", "notices"):
+        for name in ("blockStates", "crossingStates", "signalStates",
+                     "closures", "switchCommandCount", "departures",
+                     "notices"):
             self.assertEqual(seen[name], [], name)
         self.assertEqual(
             [t["block"] for t in host.mapTrains], ["2"])
@@ -597,12 +598,10 @@ class RedrawTest(unittest.TestCase):
             clock.clock.tick()
         self.assertEqual(len(seen["clock"]), 10)
         self.assertEqual(seen["throughput"], [1])
-        self.assertEqual(seen["throughputHistory"], [1])
         host._receive_inputs(CtcInputs(track_model=_green(30)))
         for _ in range(600):                 # past the first minute
             clock.clock.tick()
         self.assertEqual(host.throughput["Green"], "1543")
-        self.assertEqual(seen["throughputHistory"], [1, 1])
         self.assertGreater(len(seen["throughput"]), 1)
 
     def test_a_panel_reads_the_redraws_values(self) -> None:
@@ -677,6 +676,23 @@ class RedrawTest(unittest.TestCase):
         self.assertEqual(host._shown["blockStates"], {"Green:9": "closed"})
         self.assertEqual(host._shown["closures"], host.closures)
         self.assertIsNone(host._serving)
+
+    def test_signal_states_are_sent_only_when_an_aspect_changes(
+            self) -> None:
+        host, module, clock = _host()
+        green = SignalReport("Green", "12", "GREEN")
+        _report(host, module, at("T1", "3"), signals=[green])
+        clock.clock.tick()
+        seen = self._count(host)
+        # T1 moves; the aspect stays: the signals are not sent again.
+        _report(host, module, at("T1", "2"), signals=[green])
+        clock.clock.tick()
+        self.assertEqual(seen["signalStates"], [])
+        _report(host, module, at("T1", "2"),
+                signals=[SignalReport("Green", "12", "RED")])
+        clock.clock.tick()
+        self.assertEqual(seen["signalStates"], [1])
+        self.assertEqual(host.signalStates, {"Green:12": "RED"})
 
     def test_dismissing_resends_the_notices(self) -> None:
         host, module, clock = _host()

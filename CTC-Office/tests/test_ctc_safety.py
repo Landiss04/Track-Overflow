@@ -19,6 +19,7 @@ from ctc.interface import (  # noqa: E402
     CancelledOrder,
     CrossingReport,
     CtcInputs,
+    SignalReport,
     SwitchReport,
     TrackControllerInputs,
     TrackControllerOutputs,
@@ -350,6 +351,17 @@ class InputCheckTest(unittest.TestCase):
                 switches=(SwitchReport("Green", "12", "sideways"),)),
             "crossing state": TrackControllerInputs(
                 crossings=(CrossingReport("Green", "19", "blinking"),)),
+            "signal aspect": TrackControllerInputs(
+                signals=(SignalReport("Green", "12", "PURPLE"),)),
+            "signal aspect spelling": TrackControllerInputs(
+                signals=(SignalReport("Green", "12", "red"),)),
+            "signal off a switch": TrackControllerInputs(
+                signals=(SignalReport("Green", "5", "RED"),)),
+            "signal on an unknown line": TrackControllerInputs(
+                signals=(SignalReport("Blue", "12", "RED"),)),
+            "contradictory signal": TrackControllerInputs(signals=(
+                SignalReport("Green", "12", "RED"),
+                SignalReport("Green", "12", "GREEN"))),
             "occupancy flag": TrackControllerInputs(
                 occupancy=(BlockOccupancy("Green", "5", "no"),)),
             "contradictory switch": TrackControllerInputs(switches=(
@@ -363,6 +375,27 @@ class InputCheckTest(unittest.TestCase):
             with self.subTest(label), self.assertRaises(InvalidInputError):
                 ready_office().step(DT_S,
                                     CtcInputs(track_controller=track))
+
+    def test_every_aspect_and_a_repeated_signal_are_accepted(self) -> None:
+        for aspect in ("RED", "YELLOW", "GREEN", "SUPER_GREEN"):
+            signal = SignalReport("Green", "12", aspect)
+            with self.subTest(aspect):
+                ready_office().step(DT_S, CtcInputs(
+                    track_controller=TrackControllerInputs(
+                        signals=(signal, signal))))
+
+    def test_signals_staged_while_paused_are_checked_the_same(
+            self) -> None:
+        # While the clock is paused reports are staged, not stepped
+        # with; they are checked as they arrive, as a step checks them.
+        office = ready_office()
+        green = SignalReport("Green", "12", "GREEN")
+        office.stage_inputs(CtcInputs(track_controller=TrackControllerInputs(
+            signals=(green, green))))
+        with self.assertRaises(InvalidInputError):
+            office.stage_inputs(CtcInputs(
+                track_controller=TrackControllerInputs(signals=(
+                    green, SignalReport("Green", "12", "RED")))))
 
     def test_repeated_identical_reports_are_fine(self) -> None:
         ready_office().step(DT_S, CtcInputs(

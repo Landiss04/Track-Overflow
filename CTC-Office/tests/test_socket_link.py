@@ -192,7 +192,8 @@ class SocketLinkTest(unittest.TestCase):
         harness = CtcTestHarness(self.link)
         self.assertEqual([row["name"] for row in harness.inputs],
                          ["waysides", "occupied_blocks",
-                          "switch_states", "crossing_states"])
+                          "switch_states", "crossing_states",
+                          "signal_states"])
 
     def test_remote_rejection_is_reported(self) -> None:
         with self.assertRaises(RemoteCtcError):

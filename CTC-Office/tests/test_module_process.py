@@ -159,6 +159,21 @@ class ProcessTest(_ProcessCase):
             self.process.step(2, -DT_S, FIVE_AM_S, wire_inputs())
         self.assertEqual(self.host.module.snapshot(), before)
 
+    def test_signal_aspects_arrive_over_the_wire(self) -> None:
+        wire = wire_inputs()
+        wire["track_controller"]["signals"] = [
+            {"line": "Green", "signal_id": "12", "aspect": "YELLOW"},
+            {"line": "Red", "signal_id": "15", "aspect": "SUPER_GREEN"}]
+        self.step(wire)
+        self.assertEqual(self.host.signalStates,
+                         {"Green:12": "YELLOW", "Red:15": "SUPER_GREEN"})
+        # A bad aspect refuses the tick, like any other bad input.
+        before = self.host.module.snapshot()
+        wire["track_controller"]["signals"][0]["aspect"] = "yellow"
+        with self.assertRaises(TickRejectedError):
+            self.process.step(99, DT_S, FIVE_AM_S + 99, wire)
+        self.assertEqual(self.host.module.snapshot(), before)
+
     def test_each_steps_ticket_sales_count_once(self) -> None:
         self.step(wire_inputs(sales={"GLENBURY": 3}))
         self.step(wire_inputs(sales={"GLENBURY": 2, "DORMONT": 1}))

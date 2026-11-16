@@ -18,6 +18,7 @@ from ctc.interface import (
     CrossingReport,
     CtcInputs,
     CtcOutputs,
+    SignalReport,
     SwitchReport,
     TrackControllerInputs,
     TrainSuggestion,
@@ -45,6 +46,7 @@ def at(train_id: str, block_id: str, line: str = "Green") -> At:
 def reports(*trains: At, occupied: Iterable[tuple[str, str]] = (),
             switches: Iterable[SwitchReport] = (),
             crossings: Iterable[CrossingReport] = (),
+            signals: Iterable[SignalReport] = (),
             ready: bool | Iterable[str] = True) -> CtcInputs:
     """The Track Controller's report with ``trains`` in their blocks and
     ``occupied`` ``(line, block)`` pairs occupied too. Ready on every
@@ -60,7 +62,7 @@ def reports(*trains: At, occupied: Iterable[tuple[str, str]] = (),
         occupancy=tuple(BlockOccupancy(line, block_id, True)
                         for line, block_id in sorted(blocks)),
         switches=tuple(switches), crossings=tuple(crossings),
-        waysides=waysides))
+        signals=tuple(signals), waysides=waysides))
 
 
 def own_block(suggestions: Iterable[TrainSuggestion],

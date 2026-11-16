@@ -78,6 +78,42 @@ class Line:
         """IDs of the switches: the blocks they are listed on."""
         return tuple(b.block_id for b in self.blocks if b.switch)
 
+    def light_blocks(self) -> dict[str, str]:
+        """Where each switch's signal light stands: the block, by the
+        switch's ID.
+
+        There is one light per switch, at its points (agreed with the
+        Track Model 2026-10-28; ``common/harness/track_devices.py``):
+        the block both of its connections share, or, for a switch with
+        one connection, to or from the yard, the block that connection
+        names. Green 12 (``12-13; 1-13``) has its light on 13, Green 58
+        (``57-yard``) on 57. Red 9 lists ``75-yard``, which names no
+        block beside it; its light is on 9, as the harness places it.
+        """
+        order = {block.block_id: i for i, block in enumerate(self.blocks)}
+        found: dict[str, str] = {}
+        for block in self.blocks:
+            if not block.switch:
+                continue
+            legs = [{end.strip() for end in part.split("-")}
+                    for part in block.switch.split(";")]
+            shared = set.intersection(*legs) - {YARD, YARD.title()}
+            named = {end for leg in legs for end in leg
+                     if end.lower() != YARD}
+            if len(legs) > 1 and len(shared) == 1:
+                (light,) = shared
+            elif len(legs) == 1 and len(named) == 1:
+                (light,) = named
+                here = order[block.block_id]
+                if abs(order.get(light, here + 2) - here) > 1:
+                    light = block.block_id
+            else:
+                raise ValueError(f"{self.name} switch {block.block_id} "
+                                 f"({block.switch!r}): no one block for "
+                                 "its light")
+            found[block.block_id] = light
+        return found
+
     def crossing_ids(self) -> tuple[str, ...]:
         """IDs of the railway crossings: the blocks they are on."""
         return tuple(b.block_id for b in self.blocks if b.railway_crossing)

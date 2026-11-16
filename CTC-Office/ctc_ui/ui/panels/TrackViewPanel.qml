@@ -16,6 +16,7 @@ Panel {
     // Live state from the CTC host; see TrackMap.qml.
     property var blockStates: ({})
     property var crossingStates: ({})
+    property var signalStates: ({})
     // CtcHost.mapTrains: { train, line, block, fraction } per train.
     property var mapTrains: []
     // The selected train and its route (CtcHost.routeStates).
@@ -83,6 +84,7 @@ Panel {
             lineFilter: root.lineFilterIndex
             blockStates: root.blockStates
             crossingStates: root.crossingStates
+            signalStates: root.signalStates
             routeStates: root.routeStates
             selectedTrain: root.selectedTrainId
             trains: root.trackMap
@@ -200,6 +202,41 @@ Panel {
                     text: "×"
                     color: theme.text_secondary
                     font.pixelSize: theme.size_small
+                }
+            }
+        }
+        // Signal lights: one marker per aspect, each its own shape.
+        Row {
+            spacing: theme.space_2
+
+            HelperText {
+                text: qsTr("Signal:")
+                wrapMode: Text.NoWrap
+            }
+
+            Repeater {
+                model: [
+                    { aspect: "RED", name: qsTr("red") },
+                    { aspect: "YELLOW", name: qsTr("yellow") },
+                    { aspect: "GREEN", name: qsTr("green") },
+                    { aspect: "SUPER_GREEN", name: qsTr("super green") },
+                    { aspect: "", name: qsTr("not reported") }
+                ]
+
+                delegate: Row {
+                    id: key
+                    required property var modelData
+                    spacing: theme.space_1
+
+                    SignalMarker {
+                        anchors.verticalCenter: parent.verticalCenter
+                        aspect: key.modelData.aspect
+                    }
+
+                    HelperText {
+                        text: key.modelData.name
+                        wrapMode: Text.NoWrap
+                    }
                 }
             }
         }

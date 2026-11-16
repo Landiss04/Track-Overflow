@@ -22,6 +22,7 @@ from ctc.interface import (
     NewTrain,
     RetiredTrain,
     ScheduledRun,
+    SignalReport,
     SwitchCommand,
     SwitchReport,
     TrackControllerInputs,
@@ -92,6 +93,8 @@ def inputs_from_wire(data: Mapping[str, Any]) -> CtcInputs:
                            for s in _items(track, "switches")),
             crossings=tuple(CrossingReport(**c)
                             for c in _items(track, "crossings")),
+            signals=tuple(SignalReport(**s)
+                          for s in _items(track, "signals")),
             waysides=tuple(WaysideStatus(**s)
                            for s in _items(track, "waysides")),
         ),

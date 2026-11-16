@@ -63,18 +63,23 @@ Office's ``track_controller`` input, from every wayside's report::
     blocks[].switch_position  -> switches[]: line, switch_id, position
     blocks[].crossing_active  -> crossings[]: line, crossing_id, state
                                  "active" or "inactive"
+    blocks[].signal_aspect    -> signals[]: line, signal_id, aspect
+                                 "RED", "YELLOW", "GREEN" or
+                                 "SUPER_GREEN"; the signal ID is its
+                                 switch's ID, as the Track Controller
+                                 names the light
     wayside_id, line, ready, reason
                               -> waysides[] (R70)
 
 A failed block reaches the CTC Office as occupied, with nothing else
-said of it (R69). The signal aspects and the report's time stop here:
-the CTC Office has no field for them.
+said of it (R69). A signal with no read-back aspect is left out. The
+report's time stops here: the CTC Office has no field for it.
 
 The CTC Office has one ``track_controller`` input for both lines.
 ``merge_ctc_inputs`` joins the reports of each Track Controller, the SW
 variant's for the Green Line and, from Phase 5, the HW variant's for the
-Red (R77), list by list. Each names its blocks, switches, crossings and
-waysides by line, so nothing is lost or doubled.
+Red (R77), list by list. Each names its blocks, switches, crossings,
+signals and waysides by line, so nothing is lost or doubled.
 """
 
 from __future__ import annotations
@@ -274,6 +279,7 @@ def track_controller_to_ctc(outputs: Mapping[str, Any]) -> dict[str, Any]:
     occupancy = []
     switches = []
     crossings = []
+    signals = []
     waysides = []
     for report in outputs["ctc_reports"]:
         waysides.append({
@@ -300,10 +306,16 @@ def track_controller_to_ctc(outputs: Mapping[str, Any]) -> dict[str, Any]:
                      "state": ("active" if value["crossing_active"]
                                else "inactive")}
                 )
+            if value["signal_aspect"] is not None:
+                signals.append(
+                    {"line": line, "signal_id": number,
+                     "aspect": str(value["signal_aspect"]).upper()}
+                )
     return {
         "occupancy": occupancy,
         "switches": switches,
         "crossings": crossings,
+        "signals": signals,
         "waysides": waysides,
     }
 
@@ -318,11 +330,12 @@ def merge_ctc_inputs(
 
     Returns:
         The CTC Office's ``track_controller`` input: every report's
-        occupancy, switches, crossings and waysides, in report order.
-        Empty lists when there is no report.
+        occupancy, switches, crossings, signals and waysides, in report
+        order. Empty lists when there is no report.
     """
     merged: dict[str, list[Any]] = {
-        "occupancy": [], "switches": [], "crossings": [], "waysides": [],
+        "occupancy": [], "switches": [], "crossings": [], "signals": [],
+        "waysides": [],
     }
     for report in reports:
         for field, values in merged.items():
