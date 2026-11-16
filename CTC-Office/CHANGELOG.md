@@ -4,6 +4,67 @@ Changes to the owner's module code during integration, for review.
 
 ---
 
+## 2026-11-15 — The window redraws in place, and routes are remembered (issue #66)
+
+From issue #66, a review of `b066cde` on `hw_pi_test`, which redraws
+the window only once a second at 10x to shorten the CTC's reply tail.
+This keeps the 200 ms redraw and makes the redraw and the step cheap
+instead.
+
+- **What happened.** With `utils/schedule_stress.json` at 10x, both
+  Pis simulated, the CTC's reply to a STEP had a p99 of about 20 ms
+  and a max of 50–70 ms, against a 10 ms tick. Profiled by replaying
+  a recorded run through the process's own `step` with the window
+  loaded offscreen:
+  - the redraw (`CtcHost._refresh`, five times a second) took 31 ms
+    mean, p99 55 ms, plus 6 ms of layout after it. 17.5 ms of it was
+    the throughput history: its Repeaters destroyed and rebuilt 72 bars
+    (in the three views) on every new history, which at 10x is every
+    redraw. The map's train cars, all rebuilt, were 4.7 ms;
+  - the step took 2.1 ms mean, most of it the route search in
+    `_compute_authorities`, asked the same routes every step.
+- **The fix, window.** `ctc_ui/ctc_host.py`: each panel model has its
+  own notify signal (`trainsChanged`, `blockStatesChanged`,
+  `mapTrainsChanged`, `crossingStatesChanged`, `closuresChanged`,
+  `switchCommandCountChanged`, `departuresChanged`,
+  `throughputChanged`, `throughputHistoryChanged`). A redraw works
+  each one out once, from one snapshot, and sends its signal only if
+  it is not what was last sent. `stateChanged` (`revision`) and
+  `clockChanged` go out as before. Outside a redraw the properties are
+  read live, as before. `ThroughputHistory.qml` and `TrackMap.qml`:
+  the Repeaters count rows, hours and trains, and each delegate reads
+  its value by index, so a new value updates the items in place.
+- **The fix, step.** `ctc/routing.py`: a `TrackGraph` never changes
+  once built, so `route()` remembers its answers by start,
+  destination, blocks avoided and `came_from` (up to
+  `ROUTE_CACHE_SIZE`, 4096), and `neighbors()` is worked out once.
+  The stress schedule asks 1,526 different routes 583,000 times in 40
+  simulated minutes.
+- **Same outputs.** Recorded live runs with the old code (stress, 24,007
+  ticks; `schedule_v4.json`, 9,000 ticks) replayed through the new
+  code give the same outputs (authorities, suggested speeds, switch
+  commands, everything in the reply) at every tick.
+- **Measured** (replay, this laptop): redraw 30.7 → 2.3 ms mean, p99
+  55 → 13 ms; step 2.1 → 1.0 ms mean, p99 4.0 → 1.5 ms.
+- **Measured live**, `measure --system --test-pi process`, stress
+  schedule, 60 s, three runs each, alternated, Qt offscreen. CTC reply
+  p99: as it was 19.4–20.0 ms; `b066cde` (redraw every 1000 ms at 10x)
+  6.2–10.8 ms; this change 3.7–5.2 ms. Round trip p99: 19.7–20.1,
+  14.0–15.2 and 8.8–10.2 ms. All ran at 10.00x on this laptop.
+- **Why the redraw stays at 200 ms at 10x.** With the redraw at 2.4 ms
+  mean the window no longer holds up a step, and `b066cde`'s slower
+  redraw leaves the CTC tail higher than this change does (its redraw
+  still takes 18 ms each time). It is not applied.
+- **Tests.** `tests/test_ctc_authority.py` `RouteCacheTest`: the cached
+  route against a fresh search for 3,000 random questions per line,
+  a caller changing its avoid set afterwards, a full cache.
+  `tests/test_ctc_host.py` `RedrawTest`: what is and is not sent
+  again, one computation per redraw, an action during a redraw.
+  `tests/test_ctc_window.py` loads the window offscreen in its own
+  process (`window_probe.py`): the train cars are drawn where
+  `placeTrains` puts them and move in place, and the history bars
+  update in place.
+
 ## 2026-11-12 — The train in front claims its zone pass first
 
 From Landis's report of zero suggested speeds on both lines. An
