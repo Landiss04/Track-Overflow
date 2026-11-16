@@ -32,6 +32,18 @@ its later stops, and remove or reorder them (REQ-FUNC-060 to 062, new).
   (`dispatch`) replaces only the current stop. Queueing is refused for
   a run of the loaded schedule. The queue advances in either mode, as a
   single manual order does.
+- **Review fixes.** A new first stop (× on the current stop, ▲ ▼ or a
+  drag to the top) is refused while the train is going too fast to stop
+  within the blocks the new route keeps of its grant
+  (`_check_can_stop`): before, the authority was cut to the new stop at
+  once and a train at speed ran past it (realistic railway: Green 66 at
+  18 m/s, block 67 moved to the top, overran 67 into 68 at 10.5 m/s).
+  `remove_stop` and `move_stop` take `expected`, the stops' blocks as
+  the list showed them, and refuse if the train has moved on since:
+  the panel passes them, so an index never names another stop than the
+  one clicked. A train a loaded schedule runs (same train ID) loses its
+  queued stops at load and is never sent on by a queue. A card rebuilt
+  mid-drag lets the list scroll again.
 - **The host.** `ctc_ui/ctc_host.py`: `stopQueues` (its own notify
   signal, sent only when changed, like the other panel models),
   `stopAction`, `addStop`, `removeStop`, `moveStop`; `setAuthority`
