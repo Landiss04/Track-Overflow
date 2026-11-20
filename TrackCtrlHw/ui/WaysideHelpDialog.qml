@@ -4,9 +4,9 @@ import QtQuick.Layouts
 import "components"
 import "../../ui" as Shared
 
-// Window-level help. Opened from the header's "?" button. Summarizes how to
-// read the panels against the running PLC program; the full reference lives
-// in TrackCtrlHw/docs/plc-language-help.md (linked at the bottom).
+// Window-level help. Opened from the header's "?" button. The full,
+// consolidated Help File for this module is TrackCtrlHw/docs/help.md; this
+// dialog is a quick pointer to it plus the most-asked-about terms.
 ModalDialog {
     id: root
 
@@ -55,9 +55,10 @@ ModalDialog {
 
     Shared.HelperText {
         Layout.fillWidth: true
-        text: qsTr("Full PLC language reference: "
-            + "TrackCtrlHw/docs/plc-language-help.md")
+        text: qsTr("Full Help File (window, PLC language, troubleshooting): "
+            + "TrackCtrlHw/docs/help.md")
         color: theme.text_muted
     }
 }
+
 
