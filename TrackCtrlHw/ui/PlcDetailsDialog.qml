@@ -81,6 +81,17 @@ ModalDialog {
                 color: theme.warning
             }
         }
+
+        Shared.HelperText {
+            Layout.fillWidth: true
+            visible: root.program.loaded === true
+            text: qsTr("\u201cScan overruns\u201d should stay 0 \u2014 a nonzero "
+                + "value means a scan took longer than the scan interval. "
+                + "\u201cChecksum\u201d is for confirming two waysides are "
+                + "running the identical program file, not for diagnosing "
+                + "program behavior.")
+            color: theme.text_muted
+        }
     }
 
     Shared.Panel {

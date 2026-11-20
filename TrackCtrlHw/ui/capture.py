@@ -8,9 +8,9 @@
 window opens at the 1440 x 900 reference canvas. ``--demo`` loads the
 three sample waysides and their programs and runs one scan of sample
 inputs in this process, so the window has something to show without a
-test UI. ``--dialog`` opens ``plc`` (PLC details) or ``report`` (last
-report) before the capture. ``--zoom`` zooms the territory in by that
-many steps.
+test UI. ``--dialog`` opens ``plc`` (PLC details), ``report`` (last
+report) or ``help`` (window help) before the capture. ``--zoom`` zooms
+the territory in by that many steps.
 """
 
 import argparse
@@ -79,7 +79,7 @@ def main() -> int:
     parser.add_argument("out", nargs="?", default="track-controller.png")
     parser.add_argument("--size", nargs=2, type=int, metavar=("W", "H"))
     parser.add_argument("--demo", action="store_true")
-    parser.add_argument("--dialog", choices=("plc", "report"))
+    parser.add_argument("--dialog", choices=("plc", "report", "help"))
     parser.add_argument("--zoom", type=int, default=0)
     args = parser.parse_args()
 
@@ -92,7 +92,7 @@ def main() -> int:
         window.window.resize(*args.size)
     root = window.window
     if args.dialog:
-        name = "plcDetails" if args.dialog == "plc" else "lastReport"
+        name = {"plc": "plcDetails", "report": "lastReport", "help": "waysideHelp"}[args.dialog]
         dialog = root.findChild(QObject, name)
         if dialog is not None:
             QMetaObject.invokeMethod(dialog, "open")

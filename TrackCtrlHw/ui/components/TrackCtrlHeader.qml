@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Layouts
 
 import "../../../ui" as Shared
@@ -18,6 +19,7 @@ Rectangle {
     property string instance: ""
     property string mode: ""
     property string modeKind: "info"
+    property string modeHint: ""
     property string faultText: ""
     property string source: ""
     property string clock: "--:--:--"
@@ -40,10 +42,24 @@ Rectangle {
             font.bold: true
         }
 
-        Shared.StatusBadge {
-            variant: root.modeKind
-            label: root.mode
+        Item {
+            implicitWidth: modeBadge.implicitWidth
+            implicitHeight: modeBadge.implicitHeight
             visible: root.mode !== ""
+
+            Shared.StatusBadge {
+                id: modeBadge
+                variant: root.modeKind
+                label: root.mode
+            }
+
+            HoverHandler {
+                id: modeHover
+            }
+
+            ToolTip.text: root.modeHint
+            ToolTip.visible: root.modeHint !== "" && modeHover.hovered
+            ToolTip.delay: 400
         }
 
         Shared.StatusBadge {

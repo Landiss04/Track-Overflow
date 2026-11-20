@@ -32,25 +32,49 @@ Item {
             instance: page.loaded ? tc.line + qsTr(" Line \u00b7 ") + page.waysideName : ""
             mode: tc.ready ? qsTr("Ready") : qsTr("Not ready")
             modeKind: tc.ready ? "ok" : "warning"
+            modeHint: tc.ready
+                ? qsTr("Every wayside on this line is ready; the CTC Office may send it input.")
+                : qsTr("Until every wayside on this line reports ready, this wayside holds its fail-safe outputs.")
             faultText: tc.channelFault !== "" ? qsTr("Channel fault") : ""
             source: tc.sourceText
             clock: tc.clockText
 
             controls: [
-                Shared.SelectField {
-                    label: qsTr("Wayside")
-                    model: tc.waysides
-                    currentIndex: tc.waysides.indexOf(tc.selectedWayside)
-                    enabled: tc.waysides.length > 0
-                    // A ColumnLayout fills by default; this field is fixed width.
-                    Layout.fillWidth: false
-                    Layout.preferredWidth: 96
-                    onCommitted: function (value) { tc.selectWayside(value); }
+                Item {
+                    implicitWidth: waysideField.implicitWidth
+                    implicitHeight: waysideField.implicitHeight
+
+                    Shared.SelectField {
+                        id: waysideField
+                        label: qsTr("Wayside")
+                        model: tc.waysides
+                        currentIndex: tc.waysides.indexOf(tc.selectedWayside)
+                        enabled: tc.waysides.length > 0
+                        // A ColumnLayout fills by default; this field is fixed width.
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: 96
+                        onCommitted: function (value) { tc.selectWayside(value); }
+                    }
+
+                    HoverHandler {
+                        id: waysideHover
+                    }
+
+                    ToolTip.text: qsTr("Select which wayside on this line to view. Each wayside runs its own PLC program.")
+                    ToolTip.visible: waysideHover.hovered
+                    ToolTip.delay: 400
                 },
                 Shared.AppButton {
                     text: qsTr("Load database")
                     Layout.alignment: Qt.AlignBottom
                     onClicked: databaseDialog.open()
+                },
+                IconButton {
+                    size: "sm"
+                    glyph: "?"
+                    tip: qsTr("Help reading this window")
+                    Layout.alignment: Qt.AlignBottom
+                    onClicked: waysideHelp.open()
                 }
             ]
         }
@@ -166,7 +190,8 @@ Item {
                             { title: qsTr("Length"), role: "length", width: 80, mono: true, align: "right" },
                             { title: qsTr("Speed limit"), role: "limit", width: 96, mono: true, align: "right" },
                             { title: qsTr("Occupancy"), role: "stateText", badgeRole: "badge", width: 148 },
-                            { title: qsTr("Track circuit"), role: "circuit", fill: true, mono: true }
+                            { title: qsTr("Track circuit"), role: "circuit", fill: true, mono: true,
+                                hint: qsTr("Most recent speed/authority suggestion from the CTC Office for this occupied block.") }
                         ]
                     }
                 }
@@ -200,7 +225,8 @@ Item {
                     kind: active ? "warning" : "info"
                     heading: active ? qsTr("CTC MAINTENANCE") : qsTr("NO CTC MAINTENANCE")
                     body: active
-                        ? tc.maintenanceText + qsTr(". The PLC program decides what to do with them.")
+                        ? tc.maintenanceText + qsTr(". The PLC program decides what to do with them; "
+                            + "a closed block is not automatically treated as occupied.")
                         : qsTr("No block closed and no switch commanded by the CTC Office here.")
                 }
 
@@ -284,10 +310,24 @@ Item {
                     title: qsTr("Switches")
                     bodyPadding: 0
 
-                    headerItems: Shared.StatusBadge {
+                    headerItems: Item {
+                        implicitWidth: switchBadge.implicitWidth
+                        implicitHeight: switchBadge.implicitHeight
                         visible: tc.switchCount > 0
-                        variant: tc.switchesAgreeing === tc.switchCount ? "ok" : "fault"
-                        label: qsTr("%1 of %2 agreeing").arg(tc.switchesAgreeing).arg(tc.switchCount)
+
+                        Shared.StatusBadge {
+                            id: switchBadge
+                            variant: tc.switchesAgreeing === tc.switchCount ? "ok" : "fault"
+                            label: qsTr("%1 of %2 agreeing").arg(tc.switchesAgreeing).arg(tc.switchCount)
+                        }
+
+                        HoverHandler {
+                            id: switchBadgeHover
+                        }
+
+                        ToolTip.text: qsTr("How many switches have a reported position matching what the PLC program commanded.")
+                        ToolTip.visible: switchBadgeHover.hovered
+                        ToolTip.delay: 400
                     }
 
                     DataTable {
@@ -299,8 +339,10 @@ Item {
                             { title: qsTr("Switch"), role: "name", width: 72, mono: true },
                             { title: qsTr("Commanded"), role: "commanded", fill: true, mono: true },
                             { title: qsTr("Reported"), role: "reported", width: 80 },
-                            { title: qsTr("CTC asks"), role: "ctcRequest", width: 96, tone: "secondary" },
-                            { title: qsTr("Agreement"), role: "agreeText", badgeRole: "agreeBadge", width: 144 }
+                            { title: qsTr("CTC asks"), role: "ctcRequest", width: 96, tone: "secondary",
+                                hint: qsTr("What the CTC Office requested. The PLC program decides whether to honor it.") },
+                            { title: qsTr("Agreement"), role: "agreeText", badgeRole: "agreeBadge", width: 144,
+                                hint: qsTr("Whether the reported position matches what was commanded. A mismatch can mean the switch is stuck or miswired.") }
                         ]
                     }
                 }
@@ -331,7 +373,8 @@ Item {
                             { title: qsTr("Block"), role: "location", width: 56, mono: true },
                             { title: qsTr("Commanded"), role: "commanded", fill: true },
                             { title: qsTr("Reported"), role: "reported", fill: true },
-                            { title: qsTr("Set by"), role: "setBy", width: 56, tone: "secondary" }
+                            { title: qsTr("Set by"), role: "setBy", width: 56, tone: "secondary",
+                                hint: qsTr("Which source last set this device: the running PLC program, or the wayside's fail-safe default when not ready.") }
                         ]
                     }
                 }
@@ -346,6 +389,12 @@ Item {
         program: tc.program
         meta: page.waysideName
         onLoadRequested: programDialog.open()
+    }
+
+    WaysideHelpDialog {
+        id: waysideHelp
+        objectName: "waysideHelp"
+        anchors.fill: parent
     }
 
     LastReportDialog {

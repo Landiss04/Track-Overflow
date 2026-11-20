@@ -11,10 +11,12 @@ import "../../../ui" as Shared
 // Rows come from a model with a `row` role (track_ctrl_hw.rows_model), so a
 // refresh updates cells in place and never resets the scroll position.
 //
-// columns: [{ title, role, width | fill, align, mono, tone, badgeRole }]
+// columns: [{ title, role, width | fill, align, mono, tone, badgeRole, hint }]
 //   role       key of the row value shown in the cell
 //   badgeRole  when set, the cell is a status badge whose variant is
 //              row[badgeRole] and whose label is row[role]
+//   hint       optional text shown on hover over the column header, for a
+//              column whose meaning is not obvious from its title alone
 Item {
     id: root
 
@@ -87,6 +89,8 @@ Item {
 
                     delegate: Text {
                         required property int index
+                        readonly property string hint: root.columns[index].hint !== undefined
+                            ? root.columns[index].hint : ""
 
                         width: root.columnWidth(index)
                         height: root.headerHeight
@@ -100,6 +104,14 @@ Item {
                         verticalAlignment: Text.AlignVCenter
                         horizontalAlignment: root.cellAlignment(root.columns[index])
                         elide: Text.ElideRight
+
+                        HoverHandler {
+                            id: headerHover
+                        }
+
+                        ToolTip.text: hint
+                        ToolTip.visible: hint !== "" && headerHover.hovered
+                        ToolTip.delay: 400
                     }
                 }
             }
